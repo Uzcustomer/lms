@@ -534,14 +534,13 @@
             {{-- Yuklash modali (Yo'nalish bo'yicha tab uchun) --}}
             <div id="batchUploadModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/40">
                 <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg">
                         <form id="batchUploadForm" method="POST"
                               action="{{ route('admin.oquv-reja.store') }}"
                               enctype="multipart/form-data">
                             @csrf
                             <input type="hidden" name="curricula_hemis_id" id="batchCurriculumId">
                             <input type="hidden" name="level_code" id="batchLevelCode">
-                            <input type="hidden" name="semester_code" id="batchSemesterCode">
 
                             <div class="flex items-center justify-between px-6 py-4 border-b">
                                 <h3 class="text-base font-semibold text-gray-800" id="batchModalTitle">O'quv reja yuklash</h3>
@@ -549,8 +548,26 @@
                             </div>
 
                             <div class="px-6 py-4 space-y-4">
-                                <div class="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2" id="batchCurriculumInfo"></div>
 
+                                {{-- Kohort kartochkasi --}}
+                                <div class="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 space-y-1.5">
+                                    <div class="text-xs font-semibold text-blue-500 uppercase tracking-wide">Kohort (o'quv reja)</div>
+                                    <div class="font-semibold text-gray-800 text-sm" id="batchInfoName"></div>
+                                    <div class="flex flex-wrap gap-3 text-xs text-gray-500">
+                                        <span>📅 <span id="batchInfoYear" class="font-medium text-gray-700"></span></span>
+                                        <span>🎓 <span id="batchInfoType" class="font-medium text-gray-700"></span></span>
+                                    </div>
+                                    <div class="pt-1 border-t border-blue-100 flex flex-wrap gap-3 text-xs text-gray-500">
+                                        <span>Joriy holat:</span>
+                                        <span class="font-semibold text-blue-700" id="batchInfoLevel"></span>
+                                        <span class="text-gray-400">·</span>
+                                        <span class="font-semibold text-blue-700" id="batchInfoSem"></span>
+                                        <span class="text-gray-400">·</span>
+                                        <span id="batchInfoStudents" class="text-gray-600"></span>
+                                    </div>
+                                </div>
+
+                                {{-- Reja turi --}}
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Reja turi</label>
                                     <div class="flex gap-4">
@@ -565,6 +582,19 @@
                                     </div>
                                 </div>
 
+                                {{-- Semestr tanlash --}}
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        Bu yuklama qaysi semestr uchun?
+                                        <span class="font-normal text-gray-400">(keyingi yil uchun boshqa semestrni tanlang)</span>
+                                    </label>
+                                    <select name="semester_code" id="batchSemesterSelect"
+                                            class="w-full rounded-md border-gray-300 shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="">Yuklanmoqda...</option>
+                                    </select>
+                                </div>
+
+                                {{-- Excel fayl --}}
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Excel fayl (.xlsx)</label>
                                     <input type="file" name="file" required accept=".xlsx,.xls"
@@ -849,8 +879,9 @@
                                         ).join('');
                                     }
 
-                                    const btnNam = '<button type="button" class="js-batch-upload px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 mr-1" data-id="' + r.curriculum_id + '" data-type="namunaviy" data-level="' + (r.level_code||'') + '" data-sem="' + (r.semester_code||'') + '" data-name="' + escHtml(r.curriculum_name) + '" data-year="' + (r.education_year||'') + '" data-levelname="' + escHtml(r.level_name||'') + '" data-semname="' + escHtml(r.semester_name||'') + '">+ Namunaviy</button>';
-                                    const btnIsh = '<button type="button" class="js-batch-upload px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700" data-id="' + r.curriculum_id + '" data-type="ishchi" data-level="' + (r.level_code||'') + '" data-sem="' + (r.semester_code||'') + '" data-name="' + escHtml(r.curriculum_name) + '" data-year="' + (r.education_year||'') + '" data-levelname="' + escHtml(r.level_name||'') + '" data-semname="' + escHtml(r.semester_name||'') + '">+ Ishchi</button>';
+                                    const sharedAttrs = ' data-id="' + r.curriculum_id + '" data-level="' + (r.level_code||'') + '" data-sem="' + (r.semester_code||'') + '" data-name="' + escHtml(r.curriculum_name) + '" data-year="' + escHtml(r.education_year||'') + '" data-eductype="' + escHtml(r.education_type||'') + '" data-levelname="' + escHtml(r.level_name||'') + '" data-semname="' + escHtml(r.semester_name||'') + '" data-students="' + (r.student_count||'') + '"';
+                                    const btnNam = '<button type="button" class="js-batch-upload px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 mr-1"' + sharedAttrs + ' data-type="namunaviy">+ Namunaviy</button>';
+                                    const btnIsh = '<button type="button" class="js-batch-upload px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"' + sharedAttrs + ' data-type="ishchi">+ Ishchi</button>';
 
                                     return '<tr class="hover:bg-gray-50">' +
                                         '<td class="px-3 py-2 text-gray-800 text-xs max-w-xs"><div class="font-medium">' + escHtml(r.curriculum_name) + '</div>' +
@@ -869,18 +900,41 @@
 
                                 // Yuklash tugmalari
                                 tbody.querySelectorAll('.js-batch-upload').forEach(btn => {
-                                    btn.addEventListener('click', function () {
-                                        document.getElementById('batchCurriculumId').value = this.dataset.id;
+                                    btn.addEventListener('click', async function () {
+                                        const id = this.dataset.id;
+                                        const type = this.dataset.type;
+                                        const currentSem = this.dataset.sem;
+
+                                        document.getElementById('batchCurriculumId').value = id;
                                         document.getElementById('batchLevelCode').value = this.dataset.level;
-                                        document.getElementById('batchSemesterCode').value = this.dataset.sem;
                                         document.getElementById('batchModalTitle').textContent =
-                                            (this.dataset.type === 'namunaviy' ? 'Namunaviy' : 'Ishchi') + " o'quv reja yuklash";
-                                        document.getElementById('batchCurriculumInfo').textContent =
-                                            this.dataset.name + (this.dataset.year ? ' (' + this.dataset.year + ')' : '') +
-                                            (this.dataset.levelname ? ' · ' + this.dataset.levelname : '') +
-                                            (this.dataset.semname ? ' · ' + this.dataset.semname : '');
-                                        document.querySelector('input[name="type"][value="' + this.dataset.type + '"]').checked = true;
+                                            (type === 'namunaviy' ? 'Namunaviy' : 'Ishchi') + " o'quv reja yuklash";
+                                        document.getElementById('batchInfoName').textContent = this.dataset.name;
+                                        document.getElementById('batchInfoYear').textContent = this.dataset.year || '';
+                                        document.getElementById('batchInfoType').textContent = this.dataset.eductype || '';
+                                        document.getElementById('batchInfoLevel').textContent = this.dataset.levelname || this.dataset.level || '';
+                                        document.getElementById('batchInfoSem').textContent = this.dataset.semname || currentSem || '';
+                                        document.getElementById('batchInfoStudents').textContent = this.dataset.students ? this.dataset.students + ' talaba' : '';
+                                        document.querySelector('input[name="type"][value="' + type + '"]').checked = true;
                                         document.getElementById('batchUploadModal').classList.remove('hidden');
+
+                                        const semSel = document.getElementById('batchSemesterSelect');
+                                        semSel.innerHTML = '<option value="">Yuklanmoqda...</option>';
+                                        semSel.disabled = true;
+                                        try {
+                                            const sems = await fetchOpts('semesters_for_curriculum', {curriculum_id: id});
+                                            if (sems.length) {
+                                                semSel.innerHTML = sems.map(s =>
+                                                    '<option value="' + escHtml(s.code) + '"' + (s.code == currentSem ? ' selected' : '') + '>' +
+                                                    escHtml(s.name) + (s.current ? ' ★' : '') + '</option>'
+                                                ).join('');
+                                            } else {
+                                                semSel.innerHTML = '<option value="">Semestrlar topilmadi</option>';
+                                            }
+                                        } catch (e) {
+                                            semSel.innerHTML = '<option value="">Xatolik yuz berdi</option>';
+                                        }
+                                        semSel.disabled = false;
                                     });
                                 });
                             } catch (e) {

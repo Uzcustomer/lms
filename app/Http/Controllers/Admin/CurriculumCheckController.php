@@ -90,6 +90,13 @@ class CurriculumCheckController extends Controller
                 ->orderByDesc('education_year_code')
                 ->get(),
 
+            // Berilgan reja (curriculum_id) bo'yicha HEMIS semestrlar ro'yxati.
+            // Batch modal uchun: foydalanuvchi qaysi semestr uchun yuklamoqchi ekanini tanlaydi.
+            'semesters_for_curriculum' => \App\Models\Semester::where('curriculum_hemis_id', $request->curriculum_id)
+                ->select('code', 'name', 'level_code', 'level_name', 'current')
+                ->orderBy('code')
+                ->get(),
+
             'faculties' => $this->students($request)
                 ->whereNotNull('department_id')
                 ->select('department_id as id', 'department_name as name')

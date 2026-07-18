@@ -11373,6 +11373,9 @@ class ReportController extends Controller
             $talimFilter = 'all';
         }
 
+        // Bir xil yo'nalishli fakultetlarni birlashtirish (masalan 1-son va 2-son davolash)
+        $mergeFaculties = $request->boolean('merge_faculties');
+
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
         $blocks = [];
         foreach ($rows as $r) {
@@ -11387,17 +11390,23 @@ class ReportController extends Controller
                 continue;
             }
 
+            // Fakultet nomi — "fakultetlarni birlashtirish" yoqilgan bo'lsa "N-son" prefiksi
+            // olib tashlanadi, shunda 1-son va 2-son davolash bitta blokka jamlanadi.
+            $deptForBlock = $mergeFaculties
+                ? $this->oqimMergeDeptName($r->department_name)
+                : $r->department_name;
+
             // Blok kaliti — fakultet + yo'nalish NOMI + ta'lim turi bo'yicha. Qo'shma va oddiy
             // ta'lim hech qachon bitta blok/oqimга aralashmaydi.
-            $blockKey = mb_strtolower(trim((string) $r->department_name)) . '|'
+            $blockKey = mb_strtolower(trim((string) $deptForBlock)) . '|'
                 . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
             if (!isset($blocks[$blockKey])) {
-                $title = $this->oqimBlockTitle($r->department_name, $r->specialty_name);
+                $title = $this->oqimBlockTitle($deptForBlock, $r->specialty_name);
                 if ($track === 'qoshma') {
                     $title .= " — Qo'shma ta'lim";
                 }
                 $blocks[$blockKey] = [
-                    'department_name' => $r->department_name,
+                    'department_name' => $deptForBlock,
                     'specialty_name'  => $r->specialty_name,
                     'track'           => $track,
                     'title'           => $title,
@@ -11652,9 +11661,12 @@ class ReportController extends Controller
                             $rowsOut[] = $sub;
                         }
                     }
+                    // Oqim bitta tilda bo'ladi (packOqims til bo'yicha ajratadi) — rang uchun
+                    $oqimLang = $oq[0]['lang'] ?? 'uz';
                     $displayOqims[] = [
                         'label' => ($idx + 1) . '-oqim',
                         'total' => $oqimTotal,
+                        'lang'  => $oqimLang,
                         'rows'  => $rowsOut,
                     ];
                 }
@@ -12023,6 +12035,21 @@ class ReportController extends Controller
             $spec .= " yo'nalishi";
         }
         return $department === '' ? $spec : ($department . ': ' . $spec);
+    }
+
+    /**
+     * Fakultet nomidan "N-son" prefiksini olib tashlaydi (birlashtirish uchun).
+     * "1-son davolash fakulteti" -> "Davolash fakulteti". Prefiks bo'lmasa — o'zgarmaydi.
+     */
+    private function oqimMergeDeptName(?string $name): string
+    {
+        $name = trim((string) $name);
+        $stripped = preg_replace('/^\s*\d+\s*-?\s*son\s+/ui', '', $name);
+        $stripped = trim($stripped === null ? $name : $stripped);
+        if ($stripped === '') {
+            return $name;
+        }
+        return mb_strtoupper(mb_substr($stripped, 0, 1)) . mb_substr($stripped, 1);
     }
 
     /**

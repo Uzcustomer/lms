@@ -84,6 +84,12 @@
                                 <div><label>±</label><input type="number" id="abc_tol" class="norm-in" value="0" min="0"></div>
                             </div>
                         </div>
+                        <div class="norm-group" style="align-self:stretch;display:flex;align-items:center;">
+                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;font-weight:700;color:#334155;">
+                                <input type="checkbox" id="merge_faculties" style="width:16px;height:16px;cursor:pointer;">
+                                Fakultetlarni birlashtirish<br><span style="font-weight:500;font-size:10.5px;color:#94a3b8;">(1+2-son davolash)</span>
+                            </label>
+                        </div>
                         <div class="filter-item" style="min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -172,6 +178,7 @@
                 ab_tol: $('#ab_tol').val() || 0,
                 abc_max: $('#abc_max').val() || 10,
                 abc_tol: $('#abc_tol').val() || 0,
+                merge_faculties: $('#merge_faculties').is(':checked') ? 1 : 0,
                 optimize: optimize ? 1 : 0,
             };
         }
@@ -226,7 +233,7 @@
         function renderReport(res) {
             var blocks = res.blocks || [];
             var grand = 0;
-            var html = '';
+            var html = '<div class="lang-legend">Til: <span class="ll lang-uz">o\'z</span> <span class="ll lang-rus">rus</span> <span class="ll lang-ing">ing</span></div>';
             for (var b = 0; b < blocks.length; b++) {
                 var block = blocks[b];
                 html += '<div class="oqim-block">';
@@ -239,9 +246,11 @@
                     html += '<table class="oqim-table"><thead><tr><th colspan="3">' + esc(course.level_name) + '</th></tr></thead><tbody>';
                     for (var o = 0; o < course.oqims.length; o++) {
                         var oq = course.oqims[o];
+                        var lc = 'lang-' + (oq.lang || 'uz');
                         for (var r = 0; r < oq.rows.length; r++) {
-                            html += '<tr>';
-                            if (r === 0) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum">' + esc(oq.total) + ' ta</span></td>';
+                            var first = (r === 0), last = (r === oq.rows.length - 1);
+                            html += '<tr class="' + lc + (first ? ' oq-first' : '') + (last ? ' oq-last' : '') + '">';
+                            if (first) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum">' + esc(oq.total) + ' ta</span></td>';
                             html += '<td class="oq-grp">' + esc(oq.rows[r].name) + '</td>';
                             html += '<td class="oq-cnt">' + esc(oq.rows[r].count) + '</td>';
                             html += '</tr>';
@@ -386,6 +395,24 @@
         .oq-cnt { text-align: center; font-weight: 600; color: #334155; width: 40px; }
         .oq-total td { background: #f1f5f9; font-weight: 800; color: #0f172a; text-align: center; }
         .badge { display: inline-block; font-weight: 600; }
+
+        /* Oqimni o'qitish tili bo'yicha ranglash */
+        .oqim-table td.oq-grp { border-left: 3px solid transparent; }
+        .lang-uz  td.oq-grp { border-left-color:#3b82f6; }
+        .lang-rus td.oq-grp { border-left-color:#f43f5e; }
+        .lang-ing td.oq-grp { border-left-color:#8b5cf6; }
+        .lang-uz  .oq-label { color:#1d4ed8; background:#eff6ff; }
+        .lang-rus .oq-label { color:#be123c; background:#fff1f2; }
+        .lang-ing .oq-label { color:#6d28d9; background:#f5f3ff; }
+        .lang-rus td.oq-grp, .lang-rus td.oq-cnt { background:#fffafa; }
+        .lang-ing td.oq-grp, .lang-ing td.oq-cnt { background:#fbfaff; }
+        tr.oq-first td { border-top:2px solid #cbd5e1; }
+
+        .lang-legend { font-size:12px; font-weight:700; color:#64748b; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+        .lang-legend .ll { padding:2px 12px; border-radius:999px; font-weight:800; border-left:3px solid; }
+        .lang-legend .ll.lang-uz  { color:#1d4ed8; background:#eff6ff; border-left-color:#3b82f6; }
+        .lang-legend .ll.lang-rus { color:#be123c; background:#fff1f2; border-left-color:#f43f5e; }
+        .lang-legend .ll.lang-ing { color:#6d28d9; background:#f5f3ff; border-left-color:#8b5cf6; }
 
         #opt-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
         #opt-dialog { background:#fff; border-radius:14px; width:100%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,0.35); overflow:hidden; }

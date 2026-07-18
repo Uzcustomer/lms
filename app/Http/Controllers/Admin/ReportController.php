@@ -12099,108 +12099,147 @@ class ReportController extends Controller
     }
 
     /**
-     * Fakultetlararo OQIM ko'chirish (fakultetlar ALOHIDA qoladi): bir fakultetning kam
-     * to'lgan (ortiqcha) oqimini qo'shni fakultetning (bir xil merge_key, kurs va til)
-     * joyi bor oqimiga to'liq ko'chiradi. Shunda oqimlar soni kamayadi. Ko'chirilgan
-     * guruhlar QABUL QILGAN fakultet blokida "mehmon" deb belgilanadi; yuboruvchi fakultet
-     * o'sha oqimni endi ko'rsatmaydi. Qaytaradi: [yangilangan bloklar, ko'chirishlar (xmoves)].
+     * Fakultetlararo OQIM to'ldirish (fakultetlar ALOHIDA qoladi): bir xil yo'nalishli
+     * (merge_key), kurs va tildagi barcha oqimlarning asosiy guruhlari pool qilinib, oqim
+     * me'yorigacha (oqim_max + tolerantlik) zich qayta qadoqlanadi — shunda kam to'lgan
+     * oqimlar qo'shni fakultet guruhlari hisobiga me'yorgacha to'ladi. Oqim me'yori
+     * PRIORITET: guruhcha soni bir xil qoladi, faqat oqimlar to'ldiriladi. Har bir oqim
+     * eng ko'p talaba beruvchi fakultetga biriktiriladi; boshqasidan kelgan guruhlar
+     * "mehmon" bo'ladi. Qaytaradi: [yangilangan bloklar, ko'chirishlar (xmoves)].
      */
     private function applyCrossFacultyOqimMerge(array $blocks, array $params): array
     {
         $limit = $params['oqim_max'] + max(0, $params['oqim_tol']);
-        $langLabels = ['uz' => "o'z", 'rus' => 'rus', 'ing' => 'ing'];
 
-        // 1) Barcha oqimlarni egasi (blok, kurs) bilan guruhlab yig'amiz.
-        //    Guruh kaliti: merge_key | level_code | til — ko'chirish faqat shu doirada.
-        $groups = [];
-        $order = 0;
+        // (bi, level_code) -> ci — oqimni qabul qiluvchi fakultetning shu kursiga biriktirish uchun
+        $courseIndex = [];
         foreach ($blocks as $bi => $blk) {
             foreach ($blk['courses'] as $ci => $course) {
+                $courseIndex[$bi][(string) $course['level_code']] = $ci;
+            }
+        }
+
+        // Oqimlarni (merge_key | level_code | til) bo'yicha guruhlaymiz.
+        $groups = [];
+        $gorder = 0;
+        foreach ($blocks as $bi => $blk) {
+            $dept = $this->oqimFacultyShort($blk['department_name'] ?? $blk['title']);
+            foreach ($blk['courses'] as $ci => $course) {
                 foreach ($course['oqims'] as $oq) {
-                    $oq['_bi']    = $bi;
-                    $oq['_ci']    = $ci;
-                    $oq['_dept']  = $this->oqimFacultyShort($blk['department_name'] ?? $blk['title']);
-                    $oq['_level'] = $course['level_name'];
-                    $oq['_order'] = $order++;
-                    $gkey = ($blk['merge_key'] ?? $bi) . '|' . ($course['level_code'] ?? $ci) . '|' . ($oq['lang'] ?? 'uz');
-                    $groups[$gkey][] = $oq;
+                    $gkey = ($blk['merge_key'] ?? $bi) . '|' . $course['level_code'] . '|' . ($oq['lang'] ?? 'uz');
+                    if (!isset($groups[$gkey])) {
+                        $groups[$gkey] = [
+                            'level_code' => $course['level_code'],
+                            'level_name' => $course['level_name'],
+                            'lang'       => $oq['lang'] ?? 'uz',
+                            'lang_label' => $oq['lang_label'] ?? "o'z",
+                            'order'      => $gorder++,
+                            'items'      => [],
+                        ];
+                    }
+                    $groups[$gkey]['items'][] = ['oq' => $oq, 'bi' => $bi, 'ci' => $ci, 'dept' => $dept];
                 }
             }
         }
 
-        // 2) Har bir guruhda — eng kichik oqimdan boshlab, boshqa fakultetdagi sig'adigan
-        //    (best-fit) oqimga to'liq singdiramiz.
         $xmoves = [];
-        $courseOqims = []; // "bi|ci" => [oqim, ...]
-        foreach ($groups as $list) {
-            $distinctBlocks = array_unique(array_map(fn($o) => $o['_bi'], $list));
-            if (count($distinctBlocks) > 1) {
-                usort($list, fn($a, $b) => $a['total'] <=> $b['total']);
-                $removed = [];
-                $n = count($list);
-                for ($i = 0; $i < $n; $i++) {
-                    if (isset($removed[$i]) || !empty($list[$i]['has_visitor'])) {
-                        continue; // mehmon qabul qilgan oqim boshqa joyga ko'chmaydi
-                    }
-                    $S = $list[$i];
-                    $bestJ = -1; $bestTotal = -1;
-                    for ($j = 0; $j < $n; $j++) {
-                        if ($j === $i || isset($removed[$j])) continue;
-                        if ($list[$j]['_bi'] === $S['_bi']) continue; // bir fakultet ichida emas
-                        $ht = $list[$j]['total'];
-                        if ($ht + $S['total'] <= $limit && $ht > $bestTotal) {
-                            $bestTotal = $ht; $bestJ = $j;
-                        }
-                    }
-                    if ($bestJ < 0) continue;
+        $courseOqims = []; // [bi][ci] => [oqim, ...]
 
-                    $before = $list[$bestJ]['total'];
-                    $moved = [];
-                    foreach ($S['rows'] as $rr) {
-                        $rr['visitor'] = true;
-                        $rr['from']    = $S['_dept'];
-                        $list[$bestJ]['rows'][] = $rr;
-                        $moved[] = ['name' => $rr['name'], 'count' => $rr['count']];
+        foreach ($groups as $g) {
+            $items = $g['items'];
+            $distinctBi = array_unique(array_map(fn($x) => $x['bi'], $items));
+
+            if (count($distinctBi) < 2) {
+                // Bitta fakultet — oqimlar o'zgarmaydi.
+                foreach ($items as $it) {
+                    $courseOqims[$it['bi']][$it['ci']][] = $it['oq'];
+                }
+                continue;
+            }
+
+            // Barcha asosiy guruhlarni pool qilamiz (oqim qatorlaridan qayta yig'ib), egasi bilan.
+            $bases = [];
+            foreach ($items as $it) {
+                foreach ($this->oqimRowsToBases($it['oq']['rows']) as $bs) {
+                    $bs['_bi']   = $it['bi'];
+                    $bs['_dept'] = $it['dept'];
+                    $bases[] = $bs;
+                }
+            }
+            // Guruh nomi bo'yicha tartiblab, oqim me'yorigacha (limit) zich qadoqlaymiz.
+            usort($bases, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+            $chunks = [];
+            $cur = []; $sum = 0;
+            foreach ($bases as $bs) {
+                if (!empty($cur) && ($sum + $bs['total']) > $limit) {
+                    $chunks[] = $cur; $cur = []; $sum = 0;
+                }
+                $cur[] = $bs; $sum += $bs['total'];
+            }
+            if (!empty($cur)) {
+                $chunks[] = $cur;
+            }
+
+            // Har bir oqimni ENG KO'P talaba beruvchi fakultetga biriktiramiz.
+            foreach ($chunks as $chunk) {
+                $byBi = [];
+                foreach ($chunk as $bs) { $byBi[$bs['_bi']] = ($byBi[$bs['_bi']] ?? 0) + $bs['total']; }
+                arsort($byBi);
+                $hostBi = array_key_first($byBi);
+                $hostCi = $courseIndex[$hostBi][(string) $g['level_code']] ?? null;
+                if ($hostCi === null) { $hostBi = $items[0]['bi']; $hostCi = $items[0]['ci']; }
+
+                $rows = []; $total = 0; $hasVisitor = false; $movedByDept = [];
+                foreach ($chunk as $bs) {
+                    $isVisitor = ($bs['_bi'] !== $hostBi);
+                    foreach ($bs['rows'] as $r) {
+                        if ($isVisitor) { $r['visitor'] = true; $r['from'] = $bs['_dept']; }
+                        if (!empty($r['visitor'])) { $hasVisitor = true; }
+                        $rows[] = $r;
+                        $total += (int) $r['count'];
                     }
-                    $list[$bestJ]['total']      += $S['total'];
-                    $list[$bestJ]['has_visitor'] = true;
-                    $removed[$i] = true;
-                    $xmoves[] = [
-                        'course'      => $S['_level'],
-                        'lang'        => $S['lang_label'] ?? ($langLabels[$S['lang'] ?? 'uz'] ?? ''),
-                        'from_fac'    => $S['_dept'],
-                        'to_fac'      => $list[$bestJ]['_dept'],
-                        'moved'       => $moved,
-                        'moved_total' => $S['total'],
-                        'to_before'   => $before,
-                        'to_after'    => $list[$bestJ]['total'],
-                    ];
+                    if ($isVisitor) {
+                        if (!isset($movedByDept[$bs['_dept']])) { $movedByDept[$bs['_dept']] = ['total' => 0, 'items' => []]; }
+                        $movedByDept[$bs['_dept']]['total'] += $bs['total'];
+                        $movedByDept[$bs['_dept']]['items'][] = ['name' => $bs['base'], 'count' => $bs['total']];
+                    }
                 }
-                foreach ($list as $k => $oq) {
-                    if (isset($removed[$k])) continue;
-                    $courseOqims[$oq['_bi'] . '|' . $oq['_ci']][] = $oq;
-                }
-            } else {
-                foreach ($list as $oq) {
-                    $courseOqims[$oq['_bi'] . '|' . $oq['_ci']][] = $oq;
+                $courseOqims[$hostBi][$hostCi][] = [
+                    'label' => '', 'total' => $total, 'lang' => $g['lang'], 'lang_label' => $g['lang_label'],
+                    'has_visitor' => $hasVisitor, 'rows' => $rows, '_first' => $chunk[0]['base'],
+                ];
+                if ($hasVisitor) {
+                    $hostDept = $this->oqimFacultyShort($blocks[$hostBi]['department_name'] ?? '');
+                    foreach ($movedByDept as $fromDept => $mv) {
+                        $xmoves[] = [
+                            'course'      => $g['level_name'],
+                            'lang'        => $g['lang_label'],
+                            'from_fac'    => $fromDept,
+                            'to_fac'      => $hostDept,
+                            'moved'       => $mv['items'],
+                            'moved_total' => $mv['total'],
+                            'to_before'   => $total - $mv['total'],
+                            'to_after'    => $total,
+                        ];
+                    }
                 }
             }
         }
 
-        // 3) Bloklarni qayta quramiz — kursdagi oqimlarni asl tartibda qayta raqamlaymiz.
+        // Bloklarni qayta quramiz — har kursdagi oqimlarni guruh nomi bo'yicha tartiblab raqamlaymiz.
         foreach ($blocks as $bi => &$blk) {
             $newCourses = [];
             foreach ($blk['courses'] as $ci => $course) {
-                $oqs = $courseOqims[$bi . '|' . $ci] ?? [];
+                $oqs = $courseOqims[$bi][$ci] ?? [];
                 if (empty($oqs)) {
                     continue; // bu kursda oqim qolmadi (hammasi qo'shni fakultetga ko'chdi)
                 }
-                usort($oqs, fn($a, $b) => $a['_order'] <=> $b['_order']);
+                usort($oqs, fn($a, $b) => $this->oqimNatCmp($a['_first'] ?? '', $b['_first'] ?? ''));
                 $total = 0; $rebuilt = []; $num = 0;
                 foreach ($oqs as $oq) {
                     $total += $oq['total'];
                     $oq['label'] = (++$num) . '-oqim';
-                    unset($oq['_bi'], $oq['_ci'], $oq['_dept'], $oq['_level'], $oq['_order']);
+                    unset($oq['_first']);
                     $rebuilt[] = $oq;
                 }
                 $course['oqims'] = $rebuilt;
@@ -12213,6 +12252,26 @@ class ReportController extends Controller
         $blocks = array_values(array_filter($blocks, fn($b) => !empty($b['courses'])));
 
         return [$blocks, $xmoves];
+    }
+
+    /**
+     * Oqim qatorlarini (kichik guruhlar) asosiy guruhlarga (base) qayta yig'adi — ketma-ket
+     * bir xil asosiy nomli qatorlar bitta guruh. Fakultetlararo oqim qadoqlashda butun
+     * guruhni ko'chirish uchun ishlatiladi.
+     */
+    private function oqimRowsToBases(array $rows): array
+    {
+        $bases = [];
+        $order = [];
+        foreach ($rows as $r) {
+            $bk = $this->oqimBaseOfRow($r['name']);
+            if (!isset($bases[$bk])) { $bases[$bk] = ['base' => $bk, 'total' => 0, 'rows' => []]; $order[] = $bk; }
+            $bases[$bk]['rows'][] = $r;
+            $bases[$bk]['total'] += (int) $r['count'];
+        }
+        $out = [];
+        foreach ($order as $bk) { $out[] = $bases[$bk]; }
+        return $out;
     }
 
     /**

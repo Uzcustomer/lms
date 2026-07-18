@@ -29,8 +29,10 @@ class ImportAcademicRecords extends Command
 
         Cache::put('academic_import_progress', [
             'status'     => 'running',
+            'stage'      => 'prepare',
+            'loaded'     => 0,
             'page'       => 0,
-            'pages'      => 1,
+            'pages'      => 0,
             'imported'   => 0,
             'percent'    => 0,
             'started_at' => now()->toDateTimeString(),
@@ -49,6 +51,7 @@ class ImportAcademicRecords extends Command
 
                     Cache::put('academic_import_progress', [
                         'status'     => 'running',
+                        'stage'      => 'import',
                         'page'       => $page,
                         'pages'      => $totalPages,
                         'imported'   => $imported,
@@ -62,8 +65,31 @@ class ImportAcademicRecords extends Command
                         $telegram->notify("📊 Akademik qaydlar import: {$milestone}% ({$page}/{$totalPages} sahifa, yangi: {$imported} ta)");
                         $lastTelegramPct = $milestone;
                     }
+                },
+                // Tayyorlanish bosqichi — mavjud yozuvlar xaritasi o'qilmoqda.
+                function ($loaded) {
+                    $this->output->write("\r  Tayyorlanmoqda: {$loaded} ta yozuv o'qildi...");
+                    Cache::put('academic_import_progress', [
+                        'status'     => 'running',
+                        'stage'      => 'prepare',
+                        'loaded'     => $loaded,
+                        'page'       => 0,
+                        'pages'      => 0,
+                        'imported'   => 0,
+                        'percent'    => 0,
+                        'started_at' => now()->toDateTimeString(),
+                    ], 3600);
                 }
             );
+        } catch (\Throwable $e) {
+            Cache::put('academic_import_progress', [
+                'status'      => 'failed',
+                'message'     => mb_substr($e->getMessage(), 0, 200),
+                'percent'     => 0,
+                'finished_at' => now()->toDateTimeString(),
+            ], 3600);
+            $telegram->notify("❌ Akademik qaydlar importi xato bilan to'xtadi: " . mb_substr($e->getMessage(), 0, 200));
+            throw $e;
         } finally {
             Cache::forget('academic_import_lock');
         }
@@ -72,6 +98,9 @@ class ImportAcademicRecords extends Command
 
         $this->newLine();
         $this->info("Import tugadi! Yangi/o'zgargan: {$totalImported} ta, O'tkazib: {$skippedCount} ta, Vaqt: {$duration} daqiqa");
+
+        // Oxirgi muvaffaqiyatli sinxronizatsiya vaqti (progress keshidan uzoqroq saqlanadi).
+        Cache::forever('academic_records_last_synced_at', now()->toDateTimeString());
 
         Cache::put('academic_import_progress', [
             'status'      => 'done',

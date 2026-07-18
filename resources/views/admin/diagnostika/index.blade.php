@@ -136,7 +136,7 @@
         .ms-col-btn:hover { border-color: #2b5ea7; }
         .ms-col-btn.ms-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
         .ms-btn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ms-popup { display: none; position: absolute; top: 30px; left: 0; z-index: 200; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
+        .ms-popup { display: none; position: fixed; z-index: 3000; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
         .ms-search { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
         .ms-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .ms-opts { max-height: 220px; overflow-y: auto; }
@@ -166,8 +166,6 @@
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; }
         .badge-grade { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; font-weight: 800; min-width: 32px; text-align: center; }
-        .editable-grade { cursor: pointer; transition: all .15s; }
-        .editable-grade:hover { background: #bfdbfe; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
         .badge-oski { background: #fce7f3; color: #9d174d; border: 1px solid #fbcfe8; font-weight: 800; min-width: 32px; text-align: center; }
         .text-cell { font-size: 12px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
@@ -235,11 +233,15 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="filter-item" style="max-width:200px;">
+                        <div class="filter-item" style="max-width:220px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Dublikatlar</label>
                             <label style="display:inline-flex;align-items:center;gap:8px;height:34px;cursor:pointer;user-select:none;" title="Yoqilganda bir xil natijaning barcha urinishlari ko'rinadi (dedup o'chadi)">
                                 <input type="checkbox" id="show_duplicates" checked onchange="loadTartibgaSol()" style="width:16px;height:16px;cursor:pointer;">
                                 <span style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;">Dublikatlarni ko'rsatish</span>
+                            </label>
+                            <label style="display:inline-flex;align-items:center;gap:8px;height:28px;cursor:pointer;user-select:none;margin-top:2px;" title="Faqat takrorlangan (DUBLIKAT) natijalarni ko'rsatadi">
+                                <input type="checkbox" id="only_duplicates" onchange="onlyDupToggle()" style="width:16px;height:16px;cursor:pointer;">
+                                <span style="font-size:12px;font-weight:700;color:#991b1b;white-space:nowrap;">Faqat dublikatlar</span>
                             </label>
                         </div>
                         <div class="filter-item" style="margin-left:auto;max-width:280px;">
@@ -284,6 +286,11 @@
                             Xulosali Excel
                         </button>
 
+                        <button type="button" id="btn-excel-view" class="btn-excel-xulosa" style="background:linear-gradient(135deg,#0284c7,#0ea5e9);box-shadow:0 2px 6px rgba(2,132,199,0.3);" onclick="downloadTableExcel()" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Jadvalni Excelga
+                        </button>
+
                         <button type="button" id="btn-upload" class="btn-upload" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
                             Sistemaga yuklash
@@ -302,6 +309,11 @@
                         <button type="button" id="btn-delete-grades" class="btn-delete-grades" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                             Bahoni o'chirish
+                        </button>
+
+                        <button type="button" id="btn-not-actual" class="btn-compare" style="background:linear-gradient(135deg,#64748b,#94a3b8);box-shadow:0 2px 6px rgba(100,116,139,0.3);" title="Tanlangan natijalarni noaktual (xato semestr — ortiqcha) deb belgilash" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                            Noaktual
                         </button>
 
                         <div class="import-group">
@@ -473,6 +485,12 @@
         var deleteStudentGradeUrl = '{{ route($routePrefix . ".quiz-results.delete-student-grade") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var triggerCronUrl = '{{ route($routePrefix . ".quiz-results.trigger-cron") }}';
+        var retakeAppSubjectsUrl = '{{ route($routePrefix . ".quiz-results.retake-app-subjects") }}';
+        var reassignRetakeSubjectUrl = '{{ route($routePrefix . ".quiz-results.reassign-retake-subject") }}';
+        var markNotActualUrl = '{{ route($routePrefix . ".quiz-results.mark-not-actual") }}';
+        // Fan/semestrni almashtirish (fan ID tahriri va qayta o'qish arizasiga
+        // moslash) — faqat admin/superadmin rolida ko'rinadi.
+        var canEditFan = {{ !empty($canEditFan) ? 'true' : 'false' }};
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
 
         var allData = [];
@@ -482,6 +500,8 @@
         var xulosaCodes = {
             'ok': 'Yuklasa bo\'ladi',
             'uploaded': 'Jurnalga yuklangan',
+            'no_retake_app': 'Qayta o\'qish arizasi topilmadi',
+            'mavzu': 'Mavzu retake',
             'mavzu_uploaded': 'Jurnalga yuklangan (mavzu)',
             'has_other_grade': 'Bahosi bor',
             'mavzu_nb': 'NB bor',
@@ -495,7 +515,9 @@
             'no_student': 'Talaba topilmadi',
             'unknown_type': 'Quiz turi noma\'lum',
             'bad_grade': 'Baho noto\'g\'ri',
-            'not_first': '1-urinish emas'
+            'not_first': '1-urinish emas',
+            'appeal_deleted': 'Appelyatsiyadan o\'chirildi',
+            'not_actual': 'Noaktual'
         };
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
@@ -518,7 +540,9 @@
                 'no_student':       'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
                 'unknown_type':     'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
                 'bad_grade':        'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
-                'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;'
+                'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
+                'appeal_deleted':   'background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff;',
+                'not_actual':       'background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;'
             };
             var style = styles[code] || 'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;';
             var badge = '<span class="badge" style="' + style + 'font-size:10px;white-space:nowrap;">' + esc(text) + '</span>';
@@ -526,8 +550,93 @@
                 badge = '<span class="xulosa-dup-wrap" style="position:relative;display:inline-block;">' + badge +
                     '<button onclick="deleteDuplicateGrade(' + resultId + ')" class="xulosa-dup-del" title="Dublikat bahoni o\'chirish">&#10005;</button></span>';
             }
+            if (code === 'no_retake_app' && resultId && canEditFan) {
+                badge += ' <button onclick="reassignRetakeSubjectPrompt(' + resultId + ', this)" title="Fanni talabaning qayta o\'qish arizasidagi fanga almashtirish" style="margin-left:4px;padding:2px 6px;font-size:10px;font-weight:700;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:5px;cursor:pointer;white-space:nowrap;">&#128260; Fan</button>';
+            }
+            // Noaktual qatorni qayta "aktual" qilish tugmasi (har qanday operator).
+            if (code === 'not_actual' && resultId) {
+                badge += ' <button onclick="setNotActual([' + resultId + '], false)" title="Qayta aktual qilish" style="margin-left:4px;padding:2px 6px;font-size:10px;font-weight:700;border:1px solid #0ea5e9;background:#f0f9ff;color:#075985;border-radius:5px;cursor:pointer;white-space:nowrap;">&#8634; Aktual</button>';
+            }
             return badge;
         }
+
+        // "Qayta o'qish arizasi topilmadi" qatorida fanni talabaning ariza
+        // bergan (approved) fanlaridan biriga almashtirish — inline dropdown.
+        window.reassignRetakeSubjectPrompt = function(resultId, btn) {
+            var cell = btn.closest('td');
+            var original = cell.innerHTML;
+            btn.disabled = true;
+            btn.textContent = '...';
+            $.ajax({
+                url: retakeAppSubjectsUrl, type: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                data: { id: resultId },
+                success: function(res) {
+                    if (!res.success || !res.items || res.items.length === 0) {
+                        alert('Bu talabada tasdiqlangan qayta o\'qish arizasi topilmadi.');
+                        cell.innerHTML = original;
+                        return;
+                    }
+                    var opts = '<option value="">— fanni tanlang —</option>';
+                    res.items.forEach(function(a) {
+                        var label = (a.subject_name || '—') + (a.semester_name ? ' (' + a.semester_name + ')' : '');
+                        opts += '<option value="' + a.app_id + '">' + esc(label) + '</option>';
+                    });
+                    cell.innerHTML = '<div style="display:flex;gap:4px;align-items:center;">' +
+                        '<select class="reassign-sel" style="max-width:210px;padding:4px;font-size:11px;border:2px solid #f59e0b;border-radius:6px;">' + opts + '</select>' +
+                        '<button class="reassign-cancel" title="Bekor qilish" style="border:none;background:#e2e8f0;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px;">&#10005;</button></div>';
+                    var $sel = $(cell).find('.reassign-sel');
+                    $sel.focus();
+                    $sel.on('change', function() {
+                        var appId = $(this).val();
+                        if (!appId) return;
+                        var chosen = res.items.find(function(x) { return String(x.app_id) === String(appId); });
+                        if (!confirm('Quiz natijasining fani "' + (chosen ? chosen.subject_name : '') + '" faniga almashtirilsinmi?')) {
+                            return;
+                        }
+                        $sel.prop('disabled', true);
+                        $.ajax({
+                            url: reassignRetakeSubjectUrl, type: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrfToken },
+                            data: { id: resultId, app_id: appId },
+                            success: function(d) {
+                                if (!d.success) { alert(d.message || 'Xatolik'); cell.innerHTML = original; return; }
+                                var row = allData.find(function(r) { return r.id === resultId; });
+                                if (row) { row.fan_id = d.fan_id; row.fan_name = d.fan_name; row.orig_fan_name = d.orig_fan_name; }
+                                loadTartibgaSol();
+                            },
+                            error: function(xhr) { alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi')); cell.innerHTML = original; }
+                        });
+                    });
+                    $(cell).find('.reassign-cancel').on('click', function() { cell.innerHTML = original; });
+                },
+                error: function(xhr) {
+                    alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                    cell.innerHTML = original;
+                }
+            });
+        };
+
+        // Natijalarni noaktual / qayta aktual qilish (xato semestr — ortiqcha natija).
+        window.setNotActual = function(ids, notActual, reason) {
+            if (!ids || ids.length === 0) return;
+            if (notActual) {
+                var msg = ids.length === 1
+                    ? "Ushbu natija noaktual (xato semestr — ortiqcha) deb belgilansinmi?"
+                    : (ids.length + " ta natija noaktual deb belgilansinmi?");
+                if (!confirm(msg)) return;
+            }
+            $.ajax({
+                url: markNotActualUrl, type: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                data: { ids: ids, not_actual: notActual ? 1 : 0, reason: reason || '' },
+                success: function(d) {
+                    if (!d.success) { alert(d.message || 'Xatolik'); return; }
+                    loadTartibgaSol();
+                },
+                error: function(xhr) { alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi')); }
+            });
+        };
 
         // ========== TARTIBGA SOLISH ==========
         function searchByName() {
@@ -574,7 +683,7 @@
                         allData = []; filteredData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
-                        $('#btn-excel, #btn-excel-xulosa').prop('disabled', true);
+                        $('#btn-excel, #btn-excel-xulosa, #btn-excel-view').prop('disabled', true);
                         $('#total-info').hide();
                         return;
                     }
@@ -582,7 +691,7 @@
                     msPopulate();
                     applyColumnFilters();
                     $('#table-area').show();
-                    $('#btn-excel, #btn-excel-xulosa').prop('disabled', false);
+                    $('#btn-excel, #btn-excel-xulosa, #btn-excel-view').prop('disabled', false);
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -634,14 +743,24 @@
             document.querySelectorAll('.ms-popup').forEach(function(p) { p.style.display = 'none'; });
             document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
             if (!visible) {
-                popup.style.left = '0';
-                popup.style.right = 'auto';
+                // Popup `position: fixed` — jadval scroll konteyneri (overflow)
+                // uni kesib qo'ymasligi uchun. O'rnini tugmadan hisoblaymiz.
+                var btn = popup.parentElement.querySelector('.ms-col-btn');
+                var brect = btn.getBoundingClientRect();
+                var popW = 230;
+                var left = brect.left;
+                // O'ng chetidan chiqib ketsa — tugmaning o'ng chetiga tekislaymiz
+                if (left + popW > window.innerWidth - 8) {
+                    left = Math.max(8, brect.right - popW);
+                }
+                popup.style.left = left + 'px';
+                popup.style.top = (brect.bottom + 4) + 'px';
                 popup.style.display = 'block';
-                // Ekran o'ng chetidan chiqib ketsa — chapga ochiladi
-                var rect = popup.getBoundingClientRect();
-                if (rect.right > window.innerWidth - 8) {
-                    popup.style.left = 'auto';
-                    popup.style.right = '0';
+                // Pastdan chiqib ketsa — tugmaning tepasiga ochamiz
+                var prect = popup.getBoundingClientRect();
+                if (prect.bottom > window.innerHeight - 8) {
+                    var newTop = brect.top - prect.height - 4;
+                    popup.style.top = Math.max(8, newTop) + 'px';
                 }
             }
         }
@@ -704,6 +823,31 @@
             }
         });
 
+        // Dublikat kaliti — renderTable dagi bilan bir xil (talaba+fan+yn_turi+shakl).
+        function dupKeyOf(r) {
+            return r.student_id + '|' + r.fan_id + '|' + r.yn_turi + '|' + r.shakl;
+        }
+        // allData bo'yicha kalit -> takrorlanish soni.
+        function computeDupCounts() {
+            var dc = {};
+            (allData || []).forEach(function(d) {
+                var k = dupKeyOf(d);
+                dc[k] = (dc[k] || 0) + 1;
+            });
+            return dc;
+        }
+
+        // "Faqat dublikatlar" tugmasi. Dublikatlar hozir ko'rsatilmayotgan bo'lsa
+        // (dedup yoqilgan) — avval ularni yuklab, so'ng filtrlaymiz.
+        function onlyDupToggle() {
+            if ($('#only_duplicates').is(':checked') && !$('#show_duplicates').is(':checked')) {
+                $('#show_duplicates').prop('checked', true);
+                loadTartibgaSol(); // qayta yuklanadi, so'ng applyColumnFilters ishlaydi
+                return;
+            }
+            applyColumnFilters();
+        }
+
         function applyColumnFilters() {
             var filters = {};
             $('input.col-filter-input').each(function() {
@@ -711,7 +855,12 @@
                 if (val) filters[$(this).data('col')] = val;
             });
 
+            var onlyDup = $('#only_duplicates').is(':checked');
+            var dupCounts = onlyDup ? computeDupCounts() : null;
+
             filteredData = allData.filter(function(r) {
+                // Faqat dublikatlar — takrorlanish soni 1 dan katta bo'lganlar.
+                if (onlyDup && !(dupCounts[dupKeyOf(r)] > 1)) return false;
                 for (var col in filters) {
                     var fv = filters[col];
                     var rv = (r[col] || '').toString();
@@ -735,7 +884,7 @@
             filteredData.forEach(function(r) {
                 if (r.xulosa_code === 'ok') okCount++;
                 else if (r.xulosa_code === 'mavzu' || r.xulosa_code === 'mavzu_nb' || r.xulosa_code === 'mavzu_grade') mavzuCount++;
-                else if (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') uploadedCount++;
+                else if (isUploadedRow(r)) uploadedCount++;
                 else errCount++;
             });
             var parts = 'Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>';
@@ -846,8 +995,19 @@
         });
 
         var journalShowBaseUrl = @json(url('/admin/journal/show'));
+        var retakeGroupBaseUrl = @json(url('/admin/retake-test-markazi'));
 
         function buildJournalBtn(r) {
+            // Qayta o'qish qatori — ko'z tugmasi QAYTA O'QISH jurnaliga (test
+            // markazi guruhiga) yo'naltiradi, asosiy jurnalga emas.
+            if (r.retake_group_id) {
+                var rurl = retakeGroupBaseUrl + '/' + encodeURIComponent(r.retake_group_id);
+                return '<a href="' + rurl + '" target="_blank" rel="noopener" class="journal-view-btn" title="Qayta o\'qish jurnalida ko\'rish">' +
+                       '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align:middle;">' +
+                       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>' +
+                       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>' +
+                       '</svg></a>';
+            }
             if (!r.group_local_id || !r.fan_id || !r.semester_code || !r.student_hemis_id) {
                 return '<span style="color:#cbd5e1;font-size:11px;">—</span>';
             }
@@ -863,12 +1023,24 @@
         }
 
         // ========== JADVAL RENDERI ==========
+        function isUploadedRow(r) {
+            var code = r.xulosa_code || '';
+            var text = String(r.xulosa || '').toLowerCase();
+            return code === 'uploaded'
+                || code === 'mavzu_uploaded'
+                || code === 'retake_uploaded'
+                || code === 'not_actual'
+                || code === 'appeal_deleted'
+                || text.indexOf("qayta o'qish jurnalida") !== -1
+                || text.indexOf("qayta o‘qish jurnalida") !== -1;
+        }
+
         function renderTable(data) {
             // Jurnalga yuklanganlar pastga tushadi, yuklanmaganlarning HAMMASI
             // (yuklasa bo'ladi, baho bor, mavzu, xato va h.k.) tepada joylashadi
             data.sort(function(a, b) {
-                var ua = (a.xulosa_code === 'uploaded' || a.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
-                var ub = (b.xulosa_code === 'uploaded' || b.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
+                var ua = isUploadedRow(a) ? 1 : 0;
+                var ub = isUploadedRow(b) ? 1 : 0;
                 return ua - ub;
             });
             // Dublikatlarni aniqlash: bir xil (talaba+fan+yn_turi+shakl) bo'yicha
@@ -888,10 +1060,14 @@
                         : esc(r.yn_turi));
 
                 var isOk = r.xulosa_code === 'ok';
-                var rowClass = (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') ? 'journal-row row-uploaded' : 'journal-row';
+                var rowClass = isUploadedRow(r) ? 'journal-row row-uploaded' : 'journal-row';
 
                 var nameCell = '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
                 var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
+                // Fan qayta o'qish arizasidagi fanga qo'lda almashtirilgan bo'lsa — izini ko'rsatamiz.
+                if (r.orig_fan_name && r.orig_fan_name !== r.fan_name) {
+                    fanCell += '<div style="margin-top:3px;font-size:10px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:2px 6px;display:inline-block;white-space:normal;" title="Fan qayta o\'qish arizasidagi fanga almashtirilgan">&#128260; Almashtirilgan &mdash; asli: <b>' + esc(r.orig_fan_name) + '</b></div>';
+                }
 
                 // Quiz semestri talabaning LMS semestriga mos kelmasa — qator qizil belgilanadi.
                 var semMismatch = !!r.semester_mismatch;
@@ -911,14 +1087,18 @@
                 }
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td>' + fanCell + '</td>';
-                html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
+                if (canEditFan) {
+                    html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
+                } else {
+                    html += '<td><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;">' + esc(r.fan_id || '-') + '</span></td>';
+                }
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 var dupKey = r.student_id + '|' + r.fan_id + '|' + r.yn_turi + '|' + r.shakl;
                 var dupBadge = (dupCount[dupKey] > 1)
                     ? ' <span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:700;" title="Bir xil natija ' + dupCount[dupKey] + ' marta topshirilgan — takroriy urinish">DUBLIKAT ×' + dupCount[dupKey] + '</span>'
                     : '';
-                html += '<td><span class="text-cell">' + esc(r.shakl) + '</span>' + dupBadge + '</td>';
-                html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
+                html += '<td><span class="text-cell editable-shakl" data-id="' + r.id + '" onclick="editShakl(this,' + r.id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.shakl) + '</span>' + dupBadge + '</td>';
+                html += '<td style="text-align:center;"><span class="badge badge-grade" data-id="' + r.id + '" title="Moodle quiz bahosi — tahrirlab bo\'lmaydi">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
                 html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa, r.id) + '</td>';
                 html += '<td style="text-align:center;">' + buildJournalBtn(r) + '</td>';
@@ -949,10 +1129,11 @@
             var hasUploaded = false;
             ids.forEach(function(id) {
                 var row = allData.find(function(r) { return r.id === id; });
-                if (row && row.xulosa_code === 'uploaded') hasUploaded = true;
+                if (row && isUploadedRow(row)) hasUploaded = true;
             });
             $('#btn-delete-grades').prop('disabled', !hasUploaded);
             $('#btn-compare').prop('disabled', count === 0);
+            $('#btn-not-actual').prop('disabled', count === 0);
         }
 
         // ========== EXCEL (Quiz natijalar) ==========
@@ -1015,6 +1196,38 @@
             XLSX.writeFile(wb, 'diagnostika_xulosali_' + new Date().toISOString().slice(0, 10) + '.xlsx');
         }
 
+        // ========== EXCEL (Jadval ko'rinishi — ekrandagi ustunlar shu holicha) ==========
+        function downloadTableExcel() {
+            if (!filteredData || filteredData.length === 0) return;
+
+            // Ekrandagi jadval ustunlari bilan bir xil tartibda (Jurnal tugmasidan tashqari).
+            var headers = ['#', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'Fan', 'Fan ID', 'YN turi', 'Shakl', 'Baho', 'Sana', 'Xulosa'];
+            var rows = [headers];
+            filteredData.forEach(function(r, i) {
+                rows.push([
+                    i + 1, r.student_id, r.full_name, r.faculty, r.direction,
+                    r.kurs, r.semester, r.group, r.fan_name, r.fan_id || '',
+                    r.yn_turi, r.shakl, r.grade, r.date, r.xulosa
+                ]);
+            });
+
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(rows);
+
+            var colWidths = headers.map(function(h, ci) {
+                var max = h.length;
+                rows.forEach(function(row) {
+                    var len = String(row[ci] || '').length;
+                    if (len > max) max = len;
+                });
+                return { wch: Math.min(max + 2, 40) };
+            });
+            ws['!cols'] = colWidths;
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Jadval');
+            XLSX.writeFile(wb, 'diagnostika_jadval_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+        }
+
         // ========== FAYL IMPORT ==========
         function importFile() {
             var fileInput = document.getElementById('file-upload');
@@ -1061,6 +1274,11 @@
                 success: function(data) {
                     var cls = data.success ? 'diag-success' : 'diag-error';
                     $('#upload-result').html('<div class="diag-msg ' + cls + '">' + esc(data.message) + '</div>').show();
+                    // To'g'ridan-to'g'ri tortish natija keltirgan bo'lsa —
+                    // jadvalni avtomatik yangilaymiz (ikkinchi marta bosish shart emas).
+                    if (data.success && typeof data.imported !== 'undefined') {
+                        loadTartibgaSol();
+                    }
                 },
                 error: function(xhr) {
                     var msg = xhr.responseJSON?.message || 'Server xatosi';
@@ -1101,57 +1319,8 @@
                 filterTimer = setTimeout(function() { applyColumnFilters(); }, 300);
             });
 
-            // BAHO TAHRIRLASH
-            window.editGrade = function(el, id) {
-                var currentGrade = el.textContent.trim();
-                var td = el.parentNode;
-                var input = document.createElement('input');
-                input.type = 'number';
-                input.min = '0';
-                input.max = '100';
-                input.value = currentGrade;
-                input.style.cssText = 'width:60px;padding:4px 6px;font-size:13px;font-weight:700;text-align:center;border:2px solid #3b82f6;border-radius:6px;outline:none;';
-                input.className = 'grade-edit-input';
-                td.innerHTML = '';
-                td.appendChild(input);
-                input.focus();
-                input.select();
-
-                function saveGrade() {
-                    var newGrade = parseInt(input.value);
-                    if (isNaN(newGrade) || newGrade < 0 || newGrade > 100) {
-                        alert('Baho 0 dan 100 gacha bo\'lishi kerak!');
-                        input.focus();
-                        return;
-                    }
-                    // allData ni yangilash
-                    var row = allData.find(function(r) { return r.id === id; });
-                    if (row) row.grade = newGrade;
-
-                    // DB ga saqlash
-                    $.ajax({
-                        url: '{{ route($routePrefix . ".quiz-results.update-grade") }}',
-                        type: 'POST',
-                        headers: { 'X-CSRF-TOKEN': csrfToken },
-                        data: { id: id, grade: newGrade },
-                        success: function() {
-                            td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + newGrade + '</span>';
-                        },
-                        error: function() {
-                            alert('Saqlashda xatolik!');
-                            td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + currentGrade + '</span>';
-                        }
-                    });
-                }
-
-                input.addEventListener('blur', saveGrade);
-                input.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') { e.preventDefault(); saveGrade(); }
-                    if (e.key === 'Escape') {
-                        td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + currentGrade + '</span>';
-                    }
-                });
-            };
+            // BAHO TAHRIRLASH — o'chirilgan.
+            // Baho Moodle quizdan keladi va diagnostika sahifasida qo'lda o'zgartirilmaydi.
 
             window.editFanId = function(el, id) {
                 var currentFanId = el.textContent.trim();
@@ -1210,6 +1379,63 @@
                 input.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') { e.preventDefault(); saveFanId(); }
                     if (e.key === 'Escape') { restore(currentFanId); }
+                });
+            };
+
+            window.editShakl = function(el, id) {
+                var currentShakl = el.textContent.trim();
+                var td = el.parentNode;
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.value = currentShakl;
+                input.style.cssText = 'width:230px;max-width:100%;padding:4px 6px;font-size:12px;font-weight:600;border:2px solid #3b82f6;border-radius:6px;outline:none;';
+                td.innerHTML = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                function restore(val) {
+                    td.innerHTML = '<span class="text-cell editable-shakl" data-id="' + id + '" onclick="editShakl(this,' + id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;">' + esc(val || '-') + '</span>';
+                }
+
+                function saveShakl() {
+                    var newShakl = input.value.trim();
+                    if (!newShakl) {
+                        alert('Shakl bo\'sh bo\'lishi mumkin emas!');
+                        input.focus();
+                        return;
+                    }
+                    if (newShakl === currentShakl) {
+                        restore(currentShakl);
+                        return;
+                    }
+                    $.ajax({
+                        url: '{{ route($routePrefix . ".quiz-results.update-shakl") }}',
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        data: { id: id, shakl: newShakl },
+                        success: function(data) {
+                            if (!data.success) {
+                                alert(data.message || 'Xatolik');
+                                restore(currentShakl);
+                                return;
+                            }
+                            var row = allData.find(function(r) { return r.id === id; });
+                            if (row) row.shakl = data.shakl;
+                            restore(data.shakl);
+                            loadTartibgaSol();
+                        },
+                        error: function(xhr) {
+                            alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                            restore(currentShakl);
+                        }
+                    });
+                }
+
+                input.addEventListener('blur', saveShakl);
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); saveShakl(); }
+                    if (e.key === 'Escape') { restore(currentShakl); }
                 });
             };
 
@@ -1374,6 +1600,17 @@
                     html += '</td>';
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
+                    var shaklRaw = String(g.shakl || '');
+                    var attemptMatch = shaklRaw.match(/^\s*(\d+)\s*-\s*urinish/i);
+                    var defaultAttempt = attemptMatch && attemptMatch[1] ? attemptMatch[1] : '1';
+                    html += '<td>';
+                    html += '<select class="reupload-shakl-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:155px;">';
+                    html += '<option value="1"' + (defaultAttempt === '1' ? ' selected' : '') + '>1-urinish</option>';
+                    html += '<option value="2"' + (defaultAttempt === '2' ? ' selected' : '') + '>2-urinish</option>';
+                    html += '<option value="3"' + (defaultAttempt === '3' ? ' selected' : '') + '>3-urinish</option>';
+                    html += '<option value="retake">Qayta o&#039;qish</option>';
+                    html += '</select>';
+                    html += '</td>';
                     // YN turi tanlovi: OSKI/Test + mavzular (1..N). Default — qatordagi qiymat.
                     var defaultYnTuri = '';
                     if (g.yn_turi === 'oski' || g.yn_turi === 'test') {
@@ -1491,7 +1728,7 @@
                         url: reuploadUrl, type: 'POST',
                         headers: { 'X-CSRF-TOKEN': csrfToken },
                         contentType: 'application/json',
-                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides, semester_overrides: semesterOverrides }),
+                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides, semester_overrides: semesterOverrides, attempt_overrides: attemptOverrides }),
                         success: function(data) {
                             closeReuploadModal();
                             var html = '';
@@ -1527,6 +1764,13 @@
             window.closeReuploadModal = function() {
                 $('#reupload-modal-overlay').remove();
             };
+
+            // ========== NOAKTUAL QILISH ==========
+            $('#btn-not-actual').on('click', function() {
+                var ids = getSelectedIds();
+                if (ids.length === 0) return;
+                setNotActual(ids, true);
+            });
 
             // ========== BAHONI O'CHIRISH ==========
             $('#btn-delete-grades').on('click', function() {

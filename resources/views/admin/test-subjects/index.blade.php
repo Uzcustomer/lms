@@ -4,7 +4,7 @@
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl font-bold text-slate-900">Test fanlar</h1>
-                    <p class="text-sm text-slate-500 mt-1">Admin yaratadigan maxsus test fanlar, guruhlar va dars sanalari.</p>
+                    <p class="text-sm text-slate-500 mt-1">Sohta fan, guruh, o'qituvchi va dars jadvali yaratish uchun admin moduli.</p>
                 </div>
                 <a href="{{ route('admin.test-subjects.create') }}"
                    class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">
@@ -22,51 +22,59 @@
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
-                            <tr>
-                                <th class="px-4 py-3 text-left">Fan</th>
-                                <th class="px-4 py-3 text-left">Fakultet</th>
-                                <th class="px-4 py-3 text-left">Yo'nalish</th>
-                                <th class="px-4 py-3 text-left">Kafedra</th>
-                                <th class="px-4 py-3 text-left">Kurs</th>
-                                <th class="px-4 py-3 text-left">O'qituvchi</th>
-                                <th class="px-4 py-3 text-center">Guruhlar</th>
-                                <th class="px-4 py-3 text-center">Darslar</th>
-                                <th class="px-4 py-3 text-left">Muddat</th>
-                                <th class="px-4 py-3 text-right">Amal</th>
-                            </tr>
+                        <tr>
+                            <th class="px-4 py-3 text-left">Fan</th>
+                            <th class="px-4 py-3 text-left">O'qituvchi</th>
+                            <th class="px-4 py-3 text-left">Kurs</th>
+                            <th class="px-4 py-3 text-left">Yo'nalish</th>
+                            <th class="px-4 py-3 text-center">Guruhlar</th>
+                            <th class="px-4 py-3 text-center">Darslar</th>
+                            <th class="px-4 py-3 text-left">Muddat</th>
+                            <th class="px-4 py-3 text-right">Amal</th>
+                        </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            @forelse($subjects as $subject)
-                                <tr class="hover:bg-slate-50">
-                                    <td class="px-4 py-4">
-                                        <div class="font-semibold text-slate-900">{{ $subject->name }}</div>
-                                    </td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->faculty_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->specialty_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->department_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->level_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->teacher_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->groups->count() }}</td>
-                                    <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->lessons->count() }}</td>
-                                    <td class="px-4 py-4 text-slate-700">
-                                        {{ optional($subject->starts_on)->format('d.m.Y') ?: '—' }}
-                                        -
-                                        {{ optional($subject->ends_on)->format('d.m.Y') ?: '—' }}
-                                    </td>
-                                    <td class="px-4 py-4 text-right">
-                                        <a href="{{ route('admin.test-subjects.show', $subject) }}"
-                                           class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
-                                            Ko'rish
-                                        </a>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="10" class="px-4 py-10 text-center text-slate-500">
-                                        Hozircha test fanlar yaratilmagan.
-                                    </td>
-                                </tr>
-                            @endforelse
+                        @forelse($subjects as $subject)
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-4 py-4">
+                                    <div class="font-semibold text-slate-900">{{ $subject->name }}</div>
+                                    <div class="text-xs text-slate-500 mt-1">{{ $subject->faculty_name ?: 'Fakultet tanlanmagan' }}</div>
+                                </td>
+                                <td class="px-4 py-4 text-slate-700">{{ $subject->teacher_name ?: '-' }}</td>
+                                <td class="px-4 py-4 text-slate-700">{{ $subject->level_name ?: '-' }}</td>
+                                <td class="px-4 py-4 text-slate-700">{{ $subject->specialty_name ?: '-' }}</td>
+                                <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->groups->count() }}</td>
+                                <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->lessons->count() }}</td>
+                                <td class="px-4 py-4 text-slate-700">
+                                    {{ optional($subject->starts_on)->format('d.m.Y') ?: '-' }}
+                                    -
+                                    {{ optional($subject->ends_on)->format('d.m.Y') ?: '-' }}
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="flex items-center justify-end gap-2">
+                                    <a href="{{ route('admin.test-subjects.show', $subject) }}"
+                                       class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
+                                        Ko'rish
+                                    </a>
+                                        <form method="POST" action="{{ route('admin.test-subjects.destroy', $subject) }}"
+                                              onsubmit="return confirm('Test fanni o\\'chirishni tasdiqlaysizmi?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit"
+                                                    class="inline-flex items-center px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" class="px-4 py-10 text-center text-slate-500">
+                                    Hozircha test fan yaratilmagan.
+                                </td>
+                            </tr>
+                        @endforelse
                         </tbody>
                     </table>
                 </div>

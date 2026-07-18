@@ -56,21 +56,36 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             $q->where('semester_id', $semester);
         }
 
-        // Stage (akademik dept) — pending / preapproved / rejected
-        if (!empty($f['stage'])) {
-            $q->whereHas('group', function ($g) {
-                $g->whereNotNull('payment_uploaded_at')
-                  ->where('payment_verification_status', 'approved');
-            });
+        // Aniq "Holat" filtri — bosqich (stage) filtridan ustun turadi
+        if (!empty($f['status'])) {
+            $q->academicStatus($f['status']);
+        }
+
+        // Stage (akademik dept) — awaiting / pending / preapproved / rejected
+        if (empty($f['status']) && !empty($f['stage'])) {
             match ($f['stage']) {
-                'pending' => $q->where('dean_status', 'approved')
+                'awaiting' => $q
+                    ->where('final_status', 'pending')
+                    ->where('academic_dept_status', 'pending')
+                    ->whereHas('group', fn ($g) => $g->where('payment_verification_status', '!=', 'rejected'))
+                    ->where(function ($inner) {
+                        $inner->where('dean_status', '!=', 'approved')
+                            ->orWhere('registrar_status', '!=', 'approved')
+                            ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', '!=', 'approved'));
+                    }),
+                'pending' => $q->whereHas('group', fn ($g) => $g->where('payment_verification_status', 'approved'))
+                    ->where('dean_status', 'approved')
                     ->where('registrar_status', 'approved')
                     ->where('academic_dept_status', 'pending')
                     ->where('final_status', 'pending'),
-                'preapproved' => $q->where('academic_dept_status', 'approved')
+                'preapproved' => $q->whereHas('group', fn ($g) => $g->where('payment_verification_status', 'approved'))
+                    ->where('academic_dept_status', 'approved')
                     ->where('final_status', 'pending')
                     ->whereNull('retake_group_id'),
-                'rejected' => $q->where('academic_dept_status', 'rejected'),
+                'rejected' => $q->where(function ($inner) {
+                    $inner->where('final_status', 'rejected')
+                        ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
+                }),
                 default => null,
             };
         }
@@ -174,7 +189,7 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             'O\'quv bo\'limi',
             'O\'quv bo\'limi sanasi',
             'O\'quv bo\'limi sababi',
-            'Yakuniy holat',
+            'Holat',
             'Rad etgan tomon',
             'Qayta o\'qish guruhi',
             'O\'qituvchi',
@@ -227,7 +242,7 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             optional($app->academic_dept_decision_at)->format('Y-m-d H:i'),
             $app->academic_dept_reason,
 
-            $this->finalLabel($app->final_status),
+            $app->academicStageBadge()['label'],
             $this->rejectedByLabel($app->rejected_by),
 
             $rg?->name ?? '',
@@ -238,16 +253,6 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
     }
 
     private function statusLabel(?string $status): string
-    {
-        return match ($status) {
-            'approved' => 'Tasdiqlandi',
-            'rejected' => 'Rad etildi',
-            'pending' => 'Kutilmoqda',
-            default => '—',
-        };
-    }
-
-    private function finalLabel(?string $status): string
     {
         return match ($status) {
             'approved' => 'Tasdiqlandi',

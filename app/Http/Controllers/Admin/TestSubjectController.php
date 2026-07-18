@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\CurriculumSubject;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\Specialty;
+use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TestSubject;
+use App\Models\TestSubjectLesson;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -19,7 +20,7 @@ class TestSubjectController extends Controller
     public function index()
     {
         $subjects = TestSubject::query()
-            ->with(['lessons', 'groups', 'teacher'])
+            ->with(['groups', 'lessons', 'teacher'])
             ->latest()
             ->paginate(20);
 
@@ -28,36 +29,17 @@ class TestSubjectController extends Controller
 
     public function create()
     {
-        $baseGroups = $this->testSubjectGroupsQuery()
-            ->with(['curriculum.semesters'])
-            ->orderBy('name')
-            ->get([
-                'id',
-                'name',
-                'group_hemis_id',
-                'department_hemis_id',
-                'specialty_hemis_id',
-                'curriculum_hemis_id',
-            ]);
-
-        $facultyHemisIds = $baseGroups->pluck('department_hemis_id')->filter()->unique()->values();
-        $specialtyHemisIds = $baseGroups->pluck('specialty_hemis_id')->filter()->unique()->values();
-        $curriculumIds = $baseGroups->pluck('curriculum_hemis_id')->filter()->unique()->values();
+        [$groups, $levels] = $this->groupPayload();
 
         $faculties = Department::query()
             ->where('structure_type_code', 11)
             ->where('active', true)
-            ->whereIn('department_hemis_id', $facultyHemisIds)
             ->orderBy('name')
             ->get(['department_hemis_id', 'name'])
-            ->map(fn (Department $faculty) => [
-                'department_hemis_id' => (string) $faculty->department_hemis_id,
-                'name' => $faculty->name,
-            ])
-            ->values();
+            ->mapWithKeys(fn (Department $department) => [(string) $department->department_hemis_id => $department->name]);
 
         $specialties = Specialty::query()
-            ->whereIn('specialty_hemis_id', $specialtyHemisIds)
+            ->whereIn('specialty_hemis_id', collect($groups)->pluck('specialty_hemis_id')->filter()->unique()->values())
             ->orderBy('name')
             ->get(['specialty_hemis_id', 'name', 'department_hemis_id'])
             ->map(fn (Specialty $specialty) => [
@@ -78,67 +60,13 @@ class TestSubjectController extends Controller
             ])
             ->values();
 
-        $kafedraMap = CurriculumSubject::query()
-            ->whereIn('curricula_hemis_id', $curriculumIds)
-            ->whereNotNull('department_id')
-            ->whereNotNull('department_name')
-            ->select('curricula_hemis_id', 'department_id', 'department_name')
-            ->get()
-            ->groupBy('curricula_hemis_id');
-
-        $groups = $baseGroups->map(function (Group $group) {
-            $semester = $group->curriculum?->semesters
-                ?->sortByDesc(fn ($item) => (int) ($item->current ? 1 : 0))
-                ->first();
-
-            return [
-                'id' => $group->id,
-                'name' => $group->name,
-                'group_hemis_id' => $group->group_hemis_id,
-                'department_hemis_id' => (string) $group->department_hemis_id,
-                'specialty_hemis_id' => (string) $group->specialty_hemis_id,
-                'curriculum_hemis_id' => $group->curriculum_hemis_id,
-                'level_code' => (string) ($semester?->level_code ?? ''),
-                'level_name' => $semester?->level_name,
-            ];
-        })->values();
-
-        $departments = $groups
-            ->flatMap(function (array $group) use ($kafedraMap) {
-                return ($kafedraMap->get($group['curriculum_hemis_id']) ?? collect())
-                    ->map(fn ($item) => [
-                        'department_id' => (string) $item->department_id,
-                        'department_name' => $item->department_name,
-                        'faculty_hemis_id' => $group['department_hemis_id'],
-                        'specialty_hemis_id' => $group['specialty_hemis_id'],
-                    ]);
-            })
-            ->unique(fn ($item) => implode('|', [
-                $item['department_id'],
-                $item['faculty_hemis_id'],
-                $item['specialty_hemis_id'],
-            ]))
-            ->sortBy('department_name')
-            ->values();
-
-        $levels = $groups
-            ->filter(fn ($group) => $group['level_code'] !== '')
-            ->map(fn ($group) => [
-                'code' => $group['level_code'],
-                'name' => (string) ($group['level_name'] ?: ($group['level_code'] . '-kurs')),
-            ])
-            ->unique('code')
-            ->sortBy(fn ($level) => (int) $level['code'])
-            ->values();
-
-        return view('admin.test-subjects.create', compact(
-            'faculties',
-            'specialties',
-            'departments',
-            'teachers',
-            'groups',
-            'levels'
-        ));
+        return view('admin.test-subjects.create', [
+            'faculties' => $faculties,
+            'specialties' => $specialties,
+            'teachers' => $teachers,
+            'groups' => $groups,
+            'levels' => $levels,
+        ]);
     }
 
     public function store(Request $request)
@@ -147,17 +75,16 @@ class TestSubjectController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'faculty_hemis_id' => ['nullable', 'integer'],
             'specialty_hemis_id' => ['nullable', 'integer'],
-            'department_id' => ['nullable', 'integer'],
             'level_code' => ['nullable', 'string', 'max:20'],
             'teacher_id' => ['nullable', 'integer', 'exists:teachers,id'],
-            'starts_on' => ['nullable', 'date'],
-            'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
+            'starts_on' => ['required', 'date'],
+            'ends_on' => ['required', 'date', 'after_or_equal:starts_on'],
             'group_ids' => ['required', 'array', 'min:1'],
             'group_ids.*' => ['integer', 'exists:groups,id'],
             'lessons' => ['required', 'array', 'min:1'],
             'lessons.*.lesson_date' => ['required', 'date'],
             'lessons.*.starts_at' => ['nullable', 'date_format:H:i'],
-            'lessons.*.ends_at' => ['nullable', 'date_format:H:i'],
+            'lessons.*.ends_at' => ['nullable', 'date_format:H:i', 'after:lessons.*.starts_at'],
             'lessons.*.topic_title' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -169,21 +96,14 @@ class TestSubjectController extends Controller
             ? Specialty::query()->where('specialty_hemis_id', $validated['specialty_hemis_id'])->first()
             : null;
 
-        $department = !empty($validated['department_id'])
-            ? CurriculumSubject::query()
-                ->where('department_id', $validated['department_id'])
-                ->whereNotNull('department_name')
-                ->select('department_id', 'department_name')
-                ->first()
-            : null;
-
         $teacher = !empty($validated['teacher_id'])
             ? Teacher::query()->find($validated['teacher_id'])
             : null;
 
+        [, $levels] = $this->groupPayload();
         $levelName = null;
         if (!empty($validated['level_code'])) {
-            $levelName = collect($this->availableLevels())->firstWhere('code', (string) $validated['level_code'])['name']
+            $levelName = collect($levels)->firstWhere('code', (string) $validated['level_code'])['name']
                 ?? ($validated['level_code'] . '-kurs');
         }
 
@@ -191,13 +111,11 @@ class TestSubjectController extends Controller
             ->whereIn('id', $validated['group_ids'])
             ->get(['id', 'group_hemis_id', 'name']);
 
-        DB::transaction(function () use ($validated, $faculty, $specialty, $department, $teacher, $levelName, $groups) {
+        DB::transaction(function () use ($validated, $faculty, $specialty, $teacher, $levelName, $groups) {
             $subject = TestSubject::query()->create([
                 'name' => $validated['name'],
                 'faculty_hemis_id' => $faculty?->department_hemis_id,
                 'faculty_name' => $faculty?->name,
-                'department_hemis_id' => $department?->department_id,
-                'department_name' => $department?->department_name,
                 'specialty_hemis_id' => $specialty?->specialty_hemis_id,
                 'specialty_name' => $specialty?->name,
                 'level_code' => $validated['level_code'] ?? null,
@@ -205,8 +123,8 @@ class TestSubjectController extends Controller
                 'teacher_id' => $teacher?->id,
                 'teacher_hemis_id' => $teacher?->hemis_id,
                 'teacher_name' => $teacher?->full_name,
-                'starts_on' => $validated['starts_on'] ?? null,
-                'ends_on' => $validated['ends_on'] ?? null,
+                'starts_on' => $validated['starts_on'],
+                'ends_on' => $validated['ends_on'],
                 'is_active' => true,
                 'created_by' => auth()->id(),
                 'updated_by' => auth()->id(),
@@ -234,42 +152,195 @@ class TestSubjectController extends Controller
 
         return redirect()
             ->route('admin.test-subjects.index')
-            ->with('success', 'Test fan muvaffaqiyatli yaratildi.');
+            ->with('success', 'Test fan yaratildi.');
     }
 
     public function show(TestSubject $testSubject)
     {
-        $testSubject->load(['teacher', 'groups', 'lessons']);
+        $testSubject->load(['groups', 'lessons', 'teacher']);
 
-        return view('admin.test-subjects.show', compact('testSubject'));
+        $groupHemisIds = $testSubject->groups
+            ->pluck('group_hemis_id')
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->values();
+
+        $studentsByGroup = Student::query()
+            ->whereIn('group_id', $groupHemisIds)
+            ->orderBy('full_name')
+            ->get(['hemis_id', 'student_id_number', 'full_name', 'group_id', 'group_name'])
+            ->groupBy(fn (Student $student) => (string) $student->group_id);
+
+        return view('admin.test-subjects.show', compact('testSubject', 'studentsByGroup'));
     }
 
-    private function availableLevels(): array
+    public function storeLesson(Request $request, TestSubject $testSubject)
     {
-        return $this->testSubjectGroupsQuery()
+        $validated = $this->validateLesson($request);
+
+        $testSubject->lessons()->create([
+            'lesson_date' => $validated['lesson_date'],
+            'starts_at' => $validated['starts_at'] ?? null,
+            'ends_at' => $validated['ends_at'] ?? null,
+            'topic_order' => ((int) $testSubject->lessons()->max('topic_order')) + 1,
+            'topic_title' => $validated['topic_title'] ?? null,
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+
+        $this->syncLessonOrdering($testSubject);
+
+        return redirect()
+            ->route('admin.test-subjects.show', $testSubject)
+            ->with('success', 'Dars jadvali qo‘shildi.');
+    }
+
+    public function updateLesson(Request $request, TestSubject $testSubject, TestSubjectLesson $lesson)
+    {
+        abort_unless((int) $lesson->test_subject_id === (int) $testSubject->id, 404);
+
+        $validated = $this->validateLesson($request);
+
+        $lesson->update([
+            'lesson_date' => $validated['lesson_date'],
+            'starts_at' => $validated['starts_at'] ?? null,
+            'ends_at' => $validated['ends_at'] ?? null,
+            'topic_title' => $validated['topic_title'] ?? null,
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+
+        $this->syncLessonOrdering($testSubject);
+
+        return redirect()
+            ->route('admin.test-subjects.show', $testSubject)
+            ->with('success', 'Dars jadvali yangilandi.');
+    }
+
+    public function destroyLesson(TestSubject $testSubject, TestSubjectLesson $lesson)
+    {
+        abort_unless((int) $lesson->test_subject_id === (int) $testSubject->id, 404);
+
+        $lesson->delete();
+        $this->syncLessonOrdering($testSubject);
+
+        return redirect()
+            ->route('admin.test-subjects.show', $testSubject)
+            ->with('success', 'Dars jadvali o‘chirildi.');
+    }
+
+    public function destroy(TestSubject $testSubject)
+    {
+        $testSubject->delete();
+
+        return redirect()
+            ->route('admin.test-subjects.index')
+            ->with('success', 'Test fan o\'chirildi.');
+    }
+
+    private function validateLesson(Request $request): array
+    {
+        return $request->validate([
+            'lesson_date' => ['required', 'date'],
+            'starts_at' => ['nullable', 'date_format:H:i'],
+            'ends_at' => ['nullable', 'date_format:H:i', 'after:starts_at'],
+            'topic_title' => ['required', 'string', 'max:255'],
+        ]);
+    }
+
+    private function syncLessonOrdering(TestSubject $testSubject): void
+    {
+        $testSubject->load('lessons');
+
+        $testSubject->lessons
+            ->sortBy([
+                fn (TestSubjectLesson $lesson) => $lesson->topic_order ?? PHP_INT_MAX,
+                fn (TestSubjectLesson $lesson) => $lesson->id,
+            ])
+            ->values()
+            ->each(function (TestSubjectLesson $lesson, int $index) {
+                if ((int) $lesson->topic_order !== $index + 1) {
+                    $lesson->update(['topic_order' => $index + 1]);
+                }
+            });
+    }
+
+    private function groupPayload(): array
+    {
+        $groupCollection = Group::query()
+            ->whereHas('curriculum', function ($query) {
+                $query->where('education_year_name', 'like', self::TARGET_EDUCATION_YEAR . '%');
+            })
             ->with(['curriculum.semesters'])
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+                'group_hemis_id',
+                'department_hemis_id',
+                'specialty_hemis_id',
+                'curriculum_hemis_id',
+            ]);
+
+        $studentLevels = Student::query()
+            ->whereIn('group_id', $groupCollection->pluck('group_hemis_id')->filter()->values())
+            ->where('education_year_name', 'like', self::TARGET_EDUCATION_YEAR . '%')
+            ->whereNotNull('level_code')
+            ->where('level_code', '!=', '')
+            ->select('group_id', 'level_code', 'level_name', DB::raw('COUNT(*) as student_count'))
+            ->groupBy('group_id', 'level_code', 'level_name')
             ->get()
-            ->map(function (Group $group) {
+            ->groupBy('group_id')
+            ->map(function ($rows) {
+                return $rows
+                    ->sort(function ($left, $right) {
+                        $countCompare = ((int) $right->student_count) <=> ((int) $left->student_count);
+                        if ($countCompare !== 0) {
+                            return $countCompare;
+                        }
+
+                        return ((int) $right->level_code) <=> ((int) $left->level_code);
+                    })
+                    ->first();
+            });
+
+        $groups = $groupCollection
+            ->map(function (Group $group) use ($studentLevels) {
+                $studentLevel = $studentLevels->get($group->group_hemis_id);
+
                 $semester = $group->curriculum?->semesters
-                    ?->sortByDesc(fn ($item) => (int) ($item->current ? 1 : 0))
+                    ?->sort(function ($left, $right) {
+                        $currentCompare = ((int) ($right->current ? 1 : 0)) <=> ((int) ($left->current ? 1 : 0));
+                        if ($currentCompare !== 0) {
+                            return $currentCompare;
+                        }
+
+                        return ((int) ($right->level_code ?? 0)) <=> ((int) ($left->level_code ?? 0));
+                    })
                     ->first();
 
                 return [
-                    'code' => (string) ($semester?->level_code ?? ''),
-                    'name' => (string) ($semester?->level_name ?? ''),
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'group_hemis_id' => (string) $group->group_hemis_id,
+                    'department_hemis_id' => (string) $group->department_hemis_id,
+                    'specialty_hemis_id' => (string) $group->specialty_hemis_id,
+                    'level_code' => (string) ($studentLevel->level_code ?? $semester?->level_code ?? ''),
+                    'level_name' => (string) ($studentLevel->level_name ?? $semester?->level_name ?? ''),
                 ];
             })
-            ->filter(fn ($level) => $level['code'] !== '')
-            ->unique('code')
             ->values()
             ->all();
-    }
 
-    private function testSubjectGroupsQuery()
-    {
-        return Group::query()
-            ->whereHas('curriculum', function ($query) {
-                $query->where('education_year_name', 'like', self::TARGET_EDUCATION_YEAR . '%');
-            });
+        $levels = collect($groups)
+            ->filter(fn ($group) => $group['level_code'] !== '')
+            ->map(fn ($group) => [
+                'code' => $group['level_code'],
+                'name' => $group['level_name'] ?: ($group['level_code'] . '-kurs'),
+            ])
+            ->unique('code')
+            ->sortBy(fn ($level) => (int) $level['code'])
+            ->values()
+            ->all();
+
+        return [$groups, $levels];
     }
 }

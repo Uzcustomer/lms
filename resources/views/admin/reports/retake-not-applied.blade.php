@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Qayta o'qishga ariza topshirmaganlar
+            Qarzdorlar — akademik ma'lumotlar (academic records)
         </h2>
     </x-slot>
 
@@ -92,16 +92,23 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 210px;">
+                        <div class="filter-item" style="min-width: 180px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div class="toggle-switch active" id="only-not-applied-toggle" onclick="this.classList.toggle('active')">
+                            <div class="toggle-switch active" id="only-debtors-toggle" onclick="this.classList.toggle('active')">
                                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
-                                <span class="toggle-label">Faqat ariza bermaganlar</span>
+                                <span class="toggle-label">Faqat qarzdorlar</span>
+                            </div>
+                        </div>
+                        <div class="filter-item" style="min-width: 220px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch" id="include-current-toggle" onclick="this.classList.toggle('active')" title="Yoqilsa joriy semestr academic_records qarzi ham hisoblanadi; o'chirilsa faqat o'tgan semestrlar">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Joriy semestrni ham hisoblash</span>
                             </div>
                         </div>
                         <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
+                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1, true)">
                                 <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                 Hisoblash
                             </button>
@@ -109,38 +116,82 @@
                     </div>
                 </div>
 
+                <!-- HEMIS sinxronizatsiya paneli -->
+                <div class="sync-bar">
+                    <div class="sync-info">
+                        <svg style="width:16px;height:16px;color:#2b5ea7;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>Ma'lumotlar HEMIS API'dan olinadi (har kuni <strong>23:00</strong> da avtomatik yangilanadi).</span>
+                        <span class="sync-last">Oxirgi yangilangan: <strong id="last-synced">—</strong></span>
+                    </div>
+                    <button type="button" id="btn-refresh-academic" class="btn-refresh" onclick="startAcademicSync()">
+                        <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span id="btn-refresh-label">HEMIS'dan yangilash</span>
+                    </button>
+                </div>
+                <div id="sync-progress-wrap" style="display:none;">
+                    <div class="sync-progress-head">
+                        <span id="sync-progress-title">Yangilanmoqda...</span>
+                        <span id="sync-progress-pct">0%</span>
+                    </div>
+                    <div class="sync-progress-track"><div id="sync-progress-bar"></div></div>
+                    <div id="sync-progress-detail"></div>
+                </div>
+
                 <!-- Result Area -->
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Tugagan semestrlarda bahosi yo'q (qarz) fanlari bo'lib, qayta o'qishga ariza bermagan talabalar</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Talabalarning academic records yozuvlari bo'yicha qarzdor (bahosi yo'q / yiqilgan) fanlar ro'yxati</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
-                        <p style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
-                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
+                        <p id="calc-progress-msg" style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
+                        <div id="calc-progress-track" style="display:none;max-width:420px;margin:14px auto 0;background:#e2e8f0;height:10px;border-radius:6px;overflow:hidden;">
+                            <div id="calc-progress-bar" style="height:10px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);border-radius:6px;width:0%;transition:width .5s;"></div>
+                        </div>
+                        <p id="calc-progress-pct" style="color:#2b5ea7;font-size:13px;font-weight:800;margin-top:6px;"></p>
+                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Hisob fon rejimida ishlaydi — sahifadan chiqib ketsangiz ham davom etadi</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:flex;align-items:center;gap:12px;">
-                            <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
-                            <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                        <div style="padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                                <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
+                                <div style="width:250px;min-width:250px;flex:0 0 250px;">
+                                <select id="retake_status_filter" class="select2" style="width:250px;">
+                                    <option value="">Barchasi</option>
+                                    <option value="no_application">Ariza bermaganlar</option>
+                                    <option value="group_assigned">Guruhga biriktirilganlar</option>
+                                </select>
+                                </div>
+                                <button type="button" onclick="exportRetakeNotAppliedExcel()" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;height:38px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(22,163,74,0.3);white-space:nowrap;flex:0 0 auto;">
+                                    Excel
+                                </button>
+                            </div>
                         </div>
                         <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table">
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon active">&#9650;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th>Yopilish shakli</th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Bahosi yo'q (rejada bor, academic records'da baho yo'q)"><a href="#" class="sort-link" data-sort="no_grade_count">Bahosi yo'q <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Bahosi yo'q fanlardan qayta o'qishga ariza bermaganlari"><a href="#" class="sort-link" data-sort="not_applied_count">Ariza bermagan <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Rejada yo'q, academic records'da bor"><a href="#" class="sort-link" data-sort="extra_count">Ortiqcha <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Joriy semestr — potensial yiqilganlar"><a href="#" class="sort-link" data-sort="current_risk_count">Joriy xavf <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;">Soat</th>
+                                        <th style="text-align:center;">Kredit</th>
+                                        <th style="text-align:center;"><a href="#" class="sort-link" data-sort="total_point">Olgan bali <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;"><a href="#" class="sort-link" data-sort="grade">Olgan bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Semestrni o'zlashtirdimi (HEMIS: kredit yakunlangan holati)">O'zlashtirdi</th>
+                                        <th title="Qayta o'qishga ariza berganlik holati">Qayta o'qish holati</th>
+                                        <th title="O'qishi holati">O'qish holati</th>
                                         <th style="text-align:center;width:90px;">Batafsil</th>
                                     </tr>
                                 </thead>
@@ -154,15 +205,24 @@
         </div>
     </div>
 
-    <!-- Detail Modal -->
-    <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
+    <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeDetailModal()">
         <div class="modal-box">
             <div class="modal-header">
                 <h3 id="modal-title">Batafsil ma'lumot</h3>
-                <button onclick="closeModal()" class="modal-close">&times;</button>
+                <button onclick="closeDetailModal()" class="modal-close">&times;</button>
             </div>
             <div id="modal-student-info" class="modal-info"></div>
             <div id="modal-body" style="max-height:65vh;overflow-y:auto;padding:0 4px 8px;"></div>
+        </div>
+    </div>
+
+    <div id="score-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeScoreModal()">
+        <div class="modal-box" style="max-width:760px;">
+            <div class="modal-header">
+                <h3 id="score-modal-title">Qayta o'qish baholari</h3>
+                <button onclick="closeScoreModal()" class="modal-close">&times;</button>
+            </div>
+            <div id="score-modal-body" style="max-height:65vh;overflow-y:auto;padding:0 4px 8px;"></div>
         </div>
     </div>
 
@@ -171,8 +231,8 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'not_applied_count';
-        let currentDirection = 'desc';
+        let currentSort = 'full_name';
+        let currentDirection = 'asc';
         let currentPage = 1;
         let reportData = [];
 
@@ -196,7 +256,9 @@
                 group: $('#group').val() || '',
                 student_status: $('#student_status').val() || '',
                 student_type: $('#student_type').val() || '',
-                only_not_applied: document.getElementById('only-not-applied-toggle').classList.contains('active') ? '1' : '0',
+                retake_status_filter: $('#retake_status_filter').val() || '',
+                only_debtors: document.getElementById('only-debtors-toggle').classList.contains('active') ? '1' : '0',
+                include_current_semester: document.getElementById('include-current-toggle').classList.contains('active') ? '1' : '0',
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -204,17 +266,130 @@
             };
         }
 
-        function loadReport(page) {
-            currentPage = page || 1;
-            var params = getFilters();
-            params.page = currentPage;
+        // ── Fon rejimida hisoblash (calc) oqimi ──────────────────────────
+        // "Hisoblash" bosilganda hisob fon jobida boshlanadi, progress polling
+        // bilan ko'rsatiladi; tayyor natija diskda keshlanadi — sahifalash,
+        // saralash va holat filtri qayta hisobsiz (calc_key bilan) ishlaydi.
+        var currentCalcKey = null;
+        var currentCalcSig = null;
+        var calcPollTimer = null;
+        var calcStartedAt = null;
 
+        function calcSignature(p) {
+            return [p.education_type, p.faculty, p.specialty, p.level_code, p.semester_code,
+                    p.group, p.student_status, p.student_type, p.only_debtors, p.include_current_semester, p.student_name].join('|');
+        }
+
+        function stopCalcPolling() {
+            if (calcPollTimer) { clearInterval(calcPollTimer); calcPollTimer = null; }
+        }
+
+        function showLoading(msg) {
             $('#empty-state').hide();
             $('#table-area').hide();
             $('#loading-state').show();
             $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
+            $('#calc-progress-msg').text(msg || 'Hisoblanmoqda...');
+            $('#calc-progress-track').hide();
+            $('#calc-progress-bar').css('width', '0%');
+            $('#calc-progress-pct').text('');
+        }
 
-            var startTime = performance.now();
+        function hideLoading() {
+            $('#loading-state').hide();
+            $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+        }
+
+        function showLoadError(msg) {
+            stopCalcPolling();
+            hideLoading();
+            $('#empty-state').show().find('p:first').text(msg || "Xatolik yuz berdi. Qayta urinib ko'ring.");
+        }
+
+        function setCalcProgress(pct, msg) {
+            $('#calc-progress-track').show();
+            $('#calc-progress-bar').css('width', Math.min(100, pct || 0) + '%');
+            $('#calc-progress-pct').text((pct || 0) + '%');
+            if (msg) $('#calc-progress-msg').text(msg);
+        }
+
+        function loadReport(page, forceRecalc) {
+            currentPage = page || 1;
+            var params = getFilters();
+            var sig = calcSignature(params);
+
+            // Filtrlar o'zgarmagan va tayyor natija bor — to'g'ridan-to'g'ri sahifani olamiz.
+            if (!forceRecalc && currentCalcKey && currentCalcSig === sig) {
+                fetchReportPage();
+                return;
+            }
+            startCalc(params, sig);
+        }
+
+        function startCalc(params, sig) {
+            stopCalcPolling();
+            currentCalcKey = null;
+            showLoading('Hisob boshlanmoqda...');
+            calcStartedAt = performance.now();
+
+            $.ajax({
+                url: '{{ route('admin.reports.retake-not-applied.calc-start') }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                data: params,
+                success: function (res) {
+                    if (!res || !res.calc_key) {
+                        showLoadError("Hisobni boshlab bo'lmadi. Qayta urinib ko'ring.");
+                        return;
+                    }
+                    pollCalc(res.calc_key, sig);
+                },
+                error: function (xhr) {
+                    var msg = "Hisobni boshlab bo'lmadi.";
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg += ' (' + xhr.responseJSON.message + ')';
+                    else if (xhr.status) msg += ' (HTTP ' + xhr.status + ')';
+                    showLoadError(msg);
+                }
+            });
+        }
+
+        function pollCalc(calcKey, sig) {
+            stopCalcPolling();
+            var polls = 0;
+            var check = function () {
+                if (++polls > 1200) { showLoadError('Hisob juda uzoq davom etdi. Qayta urinib ko\'ring.'); return; }
+                $.get('{{ route('admin.reports.retake-not-applied.calc-status') }}', { calc_key: calcKey }, function (st) {
+                    if (!st) return;
+                    if (st.status === 'done') {
+                        stopCalcPolling();
+                        currentCalcKey = calcKey;
+                        currentCalcSig = sig;
+                        fetchReportPage();
+                        return;
+                    }
+                    if (st.status === 'failed' || st.status === 'error') {
+                        showLoadError(st.message || 'Hisoblashda xatolik yuz berdi.');
+                        return;
+                    }
+                    setCalcProgress(st.percent || 0, st.message || (st.status === 'queued' ? 'Navbatda kutilmoqda...' : 'Hisoblanmoqda...'));
+                }).fail(function (xhr) {
+                    // 403 — kalit boshqa foydalanuvchiga tegishli; qolgan xatolarda polling davom etadi.
+                    if (xhr.status === 403) {
+                        showLoadError('Hisob holatini o\'qib bo\'lmadi (ruxsat xatosi).');
+                    }
+                });
+            };
+            calcPollTimer = setInterval(check, 1500);
+            check();
+        }
+
+        function fetchReportPage() {
+            var params = getFilters();
+            params.page = currentPage;
+            params.calc_key = currentCalcKey;
+
+            showLoading('Natijalar yuklanmoqda...');
+            var startTime = calcStartedAt || performance.now();
 
             $.ajax({
                 url: '{{ route('admin.reports.retake-not-applied.data') }}',
@@ -223,8 +398,8 @@
                 timeout: 120000,
                 success: function(res) {
                     var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-                    $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    calcStartedAt = null;
+                    hideLoading();
 
                     if (!res.data || res.data.length === 0) {
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
@@ -233,7 +408,7 @@
                     }
 
                     reportData = res.data;
-                    $('#total-badge').text('Jami: ' + res.total + ' ta talaba');
+                    $('#total-badge').text('Jami: ' + res.total + ' ta yozuv');
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
 
                     renderTable(res.data);
@@ -241,33 +416,86 @@
                     $('#table-area').show();
                 },
                 error: function(xhr) {
-                    $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    // Natija muddati tugagan (410) — avtomatik qayta hisoblaymiz.
+                    if (xhr.status === 410) {
+                        currentCalcKey = null;
+                        loadReport(currentPage, true);
+                        return;
+                    }
                     var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         msg += ' (' + xhr.responseJSON.error + ')';
                     } else if (xhr.status) {
                         msg += ' (HTTP ' + xhr.status + ')';
                     }
-                    $('#empty-state').show().find('p:first').text(msg);
+                    showLoadError(msg);
                     console.error('Retake-not-applied report error:', xhr.status, xhr.responseText ? xhr.responseText.substring(0, 500) : '');
                 }
             });
         }
 
-        function esc(s) { return $('<span>').text((s === 0 || s) ? s : '-').html(); }
-        function fmtCredit(c) { var n = parseFloat(c); if (isNaN(n)) return '-'; return (Math.round(n * 100) / 100).toString(); }
+        function exportRetakeNotAppliedExcel() {
+            var params = getFilters();
+            params.export = 'excel';
+            // Tayyor hisob natijasi bo'lsa — undan eksport (tez, qayta hisobsiz).
+            if (currentCalcKey && calcSignature(params) === currentCalcSig) {
+                params.calc_key = currentCalcKey;
+            }
+            var url = new URL('{{ route('admin.reports.retake-not-applied.data') }}', window.location.origin);
+            Object.keys(params).forEach(function(key) {
+                if (params[key] !== null && params[key] !== '') {
+                    url.searchParams.set(key, params[key]);
+                }
+            });
+            window.location.href = url.toString();
+        }
 
-        function cnt(n, color) {
-            n = n || 0;
-            if (n === 0) return '<span style="color:#94a3b8;">0</span>';
-            return '<span class="badge-cnt" style="background:' + color + ';">' + n + '</span>';
+        function esc(s) { return $('<span>').text((s === 0 || s) ? s : '-').html(); }
+        function fmtNum(c) {
+            if (c === null || c === '' || typeof c === 'undefined') return '<span style="color:#94a3b8;">-</span>';
+            var n = parseFloat(c);
+            if (isNaN(n)) return esc(c);
+            return (Math.round(n * 100) / 100).toString();
+        }
+
+        function retakePill(status) {
+            var map = {
+                'Ariza bermagan': 'pill-red',
+                "Ko'rib chiqilmoqda": 'pill-gray',
+                "To'lovini qilmagan": 'pill-amber',
+                "To'lov tekshirilmoqda": 'pill-blue',
+                "To'lov tasdiqlandi": 'pill-teal',
+                'Guruhga tasdiqlangan': 'pill-green',
+                'Joriy semestr': 'pill-blue'
+            };
+            return '<span class="pill ' + (map[status] || 'pill-gray') + '">' + esc(status) + '</span>';
+        }
+
+        function studyPill(code, label) {
+            var map = { passed: 'pill-green', failed: 'pill-red', not_examined: 'pill-amber', not_graded: 'pill-gray', current_risk: 'pill-amber' };
+            return '<span class="pill ' + (map[code] || 'pill-gray') + '">' + esc(label) + '</span>';
+        }
+
+        function masteredPill(m) {
+            if (m === null || typeof m === 'undefined') return '<span style="color:#94a3b8;">-</span>';
+            return m
+                ? '<span class="pill pill-green">Ha</span>'
+                : '<span class="pill pill-red">Yo\'q</span>';
+        }
+
+        function fmtCredit(c) {
+            var n = parseFloat(c);
+            if (isNaN(n)) return '-';
+            return (Math.round(n * 100) / 100).toString();
         }
 
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
+                var scoreBtn = r.has_score_details
+                    ? '<button class="btn-detail" onclick="showScoreDetail(' + i + ')">Ko\'rish</button>'
+                    : '<span style="color:#94a3b8;">-</span>';
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:600;color:#1e293b;">' + esc(r.full_name) + '</span><span style="font-size:11px;color:#94a3b8;">' + esc(r.student_id_number) + '</span></td>';
@@ -275,81 +503,139 @@
                 html += '<td><span class="text-cell">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="text-cell">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="text-cell">' + esc(r.subject_name) + '</span></td>';
+                html += '<td><span class="text-cell">' + esc(r.closing_form) + '</span></td>';
                 html += '<td><span class="text-cell">' + esc(r.semester_name) + '</span></td>';
-                html += '<td style="text-align:center;">' + cnt(r.no_grade_count, '#64748b') + '</td>';
-                html += '<td style="text-align:center;">' + cnt(r.not_applied_count, 'linear-gradient(135deg,#dc2626,#ef4444)') + '</td>';
-                html += '<td style="text-align:center;">' + cnt(r.extra_count, 'linear-gradient(135deg,#7c3aed,#a855f7)') + '</td>';
-                html += '<td style="text-align:center;">' + cnt(r.current_risk_count, 'linear-gradient(135deg,#d97706,#f59e0b)') + '</td>';
-                html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')">Ko\'rish</button></td>';
+                html += '<td style="text-align:center;">' + fmtNum(r.total_acload) + '</td>';
+                html += '<td style="text-align:center;">' + fmtNum(r.credit) + '</td>';
+                html += '<td style="text-align:center;">' + scoreBtn + '</td>';
+                var gradeStyle = r.is_debt ? 'color:#dc2626;font-weight:800;' : 'color:#15803d;font-weight:800;';
+                var gradeVal = (r.grade === null || typeof r.grade === 'undefined') ? '<span style="color:#94a3b8;">-</span>' : '<span style="' + gradeStyle + '">' + esc(r.grade) + '</span>';
+                html += '<td style="text-align:center;">' + gradeVal + '</td>';
+                html += '<td style="text-align:center;">' + masteredPill(r.mastered) + '</td>';
+                html += '<td>' + retakePill(r.retake_status) + '</td>';
+                html += '<td>' + studyPill(r.study_status_code, r.study_status) + '</td>';
+                html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')">Batafsil</button></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
         }
 
+        function showScoreDetail(idx) {
+            var r = reportData[idx];
+            if (!r) return;
+
+            var rows = Array.isArray(r.score_details) ? r.score_details : [];
+            $('#score-modal-title').text("Qayta o'qish baholari");
+
+            if (!rows.length) {
+                $('#score-modal-body').html('<div class="sec-empty">Baholar topilmadi</div>');
+                $('#score-modal').css('display', 'flex');
+                return;
+            }
+
+            var html = '';
+            html += '<div class="modal-info" style="margin-bottom:12px;">';
+            html += '<div class="mi-grid">';
+            html += '<div><span class="mi-l">Talaba</span><span class="mi-v">' + esc(r.full_name) + '</span></div>';
+            html += '<div><span class="mi-l">ID</span><span class="mi-v">' + esc(r.student_id_number) + '</span></div>';
+            html += '<div><span class="mi-l">Fan</span><span class="mi-v">' + esc(r.subject_name) + '</span></div>';
+            html += '<div><span class="mi-l">Semestr</span><span class="mi-v">' + esc(r.semester_name) + '</span></div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<table class="det-table">';
+            html += '<thead><tr><th style="width:120px;">Baho turi</th><th style="text-align:center;width:120px;">Qiymat</th><th>O\'qituvchi</th><th style="width:170px;">Sana</th></tr></thead><tbody>';
+            for (var i = 0; i < rows.length; i++) {
+                var s = rows[i];
+                html += '<tr>';
+                html += '<td><span class="pill pill-blue">' + esc(s.type) + '</span></td>';
+                html += '<td style="text-align:center;font-weight:800;color:#1e293b;">' + fmtNum(s.score) + '</td>';
+                html += '<td>' + esc(s.teacher || '—') + '</td>';
+                html += '<td>' + esc(s.date || '—') + '</td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+
+            $('#score-modal-body').html(html);
+            $('#score-modal').css('display', 'flex');
+        }
+
         function showDetail(idx) {
             var r = reportData[idx];
             if (!r) return;
+
             $('#modal-title').text(r.full_name);
             $('#modal-student-info').html(
                 '<div class="mi-grid">' +
                 '<div><span class="mi-l">ID</span><span class="mi-v">' + esc(r.student_id_number) + '</span></div>' +
                 '<div><span class="mi-l">Fakultet</span><span class="mi-v">' + esc(r.department_name) + '</span></div>' +
-                '<div><span class="mi-l">Yo\'nalish</span><span class="mi-v">' + esc(r.specialty_name) + '</span></div>' +
+                "<div><span class=\"mi-l\">Yo'nalish</span><span class=\"mi-v\">" + esc(r.specialty_name) + '</span></div>' +
                 '<div><span class="mi-l">Guruh</span><span class="mi-v">' + esc(r.group_name) + '</span></div>' +
                 '<div><span class="mi-l">Semestr</span><span class="mi-v">' + esc(r.semester_name) + '</span></div>' +
+                '<div><span class="mi-l">Fan</span><span class="mi-v">' + esc(r.subject_name) + '</span></div>' +
                 '</div>'
             );
 
-            var body = '';
-
-            // 1. Bahosi yo'q (yetmayotgan) + qayta o'qish holati
-            body += '<div class="sec-title" style="color:#dc2626;">Bahosi yo\'q (yetmayotgan) fanlar — qayta o\'qish holati</div>';
-            if (r.no_grade_subjects && r.no_grade_subjects.length) {
-                body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Semestr</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Qayta o\'qishga ariza</th></tr></thead><tbody>';
-                for (var j = 0; j < r.no_grade_subjects.length; j++) {
-                    var d = r.no_grade_subjects[j];
-                    var statusCell = d.has_application
-                        ? '<span class="pill pill-green">Bergan' + (d.application_status ? ' — ' + esc(d.application_status) : '') + '</span>'
-                        : '<span class="pill pill-red">Bermagan</span>';
-                    body += '<tr><td>' + (j + 1) + '</td><td>' + esc(d.subject_name) + '</td><td style="text-align:center;">' + esc(d.semester_name || d.semester_code) + '</td><td style="text-align:center;">' + fmtCredit(d.credit) + '</td><td style="text-align:center;">' + statusCell + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            } else {
-                body += '<div class="sec-empty">Yo\'q</div>';
-            }
-
-            // 2. Ortiqcha
-            body += '<div class="sec-title" style="color:#7c3aed;">Ortiqcha fanlar (rejada yo\'q, academic records\'da bor)</div>';
-            if (r.extra_subjects && r.extra_subjects.length) {
-                body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Semestr</th><th style="text-align:center;">Kredit</th></tr></thead><tbody>';
-                for (var k = 0; k < r.extra_subjects.length; k++) {
-                    var e = r.extra_subjects[k];
-                    body += '<tr><td>' + (k + 1) + '</td><td>' + esc(e.subject_name) + '</td><td style="text-align:center;">' + esc(e.semester_code) + '</td><td style="text-align:center;">' + fmtCredit(e.credit) + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            } else {
-                body += '<div class="sec-empty">Yo\'q</div>';
-            }
-
-            // 3. Joriy semestr xavf
-            body += '<div class="sec-title" style="color:#d97706;">Joriy semestr — potensial yiqilganlar</div>';
-            if (r.current_risks && r.current_risks.length) {
-                body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th>Sabablar</th></tr></thead><tbody>';
-                for (var m = 0; m < r.current_risks.length; m++) {
-                    var cr = r.current_risks[m];
-                    var reasons = (cr.reasons || []).map(function(x){ return '<span class="pill pill-amber">' + esc(x) + '</span>'; }).join(' ');
-                    body += '<tr><td>' + (m + 1) + '</td><td>' + esc(cr.subject_name) + '</td><td>' + reasons + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            } else {
-                body += '<div class="sec-empty">Yo\'q</div>';
-            }
-
-            $('#modal-body').html(body);
+            $('#modal-body').html('<div class="sec-empty">Yuklanmoqda...</div>');
             $('#detail-modal').css('display', 'flex');
+
+            $.get('{{ route('admin.reports.student-all-records') }}', {
+                student_id: r.hemis_id,
+                group_name: r.group_name,
+                current_semester: 0
+            }, function(resp) {
+                var semCode = String(r.semester_code || '');
+                var planned = (resp.planned_subjects || []).filter(function(item) {
+                    return String(item.semester_code) === semCode;
+                });
+                var extra = (resp.extra_subjects || []).filter(function(item) {
+                    return String(item.semester_code) === semCode;
+                });
+
+                var body = '';
+                body += "<div class=\"sec-title\" style=\"color:#2563eb;\">O'quv rejadagi fanlar</div>";
+                if (planned.length) {
+                    body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Soat</th><th style="text-align:center;">Holat</th><th style="text-align:center;">Ball</th><th style="text-align:center;">Baho</th></tr></thead><tbody>';
+                    for (var i = 0; i < planned.length; i++) {
+                        var p = planned[i];
+                        var pStatus = p.has_record ? '<span class="pill pill-green">Yozuv bor</span>' : "<span class=\"pill pill-red\">Yozuv yo'q</span>";
+                        body += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.subject_name) + '</td><td style="text-align:center;">' + fmtCredit(p.credit) + '</td><td style="text-align:center;">' + fmtNum(p.total_acload) + '</td><td style="text-align:center;">' + pStatus + '</td><td style="text-align:center;">' + fmtNum(p.total_point) + '</td><td style="text-align:center;">' + fmtNum(p.grade) + '</td></tr>';
+                    }
+                    body += '</tbody></table>';
+                } else {
+                    body += "<div class=\"sec-empty\">Bu semestr uchun o'quv rejadagi fan topilmadi</div>";
+                }
+
+                body += '<div class="sec-title" style="color:#7c3aed;">Ortiqcha fanlar</div>';
+                if (extra.length) {
+                    body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Ball</th><th style="text-align:center;">Baho</th></tr></thead><tbody>';
+                    for (var j = 0; j < extra.length; j++) {
+                        var e = extra[j];
+                        body += '<tr><td>' + (j + 1) + '</td><td>' + esc(e.subject_name) + '</td><td style="text-align:center;">' + fmtCredit(e.credit) + '</td><td style="text-align:center;">' + fmtNum(e.total_point) + '</td><td style="text-align:center;">' + fmtNum(e.grade) + '</td></tr>';
+                    }
+                    body += '</tbody></table>';
+                } else {
+                    body += "<div class=\"sec-empty\">Yo'q</div>";
+                }
+
+                $('#modal-body').html(body);
+            }).fail(function(xhr) {
+                var msg = "Batafsil ma'lumotni yuklab bo'lmadi";
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    msg += ': ' + xhr.responseJSON.error;
+                }
+                $('#modal-body').html('<div class="sec-empty">' + esc(msg) + '</div>');
+            });
         }
 
-        function closeModal() { $('#detail-modal').hide(); }
+        function closeDetailModal() {
+            $('#detail-modal').hide();
+        }
+
+        function closeScoreModal() {
+            $('#score-modal').hide();
+        }
 
         function renderPagination(res) {
             var total = res.last_page || 1;
@@ -367,9 +653,146 @@
             $('#pagination-area').html(html);
         }
 
-        $(document).keydown(function(e) { if (e.keyCode === 27) closeModal(); });
+        // ── HEMIS academic records sinxronizatsiyasi ─────────────────────
+        var academicSyncTimer = null;
+
+        function fmtSyncDate(s) {
+            if (!s) return '—';
+            var m = String(s).replace('T', ' ').split(/[-: ]/);
+            if (m.length < 5) return s;
+            return m[2] + '.' + m[1] + '.' + m[0] + ' ' + m[3] + ':' + m[4];
+        }
+
+        function stopAcademicPolling() {
+            if (academicSyncTimer) { clearInterval(academicSyncTimer); academicSyncTimer = null; }
+        }
+
+        function startAcademicPolling() {
+            if (academicSyncTimer) return;
+            academicSyncTimer = setInterval(pollAcademicSync, 2000);
+        }
+
+        function renderSyncProgress(d) {
+            d = d || {};
+            var wrap = document.getElementById('sync-progress-wrap');
+            var bar = document.getElementById('sync-progress-bar');
+            var pct = document.getElementById('sync-progress-pct');
+            var title = document.getElementById('sync-progress-title');
+            var detail = document.getElementById('sync-progress-detail');
+            var btn = document.getElementById('btn-refresh-academic');
+            var btnLabel = document.getElementById('btn-refresh-label');
+
+            document.getElementById('last-synced').textContent = fmtSyncDate(d.last_synced_at);
+
+            function resetBtn() {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+                btnLabel.textContent = "HEMIS'dan yangilash";
+            }
+
+            if (!d.status || d.status === 'idle') {
+                wrap.style.display = 'none';
+                resetBtn();
+                stopAcademicPolling();
+                return;
+            }
+
+            if (d.status === 'done') {
+                wrap.style.display = 'block';
+                bar.style.width = '100%';
+                bar.style.background = '#16a34a';
+                pct.textContent = '100%';
+                pct.style.color = '#16a34a';
+                title.textContent = 'Yangilash tugadi';
+                detail.textContent = "✅ Yangi/o'zgargan: " + (d.imported || 0) + " ta. Vaqt: " + (d.duration || '?') + " daqiqa";
+                resetBtn();
+                stopAcademicPolling();
+                setTimeout(function () { wrap.style.display = 'none'; }, 8000);
+                return;
+            }
+
+            if (d.status === 'failed') {
+                wrap.style.display = 'block';
+                bar.style.width = '100%';
+                bar.style.background = '#dc2626';
+                pct.textContent = '—';
+                pct.style.color = '#dc2626';
+                title.textContent = 'Xatolik';
+                detail.textContent = '❌ ' + (d.message || "Import xato bilan to'xtadi. Qayta urinib ko'ring.");
+                resetBtn();
+                stopAcademicPolling();
+                return;
+            }
+
+            // running / queued
+            wrap.style.display = 'block';
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            btnLabel.textContent = 'Yangilanmoqda...';
+            var p = d.percent || 0;
+            bar.style.width = p + '%';
+            bar.style.background = '#2b5ea7';
+            pct.style.color = '#2b5ea7';
+            if (d.status === 'queued') {
+                pct.textContent = '…';
+                title.textContent = 'Navbatda';
+                detail.textContent = 'Import navbatda kutilmoqda...';
+            } else if (d.stage === 'prepare' || !d.pages) {
+                // Tayyorlanish bosqichi — mavjud yozuvlar (~359k) o'qilmoqda,
+                // foiz hali yo'q; qotib qolmaganini ko'rsatish uchun sanani chiqaramiz.
+                pct.textContent = '…';
+                title.textContent = 'Tayyorlanmoqda';
+                detail.textContent = 'Mavjud yozuvlar bilan solishtirilmoqda: ' + (d.loaded || 0).toLocaleString() + " ta o'qildi...";
+            } else {
+                pct.textContent = p + '%';
+                title.textContent = 'Yangilanmoqda';
+                detail.textContent = "Sahifa: " + d.page + "/" + d.pages + "  |  Yangi/o'zgargan: " + (d.imported || 0) + " ta";
+            }
+            startAcademicPolling();
+        }
+
+        function pollAcademicSync() {
+            $.get('{{ route('admin.reports.retake-not-applied.sync-progress') }}', function (d) {
+                renderSyncProgress(d);
+            }).fail(function () { stopAcademicPolling(); });
+        }
+
+        function startAcademicSync() {
+            var btn = document.getElementById('btn-refresh-academic');
+            if (btn.disabled) return;
+            if (!confirm("HEMIS'dan talaba baholari (academic records) yangilansinmi?\n359k+ yozuv — bir necha daqiqa olishi mumkin.")) return;
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            document.getElementById('btn-refresh-label').textContent = 'Boshlanmoqda...';
+            $.ajax({
+                url: '{{ route('admin.reports.retake-not-applied.sync') }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                success: function () {
+                    document.getElementById('sync-progress-wrap').style.display = 'block';
+                    startAcademicPolling();
+                    pollAcademicSync();
+                },
+                error: function (xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : "Yangilashni boshlab bo'lmadi.";
+                    alert(msg);
+                    if (xhr.status === 409) {
+                        // Boshqa foydalanuvchi import boshlagan — jarayonni kuzatamiz.
+                        document.getElementById('sync-progress-wrap').style.display = 'block';
+                        startAcademicPolling();
+                        pollAcademicSync();
+                    } else {
+                        btn.disabled = false;
+                        btn.classList.remove('is-loading');
+                        document.getElementById('btn-refresh-label').textContent = "HEMIS'dan yangilash";
+                    }
+                }
+            });
+        }
 
         $(document).ready(function() {
+            pollAcademicSync();
+
             $(document).on('click', '.sort-link', function(e) {
                 e.preventDefault();
                 var col = $(this).data('sort');
@@ -388,6 +811,7 @@
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
+            $('#retake_status_filter').next('.select2-container').css('width', '250px');
 
             function fp() { var df=document.getElementById('dekan_faculty_id'); return { education_type: $('#education_type').val()||'', faculty_id: df ? df.value : ($('#faculty').val()||''), specialty_id: $('#specialty').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'' }; }
             function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
@@ -402,6 +826,7 @@
             $('#specialty').change(function() { rGrp(); });
             $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rGrp(); });
             $('#semester_code').change(function() { rGrp(); });
+            $('#retake_status_filter').change(function() { loadReport(1); });
 
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
@@ -420,8 +845,49 @@
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
+        .sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .sync-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #475569; }
+        .sync-info strong { color: #1e293b; font-weight: 700; }
+        .sync-last { padding-left: 10px; margin-left: 4px; border-left: 1px solid #cbd5e1; }
+        .btn-refresh { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; background: #fff; color: #2b5ea7; border: 1px solid #2b5ea7; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .btn-refresh:hover:not(:disabled) { background: #2b5ea7; color: #fff; }
+        .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-refresh.is-loading svg { animation: spin 0.9s linear infinite; }
+        #sync-progress-wrap { padding: 12px 20px; background: #eff6ff; border-bottom: 1px solid #bfdbfe; }
+        .sync-progress-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        #sync-progress-title { font-size: 13px; font-weight: 700; color: #2b5ea7; }
+        #sync-progress-pct { font-size: 13px; font-weight: 800; color: #2b5ea7; }
+        .sync-progress-track { background: #dbeafe; border-radius: 6px; height: 10px; overflow: hidden; }
+        #sync-progress-bar { height: 10px; background: #2b5ea7; border-radius: 6px; width: 0%; transition: width 0.4s; }
+        #sync-progress-detail { font-size: 12px; color: #64748b; margin-top: 6px; }
+
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        .btn-detail { display:inline-flex; align-items:center; justify-content:center; padding:6px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#1e40af; font-size:12px; font-weight:700; }
+        .btn-detail:hover { background:#eff6ff; }
+        .modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; padding:20px; z-index:9999; }
+        .modal-box { width:min(1100px, 100%); max-height:90vh; overflow:hidden; background:#fff; border-radius:16px; box-shadow:0 25px 60px rgba(15,23,42,.25); border:1px solid #dbe4ef; }
+        .modal-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; border-bottom:1px solid #e2e8f0; background:linear-gradient(135deg,#f0f6ff,#f8fbff); }
+        .modal-header h3 { margin:0; font-size:18px; font-weight:700; color:#0f172a; }
+        .modal-close { width:36px; height:36px; border:none; border-radius:10px; background:#fff; color:#475569; font-size:24px; line-height:1; cursor:pointer; box-shadow:0 1px 3px rgba(15,23,42,.12); }
+        .modal-info { padding:14px 18px 6px; border-bottom:1px solid #eef2f7; }
+        .mi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px 14px; }
+        .mi-grid div { display:flex; flex-direction:column; gap:2px; }
+        .mi-l { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
+        .mi-v { font-size:13px; font-weight:600; color:#0f172a; }
+        .sec-title { margin:14px 0 8px; font-size:14px; font-weight:800; }
+        .sec-empty { padding:12px 14px; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b; background:#f8fafc; }
+        .det-table { width:100%; border-collapse:separate; border-spacing:0; margin-bottom:10px; }
+        .det-table thead th { position:sticky; top:0; background:#f8fafc; color:#475569; font-size:12px; font-weight:700; padding:10px 12px; border-bottom:1px solid #e2e8f0; }
+        .det-table tbody td { padding:10px 12px; border-bottom:1px solid #eef2f7; font-size:13px; color:#0f172a; vertical-align:top; }
+        .pill { display:inline-flex; align-items:center; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+        .pill-green { background:#dcfce7; color:#166534; }
+        .pill-red { background:#fee2e2; color:#b91c1c; }
+        .pill-gray { background:#e2e8f0; color:#475569; }
+        .pill-amber { background:#fef3c7; color:#b45309; }
+        .pill-blue { background:#dbeafe; color:#1d4ed8; }
+        .pill-teal { background:#ccfbf1; color:#0f766e; }
 
         .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
@@ -468,26 +934,12 @@
         .pg-btn.active { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
         .pg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); z-index: 9999; align-items: center; justify-content: center; padding: 20px; }
-        .modal-box { background: #fff; border-radius: 14px; width: 100%; max-width: 920px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
-        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f0f4f8, #e8edf5); }
-        .modal-header h3 { font-size: 16px; font-weight: 700; color: #1e293b; }
-        .modal-close { font-size: 26px; line-height: 1; color: #94a3b8; background: none; border: none; cursor: pointer; }
-        .modal-close:hover { color: #ef4444; }
-        .modal-info { padding: 14px 22px; border-bottom: 1px solid #f1f5f9; background: #fafbfc; }
-        .mi-grid { display: flex; flex-wrap: wrap; gap: 18px; }
-        .mi-l { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; }
-        .mi-v { display: block; font-size: 13px; color: #1e293b; font-weight: 600; }
-
-        .sec-title { margin: 16px 22px 8px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
-        .sec-empty { margin: 0 22px 8px; font-size: 13px; color: #94a3b8; padding: 6px 0; }
-        .det-table { width: calc(100% - 44px); margin: 0 22px 8px; border-collapse: collapse; font-size: 12.5px; }
-        .det-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; }
-        .det-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
-
-        .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1.4; white-space: nowrap; }
+        .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.4; white-space: nowrap; }
         .pill-red { background: #fee2e2; color: #b91c1c; }
         .pill-green { background: #dcfce7; color: #15803d; }
         .pill-amber { background: #fef3c7; color: #b45309; margin: 1px; }
+        .pill-gray { background: #e2e8f0; color: #475569; }
+        .pill-blue { background: #dbeafe; color: #1d4ed8; }
+        .pill-teal { background: #ccfbf1; color: #0f766e; }
     </style>
 </x-app-layout>

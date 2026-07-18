@@ -2,13 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class TestSubjectLesson extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'test_subject_id',
         'lesson_date',
@@ -27,5 +24,10 @@ class TestSubjectLesson extends Model
     public function testSubject()
     {
         return $this->belongsTo(TestSubject::class);
+    }
+
+    public function lessonTest()
+    {
+        return $this->hasOne(TestSubjectLessonTest::class, 'test_subject_lesson_id');
     }
 }

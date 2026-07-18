@@ -57,6 +57,11 @@
     $logoutRoute = $isImpersonating ? route('impersonate.stop') : ($useTeacherRoutes ? route('teacher.logout') : route('admin.logout'));
     $switchRoleRoute = $useTeacherRoutes ? route('teacher.switch-role') : route('admin.switch-role');
     $profileRoute = $useTeacherRoutes ? route('teacher.info-me') : null;
+    $teacherTestSubjectCount = 0;
+
+    if ($isTeacher && $user && !in_array($activeRole, $adminRoles)) {
+        $teacherTestSubjectCount = \App\Models\TestSubject::where('teacher_id', $user->id)->count();
+    }
 
     // Rol labellarini olish
     $roleLabels = [];
@@ -263,6 +268,16 @@
         </a>
         @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        <a href="{{ route('admin.admission-indicators.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.admission-indicators.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            Qabul ko'rsatkichlari
+        </a>
+        @endif
+
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <a href="{{ route('admin.users.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'sidebar-active' : '' }}">
@@ -342,6 +357,16 @@
             @if($vedomostRejUnread > 0)
                 <span style="background:#b91c1c;color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;">{{ $vedomostRejUnread }}</span>
             @endif
+        </a>
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'oquv_prorektori', 'admin']))
+        <a href="{{ $r('admin.quiz-grade-appeals.index', 'teacher.quiz-grade-appeals.index') }}"
+           class="sidebar-link {{ $isActive('admin.quiz-grade-appeals.*', 'teacher.quiz-grade-appeals.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            Test baho apelyatsiyasi
         </a>
         @endif
 
@@ -803,7 +828,9 @@
             </svg>
             Talaba rasmlari
         </a>
+        @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
         <a href="{{ route('admin.oquv-reja.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.oquv-reja.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -898,6 +925,14 @@
         </a>
         @endif
 
+        <a href="{{ route('admin.reports.oqim') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.oqim*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.83-4M7 12a3 3 0 10-2.83-4"></path>
+            </svg>
+            Oqim
+        </a>
+
         <a href="{{ route('admin.reports.debtors') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.debtors') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -912,7 +947,7 @@
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7l-2 2-1-1"></path>
             </svg>
-            Qayta o'qish: ariza bermaganlar
+            Qarzdorlar: academic records
         </a>
         @endif
 
@@ -1088,7 +1123,7 @@
         @endif
 
         {{-- O'quv bo'limi: qolgan QO' bo'limlari --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'dekan', 'registrator_ofisi']))
         <a href="{{ route('admin.retake-applications.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-applications.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1099,19 +1134,22 @@
                 <span class="sidebar-badge">{{ $pendingRetakeCount > 99 ? '99+' : $pendingRetakeCount }}</span>
             @endif
         </a>
-        <a href="{{ route('admin.retake-groups.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.retake-groups.*') ? 'sidebar-active' : '' }}" style="position: relative;">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
-            QO': Guruhlar
-            @if(($pendingGroupingCount ?? 0) > 0)
-                <span class="sidebar-badge">{{ $pendingGroupingCount > 99 ? '99+' : $pendingGroupingCount }}</span>
-            @endif
-        </a>
+        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
+            <a href="{{ route('admin.retake-groups.index') }}"
+               class="sidebar-link {{ request()->routeIs('admin.retake-groups.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+                <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+                QO': Guruhlar
+                @if(($pendingGroupingCount ?? 0) > 0)
+                    <span class="sidebar-badge">{{ $pendingGroupingCount > 99 ? '99+' : $pendingGroupingCount }}</span>
+                @endif
+            </a>
+        @endif
         @endif
 
-        {{-- Qayta o'qish jurnali — o'qituvchi, dekan, registrator, o'quv bo'limi, admin --}}
+        {{-- QO': Jurnal — barcha qayta o'qish guruhlari (sinov fanlar ham).
+             O'qituvchi JN/MT kiritadi; admin/registrator/dekan/o'quv bo'limi ko'radi. --}}
         @if($hasActiveRole(['superadmin', 'admin', 'oqituvchi', 'dekan', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
         <a href="{{ route('admin.retake-journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-journal.*') ? 'sidebar-active' : '' }}">
@@ -1122,8 +1160,9 @@
         </a>
         @endif
 
-        {{-- Test markazi paneli — qayta o'qish OSKE/TEST natijalari --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'test_markazi']))
+        {{-- QO': Test markazi — OSKE/TEST natijalari, diagnostika, YN qaydnoma.
+             Admin, registrator ofisi va test markazi. --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi', 'test_markazi']))
         <a href="{{ route('admin.retake-test-markazi.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-test-markazi.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1192,7 +1231,7 @@
         @endif
 
         {{-- ============ DB MA'LUMOTLAR ============ --}}
-        @if($hasActiveRole(['superadmin', 'admin']))
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
         <a href="{{ route('admin.db-export.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.db-export.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1222,10 +1261,10 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || ($isTeacher && !in_array($activeRole, $adminRoles) && $teacherTestSubjectCount > 0))
         <div class="sidebar-section">Test Moduli</div>
-        <a href="{{ route('admin.test-subjects.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.test-subjects.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.test-subjects.index', 'teacher.test-subjects.index') }}"
+           class="sidebar-link {{ $isActive('admin.test-subjects.*', 'teacher.test-subjects.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>

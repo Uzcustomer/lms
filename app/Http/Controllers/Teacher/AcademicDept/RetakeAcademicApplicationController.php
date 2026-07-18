@@ -33,7 +33,7 @@ class RetakeAcademicApplicationController extends Controller
 
     public function index(Request $request)
     {
-        $this->authorizeAccess();
+        $this->authorizeViewAccess();
 
         $departmentId = $request->input('department');
         $specialtyId = $request->input('specialty');
@@ -41,7 +41,8 @@ class RetakeAcademicApplicationController extends Controller
         $semesterCode = $request->input('semester_code');
         $groupId = $request->input('group');
         $search = trim((string) $request->input('search', ''));
-        $stage = $request->input('stage', 'all'); // all|pending|preapproved|rejected
+        $stage = $request->input('stage', 'all'); // all|awaiting|pending|preapproved|rejected
+        $status = $request->input('status'); // aniq holat filtri (academicStatusOptions)
 
         $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {
@@ -76,37 +77,59 @@ class RetakeAcademicApplicationController extends Controller
         $hasFilters = $departmentId || $specialtyId || $levelCode || $semesterCode || $groupId || $search !== '';
         $studentHemisIds = $hasFilters ? $studentQuery->pluck('hemis_id') : null;
 
+        // Barcha yuborilgan arizalar ko'rinadi (guruhi bo'lgan har bir ariza).
+        // Ilgari faqat to'lovi tasdiqlangan/rad etilganlar ko'rinardi — shu sabab
+        // talabaning barcha fanlari ko'rinmasdi. Endi har bir arizaning "Holat"
+        // ustuni orqali qaysi bosqichda ekanligi ko'rsatiladi.
         $appsQuery = RetakeApplication::query()
             ->with(['group.student', 'deanUser', 'registrarUser', 'academicDeptUser'])
-            ->whereHas('group', function ($q) {
-                // Faqat to'lov tasdiqlangan arizalar
-                $q->whereNotNull('payment_uploaded_at')
-                  ->where('payment_verification_status', 'approved');
-            });
+            ->whereHas('group');
 
         if ($studentHemisIds !== null) {
             $appsQuery->whereIn('student_hemis_id', $studentHemisIds);
         }
 
+        // Aniq "Holat" filtri tanlangan bo'lsa — u bosqich (tab) filtridan ustun turadi
+        if (!empty($status)) {
+            $appsQuery->academicStatus($status);
+        } else {
         // Bosqich filtri
         match ($stage) {
+            // Hali o'quv bo'limi bosqichiga yetib kelmagan arizalar
+            // (dekan/registrator ko'rib chiqmoqda yoki to'lov tekshirilmoqda)
+            'awaiting' => $appsQuery
+                ->where('final_status', 'pending')
+                ->where('academic_dept_status', 'pending')
+                ->whereHas('group', fn ($g) => $g->where('payment_verification_status', '!=', 'rejected'))
+                ->where(function ($q) {
+                    $q->where('dean_status', '!=', 'approved')
+                      ->orWhere('registrar_status', '!=', 'approved')
+                      ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', '!=', 'approved'));
+                }),
             // Dekan + Registrator tasdiqlagan, lekin o'quv bo'limi hali ko'rib chiqmagan
             'pending' => $appsQuery
+                ->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
                 ->where('dean_status', 'approved')
                 ->where('registrar_status', 'approved')
                 ->where('academic_dept_status', 'pending')
                 ->where('final_status', 'pending'),
             // O'quv bo'limi tasdiqlagan, lekin guruhga biriktirilmagan
             'preapproved' => $appsQuery
+                ->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
                 ->where('academic_dept_status', 'approved')
                 ->where('final_status', 'pending')
                 ->whereNull('retake_group_id'),
-            // O'quv bo'limi tomonidan rad etilgan
+            // Har qanday bosqichda rad etilgan (dekan/registrator/o'quv bo'limi/tizim)
+            // yoki to'lovi rad etilgan arizalar
             'rejected' => $appsQuery
-                ->where('academic_dept_status', 'rejected'),
+                ->where(function ($q) {
+                    $q->where('final_status', 'rejected')
+                      ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
+                }),
             // Hammasi (statistika uchun)
             default => null,
         };
+        }
 
         $appsQuery->orderByDesc('created_at');
         $applications = $appsQuery->paginate($perPage)->withQueryString();
@@ -116,18 +139,34 @@ class RetakeAcademicApplicationController extends Controller
 
         // Sanoq qatorlari (tab badge)
         $counters = [
-            'pending' => (clone $this->countersBaseQuery())->where('dean_status', 'approved')
+            'all' => (clone $this->countersBaseQuery())->count(),
+            'awaiting' => (clone $this->countersBaseQuery())
+                ->where('final_status', 'pending')
+                ->where('academic_dept_status', 'pending')
+                ->whereHas('group', fn ($q) => $q->where('payment_verification_status', '!=', 'rejected'))
+                ->where(function ($q) {
+                    $q->where('dean_status', '!=', 'approved')
+                      ->orWhere('registrar_status', '!=', 'approved')
+                      ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', '!=', 'approved'));
+                })
+                ->count(),
+            'pending' => (clone $this->countersBaseQuery())->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
+                ->where('dean_status', 'approved')
                 ->where('registrar_status', 'approved')
                 ->where('academic_dept_status', 'pending')
                 ->where('final_status', 'pending')
                 ->count(),
             'preapproved' => (clone $this->countersBaseQuery())
+                ->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
                 ->where('academic_dept_status', 'approved')
                 ->where('final_status', 'pending')
                 ->whereNull('retake_group_id')
                 ->count(),
             'rejected' => (clone $this->countersBaseQuery())
-                ->where('academic_dept_status', 'rejected')
+                ->where(function ($q) {
+                    $q->where('final_status', 'rejected')
+                      ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
+                })
                 ->count(),
         ];
 
@@ -137,6 +176,9 @@ class RetakeAcademicApplicationController extends Controller
             'stage' => $stage,
             'counters' => $counters,
             'perPage' => $perPage,
+            'statusOptions' => RetakeApplication::academicStatusOptions(),
+            'currentStatus' => $status,
+            'canManageApplications' => RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff()),
         ]);
     }
 
@@ -145,10 +187,11 @@ class RetakeAcademicApplicationController extends Controller
      */
     public function export(Request $request)
     {
-        $this->authorizeAccess();
+        $this->authorizeViewAccess();
 
         $filters = [
             'stage' => $request->input('stage'),
+            'status' => $request->input('status'),
             'department' => $request->input('department'),
             'specialty' => $request->input('specialty'),
             'level_code' => $request->input('level_code'),
@@ -172,10 +215,7 @@ class RetakeAcademicApplicationController extends Controller
 
     private function countersBaseQuery()
     {
-        return RetakeApplication::query()->whereHas('group', function ($q) {
-            $q->whereNotNull('payment_uploaded_at')
-              ->where('payment_verification_status', 'approved');
-        });
+        return RetakeApplication::query()->whereHas('group');
     }
 
     /**
@@ -293,6 +333,13 @@ class RetakeAcademicApplicationController extends Controller
     {
         if (!RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff())) {
             abort(403, "Sizda qayta o'qish arizalarini boshqarish ruxsati yo'q");
+        }
+    }
+
+    private function authorizeViewAccess(): void
+    {
+        if (!RetakeAccess::canViewAcademicApplications(RetakeAccess::currentStaff())) {
+            abort(403, "Sizda qayta o'qish arizalarini ko'rish ruxsati yo'q");
         }
     }
 

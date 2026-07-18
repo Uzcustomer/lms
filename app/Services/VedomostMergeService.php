@@ -87,7 +87,8 @@ class VedomostMergeService
     public function mergeKey(object $row): string
     {
         $formType = $row->form_type ?? VedomostSubmission::FORM_12;
-        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+        $isManual = !empty($row->manual_opened_at ?? null);
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true) && !$isManual;
 
         return implode('|', [
             $formType,
@@ -134,7 +135,8 @@ class VedomostMergeService
             ->first();
 
         $formType = $rep->form_type ?? VedomostSubmission::FORM_12;
-        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+        $isManual = !empty($rep->manual_opened_at ?? null);
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true) && !$isManual;
 
         $subgroups = $group->pluck('group_name')->filter()->unique()->sort()->values();
 
@@ -153,6 +155,7 @@ class VedomostMergeService
         $out = (object) [
             'id' => $rep->id,
             'ids' => $group->pluck('id')->all(),
+            'created_at' => $rep->created_at ?? null,
             'merge_count' => $group->count(),
             'subgroup_names' => $subgroups->all(),
             'subgroup_label' => $subgroups->implode(', '),
@@ -256,7 +259,8 @@ class VedomostMergeService
     public function siblingsOf(VedomostSubmission $v): Collection
     {
         $formType = $v->form_type ?? VedomostSubmission::FORM_12;
-        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+        $isManual = $v->manual_opened_at !== null;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true) && !$isManual;
 
         $query = VedomostSubmission::query()
             // Faqat FAOL guruhlar — index ro'yxati bilan mos bo'lishi uchun.
@@ -275,6 +279,10 @@ class VedomostMergeService
         }
 
         // 12a/12b — har fakultet alohida varaq: bir xil reja (fakultet) doirasida.
+        if ($isManual) {
+            return $query->whereKey($v->id)->get();
+        }
+
         if ($isCombined) {
             $query->where('curriculum_hemis_id', $v->curriculum_hemis_id);
         }

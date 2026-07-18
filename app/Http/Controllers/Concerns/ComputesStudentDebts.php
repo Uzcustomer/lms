@@ -275,4 +275,489 @@ trait ComputesStudentDebts
             return true;
         })->values();
     }
+
+    /**
+     * Joriy semestr bo'yicha xavf ostidagi talabalarni student_grades dan hisoblash.
+     * Qaytaradi: [hemis_id => [['subject_name'=>..., 'reasons'=>[...]], ...]]
+     */
+    protected function getCurrentSemesterRisks(array $studentHemisIds, array $studentSemCodesMap = []): array
+    {
+        if (empty($studentHemisIds)) return [];
+
+        if (!empty($studentSemCodesMap)) {
+            $currentSemesterCodes = array_values(array_unique(array_map('strval', $studentSemCodesMap)));
+        } else {
+            $currentSemesterCodes = DB::table('semesters')
+                ->where('current', true)
+                ->pluck('code')
+                ->toArray();
+        }
+
+        if (empty($currentSemesterCodes)) return [];
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+        // Barcha joriy semestr student_grades yozuvlari
+        $grades = collect();
+        foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+            $chunk_grades = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->whereNull('deleted_at')
+                ->select(
+                    'student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                    'training_type_code', 'grade', 'retake_grade', 'status', 'reason',
+                    $hasAttemptCol ? 'attempt' : DB::raw('1 as attempt'),
+                    'lesson_date', 'education_year_code'
+                )
+                ->get();
+            $grades = $grades->merge($chunk_grades);
+        }
+
+        if ($grades->isEmpty()) return [];
+
+        // Biriktirilganlik (enrollment) — student_subjects + JORIY O'QUV YILI bo'yicha.
+        // Tiklangan talaba bir semestrni 2 marta o'qishi mumkin; faqat eng so'nggi
+        // (joriy) o'quv yili biriktirilgan fanlar hozir o'qilayotgan fanlardir.
+        $curYear = [];
+        $hasEnrollment = [];
+        $ssRowsAll = collect();
+        foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+            $ssRows = DB::table('student_subjects')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereIn('semester_id', $currentSemesterCodes)
+                ->whereNotNull('subject_id')
+                ->select('student_hemis_id', 'semester_id', 'subject_id', 'education_year')
+                ->get();
+            $ssRowsAll = $ssRowsAll->merge($ssRows);
+            foreach ($ssRows as $sr) {
+                $hid = $sr->student_hemis_id;
+                $hasEnrollment[$hid] = true;
+                $y = (string) $sr->education_year;
+                if ($y !== '' && (!isset($curYear[$hid]) || $y > $curYear[$hid])) {
+                    $curYear[$hid] = $y;
+                }
+            }
+        }
+        $enrolledCur = [];
+        foreach ($ssRowsAll as $sr) {
+            $hid = $sr->student_hemis_id;
+            $cy = $curYear[$hid] ?? null;
+            if ($cy === null || (string) $sr->education_year === '' || (string) $sr->education_year === $cy) {
+                $enrolledCur[$hid][$sr->subject_id] = true;
+            }
+        }
+
+        // Baholarni joriy o'quv yili bo'yicha tozalash (eski yil baholari chiqarib tashlanadi).
+        $grades = $grades->filter(function ($g) use ($curYear) {
+            $cy = $curYear[$g->student_hemis_id] ?? null;
+            if ($cy === null) return true;
+            $gy = (string) ($g->education_year_code ?? '');
+            if ($gy === '') return true;
+            return $gy === $cy;
+        });
+
+        if ($grades->isEmpty()) return [];
+
+        // Sababli absent oralilqlari (AbsenceExcuse — sana oralig'i bo'yicha, fan emas)
+        $hasExcuseTable = \Illuminate\Support\Facades\Schema::hasTable('absence_excuses');
+        $excuseRanges = [];
+        if ($hasExcuseTable) {
+            $excused = DB::table('absence_excuses')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('status', 'approved')
+                ->select('student_hemis_id', 'start_date', 'end_date')
+                ->get();
+            foreach ($excused as $e) {
+                $excuseRanges[$e->student_hemis_id][] = [
+                    'start' => substr((string) $e->start_date, 0, 10),
+                    'end' => substr((string) $e->end_date, 0, 10),
+                ];
+            }
+        }
+
+        // --- Davomat (jurnal mantig'i): attendances.absent_off soatlari / auditoriya soati ---
+        // Jurnal show sahifasi davomatni dars SONIDAN emas, balki QOLDIRILGAN SOATLARdan
+        // hisoblaydi: SUM(absent_off) / auditoriumHours * 100. MT/ON/OSKI/Test (99,100,101,102)
+        // turlari va tasdiqlangan sababli ariza sanalari chiqarib tashlanadi.
+        $subjectIdsForAtt = $grades->pluck('subject_id')->filter()->unique()->values()->all();
+
+        // 1) Har talaba+fan+semestr uchun sababsiz qoldirilgan soat.
+        //    Tasdiqlangan sababli ariza sanalari SQL korrelyatsiyalangan subso'rov
+        //    o'rniga PHP tomonda ($excuseRanges) filtrlanadi — DATE() funksiyasi bilan
+        //    indekssiz korrelyatsiyali subso'rov katta talaba to'plamida sahifani
+        //    juda sekinlashtirib (timeout) yuboradi.
+        $absentHours = [];
+        if (!empty($subjectIdsForAtt)) {
+            foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                $attRows = DB::table('attendances')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->whereIn('subject_id', $subjectIdsForAtt)
+                    ->whereNotIn('training_type_code', [99, 100, 101, 102])
+                    ->where('absent_off', '>', 0)
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code', 'lesson_date', 'absent_off')
+                    ->get();
+                foreach ($attRows as $ar) {
+                    // Joriy o'quv yili filtri (tiklangan talaba uchun eski yil qoldirishlarini chiqarib tashlash)
+                    $cy = $curYear[$ar->student_hemis_id] ?? null;
+                    $ey = (string) ($ar->education_year_code ?? '');
+                    if ($cy !== null && $ey !== '' && $ey !== $cy) continue;
+                    // Tasdiqlangan sababli ariza oralig'iga tushsa — sababli, hisobga olinmaydi
+                    if ($hasExcuseTable && $this->isDateExcused($ar->student_hemis_id, $ar->lesson_date, $excuseRanges)) {
+                        continue;
+                    }
+                    $k = $ar->student_hemis_id . '|' . $ar->subject_id . '|' . $ar->semester_code;
+                    $absentHours[$k] = ($absentHours[$k] ?? 0) + (float) $ar->absent_off;
+                }
+            }
+        }
+
+        // 2) Talaba -> o'quv reja (curricula) xaritasi
+        $stuCurricula = DB::table('students')
+            ->whereIn('students.hemis_id', $studentHemisIds)
+            ->leftJoin('groups', 'students.group_id', '=', 'groups.group_hemis_id')
+            ->select('students.hemis_id', 'groups.curriculum_hemis_id')
+            ->pluck('curriculum_hemis_id', 'students.hemis_id')
+            ->toArray();
+
+        // Talaba -> guruh (group_hemis_id) xaritasi — JN ni jurnal mantig'ida hisoblash uchun
+        $stuGroup = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->pluck('group_id', 'hemis_id')
+            ->toArray();
+        $jnGroupCache = [];
+
+        // 3) Auditoriya soatlari: [curricula|subject|sem] va fallback [subject|sem]
+        $auditMap = [];
+        $auditAnyMap = [];
+        if (!empty($subjectIdsForAtt)) {
+            $csRows = \App\Models\CurriculumSubject::whereIn('semester_code', $currentSemesterCodes)
+                ->whereIn('subject_id', $subjectIdsForAtt)
+                ->orderByDesc('is_active')
+                ->get(['subject_id', 'semester_code', 'curricula_hemis_id', 'total_acload', 'subject_details']);
+            foreach ($csRows as $cs) {
+                $h = 0.0;
+                if (is_array($cs->subject_details)) {
+                    foreach ($cs->subject_details as $d) {
+                        $code = (string) (($d['trainingType'] ?? [])['code'] ?? '');
+                        if ($code !== '' && $code !== '17') {
+                            $h += (float) ($d['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($h <= 0) $h = (float) ($cs->total_acload ?? 0);
+                $kc = $cs->curricula_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
+                if (!isset($auditMap[$kc])) $auditMap[$kc] = $h;
+                $ka = $cs->subject_id . '|' . $cs->semester_code;
+                if (!isset($auditAnyMap[$ka])) $auditAnyMap[$ka] = $h;
+            }
+        }
+
+        // 4) Imtihon (OSKI/Test) sana oynasi — JURNAL bilan bir xil: imtihon yozuvlari
+        //    [group|subject|sem] uchun birinchi DARS sanasidan oldin bo'lsa, ular o'tgan
+        //    semestrga tegishli (semester_code noto'g'ri teglangan bo'lishi mumkin) va
+        //    hisobga olinmaydi. Jurnal imtihonlarni semester_code emas, lesson_date
+        //    oynasi bilan ajratadi — shuni takrorlaymiz.
+        $examMinDate = []; // [group|subject|sem] => 'YYYY-MM-DD'
+        $groupIdsForSched = array_values(array_unique(array_filter(array_map('strval', $stuGroup))));
+        if (!empty($groupIdsForSched) && !empty($subjectIdsForAtt) && \Illuminate\Support\Facades\Schema::hasTable('schedules')) {
+            foreach (array_chunk($groupIdsForSched, 500) as $gchunk) {
+                $schedRows = DB::table('schedules')
+                    ->whereIn('group_id', $gchunk)
+                    ->whereIn('subject_id', $subjectIdsForAtt)
+                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('lesson_date')
+                    ->whereNotIn('training_type_code', [100, 101, 102, 103]) // imtihonlar emas — dars sanalari
+                    ->select('group_id', 'subject_id', 'semester_code', DB::raw('MIN(lesson_date) as min_date'))
+                    ->groupBy('group_id', 'subject_id', 'semester_code')
+                    ->get();
+                foreach ($schedRows as $sr) {
+                    $examMinDate[$sr->group_id . '|' . $sr->subject_id . '|' . $sr->semester_code] = substr((string) $sr->min_date, 0, 10);
+                }
+            }
+        }
+
+        // Talaba+fan bo'yicha guruhlash
+        $grouped = $grades->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
+
+        $risks = [];
+
+        foreach ($grouped as $key => $rows) {
+            [$hemisId, $subjectId, $semCode] = explode('|', $key, 3);
+
+            // Talabaning o'z semester_code si bilan mos kelmasa — bu fan joriy semestr emas
+            if (!empty($studentSemCodesMap)) {
+                $studentSemCode = $studentSemCodesMap[$hemisId] ?? null;
+                if ($studentSemCode !== null && (string) $semCode !== (string) $studentSemCode) {
+                    continue;
+                }
+            }
+
+            // Biriktirilganlik tekshiruvi: bu fan joriy o'quv yili biriktirilganlar
+            // ro'yxatida bo'lmasa — talaba hozir o'qimaydi (tiklangan, eski yil fani),
+            // xavf hisoblanmaydi.
+            if (($hasEnrollment[$hemisId] ?? false) && !isset($enrolledCur[$hemisId][$subjectId])) {
+                continue;
+            }
+
+            $subjectName = $rows->first()->subject_name ?? 'Fan';
+            $reasons = [];
+
+            // 1. OSKI/Test imtihonlari — har bir tur (101=OSKI, 102=Test) bo'yicha
+            //    URINISHLARNING ENG YAXSHISIGA qaraladi. Talaba birorta urinishda
+            //    >=60 olgan bo'lsa — o'sha tur o'tilgan; keyin past urinish kelsa
+            //    (xato/dublikat yozuv) o'tganlikni bekor qilmaydi. Mavjud turdan
+            //    birortasi <60 bo'lsa (va bahosi bor bo'lsa) — imtihon qarzdorligi.
+            $gidForExam = $stuGroup[$hemisId] ?? null;
+            $minDateForExam = $gidForExam !== null
+                ? ($examMinDate[$gidForExam . '|' . $subjectId . '|' . $semCode] ?? null)
+                : null;
+            foreach ([101 => 'OSKI', 102 => 'Test'] as $ttCode => $ttLabel) {
+                $typeRows = $rows->where('training_type_code', $ttCode);
+                // Jurnal oynasi: birinchi dars sanasidan oldingi imtihonlar (o'tgan
+                // semestr / noto'g'ri teglangan) hisobga olinmaydi.
+                if ($minDateForExam !== null) {
+                    $typeRows = $typeRows->filter(fn($r) => $r->lesson_date !== null
+                        && substr((string) $r->lesson_date, 0, 10) >= $minDateForExam);
+                }
+                if ($typeRows->isEmpty()) continue;
+                $best = null;
+                foreach ($typeRows as $r) {
+                    $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
+                    if ($val !== null && ($best === null || $val > $best)) {
+                        $best = $val;
+                    }
+                }
+                if ($best !== null && $best < 60) {
+                    $reasons[] = $ttLabel . '<60';
+                }
+            }
+
+            // 2. MT (training_type_code = 99)
+            $mtRows = $rows->where('training_type_code', 99);
+            if ($mtRows->isNotEmpty()) {
+                $mtGrade = null;
+                foreach ($mtRows as $r) {
+                    $val = $r->grade !== null ? (float)$r->grade : null;
+                    if ($val !== null && ($mtGrade === null || $val > $mtGrade)) {
+                        $mtGrade = $val;
+                    }
+                }
+                if ($mtGrade !== null && $mtGrade < 60) {
+                    $reasons[] = 'MT<60';
+                }
+            }
+
+            // 3. JN (kunlik baholar) — jurnaldagi AYNAN bir xil hisob:
+            // computeJnAveragesForGroup (schedules rejasi bo'yicha kunlik o'rtacha,
+            // yo'qolgan juftlar 0, maxraj = rejalashtirilgan dars kunlari soni).
+            $jnHasGrades = $rows->contains(fn($r) =>
+                !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
+                && $r->lesson_date !== null
+                && $r->reason !== 'absent'
+                && $r->grade !== null
+            );
+            $gidForJn = $stuGroup[$hemisId] ?? null;
+            if ($jnHasGrades && $gidForJn) {
+                $jnCacheKey = $gidForJn . '|' . $subjectId . '|' . $semCode;
+                if (!array_key_exists($jnCacheKey, $jnGroupCache)) {
+                    try {
+                        $jnGroupCache[$jnCacheKey] = \App\Http\Controllers\Admin\JournalController::computeJnAveragesForGroup(
+                            (string) $subjectId, (string) $semCode, (string) $gidForJn
+                        );
+                    } catch (\Throwable $e) {
+                        $jnGroupCache[$jnCacheKey] = [];
+                    }
+                }
+                $jnVal = $jnGroupCache[$jnCacheKey][$hemisId] ?? null;
+                if ($jnVal !== null && $jnVal > 0 && $jnVal < 60) {
+                    $reasons[] = 'JN<60 (' . $jnVal . ')';
+                }
+            }
+
+            // 4. Sababsiz davomat >= 25% (jurnal mantig'i: qoldirilgan soat / auditoriya soati)
+            $absH = $absentHours[$hemisId . '|' . $subjectId . '|' . $semCode] ?? 0;
+            if ($absH > 0) {
+                $cur = $stuCurricula[$hemisId] ?? null;
+                $audH = ($cur !== null) ? ($auditMap[$cur . '|' . $subjectId . '|' . $semCode] ?? 0) : 0;
+                if ($audH <= 0) {
+                    $audH = $auditAnyMap[$subjectId . '|' . $semCode] ?? 0;
+                }
+                if ($audH > 0) {
+                    $pct = round(($absH / $audH) * 100, 2);
+                    if ($pct >= 25) {
+                        $pctLabel = rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.');
+                        $reasons[] = "Davomat≥25% ({$pctLabel}%)";
+                    }
+                }
+            }
+
+            if (!empty($reasons)) {
+                $risks[$hemisId][] = [
+                    'subject_id' => $subjectId,
+                    'semester_code' => $rows->first()->semester_code ?? null,
+                    'subject_name' => $subjectName,
+                    'reasons' => $reasons,
+                ];
+            }
+        }
+
+        // Individual grafik bo'yicha belgilangan urinishlar: sana o'tib ketgan lekin
+        // student_grades da mos yozuv yo'q — "o'tmagan" hisoblanadi.
+        // exam_schedules.student_hemis_id = talaba → shaxsiy resit sana belgilangan.
+        // attempt=2: test_resit_date / oski_resit_date
+        // attempt=3: test_resit2_date / oski_resit2_date
+        if (\Illuminate\Support\Facades\Schema::hasTable('exam_schedules')) {
+            $today = now()->format('Y-m-d');
+
+            // O'TGAN imtihonlar: [hid|subId|semCode] => true (eng yaxshi 101/102 bahosi >= 60).
+            // Resit sanalari guruhga oldindan belgilanadi; 1-urinishda o'tgan talabaga
+            // resit kerak emas — shuning uchun "baholanmagan" deb belgilanmaydi.
+            $passedExam = [];
+            foreach ($grades as $g) {
+                if (!in_array((int) $g->training_type_code, [101, 102])) continue;
+                $val = $g->retake_grade !== null ? (float) $g->retake_grade : ($g->grade !== null ? (float) $g->grade : null);
+                if ($val !== null && $val >= 60) {
+                    $passedExam[$g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code] = true;
+                }
+            }
+
+            foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                $esRows = DB::table('exam_schedules')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->select(
+                        'student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                        'test_resit_date', 'oski_resit_date',
+                        'test_resit2_date', 'oski_resit2_date'
+                    )
+                    ->get();
+
+                // Mavjud student_grades imtihon yozuvlari: [hemis_id|subject_id|semester_code|attempt|type]
+                $existingKeys = [];
+                foreach ($grades as $g) {
+                    if (!in_array((int)$g->training_type_code, [101, 102])) continue;
+                    $att = (int) ($g->attempt ?? 1);
+                    $existingKeys[$g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code . '|' . $att] = true;
+                }
+
+                foreach ($esRows as $es) {
+                    $hid = $es->student_hemis_id;
+                    $subId = $es->subject_id;
+                    $semCode = $es->semester_code;
+                    $subName = $es->subject_name ?? 'Fan';
+
+                    // Semester filter per student
+                    if (!empty($studentSemCodesMap)) {
+                        $stu_sem = $studentSemCodesMap[$hid] ?? null;
+                        if ($stu_sem !== null && (string)$semCode !== (string)$stu_sem) continue;
+                    }
+
+                    // Fanni allaqachon o'tgan (imtihon bahosi >= 60) — resit kerak emas, o'tkazib yuboramiz.
+                    if (isset($passedExam[$hid . '|' . $subId . '|' . $semCode])) {
+                        continue;
+                    }
+
+                    // attempt=2: test yoki oski resit sanasi o'tib ketgan va grade yo'q
+                    foreach (['test_resit_date' => 102, 'oski_resit_date' => 101] as $col => $ttCode) {
+                        $date = $es->$col ?? null;
+                        if ($date === null) continue;
+                        $dateStr = substr((string)$date, 0, 10);
+                        if ($dateStr > $today) continue;
+                        $key2 = $hid . '|' . $subId . '|' . $semCode . '|2';
+                        if (!isset($existingKeys[$key2])) {
+                            // 2-urinish sanasi o'tib ketgan, lekin baholanmagan
+                            $alreadyAdded = false;
+                            foreach ($risks[$hid] ?? [] as $r) {
+                                if ($r['subject_name'] === $subName) { $alreadyAdded = true; break; }
+                            }
+                            if (!$alreadyAdded) {
+                                $risks[$hid][] = [
+                                    'subject_id' => $subId,
+                                    'semester_code' => $semCode,
+                                    'subject_name' => $subName,
+                                    'reasons' => ['2-urinish: baholanmagan (grafik o\'tib ketdi)'],
+                                ];
+                            } else {
+                                foreach ($risks[$hid] as &$r) {
+                                    if ($r['subject_name'] === $subName) {
+                                        if (!in_array('2-urinish: baholanmagan (grafik o\'tib ketdi)', $r['reasons'])) {
+                                            $r['reasons'][] = '2-urinish: baholanmagan (grafik o\'tib ketdi)';
+                                        }
+                                        break;
+                                    }
+                                }
+                                unset($r);
+                            }
+                        }
+                    }
+
+                    // attempt=3: resit2 sanasi o'tib ketgan va grade yo'q
+                    foreach (['test_resit2_date' => 102, 'oski_resit2_date' => 101] as $col => $ttCode) {
+                        $date = $es->$col ?? null;
+                        if ($date === null) continue;
+                        $dateStr = substr((string)$date, 0, 10);
+                        if ($dateStr > $today) continue;
+                        $key3 = $hid . '|' . $subId . '|' . $semCode . '|3';
+                        if (!isset($existingKeys[$key3])) {
+                            // 3-urinish sanasi o'tib ketgan, lekin baholanmagan → akademik qarzdor
+                            $alreadyAdded = false;
+                            $reason3 = 'Akademik qarzdor (3-urinish baholanmagan)';
+                            foreach ($risks[$hid] ?? [] as $r) {
+                                if ($r['subject_name'] === $subName) { $alreadyAdded = true; break; }
+                            }
+                            if (!$alreadyAdded) {
+                                $risks[$hid][] = [
+                                    'subject_id' => $subId,
+                                    'semester_code' => $semCode,
+                                    'subject_name' => $subName,
+                                    'reasons' => [$reason3],
+                                ];
+                            } else {
+                                foreach ($risks[$hid] as &$r) {
+                                    if ($r['subject_name'] === $subName) {
+                                        // Agar "2-urinish: V<60" yoki shunga o'xshash sabab bo'lsa — 3-urinish ustunlik qiladi
+                                        if (!in_array($reason3, $r['reasons'])) {
+                                            $r['reasons'][] = $reason3;
+                                        }
+                                        break;
+                                    }
+                                }
+                                unset($r);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $risks;
+    }
+
+    /**
+     * Berilgan sana talaba uchun tasdiqlangan sababli ariza oralig'iga tushadimi?
+     *
+     * @param  mixed  $hemisId      Talaba hemis_id.
+     * @param  mixed  $lessonDate   Dars sanasi (Y-m-d yoki datetime).
+     * @param  array  $excuseRanges [hemis_id => [['start'=>Y-m-d, 'end'=>Y-m-d], ...]].
+     */
+    protected function isDateExcused($hemisId, $lessonDate, array $excuseRanges): bool
+    {
+        $ranges = $excuseRanges[$hemisId] ?? null;
+        if (empty($ranges) || $lessonDate === null) {
+            return false;
+        }
+        $d = substr((string) $lessonDate, 0, 10);
+        if ($d === '') {
+            return false;
+        }
+        foreach ($ranges as $range) {
+            if ($d >= $range['start'] && $d <= $range['end']) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

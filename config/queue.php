@@ -39,7 +39,12 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Uzoq ishlaydigan joblar bor: ComputeRetakeNotAppliedReportJob (timeout=1800s)
+            // va ImportAcademicRecordsJob (timeout=3600s; oxirida import:student-subjects ham
+            // chaqiradi). retry_after HAR DOIM eng uzun job timeout'idan katta bo'lishi shart —
+            // aks holda queue hali ishlayotgan jobni qayta band qilib "attempted too many times"
+            // xatosini beradi. Eng uzun timeout 3600s, shuning uchun default 5400 (>3600) bilan zaxira.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 5400),
             'after_commit' => false,
         ],
 

@@ -7,6 +7,7 @@ use App\Models\RetakeApplicationWindow;
 use App\Models\RetakeGroup;
 use App\Models\Student;
 use App\Models\Teacher;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -90,7 +91,7 @@ class RetakeWindowService
     /**
      * Sanalarni o'zgartirish — faqat super-admin override.
      */
-    public function overrideDates(RetakeApplicationWindow $window, string $startDate, string $endDate): void
+    public function overrideDates(RetakeApplicationWindow $window, string $startDate, string $endDate, ?Model $actor = null, bool $countOverride = true): void
     {
         $this->validateDateRange($startDate, $endDate);
 
@@ -103,10 +104,15 @@ class RetakeWindowService
         // bugundan boshlab shuncha kun ariza qabuli qayta ochiladi.
         // (Migration ishga tushgan bo'lsagina — aks holda jim qoladi.)
         if (RetakeApplicationWindow::supportsReopen()) {
-            $reopen = $this->reopenUntil($window->end_date, $endDate);
-            if ($reopen !== null) {
-                $update['application_reopen_until'] = $reopen;
-            }
+            $update['application_reopen_until'] = $this->reopenUntil($window->end_date, $endDate);
+        }
+
+        if ($countOverride && RetakeApplicationWindow::supportsOverrideTracking()) {
+            $update['override_count'] = (int) ($window->override_count ?? 0) + 1;
+            $update['override_last_at'] = now();
+            $update['override_last_by_name'] = $actor?->full_name
+                ?? $actor?->name
+                ?? $window->override_last_by_name;
         }
 
         $window->update($update);
@@ -194,7 +200,7 @@ class RetakeWindowService
             // Guruh sanasi oynaning eng kech sanasiga teng bo'lsin
             // (faqat oldinga — qisqartirmaymiz, boshqa ishlar buzilmasin uchun).
             $curEnd = $group->end_date ? Carbon::parse($group->end_date)->startOfDay() : null;
-            if ($curEnd === null || $curEnd->lt($targetEnd)) {
+            if ($curEnd === null || !$curEnd->equalTo($targetEnd)) {
                 $update['end_date'] = $targetEnd->toDateString();
             }
 
@@ -214,6 +220,8 @@ class RetakeWindowService
                         ? RetakeGroup::STATUS_SCHEDULED
                         : RetakeGroup::STATUS_IN_PROGRESS;
                 }
+            } elseif ($effectiveEnd && $effectiveEnd->lt($today) && $group->status !== RetakeGroup::STATUS_COMPLETED) {
+                $update['status'] = RetakeGroup::STATUS_COMPLETED;
             }
 
             if (!empty($update)) {

@@ -12,9 +12,11 @@ use App\Models\VedomostSubmissionLog;
 use App\Services\VedomostMergeService;
 use App\Services\VedomostSubmissionNotifier;
 use App\Services\VedomostSubmissionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -203,6 +205,70 @@ class VedomostSubmissionController extends Controller
         return [$query, $educationTypes, $selectedEducationType];
     }
 
+    /**
+     * Qo'lda ochish modali uchun 12-shakl bazalarini qaytaradi.
+     * Sahifadagi filtrlar bilan cheklanmaydi — admin har doim barcha mos guruh+fanlarni ko'rsin.
+     */
+    private function manualOpenOptions(): array
+    {
+        $query = DB::table('vedomost_submissions as vs')
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
+            })
+            ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'vs.curriculum_hemis_id')
+                    ->on('s.code', '=', 'vs.semester_code');
+            })
+            ->where('vs.form_type', VedomostSubmission::FORM_12)
+            ->whereIn('vs.closing_form', VedomostSubmissionService::RESIT_CLOSING_FORMS);
+
+        $rows = $query
+            ->orderBy('vs.group_name')
+            ->orderBy('vs.subject_name')
+            ->get([
+                'vs.group_hemis_id',
+                'vs.group_name',
+                'vs.subject_id',
+                'vs.subject_name',
+                'vs.semester_code',
+                's.name as semester_name',
+                'vs.closing_form',
+                'vs.specialty_name',
+            ]);
+
+        $groups = $rows
+            ->groupBy('group_hemis_id')
+            ->map(function (Collection $items, $groupId) {
+                $first = $items->first();
+
+                return [
+                    'group_hemis_id' => (string) $groupId,
+                    'group_name' => $first->group_name,
+                    'specialty_name' => $first->specialty_name,
+                    'subjects' => $items
+                        ->unique(fn($row) => $row->subject_id . '|' . $row->semester_code)
+                        ->map(fn($row) => [
+                            'subject_id' => (string) $row->subject_id,
+                            'subject_name' => $row->subject_name,
+                            'semester_code' => (string) $row->semester_code,
+                            'semester_name' => $row->semester_name ?: ($row->semester_code ? ($row->semester_code . '-semestr') : null),
+                            'closing_form' => $row->closing_form,
+                        ])
+                        ->sortBy('subject_name', SORT_NATURAL | SORT_FLAG_CASE)
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+
+        return $groups;
+    }
+
     public function index(Request $request)
     {
         $this->checkViewAccess();
@@ -263,6 +329,11 @@ class VedomostSubmissionController extends Controller
 
         $notifyEnabled = VedomostSubmissionNotifier::enabled();
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
+        $canManage = in_array(session('active_role', ''), self::ALLOWED_ROLES, true);
+        $manualOpenGroups = $canManage
+            ? $this->manualOpenOptions()
+            : [];
+        $syncProgress = Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']);
 
         return view('admin.vedomost-submission.index', compact(
             'submissions',
@@ -274,14 +345,27 @@ class VedomostSubmissionController extends Controller
             'formLabels',
             'stats',
             'notifyEnabled',
-            'canToggleNotify'
+            'canToggleNotify',
+            'canManage',
+            'manualOpenGroups',
+            'syncProgress'
         ));
     }
 
+    /** Davr ichidagi harakat turlari (audit jurnali action -> yorliq). */
+    private const REPORT_ACTIONS = [
+        'upload'          => 'Topshirildi',
+        'review'          => 'Tekshirishga olindi',
+        'approve'         => 'Tasdiqlandi',
+        'reject'          => 'Rad etildi',
+        'reupload_permit' => 'Qayta ruxsat',
+    ];
+
     /**
-     * Svodnaya hisobot — tanlangan kesim (fakultet/kurs/kafedra/fan/guruh) bo'yicha
-     * qatorlar, ustunlarda shakl turi (12 / 12a / 12b) × status sanog'i.
-     * Joriy filtrlar (query string) hisobga olinadi.
+     * Svodnaya hisobot — tanlangan kesimlar (fakultet/kurs/kafedra/fan/guruh)
+     * bo'yicha IERARXIK qatorlar. Sana oralig'isiz — shakl (12/12a/12b) × status.
+     * Sana oralig'i berilsa — "Davri boshiga / Davri ichida / Davri oxiriga"
+     * (qoldiq–harakat–qoldiq) ko'rinishi. Har ustun bo'yicha sort qilinadi.
      */
     public function report(Request $request)
     {
@@ -297,36 +381,306 @@ class VedomostSubmissionController extends Controller
             'subject'    => ['label' => 'Fan',      'field' => 'subject_name'],
             'group'      => ['label' => 'Guruh',    'field' => 'group_name'],
         ];
-        $dimension = $request->get('dimension', 'faculty');
-        if (!isset($dimensions[$dimension])) {
-            $dimension = 'faculty';
-        }
-        $field = $dimensions[$dimension]['field'];
 
-        $forms    = VedomostSubmission::formLabels();    // 12 / 12a / 12b
+        // Tanlangan kesimlar — tartibli ro'yxat (dims=department,subject -> Kafedra > Fan).
+        $selectedDims = collect(explode(',', (string) $request->get('dims', 'faculty')))
+            ->map(fn($d) => trim($d))
+            ->filter(fn($d) => isset($dimensions[$d]))
+            ->unique()->values()->all();
+        if (empty($selectedDims)) {
+            $selectedDims = ['faculty'];
+        }
+        $availableDims = array_values(array_diff(array_keys($dimensions), $selectedDims));
+
         $statuses = VedomostSubmission::statusLabels();  // pending..rejected
+        $statusColor = [
+            'pending'   => ['#475569', '#f1f5f9'],
+            'received'  => ['#1d4ed8', '#dbeafe'],
+            'reviewing' => ['#b45309', '#fef3c7'],
+            'approved'  => ['#166534', '#dcfce7'],
+            'rejected'  => ['#b91c1c', '#fee2e2'],
+        ];
 
         // Index bilan bir xil — o'zak guruh × o'zak fan bo'yicha jamlangan qatorlar.
         $aggregated = $this->merge->aggregate($query->get());
 
-        // pivot[kesim qiymati][shakl][status] = soni
-        $pivot = [];
-        $formStatusTotals = []; // [shakl][status] — pastdagi "Jami" qatori uchun
-        foreach ($aggregated as $v) {
-            $key  = trim((string) ($v->{$field} ?? '')) ?: '— (aniqlanmagan)';
-            $form = $v->form_type ?? VedomostSubmission::FORM_12;
-            $st   = $v->status;
-            if (!isset($forms[$form])) {
-                $form = VedomostSubmission::FORM_12;
-            }
-            $pivot[$key][$form][$st] = ($pivot[$key][$form][$st] ?? 0) + 1;
-            $formStatusTotals[$form][$st] = ($formStatusTotals[$form][$st] ?? 0) + 1;
+        // Sana oralig'i (ikkalasi ham berilsa — davr rejimi).
+        [$from, $to] = $this->reportDateRange($request);
+        $dateMode = $from && $to;
+
+        // Ustun bo'limlari ($sections) va har varaq uchun ustun hissasi ($contribById).
+        if ($dateMode) {
+            [$sections, $contribById] = $this->reportDateSections($aggregated, $from, $to, $statuses, $statusColor);
+            $showGrand = false;
+        } else {
+            [$sections, $contribById] = $this->reportFormSections($aggregated, $statuses, $statusColor);
+            $showGrand = true;
         }
-        ksort($pivot, SORT_NATURAL | SORT_FLAG_CASE);
+
+        // Ierarxik daraxt + har bir ustun bo'yicha umumiy "Jami" (tfoot).
+        $dimFields = array_map(fn($d) => $dimensions[$d]['field'], $selectedDims);
+        $tree = $this->buildReportTree($aggregated, $dimFields, $contribById);
+
+        $totalMetrics = [];
+        foreach ($contribById as $contrib) {
+            foreach ($contrib as $k => $c) {
+                $totalMetrics[$k] = ($totalMetrics[$k] ?? 0) + $c;
+            }
+        }
+
+        // Sort: label | "{section}|{col}" | "{section}|__total" | __grand
+        $sortCol = $request->get('rsort', 'label');
+        $sortDir = $request->get('rdir') === 'desc' ? 'desc' : 'asc';
+        $sectionKeys = array_map(fn($s) => $s['key'], $sections);
+        $this->sortReportNodes($tree, $sortCol, $sortDir, $sectionKeys);
+
+        $rows = [];
+        $this->flattenReportTree($tree, 0, $rows);
 
         return view('admin.vedomost-submission.report', compact(
-            'pivot', 'dimensions', 'dimension', 'forms', 'statuses', 'formStatusTotals'
+            'rows', 'dimensions', 'selectedDims', 'availableDims',
+            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to'
         ));
+    }
+
+    /** Hisobot sana oralig'i: [Carbon|null start, Carbon|null end]. */
+    private function reportDateRange(Request $request): array
+    {
+        $parse = function ($v) {
+            $v = trim((string) $v);
+            if ($v === '') {
+                return null;
+            }
+            try {
+                return \Carbon\Carbon::parse($v);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+        $from = $parse($request->get('from'));
+        $to   = $parse($request->get('to'));
+
+        return [$from?->startOfDay(), $to?->endOfDay()];
+    }
+
+    /**
+     * Sana oralig'isiz rejim — shakl (12/12a/12b) × status bo'limlari.
+     * @return array{0: array, 1: array}  [$sections, $contribById]
+     */
+    private function reportFormSections(iterable $aggregated, array $statuses, array $statusColor): array
+    {
+        $forms = VedomostSubmission::formLabels();
+        $formTint = [
+            '12' => '#eef2ff', '12q' => '#e0e7ff',
+            '12a' => '#ecfeff', '12aq' => '#fef3c7', '12ag' => '#fde68a',
+            '12b' => '#fef2f2', '12bq' => '#fae8ff', '12bg' => '#fed7aa',
+        ];
+
+        $sections = [];
+        foreach ($forms as $fkey => $flabel) {
+            $cols = [];
+            foreach ($statuses as $st => $slabel) {
+                $cols[] = ['key' => "$fkey|$st", 'label' => $slabel, 'color' => $statusColor[$st] ?? null];
+            }
+            $sections[] = ['key' => $fkey, 'label' => $flabel, 'cols' => $cols, 'tint' => $formTint[$fkey] ?? '#f8fafc'];
+        }
+
+        $contribById = [];
+        foreach ($aggregated as $v) {
+            $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
+            $contribById[$v->id] = ["$form|$v->status" => 1];
+        }
+
+        return [$sections, $contribById];
+    }
+
+    /**
+     * Sana rejimi — "Davri boshiga / Davri ichida / Davri oxiriga" bo'limlari.
+     * Har varaqning holati audit jurnalidan (rep yozuv loglari) tiklanadi.
+     * @return array{0: array, 1: array}  [$sections, $contribById]
+     */
+    private function reportDateSections(iterable $aggregated, \Carbon\Carbon $from, \Carbon\Carbon $to, array $statuses, array $statusColor): array
+    {
+        $aggregated = collect($aggregated);
+        $repIds = $aggregated->pluck('id')->all();
+
+        $logsById = VedomostSubmissionLog::whereIn('vedomost_submission_id', $repIds)
+            ->orderBy('created_at')->orderBy('id')
+            ->get(['vedomost_submission_id', 'action', 'from_status', 'to_status', 'created_at'])
+            ->groupBy('vedomost_submission_id');
+
+        $contribById = [];
+        foreach ($aggregated as $v) {
+            $logs = $logsById->get($v->id) ?? collect();
+            $initial = $logs->isNotEmpty() ? ($logs->first()->from_status ?: VedomostSubmission::STATUS_PENDING) : VedomostSubmission::STATUS_PENDING;
+            $created = $v->created_at ? \Carbon\Carbon::parse($v->created_at) : null;
+
+            $contrib = [];
+
+            // Davri boshiga — davr boshlanishidan oldingi holat (varaq o'shanda mavjud bo'lsa).
+            if ($created === null || $created < $from) {
+                $st = $this->statusAt($logs, $from, false, $initial);
+                $contrib["open|$st"] = ($contrib["open|$st"] ?? 0) + 1;
+            }
+
+            // Davri ichida — oraliqda qilingan harakatlar (loglar).
+            foreach ($logs as $l) {
+                $at = \Carbon\Carbon::parse($l->created_at);
+                if ($at >= $from && $at <= $to && isset(self::REPORT_ACTIONS[$l->action])) {
+                    $key = "period|{$l->action}";
+                    $contrib[$key] = ($contrib[$key] ?? 0) + 1;
+                }
+            }
+
+            // Davri oxiriga — davr oxiridagi holat (varaq o'shanda mavjud bo'lsa).
+            if ($created === null || $created <= $to) {
+                $st = $this->statusAt($logs, $to, true, $initial);
+                $contrib["close|$st"] = ($contrib["close|$st"] ?? 0) + 1;
+            }
+
+            $contribById[$v->id] = $contrib;
+        }
+
+        $statusCols = function (string $prefix) use ($statuses, $statusColor) {
+            $cols = [];
+            foreach ($statuses as $st => $slabel) {
+                $cols[] = ['key' => "$prefix|$st", 'label' => $slabel, 'color' => $statusColor[$st] ?? null];
+            }
+            return $cols;
+        };
+        $actionCols = [];
+        $actionColor = [
+            'upload' => ['#1d4ed8', '#dbeafe'], 'review' => ['#b45309', '#fef3c7'],
+            'approve' => ['#166534', '#dcfce7'], 'reject' => ['#b91c1c', '#fee2e2'],
+            'reupload_permit' => ['#475569', '#f1f5f9'],
+        ];
+        foreach (self::REPORT_ACTIONS as $act => $label) {
+            $actionCols[] = ['key' => "period|$act", 'label' => $label, 'color' => $actionColor[$act] ?? null];
+        }
+
+        $sections = [
+            ['key' => 'open',   'label' => 'Davri boshiga',            'cols' => $statusCols('open'),  'tint' => '#eef2ff'],
+            ['key' => 'period', 'label' => 'Davri ichida (harakatlar)', 'cols' => $actionCols,          'tint' => '#ecfeff'],
+            ['key' => 'close',  'label' => 'Davri oxiriga',            'cols' => $statusCols('close'), 'tint' => '#fef2f2'],
+        ];
+
+        return [$sections, $contribById];
+    }
+
+    /**
+     * Saralangan loglar (created_at asc) bo'yicha berilgan kesim vaqtidagi status.
+     * @param  bool  $inclusive  cutoff vaqtning o'zi kiritiladimi (<=) yoki yo'q (<).
+     */
+    private function statusAt(Collection $logs, \Carbon\Carbon $cutoff, bool $inclusive, string $initial): string
+    {
+        $status = $initial;
+        foreach ($logs as $l) {
+            $at = \Carbon\Carbon::parse($l->created_at);
+            $within = $inclusive ? $at <= $cutoff : $at < $cutoff;
+            if (!$within) {
+                break;
+            }
+            if ($l->to_status) {
+                $status = $l->to_status;
+            }
+        }
+        return $status;
+    }
+
+    /**
+     * Jamlangan qatorlardan ierarxik daraxt quradi. Har tugun avlodlari
+     * hissasi yig'indisi bo'lgan metrikani (metrics[ustun_kaliti] => son) saqlaydi.
+     *
+     * @param  array  $dimFields    tartibli kesim maydonlari (qolgan darajalar)
+     * @param  array  $contribById  vedomost id => [ustun_kaliti => son]
+     */
+    private function buildReportTree(iterable $rows, array $dimFields, array $contribById): array
+    {
+        if (empty($dimFields)) {
+            return [];
+        }
+        $field = $dimFields[0];
+        $rest  = array_slice($dimFields, 1);
+
+        $groups = collect($rows)->groupBy(
+            fn($v) => trim((string) ($v->{$field} ?? '')) ?: '— (aniqlanmagan)'
+        );
+
+        $nodes = [];
+        foreach ($groups as $label => $groupRows) {
+            $metrics = [];
+            foreach ($groupRows as $v) {
+                foreach (($contribById[$v->id] ?? []) as $k => $c) {
+                    $metrics[$k] = ($metrics[$k] ?? 0) + $c;
+                }
+            }
+            $nodes[] = [
+                'label'    => (string) $label,
+                'metrics'  => $metrics,
+                'children' => $this->buildReportTree($groupRows, $rest, $contribById),
+            ];
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * Tanlangan ustun bo'yicha har bir darajadagi "aka-uka" tugunlarni saralaydi.
+     */
+    private function sortReportNodes(array &$nodes, string $sortCol, string $sortDir, array $sectionKeys): void
+    {
+        if (empty($nodes)) {
+            return;
+        }
+        $factor = $sortDir === 'desc' ? -1 : 1;
+
+        $metric = function (array $node) use ($sortCol, $sectionKeys) {
+            if ($sortCol === '__grand') {
+                return array_sum($node['metrics']);
+            }
+            if (str_contains($sortCol, '|')) {
+                [$sec, $col] = explode('|', $sortCol, 2);
+                if ($col === '__total') {
+                    $sum = 0;
+                    foreach ($node['metrics'] as $k => $c) {
+                        if (str_starts_with($k, "$sec|")) {
+                            $sum += $c;
+                        }
+                    }
+                    return $sum;
+                }
+                return $node['metrics'][$sortCol] ?? 0;
+            }
+            return 0;
+        };
+
+        usort($nodes, function ($a, $b) use ($sortCol, $factor, $metric) {
+            if ($sortCol === 'label') {
+                return strnatcasecmp($a['label'], $b['label']) * $factor;
+            }
+            $cmp = $metric($a) <=> $metric($b);
+            return ($cmp !== 0 ? $cmp * $factor : strnatcasecmp($a['label'], $b['label']));
+        });
+
+        foreach ($nodes as &$node) {
+            $this->sortReportNodes($node['children'], $sortCol, $sortDir, $sectionKeys);
+        }
+    }
+
+    /**
+     * Daraxtni depth bilan tekis qatorlar massiviga yoyadi.
+     */
+    private function flattenReportTree(array $nodes, int $depth, array &$out): void
+    {
+        foreach ($nodes as $node) {
+            $out[] = [
+                'label'        => $node['label'],
+                'depth'        => $depth,
+                'metrics'      => $node['metrics'],
+                'has_children' => !empty($node['children']),
+            ];
+            $this->flattenReportTree($node['children'], $depth + 1, $out);
+        }
     }
 
     public function export(Request $request)
@@ -383,11 +737,74 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkAccess();
 
-        $count = $this->service->sync();
+        if (Cache::has('vedomost_submission_sync_lock')) {
+            return redirect()
+                ->route('admin.vedomost-submission.index', $request->query())
+                ->with('error', "Joriy semester bo'yicha yangilash allaqachon ishlamoqda.");
+        }
+
+        Cache::put('vedomost_submission_sync_progress', [
+            'status' => 'queued',
+            'message' => "Joriy semester bo'yicha yangilash navbatga qo'yildi.",
+            'updated_at' => now()->toDateTimeString(),
+        ], now()->addHours(2));
+
+        \App\Jobs\SyncVedomostSubmissionsJob::dispatch();
 
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
-            ->with('success', "Joriy semestr bo'yicha {$count} ta vedomost yozuvi yangilandi.");
+            ->with('success', "Joriy semester bo'yicha yangilash fon rejimida boshlandi.");
+    }
+
+    /**
+     * Admin tanlangan guruh+fan uchun 12a/12b ni qo'lda ochadi.
+     */
+    public function manualOpen(Request $request)
+    {
+        $this->checkAccess();
+
+        $data = $request->validate([
+            'group_hemis_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'form_type' => 'required|in:' . implode(',', [
+                VedomostSubmission::FORM_12A,
+                VedomostSubmission::FORM_12B,
+            ]),
+            'only_paid' => 'nullable|boolean',
+        ], [
+            'group_hemis_id.required' => 'Guruhni tanlang.',
+            'subject_id.required' => 'Fanni tanlang.',
+            'semester_code.required' => 'Semestr aniqlanmadi.',
+            'form_type.required' => 'Shaklni tanlang.',
+        ]);
+
+        $opened = $this->service->manualOpenForGroup(
+            (string) $data['group_hemis_id'],
+            (string) $data['subject_id'],
+            (string) $data['semester_code'],
+            (string) $data['form_type'],
+            $request->boolean('only_paid')
+        );
+
+        $note = $request->boolean('only_paid')
+            ? "Qo'lda ochildi (pullik uchun): " . VedomostSubmission::formLabel($opened->form_type)
+            : "Qo'lda ochildi: " . VedomostSubmission::formLabel($opened->form_type);
+
+        $this->log($opened, 'manual_open', $opened->status, $opened->status, $note);
+
+        return redirect()
+            ->route('admin.vedomost-submission.index', $request->query())
+            ->with('success', $note . '.');
+    }
+
+    public function syncProgress(): JsonResponse
+    {
+        $this->checkViewAccess();
+
+        return response()->json(
+            Cache::get('vedomost_submission_sync_progress', ['status' => 'idle'])
+        );
     }
 
     /**

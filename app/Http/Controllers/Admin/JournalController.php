@@ -776,6 +776,8 @@ class JournalController extends Controller
                     'retake_graded_at' => $g->retake_graded_at,
                     'quiz_result_id' => $g->quiz_result_id,
                     'employee_id' => $g->employee_id,
+                    'employee_name' => $g->employee_name ?? null,
+                    'retake_by' => $g->retake_by ?? null,
                 ];
             }
         }
@@ -788,6 +790,12 @@ class JournalController extends Controller
                     'retake_grade' => $g->retake_grade,
                     'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'deadline' => $g->deadline,
+                    'graded_by_user_id' => $g->graded_by_user_id,
+                    'retake_graded_at' => $g->retake_graded_at,
+                    'quiz_result_id' => $g->quiz_result_id,
+                    'employee_id' => $g->employee_id,
+                    'employee_name' => $g->employee_name ?? null,
+                    'retake_by' => $g->retake_by ?? null,
                 ];
             }
         }
@@ -1158,9 +1166,11 @@ class JournalController extends Controller
         }
 
         // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
-        // Sababli ariza oraliqlarini Dav % dan chiqarib tashlash: tasdiqlangan
-        // ariza sanasi qatorlarni whereNotExists subquery orqali hisobdan
-        // chiqaramiz (ham amaliyot, ham ma'ruza turi uchun).
+        // Dav % faqat HEMIS xom davomatiga (absent_off) tayanadi — HEMIS "Davomat
+        // hisoboti" (Foiz) bilan bir xil bo'lishi uchun. LMS'da tasdiqlangan sababli
+        // ariza Dav %'ni kamaytirmaydi: ariza faqat farmoyish/otrabotka huquqini beradi
+        // (u alohida $approvedExcuses/makeups so'rovidan o'qiladi). Shu bilan bu hisob
+        // computeAbsenceForGroup() va boshqa Dav % hisoblari bilan ham mos keladi.
         $excludedAttendanceCodes = [99, 100, 101, 102];
         $attendanceData = DB::table('attendances')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -1168,14 +1178,6 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_code', $excludedAttendanceCodes)
-            ->whereNotExists(function ($sub) {
-                $sub->select(DB::raw(1))
-                    ->from('absence_excuses')
-                    ->whereColumn('absence_excuses.student_hemis_id', 'attendances.student_hemis_id')
-                    ->where('absence_excuses.status', 'approved')
-                    ->whereRaw('absence_excuses.start_date <= DATE(attendances.lesson_date)')
-                    ->whereRaw('absence_excuses.end_date >= DATE(attendances.lesson_date)');
-            })
             ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
             ->groupBy('student_hemis_id')
             ->pluck('total_absent_off', 'student_hemis_id')
@@ -1678,20 +1680,36 @@ class JournalController extends Controller
         $testAttempt3Map = [];
         $sinovJnMap = [];
         try {
-            $isSinovForWeights = ($subject->closing_form ?? null) === 'sinov';
-            $hasOskiForWeights = !($examSchedule && $examSchedule->oski_na);
-            $hasTestForWeights = !($examSchedule && $examSchedule->test_na);
+            $closingFormForWeights = mb_strtolower((string) ($subject->closing_form ?? ''));
+            $isSinovForWeights = $closingFormForWeights === 'sinov';
+
+            // Badge/stage logikasi qaysi imtihon majburiyligini avvalo
+            // curriculum_subjects.closing_form dan olishi kerak. Aks holda
+            // nofaol/eski exam_schedules yozuvi sabab OSKI fan ham imtihonsiz
+            // "1-urinish passed" bo'lib ketishi mumkin.
             if ($isSinovForWeights) {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
-            } elseif ($hasOskiForWeights && $hasTestForWeights) {
+            } elseif ($closingFormForWeights === 'oski_test') {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
-            } elseif ($hasOskiForWeights) {
+            } elseif ($closingFormForWeights === 'oski') {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
-            } elseif ($hasTestForWeights) {
+            } elseif ($closingFormForWeights !== '') {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
             } else {
-                $defaultWeights = ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+                $hasOskiFromSchedule = !($examSchedule && $examSchedule->oski_na);
+                $hasTestFromSchedule = !($examSchedule && $examSchedule->test_na);
+                if ($hasOskiFromSchedule && $hasTestFromSchedule) {
+                    $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
+                } elseif ($hasOskiFromSchedule) {
+                    $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
+                } elseif ($hasTestFromSchedule) {
+                    $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
+                } else {
+                    $defaultWeights = ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+                }
             }
+            $hasOskiForWeights = ($defaultWeights['oski'] ?? 0) > 0;
+            $hasTestForWeights = ($defaultWeights['test'] ?? 0) > 0;
 
             $stageLevelCode = (string) ($semester?->level_code ?? '');
             $hasAttemptColForStage = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
@@ -1750,8 +1768,8 @@ class JournalController extends Controller
 
             $av1 = $fetchAttemptOskiTest(2, true, false);  // 12a sababsiz, asosiy
             $av2 = $fetchAttemptOskiTest(2, false, false); // 12a sababli bilan, asosiy
-            $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
-            $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
+            $bv1 = $fetchAttemptOskiTest(3, true, false);  // 12b sababsiz, asosiy
+            $bv2 = $fetchAttemptOskiTest(3, false, false); // 12b sababli bilan, asosiy
 
             // 2-urinish (attempt=2) sanalarini ikki darajada yig'amiz:
             //  - guruh bo'yicha: bironta talabada attempt=2 baho yozilgan eng so'nggi
@@ -1823,6 +1841,7 @@ class JournalController extends Controller
             // Qo'shimcha (sababli farmoyish) baholar — alohida ustunlar
             $aq = $fetchAttemptOskiTest(1, false, true);   // 1-urinish qo'shimcha
             $aq2 = $fetchAttemptOskiTest(2, false, true);  // 2-urinish qo'shimcha
+            $aq3 = $fetchAttemptOskiTest(3, false, true);  // 3-urinish qo'shimcha
 
             // Bladega ham uzatamiz: 2-urinish va 3-urinish OSKI/Test ustunlari uchun
             $oskiAttempt2Map = $av2[101] ?? [];
@@ -1835,6 +1854,47 @@ class JournalController extends Controller
             $testQosh1Map = $aq[102] ?? [];
             $oskiQosh2Map = $aq2[101] ?? [];
             $testQosh2Map = $aq2[102] ?? [];
+            $oskiQosh3Map = $aq3[101] ?? [];
+            $testQosh3Map = $aq3[102] ?? [];
+
+            // Qo'shimcha (farmoyish) baho TOPSHIRILGAN SANALARI — tooltip uchun.
+            // is_qoshimcha=1 baholar $otherGradesRaw dan chiqarilgan (is_qoshimcha=0),
+            // shuning uchun sanalarni alohida olamiz.
+            $oskiQosh1DateMap = [];
+            $testQosh1DateMap = [];
+            $oskiQosh2DateMap = [];
+            $testQosh2DateMap = [];
+            $oskiQosh3DateMap = [];
+            $testQosh3DateMap = [];
+            if ($hasQoshimchaCol) {
+                $qoshDateRows = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('is_qoshimcha', 1)
+                    ->whereIn('attempt', [1, 2, 3])
+                    ->select('student_hemis_id', 'training_type_code', 'attempt', 'lesson_date', 'updated_at')
+                    ->get();
+                $qoshDateTargets = [
+                    '101_1' => &$oskiQosh1DateMap, '102_1' => &$testQosh1DateMap,
+                    '101_2' => &$oskiQosh2DateMap, '102_2' => &$testQosh2DateMap,
+                    '101_3' => &$oskiQosh3DateMap, '102_3' => &$testQosh3DateMap,
+                ];
+                foreach ($qoshDateRows as $r) {
+                    $d = $r->lesson_date ?: $r->updated_at;
+                    if (!$d) {
+                        continue;
+                    }
+                    $att = (int) ($r->attempt ?? 1);
+                    $key = $r->training_type_code . '_' . $att;
+                    if (isset($qoshDateTargets[$key])) {
+                        $qoshDateTargets[$key][$r->student_hemis_id] = $formatDate($d);
+                    }
+                }
+                unset($qoshDateTargets);
+            }
 
             // Pullik/stage hisobida ishlatiladigan JN/MT o'rtacha jurnal
             // jadvalida KO'RSATILADIGAN qiymat bilan AYNI bo'lishi shart:
@@ -1950,27 +2010,27 @@ class JournalController extends Controller
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
                 $bQoshimcha = null;
-                if (isset($bv2[101][$h]) || isset($bv2[102][$h])) {
+                if (isset($aq3[101][$h]) || isset($aq3[102][$h])) {
                     $bQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
-                        $bv2[101][$h] ?? $av2[101][$h] ?? $other['oski'] ?? null,
-                        $bv2[102][$h] ?? $av2[102][$h] ?? $other['test'] ?? null, $davomatPct,
+                        $aq3[101][$h] ?? $av2[101][$h] ?? $other['oski'] ?? null,
+                        $aq3[102][$h] ?? $av2[102][$h] ?? $other['test'] ?? null, $davomatPct,
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
 
                 $stageInfo = $svc::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha);
                 $stageKey = $stageInfo['stage'];
 
-                // 1-urinish OSKI/Test imtihonlari hali bo'lmaganida (sanalar
-                // o'tib ketmagan) talabani 2-urinish/Pullik deb belgilamaslik.
-                // Imtihon sanasi BUGUN bo'lsa ham hali "tugamagan" hisoblanadi —
-                // faqat sana o'tib ketgandagina (sana < bugun) 2-urinishga
-                // o'tkaziladi. Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
+                // 1-urinish OSKI/Test uchun aniq sana kelajakda turgan bo'lsa,
+                // talabani hozircha 2-urinishga o'tkazmaymiz. Lekin sana umuman
+                // qo'yilmagan bo'lsa, badge'ni kulrang "1-urinish"da abadiy ushlab
+                // turmaymiz — bunday holatda stage determineStage natijasiga ko'ra
+                // 2-urinishga tushishi mumkin.
                 $today = now()->format('Y-m-d');
                 $oskiDone = $hasOskiForWeights
-                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') < $today)
+                    ? (!$examSchedule || !$examSchedule->oski_date || $examSchedule->oski_date->format('Y-m-d') < $today)
                     : true;
                 $testDone = $hasTestForWeights
-                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') < $today)
+                    ? (!$examSchedule || !$examSchedule->test_date || $examSchedule->test_date->format('Y-m-d') < $today)
                     : true;
                 $oneUrinishEnded = $oskiDone && $testDone;
                 $isDavomatFail = ($main['v'] ?? null) === -3;
@@ -2185,6 +2245,14 @@ class JournalController extends Controller
             'testQosh1Map',
             'oskiQosh2Map',
             'testQosh2Map',
+            'oskiQosh3Map',
+            'testQosh3Map',
+            'oskiQosh1DateMap',
+            'testQosh1DateMap',
+            'oskiQosh2DateMap',
+            'testQosh2DateMap',
+            'oskiQosh3DateMap',
+            'testQosh3DateMap',
             'oskiAttempt1DateMap',
             'testAttempt1DateMap',
             'oskiAttempt2DateMap',

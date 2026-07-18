@@ -1185,6 +1185,9 @@
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
+                                        @if(array_filter($oskiQosh3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="3-urinish qo'shimcha farmoyish OSKI">OSKI 3<br><span class="text-[9px] font-normal">qo'shimcha<br>farmoyish</span></th>
+                                        @endif
                                         @if(!empty($isSinov))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 70px;" title="Sinov (test) bahosi — JN o'rtachasidan ko'chirilgan">Sinov<br><span class="text-[9px] font-normal">(test)</span></th>
                                         @else
@@ -1201,6 +1204,9 @@
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
+                                        @if(array_filter($testQosh3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="3-urinish qo'shimcha farmoyish Test">Test 3<br><span class="text-[9px] font-normal">qo'shimcha<br>farmoyish</span></th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;">Dav %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">YN</th>
@@ -1412,12 +1418,16 @@
                                                 $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                                 $showOskiQ1Col = (bool) array_filter($oskiQosh1Map ?? []);
                                                 $showOskiQ2Col = (bool) array_filter($oskiQosh2Map ?? []);
+                                                $showOskiQ3Col = (bool) array_filter($oskiQosh3Map ?? []);
                                                 $showTestQ1Col = (bool) array_filter($testQosh1Map ?? []);
                                                 $showTestQ2Col = (bool) array_filter($testQosh2Map ?? []);
+                                                $showTestQ3Col = (bool) array_filter($testQosh3Map ?? []);
                                                 $oskiQ1 = isset($oskiQosh1Map[$student->hemis_id]) ? round($oskiQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                                 $oskiQ2 = isset($oskiQosh2Map[$student->hemis_id]) ? round($oskiQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiQ3 = isset($oskiQosh3Map[$student->hemis_id]) ? round($oskiQosh3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testQ1 = isset($testQosh1Map[$student->hemis_id]) ? round($testQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testQ2 = isset($testQosh2Map[$student->hemis_id]) ? round($testQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testQ3 = isset($testQosh3Map[$student->hemis_id]) ? round($testQosh3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
                                             {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
@@ -1453,7 +1463,7 @@
                                             </td>
                                             {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
                                             @if($showOskiQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1489,7 +1499,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1521,6 +1531,12 @@
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 3, this)">×</button>
                                                         @endif
                                                     @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish qo'shimcha OSKI ustuni --}}
+                                            @if($showOskiQ3Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
+                                                    @if($oskiQ3 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
@@ -1579,7 +1595,7 @@
                                             @endif
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1615,7 +1631,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1647,6 +1663,12 @@
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 3, this)">×</button>
                                                         @endif
                                                     @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish qo'shimcha Test ustuni --}}
+                                            @if($showTestQ3Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
+                                                    @if($testQ3 !== null)<span class="font-bold text-emerald-700">{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -1705,6 +1727,9 @@
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
+                                        @if(array_filter($oskiQosh3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="3-urinish qo'shimcha farmoyish OSKI">OSKI 3<br><span class="text-[9px] font-normal">qo'shimcha<br>farmoyish</span></th>
+                                        @endif
                                         @if(!empty($isSinov))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 70px;" title="Sinov (test) bahosi — JN o'rtachasidan ko'chirilgan">Sinov<br><span class="text-[9px] font-normal">(test)</span></th>
                                         @else
@@ -1721,6 +1746,9 @@
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
+                                        @if(array_filter($testQosh3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="3-urinish qo'shimcha farmoyish Test">Test 3<br><span class="text-[9px] font-normal">qo'shimcha<br>farmoyish</span></th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;">Dav %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">YN</th>
@@ -1972,6 +2000,10 @@
                                                                         $graderName = $retakeGraderNames[$absenceData['graded_by_user_id']];
                                                                     } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
                                                                         $graderName = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                    } elseif (!empty($absenceData['employee_name']) && $absenceData['employee_name'] !== 'Manual Entry') {
+                                                                        $graderName = $absenceData['employee_name'];
+                                                                    } elseif (!empty($absenceData['retake_by'])) {
+                                                                        $graderName = $absenceData['retake_by'];
                                                                     }
                                                                     if ($graderName) {
                                                                         $retakeTooltip .= "\nBaho qo'ydi: " . $graderName;
@@ -2066,6 +2098,10 @@
                                                                     $graderName2 = $retakeGraderNames[$absenceData['graded_by_user_id']];
                                                                 } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
                                                                     $graderName2 = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                } elseif (!empty($absenceData['employee_name']) && $absenceData['employee_name'] !== 'Manual Entry') {
+                                                                    $graderName2 = $absenceData['employee_name'];
+                                                                } elseif (!empty($absenceData['retake_by'])) {
+                                                                    $graderName2 = $absenceData['retake_by'];
                                                                 }
                                                                 if ($graderName2) {
                                                                     $retakeTooltip2 .= "\nBaho qo'ydi: " . $graderName2;
@@ -2171,12 +2207,16 @@
                                                 $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                                 $showOskiQ1Col = (bool) array_filter($oskiQosh1Map ?? []);
                                                 $showOskiQ2Col = (bool) array_filter($oskiQosh2Map ?? []);
+                                                $showOskiQ3Col = (bool) array_filter($oskiQosh3Map ?? []);
                                                 $showTestQ1Col = (bool) array_filter($testQosh1Map ?? []);
                                                 $showTestQ2Col = (bool) array_filter($testQosh2Map ?? []);
+                                                $showTestQ3Col = (bool) array_filter($testQosh3Map ?? []);
                                                 $oskiQ1 = isset($oskiQosh1Map[$student->hemis_id]) ? round($oskiQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                                 $oskiQ2 = isset($oskiQosh2Map[$student->hemis_id]) ? round($oskiQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiQ3 = isset($oskiQosh3Map[$student->hemis_id]) ? round($oskiQosh3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testQ1 = isset($testQosh1Map[$student->hemis_id]) ? round($testQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testQ2 = isset($testQosh2Map[$student->hemis_id]) ? round($testQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testQ3 = isset($testQosh3Map[$student->hemis_id]) ? round($testQosh3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
                                             {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
@@ -2212,7 +2252,7 @@
                                             </td>
                                             {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
                                             @if($showOskiQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2248,7 +2288,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2280,6 +2320,12 @@
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 3, this)">×</button>
                                                         @endif
                                                     @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish qo'shimcha OSKI ustuni --}}
+                                            @if($showOskiQ3Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
+                                                    @if($oskiQ3 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
@@ -2338,7 +2384,7 @@
                                             @endif
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2374,7 +2420,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish)">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2406,6 +2452,12 @@
                                                                     onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 3, this)">×</button>
                                                         @endif
                                                     @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish qo'shimcha Test ustuni --}}
+                                            @if($showTestQ3Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
+                                                    @if($testQ3 !== null)<span class="font-bold text-emerald-700">{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>

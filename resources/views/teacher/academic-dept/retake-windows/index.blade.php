@@ -155,7 +155,8 @@
                                 <td class="px-3 py-2.5 text-right whitespace-nowrap">
                                     <a href="{{ route('admin.retake-windows.show', $w->id) }}"
                                        class="text-xs text-blue-600 hover:underline mr-2">{{ __("Ko'rish") }}</a>
-                                    @if(($canManage ?? false) && $canOverride)
+                                    @php $canOverrideThisWindow = ($isSuperAdminOverride ?? false) || !$w->hasConsumedSingleOverride(); @endphp
+                                    @if(($canManage ?? false) && $canOverride && $canOverrideThisWindow)
                                         <button type="button"
                                                 @click="overrideId = {{ $w->id }}; overrideStart = '{{ $w->start_date->format('Y-m-d') }}'; overrideEnd = '{{ $w->end_date->format('Y-m-d') }}'"
                                                 class="text-xs text-blue-600 hover:underline mr-2">
@@ -167,6 +168,8 @@
                                                 <button type="submit" class="text-xs text-red-600 hover:underline">{{ __("O'chirish") }}</button>
                                             </form>
                                         @endif
+                                    @elseif(($canManage ?? false) && $canOverride && !($isSuperAdminOverride ?? false))
+                                        <span class="text-[11px] text-gray-400 mr-2">{{ __("Override yopilgan") }}</span>
                                     @endif
                                 </td>
                             </tr>
@@ -296,6 +299,12 @@
                     <div class="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 z-10">
                         <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Sanalarni override qilish") }}</h3>
                         <p class="text-xs text-red-600 mb-4">⚠️ {{ __("Faqat istisno holatlarda ishlating") }}</p>
+                        @if(!($isSuperAdminOverride ?? false))
+                            <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                <strong>{{ __("Diqqat:") }}</strong>
+                                {{ __("O'quv bo'limi va boshliq uchun override faqat 1 marta ishlaydi. Saqlagandan keyin bu oynada override yopiladi.") }}
+                            </div>
+                        @endif
                         <form :action="`{{ url('/admin/retake-windows') }}/${overrideId}/override-dates`" method="POST" class="space-y-3">
                             @csrf
                             <div>

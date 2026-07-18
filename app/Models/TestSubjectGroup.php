@@ -2,13 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class TestSubjectGroup extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'test_subject_id',
         'group_id',
@@ -23,6 +20,6 @@ class TestSubjectGroup extends Model
 
     public function group()
     {
-        return $this->belongsTo(Group::class);
+        return $this->belongsTo(Group::class, 'group_id');
     }
 }

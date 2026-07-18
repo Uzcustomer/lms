@@ -17,6 +17,7 @@ class RetakeApplicationWindow extends Model
      * qayta ochish funksiyasi jim qoladi, 500 xato bermaydi.
      */
     protected static ?bool $reopenColumnExists = null;
+    protected static ?bool $overrideTrackingColumnExists = null;
 
     public static function supportsReopen(): bool
     {
@@ -28,6 +29,18 @@ class RetakeApplicationWindow extends Model
             }
         }
         return self::$reopenColumnExists;
+    }
+
+    public static function supportsOverrideTracking(): bool
+    {
+        if (self::$overrideTrackingColumnExists === null) {
+            try {
+                self::$overrideTrackingColumnExists = Schema::hasColumn('retake_application_windows', 'override_count');
+            } catch (\Throwable $e) {
+                self::$overrideTrackingColumnExists = false;
+            }
+        }
+        return self::$overrideTrackingColumnExists;
     }
 
     /**
@@ -64,6 +77,9 @@ class RetakeApplicationWindow extends Model
         'start_date',
         'end_date',
         'application_reopen_until',
+        'override_count',
+        'override_last_at',
+        'override_last_by_name',
         'created_by_user_id',
         'created_by_name',
         'creation_batch_id',
@@ -73,7 +89,18 @@ class RetakeApplicationWindow extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'application_reopen_until' => 'date',
+        'override_count' => 'integer',
+        'override_last_at' => 'datetime',
     ];
+
+    public function hasConsumedSingleOverride(): bool
+    {
+        if (!self::supportsOverrideTracking()) {
+            return false;
+        }
+
+        return (int) ($this->override_count ?? 0) > 0;
+    }
 
     public function session()
     {

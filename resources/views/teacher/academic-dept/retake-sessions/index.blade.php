@@ -187,13 +187,21 @@
                                    class="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100">
                                     {{ __("Oynalar") }}
                                 </a>
-                                @if(!$session->is_closed && ($canOverride ?? false))
+                                @php
+                                    $sessionOverrideClosed = !($isSuperAdminOverride ?? false)
+                                        && in_array($session->id, $sessionsWithUsedOverride ?? [], true);
+                                @endphp
+                                @if(!$session->is_closed && ($canOverride ?? false) && !$sessionOverrideClosed)
                                     <button type="button"
                                             @click="openOverride({{ $session->id }}, '', '')"
                                             class="px-3 py-1.5 text-xs bg-amber-50 text-amber-700 rounded hover:bg-amber-100"
                                             title="{{ __("Sessiya ichidagi barcha oynalar sanasini bir marta o'zgartirish") }}">
                                         📅 {{ __("Sanani o'zgartirish") }}
                                     </button>
+                                @elseif(!$session->is_closed && ($canOverride ?? false) && $sessionOverrideClosed)
+                                    <span class="px-3 py-1.5 text-xs bg-gray-100 text-gray-400 rounded">
+                                        {{ __("Override yopilgan") }}
+                                    </span>
                                 @endif
                                 @if(!$session->is_closed)
                                     <form method="POST"
@@ -364,6 +372,12 @@
                             </p>
                         </div>
 
+                        @if(!($isSuperAdminOverride ?? false))
+                            <div class="mx-6 mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                <strong>{{ __("Diqqat:") }}</strong>
+                                {{ __("O'quv bo'limi va boshliq uchun sessiya override faqat 1 marta ishlaydi. Saqlagandan keyin bu sessiyada override yopiladi.") }}
+                            </div>
+                        @endif
                         <form :action="`{{ url('/admin/retake-sessions') }}/${overrideSessionId}/bulk-override-dates`" method="POST">
                             @csrf
                             <div class="px-6 py-5 space-y-3">

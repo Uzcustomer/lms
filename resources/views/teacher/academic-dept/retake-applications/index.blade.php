@@ -37,17 +37,24 @@
             </div>
         @endif
 
+        @unless($canManageApplications ?? false)
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+                {{ __("Siz bu sahifani ko'rishingiz mumkin, lekin arizalarni tasdiqlash yoki rad etish huquqingiz yo'q.") }}
+            </div>
+        @endunless
+
         <p class="text-sm text-gray-500 mb-4">
-            {{ __("Dekan va registrator tasdiqlagan arizalar — guruhga ajratishdan oldin O'quv bo'limi tasdig'i kerak") }}
+            {{ __("Talabalarning barcha qayta o'qish arizalari — har birining joriy holati \"Holat\" ustunida ko'rsatilgan. Guruhga ajratishdan oldin dekan, registrator, to'lov va O'quv bo'limi tasdig'i kerak.") }}
         </p>
 
         {{-- Bosqich tablari (Hammasi default; har biriga sanoq) --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
             <div class="flex border-b border-gray-100">
                 @php
-                    $totalCount = ($counters['pending'] ?? 0) + ($counters['preapproved'] ?? 0) + ($counters['rejected'] ?? 0);
+                    $totalCount = $counters['all'] ?? (($counters['pending'] ?? 0) + ($counters['preapproved'] ?? 0) + ($counters['rejected'] ?? 0));
                     $tabs = [
                         'all' => ['label' => "Hammasi", 'color' => 'gray', 'icon' => '📋', 'count' => $totalCount],
+                        'awaiting' => ['label' => "Jarayonda", 'color' => 'orange', 'icon' => '🕓', 'count' => $counters['awaiting'] ?? 0],
                         'pending' => ['label' => "Tasdiq kutmoqda", 'color' => 'amber', 'icon' => '⏳', 'count' => $counters['pending'] ?? 0],
                         'preapproved' => ['label' => "Tasdiqlangan (guruhsiz)", 'color' => 'blue', 'icon' => '✓', 'count' => $counters['preapproved'] ?? 0],
                         'rejected' => ['label' => "Rad etilgan", 'color' => 'red', 'icon' => '✕', 'count' => $counters['rejected'] ?? 0],
@@ -58,13 +65,14 @@
                         $active = ($stage ?? 'all') === $key;
                         $activeBg = match($tab['color']) {
                             'gray' => 'bg-gray-100 border-b-2 border-gray-500 text-gray-900',
+                            'orange' => 'bg-orange-50 border-b-2 border-orange-500 text-orange-800',
                             'amber' => 'bg-amber-50 border-b-2 border-amber-500 text-amber-800',
                             'blue' => 'bg-blue-50 border-b-2 border-blue-500 text-blue-800',
                             'red' => 'bg-red-50 border-b-2 border-red-500 text-red-800',
                             default => 'bg-gray-50 border-b-2 border-gray-500 text-gray-800',
                         };
                     @endphp
-                    <a href="{{ request()->fullUrlWithQuery(['stage' => $key]) }}"
+                    <a href="{{ request()->fullUrlWithQuery(['stage' => $key, 'status' => null]) }}"
                        class="flex-1 px-4 py-3 text-center text-sm font-medium {{ $active ? $activeBg : 'text-gray-600 hover:bg-gray-50' }}">
                         <span class="text-base mr-1">{{ $tab['icon'] }}</span>
                         {{ __($tab['label']) }}
@@ -76,13 +84,27 @@
             </div>
         </div>
 
-        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + F.I.Sh) --}}
+        {{-- "Holat" bo'yicha filtr — cascading filtr formasi ichiga qo'shiladi --}}
+        @php
+            $statusFilterHtml = '<div class="rf-item" style="flex:1; min-width:280px;">'
+                . '<label class="rf-label"><span class="rf-dot" style="background:#6366f1;"></span> Holat</label>'
+                . '<select name="status" class="rf-select2" style="width:100%;">'
+                . '<option value="">' . e(__('Barchasi')) . '</option>';
+            foreach (($statusOptions ?? []) as $stKey => $stLabel) {
+                $sel = ((string) ($currentStatus ?? '')) === (string) $stKey ? ' selected' : '';
+                $statusFilterHtml .= '<option value="' . e($stKey) . '"' . $sel . '>' . e($stLabel) . '</option>';
+            }
+            $statusFilterHtml .= '</select></div>';
+        @endphp
+
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + F.I.Sh + Holat) --}}
         @include('partials._retake_filters', [
             'formAction' => route('admin.retake-applications.index'),
             'educationTypes' => $educationTypes ?? collect(),
             'extraQueryFields' => array_filter([
                 'stage' => ($stage ?? 'all') !== 'all' ? $stage : null,
             ]),
+            'extraRow' => $statusFilterHtml,
         ])
 
         {{-- Excel eksport tugmasi (joriy filtrlar bo'yicha) --}}
@@ -97,6 +119,7 @@
         </div>
 
         {{-- Bulk actions panel (har qachon ko'rinadi — tanlangan arizalar bo'lsa) --}}
+        @if($canManageApplications ?? false)
         <div x-show="selected.length > 0" x-cloak
              class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div class="text-sm text-blue-800">
@@ -132,6 +155,7 @@
                 </button>
             </div>
         </div>
+        @endif
 
         {{-- Arizalar jadvali --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -141,10 +165,12 @@
                 </div>
             @else
                 @php
-                    // Faqat dean+registrator tasdiqlagan, academic_dept hali pending bo'lganlarni tanlash mumkin
+                    // Faqat dean+registrator tasdiqlagan, to'lovi tasdiqlangan va
+                    // academic_dept hali pending bo'lganlarni tanlash mumkin
                     $actionableIds = $applications->filter(function ($a) {
                         return $a->dean_status === 'approved'
                             && $a->registrar_status === 'approved'
+                            && ($a->group?->payment_verification_status === 'approved')
                             && $a->academic_dept_status === 'pending'
                             && $a->final_status === 'pending';
                     })->pluck('id')->toArray();
@@ -154,21 +180,21 @@
                         <thead class="bg-gray-50">
                         <tr>
                             <th class="px-3 py-2 text-center" style="width:40px;">
-                                <input type="checkbox"
-                                       @change="toggleAll(@js($actionableIds))"
-                                       :checked="@js($actionableIds).length > 0 && @js($actionableIds).every(id => selected.includes(id))"
-                                       :disabled="@js($actionableIds).length === 0"
-                                       title="{{ __('Tasdiq kutayotganlarni tanlash') }}"
-                                       class="rounded">
+                                @if($canManageApplications ?? false)
+                                    <input type="checkbox"
+                                           @change="toggleAll(@js($actionableIds))"
+                                           :checked="@js($actionableIds).length > 0 && @js($actionableIds).every(id => selected.includes(id))"
+                                           :disabled="@js($actionableIds).length === 0"
+                                           title="{{ __('Tasdiq kutayotganlarni tanlash') }}"
+                                           class="rounded">
+                                @endif
                             </th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:48px;">{{ __("T/R") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Dekan") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Registrator") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("O'quv bo'limi") }}</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Yuborilgan") }}</th>
+                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:260px;">{{ __("Holat") }}</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:150px;">{{ __("Yuborilgan") }}</th>
                             <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:160px;"></th>
                         </tr>
                         </thead>
@@ -176,14 +202,16 @@
                         @foreach($applications as $i => $app)
                             @php
                                 $student = $app->group?->student;
+                                $paymentApproved = ($app->group?->payment_verification_status === 'approved');
                                 $isActionable = $app->dean_status === 'approved'
                                     && $app->registrar_status === 'approved'
+                                    && $paymentApproved
                                     && $app->academic_dept_status === 'pending'
                                     && $app->final_status === 'pending';
                             @endphp
                             <tr>
                                 <td class="px-3 py-2.5 text-center">
-                                    @if($isActionable)
+                                    @if(($canManageApplications ?? false) && $isActionable)
                                         <input type="checkbox" :value="{{ $app->id }}" x-model="selected" class="rounded">
                                     @else
                                         <span class="inline-block w-4 h-4 rounded border border-gray-200 bg-gray-50"
@@ -202,51 +230,47 @@
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $app->subject_name }}</td>
                                 <td class="px-3 py-2.5 text-xs text-gray-600">{{ $app->semester_name }}</td>
 
-                                {{-- Dekan ustun --}}
-                                <td class="px-3 py-2.5 text-center">
-                                    @include('teacher.academic-dept.retake-applications._stage_badge', [
-                                        'status' => $app->dean_status,
-                                        'userName' => $app->deanUser?->full_name ?? $app->dean_user_name,
-                                        'decisionAt' => $app->dean_decision_at,
-                                        'reason' => $app->dean_reason,
-                                    ])
-                                </td>
-
-                                {{-- Registrator ustun --}}
-                                <td class="px-3 py-2.5 text-center">
-                                    @include('teacher.academic-dept.retake-applications._stage_badge', [
-                                        'status' => $app->registrar_status,
-                                        'userName' => $app->registrarUser?->full_name ?? $app->registrar_user_name,
-                                        'decisionAt' => $app->registrar_decision_at,
-                                        'reason' => $app->registrar_reason,
-                                    ])
-                                </td>
-
-                                {{-- O'quv bo'limi ustun --}}
+                                {{-- Yagona "Holat" ustuni — jarayonning joriy bosqichi.
+                                     Jarayon ketma-ket: dekanat → registrator → to'lov yuklash →
+                                     to'lov tasdiqlash → o'quv bo'limi. Faqat joriy bosqich ko'rsatiladi,
+                                     keyingi bosqichlar "kutilmoqda" deb ko'rsatilmaydi. --}}
                                 <td class="px-3 py-2.5 text-center">
                                     @php
-                                        // Pre-approved (group hali yo'q) — alohida yorliq
-                                        $effectiveStatus = $app->academic_dept_status;
-                                        $extraNote = null;
-                                        if ($effectiveStatus === 'approved' && empty($app->retake_group_id)) {
-                                            $extraNote = __("guruhga kutmoqda");
+                                        $stageBadge = $app->academicStageBadge();
+                                        // Joriy bosqichga tegishli izoh (rad etish sababi)
+                                        $stageReason = null;
+                                        if ($app->final_status === 'rejected') {
+                                            $stageReason = $app->rejectionReason();
+                                        } elseif ($app->group?->payment_verification_status === 'rejected') {
+                                            $stageReason = $app->group?->payment_rejection_reason;
+                                        }
+                                        // Joriy bosqichni kim/qachon hal qilgani (tooltip uchun)
+                                        $stageActor = null;
+                                        if ($app->academic_dept_status !== 'pending' && $app->academic_dept_decision_at) {
+                                            $stageActor = trim(($app->academicDeptUser?->full_name ?? $app->academic_dept_user_name ?? '') . ' · ' . $app->academic_dept_decision_at->format('d.m.Y H:i'));
+                                        } elseif ($app->registrar_status !== 'pending' && $app->registrar_decision_at) {
+                                            $stageActor = trim(($app->registrarUser?->full_name ?? $app->registrar_user_name ?? '') . ' · ' . $app->registrar_decision_at->format('d.m.Y H:i'));
+                                        } elseif ($app->dean_status !== 'pending' && $app->dean_decision_at) {
+                                            $stageActor = trim(($app->deanUser?->full_name ?? $app->dean_user_name ?? '') . ' · ' . $app->dean_decision_at->format('d.m.Y H:i'));
                                         }
                                     @endphp
-                                    @include('teacher.academic-dept.retake-applications._stage_badge', [
-                                        'status' => $effectiveStatus,
-                                        'userName' => $app->academicDeptUser?->full_name ?? $app->academic_dept_user_name,
-                                        'decisionAt' => $app->academic_dept_decision_at,
-                                        'reason' => $app->academic_dept_reason,
-                                        'extraNote' => $extraNote,
-                                    ])
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border {{ $stageBadge['class'] }}"
+                                          @if($stageActor) title="{{ $stageActor }}" @endif>
+                                        {{ $stageBadge['label'] }}
+                                    </span>
+                                    @if($stageReason)
+                                        <div class="mt-1 text-[11px] text-red-600 max-w-[240px] mx-auto break-words">
+                                            {{ $stageReason }}
+                                        </div>
+                                    @endif
                                 </td>
 
-                                <td class="px-3 py-2.5 text-xs text-gray-500 text-right whitespace-nowrap" title="{{ $app->created_at->format('Y-m-d H:i:s') }}">
-                                    {{ $app->created_at->diffForHumans() }}
+                                <td class="px-3 py-2.5 text-xs text-gray-600 text-right whitespace-nowrap">
+                                    {{ $app->created_at->format('d.m.Y H:i') }}
                                 </td>
 
                                 <td class="px-3 py-2.5 text-right whitespace-nowrap">
-                                    @if($isActionable)
+                                    @if(($canManageApplications ?? false) && $isActionable)
                                         <form method="POST" action="{{ route('admin.retake-applications.approve', $app->id) }}" class="inline">
                                             @csrf
                                             <button type="submit" title="{{ __('Tasdiqlash') }}"
@@ -283,6 +307,7 @@
         </div>
 
         {{-- Yakka rad etish modal --}}
+        @if($canManageApplications ?? false)
         <div x-show="rejectFor !== null" x-cloak
              class="fixed inset-0 z-50 overflow-y-auto"
              @keydown.escape.window="rejectFor = null">
@@ -310,8 +335,10 @@
                 </div>
             </div>
         </div>
+        @endif
 
         {{-- Bulk rad etish modal --}}
+        @if($canManageApplications ?? false)
         <div x-show="bulkRejectOpen" x-cloak
              class="fixed inset-0 z-50 overflow-y-auto"
              @keydown.escape.window="bulkRejectOpen = false">
@@ -344,5 +371,6 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 </x-teacher-app-layout>

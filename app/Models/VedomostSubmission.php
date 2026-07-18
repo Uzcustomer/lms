@@ -20,8 +20,31 @@ class VedomostSubmission extends Model
     public const FORM_12A = '12a';   // 2-urinish (1-qayta topshirish) — barcha guruhlar bitta varaqda
     public const FORM_12B = '12b';   // 3-urinish (2-qayta topshirish) — barcha guruhlar bitta varaqda
 
-    /** 12a/12b umumiy (guruhsiz, hamma guruh bitta varaqda) shakllar. */
-    public const COMBINED_FORMS = [self::FORM_12A, self::FORM_12B];
+    // Qo'shimcha (sababli ma'lumotnoma asosida) shakllar — YN tizimidagi
+    // 12-qo'shimcha / 12a-qo'shimcha / 12b-qo'shimcha bilan mos.
+    public const FORM_12Q  = '12q';   // 12-qo'shimcha — asosiy urinishning qo'shimchasi (har guruh alohida)
+    public const FORM_12AQ = '12aq';  // 12a-qo'shimcha (barcha guruhlar bitta varaqda)
+    public const FORM_12BQ = '12bq';  // 12b-qo'shimcha (barcha guruhlar bitta varaqda)
+    public const FORM_12AG = '12ag';  // 12a-qo'shimcha (sababli guruh uchun alohida)
+    public const FORM_12BG = '12bg';  // 12b-qo'shimcha (sababli guruh uchun alohida)
+
+    /** 12a/12b va ularning qo'shimchalari — umumiy (guruhsiz, hamma guruh bitta varaqda). */
+    public const COMBINED_FORMS = [self::FORM_12A, self::FORM_12B, self::FORM_12AQ, self::FORM_12BQ];
+
+    /** Qo'shimcha (sababli) shakllar. */
+    public const QOSHIMCHA_FORMS = [self::FORM_12Q, self::FORM_12AQ, self::FORM_12BQ, self::FORM_12AG, self::FORM_12BG];
+
+    /** YN service shakl nomi -> vedomost form_type. */
+    public const YN_FORM_MAP = [
+        '12-shakl'      => self::FORM_12,
+        "12-qo'shimcha" => self::FORM_12Q,
+        '12a-shakl'     => self::FORM_12A,
+        "12a-qo'shimcha" => self::FORM_12AQ,
+        "12a-qo'shimcha (guruh)" => self::FORM_12AG,
+        '12b-shakl'     => self::FORM_12B,
+        "12b-qo'shimcha" => self::FORM_12BQ,
+        "12b-qo'shimcha (guruh)" => self::FORM_12BG,
+    ];
 
     protected $fillable = [
         'education_year',
@@ -71,6 +94,7 @@ class VedomostSubmission extends Model
         'prorektor_notified_at',
         'warning_stage',
         'warned_at',
+        'manual_opened_at',
     ];
 
     protected $casts = [
@@ -83,6 +107,7 @@ class VedomostSubmission extends Model
         'ai_result' => 'array',
         'prorektor_notified_at' => 'datetime',
         'warned_at' => 'datetime',
+        'manual_opened_at' => 'datetime',
     ];
 
     public function curriculumSubject()
@@ -128,8 +153,13 @@ class VedomostSubmission extends Model
     {
         return [
             self::FORM_12 => '12-shakl',
+            self::FORM_12Q => '12-qo\'shimcha',
             self::FORM_12A => '12a-shakl',
+            self::FORM_12AQ => '12a-qo\'shimcha',
+            self::FORM_12AG => '12a-qo\'shimcha (guruh)',
             self::FORM_12B => '12b-shakl',
+            self::FORM_12BQ => '12b-qo\'shimcha',
+            self::FORM_12BG => '12b-qo\'shimcha (guruh)',
         ];
     }
 

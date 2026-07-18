@@ -6,6 +6,7 @@
     </x-slot>
 
     @php
+        $testSubjects = $testSubjects ?? collect();
         $subjectCount = $subjects->count();
         $totalCredit = 0;
         $totalAbsent = 0;
@@ -186,6 +187,35 @@
             text-align: center; padding: 60px 20px; color: #94a3b8;
             font-size: 14px; background: white; border-radius: 14px;
             border: 1px solid #f1f5f9;
+        }
+        .test-subjects-title {
+            margin: 0 0 14px 0; font-size: 15px; font-weight: 800; color: #0f172a;
+        }
+        .test-badge {
+            display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px;
+            font-size:11px; font-weight:800; background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc;
+        }
+        .test-meta { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 12px; }
+        .test-meta-item {
+            display:inline-flex; align-items:center; padding:5px 10px; border-radius:999px;
+            font-size:11px; font-weight:700; background:#f8fafc; color:#475569; border:1px solid #e2e8f0;
+        }
+        .test-status {
+            display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px;
+            font-size:11px; font-weight:800; border:1px solid transparent;
+        }
+        .test-status.green { background:#ecfdf5; color:#15803d; border-color:#86efac; }
+        .test-status.orange { background:#fff7ed; color:#c2410c; border-color:#fdba74; }
+        .test-status.gray { background:#f8fafc; color:#64748b; border-color:#cbd5e1; }
+        .btn-test-start {
+            display:inline-flex; align-items:center; justify-content:center; padding:8px 14px; border-radius:10px;
+            font-size:12px; font-weight:800; background:linear-gradient(135deg,#059669,#10b981); color:#fff;
+            box-shadow:0 8px 18px rgba(5,150,105,.18); transition:all .18s ease;
+        }
+        .btn-test-start:hover { transform:translateY(-1px); }
+        .btn-test-view {
+            display:inline-flex; align-items:center; justify-content:center; padding:8px 14px; border-radius:10px;
+            font-size:12px; font-weight:800; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;
         }
 
         /* ===== MODAL ===== */

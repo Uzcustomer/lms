@@ -482,7 +482,7 @@
                         }
                         dh += '</tbody></table>';
                     }
-                    dh += '</div>';
+
 
                     var currentTitle = $('#modal-title').text().split(' — ')[0];
                     $('#modal-title').text(currentTitle + ' — Qarzlar: ' + debtsAll.length + ' ta fan');
@@ -549,8 +549,10 @@
                         var gr = grades[g];
                         var isDebt = gr.is_debt || false;
                         var isOrphan = gr.is_orphan || false;
+                        var isFinishCreditPassed = gr.finish_credit_status || false;
                         var point = (gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
                         var grade = (gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
+                        if (!isDebt && isFinishCreditPassed) { grade = 'O\'tdi'; }
                         if (isDebt) { point = '-'; grade = '-'; }
                         var gradeClass = isDebt ? 'cell-fail' : 'cell-pass';
                         var rowBg;

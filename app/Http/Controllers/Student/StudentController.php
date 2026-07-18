@@ -14,16 +14,21 @@ use App\Models\IndependentSubmission;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Setting;
+use App\Models\SinovTestGrade;
 use App\Models\Student;
 use App\Models\StudentGrade;
+use App\Models\TestSubject;
+use App\Models\TestSubjectLessonTestAttempt;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 use App\Models\MarkingSystemScore;
 use App\Models\AcademicRecord;
+use App\Models\AdmissionIndicator;
 use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnSubmission;
@@ -86,6 +91,7 @@ class StudentController extends Controller
             // Academic records lookup
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $student->hemis_id)
+                ->when($student->curriculum_id !== null, fn($q) => $q->where('curriculum_id', $student->curriculum_id))
                 ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
                 ->get();
 
@@ -487,6 +493,13 @@ class StudentController extends Controller
         // 7) Quiz results (legacy code 103) — bir so'rov
         $allQuizResultIds = $allOtherGrades->flatten()->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->toArray();
         $quizTypes = [];
+        $allSinovTestGrades = SinovTestGrade::query()
+            ->whereIn('subject_id', $subjectIds)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('student_hemis_id', $studentHemisId)
+            ->get()
+            ->keyBy('subject_id');
         if (!empty($allQuizResultIds)) {
             $quizTypes = DB::table('hemis_quiz_results')
                 ->whereIn('id', $allQuizResultIds)
@@ -530,7 +543,7 @@ class StudentController extends Controller
             $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime, $mtDeadlineType,
             $allScheduleDatesBySubject,
             $allSchedules, $allStudentGrades, $allOtherGrades, $allAttendance, $allDetailGrades,
-            $allManualMt, $quizTypes, $mtHistoryCounts
+            $allManualMt, $quizTypes, $allSinovTestGrades, $mtHistoryCounts
         ) {
             $subjectId = $cs->subject_id;
 
@@ -786,6 +799,16 @@ class StudentController extends Controller
             $otherGrades['oski'] = $pickLatestAttempt($otherByType[101] ?? null);
             $otherGrades['test'] = $pickLatestAttempt($otherByType[102] ?? null);
 
+            if (($cs->closing_form ?? null) === 'sinov') {
+                $sinovRow = $allSinovTestGrades->get($subjectId);
+                if ($sinovRow) {
+                    $sinovValue = $sinovRow->override_grade ?? $sinovRow->default_grade;
+                    if ($sinovValue !== null) {
+                        $otherGrades['test'] = (int) round((float) $sinovValue, 0, PHP_ROUND_HALF_UP);
+                    }
+                }
+            }
+
             // ---- Davomat (in-memory filter) ----
             $excludedAttendanceCodes = [99, 100, 101, 102];
             $subjectAttendance = $allAttendance->get($subjectId) ?? collect();
@@ -1033,8 +1056,131 @@ class StudentController extends Controller
         });
 
         $minimumLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+        return view('student.subjects', [
+            'subjects' => $subjects,
+            'semester' => $semester_name,
+            'mtDeadlineTime' => $mtDeadlineTime,
+            'minimumLimit' => $minimumLimit,
+        ]);
+    }
 
-        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name, 'mtDeadlineTime' => $mtDeadlineTime, 'minimumLimit' => $minimumLimit]);
+    private function loadAssignedTestSubjects(Student $student)
+    {
+        $requiredTables = [
+            'test_subjects',
+            'test_subject_groups',
+            'test_subject_lessons',
+            'test_subject_lesson_tests',
+            'test_subject_lesson_test_questions',
+            'test_subject_lesson_test_attempts',
+            'test_subject_lesson_test_answers',
+        ];
+
+        foreach ($requiredTables as $table) {
+            if (!Schema::hasTable($table)) {
+                return collect();
+            }
+        }
+
+        $today = Carbon::now('Asia/Tashkent')->toDateString();
+
+        $subjects = TestSubject::query()
+            ->with([
+                'groups',
+                'lessons' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderBy('lesson_date')
+                    ->orderBy('topic_order'),
+                'lessons.lessonTest' => fn ($query) => $query->withCount([
+                    'questions' => fn ($q) => $q->where('is_active', true),
+                ]),
+            ])
+            ->where('is_active', true)
+            ->where(function ($query) use ($today) {
+                $query->whereNull('starts_on')
+                    ->orWhereDate('starts_on', '<=', $today);
+            })
+            ->where(function ($query) use ($today) {
+                $query->whereNull('ends_on')
+                    ->orWhereDate('ends_on', '>=', $today);
+            })
+            ->whereHas('groups', function ($query) use ($student) {
+                $query->where(function ($sub) use ($student) {
+                    $sub->where('group_hemis_id', $student->group_id)
+                        ->orWhere('group_id', $student->group_id);
+                });
+            })
+            ->orderBy('name')
+            ->get();
+
+        if ($subjects->isEmpty()) {
+            return collect();
+        }
+
+        $attemptsByTestId = collect();
+        $testIds = $subjects->pluck('lessons')
+            ->flatten()
+            ->pluck('lessonTest.id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (!empty($testIds)) {
+            $attemptsByTestId = TestSubjectLessonTestAttempt::query()
+                ->where('student_id', $student->id)
+                ->whereIn('test_subject_lesson_test_id', $testIds)
+                ->get()
+                ->keyBy('test_subject_lesson_test_id');
+        }
+
+        return $subjects->map(function (TestSubject $subject) use ($today, $attemptsByTestId) {
+            $todayLesson = $subject->lessons->first(function ($lesson) use ($today) {
+                return optional($lesson->lesson_date)->format('Y-m-d') === $today;
+            });
+
+            $nextLesson = $subject->lessons->first(function ($lesson) use ($today) {
+                return optional($lesson->lesson_date)->format('Y-m-d') >= $today;
+            });
+
+            $displayLesson = $todayLesson ?: $nextLesson ?: $subject->lessons->last();
+            $todayTest = $todayLesson?->lessonTest;
+            $attempt = $todayTest ? $attemptsByTestId->get($todayTest->id) : null;
+            $questionCount = (int) ($todayTest?->questions_count ?? 0);
+            $attemptSubmitted = $attempt && $attempt->status === 'submitted';
+            $canStart = $todayTest
+                && $todayTest->is_open
+                && $todayTest->is_published
+                && $questionCount > 0
+                && !$attemptSubmitted;
+
+            return [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'teacher_name' => $subject->teacher_name,
+                'group_name' => $subject->groups->pluck('group_name')->filter()->implode(', '),
+                'starts_on' => optional($subject->starts_on)->format('d.m.Y'),
+                'ends_on' => optional($subject->ends_on)->format('d.m.Y'),
+                'lesson_topic' => $displayLesson?->topic_title ?: (($displayLesson?->topic_order ?? 1) . '-mavzu'),
+                'lesson_date' => optional($displayLesson?->lesson_date)->format('d.m.Y'),
+                'lesson_time' => $displayLesson
+                    ? trim(($displayLesson->starts_at ? substr($displayLesson->starts_at, 0, 5) : '--:--') . ' - ' . ($displayLesson->ends_at ? substr($displayLesson->ends_at, 0, 5) : '--:--'))
+                    : null,
+                'question_count' => $questionCount,
+                'test_is_open' => (bool) ($todayTest?->is_open),
+                'test_is_published' => (bool) ($todayTest?->is_published),
+                'has_today_lesson' => (bool) $todayLesson,
+                'can_start' => $canStart,
+                'attempt_submitted' => $attemptSubmitted,
+                'attempt_percent' => $attempt?->percent,
+                'attempt_score' => $attempt?->score,
+                'attempt_total_points' => $attempt?->total_points,
+                'attempt_is_passed' => (bool) ($attempt?->is_passed),
+                'show_route' => ($todayLesson && $todayTest)
+                    ? route('student.test-subjects.tests.show', [$subject, $todayLesson])
+                    : null,
+            ];
+        })->values();
     }
 
     // Fetch grades for a selected subject
@@ -1482,6 +1628,24 @@ class StudentController extends Controller
         }
 
         $student = Auth::guard('student')->user();
+        $student->loadMissing('admissionData');
+
+        $admissionIndicator = AdmissionIndicator::query()
+            ->where('student_id', $student->student_id_number)
+            ->first([
+                'qabul_yili',
+                'talim_shakli',
+                'talaba_toifasi',
+                'imtiyoz_toifasi',
+                'toplagan_bali',
+                'tolov_kontrakt_shartnoma_summasi',
+            ]);
+
+        $studyFormName = $student->education_form_name
+            ?: $student->admissionData?->talim_shakli
+            ?: $admissionIndicator?->talim_shakli;
+
+        $admissionScore = $student->admissionData?->toplagan_ball ?? $admissionIndicator?->toplagan_bali;
 
         $profileData = [
             'full_name' => $student->full_name,
@@ -1501,6 +1665,12 @@ class StudentController extends Controller
             'province' => ['name' => $student->province_name ?? ''],
             'district' => ['name' => $student->district_name ?? ''],
             'is_graduate' => $student->is_graduate,
+            'admission_year' => $admissionIndicator?->qabul_yili,
+            'study_form_name' => $studyFormName,
+            'student_category_name' => $admissionIndicator?->talaba_toifasi,
+            'privilege_category_name' => $admissionIndicator?->imtiyoz_toifasi,
+            'admission_score' => $admissionScore,
+            'contract_amount' => $admissionIndicator?->tolov_kontrakt_shartnoma_summasi,
         ];
 
         $botUsername = config('services.telegram.bot_username', '');

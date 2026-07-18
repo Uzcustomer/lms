@@ -119,8 +119,10 @@
                                             $student = $app->group->student ?? null;
                                             $val = $app->joriy_score;
                                             $mustaqil = $mustaqilMap[$app->id] ?? null;
-                                            $canSendToTestMarkazi = $val !== null && $mustaqil?->grade !== null;
-                                            $attempt = $attemptsMap[$app->id] ?? 1;
+                                            // Testga yuborish faqat JN >= 60 VA MT >= 60 bo'lganda faol.
+                                            $jnOk = $val !== null && (float) $val >= 60;
+                                            $mtOk = $mustaqil?->grade !== null && (float) $mustaqil->grade >= 60;
+                                            $canSendToTestMarkazi = $jnOk && $mtOk;
                                             $cellStyle = '';
                                             if ($val !== null) {
                                                 $f = (float) $val;
@@ -138,10 +140,8 @@
                                                     @if(!empty($student?->group_name))
                                                         <span class="text-[10px] text-blue-600 whitespace-nowrap">{{ $student->group_name }}</span>
                                                     @endif
-                                                    @if($attempt === 1)
-                                                        <span class="rj-badge rj-badge-1">1-URINISH ✓</span>
-                                                    @else
-                                                        <span class="rj-badge rj-badge-{{ min($attempt, 3) }}">{{ $attempt }}-URINISH</span>
+                                                    @if($app->semester_name)
+                                                        <span class="rj-badge rj-badge-sem">{{ $app->semester_name }}</span>
                                                     @endif
                                                 </div>
                                                 <span class="block text-[10px] text-gray-500">{{ $app->student_hemis_id }}</span>
@@ -187,17 +187,26 @@
                                                     <span class="block text-[10px] text-gray-400 mt-1">
                                                         {{ $app->sent_to_test_markazi_at->format('d.m.Y H:i') }}
                                                     </span>
-                                                @elseif($canEdit && $canSendToTestMarkazi)
-                                                    <form method="POST"
-                                                          action="{{ route('admin.retake-journal.send-application-to-test-markazi', [$group->id, $app->id]) }}"
-                                                          onsubmit="return confirm('{{ __("Bu talabani test markaziga yuborishni tasdiqlaysizmi?") }}')">
-                                                        @csrf
-                                                        <button type="submit"
-                                                                style="background:#16a34a;color:#fff;border-radius:5px;"
-                                                                class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold hover:bg-green-700">
+                                                @elseif($canEdit)
+                                                    @if($canSendToTestMarkazi)
+                                                        <form method="POST"
+                                                              action="{{ route('admin.retake-journal.send-application-to-test-markazi', [$group->id, $app->id]) }}"
+                                                              onsubmit="return confirm('{{ __("Bu talabani test markaziga yuborishni tasdiqlaysizmi?") }}')">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    style="background:#16a34a;color:#fff;border-radius:5px;"
+                                                                    class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold hover:bg-green-700">
+                                                                {{ __("Testga yuborish") }}
+                                                            </button>
+                                                        </form>
+                                                    @else
+                                                        <button type="button" disabled
+                                                                title="{{ __("JN va MT 60 dan kam — testga yuborib bo'lmaydi") }}"
+                                                                style="background:#e5e7eb;color:#9ca3af;border-radius:5px;cursor:not-allowed;"
+                                                                class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold">
                                                             {{ __("Testga yuborish") }}
                                                         </button>
-                                                    </form>
+                                                    @endif
                                                 @else
                                                     <span class="text-gray-400">—</span>
                                                 @endif
@@ -239,7 +248,7 @@
                     @endif
 
                     {{-- OSKI / Test natijalari paneli --}}
-                    @if(in_array($group->assessment_type, ['oske', 'test', 'oske_test'], true))
+                    @if(in_array($group->assessment_type, ['oske', 'test', 'oske_test', 'sinov', 'sinov_fan'], true))
                         <div class="bg-white rounded-xl shadow-sm border border-gray-100 mt-3 p-4">
                             <div class="flex items-start justify-between flex-wrap gap-3">
                                 <div class="flex items-start gap-3">
@@ -283,7 +292,10 @@
                                 </div>
 
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    @if($canEdit && !$group->sent_to_test_markazi_at)
+                                    {{-- Sinov guruhlar uchun bu tugma yashirilgan — natija faqat
+                                         Test markazi sahifasidagi "Diagnostika orqali yuklash"
+                                         (sessiya/cutoff bilan xavfsiz) orqali tushadi. --}}
+                                    @if($canEdit && !$group->sent_to_test_markazi_at && !in_array($group->assessment_type, ['sinov', 'sinov_fan'], true))
                                         <form method="POST" action="{{ route('admin.retake-journal.fetch-results', $group->id) }}"
                                               onsubmit="return confirm('{{ __("HEMIS'dan OSKE va Test natijalarini tortishni tasdiqlaysizmi?") }}')">
                                             @csrf
@@ -658,9 +670,7 @@
             font-weight: 700;
             white-space: nowrap;
         }
-        .rj-badge-1 { background: #dcfce7; color: #15803d; }
-        .rj-badge-2 { background: #fef3c7; color: #92400e; }
-        .rj-badge-3 { background: #fee2e2; color: #b91c1c; }
+        .rj-badge-sem { background: #e0f2fe; color: #0369a1; }
 
         .rj-field {
             background: #f9fafb;

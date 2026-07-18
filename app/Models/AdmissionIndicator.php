@@ -4,6 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Qabul ko'rsatkichlari jadvali endi ham yig'ma statistika, ham
+ * student-level import qatorlarini saqlashi mumkin.
+ */
 class AdmissionIndicator extends Model
 {
     protected $table = 'admission_indicators';
@@ -64,6 +68,34 @@ class AdmissionIndicator extends Model
         'tolov_kontrakt_shartnoma_summasi' => 'decimal:2',
         'min_ball' => 'decimal:1',
     ];
+
+    /** Ta'lim turi variantlari (forma select uchun). */
+    public const TALIM_TURLARI = [
+        'Bakalavr',
+        'Magistr',
+        'Ordinatura',
+        'Rezidentura',
+        'Doktorantura',
+    ];
+
+    /** Ta'lim shakli variantlari. */
+    public const TALIM_SHAKLLARI = [
+        'Kunduzgi',
+        'Sirtqi',
+        'Kechki',
+        'Masofaviy',
+    ];
+
+    /** To'lov shakli variantlari. */
+    public const TOLOV_SHAKLLARI = [
+        'Davlat granti',
+        "To'lov-shartnoma",
+    ];
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 
     public function student()
     {

@@ -308,13 +308,16 @@
             {{-- BULK TOOLBAR --}}
             @if(!$applications->isEmpty())
             <div id="bulkBar" x-data="{ count: 0 }"
-                 x-init="window.vaBulkUpdate = () => { count = document.querySelectorAll('.va-row-cb:checked').length; window.vaSyncCheckAllButton && window.vaSyncCheckAllButton(); };"
+                 x-init="window.vaBulkUpdate = () => { count = window.vaIsAllFilteredSelected && window.vaIsAllFilteredSelected() ? {{ (int) ($selectableApplicationsCount ?? 0) }} : document.querySelectorAll('.va-row-cb:checked').length; window.vaSyncCheckAllButton && window.vaSyncCheckAllButton(); };"
                  x-show="count > 0" x-cloak
                  class="bg-white rounded-xl border-2 shadow-sm overflow-hidden sticky top-2 z-20"
                  style="border-color:#2b5ea7;">
                 <div class="px-4 py-2.5 flex items-center gap-2 flex-wrap" style="background: linear-gradient(135deg,#dbeafe,#bfdbfe);">
                     <span class="text-xs font-bold text-blue-900">
                         <span x-text="count"></span> ta tanlandi
+                    </span>
+                    <span id="vaBulkSelectionHint" class="text-[11px] font-semibold text-blue-700 hidden">
+                        Barcha sahifalardagi mos arizalar tanlandi
                     </span>
                     <div class="flex-1"></div>
 
@@ -391,7 +394,7 @@
                                         <input type="checkbox"
                                                id="vaCheckAllInput"
                                                class="w-4 h-4 cursor-pointer accent-blue-600"
-                                               title="Joriy sahifadagi arizalarni belgilash"
+                                               title="Barcha sahifalardagi mos arizalarni belgilash"
                                                onchange="vaToggleCheckAll(this.checked)">
                                     </th>
                                     <th>
@@ -759,27 +762,50 @@
     </style>
 
     <script>
+        let vaSelectionScope = 'page';
+
         function vaSelectedCheckboxes() {
             return Array.from(document.querySelectorAll('.va-row-cb'));
+        }
+
+        function vaIsAllFilteredSelected() {
+            return vaSelectionScope === 'all_filtered';
+        }
+
+        function vaSyncSelectionHint() {
+            const hint = document.getElementById('vaBulkSelectionHint');
+            if (!hint) return;
+
+            hint.classList.toggle('hidden', !vaIsAllFilteredSelected());
         }
 
         function vaSyncCheckAllButton() {
             const input = document.getElementById('vaCheckAllInput');
             if (!input) return;
 
+            if (vaIsAllFilteredSelected()) {
+                input.checked = true;
+                input.indeterminate = false;
+                vaSyncSelectionHint();
+                return;
+            }
+
             const checkboxes = vaSelectedCheckboxes();
             const allChecked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
             input.checked = allChecked;
             input.indeterminate = !allChecked && checkboxes.some(cb => cb.checked);
+            vaSyncSelectionHint();
         }
 
         function vaToggleCheckAll(forceState = null) {
             const checkboxes = vaSelectedCheckboxes();
-            if (checkboxes.length === 0) return;
 
             const shouldCheck = typeof forceState === 'boolean'
                 ? forceState
                 : checkboxes.some(cb => !cb.checked);
+
+            vaSelectionScope = shouldCheck ? 'all_filtered' : 'page';
+
             checkboxes.forEach(cb => {
                 cb.checked = shouldCheck;
             });
@@ -791,7 +817,9 @@
         // Tanlangan id'lardan vaqtinchalik form yasab, kerakli URLga POST/GET qiladi.
         function vaBulkSubmit(url, method, status = null, confirmMsg = null) {
             const ids = Array.from(document.querySelectorAll('.va-row-cb:checked')).map(el => el.value);
-            if (ids.length === 0) {
+            const allFilteredSelected = vaIsAllFilteredSelected();
+
+            if (!allFilteredSelected && ids.length === 0) {
                 alert('Avval kamida bitta arizani tanlang.');
                 return;
             }
@@ -814,13 +842,34 @@
                 }
             }
 
-            ids.forEach(id => {
-                const i = document.createElement('input');
-                i.type = 'hidden';
-                i.name = 'ids[]';
-                i.value = id;
-                form.appendChild(i);
-            });
+            if (allFilteredSelected) {
+                const scope = document.createElement('input');
+                scope.type = 'hidden';
+                scope.name = 'selection_scope';
+                scope.value = 'all_filtered';
+                form.appendChild(scope);
+
+                const params = new URLSearchParams(window.location.search);
+                params.forEach((value, key) => {
+                    if (key === 'page' || key === 'ids[]' || key === 'selection_scope') {
+                        return;
+                    }
+
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = value;
+                    form.appendChild(input);
+                });
+            } else {
+                ids.forEach(id => {
+                    const i = document.createElement('input');
+                    i.type = 'hidden';
+                    i.name = 'ids[]';
+                    i.value = id;
+                    form.appendChild(i);
+                });
+            }
 
             if (status) {
                 const a = document.createElement('input');
@@ -835,6 +884,13 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            vaSelectedCheckboxes().forEach(cb => {
+                cb.addEventListener('change', function () {
+                    vaSelectionScope = 'page';
+                    window.vaBulkUpdate && window.vaBulkUpdate();
+                });
+            });
+
             vaSyncCheckAllButton();
 
             if (window.location.search) {

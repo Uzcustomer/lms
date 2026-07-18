@@ -76,6 +76,9 @@ class StudentApiController extends Controller
                     $join->on('ar.student_id', '=', \DB::raw((int) $student->hemis_id))
                          ->on('ar.subject_id', '=', 'ss.subject_id')
                          ->on('ar.semester_id', '=', 'ss.semester_id');
+                    if ($student->curriculum_id !== null) {
+                        $join->where('ar.curriculum_id', '=', $student->curriculum_id);
+                    }
                 })
                 ->leftJoin('semesters as sem', 'sem.code', '=', 'ss.semester_id')
                 ->where('ss.student_hemis_id', $student->hemis_id)
@@ -92,6 +95,7 @@ class StudentApiController extends Controller
         } else {
             // Fallback: faqat academic_records dan (eski mantiq)
             $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
+                ->when($student->curriculum_id !== null, fn($q) => $q->where('curriculum_id', $student->curriculum_id))
                 ->where(function ($q) {
                     $q->whereNull('grade')
                       ->orWhereIn('grade', ['2', '0'])

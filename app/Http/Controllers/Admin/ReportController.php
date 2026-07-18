@@ -12207,10 +12207,13 @@ class ReportController extends Controller
             //    kattalashtirib) — avval me'yorgacha (limit), zarur bo'lsa teng ravishda sal
             //    oshirib. Shunda 30 talabalik kichik oqim yo'qoladi, oqim me'yori PRIORITET.
             if ($remainder !== null) {
-                if (!empty($resultOqims)) {
-                    $S = (int) array_sum(array_column($remainder, 'total'));
+                $S = (int) array_sum(array_column($remainder, 'total'));
+                // Bo'sh joy (limitgacha) — qoldiq shunga sig'sagina tarqatamiz; aks holda
+                // qoldiq ALOHIDA oqim bo'lib qoladi (hech qaysi oqim limitdan oshmaydi).
+                $room = 0;
+                foreach ($resultOqims as $ro) { $room += max(0, $limit - (int) $ro['total']); }
+                if (!empty($resultOqims) && $S <= $room) {
                     $this->oqimDistributeStudents($resultOqims, $S, $limit);
-                    // Tarqatishni solishtirmada ko'rsatamiz (guruh nomlari + jami)
                     $names = [];
                     foreach ($remainder as $bs) { $names[] = ['name' => $bs['base'], 'count' => $bs['total']]; }
                     $fromDept = $this->oqimFacultyShort(($remainder[0]['_dept'] ?? ''));
@@ -12221,6 +12224,7 @@ class ReportController extends Controller
                         'to_before' => 0, 'to_after' => 0, 'distributed' => true,
                     ];
                 } else {
+                    // Sig'madi — qoldiqni o'z holicha (alohida oqim) qoldiramiz.
                     $resultOqims[] = $this->oqimBuildFromChunk($remainder, $courseIndex, $g['level_code'], $items);
                 }
             }
@@ -12334,7 +12338,9 @@ class ReportController extends Controller
     private function oqimDistributeStudents(array &$oqims, int $S, int $limit): void
     {
         if ($S <= 0 || empty($oqims)) { return; }
-        // 1-bosqich: har oqimni me'yorgacha (limit) to'ldiramiz
+        // Har oqimni FAQAT me'yorgacha (limit = oqim_max + tolerantlik) to'ldiramiz —
+        // hech qachon limitdan oshmaydi (±5 qat'iy). Sig'magan talaba bo'lsa, chaqiruvchi
+        // uni alohida oqim qilib qoldiradi.
         foreach ($oqims as &$oq) {
             if ($S <= 0) { break; }
             $room = $limit - (int) $oq['total'];
@@ -12344,16 +12350,6 @@ class ReportController extends Controller
             $oq['total'] += $add; $S -= $add;
         }
         unset($oq);
-        // 2-bosqich: qolgani teng ravishda (kichik oqim qoldirmaslik uchun)
-        if ($S > 0) {
-            $n = count($oqims); $i = 0;
-            while ($S > 0) {
-                $k = $i % $n;
-                $this->oqimAddStudentsToRows($oqims[$k]['rows'], 1);
-                $oqims[$k]['total'] += 1;
-                $S--; $i++;
-            }
-        }
     }
 
     /**

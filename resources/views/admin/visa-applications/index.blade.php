@@ -13,6 +13,7 @@
         $statusMeta = [
             'pending'   => ['label' => 'Kutilmoqda',    'bg' => '#fef3c7', 'fg' => '#92400e', 'border' => '#fde68a'],
             'reviewing' => ['label' => 'Ko\'rilmoqda',  'bg' => '#dbeafe', 'fg' => '#1e40af', 'border' => '#bfdbfe'],
+            'submitted' => ['label' => 'Submitted',     'bg' => '#e0f2fe', 'fg' => '#0f766e', 'border' => '#99f6e4'],
             'approved'  => ['label' => 'Qabul qilindi', 'bg' => '#d1fae5', 'fg' => '#065f46', 'border' => '#a7f3d0'],
             'rejected'  => ['label' => 'Rad etilgan',   'bg' => '#fee2e2', 'fg' => '#991b1b', 'border' => '#fecaca'],
         ];

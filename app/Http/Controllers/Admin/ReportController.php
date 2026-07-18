@@ -11409,6 +11409,91 @@ class ReportController extends Controller
         $mergeFaculties = $request->boolean('merge_faculties');
 
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
+        $blocks = $this->assembleOqimBlocks(
+            $rows, $mergeFaculties, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang
+        );
+
+        // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----
+        $params = [
+            'optimize' => $request->boolean('optimize'),
+            'oqim_max' => max(1, (int) $request->get('oqim_max', 100)),
+            'oqim_tol' => max(0, (int) $request->get('oqim_tol', 0)),
+            'ab_max'   => max(1, (int) $request->get('ab_max', 15)),
+            'ab_tol'   => max(0, (int) $request->get('ab_tol', 0)),
+            'abc_max'  => max(1, (int) $request->get('abc_max', 10)),
+            'abc_tol'  => max(0, (int) $request->get('abc_tol', 0)),
+        ];
+
+        // Tanlangan variant(lar). full=to'liq guruh, ab=a,b guruhcha, abc=a,b,c guruhcha,
+        // auto=kursga qarab (1-3 kurs -> a,b, 4+ kurs -> a,b,c).
+        $variantNames = [
+            'full' => 'Guruh (to\'liq)',
+            'ab'   => 'a,b guruhchalar',
+            'abc'  => 'a,b,c guruhchalar',
+            'auto' => 'Avtomatik (kursga qarab)',
+        ];
+        $variantParam = (string) $request->get('variant', 'auto');
+        if ($variantParam === 'all') {
+            $variants = [
+                'full' => $variantNames['full'],
+                'ab'   => $variantNames['ab'],
+                'abc'  => $variantNames['abc'],
+            ];
+        } else {
+            $key = $this->oqimNormalizeVariant($variantParam);
+            $variants = [$key => $variantNames[$key]];
+        }
+
+        // Har bir variant uchun oqimlarni quramiz
+        $byVariant = [];
+        foreach ($variants as $vKey => $vTitle) {
+            $byVariant[$vKey] = $this->buildOqimBlocksForVariant($blocks, $params, $vKey);
+        }
+
+        $header = [
+            "Toshkent davlat tibbiyot universiteti Termiz filiali fakultetlar, yo'nalishlar va kurslar kesimi bo'yicha talabalarning oqim va guruhlarga taqsimlanish tartibi",
+            "Kurslar va yo'nalishlar kesimida guruhlar va ulardagi talabalar soni (" . now()->format('d.m.Y') . " holati)",
+        ];
+
+        // JSON uchun asosiy (birinchi) variantni ham qulay ko'rinishda beramiz
+        $firstVariant = array_key_first($byVariant);
+
+        // Optimizatsiya bosilganda — nima o'zgarishi haqida reja (dialog uchun)
+        $plan = null;
+        if ($params['optimize']) {
+            // Reja ko'rsatilayotgan variant bilan bir xil bo'lsin (birinchi variant)
+            $planVariant = array_key_first($variants);
+            // "Joriy holat" baseline HAR DOIM birlashtirilmagan bloklardan olinadi, shunda
+            // solishtirmadagi "joriy" sonlar (guruh/oqim) "Joriy holat" vkladkasi bilan
+            // mos keladi — fakultetlararo optimizatsiya bu sonlarni buzmaydi.
+            $curBlocks = $mergeFaculties
+                ? $this->assembleOqimBlocks($rows, false, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang)
+                : $blocks;
+            $plan = $this->computeOptimizationPlan($curBlocks, $blocks, $params, $planVariant);
+        }
+
+        return [
+            'header'    => $header,
+            'variants'  => $variants,
+            'byVariant' => $byVariant,
+            'blocks'    => $byVariant[$firstVariant],
+            'params'    => $params,
+            'optimize'  => $params['optimize'],
+            'plan'      => $plan,
+            'generated_at' => now()->format('d.m.Y H:i'),
+        ];
+    }
+
+    /**
+     * HEMIS qatorlaridan fakultet+yo'nalish -> kurs -> guruhlar tuzilmasini yig'adi.
+     * $mergeFaculties=true bo'lsa — bir xil yo'nalishli fakultetlar (1-son/2-son) bitta
+     * pool ostiga jamlanadi (fakultetlararo optimizatsiya uchun). Bloklar tartiblangan
+     * holda qaytariladi.
+     */
+    private function assembleOqimBlocks(
+        $rows, bool $mergeFaculties, array $excludedIds, array $trackMap,
+        string $talimFilter, $langMap, array $overrideLang
+    ): array {
         $blocks = [];
         foreach ($rows as $r) {
             // Hisobdan chiqarilgan (xato biriktirilgan) guruhlarni tashlab yuboramiz
@@ -11496,69 +11581,7 @@ class ReportController extends Controller
                 <=> [$b['department_name'], $b['specialty_name'], $b['track']];
         });
 
-        // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----
-        $params = [
-            'optimize' => $request->boolean('optimize'),
-            'oqim_max' => max(1, (int) $request->get('oqim_max', 100)),
-            'oqim_tol' => max(0, (int) $request->get('oqim_tol', 0)),
-            'ab_max'   => max(1, (int) $request->get('ab_max', 15)),
-            'ab_tol'   => max(0, (int) $request->get('ab_tol', 0)),
-            'abc_max'  => max(1, (int) $request->get('abc_max', 10)),
-            'abc_tol'  => max(0, (int) $request->get('abc_tol', 0)),
-        ];
-
-        // Tanlangan variant(lar). full=to'liq guruh, ab=a,b guruhcha, abc=a,b,c guruhcha,
-        // auto=kursga qarab (1-3 kurs -> a,b, 4+ kurs -> a,b,c).
-        $variantNames = [
-            'full' => 'Guruh (to\'liq)',
-            'ab'   => 'a,b guruhchalar',
-            'abc'  => 'a,b,c guruhchalar',
-            'auto' => 'Avtomatik (kursga qarab)',
-        ];
-        $variantParam = (string) $request->get('variant', 'auto');
-        if ($variantParam === 'all') {
-            $variants = [
-                'full' => $variantNames['full'],
-                'ab'   => $variantNames['ab'],
-                'abc'  => $variantNames['abc'],
-            ];
-        } else {
-            $key = $this->oqimNormalizeVariant($variantParam);
-            $variants = [$key => $variantNames[$key]];
-        }
-
-        // Har bir variant uchun oqimlarni quramiz
-        $byVariant = [];
-        foreach ($variants as $vKey => $vTitle) {
-            $byVariant[$vKey] = $this->buildOqimBlocksForVariant($blocks, $params, $vKey);
-        }
-
-        $header = [
-            "Toshkent davlat tibbiyot universiteti Termiz filiali fakultetlar, yo'nalishlar va kurslar kesimi bo'yicha talabalarning oqim va guruhlarga taqsimlanish tartibi",
-            "Kurslar va yo'nalishlar kesimida guruhlar va ulardagi talabalar soni (" . now()->format('d.m.Y') . " holati)",
-        ];
-
-        // JSON uchun asosiy (birinchi) variantni ham qulay ko'rinishda beramiz
-        $firstVariant = array_key_first($byVariant);
-
-        // Optimizatsiya bosilganda — nima o'zgarishi haqida reja (dialog uchun)
-        $plan = null;
-        if ($params['optimize']) {
-            // Reja ko'rsatilayotgan variant bilan bir xil bo'lsin (birinchi variant)
-            $planVariant = array_key_first($variants);
-            $plan = $this->computeOptimizationPlan($blocks, $params, $planVariant);
-        }
-
-        return [
-            'header'    => $header,
-            'variants'  => $variants,
-            'byVariant' => $byVariant,
-            'blocks'    => $byVariant[$firstVariant],
-            'params'    => $params,
-            'optimize'  => $params['optimize'],
-            'plan'      => $plan,
-            'generated_at' => now()->format('d.m.Y H:i'),
-        ];
+        return $blocks;
     }
 
     /**
@@ -11566,15 +11589,22 @@ class ReportController extends Controller
      * solishtiradi. Optimizatsiya kam to'lgan akademik guruhlarni birlashtirib,
      * guruhlar (va shu bilan kichik guruhlar hamda oqimlar) sonini kamaytiradi.
      * Kichik guruhlar soni kursga qarab qat'iy (1-3 a,b; 4-6 a,b,c) — o'zgarmaydi.
+     *
+     * $curBlocks — "joriy (tasdiqlangan) holat" bloklari (fakultetlararo bo'lsa ham
+     * BIRLASHTIRILMAGAN — "Joriy holat" vkladkasiga mos). $optBlocks — optimizatsiya
+     * qo'llanadigan bloklar (fakultetlararo yoqilsa — pool ostida). Yuqoridagi jami
+     * sonlar (guruh/kichik guruh/oqim) shu ikki holat orasida solishtiriladi.
      */
-    private function computeOptimizationPlan(array $blocks, array $params, string $variant): array
+    private function computeOptimizationPlan(array $curBlocks, array $optBlocks, array $params, string $variant): array
     {
+        // Jami sonlar: joriy — birlashtirilmagan bloklardan, optimallashtirilgan — pool bloklardan
+        [$curBase, $curSub, $curOqim] = $this->oqimPlanTotals($curBlocks, $params, $variant, false);
+        [$optBase, $optSub, $optOqim] = $this->oqimPlanTotals($optBlocks, $params, $variant, true);
+
+        $blocks = $optBlocks; // moves (solishtirma detali) optimizatsiya tuzilmasi ustidan quriladi
         $curParams = ['optimize' => false] + $params;
         $optParams = ['optimize' => true] + $params;
 
-        $curBase = 0; $optBase = 0;
-        $curSub = 0;  $optSub = 0;
-        $curOqim = 0; $optOqim = 0;
         $moves = [];
 
         foreach ($blocks as $block) {
@@ -11585,17 +11615,9 @@ class ReportController extends Controller
                 }
                 $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
                 [$subCount, $subMax, $subTol, $eff] = $this->oqimSubRule($variant, $levelNum, $params);
-                $cap = max(1, $subCount * ($subMax + max(0, $subTol)));
 
                 $curB = $this->oqimCourseBases($bases, $curParams, $variant, $levelNum);
                 $optB = $this->oqimCourseBases($bases, $optParams, $variant, $levelNum);
-
-                $curBase += count($curB);
-                $optBase += count($optB);
-                foreach ($curB as $b) { $curSub += count($b['rows']); }
-                foreach ($optB as $b) { $optSub += count($b['rows']); }
-                $curOqim += count($this->packOqims($curB, $params['oqim_max'], $params['oqim_tol']));
-                $optOqim += count($this->packOqims($optB, $params['oqim_max'], $params['oqim_tol']));
 
                 // Til bo'yicha solishtirma (kichik guruh darajasida)
                 $curByLang = [];
@@ -11657,6 +11679,30 @@ class ReportController extends Controller
             'oqim_reduce'   => $curOqim - $optOqim,
             'moves'         => $moves,
         ];
+    }
+
+    /**
+     * Blok to'plami bo'yicha jami sonlarni hisoblaydi: [akademik guruh, kichik guruh, oqim].
+     * $optimize=false — joriy holat; true — optimallashtirilgan holat.
+     */
+    private function oqimPlanTotals(array $blocks, array $params, string $variant, bool $optimize): array
+    {
+        $p = ['optimize' => $optimize] + $params;
+        $base = 0; $sub = 0; $oqim = 0;
+        foreach ($blocks as $block) {
+            foreach ($block['courses'] as $course) {
+                $bases = $this->aggregateBaseGroups($course['groups']);
+                if (empty($bases)) {
+                    continue;
+                }
+                $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
+                $b = $this->oqimCourseBases($bases, $p, $variant, $levelNum);
+                $base += count($b);
+                foreach ($b as $bb) { $sub += count($bb['rows']); }
+                $oqim += count($this->packOqims($b, $params['oqim_max'], $params['oqim_tol']));
+            }
+        }
+        return [$base, $sub, $oqim];
     }
 
     /**

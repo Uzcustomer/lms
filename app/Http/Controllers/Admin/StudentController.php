@@ -891,6 +891,14 @@ class StudentController extends Controller
                 ->get();
         }
 
+        // Guruh tarixi (talaba qaysi davrda qaysi guruhda o'qigan)
+        $groupHistory = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('student_group_history')) {
+            $groupHistory = \App\Models\StudentGroupHistory::where('student_id', $student->id)
+                ->orderByDesc('started_at')
+                ->get();
+        }
+
         $canUploadFiles = in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin']);
         $studentFiles = collect();
         if ($canUploadFiles && \Illuminate\Support\Facades\Schema::hasTable('student_files')) {
@@ -907,7 +915,7 @@ class StudentController extends Controller
             $academicOrder = \App\Models\StudentAcademicOrder::where('student_id', $student->id)->first();
         }
 
-        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo', 'canUploadFiles', 'studentFiles', 'admissionData', 'academicOrder'));
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'groupHistory', 'visaInfo', 'canUploadFiles', 'studentFiles', 'admissionData', 'academicOrder'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)

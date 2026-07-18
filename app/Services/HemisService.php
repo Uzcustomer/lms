@@ -11,9 +11,11 @@ use App\Models\HemisExamGrade;
 use App\Models\MarkingSystemScore;
 use App\Models\Semester;
 use App\Models\Student;
+use App\Models\StudentGroupHistory;
 use App\Models\StudentSubject;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class HemisService
 {
@@ -83,10 +85,61 @@ class HemisService
     {
         $studentData = $this->transformStudentData($data);
 
-        Student::updateOrCreate(
+        $student = Student::updateOrCreate(
             ['hemis_id' => $studentData['hemis_id']],
             $studentData
         );
+
+        $this->recordGroupHistory($student);
+    }
+
+    /**
+     * Talabaning guruhi o'zgarganda uni tarixga yozib boradi.
+     *
+     * Ochiq (ended_at = null) yozuv "hozirgi guruh" hisoblanadi. Har importda
+     * hozirgi guruh ochiq yozuvdagi guruh bilan solishtiriladi:
+     *  - Ochiq yozuv yo'q bo'lsa — hozirgi guruh birinchi yozuv sifatida ochiladi (backfill).
+     *  - Guruh o'zgargan bo'lsa — eski yozuv yopiladi (ended_at) va yangisi ochiladi.
+     *  - O'zgarmagan bo'lsa — hech nima qilinmaydi.
+     *
+     * HEMIS ko'chirish sanasini bermagani uchun started_at/ended_at qiymati
+     * o'zgarish import orqali birinchi aniqlangan vaqt bilan belgilanadi.
+     */
+    protected function recordGroupHistory(Student $student): void
+    {
+        if (!Schema::hasTable('student_group_history')) {
+            return;
+        }
+
+        $newGroupId = $student->group_id;
+        if (empty($newGroupId)) {
+            return; // guruhi yo'q talaba uchun tarix yuritilmaydi
+        }
+
+        $openRecord = StudentGroupHistory::where('student_id', $student->id)
+            ->whereNull('ended_at')
+            ->orderByDesc('started_at')
+            ->first();
+
+        // Guruh o'zgarmagan bo'lsa — hech nima qilinmaydi
+        if ($openRecord && (string) $openRecord->group_hemis_id === (string) $newGroupId) {
+            return;
+        }
+
+        // Guruh o'zgargan bo'lsa — eski yozuvni yopamiz
+        if ($openRecord) {
+            $openRecord->update(['ended_at' => now()]);
+        }
+
+        // Yangi (yoki birinchi) guruhni ochamiz
+        StudentGroupHistory::create([
+            'student_id' => $student->id,
+            'group_hemis_id' => $newGroupId,
+            'group_name' => $student->group_name,
+            'specialty_name' => $student->specialty_name,
+            'education_year_name' => $student->education_year_name,
+            'started_at' => now(),
+        ]);
     }
 
     protected function transformStudentData($data)

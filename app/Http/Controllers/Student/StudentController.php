@@ -1632,7 +1632,14 @@ class StudentController extends Controller
 
         $admissionIndicator = AdmissionIndicator::query()
             ->where('student_id', $student->student_id_number)
-            ->first(['talim_shakli', 'toplagan_bali']);
+            ->first([
+                'qabul_yili',
+                'talim_shakli',
+                'talaba_toifasi',
+                'imtiyoz_toifasi',
+                'toplagan_bali',
+                'tolov_kontrakt_shartnoma_summasi',
+            ]);
 
         $studyFormName = $student->education_form_name
             ?: $student->admissionData?->talim_shakli
@@ -1658,8 +1665,12 @@ class StudentController extends Controller
             'province' => ['name' => $student->province_name ?? ''],
             'district' => ['name' => $student->district_name ?? ''],
             'is_graduate' => $student->is_graduate,
+            'admission_year' => $admissionIndicator?->qabul_yili,
             'study_form_name' => $studyFormName,
+            'student_category_name' => $admissionIndicator?->talaba_toifasi,
+            'privilege_category_name' => $admissionIndicator?->imtiyoz_toifasi,
             'admission_score' => $admissionScore,
+            'contract_amount' => $admissionIndicator?->tolov_kontrakt_shartnoma_summasi,
         ];
 
         $botUsername = config('services.telegram.bot_username', '');

@@ -117,10 +117,17 @@
                             <div class="mt-6 bg-gray-50 p-4 rounded-lg">
                                 <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __("Qabul ma'lumotlari") }}</h4>
                                 <ul class="space-y-2">
+                                    <li><span class="font-medium">{{ __('Qabul yili:') }}</span> {{ $profileData['admission_year'] ?: '—' }}</li>
                                     <li><span class="font-medium">{{ __("O'quv shakli:") }}</span> {{ $profileData['study_form_name'] ?: '—' }}</li>
+                                    <li><span class="font-medium">{{ __('Talaba toifasi:') }}</span> {{ $profileData['student_category_name'] ?: '—' }}</li>
+                                    <li><span class="font-medium">{{ __('Imtiyoz toifasi:') }}</span> {{ $profileData['privilege_category_name'] ?: '—' }}</li>
                                     <li>
                                         <span class="font-medium">{{ __("Olgan bali:") }}</span>
                                         {{ $profileData['admission_score'] !== null ? rtrim(rtrim(number_format((float) $profileData['admission_score'], 2, '.', ''), '0'), '.') : '—' }}
+                                    </li>
+                                    <li>
+                                        <span class="font-medium">{{ __("To'lov-kontrakt shartnoma summasi:") }}</span>
+                                        {{ $profileData['contract_amount'] !== null ? rtrim(rtrim(number_format((float) $profileData['contract_amount'], 2, '.', ''), '0'), '.') : '—' }}
                                     </li>
                                 </ul>
                             </div>

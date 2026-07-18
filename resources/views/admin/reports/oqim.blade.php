@@ -466,9 +466,10 @@
                 }
             }
 
-            // Fakultetlararo oqim ko'chirishlar (fakultetlar alohida qoladi)
+            // Fakultetlararo oqim to'ldirish (fakultetlar alohida qoladi)
             if (xmoves.length) {
-                m += '<div class="opt-moves-title">Fakultetlararo oqim ko\'chirish — ' + xmoves.length + ' ta kam to\'lgan oqim qo\'shni fakultetga ko\'chiriladi (jami −' + xmoves.length + ' oqim):</div>';
+                var oqRed = (plan.cur_oqim || 0) - (plan.opt_oqim || 0);
+                m += '<div class="opt-moves-title">Fakultetlararo oqim to\'ldirish — kam to\'lgan oqimlar qo\'shni fakultet guruhlari bilan me\'yorgacha to\'ldiriladi' + (oqRed > 0 ? ' (jami −' + oqRed + ' oqim)' : '') + ':</div>';
                 for (var xi = 0; xi < xmoves.length; xi++) {
                     var xm = xmoves[xi];
                     var gl = (xm.moved || []).map(function(g){ return esc(g.name) + ' (' + esc(g.count) + ')'; }).join(', ');

@@ -11552,52 +11552,53 @@ class ReportController extends Controller
                 $curOqim += count($this->packOqims($curB, $params['oqim_max'], $params['oqim_tol']));
                 $optOqim += count($this->packOqims($optB, $params['oqim_max'], $params['oqim_tol']));
 
-                // Til bo'yicha birlashtirish tavsiyalari
-                $byLang = [];
-                foreach ($bases as $b) {
-                    $byLang[$b['lang']][] = $b;
-                }
-                foreach ($byLang as $list) {
-                    usort($list, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
-                    $N = count($list);
-                    $T = array_sum(array_map(fn($x) => $x['total'], $list));
-                    $optN = min($N, max(1, (int) ceil($T / $cap)));
-                    if ($optN < $N) {
-                        $names = array_map(fn($x) => $x['base'], $list);
-                        $per = array_values($this->oqimDistribute($T, $optN));
-                        $keptNames = array_values(array_slice($names, 0, $optN));
+                // Til bo'yicha solishtirma (kichik guruh darajasida)
+                $curByLang = [];
+                foreach ($curB as $b) { $curByLang[$b['lang']][] = $b; }
+                $optByLang = [];
+                foreach ($optB as $b) { $optByLang[$b['lang']][] = $b; }
 
-                        // Joriy guruhlar (nom + jami)
-                        $curGroups = [];
-                        foreach ($list as $x) {
-                            $curGroups[] = ['name' => $x['base'], 'total' => $x['total']];
-                        }
-                        // Yangi (taklif) guruhlar — saqlanadiganlar, qayta taqsimlangan son bilan
-                        $newGroups = [];
-                        foreach ($keptNames as $i => $nm) {
-                            $newGroups[] = ['name' => $nm, 'total' => $per[$i] ?? 0];
-                        }
+                $langs = array_unique(array_merge(array_keys($curByLang), array_keys($optByLang)));
+                foreach ($langs as $lang) {
+                    $cg = $curByLang[$lang] ?? [];
+                    $og = $optByLang[$lang] ?? [];
+                    usort($cg, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+                    usort($og, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
 
-                        $moves[] = [
-                            'block'      => $block['title'],
-                            'course'     => $course['level_name'],
-                            'lang'       => $list[0]['lang_label'],
-                            'from'       => $N,
-                            'to'         => $optN,
-                            'kept'       => $keptNames,
-                            'dropped'    => array_values(array_slice($names, $optN)),
-                            'sizes'      => $per,
-                            'cur_groups' => $curGroups,
-                            'new_groups' => $newGroups,
-                            'sub'        => $eff === 'full' ? 'to\'liq' : ($eff === 'abc' ? 'a,b,c' : 'a,b'),
-                        ];
+                    // Kichik guruhlarni tekis ro'yxatga yig'amiz (nom + son)
+                    $curSubs = [];
+                    foreach ($cg as $b) { foreach ($b['rows'] as $rr) { $curSubs[] = ['name' => $rr['name'], 'count' => $rr['count']]; } }
+                    $newSubs = [];
+                    foreach ($og as $b) { foreach ($b['rows'] as $rr) { $newSubs[] = ['name' => $rr['name'], 'count' => $rr['count']]; } }
+
+                    // O'zgarish bo'lmasa — o'tkazamiz
+                    if (count($cg) === count($og) && count($curSubs) === count($newSubs)) {
+                        continue;
                     }
+
+                    $curNames = array_map(fn($b) => $b['base'], $cg);
+                    $optNames = array_map(fn($b) => $b['base'], $og);
+                    $langLabel = $cg[0]['lang_label'] ?? ($og[0]['lang_label'] ?? '');
+
+                    $moves[] = [
+                        'block'      => $block['title'],
+                        'course'     => $course['level_name'],
+                        'lang'       => $langLabel,
+                        'from'       => count($cg),
+                        'to'         => count($og),
+                        'cur_sub_n'  => count($curSubs),
+                        'new_sub_n'  => count($newSubs),
+                        'cur_subs'   => $curSubs,
+                        'new_subs'   => $newSubs,
+                        'dropped'    => array_values(array_diff($curNames, $optNames)),
+                        'sub'        => $eff === 'full' ? 'to\'liq' : ($eff === 'abc' ? 'a,b,c' : 'a,b'),
+                    ];
                 }
             }
         }
 
-        // Eng ko'p guruh kamaytiradiganlar birinchi
-        usort($moves, fn($a, $b) => ($b['from'] - $b['to']) <=> ($a['from'] - $a['to']));
+        // Eng ko'p kichik guruh kamaytiradiganlar birinchi
+        usort($moves, fn($a, $b) => ($b['cur_sub_n'] - $b['new_sub_n']) <=> ($a['cur_sub_n'] - $a['new_sub_n']));
 
         return [
             'cur_base'      => $curBase,
@@ -11822,20 +11823,28 @@ class ReportController extends Controller
             $suffix = $langLabel !== '' ? ' (' . $langLabel . ')' : '';
 
             if (!empty($params['optimize'])) {
-                // Birlashtirish: minimal guruhlar soni = ceil(T / sig'im), lekin joriydan ko'p emas
+                // OPTIMIZATSIYA — kichik guruh (a/b/c) darajasida zich qadoqlash:
+                // minimal kichik guruhlar soni = ceil(T / kichik_guruh_sig'imi); talabalar
+                // shu kichik guruhlarga teng taqsimlanadi (oxirgi ortiqcha guruhchalar
+                // yuqoridagilarga singdirilib, o'chiriladi). Keyin har subCount tadan bitta
+                // asosiy guruhga (a,b yoki a,b,c) yig'iladi — oxirgi guruh kamroq bo'lishi mumkin.
                 $T = array_sum(array_map(fn($x) => $x['total'], $list));
-                $optN = max(1, (int) ceil($T / $capacity));
-                $optN = min($optN, count($list));
-                $names = array_map(fn($x) => $x['base'], array_slice($list, 0, $optN));
-                $per = $this->oqimDistribute($T, $optN);
-                foreach ($per as $i => $t) {
+                $chunks = $this->oqimOptimalSubgroups($T, $subCount, $subMax, $subTol);
+                $names = array_map(fn($x) => $x['base'], $list);
+                $letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+                foreach ($chunks as $i => $chunk) {
                     $bname = $names[$i] ?? ($list[0]['base'] . '-' . ($i + 1));
+                    $rows = [];
+                    foreach (array_values($chunk) as $j => $size) {
+                        $lbl = ($subCount <= 1) ? $bname : ($bname . ($letters[$j] ?? ($j + 1)));
+                        $rows[] = ['name' => $lbl . $suffix, 'count' => $size];
+                    }
                     $out[] = [
                         'base'       => $bname,
                         'lang'       => $list[0]['lang'],
                         'lang_label' => $langLabel,
-                        'total'      => $t,
-                        'rows'       => $this->oqimFixedSubgroups($bname, $t, $subCount, $suffix),
+                        'total'      => array_sum($chunk),
+                        'rows'       => $rows,
                     ];
                 }
             } else {
@@ -11889,6 +11898,21 @@ class ReportController extends Controller
             $out[] = ['name' => $base . ($letters[$i] ?? ($i + 1)) . $suffix, 'count' => $c];
         }
         return $out;
+    }
+
+    /**
+     * OPTIMIZATSIYA uchun: talabalarni minimal sondagi kichik guruhlarga zich joylaydi.
+     * minSub = ceil(T / kichik_guruh_sig'imi) — teng taqsimlab, ortiqcha (oxirgi) guruhchalar
+     * yo'qoladi. Keyin har $subCount tadan bitta asosiy guruhga yig'iladi (a,b yoki a,b,c).
+     * Qaytaradi: har bir element — bitta asosiy guruhning kichik guruh sonlari, masalan
+     * [[10,10,10],[10,10,9],[9]].
+     */
+    private function oqimOptimalSubgroups(int $total, int $subCount, int $subMax, int $subTol): array
+    {
+        $subCap = max(1, $subMax + max(0, $subTol));
+        $minSub = max(1, (int) ceil($total / $subCap));
+        $subSizes = $this->oqimDistribute($total, $minSub);
+        return array_chunk($subSizes, max(1, $subCount));
     }
 
     /**

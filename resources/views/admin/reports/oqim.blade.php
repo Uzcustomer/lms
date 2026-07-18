@@ -275,51 +275,52 @@
             $('#opt-summary').html(s);
 
             var moves = plan.moves || [];
-            var reduce = plan.base_reduce || 0;
+            var reduce = (plan.cur_subgroups || 0) - (plan.opt_subgroups || 0);
             $('#opt-tab-badge').toggle(reduce > 0).text(reduce > 0 ? '−' + reduce : '');
 
             var m = '';
             if (!moves.length) {
-                m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — birlashtiriladigan (kam to\'lgan) guruhlar topilmadi.<br>'
-                  + '<span style="font-weight:500;font-size:12.5px;color:#64748b;">Ko\'proq birlashtirish uchun me\'yor (max) yoki tolerantlik (±) ni oshiring.</span></div>';
+                m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — birlashtiriladigan (kam to\'lgan) guruhcha topilmadi.<br>'
+                  + '<span style="font-weight:500;font-size:12.5px;color:#64748b;">Ko\'proq zichlash uchun me\'yor (max) yoki tolerantlik (±) ni oshiring.</span></div>';
             } else {
-                m += '<div class="opt-moves-title">Solishtirma — ' + moves.length + ' ta joyda guruh kamaytiriladi (qizil = o\'chiriladi):</div>';
+                m += '<div class="opt-moves-title">Solishtirma — ' + moves.length + ' ta joyda kichik guruh kamaytiriladi (qizil = o\'chiriladi):</div>';
                 for (var i = 0; i < moves.length; i++) {
                     var mv = moves[i];
-                    var dropped = {};
-                    (mv.dropped || []).forEach(function(d){ dropped[d] = true; });
+                    var cur = mv.cur_subs || [], nw = mv.new_subs || [];
 
                     m += '<div class="cmp-card">';
                     m += '<div class="cmp-head"><span class="cmp-title">' + esc(mv.course) + ' · ' + esc(mv.lang) + ' til</span>'
                        + '<span class="cmp-meta">' + esc(mv.block) + '</span>'
-                       + '<span class="cmp-count">' + mv.from + ' → ' + mv.to + ' guruh (' + esc(mv.sub) + ')</span></div>';
+                       + '<span class="cmp-count">' + mv.cur_sub_n + ' → ' + mv.new_sub_n + ' guruhcha · ' + mv.from + '→' + mv.to + ' guruh</span></div>';
 
                     m += '<table class="cmp-table"><thead><tr>'
-                       + '<th>Joriy versiya (' + mv.from + ')</th><th style="width:36px;"></th><th>Yangi versiya (' + mv.to + ')</th>'
+                       + '<th>Joriy versiya (' + mv.cur_sub_n + ' guruhcha)</th><th style="width:32px;"></th><th>Yangi versiya (' + mv.new_sub_n + ' guruhcha)</th>'
                        + '</tr></thead><tbody>';
 
-                    var cur = mv.cur_groups || [], nw = mv.new_groups || [];
                     var rows = Math.max(cur.length, nw.length);
                     for (var r = 0; r < rows; r++) {
                         m += '<tr>';
-                        // Joriy
+                        // Joriy — yangidan ortiqcha qatorlar (oxiridan) o'chiriladi
                         if (r < cur.length) {
-                            var isDrop = dropped[cur[r].name];
+                            var isDrop = r >= nw.length;
                             m += '<td class="cmp-cell ' + (isDrop ? 'cmp-drop' : '') + '">'
-                               + esc(cur[r].name) + ' <span class="cmp-num">' + esc(cur[r].total) + ' ta</span>'
+                               + esc(cur[r].name) + ' <span class="cmp-num">' + esc(cur[r].count) + ' ta</span>'
                                + (isDrop ? ' <span class="cmp-x">o\'chiriladi</span>' : '') + '</td>';
                         } else { m += '<td></td>'; }
-                        // Strelka (faqat birinchi qatorda)
                         m += '<td class="cmp-arrow">' + (r === 0 ? '→' : '') + '</td>';
                         // Yangi
                         if (r < nw.length) {
                             m += '<td class="cmp-cell cmp-new">' + esc(nw[r].name)
-                               + ' <span class="cmp-num">' + esc(nw[r].total) + ' ta</span></td>';
+                               + ' <span class="cmp-num">' + esc(nw[r].count) + ' ta</span></td>';
                         } else { m += '<td></td>'; }
                         m += '</tr>';
                     }
                     m += '</tbody></table>';
-                    m += '<div class="cmp-note">« <b>' + (mv.dropped||[]).join(', ') + '</b> » o\'chirilib, talabalar qolgan guruhlarga teng taqsimlanadi.</div>';
+                    var elim = cur.length - nw.length;
+                    if (elim > 0) {
+                        m += '<div class="cmp-note">Oxirgi <b>' + elim + ' ta</b> kichik guruh o\'chirilib, talabalari yuqoridagi guruhchalarga teng taqsimlanadi'
+                           + ((mv.dropped && mv.dropped.length) ? ' (guruh o\'chadi: <b>' + mv.dropped.join(', ') + '</b>)' : '') + '.</div>';
+                    }
                     m += '</div>';
                 }
             }

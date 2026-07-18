@@ -84,12 +84,11 @@
                                 <div><label>±</label><input type="number" id="abc_tol" class="norm-in" value="0" min="0"></div>
                             </div>
                         </div>
-                        <div class="norm-group" style="align-self:stretch;display:flex;align-items:center;">
-                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;font-weight:700;color:#334155;" title="Fakultetlar ALOHIDA qoladi (har birining o'z dekani bor). Bir fakultetning kam to'lgan oqimi qo'shni fakultet (masalan 1↔2-son davolash) oqimiga — joy bo'lsa — ko'chiriladi, shunda oqimlar soni kamayadi. Faqat optimizatsiyalangan holatga qo'llanadi.">
-                                <input type="checkbox" id="merge_faculties" style="width:16px;height:16px;cursor:pointer;">
-                                Fakultetlararo oqim optimizatsiyasi<br><span style="font-weight:500;font-size:10.5px;color:#94a3b8;">(kam to'lgan oqimni qo'shni fakultetga ko'chirish)</span>
-                            </label>
-                        </div>
+                        <label class="ff-toggle" title="Fakultetlar ALOHIDA qoladi (har birining o'z dekani bor). Bir xil yo'nalishli fakultetlar (masalan 1↔2-son davolash) kam to'lgan oqimlari qo'shni fakultet guruhlari bilan me'yorgacha to'ldiriladi. Faqat optimizatsiyalangan holatga qo'llanadi.">
+                            <input type="checkbox" id="merge_faculties">
+                            <span class="ff-slider"></span>
+                            <span class="ff-txt">Fakultetlar ichidan almashtirish<small>bir yo'nalishli fakultetlar oqimlarini to'ldirish</small></span>
+                        </label>
                         <div class="filter-item" style="min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -476,8 +475,13 @@
                     m += '<div class="cmp-card">';
                     m += '<div class="cmp-head"><span class="cmp-title">' + esc(xm.course) + ' · ' + esc(xm.lang) + ' til</span>'
                        + '<span class="cmp-count">' + esc(xm.from_fac) + ' → ' + esc(xm.to_fac) + '</span></div>';
-                    m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
-                       + '→ <b>' + esc(xm.to_fac) + '</b> oqimiga qo\'shiladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta).</div>';
+                    if (xm.distributed) {
+                        m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi oxirgi guruhlar ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
+                           + 'kichik oqim qoldirmaslik uchun boshqa oqimlarga tarqatiladi (guruhchalar biroz kattalashadi).</div>';
+                    } else {
+                        m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
+                           + '→ <b>' + esc(xm.to_fac) + '</b> oqimiga qo\'shiladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta).</div>';
+                    }
                     m += '</div>';
                 }
             }
@@ -559,6 +563,19 @@
         .btn-fix:hover { background: #fffbeb; border-color: #f59e0b; }
 
         .norm-group { background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:5px 10px 6px; }
+
+        /* Fakultetlar ichidan almashtirish — chiroyli toggle */
+        .ff-toggle { display:inline-flex; align-items:center; gap:9px; cursor:pointer; user-select:none; background:#fff; border:1px solid #cbd5e1; border-radius:10px; padding:6px 12px; height:44px; align-self:stretch; transition:border-color .15s, box-shadow .15s; }
+        .ff-toggle:hover { border-color:#94a3b8; }
+        .ff-toggle input { position:absolute; opacity:0; width:0; height:0; }
+        .ff-slider { position:relative; flex:0 0 auto; width:38px; height:21px; background:#cbd5e1; border-radius:999px; transition:background .18s; }
+        .ff-slider::before { content:''; position:absolute; top:2px; left:2px; width:17px; height:17px; background:#fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.25); transition:transform .18s; }
+        .ff-toggle input:checked + .ff-slider { background:linear-gradient(135deg,#2b5ea7,#3b7ddb); }
+        .ff-toggle input:checked + .ff-slider::before { transform:translateX(17px); }
+        .ff-toggle input:focus-visible + .ff-slider { box-shadow:0 0 0 3px rgba(43,94,167,0.25); }
+        .ff-txt { display:flex; flex-direction:column; line-height:1.15; font-size:12.5px; font-weight:700; color:#334155; }
+        .ff-txt small { font-weight:500; font-size:10px; color:#94a3b8; margin-top:1px; }
+        .ff-toggle input:checked ~ .ff-txt { color:#1e4b8a; }
         .norm-title { display:block; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.03em; color:#475569; margin-bottom:3px; }
         .norm-inputs { display:flex; gap:8px; }
         .norm-inputs > div { display:flex; align-items:center; gap:4px; }

@@ -276,10 +276,11 @@ class CurriculumCheckController extends Controller
         $file     = $request->file('file');
         $filePath = $file->store('manual-curricula', 'public');
 
-        // Semestr nomlarini oldindan bir so'rovda olamiz
-        $semesterNames = Semester::where('curriculum_hemis_id', $hemisCurriculum->curricula_hemis_id)
+        // Semestr nomi va level_code larini oldindan bir so'rovda olamiz
+        $semesterInfo = Semester::where('curriculum_hemis_id', $hemisCurriculum->curricula_hemis_id)
             ->whereIn('code', array_filter($semCodes))
-            ->pluck('name', 'code');
+            ->get(['code', 'name', 'level_code'])
+            ->keyBy('code');
 
         DB::beginTransaction();
         try {
@@ -287,10 +288,13 @@ class CurriculumCheckController extends Controller
             $import          = null;
 
             foreach ($semCodes as $i => $semCode) {
+                $semInfo   = $semCode ? ($semesterInfo[$semCode] ?? null) : null;
+                $levelCode = $semInfo?->level_code ?? $request->level_code;
+
                 $typeLabel = $request->type === 'namunaviy' ? 'namunaviy' : 'ishchi';
                 $name = $hemisCurriculum->name . ' — ' . $typeLabel;
                 if ($request->type === 'ishchi' && $semCode) {
-                    $semName = $semesterNames[$semCode] ?? ($semCode . '-semestr');
+                    $semName = $semInfo?->name ?? ($semCode . '-semestr');
                     $name .= ' (' . $semName . ')';
                 }
 
@@ -301,7 +305,7 @@ class CurriculumCheckController extends Controller
                     'specialty_name'     => $specialty?->name,
                     'plan_year'          => $hemisCurriculum->education_year_name,
                     'curricula_hemis_id' => $hemisCurriculum->curricula_hemis_id,
-                    'level_code'         => $request->level_code,
+                    'level_code'         => $levelCode,
                     'semester_code'      => $semCode,
                     'education_type_name'=> $hemisCurriculum->education_type_name,
                     'education_period'   => $hemisCurriculum->education_period,

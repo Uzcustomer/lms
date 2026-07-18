@@ -582,12 +582,25 @@
                                     </div>
                                 </div>
 
-                                {{-- Semestr tanlash (checkboxlar) --}}
+                                {{-- Kurs va o'quv yili --}}
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Kurs</label>
+                                        <select id="batchKursSel"
+                                                class="w-full rounded-md border-gray-300 shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100">
+                                            <option value="">Yuklanmoqda...</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">O'quv yili</label>
+                                        <p id="batchKursYear"
+                                           class="text-sm font-semibold text-gray-700 px-3 py-[9px] rounded-md bg-gray-50 border border-gray-200">—</p>
+                                    </div>
+                                </div>
+
+                                {{-- Semestrlar (kurs tanlanganda avtomatik belgilanadi) --}}
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
-                                        Qaysi semestr(lar) uchun yuklash?
-                                        <span class="font-normal text-gray-400">— bir fayl bir nechta semestr uchun alohida saqlanadi</span>
-                                    </label>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1.5">Semestrlar</label>
                                     <div id="batchSemesterCheckboxes"
                                          class="rounded-md border border-gray-200 px-3 py-2.5 bg-gray-50 space-y-2 min-h-[44px]">
                                         <p class="text-sm text-gray-400 italic">Yuklanmoqda...</p>
@@ -918,24 +931,69 @@
                                         document.querySelector('input[name="type"][value="' + type + '"]').checked = true;
                                         document.getElementById('batchUploadModal').classList.remove('hidden');
 
-                                        const semBox = document.getElementById('batchSemesterCheckboxes');
-                                        semBox.innerHTML = '<p class="text-sm text-gray-400 italic">Yuklanmoqda...</p>';
+                                        const semBox  = document.getElementById('batchSemesterCheckboxes');
+                                        const kursSel = document.getElementById('batchKursSel');
+                                        const kursYearEl = document.getElementById('batchKursYear');
+
+                                        // Kohortning joriy kursi va o'quv yilini data-atributlardan olamiz
+                                        const curLevelName = this.dataset.levelname || '';
+                                        const curKurs = parseInt(curLevelName.match(/(\d+)/)?.[1]) || 1;
+                                        const baseYear = parseInt((this.dataset.year || '').match(/(\d{4})/)?.[1]) || null;
+
+                                        semBox.innerHTML  = '<p class="text-sm text-gray-400 italic">Yuklanmoqda...</p>';
+                                        kursSel.innerHTML = '<option value="">Yuklanmoqda...</option>';
+                                        kursSel.disabled  = true;
                                         try {
                                             const sems = await fetchOpts('semesters_for_curriculum', {curriculum_id: id});
                                             if (sems.length) {
+                                                // Checkboxlar — dastlab hech biri belgilanmagan
                                                 semBox.innerHTML = sems.map(s =>
                                                     '<label class="flex items-center gap-2 text-sm cursor-pointer select-none">' +
-                                                    '<input type="checkbox" name="semester_codes[]" value="' + escHtml(s.code) + '" checked' +
+                                                    '<input type="checkbox" name="semester_codes[]" value="' + escHtml(s.code) + '"' +
                                                     ' class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">' +
                                                     '<span>' + escHtml(s.name) + '</span>' +
-                                                    (s.current ? ' <span class="text-xs text-green-600 font-medium">★ joriy semestr</span>' : '') +
+                                                    (s.current ? ' <span class="text-xs text-green-600 font-medium">★ joriy</span>' : '') +
                                                     '</label>'
                                                 ).join('');
+
+                                                // Kurs tanlash (1 dan N kursga)
+                                                const numKurs = Math.ceil(sems.length / 2);
+                                                kursSel.innerHTML = Array.from({length: numKurs}, (_, i) => {
+                                                    const k = i + 1;
+                                                    return '<option value="' + k + '">' + k + '-kurs</option>';
+                                                }).join('');
+                                                kursSel.disabled = false;
+
+                                                // Kurs o'zgarganda: tegishli 2 semestrni avtomatik belgilash
+                                                kursSel.onchange = function () {
+                                                    const k = parseInt(this.value);
+                                                    if (!k) return;
+                                                    const s1 = k * 2 - 1, s2 = k * 2;
+                                                    semBox.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                                                        const v = parseInt(cb.value);
+                                                        cb.checked = (v === s1 || v === s2);
+                                                    });
+                                                    if (kursYearEl && baseYear !== null) {
+                                                        const offset = k - curKurs;
+                                                        const y = baseYear + offset;
+                                                        kursYearEl.textContent = y + '-' + (y + 1);
+                                                    }
+                                                };
+
+                                                // Joriy kursni default qilib tanlaymiz va semestrlarni belgilaymiz
+                                                kursSel.value = String(curKurs);
+                                                if (!kursSel.options[kursSel.selectedIndex]?.value) kursSel.value = '1';
+                                                kursSel.dispatchEvent(new Event('change'));
+
                                             } else {
-                                                semBox.innerHTML = '<p class="text-sm text-gray-400 italic">Semestrlar topilmadi</p>';
+                                                semBox.innerHTML  = '<p class="text-sm text-gray-400 italic">Semestrlar topilmadi</p>';
+                                                kursSel.innerHTML = '<option value="">Topilmadi</option>';
+                                                kursSel.disabled  = false;
                                             }
                                         } catch (e) {
-                                            semBox.innerHTML = '<p class="text-sm text-red-500 italic">Xatolik yuz berdi</p>';
+                                            semBox.innerHTML  = '<p class="text-sm text-red-500 italic">Xatolik yuz berdi</p>';
+                                            kursSel.innerHTML = '<option value="">Xatolik</option>';
+                                            kursSel.disabled  = false;
                                         }
                                     });
                                 });

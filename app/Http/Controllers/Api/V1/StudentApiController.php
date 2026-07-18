@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicRecord;
+use App\Models\AdmissionIndicator;
 use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Services\HemisService;
@@ -33,6 +34,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class StudentApiController extends Controller
@@ -199,6 +201,7 @@ class StudentApiController extends Controller
     public function profile(Request $request): JsonResponse
     {
         $student = $request->user();
+        $admissionInfo = null;
 
         // Calculate course number from semester name (e.g. "8-semestr" -> kurs 4)
         $course = null;
@@ -214,6 +217,14 @@ class StudentApiController extends Controller
                 ? $currentYear - $enterYear + 1
                 : $currentYear - $enterYear;
         }
+        if (Schema::hasTable('admission_indicators')) {
+            $admissionInfo = AdmissionIndicator::query()
+                ->where('student_id', $student->id)
+                ->orderByDesc('qabul_yili')
+                ->orderByDesc('id')
+                ->first(['qabul_yili', 'toplagan_bali']);
+        }
+
 
         return response()->json([
             'data' => [
@@ -251,6 +262,8 @@ class StudentApiController extends Controller
                 'payment_form_name' => $student->payment_form_name,
                 'is_graduate' => $student->is_graduate,
             ],
+                'admission_year' => $admissionInfo?->qabul_yili,
+                'admission_score' => $admissionInfo?->toplagan_bali,
         ]);
     }
 

@@ -11311,10 +11311,14 @@ class ReportController extends Controller
         $dekanFacultyId = get_dekan_faculty_id();
 
         // ---- Talabalarni guruh kesimida sanaymiz ----
+        // Faqat FAOL guruhlar (g.active) — eski/nofaol guruhga biriktirilib qolgan
+        // talabalar "fantom" guruh sifatida chiqmasligi uchun.
         $q = DB::table('students as s')
             ->join('departments as d', 's.department_id', '=', 'd.department_hemis_id')
+            ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
             ->where('d.structure_type_code', 11)
             ->where('d.active', true)
+            ->where('g.active', true)
             ->where('s.student_status_code', 11) // faqat faol (o'qiyotgan) talabalar
             ->whereNotNull('s.group_id')
             ->select(

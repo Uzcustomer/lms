@@ -44,6 +44,10 @@
                             <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">{{ $savedComparisons->count() }}</span>
                         @endif
                     </button>
+                    <button type="button" data-tab="yonalish"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        Yo'nalish bo'yicha
+                    </button>
                 </nav>
             </div>
 
@@ -466,6 +470,121 @@
 
             </div> {{-- /panel: rejalar --}}
 
+            {{-- ===== PANEL: Yo'nalish bo'yicha ===== --}}
+            <div data-panel="yonalish" class="hidden">
+                <div class="bg-white shadow-sm sm:rounded-lg mb-6">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">Yo'nalish bo'yicha rejalar holati</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Yo'nalishni tanlang — har bir kohort (kurs)dagi talabalar, joriy semestri va yuklangan
+                            namunaviy/ishchi rejalar bir jadvalda ko'rinadi.
+                        </p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Ta'lim turi</label>
+                                <select id="batch-education-type" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Tanlang</option>
+                                    @foreach($educationTypes as $et)
+                                        <option value="{{ $et->education_type_code }}">{{ $et->education_type_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Fakultet</label>
+                                <select id="batch-faculty" disabled class="w-full rounded-md border-gray-300 shadow-sm text-sm disabled:bg-gray-100">
+                                    <option value="">Avval ta'lim turini tanlang</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Yo'nalish</label>
+                                <select id="batch-specialty" disabled class="w-full rounded-md border-gray-300 shadow-sm text-sm disabled:bg-gray-100">
+                                    <option value="">Avval fakultetni tanlang</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="batch-table-wrap" class="overflow-x-auto hidden">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Kohort (reja)</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Joriy kurs</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Joriy semestr</th>
+                                    <th class="px-3 py-2 text-right font-medium text-gray-600">Faol talabalar</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Namunaviy reja</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Ishchi reja</th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600">Yuklash</th>
+                                </tr>
+                                </thead>
+                                <tbody id="batch-tbody" class="divide-y divide-gray-100">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="batch-empty" class="hidden text-center text-sm text-gray-500 py-6">
+                            Bu yo'nalishda faol talabalar topilmadi.
+                        </div>
+                        <div id="batch-loading" class="hidden text-center text-sm text-gray-500 py-6">
+                            Yuklanmoqda...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Yuklash modali (Yo'nalish bo'yicha tab uchun) --}}
+            <div id="batchUploadModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+                        <form id="batchUploadForm" method="POST"
+                              action="{{ route('admin.oquv-reja.store') }}"
+                              enctype="multipart/form-data">
+                            @csrf
+                            <input type="hidden" name="curricula_hemis_id" id="batchCurriculumId">
+                            <input type="hidden" name="level_code" id="batchLevelCode">
+                            <input type="hidden" name="semester_code" id="batchSemesterCode">
+
+                            <div class="flex items-center justify-between px-6 py-4 border-b">
+                                <h3 class="text-base font-semibold text-gray-800" id="batchModalTitle">O'quv reja yuklash</h3>
+                                <button type="button" class="js-batch-close text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                            </div>
+
+                            <div class="px-6 py-4 space-y-4">
+                                <div class="text-xs text-gray-500 bg-gray-50 rounded px-3 py-2" id="batchCurriculumInfo"></div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Reja turi</label>
+                                    <div class="flex gap-4">
+                                        <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                                            <input type="radio" name="type" value="namunaviy" class="text-blue-600">
+                                            Namunaviy
+                                        </label>
+                                        <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                                            <input type="radio" name="type" value="ishchi" class="text-purple-600" checked>
+                                            Ishchi
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Excel fayl (.xlsx)</label>
+                                    <input type="file" name="file" required accept=".xlsx,.xls"
+                                           class="w-full text-sm text-gray-700 border border-gray-300 rounded-md">
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end gap-2 px-6 py-4 border-t bg-gray-50 rounded-b-lg">
+                                <button type="button" class="js-batch-close px-4 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700">
+                                    Bekor qilish
+                                </button>
+                                <button type="submit" class="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700">
+                                    Yuklash
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             {{-- ===== PANEL: Solishtirish ===== --}}
             <div data-panel="solishtirish" class="hidden">
 
@@ -648,9 +767,138 @@
 
                     // Boshlang'ich holat (URL hash bo'yicha)
                     const hash = (location.hash || '').replace('#', '');
-                    activateMainTab(hash === 'solishtirish' ? 'solishtirish' : 'rejalar');
+                    const validHashes = ['solishtirish', 'yonalish'];
+                    activateMainTab(validHashes.includes(hash) ? hash : 'rejalar');
                     const firstSub = document.querySelector('.sub-tab');
                     if (firstSub) firstSub.click();
+
+                    // ===== Yo'nalish bo'yicha tab =====
+                    (function () {
+                        const optionsUrl = @json(route('admin.oquv-reja.options'));
+                        const batchUrl   = @json(route('admin.oquv-reja.batch-view'));
+                        const showUrl    = @json(route('admin.oquv-reja.show', '__ID__'));
+
+                        const etSel  = document.getElementById('batch-education-type');
+                        const facSel = document.getElementById('batch-faculty');
+                        const spSel  = document.getElementById('batch-specialty');
+                        const tbody  = document.getElementById('batch-tbody');
+                        const wrap   = document.getElementById('batch-table-wrap');
+                        const empty  = document.getElementById('batch-empty');
+                        const loading = document.getElementById('batch-loading');
+
+                        async function fetchOpts(list, params = {}) {
+                            const p = new URLSearchParams({list, ...params});
+                            const r = await fetch(optionsUrl + '?' + p, {headers: {'Accept': 'application/json'}});
+                            return r.json();
+                        }
+
+                        etSel.addEventListener('change', async function () {
+                            facSel.innerHTML = '<option value="">Yuklanmoqda...</option>';
+                            facSel.disabled = true;
+                            spSel.innerHTML = '<option value="">Avval fakultetni tanlang</option>';
+                            spSel.disabled = true;
+                            wrap.classList.add('hidden'); empty.classList.add('hidden'); tbody.innerHTML = '';
+                            if (!this.value) { facSel.innerHTML = '<option value="">Tanlang</option>'; return; }
+                            const items = await fetchOpts('faculties', {education_type_code: this.value});
+                            facSel.innerHTML = '<option value="">Tanlang</option>';
+                            items.forEach(i => {
+                                const o = document.createElement('option');
+                                o.value = i.id; o.textContent = i.name;
+                                facSel.appendChild(o);
+                            });
+                            facSel.disabled = false;
+                        });
+
+                        facSel.addEventListener('change', async function () {
+                            spSel.innerHTML = '<option value="">Yuklanmoqda...</option>';
+                            spSel.disabled = true;
+                            wrap.classList.add('hidden'); empty.classList.add('hidden'); tbody.innerHTML = '';
+                            if (!this.value) return;
+                            const params = {department_id: this.value};
+                            if (etSel.value) params.education_type_code = etSel.value;
+                            const items = await fetchOpts('specialties', params);
+                            spSel.innerHTML = '<option value="">Tanlang</option>';
+                            items.forEach(i => {
+                                const o = document.createElement('option');
+                                o.value = i.id;
+                                o.textContent = (i.code ? i.code + ' — ' : '') + i.name + (i.student_count ? ' (' + i.student_count + ')' : '');
+                                spSel.appendChild(o);
+                            });
+                            spSel.disabled = false;
+                        });
+
+                        spSel.addEventListener('change', async function () {
+                            wrap.classList.add('hidden'); empty.classList.add('hidden'); tbody.innerHTML = '';
+                            if (!this.value) return;
+                            loading.classList.remove('hidden');
+                            try {
+                                const rows = await (await fetch(batchUrl + '?specialty_id=' + this.value, {headers: {'Accept': 'application/json'}})).json();
+                                loading.classList.add('hidden');
+                                if (!rows.length) { empty.classList.remove('hidden'); return; }
+
+                                tbody.innerHTML = rows.map(r => {
+                                    const nam = r.uploaded.filter(u => u.type === 'namunaviy');
+                                    const ish = r.uploaded.filter(u => u.type === 'ishchi');
+
+                                    function uploadedCell(list) {
+                                        if (!list.length) return '<span class="text-gray-400">—</span>';
+                                        return list.map(u =>
+                                            '<a href="' + showUrl.replace('__ID__', u.id) + '" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200 mr-1">✓ ' + escHtml(u.name.length > 35 ? u.name.slice(0,35)+'…' : u.name) + '</a>'
+                                        ).join('');
+                                    }
+
+                                    const btnNam = '<button type="button" class="js-batch-upload px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 mr-1" data-id="' + r.curriculum_id + '" data-type="namunaviy" data-level="' + (r.level_code||'') + '" data-sem="' + (r.semester_code||'') + '" data-name="' + escHtml(r.curriculum_name) + '" data-year="' + (r.education_year||'') + '" data-levelname="' + escHtml(r.level_name||'') + '" data-semname="' + escHtml(r.semester_name||'') + '">+ Namunaviy</button>';
+                                    const btnIsh = '<button type="button" class="js-batch-upload px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700" data-id="' + r.curriculum_id + '" data-type="ishchi" data-level="' + (r.level_code||'') + '" data-sem="' + (r.semester_code||'') + '" data-name="' + escHtml(r.curriculum_name) + '" data-year="' + (r.education_year||'') + '" data-levelname="' + escHtml(r.level_name||'') + '" data-semname="' + escHtml(r.semester_name||'') + '">+ Ishchi</button>';
+
+                                    return '<tr class="hover:bg-gray-50">' +
+                                        '<td class="px-3 py-2 text-gray-800 text-xs max-w-xs"><div class="font-medium">' + escHtml(r.curriculum_name) + '</div>' +
+                                            (r.education_year ? '<div class="text-gray-400">' + r.education_year + (r.education_type ? ' · ' + r.education_type : '') + '</div>' : '') +
+                                        '</td>' +
+                                        '<td class="px-3 py-2 font-semibold">' + escHtml(r.level_name || r.level_code || '—') + '</td>' +
+                                        '<td class="px-3 py-2">' + escHtml(r.semester_name || r.semester_code || '—') + '</td>' +
+                                        '<td class="px-3 py-2 text-right">' + r.student_count + '</td>' +
+                                        '<td class="px-3 py-2">' + uploadedCell(nam) + '</td>' +
+                                        '<td class="px-3 py-2">' + uploadedCell(ish) + '</td>' +
+                                        '<td class="px-3 py-2 text-center whitespace-nowrap">' + btnNam + btnIsh + '</td>' +
+                                        '</tr>';
+                                }).join('');
+
+                                wrap.classList.remove('hidden');
+
+                                // Yuklash tugmalari
+                                tbody.querySelectorAll('.js-batch-upload').forEach(btn => {
+                                    btn.addEventListener('click', function () {
+                                        document.getElementById('batchCurriculumId').value = this.dataset.id;
+                                        document.getElementById('batchLevelCode').value = this.dataset.level;
+                                        document.getElementById('batchSemesterCode').value = this.dataset.sem;
+                                        document.getElementById('batchModalTitle').textContent =
+                                            (this.dataset.type === 'namunaviy' ? 'Namunaviy' : 'Ishchi') + " o'quv reja yuklash";
+                                        document.getElementById('batchCurriculumInfo').textContent =
+                                            this.dataset.name + (this.dataset.year ? ' (' + this.dataset.year + ')' : '') +
+                                            (this.dataset.levelname ? ' · ' + this.dataset.levelname : '') +
+                                            (this.dataset.semname ? ' · ' + this.dataset.semname : '');
+                                        document.querySelector('input[name="type"][value="' + this.dataset.type + '"]').checked = true;
+                                        document.getElementById('batchUploadModal').classList.remove('hidden');
+                                    });
+                                });
+                            } catch (e) {
+                                loading.classList.add('hidden');
+                                empty.textContent = 'Xatolik yuz berdi.';
+                                empty.classList.remove('hidden');
+                            }
+                        });
+
+                        // Modal yopish
+                        document.querySelectorAll('.js-batch-close').forEach(b =>
+                            b.addEventListener('click', () => document.getElementById('batchUploadModal').classList.add('hidden')));
+                        document.getElementById('batchUploadModal').addEventListener('click', function (e) {
+                            if (e.target === this) this.classList.add('hidden');
+                        });
+
+                        function escHtml(s) {
+                            return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                        }
+                    })();
                 })();
             </script>
 

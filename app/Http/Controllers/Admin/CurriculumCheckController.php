@@ -249,61 +249,112 @@ class CurriculumCheckController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:namunaviy,ishchi',
+            'type'            => 'required|in:namunaviy,ishchi',
             'curricula_hemis_id' => 'required|exists:curricula,curricula_hemis_id',
-            'level_code' => 'nullable|string|max:20',
-            'semester_code' => 'nullable|string|max:20',
-            'file' => 'required|file|mimes:xlsx,xls|max:10240',
+            'level_code'      => 'nullable|string|max:20',
+            'semester_code'   => 'nullable|string|max:20',   // cascade tab (bitta select)
+            'semester_codes'  => 'nullable|array',            // batch modal (checkboxlar)
+            'semester_codes.*' => 'nullable|string|max:20',
+            'file'            => 'required|file|mimes:xlsx,xls|max:10240',
         ]);
 
+        // Batch modal semester_codes[] yoki cascade tab semester_code ni birlashtirish
+        $semCodes = array_values(array_unique(array_filter(
+            (array) ($request->input('semester_codes') ?: ($request->filled('semester_code') ? [$request->semester_code] : [])),
+            fn($s) => $s !== null && $s !== ''
+        )));
+        if (empty($semCodes)) {
+            $semCodes = [null]; // semestr ko'rsatilmagan holat (namunaviy reja va h.k.)
+        }
+
         $hemisCurriculum = Curriculum::where('curricula_hemis_id', $request->curricula_hemis_id)->first();
-        // Yo'nalish kodi/nomini shu rejaga biriktirilgan talabadan olamiz
-        // (HEMIS specialty yozuvlari ba'zan dublikat/nomuvofiq bo'lgani uchun)
         $specialty = Student::where('curriculum_id', $hemisCurriculum->curricula_hemis_id)
             ->whereNotNull('specialty_code')
             ->select('specialty_code as code', 'specialty_name as name')
             ->first();
 
-        $typeLabel = $request->type === 'namunaviy' ? 'namunaviy' : 'ishchi';
-        $name = $hemisCurriculum->name . ' — ' . $typeLabel;
-        if ($request->type === 'ishchi' && $request->filled('semester_code')) {
-            $semesterName = Semester::where('curriculum_hemis_id', $hemisCurriculum->curricula_hemis_id)
-                ->where('code', $request->semester_code)
-                ->value('name');
-            $name .= ' (' . ($semesterName ?: $request->semester_code . '-semestr') . ')';
-        }
+        $file     = $request->file('file');
+        $filePath = $file->store('manual-curricula', 'public');
 
-        $file = $request->file('file');
+        // Semestr nomlarini oldindan bir so'rovda olamiz
+        $semesterNames = Semester::where('curriculum_hemis_id', $hemisCurriculum->curricula_hemis_id)
+            ->whereIn('code', array_filter($semCodes))
+            ->pluck('name', 'code');
 
         DB::beginTransaction();
         try {
-            $curriculum = ManualCurriculum::create([
-                'type' => $request->type,
-                'name' => $name,
-                'specialty_code' => $specialty?->code,
-                'specialty_name' => $specialty?->name,
-                'plan_year' => $hemisCurriculum->education_year_name,
-                'curricula_hemis_id' => $hemisCurriculum->curricula_hemis_id,
-                'level_code' => $request->level_code,
-                'semester_code' => $request->semester_code,
-                'education_type_name' => $hemisCurriculum->education_type_name,
-                'education_period' => $hemisCurriculum->education_period,
-                'file_original_name' => $file->getClientOriginalName(),
-                'file_path' => $file->store('manual-curricula', 'public'),
-                'created_by' => Auth::id(),
-            ]);
+            $firstCurriculum = null;
+            $import          = null;
 
-            $import = new ManualCurriculumImport($curriculum);
-            Excel::import($import, $file);
+            foreach ($semCodes as $i => $semCode) {
+                $typeLabel = $request->type === 'namunaviy' ? 'namunaviy' : 'ishchi';
+                $name = $hemisCurriculum->name . ' — ' . $typeLabel;
+                if ($request->type === 'ishchi' && $semCode) {
+                    $semName = $semesterNames[$semCode] ?? ($semCode . '-semestr');
+                    $name .= ' (' . $semName . ')';
+                }
 
-            if (!empty($import->errors)) {
-                DB::rollBack();
-                return back()->with('error', implode(' ', $import->errors));
+                $curriculum = ManualCurriculum::create([
+                    'type'               => $request->type,
+                    'name'               => $name,
+                    'specialty_code'     => $specialty?->code,
+                    'specialty_name'     => $specialty?->name,
+                    'plan_year'          => $hemisCurriculum->education_year_name,
+                    'curricula_hemis_id' => $hemisCurriculum->curricula_hemis_id,
+                    'level_code'         => $request->level_code,
+                    'semester_code'      => $semCode,
+                    'education_type_name'=> $hemisCurriculum->education_type_name,
+                    'education_period'   => $hemisCurriculum->education_period,
+                    'file_original_name' => $file->getClientOriginalName(),
+                    'file_path'          => $filePath,
+                    'created_by'         => Auth::id(),
+                ]);
+
+                if ($i === 0) {
+                    // Birinchi semestr: Exceldan import
+                    $import = new ManualCurriculumImport($curriculum);
+                    Excel::import($import, $file);
+
+                    if (!empty($import->errors)) {
+                        DB::rollBack();
+                        return back()->with('error', implode(' ', $import->errors));
+                    }
+                    $firstCurriculum = $curriculum;
+                } else {
+                    // Qo'shimcha semestrlar: birinchi semestrdan fanlarni nusxalaymiz
+                    $now  = now();
+                    $rows = $firstCurriculum->subjects()->get()->map(fn($s) => [
+                        'manual_curriculum_id' => $curriculum->id,
+                        'block'        => $s->block,
+                        'subject_code' => $s->subject_code,
+                        'subject_name' => $s->subject_name,
+                        'reference_name' => $s->reference_name,
+                        'kurs'         => $s->kurs,
+                        'semester'     => $s->semester,
+                        'total_hours'  => $s->total_hours,
+                        'audit_total'  => $s->audit_total,
+                        'lecture'      => $s->lecture,
+                        'practice'     => $s->practice,
+                        'laboratory'   => $s->laboratory,
+                        'seminar'      => $s->seminar,
+                        'independent'  => $s->independent,
+                        'credit'       => $s->credit,
+                        'note'         => $s->note,
+                        'created_at'   => $now,
+                        'updated_at'   => $now,
+                    ])->toArray();
+                    ManualCurriculumSubject::insert($rows);
+                }
             }
 
             DB::commit();
-            return redirect()->route('admin.oquv-reja.show', $curriculum)
-                ->with('success', "O'quv reja yuklandi: {$import->imported} ta fan qatori o'qib olindi.");
+
+            $semCount = count($semCodes);
+            $msg = $semCount > 1
+                ? "{$semCount} ta semestr uchun o'quv reja yuklandi: {$import->imported} ta fan qatori."
+                : "O'quv reja yuklandi: {$import->imported} ta fan qatori o'qib olindi.";
+
+            return redirect()->route('admin.oquv-reja.show', $firstCurriculum)->with('success', $msg);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("O'quv reja import xatolik: " . $e->getMessage());

@@ -582,16 +582,16 @@
                                     </div>
                                 </div>
 
-                                {{-- Semestr tanlash --}}
+                                {{-- Semestr tanlash (checkboxlar) --}}
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        Bu yuklama qaysi semestr uchun?
-                                        <span class="font-normal text-gray-400">(keyingi yil uchun boshqa semestrni tanlang)</span>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                                        Qaysi semestr(lar) uchun yuklash?
+                                        <span class="font-normal text-gray-400">— bir fayl bir nechta semestr uchun alohida saqlanadi</span>
                                     </label>
-                                    <select name="semester_code" id="batchSemesterSelect"
-                                            class="w-full rounded-md border-gray-300 shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">Yuklanmoqda...</option>
-                                    </select>
+                                    <div id="batchSemesterCheckboxes"
+                                         class="rounded-md border border-gray-200 px-3 py-2.5 bg-gray-50 space-y-2 min-h-[44px]">
+                                        <p class="text-sm text-gray-400 italic">Yuklanmoqda...</p>
+                                    </div>
                                 </div>
 
                                 {{-- Excel fayl --}}
@@ -918,29 +918,41 @@
                                         document.querySelector('input[name="type"][value="' + type + '"]').checked = true;
                                         document.getElementById('batchUploadModal').classList.remove('hidden');
 
-                                        const semSel = document.getElementById('batchSemesterSelect');
-                                        semSel.innerHTML = '<option value="">Yuklanmoqda...</option>';
-                                        semSel.disabled = true;
+                                        const semBox = document.getElementById('batchSemesterCheckboxes');
+                                        semBox.innerHTML = '<p class="text-sm text-gray-400 italic">Yuklanmoqda...</p>';
                                         try {
                                             const sems = await fetchOpts('semesters_for_curriculum', {curriculum_id: id});
                                             if (sems.length) {
-                                                semSel.innerHTML = sems.map(s =>
-                                                    '<option value="' + escHtml(s.code) + '"' + (s.code == currentSem ? ' selected' : '') + '>' +
-                                                    escHtml(s.name) + (s.current ? ' ★' : '') + '</option>'
+                                                semBox.innerHTML = sems.map(s =>
+                                                    '<label class="flex items-center gap-2 text-sm cursor-pointer select-none">' +
+                                                    '<input type="checkbox" name="semester_codes[]" value="' + escHtml(s.code) + '" checked' +
+                                                    ' class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">' +
+                                                    '<span>' + escHtml(s.name) + '</span>' +
+                                                    (s.current ? ' <span class="text-xs text-green-600 font-medium">★ joriy semestr</span>' : '') +
+                                                    '</label>'
                                                 ).join('');
                                             } else {
-                                                semSel.innerHTML = '<option value="">Semestrlar topilmadi</option>';
+                                                semBox.innerHTML = '<p class="text-sm text-gray-400 italic">Semestrlar topilmadi</p>';
                                             }
                                         } catch (e) {
-                                            semSel.innerHTML = '<option value="">Xatolik yuz berdi</option>';
+                                            semBox.innerHTML = '<p class="text-sm text-red-500 italic">Xatolik yuz berdi</p>';
                                         }
-                                        semSel.disabled = false;
                                     });
                                 });
                             } catch (e) {
                                 loading.classList.add('hidden');
                                 empty.textContent = 'Xatolik yuz berdi.';
                                 empty.classList.remove('hidden');
+                            }
+                        });
+
+                        // Yuborishdan oldin kamida bitta semestr tanlanganini tekshirish
+                        document.getElementById('batchUploadForm').addEventListener('submit', function (e) {
+                            const checked = this.querySelectorAll('input[name="semester_codes[]"]:checked');
+                            if (!checked.length) {
+                                e.preventDefault();
+                                document.getElementById('batchSemesterCheckboxes').classList.add('ring-1', 'ring-red-400');
+                                setTimeout(() => document.getElementById('batchSemesterCheckboxes').classList.remove('ring-1', 'ring-red-400'), 2000);
                             }
                         });
 

@@ -837,8 +837,10 @@
                                 if (!rows.length) { empty.classList.remove('hidden'); return; }
 
                                 tbody.innerHTML = rows.map(r => {
-                                    const nam = r.uploaded.filter(u => u.type === 'namunaviy');
-                                    const ish = r.uploaded.filter(u => u.type === 'ishchi');
+                                    // Semester filteri: semester_code mos yoki bo'sh (barcha semestrlarga tegishli)
+                                    const semMatch = u => !u.semester_code || u.semester_code === r.semester_code;
+                                    const nam = r.uploaded.filter(u => u.type === 'namunaviy' && semMatch(u));
+                                    const ish = r.uploaded.filter(u => u.type === 'ishchi'    && semMatch(u));
 
                                     function uploadedCell(list) {
                                         if (!list.length) return '<span class="text-gray-400">—</span>';
@@ -852,7 +854,7 @@
 
                                     return '<tr class="hover:bg-gray-50">' +
                                         '<td class="px-3 py-2 text-gray-800 text-xs max-w-xs"><div class="font-medium">' + escHtml(r.curriculum_name) + '</div>' +
-                                            (r.education_year ? '<div class="text-gray-400">' + r.education_year + (r.education_type ? ' · ' + r.education_type : '') + '</div>' : '') +
+                                            (r.education_year ? '<div class="text-gray-400">' + escHtml(r.education_year) + (r.education_type ? ' · ' + escHtml(r.education_type) : '') + '</div>' : '') +
                                         '</td>' +
                                         '<td class="px-3 py-2 font-semibold">' + escHtml(r.level_name || r.level_code || '—') + '</td>' +
                                         '<td class="px-3 py-2">' + escHtml(r.semester_name || r.semester_code || '—') + '</td>' +

@@ -62,14 +62,25 @@ class CurriculumCheckController extends Controller
     public function options(Request $request)
     {
         return response()->json(match ($request->input('list')) {
-            // HEMIS curricula jadvalidan to'g'ridan-to'g'ri qidiruv (kelajak rejalari rejimi uchun)
+            // HEMIS curricula jadvalidan to'g'ridan-to'g'ri qidiruv (kelajak rejalari rejimi uchun).
+            // q parametri ham curriculum.name, ham specialty.code/name bo'yicha qidiradi.
             'all_curricula' => Curriculum::query()
-                ->when($request->filled('q'), fn($q) => $q->where('name', 'like', '%' . $request->q . '%'))
-                ->when($request->filled('education_year_code'), fn($q) => $q->where('education_year_code', $request->education_year_code))
-                ->when($request->filled('education_type_code'), fn($q) => $q->where('education_type_code', $request->education_type_code))
-                ->select('curricula_hemis_id as id', 'name', 'education_year_name', 'education_type_name', 'education_period', 'semester_count')
-                ->orderByDesc('education_year_code')
-                ->orderBy('name')
+                ->leftJoin('specialties', 'specialties.specialty_hemis_id', '=', 'curricula.specialty_hemis_id')
+                ->when($request->filled('q'), function ($q) use ($request) {
+                    $term = '%' . $request->q . '%';
+                    $q->where(fn($sub) => $sub
+                        ->where('curricula.name', 'like', $term)
+                        ->orWhere('specialties.code', 'like', $term)
+                        ->orWhere('specialties.name', 'like', $term)
+                    );
+                })
+                ->when($request->filled('education_year_code'), fn($q) => $q->where('curricula.education_year_code', $request->education_year_code))
+                ->when($request->filled('education_type_code'), fn($q) => $q->where('curricula.education_type_code', $request->education_type_code))
+                ->select('curricula.curricula_hemis_id as id', 'curricula.name', 'curricula.education_year_name',
+                    'curricula.education_type_name', 'curricula.education_period', 'curricula.semester_count',
+                    'specialties.code as specialty_code', 'specialties.name as specialty_name')
+                ->orderByDesc('curricula.education_year_code')
+                ->orderBy('curricula.name')
                 ->limit(50)
                 ->get(),
 
@@ -300,6 +311,56 @@ class CurriculumCheckController extends Controller
         $slug = \Illuminate\Support\Str::slug($curriculum->name);
         $fileName = "{$slug}-{$format}-" . now()->format('Y-m-d') . '.xlsx';
         return \Maatwebsite\Excel\Facades\Excel::download(new ManualCurriculumExport($curriculum, $format), $fileName);
+    }
+
+    /**
+     * Yo'nalish bo'yicha barcha kurslar (kohortlar) va yuklangan rejalar holati.
+     * specialty_id (students.specialty_id) bo'yicha faol talabalar guruhlash asosida quriladi.
+     */
+    public function batchView(Request $request)
+    {
+        $request->validate(['specialty_id' => 'required|integer']);
+
+        // Faol talabalar (status 11) bo'yicha har bir kohort (curriculum_id + level) uchun ma'lumot
+        $rows = Student::query()
+            ->where('specialty_id', $request->specialty_id)
+            ->where('student_status_code', 11)
+            ->whereNotNull('curriculum_id')
+            ->selectRaw('curriculum_id, level_code, level_name, semester_code, semester_name, count(*) as student_count')
+            ->groupBy('curriculum_id', 'level_code', 'level_name', 'semester_code', 'semester_name')
+            ->orderBy('level_code')
+            ->orderByDesc('student_count')
+            ->get();
+
+        $curricIds = $rows->pluck('curriculum_id')->filter()->unique()->values()->all();
+
+        $curriculaInfo = Curriculum::whereIn('curricula_hemis_id', $curricIds)
+            ->select('curricula_hemis_id', 'name', 'education_year_name', 'education_type_name', 'semester_count')
+            ->get()->keyBy('curricula_hemis_id');
+
+        // Yuklangan manual rejalar (namunaviy + ishchi)
+        $uploaded = ManualCurriculum::whereIn('curricula_hemis_id', $curricIds)
+            ->select('id', 'curricula_hemis_id', 'type', 'name', 'semester_code')
+            ->get()->groupBy('curricula_hemis_id');
+
+        return response()->json($rows->map(fn($r) => [
+            'curriculum_id'   => $r->curriculum_id,
+            'curriculum_name' => $curriculaInfo[$r->curriculum_id]?->name ?? "❌ ({$r->curriculum_id})",
+            'education_year'  => $curriculaInfo[$r->curriculum_id]?->education_year_name,
+            'education_type'  => $curriculaInfo[$r->curriculum_id]?->education_type_name,
+            'semester_count'  => $curriculaInfo[$r->curriculum_id]?->semester_count,
+            'level_code'      => $r->level_code,
+            'level_name'      => $r->level_name,
+            'semester_code'   => $r->semester_code,
+            'semester_name'   => $r->semester_name,
+            'student_count'   => $r->student_count,
+            'uploaded'        => ($uploaded[$r->curriculum_id] ?? collect())->map(fn($m) => [
+                'id'            => $m->id,
+                'type'          => $m->type,
+                'name'          => $m->name,
+                'semester_code' => $m->semester_code,
+            ])->values()->all(),
+        ])->values());
     }
 
     public function show(ManualCurriculum $curriculum)

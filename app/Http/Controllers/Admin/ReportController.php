@@ -12049,11 +12049,21 @@ class ReportController extends Controller
                 // yuqoridagilarga singdirilib, o'chiriladi). Keyin har subCount tadan bitta
                 // asosiy guruhga (a,b yoki a,b,c) yig'iladi — oxirgi guruh kamroq bo'lishi mumkin.
                 $T = array_sum(array_map(fn($x) => $x['total'], $list));
-                $chunks = $this->oqimOptimalSubgroups($T, $subCount, $subMax, $subTol);
+                // Guruh soni original guruhlar sonidan OSHMASIN (optimizatsiya guruh qo'shmaydi).
+                $chunks = $this->oqimOptimalSubgroups($T, $subCount, $subMax, $subTol, count($list));
                 $names = array_map(fn($x) => $x['base'], $list);
+                // Ehtiyot chorasi: agar (kamdan-kam) guruh soni nomlardan oshsa — "d2/d25-01-11"
+                // kabi chalkash nom o'rniga ketma-ket toza nom yaratamiz (masalan d2/d25-11).
+                [$genPrefix, $genWidth, $genNum] = $this->oqimBaseNameSeed($names);
                 $letters = ['a', 'b', 'c', 'd', 'e', 'f'];
                 foreach ($chunks as $i => $chunk) {
-                    $bname = $names[$i] ?? ($list[0]['base'] . '-' . ($i + 1));
+                    if (isset($names[$i])) {
+                        $bname = $names[$i];
+                    } elseif ($genPrefix !== null) {
+                        $bname = $genPrefix . str_pad((string) (++$genNum), $genWidth, '0', STR_PAD_LEFT);
+                    } else {
+                        $bname = $list[0]['base'] . '-' . ($i + 1);
+                    }
                     $rows = [];
                     foreach (array_values($chunk) as $j => $size) {
                         $lbl = ($subCount <= 1) ? $bname : ($bname . ($letters[$j] ?? ($j + 1)));
@@ -12127,12 +12137,40 @@ class ReportController extends Controller
      * Qaytaradi: har bir element — bitta asosiy guruhning kichik guruh sonlari, masalan
      * [[10,10,10],[10,10,9],[9]].
      */
-    private function oqimOptimalSubgroups(int $total, int $subCount, int $subMax, int $subTol): array
+    private function oqimOptimalSubgroups(int $total, int $subCount, int $subMax, int $subTol, int $maxBases = 0): array
     {
         $subCap = max(1, $subMax + max(0, $subTol));
         $minSub = max(1, (int) ceil($total / $subCap));
+        // Asosiy guruhlar soni original guruhlar sonidan oshmasin — optimizatsiya guruh
+        // QO'SHMAYDI (aks holda "d2/d25-01-11" kabi soxta guruh paydo bo'lardi). Bu holda
+        // oxirgi kichik guruhlar me'yordan sal ko'proq to'ladi (original ham shunday edi).
+        if ($maxBases > 0) {
+            $minSub = min($minSub, $maxBases * max(1, $subCount));
+        }
         $subSizes = $this->oqimDistribute($total, $minSub);
         return array_chunk($subSizes, max(1, $subCount));
+    }
+
+    /**
+     * Optimizatsiya uchun overflow guruh nomlarini davom ettirish uchun urug': nomlar
+     * ichidan eng katta raqamli nomni topib, uning prefiksi, raqam kengligi va raqamini
+     * qaytaradi. "d2/d25-10" -> ["d2/d25-", 2, 10]. Raqam topilmasa [null, 0, 0].
+     */
+    private function oqimBaseNameSeed(array $names): array
+    {
+        $prefix = null; $width = 2; $max = 0; $seen = false;
+        foreach ($names as $nm) {
+            if (preg_match('/^(.*?)(\d+)$/u', (string) $nm, $mm)) {
+                $num = (int) $mm[2];
+                if (!$seen || $num > $max) {
+                    $prefix = $mm[1];
+                    $width  = strlen($mm[2]);
+                    $max    = $num;
+                    $seen   = true;
+                }
+            }
+        }
+        return $seen ? [$prefix, $width, $max] : [null, 0, 0];
     }
 
     /**

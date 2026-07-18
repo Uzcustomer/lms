@@ -85,9 +85,9 @@
                             </div>
                         </div>
                         <div class="norm-group" style="align-self:stretch;display:flex;align-items:center;">
-                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;font-weight:700;color:#334155;">
+                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;font-weight:700;color:#334155;" title="Bir yo'nalishli fakultetlar (masalan 1+2-son davolash) guruhlarini birga optimallashtiradi — kam to'lgan guruhlar fakultetlararo birlashtiriladi. Fakultetlar saqlanadi, faqat optimizatsiyalangan holatga qo'llanadi.">
                                 <input type="checkbox" id="merge_faculties" style="width:16px;height:16px;cursor:pointer;">
-                                Fakultetlarni birlashtirish<br><span style="font-weight:500;font-size:10.5px;color:#94a3b8;">(1+2-son davolash)</span>
+                                Fakultetlararo guruh optimizatsiyasi<br><span style="font-weight:500;font-size:10.5px;color:#94a3b8;">(1+2-son davolash · faqat optimizatsiyada)</span>
                             </label>
                         </div>
                         <div class="filter-item" style="min-width: 420px;">
@@ -110,8 +110,9 @@
                     </div>
                     <p style="margin:2px 2px 0;font-size:11.5px;color:#64748b;">
                         Faqat faol (o'qiyotgan) talabalar hisobga olinadi. <b>Oqim</b> — ma'ruzaga birga boradigan guruhlar
-                        (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). <b>Joriy holat</b> — HEMISdagidek;
-                        <b>Optimizatsiya</b> — kam to'lgan guruhlarni birlashtirib, ortiqcha guruhlarni qisqartirish taklifi.
+                        (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). <b>Joriy holat</b> — HEMISdagidek, tasdiqlanadigan holat (o'zgarmaydi);
+                        <b>Optimizatsiyalangan holat</b> — kam to'lgan guruhlarni birlashtirib, ortiqcha guruhlarni qisqartirish taklifi (tasdiqlangach joriy holatga aylanadi).
+                        <b>Fakultetlararo guruh optimizatsiyasi</b> yoqilsa — bir yo'nalishli fakultetlar (1+2-son) guruhlari birga optimallashtiriladi, guruhlar fakultetlararo taqsimlanadi; fakultetlar saqlanadi.
                         Har xil tildagi guruhlar bir oqim/guruhga qo'shilmaydi.
                     </p>
                 </div>
@@ -130,9 +131,9 @@
                     </div>
                     <div id="table-area" style="display:none;">
                         <div style="padding:8px 20px 0;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                            <button type="button" class="oq-tab active" data-tab="joriy" onclick="switchTab('joriy')">Joriy holat</button>
-                            <button type="button" class="oq-tab" data-tab="opt" onclick="switchTab('opt')">
-                                Optimizatsiya <span id="opt-tab-badge" class="opt-tab-badge" style="display:none;"></span>
+                            <button type="button" class="oq-tab active" data-tab="joriy" onclick="switchTab('joriy')" title="HEMISdagi haqiqiy, tasdiqlanadigan holat — optimizatsiya bunga ta'sir qilmaydi">Joriy holat</button>
+                            <button type="button" class="oq-tab" data-tab="opt" onclick="switchTab('opt')" title="Optimizatsiya taklifi — tasdiqlash uchun ko'rib chiqiladi">
+                                Optimizatsiyalangan holat <span id="opt-tab-badge" class="opt-tab-badge" style="display:none;"></span>
                             </button>
                             <span id="time-badge" style="font-size:12px;color:#94a3b8;margin-left:auto;"></span>
                         </div>
@@ -145,8 +146,14 @@
                             <div id="report-body" style="padding:16px 20px;max-height:calc(100vh - 340px);overflow:auto;"></div>
                         </div>
 
-                        <!-- OPTIMIZATSIYA tab (solishtirma) -->
+                        <!-- OPTIMIZATSIYALANGAN HOLAT tab -->
                         <div id="tab-opt" style="display:none;">
+                            <div style="padding:8px 20px;background:#f5f3ff;border-bottom:1px solid #ddd6fe;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <span id="opt-total-badge" class="badge" style="background:#7c3aed;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                                <span id="opt-merge-note" style="display:none;font-size:12px;font-weight:600;color:#6d28d9;">Bir yo'nalishli fakultetlar guruhlari birga optimallashtirildi — guruhlar fakultetlararo taqsimlandi (fakultetlar saqlanadi).</span>
+                                <span style="font-size:11.5px;color:#94a3b8;margin-left:auto;">Bu taklif — tasdiqlangach joriy holatga aylanadi.</span>
+                            </div>
+                            <div id="opt-body" style="padding:16px 20px;max-height:calc(100vh - 420px);overflow:auto;"></div>
                             <div id="opt-summary" class="opt-summary"></div>
                             <div id="opt-compare" style="padding:4px 20px 16px;max-height:calc(100vh - 360px);overflow:auto;"></div>
                         </div>
@@ -167,7 +174,7 @@
 
         function getFilters(optimize) {
             var dekanFaculty = document.getElementById('dekan_faculty_id');
-            return {
+            var f = {
                 education_type: $('#education_type').val() || '',
                 faculty: dekanFaculty ? dekanFaculty.value : ($('#faculty').val() || ''),
                 talim: $('#talim').val() || 'all',
@@ -178,9 +185,14 @@
                 ab_tol: $('#ab_tol').val() || 0,
                 abc_max: $('#abc_max').val() || 10,
                 abc_tol: $('#abc_tol').val() || 0,
-                merge_faculties: $('#merge_faculties').is(':checked') ? 1 : 0,
                 optimize: optimize ? 1 : 0,
             };
+            // Fakultetlararo optimizatsiya FAQAT optimizatsiyalangan holatga qo'llanadi —
+            // joriy (tasdiqlangan) holat hech qachon o'zgarmaydi.
+            if (optimize) {
+                f.merge_faculties = $('#merge_faculties').is(':checked') ? 1 : 0;
+            }
+            return f;
         }
 
         function switchTab(tab) {
@@ -215,6 +227,7 @@
                     return;
                 }
                 renderReport(joriy);
+                renderOptimized(opt);
                 renderComparison(opt.plan);
                 $('#time-badge').text(elapsed + ' soniyada hisoblandi · ' + esc(joriy.generated_at));
                 switchTab('joriy');
@@ -230,8 +243,10 @@
             });
         }
 
-        function renderReport(res) {
-            var blocks = res.blocks || [];
+        // Bloklar layoutini chizadi (joriy va optimizatsiyalangan holat uchun umumiy).
+        // Talabalarning umumiy sonini qaytaradi.
+        function renderBlocks(blocks, bodySel) {
+            blocks = blocks || [];
             var grand = 0;
             var html = '<div class="lang-legend">Til: <span class="ll lang-uz">o\'z</span> <span class="ll lang-rus">rus</span> <span class="ll lang-ing">ing</span></div>';
             for (var b = 0; b < blocks.length; b++) {
@@ -262,9 +277,23 @@
                 }
                 html += '</div></div>';
             }
-            $('#report-body').html(html);
+            $(bodySel).html(html);
+            return grand;
+        }
+
+        function renderReport(res) {
+            var grand = renderBlocks(res.blocks, '#report-body');
             var variantLabel = $('#variant option:selected').text();
             $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
+        }
+
+        // Optimizatsiyalangan holat — to'liq layout (joriy kabi, lekin kam to'lgan guruhlar
+        // birlashtirilgan; fakultetlararo yoqilgan bo'lsa guruhlar fakultetlararo taqsimlanadi).
+        function renderOptimized(res) {
+            var grand = renderBlocks(res.blocks, '#opt-body');
+            var variantLabel = $('#variant option:selected').text();
+            $('#opt-total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
+            $('#opt-merge-note').toggle($('#merge_faculties').is(':checked'));
         }
 
         function statBox(cur, opt, label) {

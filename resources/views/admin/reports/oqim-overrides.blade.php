@@ -10,7 +10,7 @@
     @endphp
 
     <div class="py-4">
-        <div class="max-w-5xl mx-auto sm:px-4 lg:px-6">
+        <div class="max-w-7xl mx-auto sm:px-4 lg:px-6">
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
                 <div style="padding:14px 20px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);border-bottom:2px solid #dbe4ef;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -64,6 +64,64 @@
                             </div>
                         @endforeach
                     @endif
+                </div>
+            </div>
+
+            {{-- Barcha guruhlar — istalgan guruh tilini o'zgartirish --}}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+                <div style="padding:14px 20px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);border-bottom:2px solid #dbe4ef;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <div>
+                            <div style="font-size:15px;font-weight:800;color:#0f172a;">Barcha guruhlar — tilni o'zgartirish</div>
+                            <div style="font-size:12px;color:#64748b;margin-top:2px;">
+                                Aralash bo'lmagan guruhlarni ham shu yerdan o'zgartirishingiz mumkin. Guruh, fakultet yoki kurs nomi bo'yicha qidiring.
+                            </div>
+                        </div>
+                        <input type="text" id="grp-search" placeholder="🔍 Guruh / fakultet / kurs qidirish..." class="grp-search">
+                    </div>
+                </div>
+                <div style="padding:0;max-height:70vh;overflow:auto;">
+                    <table class="ov-table all-table">
+                        <thead>
+                            <tr>
+                                <th>Guruh</th><th>Fakultet</th><th>Kurs</th><th>HEMIS tili</th><th>Talaba</th><th>Tuzatish (LMS)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-groups-body">
+                            @foreach($all as $g)
+                                @foreach($g['members'] as $m)
+                                    @php
+                                        $ov = $ovMap[$m['group_id']] ?? null;
+                                        $langLabel = ['uz'=>"o'z",'rus'=>'rus','ing'=>'ing'][$m['lang']] ?? $m['lang'];
+                                        $search = mb_strtolower($m['group_name'].' '.$g['department_name'].' '.$g['level_name'].' '.$g['base']);
+                                    @endphp
+                                    <tr class="all-row" data-search="{{ $search }}">
+                                        <td style="font-weight:700;color:#0f172a;white-space:nowrap;">
+                                            {{ $m['group_name'] }}
+                                            @if($g['is_mixed'])<span class="tag tag-amber" title="Aralash tilli guruh">aralash</span>@endif
+                                        </td>
+                                        <td style="color:#475569;">{{ $g['department_name'] }}</td>
+                                        <td style="color:#64748b;white-space:nowrap;">{{ $g['level_name'] }}</td>
+                                        <td style="color:#64748b;">{{ $m['hemis_lang'] ?? '-' }}</td>
+                                        <td style="text-align:center;font-weight:700;">{{ $m['count'] }}</td>
+                                        <td>
+                                            <select class="ov-select"
+                                                data-gid="{{ $m['group_id'] }}"
+                                                data-gname="{{ $m['group_name'] }}">
+                                                <option value="">HEMISdagidek</option>
+                                                <option value="uz"  {{ $ov && $ov->lang==='uz'  ? 'selected':'' }}>O'zbek qilib belgila</option>
+                                                <option value="rus" {{ $ov && $ov->lang==='rus' ? 'selected':'' }}>Rus qilib belgila</option>
+                                                <option value="ing" {{ $ov && $ov->lang==='ing' ? 'selected':'' }}>Ingliz qilib belgila</option>
+                                                <option value="__exclude__" {{ $ov && $ov->excluded ? 'selected':'' }}>Hisobga olinmasin</option>
+                                            </select>
+                                            <span class="ov-status" data-gid="{{ $m['group_id'] }}"></span>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            @endforeach
+                        </tbody>
+                    </table>
+                    <div id="grp-noresult" style="display:none;padding:20px;text-align:center;color:#94a3b8;font-size:13px;">Mos guruh topilmadi.</div>
                 </div>
             </div>
 
@@ -136,6 +194,18 @@
                 .done(function() { $row.fadeOut(200, function(){ $(this).remove(); }); })
                 .fail(function() { alert('Xatolik yuz berdi'); });
         });
+
+        // "Barcha guruhlar" bo'yicha qidiruv (guruh / fakultet / kurs)
+        $('#grp-search').on('input', function() {
+            const q = $(this).val().trim().toLowerCase();
+            let shown = 0;
+            $('#all-groups-body .all-row').each(function() {
+                const match = !q || ($(this).data('search') + '').indexOf(q) !== -1;
+                $(this).toggle(match);
+                if (match) shown++;
+            });
+            $('#grp-noresult').toggle(shown === 0);
+        });
     </script>
 
     <style>
@@ -156,6 +226,11 @@
         .tag { display:inline-block;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:700; }
         .tag-red { background:#fef2f2;color:#dc2626;border:1px solid #fecaca; }
         .tag-blue { background:#eff6ff;color:#2b5ea7;border:1px solid #bfdbfe; }
+        .tag-amber { background:#fffbeb;color:#b45309;border:1px solid #fde68a;margin-left:6px; }
+        .grp-search { height:36px;min-width:280px;border:1px solid #cbd5e1;border-radius:8px;padding:0 12px;font-size:13px;font-weight:500;color:#1e293b;background:#fff; }
+        .grp-search:focus { outline:none;border-color:#2b5ea7;box-shadow:0 0 0 2px rgba(43,94,167,0.12); }
+        .all-table thead th { position:sticky;top:0;z-index:1; }
+        .all-table tbody tr:hover td { background:#f8fafc; }
         .btn-clear { font-size:12px;font-weight:700;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;cursor:pointer; }
         .btn-clear:hover { background:#dc2626;color:#fff; }
     </style>

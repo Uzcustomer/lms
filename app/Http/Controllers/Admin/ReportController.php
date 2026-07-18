@@ -11180,10 +11180,11 @@ class ReportController extends Controller
      */
     public function oqimOverrides(Request $request)
     {
-        $mixed     = $this->detectMixedLanguageGroups();
+        $all       = $this->buildOqimGroupList();
+        $mixed     = array_values(array_filter($all, fn($g) => $g['is_mixed']));
         $overrides = \App\Models\GroupOverride::orderBy('group_name')->get();
 
-        return view('admin.reports.oqim-overrides', compact('mixed', 'overrides'));
+        return view('admin.reports.oqim-overrides', compact('mixed', 'all', 'overrides'));
     }
 
     /**
@@ -11238,6 +11239,17 @@ class ReportController extends Controller
      */
     private function detectMixedLanguageGroups(): array
     {
+        return array_values(array_filter($this->buildOqimGroupList(), fn($g) => $g['is_mixed']));
+    }
+
+    /**
+     * Barcha guruhlarni "katta guruh" (base) kesimida yig'adi va har biriga 'is_mixed'
+     * bayrog'ini qo'yadi (bir nechta til bo'lsa — aralash). Qo'lda tuzatishlar (override)
+     * qo'llangan holda. Bu ro'yxat ham aralash guruhlarni aniqlash, ham "Guruh tuzatish"
+     * sahifasida ISTALGAN guruh tilini o'zgartirish uchun ishlatiladi.
+     */
+    private function buildOqimGroupList(): array
+    {
         $rows = DB::table('students as s')
             ->join('departments as d', 's.department_id', '=', 'd.department_hemis_id')
             ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
@@ -11288,18 +11300,17 @@ class ReportController extends Controller
             ];
         }
 
-        // Faqat bir nechta tilли (muammoli) guruhlar
-        $mixed = [];
+        // Barcha guruhlar — aralash (bir nechta til) bo'lsa 'is_mixed' bilan belgilaymiz
+        $all = [];
         foreach ($groups as $gr) {
-            if (count($gr['langs']) > 1) {
-                usort($gr['members'], fn($a, $b) => strcmp($a['group_name'], $b['group_name']));
-                $gr['langs'] = array_keys($gr['langs']);
-                $mixed[] = $gr;
-            }
+            usort($gr['members'], fn($a, $b) => strcmp($a['group_name'], $b['group_name']));
+            $gr['is_mixed'] = count($gr['langs']) > 1;
+            $gr['langs']    = array_keys($gr['langs']);
+            $all[] = $gr;
         }
-        usort($mixed, fn($a, $b) => [$a['department_name'], $a['level_name'], $a['base']] <=> [$b['department_name'], $b['level_name'], $b['base']]);
+        usort($all, fn($a, $b) => [$a['department_name'], $a['level_name'], $a['base']] <=> [$b['department_name'], $b['level_name'], $b['base']]);
 
-        return $mixed;
+        return $all;
     }
 
     /**
@@ -11390,79 +11401,17 @@ class ReportController extends Controller
             $talimFilter = 'all';
         }
 
-        // Bir xil yo'nalishli fakultetlarni birlashtirish (masalan 1-son va 2-son davolash)
+        // Fakultetlararo optimizatsiya: bir xil yo'nalishli fakultetlar (masalan 1-son va
+        // 2-son davolash) guruhlarini BIRGA optimallashtirish uchun pool qilinadi — bu kam
+        // to'lgan guruhlarni fakultetlararo birlashtirib, oqim/guruhlarni butun qiladi.
+        // Fakultetlarning o'zi saqlanadi: bu bayroq FAQAT optimizatsiya so'rovida yuboriladi,
+        // "joriy (tasdiqlangan) holat"ga hech qachon ta'sir qilmaydi.
         $mergeFaculties = $request->boolean('merge_faculties');
 
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
-        $blocks = [];
-        foreach ($rows as $r) {
-            // Hisobdan chiqarilgan (xato biriktirilgan) guruhlarni tashlab yuboramiz
-            if (isset($excludedIds[(int) $r->group_id])) {
-                continue;
-            }
-
-            // Guruh turi (qo'shma / oddiy) va filter
-            $track = $trackMap[(int) $r->group_id] ?? 'oddiy';
-            if ($talimFilter !== 'all' && $track !== $talimFilter) {
-                continue;
-            }
-
-            // Fakultet nomi — "fakultetlarni birlashtirish" yoqilgan bo'lsa "N-son" prefiksi
-            // olib tashlanadi, shunda 1-son va 2-son davolash bitta blokka jamlanadi.
-            $deptForBlock = $mergeFaculties
-                ? $this->oqimMergeDeptName($r->department_name)
-                : $r->department_name;
-
-            // Blok kaliti — fakultet + yo'nalish NOMI + ta'lim turi bo'yicha. Qo'shma va oddiy
-            // ta'lim hech qachon bitta blok/oqimга aralashmaydi.
-            $blockKey = mb_strtolower(trim((string) $deptForBlock)) . '|'
-                . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
-            if (!isset($blocks[$blockKey])) {
-                $title = $this->oqimBlockTitle($deptForBlock, $r->specialty_name);
-                if ($track === 'qoshma') {
-                    $title .= " — Qo'shma ta'lim";
-                }
-                $blocks[$blockKey] = [
-                    'department_name' => $deptForBlock,
-                    'specialty_name'  => $r->specialty_name,
-                    'track'           => $track,
-                    'title'           => $title,
-                    'courses'         => [],
-                ];
-            }
-            $lvlKey = (string) $r->level_code;
-            if (!isset($blocks[$blockKey]['courses'][$lvlKey])) {
-                $blocks[$blockKey]['courses'][$lvlKey] = [
-                    'level_code' => $r->level_code,
-                    'level_name' => $r->level_name ?: ($r->level_code . '-kurs'),
-                    'groups'     => [],
-                ];
-            }
-            $langName = $langMap[$r->group_id] ?? null;
-            // Nomdagi eski til yorlig'ini ("(rus)","(ang)"...) olib tashlaymiz.
-            $nameNoLang = $this->oqimStripLang($r->group_name);
-            // Nomdan asosiy guruh nomi (masalan d2/d25-01) va kichik guruh harfini (a/b/c) ajratamiz.
-            [$base, $letter] = $this->oqimSplitBase($nameNoLang);
-            // Til: avval qo'lda tuzatish (override), bo'lmasa HEMISdagi
-            $lang = $overrideLang[(int) $r->group_id]
-                ?? $this->oqimLangKey($langName, $r->group_name);
-            $langLabelMap = ['uz' => "o'z", 'rus' => 'rus', 'ing' => 'ing'];
-            $blocks[$blockKey]['courses'][$lvlKey]['groups'][] = [
-                'group_id'   => $r->group_id,
-                'name'       => $nameNoLang,
-                'base'       => $base,
-                'letter'     => $letter,
-                'count'      => (int) $r->cnt,
-                'lang'       => $lang,
-                'lang_label' => $langLabelMap[$lang] ?? "o'z",
-            ];
-        }
-
-        // Bloklarni fakultet + yo'nalish + ta'lim turi bo'yicha tartiblaymiz (oddiy oldin, qo'shma keyin)
-        uasort($blocks, function ($a, $b) {
-            return [$a['department_name'], $a['specialty_name'], $a['track']]
-                <=> [$b['department_name'], $b['specialty_name'], $b['track']];
-        });
+        $blocks = $this->assembleOqimBlocks(
+            $rows, $mergeFaculties, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang
+        );
 
         // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----
         $params = [
@@ -11514,7 +11463,13 @@ class ReportController extends Controller
         if ($params['optimize']) {
             // Reja ko'rsatilayotgan variant bilan bir xil bo'lsin (birinchi variant)
             $planVariant = array_key_first($variants);
-            $plan = $this->computeOptimizationPlan($blocks, $params, $planVariant);
+            // "Joriy holat" baseline HAR DOIM birlashtirilmagan bloklardan olinadi, shunda
+            // solishtirmadagi "joriy" sonlar (guruh/oqim) "Joriy holat" vkladkasi bilan
+            // mos keladi — fakultetlararo optimizatsiya bu sonlarni buzmaydi.
+            $curBlocks = $mergeFaculties
+                ? $this->assembleOqimBlocks($rows, false, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang)
+                : $blocks;
+            $plan = $this->computeOptimizationPlan($curBlocks, $blocks, $params, $planVariant);
         }
 
         return [
@@ -11530,19 +11485,126 @@ class ReportController extends Controller
     }
 
     /**
+     * HEMIS qatorlaridan fakultet+yo'nalish -> kurs -> guruhlar tuzilmasini yig'adi.
+     * $mergeFaculties=true bo'lsa — bir xil yo'nalishli fakultetlar (1-son/2-son) bitta
+     * pool ostiga jamlanadi (fakultetlararo optimizatsiya uchun). Bloklar tartiblangan
+     * holda qaytariladi.
+     */
+    private function assembleOqimBlocks(
+        $rows, bool $mergeFaculties, array $excludedIds, array $trackMap,
+        string $talimFilter, $langMap, array $overrideLang
+    ): array {
+        $blocks = [];
+        foreach ($rows as $r) {
+            // Hisobdan chiqarilgan (xato biriktirilgan) guruhlarni tashlab yuboramiz
+            if (isset($excludedIds[(int) $r->group_id])) {
+                continue;
+            }
+
+            // Guruh turi (qo'shma / oddiy) va filter
+            $track = $trackMap[(int) $r->group_id] ?? 'oddiy';
+            if ($talimFilter !== 'all' && $track !== $talimFilter) {
+                continue;
+            }
+
+            // Fakultet nomi — fakultetlararo optimizatsiya yoqilgan bo'lsa "N-son" prefiksi
+            // olib tashlanadi, shunda 1-son va 2-son davolash guruhlari bitta pool ostida
+            // birga optimallashtiriladi (guruhlar fakultetlararo taqsimlanadi).
+            $deptForBlock = $mergeFaculties
+                ? $this->oqimMergeDeptName($r->department_name)
+                : $r->department_name;
+
+            // Blok kaliti — fakultet + yo'nalish NOMI + ta'lim turi bo'yicha. Qo'shma va oddiy
+            // ta'lim hech qachon bitta blok/oqimга aralashmaydi.
+            $blockKey = mb_strtolower(trim((string) $deptForBlock)) . '|'
+                . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
+            if (!isset($blocks[$blockKey])) {
+                $title = $this->oqimBlockTitle($deptForBlock, $r->specialty_name);
+                if ($track === 'qoshma') {
+                    $title .= " — Qo'shma ta'lim";
+                }
+                $blocks[$blockKey] = [
+                    'department_name' => $deptForBlock,
+                    'specialty_name'  => $r->specialty_name,
+                    'track'           => $track,
+                    'title'           => $title,
+                    'orig_depts'      => [], // pool ostidagi haqiqiy fakultetlar (nomi bo'yicha)
+                    'courses'         => [],
+                ];
+            }
+            // Pool ostiga tushgan haqiqiy fakultetlarni belgilaymiz (sarlavhada ko'rsatish uchun)
+            $blocks[$blockKey]['orig_depts'][trim((string) $r->department_name)] = true;
+            $lvlKey = (string) $r->level_code;
+            if (!isset($blocks[$blockKey]['courses'][$lvlKey])) {
+                $blocks[$blockKey]['courses'][$lvlKey] = [
+                    'level_code' => $r->level_code,
+                    'level_name' => $r->level_name ?: ($r->level_code . '-kurs'),
+                    'groups'     => [],
+                ];
+            }
+            $langName = $langMap[$r->group_id] ?? null;
+            // Nomdagi eski til yorlig'ini ("(rus)","(ang)"...) olib tashlaymiz.
+            $nameNoLang = $this->oqimStripLang($r->group_name);
+            // Nomdan asosiy guruh nomi (masalan d2/d25-01) va kichik guruh harfini (a/b/c) ajratamiz.
+            [$base, $letter] = $this->oqimSplitBase($nameNoLang);
+            // Til: avval qo'lda tuzatish (override), bo'lmasa HEMISdagi
+            $lang = $overrideLang[(int) $r->group_id]
+                ?? $this->oqimLangKey($langName, $r->group_name);
+            $langLabelMap = ['uz' => "o'z", 'rus' => 'rus', 'ing' => 'ing'];
+            $blocks[$blockKey]['courses'][$lvlKey]['groups'][] = [
+                'group_id'   => $r->group_id,
+                'name'       => $nameNoLang,
+                'base'       => $base,
+                'letter'     => $letter,
+                'count'      => (int) $r->cnt,
+                'lang'       => $lang,
+                'lang_label' => $langLabelMap[$lang] ?? "o'z",
+            ];
+        }
+
+        // Birdan ortiq haqiqiy fakultet birga optimallashtirilgan bo'lsa — sarlavhada
+        // buni ochiq ko'rsatamiz (fakultetlar saqlanadi, guruhlar fakultetlararo taqsimlangan).
+        if ($mergeFaculties) {
+            foreach ($blocks as &$blk) {
+                $origs = array_keys($blk['orig_depts'] ?? []);
+                if (count($origs) > 1) {
+                    sort($origs, SORT_NATURAL | SORT_FLAG_CASE);
+                    $blk['title'] .= ' · fakultetlararo (' . implode(' + ', $origs) . ')';
+                }
+            }
+            unset($blk);
+        }
+
+        // Bloklarni fakultet + yo'nalish + ta'lim turi bo'yicha tartiblaymiz (oddiy oldin, qo'shma keyin)
+        uasort($blocks, function ($a, $b) {
+            return [$a['department_name'], $a['specialty_name'], $a['track']]
+                <=> [$b['department_name'], $b['specialty_name'], $b['track']];
+        });
+
+        return $blocks;
+    }
+
+    /**
      * Optimizatsiya rejasi: joriy holatni me'yor bo'yicha optimal holat bilan
      * solishtiradi. Optimizatsiya kam to'lgan akademik guruhlarni birlashtirib,
      * guruhlar (va shu bilan kichik guruhlar hamda oqimlar) sonini kamaytiradi.
      * Kichik guruhlar soni kursga qarab qat'iy (1-3 a,b; 4-6 a,b,c) — o'zgarmaydi.
+     *
+     * $curBlocks — "joriy (tasdiqlangan) holat" bloklari (fakultetlararo bo'lsa ham
+     * BIRLASHTIRILMAGAN — "Joriy holat" vkladkasiga mos). $optBlocks — optimizatsiya
+     * qo'llanadigan bloklar (fakultetlararo yoqilsa — pool ostida). Yuqoridagi jami
+     * sonlar (guruh/kichik guruh/oqim) shu ikki holat orasida solishtiriladi.
      */
-    private function computeOptimizationPlan(array $blocks, array $params, string $variant): array
+    private function computeOptimizationPlan(array $curBlocks, array $optBlocks, array $params, string $variant): array
     {
+        // Jami sonlar: joriy — birlashtirilmagan bloklardan, optimallashtirilgan — pool bloklardan
+        [$curBase, $curSub, $curOqim] = $this->oqimPlanTotals($curBlocks, $params, $variant, false);
+        [$optBase, $optSub, $optOqim] = $this->oqimPlanTotals($optBlocks, $params, $variant, true);
+
+        $blocks = $optBlocks; // moves (solishtirma detali) optimizatsiya tuzilmasi ustidan quriladi
         $curParams = ['optimize' => false] + $params;
         $optParams = ['optimize' => true] + $params;
 
-        $curBase = 0; $optBase = 0;
-        $curSub = 0;  $optSub = 0;
-        $curOqim = 0; $optOqim = 0;
         $moves = [];
 
         foreach ($blocks as $block) {
@@ -11553,17 +11615,9 @@ class ReportController extends Controller
                 }
                 $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
                 [$subCount, $subMax, $subTol, $eff] = $this->oqimSubRule($variant, $levelNum, $params);
-                $cap = max(1, $subCount * ($subMax + max(0, $subTol)));
 
                 $curB = $this->oqimCourseBases($bases, $curParams, $variant, $levelNum);
                 $optB = $this->oqimCourseBases($bases, $optParams, $variant, $levelNum);
-
-                $curBase += count($curB);
-                $optBase += count($optB);
-                foreach ($curB as $b) { $curSub += count($b['rows']); }
-                foreach ($optB as $b) { $optSub += count($b['rows']); }
-                $curOqim += count($this->packOqims($curB, $params['oqim_max'], $params['oqim_tol']));
-                $optOqim += count($this->packOqims($optB, $params['oqim_max'], $params['oqim_tol']));
 
                 // Til bo'yicha solishtirma (kichik guruh darajasida)
                 $curByLang = [];
@@ -11625,6 +11679,30 @@ class ReportController extends Controller
             'oqim_reduce'   => $curOqim - $optOqim,
             'moves'         => $moves,
         ];
+    }
+
+    /**
+     * Blok to'plami bo'yicha jami sonlarni hisoblaydi: [akademik guruh, kichik guruh, oqim].
+     * $optimize=false — joriy holat; true — optimallashtirilgan holat.
+     */
+    private function oqimPlanTotals(array $blocks, array $params, string $variant, bool $optimize): array
+    {
+        $p = ['optimize' => $optimize] + $params;
+        $base = 0; $sub = 0; $oqim = 0;
+        foreach ($blocks as $block) {
+            foreach ($block['courses'] as $course) {
+                $bases = $this->aggregateBaseGroups($course['groups']);
+                if (empty($bases)) {
+                    continue;
+                }
+                $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
+                $b = $this->oqimCourseBases($bases, $p, $variant, $levelNum);
+                $base += count($b);
+                foreach ($b as $bb) { $sub += count($bb['rows']); }
+                $oqim += count($this->packOqims($b, $params['oqim_max'], $params['oqim_tol']));
+            }
+        }
+        return [$base, $sub, $oqim];
     }
 
     /**

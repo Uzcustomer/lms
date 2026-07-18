@@ -29,7 +29,7 @@ class VisaApplicationsExport implements FromQuery, WithHeadings, ShouldAutoSize,
 
         if (!empty($this->ids)) {
             $query->whereIn('id', $this->ids);
-        } elseif ($this->status && in_array($this->status, ['pending', 'reviewing', 'approved', 'rejected'])) {
+        } elseif ($this->status && in_array($this->status, ['pending', 'reviewing', 'submitted', 'approved', 'rejected'])) {
             $query->where('status', $this->status);
         }
 
@@ -41,6 +41,7 @@ class VisaApplicationsExport implements FromQuery, WithHeadings, ShouldAutoSize,
         $statusLabel = match ($app->status) {
             'pending'   => 'Kutilmoqda',
             'reviewing' => "Ko'rilmoqda",
+            'submitted' => 'Submitted',
             'approved'  => 'Qabul qilindi',
             'rejected'  => 'Rad etilgan',
             default     => $app->status,

@@ -880,16 +880,21 @@
                                 if (!rows.length) { empty.classList.remove('hidden'); return; }
 
                                 tbody.innerHTML = rows.map(r => {
-                                    // Semester filteri: semester_code mos yoki bo'sh (barcha semestrlarga tegishli)
-                                    const semMatch = u => !u.semester_code || u.semester_code === r.semester_code;
-                                    const nam = r.uploaded.filter(u => u.type === 'namunaviy' && semMatch(u));
-                                    const ish = r.uploaded.filter(u => u.type === 'ishchi'    && semMatch(u));
+                                    // Barcha yuklangan rejalarni ko'rsatamiz (semestrdan qat'i nazar)
+                                    const nam = r.uploaded.filter(u => u.type === 'namunaviy');
+                                    const ish = r.uploaded.filter(u => u.type === 'ishchi');
 
                                     function uploadedCell(list) {
                                         if (!list.length) return '<span class="text-gray-400">—</span>';
-                                        return list.map(u =>
-                                            '<a href="' + showUrl.replace('__ID__', u.id) + '" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200 mr-1">✓ ' + escHtml(u.name.length > 35 ? u.name.slice(0,35)+'…' : u.name) + '</a>'
-                                        ).join('');
+                                        return list.map(u => {
+                                            const isCurrent = !u.semester_code || u.semester_code === r.semester_code;
+                                            const semSuffix = !isCurrent && u.semester_code ? ' [' + u.semester_code + '-sem]' : '';
+                                            const label = (u.name.length > 30 ? u.name.slice(0,30)+'…' : u.name) + semSuffix;
+                                            const cls = isCurrent
+                                                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                                : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
+                                            return '<a href="' + showUrl.replace('__ID__', u.id) + '" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ' + cls + ' mr-1">✓ ' + escHtml(label) + '</a>';
+                                        }).join('');
                                     }
 
                                     const sharedAttrs = ' data-id="' + r.curriculum_id + '" data-level="' + (r.level_code||'') + '" data-sem="' + (r.semester_code||'') + '" data-name="' + escHtml(r.curriculum_name) + '" data-year="' + escHtml(r.education_year||'') + '" data-eductype="' + escHtml(r.education_type||'') + '" data-levelname="' + escHtml(r.level_name||'') + '" data-semname="' + escHtml(r.semester_name||'') + '" data-students="' + (r.student_count||'') + '"';

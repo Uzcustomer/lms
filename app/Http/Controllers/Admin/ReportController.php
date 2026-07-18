@@ -12131,24 +12131,31 @@ class ReportController extends Controller
     }
 
     /**
-     * OPTIMIZATSIYA uchun: talabalarni minimal sondagi kichik guruhlarga zich joylaydi.
-     * minSub = ceil(T / kichik_guruh_sig'imi) — teng taqsimlab, ortiqcha (oxirgi) guruhchalar
-     * yo'qoladi. Keyin har $subCount tadan bitta asosiy guruhga yig'iladi (a,b yoki a,b,c).
+     * OPTIMIZATSIYA uchun: talabalarni zich, lekin har bir asosiy guruh TO'LIQ kichik
+     * guruhlar bilan bo'ladigan qilib joylaydi. Ya'ni avval minimal asosiy guruhlar soni
+     * aniqlanadi (baseCount = ceil(T / to'liq_guruh_sig'imi)), so'ng talabalar aynan
+     * baseCount * subCount ta kichik guruhga teng taqsimlanadi — shunda 1-3 kurslar a,b
+     * to'liq, 4-6 kurslar a,b,c TO'LIQ bo'ladi (oxirida yolg'iz "a" yoki "a,b" qolmaydi).
      * Qaytaradi: har bir element — bitta asosiy guruhning kichik guruh sonlari, masalan
-     * [[10,10,10],[10,10,9],[9]].
+     * [[10,9,9],[9,9,9]].
      */
     private function oqimOptimalSubgroups(int $total, int $subCount, int $subMax, int $subTol, int $maxBases = 0): array
     {
-        $subCap = max(1, $subMax + max(0, $subTol));
-        $minSub = max(1, (int) ceil($total / $subCap));
-        // Asosiy guruhlar soni original guruhlar sonidan oshmasin — optimizatsiya guruh
-        // QO'SHMAYDI (aks holda "d2/d25-01-11" kabi soxta guruh paydo bo'lardi). Bu holda
-        // oxirgi kichik guruhlar me'yordan sal ko'proq to'ladi (original ham shunday edi).
+        $subCount = max(1, $subCount);
+        $subCap   = max(1, $subMax + max(0, $subTol));
+        $baseCap  = $subCount * $subCap; // bitta TO'LIQ asosiy guruh (a,b yoki a,b,c) sig'imi
+
+        // Minimal asosiy guruhlar soni. Original guruhlar sonidan OSHMASIN — optimizatsiya
+        // guruh QO'SHMAYDI (aks holda "d2/d25-01-11" kabi soxta guruh paydo bo'lardi).
+        $baseCount = max(1, (int) ceil($total / $baseCap));
         if ($maxBases > 0) {
-            $minSub = min($minSub, $maxBases * max(1, $subCount));
+            $baseCount = min($baseCount, $maxBases);
         }
-        $subSizes = $this->oqimDistribute($total, $minSub);
-        return array_chunk($subSizes, max(1, $subCount));
+
+        // Har bir asosiy guruh TO'LIQ subCount ta kichik guruhga ega bo'lsin — talabalarni
+        // baseCount*subCount ta guruhchaga teng taqsimlaymiz (barchasi ~ bir xil to'ladi).
+        $subSizes = $this->oqimDistribute($total, $baseCount * $subCount);
+        return array_chunk($subSizes, $subCount);
     }
 
     /**

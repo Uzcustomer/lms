@@ -85,9 +85,9 @@
                             </div>
                         </div>
                         <div class="norm-group" style="align-self:stretch;display:flex;align-items:center;">
-                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;font-weight:700;color:#334155;" title="Bir yo'nalishli fakultetlar (masalan 1+2-son davolash) guruhlarini birga optimallashtiradi — kam to'lgan guruhlar fakultetlararo birlashtiriladi. Fakultetlar saqlanadi, faqat optimizatsiyalangan holatga qo'llanadi.">
+                            <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;font-weight:700;color:#334155;" title="Fakultetlar ALOHIDA qoladi (har birining o'z dekani bor). Bir fakultetning kam to'lgan oqimi qo'shni fakultet (masalan 1↔2-son davolash) oqimiga — joy bo'lsa — ko'chiriladi, shunda oqimlar soni kamayadi. Faqat optimizatsiyalangan holatga qo'llanadi.">
                                 <input type="checkbox" id="merge_faculties" style="width:16px;height:16px;cursor:pointer;">
-                                Fakultetlararo guruh optimizatsiyasi<br><span style="font-weight:500;font-size:10.5px;color:#94a3b8;">(1+2-son davolash · faqat optimizatsiyada)</span>
+                                Fakultetlararo oqim optimizatsiyasi<br><span style="font-weight:500;font-size:10.5px;color:#94a3b8;">(kam to'lgan oqimni qo'shni fakultetga ko'chirish)</span>
                             </label>
                         </div>
                         <div class="filter-item" style="min-width: 420px;">
@@ -111,8 +111,8 @@
                     <p style="margin:2px 2px 0;font-size:11.5px;color:#64748b;">
                         Faqat faol (o'qiyotgan) talabalar hisobga olinadi. <b>Oqim</b> — ma'ruzaga birga boradigan guruhlar
                         (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). <b>Joriy holat</b> — HEMISdagidek, tasdiqlanadigan holat (o'zgarmaydi);
-                        <b>Optimizatsiyalangan holat</b> — kam to'lgan guruhlarni birlashtirib, ortiqcha guruhlarni qisqartirish taklifi (tasdiqlangach joriy holatga aylanadi).
-                        <b>Fakultetlararo guruh optimizatsiyasi</b> yoqilsa — bir yo'nalishli fakultetlar (1+2-son) guruhlari birga optimallashtiriladi, guruhlar fakultetlararo taqsimlanadi; fakultetlar saqlanadi.
+                        <b>Taklif etilayotgan o'zgartirish</b> — nimani nimaga o'zgartirish (kamayadigan guruh/oqimlar); <b>Optimizatsiyadan keyingi holat</b> — o'zgarishlardan keyingi to'liq holat (tasdiqlangach joriy holatga aylanadi).
+                        <b>Fakultetlararo oqim optimizatsiyasi</b> yoqilsa — fakultetlar alohida qoladi, faqat bir fakultetning kam to'lgan oqimi qo'shni fakultet oqimiga ko'chiriladi (mehmon guruhlar belgilanadi).
                         Har xil tildagi guruhlar bir oqim/guruhga qo'shilmaydi.
                     </p>
                 </div>
@@ -132,8 +132,11 @@
                     <div id="table-area" style="display:none;">
                         <div style="padding:8px 20px 0;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                             <button type="button" class="oq-tab active" data-tab="joriy" onclick="switchTab('joriy')" title="HEMISdagi haqiqiy, tasdiqlanadigan holat — optimizatsiya bunga ta'sir qilmaydi">Joriy holat</button>
-                            <button type="button" class="oq-tab" data-tab="opt" onclick="switchTab('opt')" title="Optimizatsiya taklifi — tasdiqlash uchun ko'rib chiqiladi">
-                                Optimizatsiyalangan holat <span id="opt-tab-badge" class="opt-tab-badge" style="display:none;"></span>
+                            <button type="button" class="oq-tab" data-tab="taklif" onclick="switchTab('taklif')" title="Nimani nimaga o'zgartirish taklifi — kamayadigan guruh/oqimlar">
+                                Taklif etilayotgan o'zgartirish <span id="opt-tab-badge" class="opt-tab-badge" style="display:none;"></span>
+                            </button>
+                            <button type="button" class="oq-tab" data-tab="after" onclick="switchTab('after')" title="Optimizatsiya qo'llangandan keyingi to'liq holat">
+                                Optimizatsiyadan keyingi holat
                             </button>
                             <span id="time-badge" style="font-size:12px;color:#94a3b8;margin-left:auto;"></span>
                         </div>
@@ -146,16 +149,20 @@
                             <div id="report-body" style="padding:16px 20px;max-height:calc(100vh - 340px);overflow:auto;"></div>
                         </div>
 
-                        <!-- OPTIMIZATSIYALANGAN HOLAT tab -->
-                        <div id="tab-opt" style="display:none;">
-                            <div style="padding:8px 20px;background:#f5f3ff;border-bottom:1px solid #ddd6fe;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                                <span id="opt-total-badge" class="badge" style="background:#7c3aed;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
-                                <span id="opt-merge-note" style="display:none;font-size:12px;font-weight:600;color:#6d28d9;">Bir yo'nalishli fakultetlar guruhlari birga optimallashtirildi — guruhlar fakultetlararo taqsimlandi (fakultetlar saqlanadi).</span>
-                                <span style="font-size:11.5px;color:#94a3b8;margin-left:auto;">Bu taklif — tasdiqlangach joriy holatga aylanadi.</span>
-                            </div>
-                            <div id="opt-body" style="padding:16px 20px;max-height:calc(100vh - 420px);overflow:auto;"></div>
+                        <!-- TAKLIF ETILAYOTGAN O'ZGARTIRISH tab (solishtirma) -->
+                        <div id="tab-taklif" style="display:none;">
                             <div id="opt-summary" class="opt-summary"></div>
                             <div id="opt-compare" style="padding:4px 20px 16px;max-height:calc(100vh - 360px);overflow:auto;"></div>
+                        </div>
+
+                        <!-- OPTIMIZATSIYADAN KEYINGI HOLAT tab (to'liq layout) -->
+                        <div id="tab-after" style="display:none;">
+                            <div style="padding:8px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <span id="after-total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                                <span id="after-merge-note" style="display:none;font-size:12px;font-weight:600;color:#166534;">Fakultetlar alohida — kam to'lgan oqimlar qo'shni fakultet oqimiga ko'chirildi (mehmon guruhlar belgilangan).</span>
+                                <span style="font-size:11.5px;color:#94a3b8;margin-left:auto;">Bu holat — tasdiqlangach joriy holatga aylanadi.</span>
+                            </div>
+                            <div id="opt-body" style="padding:16px 20px;max-height:calc(100vh - 380px);overflow:auto;"></div>
                         </div>
                     </div>
                 </div>
@@ -200,7 +207,8 @@
             $('.oq-tab').removeClass('active');
             $('.oq-tab[data-tab="' + tab + '"]').addClass('active');
             $('#tab-joriy').toggle(tab === 'joriy');
-            $('#tab-opt').toggle(tab === 'opt');
+            $('#tab-taklif').toggle(tab === 'taklif');
+            $('#tab-after').toggle(tab === 'after');
         }
 
         function loadReport() {
@@ -264,10 +272,12 @@
                         var lc = 'lang-' + (oq.lang || 'uz');
                         for (var r = 0; r < oq.rows.length; r++) {
                             var first = (r === 0), last = (r === oq.rows.length - 1);
-                            html += '<tr class="' + lc + (first ? ' oq-first' : '') + (last ? ' oq-last' : '') + '">';
-                            if (first) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum">' + esc(oq.total) + ' ta</span></td>';
-                            html += '<td class="oq-grp">' + esc(oq.rows[r].name) + '</td>';
-                            html += '<td class="oq-cnt">' + esc(oq.rows[r].count) + '</td>';
+                            var row = oq.rows[r];
+                            html += '<tr class="' + lc + (first ? ' oq-first' : '') + (last ? ' oq-last' : '') + (row.visitor ? ' oq-visitor' : '') + '">';
+                            if (first) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum">' + esc(oq.total) + ' ta</span>' + (oq.has_visitor ? '<span class="oq-mix">fakultetlararo</span>' : '') + '</td>';
+                            html += '<td class="oq-grp">' + esc(row.name)
+                                 + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from) + '</span>' : '') + '</td>';
+                            html += '<td class="oq-cnt">' + esc(row.count) + '</td>';
                             html += '</tr>';
                         }
                     }
@@ -287,13 +297,14 @@
             $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
         }
 
-        // Optimizatsiyalangan holat — to'liq layout (joriy kabi, lekin kam to'lgan guruhlar
-        // birlashtirilgan; fakultetlararo yoqilgan bo'lsa guruhlar fakultetlararo taqsimlanadi).
+        // Optimizatsiyadan keyingi holat — to'liq layout (joriy kabi, lekin kam to'lgan guruhlar
+        // birlashtirilgan; fakultetlararo yoqilgan bo'lsa kam to'lgan oqimlar qo'shni fakultetga ko'chirilgan).
         function renderOptimized(res) {
             var grand = renderBlocks(res.blocks, '#opt-body');
             var variantLabel = $('#variant option:selected').text();
-            $('#opt-total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
-            $('#opt-merge-note').toggle($('#merge_faculties').is(':checked'));
+            $('#after-total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
+            var hasX = res.plan && res.plan.xmoves && res.plan.xmoves.length;
+            $('#after-merge-note').toggle(!!($('#merge_faculties').is(':checked') && hasX));
         }
 
         function statBox(cur, opt, label) {
@@ -313,15 +324,34 @@
             $('#opt-summary').html(s);
 
             var moves = plan.moves || [];
-            var reduce = (plan.cur_subgroups || 0) - (plan.opt_subgroups || 0);
-            $('#opt-tab-badge').toggle(reduce > 0).text(reduce > 0 ? '−' + reduce : '');
+            var xmoves = plan.xmoves || [];
+            var reduceSub = (plan.cur_subgroups || 0) - (plan.opt_subgroups || 0);
+            var reduceOqim = (plan.cur_oqim || 0) - (plan.opt_oqim || 0);
+            var badgeN = reduceOqim > 0 ? reduceOqim : reduceSub;
+            $('#opt-tab-badge').toggle(badgeN > 0).text(badgeN > 0 ? '−' + badgeN : '');
 
             var m = '';
-            if (!moves.length) {
-                m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — birlashtiriladigan (kam to\'lgan) guruhcha topilmadi.<br>'
-                  + '<span style="font-weight:500;font-size:12.5px;color:#64748b;">Ko\'proq zichlash uchun me\'yor (max) yoki tolerantlik (±) ni oshiring.</span></div>';
-            } else {
-                m += '<div class="opt-moves-title">Solishtirma — ' + moves.length + ' ta joyda kichik guruh kamaytiriladi (qizil = o\'chiriladi):</div>';
+
+            // Fakultetlararo oqim ko'chirishlar (bosh o'zgarish — fakultetlar alohida qoladi)
+            if (xmoves.length) {
+                m += '<div class="opt-moves-title">Fakultetlararo oqim ko\'chirish — ' + xmoves.length + ' ta kam to\'lgan oqim qo\'shni fakultetga ko\'chiriladi (jami −' + xmoves.length + ' oqim):</div>';
+                for (var xi = 0; xi < xmoves.length; xi++) {
+                    var xm = xmoves[xi];
+                    var gl = (xm.moved || []).map(function(g){ return esc(g.name) + ' (' + esc(g.count) + ')'; }).join(', ');
+                    m += '<div class="cmp-card">';
+                    m += '<div class="cmp-head"><span class="cmp-title">' + esc(xm.course) + ' · ' + esc(xm.lang) + ' til</span>'
+                       + '<span class="cmp-count">' + esc(xm.from_fac) + ' → ' + esc(xm.to_fac) + '</span></div>';
+                    m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
+                       + '→ <b>' + esc(xm.to_fac) + '</b> oqimiga qo\'shiladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta).</div>';
+                    m += '</div>';
+                }
+            }
+
+            if (!moves.length && !xmoves.length) {
+                m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — birlashtiriladigan (kam to\'lgan) guruh/oqim topilmadi.<br>'
+                  + '<span style="font-weight:500;font-size:12.5px;color:#64748b;">Ko\'proq zichlash uchun me\'yor (max) yoki tolerantlik (±) ni oshiring; fakultetlararo ko\'chirish uchun tegishli katakchani belgilang.</span></div>';
+            } else if (moves.length) {
+                m += '<div class="opt-moves-title">Kichik guruhlarni zichlash — ' + moves.length + ' ta joyda kichik guruh kamaytiriladi (qizil = o\'chiriladi):</div>';
                 for (var i = 0; i < moves.length; i++) {
                     var mv = moves[i];
                     var cur = mv.cur_subs || [], nw = mv.new_subs || [];
@@ -366,8 +396,9 @@
         }
 
         function downloadExcel() {
-            // Faol vkladka bo'yicha (joriy yoki optimizatsiya) Excelга yuklaymiz
-            var params = getFilters(activeTab === 'opt');
+            // Faol vkladka bo'yicha Excelга yuklaymiz: "joriy" — joriy holat; aks holda
+            // (taklif / optimizatsiyadan keyingi holat) — optimizatsiyalangan holat.
+            var params = getFilters(activeTab !== 'joriy');
             var query = $.param(params);
             window.location.href = '{{ route("admin.reports.oqim.export") }}?' + query;
         }
@@ -442,6 +473,13 @@
         .lang-legend .ll.lang-uz  { color:#1d4ed8; background:#eff6ff; border-left-color:#3b82f6; }
         .lang-legend .ll.lang-rus { color:#be123c; background:#fff1f2; border-left-color:#f43f5e; }
         .lang-legend .ll.lang-ing { color:#6d28d9; background:#f5f3ff; border-left-color:#8b5cf6; }
+
+        /* Fakultetlararo ko'chirilgan (mehmon) guruhlar — "Optimizatsiyadan keyingi holat" da */
+        tr.oq-visitor td.oq-grp { background:#fff7ed; }
+        tr.oq-visitor td.oq-cnt { background:#fff7ed; }
+        .oq-from { display:inline-block; font-size:10px; font-weight:800; color:#c2410c; background:#ffedd5; border-radius:999px; padding:0 7px; margin-left:4px; }
+        .oq-mix { display:block; margin-top:2px; font-size:9.5px; font-weight:800; color:#c2410c; }
+        .xmove-body { padding:8px 12px; font-size:13px; color:#334155; line-height:1.5; background:#fffbeb; }
 
         #opt-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
         #opt-dialog { background:#fff; border-radius:14px; width:100%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,0.35); overflow:hidden; }

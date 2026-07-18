@@ -11406,11 +11406,16 @@ class ReportController extends Controller
         // to'lgan guruhlarni fakultetlararo birlashtirib, oqim/guruhlarni butun qiladi.
         // Fakultetlarning o'zi saqlanadi: bu bayroq FAQAT optimizatsiya so'rovida yuboriladi,
         // "joriy (tasdiqlangan) holat"ga hech qachon ta'sir qilmaydi.
-        $mergeFaculties = $request->boolean('merge_faculties');
+        // Fakultetlararo oqim optimizatsiyasi: fakultetlar ALOHIDA qoladi (har birining o'z
+        // dekani bor). Optimizatsiyada bir fakultetning kam to'lgan (ortiqcha) oqimi qo'shni
+        // fakultetning (bir yo'nalishli — masalan 1-son/2-son davolash) shu kurs va tildagi
+        // oqimiga — joy bo'lsa — ko'chiriladi; shunda oqimlar soni kamayadi. Fakultetlar
+        // birlashmaydi. Bayroq FAQAT optimizatsiya so'rovida yuboriladi.
+        $crossFaculty = $request->boolean('merge_faculties');
 
-        // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
+        // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar (fakultetlar alohida) ----
         $blocks = $this->assembleOqimBlocks(
-            $rows, $mergeFaculties, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang
+            $rows, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang
         );
 
         // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----
@@ -11444,10 +11449,18 @@ class ReportController extends Controller
             $variants = [$key => $variantNames[$key]];
         }
 
-        // Har bir variant uchun oqimlarni quramiz
+        // Har bir variant uchun oqimlarni quramiz. Optimizatsiya + fakultetlararo yoqilgan
+        // bo'lsa — qo'shni fakultetlar oqimlarini ko'chirish (birlashtirish) qo'llanadi.
         $byVariant = [];
+        $xmovesByVariant = [];
         foreach ($variants as $vKey => $vTitle) {
-            $byVariant[$vKey] = $this->buildOqimBlocksForVariant($blocks, $params, $vKey);
+            $vb = $this->buildOqimBlocksForVariant($blocks, $params, $vKey);
+            $xmoves = [];
+            if ($params['optimize'] && $crossFaculty) {
+                [$vb, $xmoves] = $this->applyCrossFacultyOqimMerge($vb, $params);
+            }
+            $byVariant[$vKey]      = $vb;
+            $xmovesByVariant[$vKey] = $xmoves;
         }
 
         $header = [
@@ -11458,18 +11471,14 @@ class ReportController extends Controller
         // JSON uchun asosiy (birinchi) variantni ham qulay ko'rinishda beramiz
         $firstVariant = array_key_first($byVariant);
 
-        // Optimizatsiya bosilganda — nima o'zgarishi haqida reja (dialog uchun)
+        // Optimizatsiya bosilganda — nima o'zgarishi haqida reja (solishtirma vkladka uchun)
         $plan = null;
         if ($params['optimize']) {
             // Reja ko'rsatilayotgan variant bilan bir xil bo'lsin (birinchi variant)
             $planVariant = array_key_first($variants);
-            // "Joriy holat" baseline HAR DOIM birlashtirilmagan bloklardan olinadi, shunda
-            // solishtirmadagi "joriy" sonlar (guruh/oqim) "Joriy holat" vkladkasi bilan
-            // mos keladi — fakultetlararo optimizatsiya bu sonlarni buzmaydi.
-            $curBlocks = $mergeFaculties
-                ? $this->assembleOqimBlocks($rows, false, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang)
-                : $blocks;
-            $plan = $this->computeOptimizationPlan($curBlocks, $blocks, $params, $planVariant);
+            $plan = $this->computeOptimizationPlan(
+                $blocks, $params, $planVariant, $xmovesByVariant[$planVariant] ?? []
+            );
         }
 
         return [
@@ -11486,12 +11495,13 @@ class ReportController extends Controller
 
     /**
      * HEMIS qatorlaridan fakultet+yo'nalish -> kurs -> guruhlar tuzilmasini yig'adi.
-     * $mergeFaculties=true bo'lsa — bir xil yo'nalishli fakultetlar (1-son/2-son) bitta
-     * pool ostiga jamlanadi (fakultetlararo optimizatsiya uchun). Bloklar tartiblangan
-     * holda qaytariladi.
+     * Fakultetlar HAR DOIM alohida blok bo'ladi. Har blokka 'merge_key' beriladi —
+     * bir xil yo'nalishli (masalan 1-son/2-son davolash) fakultetlar bir xil merge_key
+     * oladi; fakultetlararo oqim ko'chirish faqat shu kalit doirasida bo'ladi.
+     * Bloklar tartiblangan holda qaytariladi.
      */
     private function assembleOqimBlocks(
-        $rows, bool $mergeFaculties, array $excludedIds, array $trackMap,
+        $rows, array $excludedIds, array $trackMap,
         string $talimFilter, $langMap, array $overrideLang
     ): array {
         $blocks = [];
@@ -11507,33 +11517,29 @@ class ReportController extends Controller
                 continue;
             }
 
-            // Fakultet nomi — fakultetlararo optimizatsiya yoqilgan bo'lsa "N-son" prefiksi
-            // olib tashlanadi, shunda 1-son va 2-son davolash guruhlari bitta pool ostida
-            // birga optimallashtiriladi (guruhlar fakultetlararo taqsimlanadi).
-            $deptForBlock = $mergeFaculties
-                ? $this->oqimMergeDeptName($r->department_name)
-                : $r->department_name;
-
-            // Blok kaliti — fakultet + yo'nalish NOMI + ta'lim turi bo'yicha. Qo'shma va oddiy
-            // ta'lim hech qachon bitta blok/oqimга aralashmaydi.
-            $blockKey = mb_strtolower(trim((string) $deptForBlock)) . '|'
+            // Blok kaliti — HAQIQIY fakultet + yo'nalish NOMI + ta'lim turi bo'yicha
+            // (fakultetlar birlashmaydi). Qo'shma va oddiy ta'lim hech qachon aralashmaydi.
+            $dept = $r->department_name;
+            $blockKey = mb_strtolower(trim((string) $dept)) . '|'
                 . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
             if (!isset($blocks[$blockKey])) {
-                $title = $this->oqimBlockTitle($deptForBlock, $r->specialty_name);
+                $title = $this->oqimBlockTitle($dept, $r->specialty_name);
                 if ($track === 'qoshma') {
                     $title .= " — Qo'shma ta'lim";
                 }
+                // merge_key — "N-son" prefiksisiz yo'nalish: bir yo'nalishli fakultetlarni
+                // fakultetlararo oqim ko'chirishda "qo'shni" deb topish uchun.
+                $mergeKey = mb_strtolower(trim((string) $this->oqimMergeDeptName($dept))) . '|'
+                    . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
                 $blocks[$blockKey] = [
-                    'department_name' => $deptForBlock,
+                    'department_name' => $dept,
                     'specialty_name'  => $r->specialty_name,
                     'track'           => $track,
                     'title'           => $title,
-                    'orig_depts'      => [], // pool ostidagi haqiqiy fakultetlar (nomi bo'yicha)
+                    'merge_key'       => $mergeKey,
                     'courses'         => [],
                 ];
             }
-            // Pool ostiga tushgan haqiqiy fakultetlarni belgilaymiz (sarlavhada ko'rsatish uchun)
-            $blocks[$blockKey]['orig_depts'][trim((string) $r->department_name)] = true;
             $lvlKey = (string) $r->level_code;
             if (!isset($blocks[$blockKey]['courses'][$lvlKey])) {
                 $blocks[$blockKey]['courses'][$lvlKey] = [
@@ -11562,19 +11568,6 @@ class ReportController extends Controller
             ];
         }
 
-        // Birdan ortiq haqiqiy fakultet birga optimallashtirilgan bo'lsa — sarlavhada
-        // buni ochiq ko'rsatamiz (fakultetlar saqlanadi, guruhlar fakultetlararo taqsimlangan).
-        if ($mergeFaculties) {
-            foreach ($blocks as &$blk) {
-                $origs = array_keys($blk['orig_depts'] ?? []);
-                if (count($origs) > 1) {
-                    sort($origs, SORT_NATURAL | SORT_FLAG_CASE);
-                    $blk['title'] .= ' · fakultetlararo (' . implode(' + ', $origs) . ')';
-                }
-            }
-            unset($blk);
-        }
-
         // Bloklarni fakultet + yo'nalish + ta'lim turi bo'yicha tartiblaymiz (oddiy oldin, qo'shma keyin)
         uasort($blocks, function ($a, $b) {
             return [$a['department_name'], $a['specialty_name'], $a['track']]
@@ -11590,18 +11583,18 @@ class ReportController extends Controller
      * guruhlar (va shu bilan kichik guruhlar hamda oqimlar) sonini kamaytiradi.
      * Kichik guruhlar soni kursga qarab qat'iy (1-3 a,b; 4-6 a,b,c) — o'zgarmaydi.
      *
-     * $curBlocks — "joriy (tasdiqlangan) holat" bloklari (fakultetlararo bo'lsa ham
-     * BIRLASHTIRILMAGAN — "Joriy holat" vkladkasiga mos). $optBlocks — optimizatsiya
-     * qo'llanadigan bloklar (fakultetlararo yoqilsa — pool ostida). Yuqoridagi jami
-     * sonlar (guruh/kichik guruh/oqim) shu ikki holat orasida solishtiriladi.
+     * $blocks — fakultetlar alohida bloklari. Jami sonlar joriy (optimize=false) va
+     * optimallashtirilgan (optimize=true) holat orasida solishtiriladi. $xmoves —
+     * fakultetlararo ko'chirilgan oqimlar (har biri jami oqimni bittaga kamaytiradi).
      */
-    private function computeOptimizationPlan(array $curBlocks, array $optBlocks, array $params, string $variant): array
+    private function computeOptimizationPlan(array $blocks, array $params, string $variant, array $xmoves = []): array
     {
-        // Jami sonlar: joriy — birlashtirilmagan bloklardan, optimallashtirilgan — pool bloklardan
-        [$curBase, $curSub, $curOqim] = $this->oqimPlanTotals($curBlocks, $params, $variant, false);
-        [$optBase, $optSub, $optOqim] = $this->oqimPlanTotals($optBlocks, $params, $variant, true);
+        // Jami sonlar: joriy (optimize=false) va optimallashtirilgan (optimize=true)
+        [$curBase, $curSub, $curOqim] = $this->oqimPlanTotals($blocks, $params, $variant, false);
+        [$optBase, $optSub, $optOqim] = $this->oqimPlanTotals($blocks, $params, $variant, true);
+        // Fakultetlararo ko'chirilgan har bir oqim jami oqimlar sonini bittaga kamaytiradi
+        $optOqim = max(0, $optOqim - count($xmoves));
 
-        $blocks = $optBlocks; // moves (solishtirma detali) optimizatsiya tuzilmasi ustidan quriladi
         $curParams = ['optimize' => false] + $params;
         $optParams = ['optimize' => true] + $params;
 
@@ -11678,6 +11671,7 @@ class ReportController extends Controller
             'opt_oqim'      => $optOqim,
             'oqim_reduce'   => $curOqim - $optOqim,
             'moves'         => $moves,
+            'xmoves'        => array_values($xmoves),
         ];
     }
 
@@ -11759,25 +11753,157 @@ class ReportController extends Controller
                     // Oqim bitta tilda bo'ladi (packOqims til bo'yicha ajratadi) — rang uchun
                     $oqimLang = $oq[0]['lang'] ?? 'uz';
                     $displayOqims[] = [
-                        'label' => ($idx + 1) . '-oqim',
-                        'total' => $oqimTotal,
-                        'lang'  => $oqimLang,
-                        'rows'  => $rowsOut,
+                        'label'      => ($idx + 1) . '-oqim',
+                        'total'      => $oqimTotal,
+                        'lang'       => $oqimLang,
+                        'lang_label' => $oq[0]['lang_label'] ?? "o'z",
+                        'rows'       => $rowsOut,
                     ];
                 }
                 $courses[] = [
                     'level_name' => $course['level_name'],
+                    'level_code' => $course['level_code'],
                     'oqims'      => $displayOqims,
                     'total'      => $total,
                 ];
             }
 
             $result[] = [
-                'title'   => $block['title'],
-                'courses' => $courses,
+                'title'           => $block['title'],
+                'department_name' => $block['department_name'] ?? $block['title'],
+                'merge_key'       => $block['merge_key'] ?? ($block['title'] ?? ''),
+                'courses'         => $courses,
             ];
         }
         return $result;
+    }
+
+    /**
+     * Fakultetlararo OQIM ko'chirish (fakultetlar ALOHIDA qoladi): bir fakultetning kam
+     * to'lgan (ortiqcha) oqimini qo'shni fakultetning (bir xil merge_key, kurs va til)
+     * joyi bor oqimiga to'liq ko'chiradi. Shunda oqimlar soni kamayadi. Ko'chirilgan
+     * guruhlar QABUL QILGAN fakultet blokida "mehmon" deb belgilanadi; yuboruvchi fakultet
+     * o'sha oqimni endi ko'rsatmaydi. Qaytaradi: [yangilangan bloklar, ko'chirishlar (xmoves)].
+     */
+    private function applyCrossFacultyOqimMerge(array $blocks, array $params): array
+    {
+        $limit = $params['oqim_max'] + max(0, $params['oqim_tol']);
+        $langLabels = ['uz' => "o'z", 'rus' => 'rus', 'ing' => 'ing'];
+
+        // 1) Barcha oqimlarni egasi (blok, kurs) bilan guruhlab yig'amiz.
+        //    Guruh kaliti: merge_key | level_code | til — ko'chirish faqat shu doirada.
+        $groups = [];
+        $order = 0;
+        foreach ($blocks as $bi => $blk) {
+            foreach ($blk['courses'] as $ci => $course) {
+                foreach ($course['oqims'] as $oq) {
+                    $oq['_bi']    = $bi;
+                    $oq['_ci']    = $ci;
+                    $oq['_dept']  = $this->oqimFacultyShort($blk['department_name'] ?? $blk['title']);
+                    $oq['_level'] = $course['level_name'];
+                    $oq['_order'] = $order++;
+                    $gkey = ($blk['merge_key'] ?? $bi) . '|' . ($course['level_code'] ?? $ci) . '|' . ($oq['lang'] ?? 'uz');
+                    $groups[$gkey][] = $oq;
+                }
+            }
+        }
+
+        // 2) Har bir guruhda — eng kichik oqimdan boshlab, boshqa fakultetdagi sig'adigan
+        //    (best-fit) oqimga to'liq singdiramiz.
+        $xmoves = [];
+        $courseOqims = []; // "bi|ci" => [oqim, ...]
+        foreach ($groups as $list) {
+            $distinctBlocks = array_unique(array_map(fn($o) => $o['_bi'], $list));
+            if (count($distinctBlocks) > 1) {
+                usort($list, fn($a, $b) => $a['total'] <=> $b['total']);
+                $removed = [];
+                $n = count($list);
+                for ($i = 0; $i < $n; $i++) {
+                    if (isset($removed[$i]) || !empty($list[$i]['has_visitor'])) {
+                        continue; // mehmon qabul qilgan oqim boshqa joyga ko'chmaydi
+                    }
+                    $S = $list[$i];
+                    $bestJ = -1; $bestTotal = -1;
+                    for ($j = 0; $j < $n; $j++) {
+                        if ($j === $i || isset($removed[$j])) continue;
+                        if ($list[$j]['_bi'] === $S['_bi']) continue; // bir fakultet ichida emas
+                        $ht = $list[$j]['total'];
+                        if ($ht + $S['total'] <= $limit && $ht > $bestTotal) {
+                            $bestTotal = $ht; $bestJ = $j;
+                        }
+                    }
+                    if ($bestJ < 0) continue;
+
+                    $before = $list[$bestJ]['total'];
+                    $moved = [];
+                    foreach ($S['rows'] as $rr) {
+                        $rr['visitor'] = true;
+                        $rr['from']    = $S['_dept'];
+                        $list[$bestJ]['rows'][] = $rr;
+                        $moved[] = ['name' => $rr['name'], 'count' => $rr['count']];
+                    }
+                    $list[$bestJ]['total']      += $S['total'];
+                    $list[$bestJ]['has_visitor'] = true;
+                    $removed[$i] = true;
+                    $xmoves[] = [
+                        'course'      => $S['_level'],
+                        'lang'        => $S['lang_label'] ?? ($langLabels[$S['lang'] ?? 'uz'] ?? ''),
+                        'from_fac'    => $S['_dept'],
+                        'to_fac'      => $list[$bestJ]['_dept'],
+                        'moved'       => $moved,
+                        'moved_total' => $S['total'],
+                        'to_before'   => $before,
+                        'to_after'    => $list[$bestJ]['total'],
+                    ];
+                }
+                foreach ($list as $k => $oq) {
+                    if (isset($removed[$k])) continue;
+                    $courseOqims[$oq['_bi'] . '|' . $oq['_ci']][] = $oq;
+                }
+            } else {
+                foreach ($list as $oq) {
+                    $courseOqims[$oq['_bi'] . '|' . $oq['_ci']][] = $oq;
+                }
+            }
+        }
+
+        // 3) Bloklarni qayta quramiz — kursdagi oqimlarni asl tartibda qayta raqamlaymiz.
+        foreach ($blocks as $bi => &$blk) {
+            $newCourses = [];
+            foreach ($blk['courses'] as $ci => $course) {
+                $oqs = $courseOqims[$bi . '|' . $ci] ?? [];
+                if (empty($oqs)) {
+                    continue; // bu kursda oqim qolmadi (hammasi qo'shni fakultetga ko'chdi)
+                }
+                usort($oqs, fn($a, $b) => $a['_order'] <=> $b['_order']);
+                $total = 0; $rebuilt = []; $num = 0;
+                foreach ($oqs as $oq) {
+                    $total += $oq['total'];
+                    $oq['label'] = (++$num) . '-oqim';
+                    unset($oq['_bi'], $oq['_ci'], $oq['_dept'], $oq['_level'], $oq['_order']);
+                    $rebuilt[] = $oq;
+                }
+                $course['oqims'] = $rebuilt;
+                $course['total'] = $total;
+                $newCourses[] = $course;
+            }
+            $blk['courses'] = array_values($newCourses);
+        }
+        unset($blk);
+        $blocks = array_values(array_filter($blocks, fn($b) => !empty($b['courses'])));
+
+        return [$blocks, $xmoves];
+    }
+
+    /**
+     * Fakultet nomining qisqa ko'rinishi (belgi/tag uchun): oxiridagi "fakulteti" so'zi olib
+     * tashlanadi. "1-son davolash fakulteti" -> "1-son davolash".
+     */
+    private function oqimFacultyShort(string $dept): string
+    {
+        $d = preg_replace('/\s*fakultet(i|lari)?\s*$/ui', '', trim($dept));
+        $d = trim((string) $d);
+        return $d === '' ? trim($dept) : $d;
     }
 
     /**

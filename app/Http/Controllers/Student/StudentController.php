@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 use App\Models\MarkingSystemScore;
 use App\Models\AcademicRecord;
+use App\Models\AdmissionIndicator;
 use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnSubmission;
@@ -1627,6 +1628,17 @@ class StudentController extends Controller
         }
 
         $student = Auth::guard('student')->user();
+        $student->loadMissing('admissionData');
+
+        $admissionIndicator = AdmissionIndicator::query()
+            ->where('student_id', $student->student_id_number)
+            ->first(['talim_shakli', 'toplagan_bali']);
+
+        $studyFormName = $student->education_form_name
+            ?: $student->admissionData?->talim_shakli
+            ?: $admissionIndicator?->talim_shakli;
+
+        $admissionScore = $student->admissionData?->toplagan_ball ?? $admissionIndicator?->toplagan_bali;
 
         $profileData = [
             'full_name' => $student->full_name,
@@ -1646,6 +1658,8 @@ class StudentController extends Controller
             'province' => ['name' => $student->province_name ?? ''],
             'district' => ['name' => $student->district_name ?? ''],
             'is_graduate' => $student->is_graduate,
+            'study_form_name' => $studyFormName,
+            'admission_score' => $admissionScore,
         ];
 
         $botUsername = config('services.telegram.bot_username', '');

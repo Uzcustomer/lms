@@ -62,6 +62,23 @@ class CurriculumCheckController extends Controller
     public function options(Request $request)
     {
         return response()->json(match ($request->input('list')) {
+            // HEMIS curricula jadvalidan to'g'ridan-to'g'ri qidiruv (kelajak rejalari rejimi uchun)
+            'all_curricula' => Curriculum::query()
+                ->when($request->filled('q'), fn($q) => $q->where('name', 'like', '%' . $request->q . '%'))
+                ->when($request->filled('education_year_code'), fn($q) => $q->where('education_year_code', $request->education_year_code))
+                ->when($request->filled('education_type_code'), fn($q) => $q->where('education_type_code', $request->education_type_code))
+                ->select('curricula_hemis_id as id', 'name', 'education_year_name', 'education_type_name', 'education_period', 'semester_count')
+                ->orderByDesc('education_year_code')
+                ->orderBy('name')
+                ->limit(50)
+                ->get(),
+
+            'education_years' => Curriculum::query()
+                ->select('education_year_code as code', 'education_year_name as name')
+                ->distinct()
+                ->orderByDesc('education_year_code')
+                ->get(),
+
             'faculties' => $this->students($request)
                 ->whereNotNull('department_id')
                 ->select('department_id as id', 'department_name as name')

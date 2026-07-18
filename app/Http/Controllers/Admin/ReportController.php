@@ -11180,10 +11180,11 @@ class ReportController extends Controller
      */
     public function oqimOverrides(Request $request)
     {
-        $mixed     = $this->detectMixedLanguageGroups();
+        $all       = $this->buildOqimGroupList();
+        $mixed     = array_values(array_filter($all, fn($g) => $g['is_mixed']));
         $overrides = \App\Models\GroupOverride::orderBy('group_name')->get();
 
-        return view('admin.reports.oqim-overrides', compact('mixed', 'overrides'));
+        return view('admin.reports.oqim-overrides', compact('mixed', 'all', 'overrides'));
     }
 
     /**
@@ -11238,6 +11239,17 @@ class ReportController extends Controller
      */
     private function detectMixedLanguageGroups(): array
     {
+        return array_values(array_filter($this->buildOqimGroupList(), fn($g) => $g['is_mixed']));
+    }
+
+    /**
+     * Barcha guruhlarni "katta guruh" (base) kesimida yig'adi va har biriga 'is_mixed'
+     * bayrog'ini qo'yadi (bir nechta til bo'lsa — aralash). Qo'lda tuzatishlar (override)
+     * qo'llangan holda. Bu ro'yxat ham aralash guruhlarni aniqlash, ham "Guruh tuzatish"
+     * sahifasida ISTALGAN guruh tilini o'zgartirish uchun ishlatiladi.
+     */
+    private function buildOqimGroupList(): array
+    {
         $rows = DB::table('students as s')
             ->join('departments as d', 's.department_id', '=', 'd.department_hemis_id')
             ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
@@ -11288,18 +11300,17 @@ class ReportController extends Controller
             ];
         }
 
-        // Faqat bir nechta tilли (muammoli) guruhlar
-        $mixed = [];
+        // Barcha guruhlar — aralash (bir nechta til) bo'lsa 'is_mixed' bilan belgilaymiz
+        $all = [];
         foreach ($groups as $gr) {
-            if (count($gr['langs']) > 1) {
-                usort($gr['members'], fn($a, $b) => strcmp($a['group_name'], $b['group_name']));
-                $gr['langs'] = array_keys($gr['langs']);
-                $mixed[] = $gr;
-            }
+            usort($gr['members'], fn($a, $b) => strcmp($a['group_name'], $b['group_name']));
+            $gr['is_mixed'] = count($gr['langs']) > 1;
+            $gr['langs']    = array_keys($gr['langs']);
+            $all[] = $gr;
         }
-        usort($mixed, fn($a, $b) => [$a['department_name'], $a['level_name'], $a['base']] <=> [$b['department_name'], $b['level_name'], $b['base']]);
+        usort($all, fn($a, $b) => [$a['department_name'], $a['level_name'], $a['base']] <=> [$b['department_name'], $b['level_name'], $b['base']]);
 
-        return $mixed;
+        return $all;
     }
 
     /**

@@ -12145,6 +12145,8 @@ class ReportController extends Controller
         $xmoves = [];
         $courseOqims = []; // [bi][ci] => [oqim, ...]
 
+        $floor = max(1, $params['oqim_max'] - max(0, $params['oqim_tol']));
+
         foreach ($groups as $g) {
             $items = $g['items'];
             $distinctBi = array_unique(array_map(fn($x) => $x['bi'], $items));
@@ -12157,69 +12159,89 @@ class ReportController extends Controller
                 continue;
             }
 
-            // Barcha asosiy guruhlarni pool qilamiz (oqim qatorlaridan qayta yig'ib), egasi bilan.
-            $bases = [];
+            // 1) To'lgan oqimlar JOYIDA qoladi (past raqamli guruhlar ko'chmaydi). Kam to'lgan
+            //    oqimlarning guruhlari (fakultet OXIRIDAGI "tail") yig'iladi.
+            $resultOqims = [];
+            $partialBases = [];
             foreach ($items as $it) {
-                foreach ($this->oqimRowsToBases($it['oq']['rows']) as $bs) {
-                    $bs['_bi']   = $it['bi'];
-                    $bs['_dept'] = $it['dept'];
-                    $bases[] = $bs;
-                }
-            }
-            // Guruh nomi bo'yicha tartiblab, oqim me'yorigacha (limit) zich qadoqlaymiz.
-            usort($bases, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
-            $chunks = [];
-            $cur = []; $sum = 0;
-            foreach ($bases as $bs) {
-                if (!empty($cur) && ($sum + $bs['total']) > $limit) {
-                    $chunks[] = $cur; $cur = []; $sum = 0;
-                }
-                $cur[] = $bs; $sum += $bs['total'];
-            }
-            if (!empty($cur)) {
-                $chunks[] = $cur;
-            }
-
-            // Har bir oqimni ENG KO'P talaba beruvchi fakultetga biriktiramiz.
-            foreach ($chunks as $chunk) {
-                $byBi = [];
-                foreach ($chunk as $bs) { $byBi[$bs['_bi']] = ($byBi[$bs['_bi']] ?? 0) + $bs['total']; }
-                arsort($byBi);
-                $hostBi = array_key_first($byBi);
-                $hostCi = $courseIndex[$hostBi][(string) $g['level_code']] ?? null;
-                if ($hostCi === null) { $hostBi = $items[0]['bi']; $hostCi = $items[0]['ci']; }
-
-                $rows = []; $total = 0; $hasVisitor = false; $movedByDept = [];
-                foreach ($chunk as $bs) {
-                    $isVisitor = ($bs['_bi'] !== $hostBi);
-                    foreach ($bs['rows'] as $r) {
-                        if ($isVisitor) { $r['visitor'] = true; $r['from'] = $bs['_dept']; }
-                        if (!empty($r['visitor'])) { $hasVisitor = true; }
-                        $rows[] = $r;
-                        $total += (int) $r['count'];
-                    }
-                    if ($isVisitor) {
-                        if (!isset($movedByDept[$bs['_dept']])) { $movedByDept[$bs['_dept']] = ['total' => 0, 'items' => []]; }
-                        $movedByDept[$bs['_dept']]['total'] += $bs['total'];
-                        $movedByDept[$bs['_dept']]['items'][] = ['name' => $bs['base'], 'count' => $bs['total']];
+                if ((int) $it['oq']['total'] >= $floor) {
+                    $resultOqims[] = [
+                        'rows'  => $it['oq']['rows'],
+                        'total' => (int) $it['oq']['total'],
+                        'host'  => $it['bi'],
+                        'first' => $this->oqimBaseOfRow($it['oq']['rows'][0]['name'] ?? ''),
+                        'has_visitor' => !empty($it['oq']['has_visitor']),
+                        'moved' => [],
+                    ];
+                } else {
+                    foreach ($this->oqimRowsToBases($it['oq']['rows']) as $bs) {
+                        $bs['_bi'] = $it['bi']; $bs['_dept'] = $it['dept']; $partialBases[] = $bs;
                     }
                 }
-                $courseOqims[$hostBi][$hostCi][] = [
-                    'label' => '', 'total' => $total, 'lang' => $g['lang'], 'lang_label' => $g['lang_label'],
-                    'has_visitor' => $hasVisitor, 'rows' => $rows, '_first' => $chunk[0]['base'],
+            }
+
+            // 2) Tail guruhlarni oqim me'yorigacha qayta qadoqlaymiz (nom bo'yicha — eng oxirgi
+            //    guruh oxirda qoladi, ya'ni fakultet oxiridan olinadi, boshidan emas).
+            $remainder = null;
+            if (!empty($partialBases)) {
+                usort($partialBases, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+                $chunks = []; $cur = []; $sum = 0;
+                foreach ($partialBases as $bs) {
+                    if (!empty($cur) && ($sum + $bs['total']) > $limit) { $chunks[] = $cur; $cur = []; $sum = 0; }
+                    $cur[] = $bs; $sum += $bs['total'];
+                }
+                if (!empty($cur)) { $chunks[] = $cur; }
+
+                $lastIdx = count($chunks) - 1;
+                foreach ($chunks as $ci => $chunk) {
+                    $tot = array_sum(array_column($chunk, 'total'));
+                    if ($ci === $lastIdx && $tot < $floor && (!empty($resultOqims) || count($chunks) > 1)) {
+                        $remainder = $chunk; // kichik qoldiq — talabalari tarqatiladi
+                    } else {
+                        $resultOqims[] = $this->oqimBuildFromChunk($chunk, $courseIndex, $g['level_code'], $items);
+                    }
+                }
+            }
+
+            // 3) Kichik qoldiq talabalarini boshqa oqimlarga TARQATAMIZ (guruhchalarni sal
+            //    kattalashtirib) — avval me'yorgacha (limit), zarur bo'lsa teng ravishda sal
+            //    oshirib. Shunda 30 talabalik kichik oqim yo'qoladi, oqim me'yori PRIORITET.
+            if ($remainder !== null) {
+                if (!empty($resultOqims)) {
+                    $S = (int) array_sum(array_column($remainder, 'total'));
+                    $this->oqimDistributeStudents($resultOqims, $S, $limit);
+                    // Tarqatishni solishtirmada ko'rsatamiz (guruh nomlari + jami)
+                    $names = [];
+                    foreach ($remainder as $bs) { $names[] = ['name' => $bs['base'], 'count' => $bs['total']]; }
+                    $fromDept = $this->oqimFacultyShort(($remainder[0]['_dept'] ?? ''));
+                    $xmoves[] = [
+                        'course' => $g['level_name'], 'lang' => $g['lang_label'],
+                        'from_fac' => $fromDept, 'to_fac' => 'oqimlar orasiga',
+                        'moved' => $names, 'moved_total' => $S,
+                        'to_before' => 0, 'to_after' => 0, 'distributed' => true,
+                    ];
+                } else {
+                    $resultOqims[] = $this->oqimBuildFromChunk($remainder, $courseIndex, $g['level_code'], $items);
+                }
+            }
+
+            // 4) Har oqimni egasiga yozamiz + ko'chirishlar (xmoves).
+            foreach ($resultOqims as $ro) {
+                $host = $ro['host'];
+                $hostCi = $courseIndex[$host][(string) $g['level_code']] ?? null;
+                if ($hostCi === null) { $host = $items[0]['bi']; $hostCi = $items[0]['ci']; }
+                $courseOqims[$host][$hostCi][] = [
+                    'label' => '', 'total' => $ro['total'], 'lang' => $g['lang'], 'lang_label' => $g['lang_label'],
+                    'has_visitor' => $ro['has_visitor'], 'rows' => $ro['rows'], '_first' => $ro['first'],
                 ];
-                if ($hasVisitor) {
-                    $hostDept = $this->oqimFacultyShort($blocks[$hostBi]['department_name'] ?? '');
-                    foreach ($movedByDept as $fromDept => $mv) {
+                if (!empty($ro['moved'])) {
+                    $hostDept = $this->oqimFacultyShort($blocks[$host]['department_name'] ?? '');
+                    foreach ($ro['moved'] as $fromDept => $mv) {
                         $xmoves[] = [
-                            'course'      => $g['level_name'],
-                            'lang'        => $g['lang_label'],
-                            'from_fac'    => $fromDept,
-                            'to_fac'      => $hostDept,
-                            'moved'       => $mv['items'],
-                            'moved_total' => $mv['total'],
-                            'to_before'   => $total - $mv['total'],
-                            'to_after'    => $total,
+                            'course' => $g['level_name'], 'lang' => $g['lang_label'],
+                            'from_fac' => $fromDept, 'to_fac' => $hostDept,
+                            'moved' => $mv['items'], 'moved_total' => $mv['total'],
+                            'to_before' => $ro['total'] - $mv['total'], 'to_after' => $ro['total'],
                         ];
                     }
                 }
@@ -12272,6 +12294,82 @@ class ReportController extends Controller
         $out = [];
         foreach ($order as $bk) { $out[] = $bases[$bk]; }
         return $out;
+    }
+
+    /**
+     * Guruhlar bo'lagidan (chunk) bitta oqim quradi: eng ko'p talaba beruvchi fakultetga
+     * biriktiradi, qo'shni fakultet guruhlarini "mehmon" deb belgilaydi.
+     */
+    private function oqimBuildFromChunk(array $chunk, array $courseIndex, $levelCode, array $items): array
+    {
+        $byBi = [];
+        foreach ($chunk as $bs) { $byBi[$bs['_bi']] = ($byBi[$bs['_bi']] ?? 0) + $bs['total']; }
+        arsort($byBi);
+        $host = array_key_first($byBi);
+        if (!isset($courseIndex[$host][(string) $levelCode])) { $host = $items[0]['bi']; }
+
+        $rows = []; $total = 0; $hasVisitor = false; $moved = [];
+        foreach ($chunk as $bs) {
+            $isVisitor = ($bs['_bi'] !== $host);
+            foreach ($bs['rows'] as $r) {
+                if ($isVisitor) { $r['visitor'] = true; $r['from'] = $bs['_dept']; }
+                if (!empty($r['visitor'])) { $hasVisitor = true; }
+                $rows[] = $r; $total += (int) $r['count'];
+            }
+            if ($isVisitor) {
+                if (!isset($moved[$bs['_dept']])) { $moved[$bs['_dept']] = ['total' => 0, 'items' => []]; }
+                $moved[$bs['_dept']]['total'] += $bs['total'];
+                $moved[$bs['_dept']]['items'][] = ['name' => $bs['base'], 'count' => $bs['total']];
+            }
+        }
+        return ['rows' => $rows, 'total' => $total, 'host' => $host,
+                'first' => $chunk[0]['base'] ?? '', 'has_visitor' => $hasVisitor, 'moved' => $moved];
+    }
+
+    /**
+     * $S ta talabani oqimlar orasiga tarqatadi (guruhchalarni sal kattalashtirib): avval
+     * har oqimni $limit gacha to'ldiradi, keyin qolganini teng ravishda (sal oshib ketishi
+     * mumkin — oqim me'yori prioritet). Qabul qilgan oqim "fakultetlararo" deb belgilanadi.
+     */
+    private function oqimDistributeStudents(array &$oqims, int $S, int $limit): void
+    {
+        if ($S <= 0 || empty($oqims)) { return; }
+        // 1-bosqich: har oqimni me'yorgacha (limit) to'ldiramiz
+        foreach ($oqims as &$oq) {
+            if ($S <= 0) { break; }
+            $room = $limit - (int) $oq['total'];
+            if ($room <= 0) { continue; }
+            $add = min($room, $S);
+            $this->oqimAddStudentsToRows($oq['rows'], $add);
+            $oq['total'] += $add; $S -= $add;
+        }
+        unset($oq);
+        // 2-bosqich: qolgani teng ravishda (kichik oqim qoldirmaslik uchun)
+        if ($S > 0) {
+            $n = count($oqims); $i = 0;
+            while ($S > 0) {
+                $k = $i % $n;
+                $this->oqimAddStudentsToRows($oqims[$k]['rows'], 1);
+                $oqims[$k]['total'] += 1;
+                $S--; $i++;
+            }
+        }
+    }
+
+    /**
+     * $k ta talabani oqim qatorlariga (kichik guruhlar) eng kam to'lganidan boshlab qo'shadi.
+     */
+    private function oqimAddStudentsToRows(array &$rows, int $k): void
+    {
+        $n = count($rows);
+        if ($n === 0) { return; }
+        for ($x = 0; $x < $k; $x++) {
+            $mi = 0;
+            for ($j = 1; $j < $n; $j++) {
+                if ((int) $rows[$j]['count'] < (int) $rows[$mi]['count']) { $mi = $j; }
+            }
+            $rows[$mi]['count'] = (int) $rows[$mi]['count'] + 1;
+        }
     }
 
     /**

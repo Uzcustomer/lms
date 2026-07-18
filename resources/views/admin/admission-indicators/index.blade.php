@@ -80,12 +80,12 @@
 
             <div style="min-height:92px;border-radius:14px;border:1px solid #e4c1cb;background:#deb9c5;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
                 <div style="min-width:0;">
-                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#d05c1f;">Eng past grant ball</div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#d05c1f;">To'lov-shartnoma eng yuqori ball</div>
                     <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#20324d;">
-                        {{ $summary['lowest_grant_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['lowest_grant_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
+                        {{ $summary['top_contract_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['top_contract_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
                     </div>
-                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['lowest_grant_scorer']?->full_name }}">
-                        {{ $summary['lowest_grant_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
+                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['top_contract_scorer']?->full_name }}">
+                        {{ $summary['top_contract_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
                     </div>
                 </div>
                 <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#fff4cf;color:#f59e0b;">

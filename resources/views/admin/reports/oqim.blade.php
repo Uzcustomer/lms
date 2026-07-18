@@ -325,6 +325,7 @@
 
             var moves = plan.moves || [];
             var xmoves = plan.xmoves || [];
+            var xbmoves = plan.xbmoves || [];
             var reduceSub = (plan.cur_subgroups || 0) - (plan.opt_subgroups || 0);
             var reduceOqim = (plan.cur_oqim || 0) - (plan.opt_oqim || 0);
             var badgeN = reduceOqim > 0 ? reduceOqim : reduceSub;
@@ -332,7 +333,22 @@
 
             var m = '';
 
-            // Fakultetlararo oqim ko'chirishlar (bosh o'zgarish — fakultetlar alohida qoladi)
+            // Fakultetlararo chala guruhlarni to'ldirish (a,b + yolg'iz a -> to'liq a,b,c)
+            if (xbmoves.length) {
+                m += '<div class="opt-moves-title">Fakultetlararo guruh to\'ldirish — ' + xbmoves.length + ' ta joyda chala guruhlar birlashtirilib to\'liq (a,b,c) qilinadi:</div>';
+                for (var bi = 0; bi < xbmoves.length; bi++) {
+                    var bm = xbmoves[bi];
+                    var fl = (bm.from || []).map(function(n){ return esc(n); }).join(' + ');
+                    m += '<div class="cmp-card">';
+                    m += '<div class="cmp-head"><span class="cmp-title">' + esc(bm.course) + ' · ' + esc(bm.lang) + ' til</span>'
+                       + '<span class="cmp-count">→ ' + esc(bm.to_fac) + '</span></div>';
+                    m += '<div class="xmove-body">Chala guruhlar <b>' + fl + '</b> (jami <b>' + esc(bm.total) + ' ta</b>) birlashtirilib, '
+                       + '<b>' + esc(bm.to_fac) + '</b> da <b>' + esc(bm.new_bases) + ' ta to\'liq guruh</b> qilinadi — guruhcha soni oshmaydi.</div>';
+                    m += '</div>';
+                }
+            }
+
+            // Fakultetlararo oqim ko'chirishlar (fakultetlar alohida qoladi)
             if (xmoves.length) {
                 m += '<div class="opt-moves-title">Fakultetlararo oqim ko\'chirish — ' + xmoves.length + ' ta kam to\'lgan oqim qo\'shni fakultetga ko\'chiriladi (jami −' + xmoves.length + ' oqim):</div>';
                 for (var xi = 0; xi < xmoves.length; xi++) {
@@ -347,7 +363,7 @@
                 }
             }
 
-            if (!moves.length && !xmoves.length) {
+            if (!moves.length && !xmoves.length && !xbmoves.length) {
                 m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — birlashtiriladigan (kam to\'lgan) guruh/oqim topilmadi.<br>'
                   + '<span style="font-weight:500;font-size:12.5px;color:#64748b;">Ko\'proq zichlash uchun me\'yor (max) yoki tolerantlik (±) ni oshiring; fakultetlararo ko\'chirish uchun tegishli katakchani belgilang.</span></div>';
             } else if (moves.length) {

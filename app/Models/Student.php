@@ -86,6 +86,12 @@ class Student extends Authenticatable
         return $this->belongsTo(Group::class, 'group_id', 'group_hemis_id');
     }
 
+    public function groupHistory()
+    {
+        return $this->hasMany(StudentGroupHistory::class, 'student_id')
+            ->orderByDesc('started_at');
+    }
+
     public function curriculum()
     {
         return $this->belongsTo(Curriculum::class, 'curriculum_id', 'curricula_hemis_id');

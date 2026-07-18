@@ -86,6 +86,7 @@
                                 <button type="button" onclick="switchProfileTab('shaxsiy')" id="ptab-shaxsiy" class="sp-tab sp-tab-active">Shaxsiy</button>
                                 <button type="button" onclick="switchProfileTab('akademik')" id="ptab-akademik" class="sp-tab">Akademik</button>
                                 <button type="button" onclick="switchProfileTab('tashkiliy')" id="ptab-tashkiliy" class="sp-tab">Tashkiliy</button>
+                                <button type="button" onclick="switchProfileTab('guruh-tarixi')" id="ptab-guruh-tarixi" class="sp-tab">Guruh tarixi</button>
                                 <button type="button" onclick="switchProfileTab('manzil')" id="ptab-manzil" class="sp-tab">Manzil</button>
                                 <button type="button" onclick="switchProfileTab('fayllar')" id="ptab-fayllar" class="sp-tab">Fayllar</button>
                                 @if($canUploadFiles)<button type="button" onclick="switchProfileTab('qabul')" id="ptab-qabul" class="sp-tab">Umumiy ma'lumotlar</button>@endif
@@ -370,6 +371,51 @@
                                     @endif
                                 </div>
 
+                              </div>
+                            </div>
+
+                            {{-- TAB: GURUH TARIXI --}}
+                            <div id="ptab-content-guruh-tarixi" class="sp-content" style="display:none;">
+                              <div class="sp-card">
+                                <h4 class="sp-title">Guruh tarixi</h4>
+                                <p class="text-xs text-gray-500 mb-3">Talaba qaysi davrda qaysi guruhda o'qigani. Oldingi guruhlardagi vedomostlarni topish uchun kerak.</p>
+                                @if(isset($groupHistory) && $groupHistory->count() > 0)
+                                    <table class="min-w-full text-sm" style="border-collapse:collapse;">
+                                        <thead>
+                                            <tr style="background:#f1f5f9;">
+                                                <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Guruh</th>
+                                                <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Yo'nalish</th>
+                                                <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Boshlangan</th>
+                                                <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Tugagan</th>
+                                                <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Holat</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($groupHistory as $gh)
+                                                <tr style="border-bottom:1px solid #e2e8f0;">
+                                                    <td style="padding:8px;">
+                                                        <strong>{{ $gh->group_name ?? '-' }}</strong>
+                                                        @if($gh->education_year_name)
+                                                            <span class="text-gray-400 text-xs">({{ $gh->education_year_name }})</span>
+                                                        @endif
+                                                    </td>
+                                                    <td style="padding:8px;color:#475569;">{{ $gh->specialty_name ?? '-' }}</td>
+                                                    <td style="padding:8px;color:#475569;">{{ optional($gh->started_at)->format('d.m.Y') ?? '-' }}</td>
+                                                    <td style="padding:8px;color:#475569;">{{ $gh->ended_at ? $gh->ended_at->format('d.m.Y') : '—' }}</td>
+                                                    <td style="padding:8px;">
+                                                        @if($gh->ended_at)
+                                                            <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;background:#f1f5f9;color:#64748b;">Oldingi</span>
+                                                        @else
+                                                            <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;background:#d1fae5;color:#065f46;">Hozirgi</span>
+                                                        @endif
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                @else
+                                    <div class="text-sm text-gray-400 p-2">Guruh tarixi hali yozilmagan. Talaba guruhi keyingi HEMIS importlarida o'zgarsa, bu yerda ko'rinadi.</div>
+                                @endif
                               </div>
                             </div>
 

@@ -11112,12 +11112,41 @@ class ReportController extends Controller
 
         $faculties = $facultyQuery->get();
 
+        // Optimizatsiyadan keyingi holatni tasdiqlash/tahrirlash huquqi — registrator ofisi
+        // (va adminlar). Faqat shu rollar "Tasdiqlash" va "Qo'lda tahrirlash" ni ko'radi.
+        $user = auth()->user();
+        $canApprove = $user && $user->hasAnyRole(['superadmin', 'admin', 'registrator_ofisi']);
+
         return view('admin.reports.oqim', compact(
             'educationTypes',
             'selectedEducationType',
             'faculties',
-            'dekanFacultyId'
+            'dekanFacultyId',
+            'canApprove'
         ));
+    }
+
+    /**
+     * Filtr kontekstini bir xil aniqlaydigan barqaror kalit — snapshot (tasdiqlangan
+     * holat) shu kalit bo'yicha saqlanadi/topiladi. optimize kiritilmaydi (snapshot
+     * doim "optimizatsiyadan keyingi holat" uchun).
+     */
+    private function oqimContextKey(Request $request): string
+    {
+        $ctx = [
+            'education_type'  => (string) $request->get('education_type', ''),
+            'faculty'         => (string) ($request->get('faculty', '') ?: (get_dekan_faculty_id() ?: '')),
+            'talim'           => (string) $request->get('talim', 'all'),
+            'variant'         => (string) $request->get('variant', 'auto'),
+            'oqim_max'        => (int) $request->get('oqim_max', 100),
+            'oqim_tol'        => (int) $request->get('oqim_tol', 0),
+            'ab_max'          => (int) $request->get('ab_max', 15),
+            'ab_tol'          => (int) $request->get('ab_tol', 0),
+            'abc_max'         => (int) $request->get('abc_max', 10),
+            'abc_tol'         => (int) $request->get('abc_tol', 0),
+            'merge_faculties' => (int) $request->boolean('merge_faculties'),
+        ];
+        return hash('sha256', json_encode($ctx));
     }
 
     /**
@@ -11130,12 +11159,101 @@ class ReportController extends Controller
             set_time_limit(120);
 
             $report = $this->buildOqimReport($request);
+
+            // Optimizatsiyadan keyingi holat uchun saqlangan/tasdiqlangan snapshotni beramiz.
+            $report['context_key'] = $this->oqimContextKey($request);
+            $report['snapshot'] = null;
+            try {
+                $snap = \App\Models\OqimSnapshot::where('context_key', $report['context_key'])->first();
+                if ($snap) {
+                    $report['snapshot'] = [
+                        'status'      => $snap->status,
+                        'approved_at' => optional($snap->approved_at)->format('d.m.Y H:i'),
+                        'approver'    => $snap->approved_by ? optional(\App\Models\User::find($snap->approved_by))->name : null,
+                        'note'        => $snap->note,
+                        'has_data'    => !empty($snap->data),
+                        'updated_at'  => optional($snap->updated_at)->format('d.m.Y H:i'),
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // Jadval hali migratsiya qilinmagan bo'lishi mumkin — hisobotni buzmaymiz.
+            }
+
             return response()->json($report);
         } catch (\Throwable $e) {
             return response()->json([
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * AJAX: saqlangan (tasdiqlangan/qoralama) optimizatsiyadan keyingi holatni beradi —
+     * "Saqlangan holatni yuklash" tugmasi uchun.
+     */
+    public function oqimSnapshotShow(Request $request)
+    {
+        $snap = \App\Models\OqimSnapshot::where('context_key', $this->oqimContextKey($request))->first();
+        if (!$snap) {
+            return response()->json(['found' => false]);
+        }
+        return response()->json([
+            'found'  => true,
+            'status' => $snap->status,
+            'data'   => $snap->data,
+        ]);
+    }
+
+    /**
+     * AJAX: optimizatsiyadan keyingi holatni qo'lda tahrirlab saqlash yoki TASDIQLASH.
+     * action=approve — faqat registrator ofisi / admin (tasdiqlaydi); aks holda qoralama.
+     */
+    public function oqimSnapshotSave(Request $request)
+    {
+        $user = auth()->user();
+        $canApprove = $user && $user->hasAnyRole(['superadmin', 'admin', 'registrator_ofisi']);
+        if (!$canApprove) {
+            return response()->json(['ok' => false, 'error' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $data = $request->validate([
+            'context'  => 'required|array',
+            'data'     => 'required|array',
+            'action'   => 'required|in:draft,approve,unapprove',
+            'note'     => 'nullable|string|max:500',
+        ]);
+
+        $key = $this->oqimContextKey($request->merge($data['context']));
+
+        $snap = \App\Models\OqimSnapshot::firstOrNew(['context_key' => $key]);
+        $snap->context = $data['context'];
+        if ($data['action'] !== 'unapprove') {
+            $snap->data = $data['data'];
+        }
+        $snap->note = $data['note'] ?? $snap->note;
+        if (!$snap->exists) {
+            $snap->created_by = $user->id;
+        }
+
+        if ($data['action'] === 'approve') {
+            $snap->status = 'approved';
+            $snap->approved_by = $user->id;
+            $snap->approved_at = now();
+        } elseif ($data['action'] === 'unapprove') {
+            $snap->status = 'draft';
+            $snap->approved_by = null;
+            $snap->approved_at = null;
+        } else {
+            $snap->status = 'draft';
+        }
+        $snap->save();
+
+        return response()->json([
+            'ok'          => true,
+            'status'      => $snap->status,
+            'approved_at' => optional($snap->approved_at)->format('d.m.Y H:i'),
+            'approver'    => $snap->approved_by ? optional($user)->name : null,
+        ]);
     }
 
     /**
@@ -11147,19 +11265,26 @@ class ReportController extends Controller
         ini_set('memory_limit', '512M');
         set_time_limit(180);
 
-        $report = $this->buildOqimReport($request);
+        // Ikki holatni ham quramiz: "Joriy holat" (optimize=0) va "Optimizatsiyadan
+        // keyingi holat" (optimize=1 + fakultetlararo, agar belgilangan bo'lsa).
+        $request->merge(['optimize' => 0]);
+        $joriy = $this->buildOqimReport($request);
+        $request->merge(['optimize' => 1]);
+        $after = $this->buildOqimReport($request);
+
+        $jVar = array_key_first($joriy['byVariant']);
+        $aVar = array_key_first($after['byVariant']);
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
 
-        // Agar "barcha variantlar" tanlangan bo'lsa — har biri alohida varaqda
-        $variants = $report['variants']; // [1=>'Guruh', 2=>'A.B', ...]
-        foreach ($variants as $vNum => $vTitle) {
-            $blocks = $report['byVariant'][$vNum];
-            $sheet = $spreadsheet->createSheet();
-            $sheet->setTitle($vTitle);
-            $this->fillOqimSheet($sheet, $blocks, $report['header']);
-        }
+        $s1 = $spreadsheet->createSheet();
+        $s1->setTitle('Joriy holat');
+        $this->fillOqimSheet($s1, $joriy['byVariant'][$jVar], $joriy['header']);
+
+        $s2 = $spreadsheet->createSheet();
+        $s2->setTitle('Optimizatsiyadan keyingi holat');
+        $this->fillOqimSheet($s2, $after['byVariant'][$aVar], $after['header']);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -12526,8 +12651,18 @@ class ReportController extends Controller
     private function fillOqimSheet($sheet, array $blocks, array $header): void
     {
         $B = \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN;
+        $BM = \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM;
         $center = \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER;
         $vcenter = \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER;
+        $FILL = \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID;
+
+        // Til bo'yicha ranglar (web HTML dagi kabi): [chegara, yorliq foni, yorliq matni, guruh foni]
+        $langColors = [
+            'uz'  => ['3B82F6', 'EFF6FF', '1D4ED8', 'FFFFFF'],
+            'rus' => ['F43F5E', 'FFF1F2', 'BE123C', 'FFFAFA'],
+            'ing' => ['8B5CF6', 'F5F3FF', '6D28D9', 'FBFAFF'],
+        ];
+        $visitorFill = 'FFF7ED'; // fakultetlararo mehmon guruh foni (orange-50)
 
         $maxCols = 18; // 6 kurs * 3 ustun
         $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($maxCols);
@@ -12544,7 +12679,13 @@ class ReportController extends Controller
         $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(10);
         $sheet->getStyle('A2')->getAlignment()->setHorizontal($center)->setVertical($vcenter)->setWrapText(true);
 
-        $row = 4;
+        // Til legendasi (web dagi kabi)
+        $sheet->setCellValue('A3', "Til ranglari:  o'z (ko'k)   ·   rus (pushti)   ·   ing (binafsha)   ·   fakultetlararo (to'q sariq)");
+        $sheet->mergeCells("A3:{$lastColLetter}3");
+        $sheet->getStyle('A3')->getFont()->setBold(true)->setSize(9)->getColor()->setRGB('64748B');
+        $sheet->getStyle('A3')->getAlignment()->setVertical($vcenter);
+
+        $row = 5;
         foreach ($blocks as $block) {
             // Blok sarlavhasi (fakultet + yo'nalish)
             $sheet->setCellValue([1, $row], $block['title']);
@@ -12576,10 +12717,28 @@ class ReportController extends Controller
                 $cur = $dataStartRow;
                 foreach ($course['oqims'] as $oqim) {
                     $oqimTop = $cur;
+                    $lc = $langColors[$oqim['lang'] ?? 'uz'] ?? $langColors['uz'];
                     foreach ($oqim['rows'] as $gr) {
-                        $sheet->setCellValue([$colBase + 1, $cur], $gr['name']);
+                        $name = $gr['name'];
+                        if (!empty($gr['visitor'])) {
+                            $name .= '  ← ' . ($gr['from'] ?? 'fakultetlararo');
+                        }
+                        $sheet->setCellValue([$colBase + 1, $cur], $name);
                         $sheet->setCellValue([$colBase + 2, $cur], $gr['count']);
                         $sheet->getStyle([$colBase + 2, $cur])->getAlignment()->setHorizontal($center);
+                        // Guruh nomi katakchasi — chap chegara til rangida (web dagi kabi)
+                        $sheet->getStyle([$colBase + 1, $cur])->getBorders()->getLeft()
+                            ->setBorderStyle($BM)->getColor()->setRGB($lc[0]);
+                        // Mehmon (fakultetlararo) guruh — to'q sariq fon; aks holda til foni
+                        $bg = !empty($gr['visitor']) ? $visitorFill : $lc[3];
+                        if ($bg !== 'FFFFFF') {
+                            foreach ([$colBase + 1, $colBase + 2] as $cc) {
+                                $sheet->getStyle([$cc, $cur])->getFill()->setFillType($FILL)->getStartColor()->setRGB($bg);
+                            }
+                        }
+                        if (!empty($gr['visitor'])) {
+                            $sheet->getStyle([$colBase + 1, $cur])->getFont()->getColor()->setRGB('C2410C');
+                        }
                         $cur++;
                     }
                     $oqimBottom = $cur - 1;
@@ -12587,13 +12746,18 @@ class ReportController extends Controller
                         // Oqim yorlig'ini birinchi ustunga, guruhlar sonicha birlashtirib yozamiz.
                         // Yorliq ostida oqimdagi jami talaba soni ko'rsatiladi.
                         $label = $oqim['label'] . "\n(" . ($oqim['total'] ?? 0) . " ta)";
+                        if (!empty($oqim['has_visitor'])) {
+                            $label .= "\nfakultetlararo";
+                        }
                         $sheet->setCellValue([$colBase, $oqimTop], $label);
                         if ($oqimBottom > $oqimTop) {
                             $sheet->mergeCells([$colBase, $oqimTop, $colBase, $oqimBottom]);
                         }
                         $sheet->getStyle([$colBase, $oqimTop])->getAlignment()
                             ->setHorizontal($center)->setVertical($vcenter)->setWrapText(true);
-                        $sheet->getStyle([$colBase, $oqimTop])->getFont()->setBold(true);
+                        // Oqim yorlig'i — til rangida (fon + matn), web dagi kabi
+                        $sheet->getStyle([$colBase, $oqimTop])->getFont()->setBold(true)->getColor()->setRGB($lc[2]);
+                        $sheet->getStyle([$colBase, $oqimTop])->getFill()->setFillType($FILL)->getStartColor()->setRGB($lc[1]);
                     }
                 }
 

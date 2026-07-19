@@ -870,6 +870,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/planned-sources', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'plannedSources'])->name('planned-sources');
                 Route::post('/store-planned', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storePlanned'])->name('store-planned');
                 Route::post('/{curriculum}/link-hemis', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'linkToHemis'])->name('link-hemis');
+                Route::get('/subjects-summary', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'subjectsSummary'])->name('subjects-summary');
+                Route::get('/subjects-summary/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'subjectsSummaryExport'])->name('subjects-summary.export');
                 Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
                 Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
                 Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');

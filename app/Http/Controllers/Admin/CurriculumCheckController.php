@@ -916,6 +916,15 @@ class CurriculumCheckController extends Controller
             ->when(!$request->boolean('include_planned', true), fn($q) => $q->where('mc.status', 'active'))
             ->when($request->filled('specialty_code'), fn($q) => $q->where('mc.specialty_code', $request->specialty_code))
             ->when($request->filled('plan_year'), fn($q) => $q->where('mc.plan_year', $request->plan_year))
+            // O'qitiladigan o'quv yili = plan_year boshi + (kurs - 1). Bir o'quv yilining
+            // barcha kurslari turli plan_year larda saqlanadi (guruh kirgan yili bo'yicha).
+            ->when($request->filled('academic_year'), function ($q) use ($request) {
+                $start = (int) substr($request->academic_year, 0, 4);
+                $q->whereRaw(
+                    "(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?",
+                    [$start]
+                );
+            })
             ->when($request->filled('level_code'), fn($q) => $q->where('mc.level_code', $request->level_code))
             ->when($request->filled('semester'), fn($q) => $q->where('s.semester', $request->semester))
             ->groupBy('mc.specialty_code', 'mc.specialty_name', 'mc.level_code', 's.semester', 's.block', 's.subject_name')

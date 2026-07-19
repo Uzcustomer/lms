@@ -701,7 +701,14 @@
                     ->unique(fn($c) => $c->specialty_code . '|' . $c->specialty_name)
                     ->sortBy('specialty_name')
                     ->values();
-                $ishYears = $ishchiList->pluck('plan_year')->filter()->unique()->sort()->values();
+                // O'qitiladigan o'quv yili = plan_year boshi + (kurs - 1)
+                $acadYears = $ishchiList->map(function ($c) {
+                    $start = (int) substr($c->plan_year ?? '', 0, 4);
+                    if (!$start || !$c->level_code) return null;
+                    $course = (int) $c->level_code >= 11 ? (int) $c->level_code - 10 : (int) $c->level_code;
+                    $as = $start + $course - 1;
+                    return $as . '-' . ($as + 1);
+                })->filter()->unique()->sortDesc()->values();
             @endphp
             <div data-panel="fanlar" class="hidden">
                 <div class="bg-white shadow-sm sm:rounded-lg mb-6">
@@ -724,10 +731,10 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-gray-600 mb-1">Reja yili</label>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">O'quv yili (o'qitiladigan)</label>
                                 <select id="fsYear" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
                                     <option value="">Barchasi</option>
-                                    @foreach($ishYears as $y)
+                                    @foreach($acadYears as $y)
                                         <option value="{{ $y }}">{{ $y }}</option>
                                     @endforeach
                                 </select>
@@ -1672,7 +1679,7 @@
                         function params() {
                             const p = new URLSearchParams();
                             if (spec.value) p.set('specialty_code', spec.value);
-                            if (year.value) p.set('plan_year', year.value);
+                            if (year.value) p.set('academic_year', year.value);
                             if (kurs.value) p.set('level_code', kurs.value);
                             if (sem.value)  p.set('semester', sem.value);
                             p.set('include_planned', planned.checked ? '1' : '0');
@@ -1745,6 +1752,8 @@
                         }
 
                         [spec, year, kurs, sem, planned].forEach(el => el.addEventListener('change', reload));
+                        // Boshlanishida eng so'nggi o'quv yilini tanlab qo'yamiz
+                        if (year.options.length > 1) year.selectedIndex = 1;
                         // Tab ochilganda birinchi marta yuklaymiz
                         document.querySelector('.main-tab[data-tab="fanlar"]').addEventListener('click', () => {
                             if (!loadedOnce) { loadedOnce = true; reload(); }

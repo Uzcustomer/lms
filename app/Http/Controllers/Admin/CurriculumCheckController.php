@@ -49,7 +49,23 @@ class CurriculumCheckController extends Controller
             ->filter(fn ($c) => $c->reference && $c->working)
             ->values();
 
-        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons'));
+        // Jamlangan solishtirish: har bir namunaviy reja uchun shu HEMIS rejaga
+        // tegishli barcha ishchi rejalar (barcha yuklangan semestrlar) yig'iladi.
+        // Yangi semestr yuklansa, guruhga avtomatik qo'shiladi.
+        $ishchiByHemis = $curricula->where('type', 'ishchi')
+            ->filter(fn ($c) => $c->curricula_hemis_id)
+            ->groupBy('curricula_hemis_id');
+        $groupedComparisons = $curricula->where('type', 'namunaviy')
+            ->filter(fn ($c) => $c->curricula_hemis_id && $ishchiByHemis->has($c->curricula_hemis_id))
+            ->map(fn ($c) => [
+                'reference' => $c,
+                'workings'  => $ishchiByHemis[$c->curricula_hemis_id]
+                    ->sortBy(fn ($w) => [CurriculumComparisonService::semesterNumber($w->semester_code) ?? 99, $w->id])
+                    ->values(),
+            ])
+            ->values();
+
+        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons', 'groupedComparisons'));
     }
 
     /**
@@ -1231,6 +1247,91 @@ class CurriculumCheckController extends Controller
         return view('admin.oquv-reja.compare', compact('reference', 'working', 'comparison'));
     }
 
+    /**
+     * Jamlangan solishtirish: bitta namunaviy reja bilan shu HEMIS rejaga
+     * tegishli barcha ishchi rejalar (barcha semestrlar) birgalikda.
+     */
+    public function compareGroup(Request $request, CurriculumComparisonService $service)
+    {
+        [$reference, $workings] = $this->resolveGroup($request);
+        if ($workings->isEmpty()) {
+            return redirect()->route('admin.oquv-reja.index')
+                ->with('error', "Ushbu namunaviy rejaga mos ishchi reja topilmadi. Avval ishchi rejani yuklang.");
+        }
+
+        $comparison = $service->compareGroup($reference, $workings,
+            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)));
+
+        // Rejaning barcha semestrlaridan hali yuklanmaganlari
+        $missingSemesters = $this->missingSemesters($reference, $comparison['covered_semesters'] ?? []);
+
+        return view('admin.oquv-reja.compare-group',
+            compact('reference', 'workings', 'comparison', 'missingSemesters'));
+    }
+
+    public function compareGroupExport(Request $request, CurriculumComparisonService $service)
+    {
+        [$reference, $workings] = $this->resolveGroup($request);
+        abort_if($workings->isEmpty(), 404);
+
+        $comparison = $service->compareGroup($reference, $workings,
+            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)));
+
+        $title = "{$reference->name} <-> barcha ishchi rejalar (jamlangan) solishtirma";
+        $fileName = 'oquv-reja-jamlangan-solishtirma-' . now()->format('Y-m-d_His') . '.xlsx';
+
+        return Excel::download(new CurriculumComparisonExport($title, $comparison), $fileName);
+    }
+
+    /** Namunaviy reja va unga tegishli barcha ishchi rejalarni aniqlash. */
+    private function resolveGroup(Request $request): array
+    {
+        $request->validate([
+            'reference_id' => 'required|exists:manual_curricula,id',
+        ]);
+
+        $reference = ManualCurriculum::findOrFail($request->reference_id);
+        abort_unless($reference->type === 'namunaviy', 404);
+
+        $workings = ManualCurriculum::where('type', 'ishchi')
+            ->when($reference->curricula_hemis_id,
+                fn ($q) => $q->where('curricula_hemis_id', $reference->curricula_hemis_id),
+                fn ($q) => $q->where('specialty_code', $reference->specialty_code)
+                    ->where('plan_year', $reference->plan_year))
+            ->orderBy('semester_code')
+            ->orderBy('id')
+            ->get();
+
+        return [$reference, $workings];
+    }
+
+    private function groupHemisIds(ManualCurriculum $reference, $workings): array
+    {
+        return array_values(array_unique(array_filter(array_merge(
+            [$reference->curricula_hemis_id],
+            $workings->pluck('curricula_hemis_id')->all(),
+        ))));
+    }
+
+    /** HEMIS'dagi reja semestrlaridan hali ishchi reja yuklanmaganlari. */
+    private function missingSemesters(ManualCurriculum $reference, array $covered): array
+    {
+        if (!$reference->curricula_hemis_id) {
+            return [];
+        }
+
+        $all = Semester::where('curriculum_hemis_id', $reference->curricula_hemis_id)
+            ->pluck('code')
+            ->map(fn ($c) => CurriculumComparisonService::semesterNumber($c))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return array_values(array_diff($all, $covered));
+    }
+
     public function destroyComparison(ManualCurriculumComparison $comparison)
     {
         $comparison->delete();
@@ -1256,10 +1357,14 @@ class CurriculumCheckController extends Controller
      */
     private function hemisSubjectNames(ManualCurriculum $reference, ManualCurriculum $working): array
     {
-        $ids = array_values(array_unique(array_filter([
+        return $this->hemisSubjectNamesForIds(array_values(array_unique(array_filter([
             $reference->curricula_hemis_id,
             $working->curricula_hemis_id,
-        ])));
+        ]))));
+    }
+
+    private function hemisSubjectNamesForIds(array $ids): array
+    {
         if (empty($ids)) {
             return [];
         }

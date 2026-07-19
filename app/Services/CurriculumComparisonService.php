@@ -107,7 +107,8 @@ class CurriculumComparisonService
      *    (batch yuklashda bir fayl bir nechta semestr yozuviga to'liq nusxalanadi);
      *  - takror (semestr + fan nomi) juftliklari bir marta olinadi, eng oxirgi
      *    yuklangan reja ustunlik qiladi;
-     *  - semestri ko'rsatilmagan qatorlar fayl bo'yicha bir marta olinadi.
+     *  - semestri ko'rsatilmagan qatorlar butun guruh bo'ylab nom bo'yicha
+     *    bir marta olinadi (batch nusxa va qayta yuklashlar takrorlanmaydi).
      *
      * @return array{0: Collection, 1: array<int>, 2: array<int, array>}
      *         [jamlangan fanlar, qamrab olingan semestrlar, har bir reja bo'yicha xulosa]
@@ -122,6 +123,7 @@ class CurriculumComparisonService
         // Eng oxirgi yuklangan reja takror qatorlarda ustun bo'lishi uchun ID kamayish tartibida
         foreach ($workings->sortByDesc('id')->values() as $working) {
             $recSem = self::semesterNumber($working->semester_code);
+            $hadNullRows = false;
             $taken = 0;
             $hours = 0.0;
             $credit = 0.0;
@@ -131,10 +133,16 @@ class CurriculumComparisonService
                 if ($recSem !== null && $rowSem !== null && $rowSem !== $recSem) {
                     continue;
                 }
+                if ($rowSem === null) {
+                    $hadNullRows = true;
+                }
                 $name = $this->normalize($s->reference_name ?: $s->subject_name);
+                // Semestri ko'rsatilmagan qator qaysi semestrga tegishligini bilib
+                // bo'lmaydi — bunday fan butun guruh bo'ylab nom bo'yicha bir marta
+                // olinadi (batch nusxalar va tuzatib qayta yuklashlar bir marta sanaladi).
                 $key = $rowSem !== null
                     ? 's' . $rowSem . '|' . $name
-                    : 'n|' . ($working->file_path ?: $working->id) . '|' . $name;
+                    : 'n|' . $name;
                 if (isset($seen[$key])) {
                     continue;
                 }
@@ -148,6 +156,12 @@ class CurriculumComparisonService
                 if ($sem !== null && !in_array($sem, $covered, true)) {
                     $covered[] = $sem;
                 }
+            }
+
+            // Qatorlari nusxa sifatida o'tkazib yuborilgan bo'lsa ham,
+            // yozuv mo'ljallangan semestr qamrab olingan hisoblanadi
+            if ($hadNullRows && $recSem !== null && !in_array($recSem, $covered, true)) {
+                $covered[] = $recSem;
             }
 
             $plans[] = [

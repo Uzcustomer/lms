@@ -425,6 +425,158 @@ class CurriculumCheckController extends Controller
         ])->values());
     }
 
+    /**
+     * Bulk yuklash: har bir kurs (kohort) uchun bitta fayl — shu kursdagi barcha
+     * curriculum va tanlangan semestrlarga qo'llanadi. Fayl bir marta o'qiladi,
+     * qolgan (curriculum, semestr) juftliklariga fanlar nusxalanadi.
+     */
+    public function storeBulk(Request $request)
+    {
+        $request->validate([
+            'type'                     => 'required|in:namunaviy,ishchi',
+            'items'                    => 'required|array|min:1',
+            'items.*.file'             => 'nullable|file|mimes:xlsx,xls|max:10240',
+            'items.*.curricula'        => 'required|array|min:1',
+            'items.*.curricula.*'      => 'integer|exists:curricula,curricula_hemis_id',
+            'items.*.semester_codes'   => 'required|array|min:1',
+            'items.*.semester_codes.*' => 'string|max:20',
+        ]);
+
+        $type    = $request->type;
+        $created = 0;
+        $skipped = 0;
+        $errors  = [];
+
+        foreach ($request->input('items', []) as $idx => $item) {
+            $file = $request->file("items.$idx.file");
+            if (!$file) {
+                continue; // fayl tanlanmagan kurs — o'tkazib yuboriladi
+            }
+
+            $curricIds = array_values(array_unique(array_map('intval', $item['curricula'])));
+            $semCodes  = array_values(array_unique(array_filter($item['semester_codes'])));
+            if (!$curricIds || !$semCodes) {
+                continue;
+            }
+
+            $curricula = Curriculum::whereIn('curricula_hemis_id', $curricIds)
+                ->get()->keyBy('curricula_hemis_id');
+            $semesterInfo = Semester::whereIn('curriculum_hemis_id', $curricIds)
+                ->whereIn('code', $semCodes)
+                ->get(['curriculum_hemis_id', 'code', 'name', 'level_code'])
+                ->groupBy('curriculum_hemis_id');
+
+            // Oldin yuklangan (curriculum, semestr) juftliklar takror yuklanmaydi
+            $existing = ManualCurriculum::whereIn('curricula_hemis_id', $curricIds)
+                ->where('type', $type)
+                ->whereIn('semester_code', $semCodes)
+                ->get(['curricula_hemis_id', 'semester_code'])
+                ->map(fn($m) => $m->curricula_hemis_id . '|' . $m->semester_code)
+                ->flip();
+
+            $filePath = $file->store('manual-curricula', 'public');
+
+            DB::beginTransaction();
+            try {
+                $master      = null;
+                $masterRows  = null;
+                $itemCreated = 0;
+
+                foreach ($curricIds as $cid) {
+                    $hemisCurriculum = $curricula[$cid] ?? null;
+                    if (!$hemisCurriculum) {
+                        continue;
+                    }
+                    $specialty = Student::where('curriculum_id', $cid)
+                        ->whereNotNull('specialty_code')
+                        ->select('specialty_code as code', 'specialty_name as name')
+                        ->first();
+                    $semInfos = ($semesterInfo[$cid] ?? collect())->keyBy('code');
+
+                    foreach ($semCodes as $semCode) {
+                        if (isset($existing[$cid . '|' . $semCode])) {
+                            $skipped++;
+                            continue;
+                        }
+                        $semInfo   = $semInfos[$semCode] ?? null;
+                        $semName   = $semInfo?->name ?? ($semCode . '-semestr');
+                        $typeLabel = $type === 'namunaviy' ? 'namunaviy' : 'ishchi';
+                        $name = $hemisCurriculum->name . ' — ' . $typeLabel;
+                        if ($type === 'ishchi') {
+                            $name .= ' (' . $semName . ')';
+                        }
+
+                        $curriculum = ManualCurriculum::create([
+                            'type'                => $type,
+                            'name'                => $name,
+                            'specialty_code'      => $specialty?->code,
+                            'specialty_name'      => $specialty?->name,
+                            'plan_year'           => $hemisCurriculum->education_year_name,
+                            'curricula_hemis_id'  => $cid,
+                            'level_code'          => $semInfo?->level_code,
+                            'semester_code'       => $semCode,
+                            'education_type_name' => $hemisCurriculum->education_type_name,
+                            'education_period'    => $hemisCurriculum->education_period,
+                            'file_original_name'  => $file->getClientOriginalName(),
+                            'file_path'           => $filePath,
+                            'created_by'          => Auth::id(),
+                        ]);
+
+                        if ($master === null) {
+                            // Birinchi juftlik: Exceldan import
+                            $import = new ManualCurriculumImport($curriculum);
+                            Excel::import($import, $file);
+                            if (!empty($import->errors)) {
+                                throw new \RuntimeException(implode(' ', $import->errors));
+                            }
+                            $master = $curriculum;
+                        } else {
+                            // Qolganlariga fanlarni nusxalaymiz
+                            if ($masterRows === null) {
+                                $masterRows = $master->subjects()->get();
+                            }
+                            $now = now();
+                            ManualCurriculumSubject::insert($masterRows->map(fn($s) => [
+                                'manual_curriculum_id' => $curriculum->id,
+                                'block'          => $s->block,
+                                'subject_code'   => $s->subject_code,
+                                'subject_name'   => $s->subject_name,
+                                'reference_name' => $s->reference_name,
+                                'kurs'           => $s->kurs,
+                                'semester'       => $s->semester,
+                                'total_hours'    => $s->total_hours,
+                                'audit_total'    => $s->audit_total,
+                                'lecture'        => $s->lecture,
+                                'practice'       => $s->practice,
+                                'laboratory'     => $s->laboratory,
+                                'seminar'        => $s->seminar,
+                                'independent'    => $s->independent,
+                                'credit'         => $s->credit,
+                                'note'           => $s->note,
+                                'created_at'     => $now,
+                                'updated_at'     => $now,
+                            ])->toArray());
+                        }
+                        $itemCreated++;
+                    }
+                }
+
+                DB::commit();
+                $created += $itemCreated;
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error("Bulk o'quv reja import xatolik: " . $e->getMessage());
+                $errors[] = $file->getClientOriginalName() . ': ' . $e->getMessage();
+            }
+        }
+
+        return response()->json([
+            'created' => $created,
+            'skipped' => $skipped,
+            'errors'  => $errors,
+        ]);
+    }
+
     public function show(ManualCurriculum $curriculum)
     {
         $curriculum->load(['subjects' => fn($q) => $q->orderBy('id')]);

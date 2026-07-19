@@ -792,25 +792,26 @@
                             <a id="fsExport" href="#" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⬇ CSV yuklab olish</a>
                         </div>
 
+                        <datalist id="fsKafList"></datalist>
                         <div id="fsLoading" class="hidden text-center text-sm text-gray-500 py-6">Yuklanmoqda...</div>
                         <div id="fsEmpty" class="hidden text-center text-sm text-gray-500 py-6">Fan topilmadi.</div>
                         <div id="fsTableWrap" class="overflow-x-auto hidden">
                             <table class="min-w-full divide-y divide-gray-200 text-xs">
                                 <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
-                                    <th class="px-2 py-2 text-center font-medium text-gray-600">Kurs</th>
-                                    <th class="px-2 py-2 text-center font-medium text-gray-600">Sem</th>
-                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Blok</th>
-                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Fan</th>
-                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Kafedra</th>
-                                    <th class="px-2 py-2 text-right font-medium text-blue-700">Ma'ruza</th>
-                                    <th class="px-2 py-2 text-right font-medium text-purple-700">Amaliy</th>
-                                    <th class="px-2 py-2 text-right font-medium text-teal-700">Lab</th>
-                                    <th class="px-2 py-2 text-right font-medium text-orange-700">Seminar</th>
-                                    <th class="px-2 py-2 text-right font-medium text-gray-500">Mustaqil</th>
-                                    <th class="px-2 py-2 text-right font-medium text-gray-700">Jami</th>
-                                    <th class="px-2 py-2 text-right font-medium text-gray-700">Kredit</th>
+                                    <th data-sort="specialty_name" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Yo'nalish<span class="fs-ind"></span></th>
+                                    <th data-sort="kurs" class="fs-sort cursor-pointer select-none px-2 py-2 text-center font-medium text-gray-600 hover:bg-gray-100">Kurs<span class="fs-ind"></span></th>
+                                    <th data-sort="semester" class="fs-sort cursor-pointer select-none px-2 py-2 text-center font-medium text-gray-600 hover:bg-gray-100">Sem<span class="fs-ind"></span></th>
+                                    <th data-sort="block" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Blok<span class="fs-ind"></span></th>
+                                    <th data-sort="subject_name" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Fan<span class="fs-ind"></span></th>
+                                    <th data-sort="kafedra" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Kafedra<span class="fs-ind"></span></th>
+                                    <th data-sort="lecture" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-blue-700 hover:bg-gray-100">Ma'ruza<span class="fs-ind"></span></th>
+                                    <th data-sort="practice" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-purple-700 hover:bg-gray-100">Amaliy<span class="fs-ind"></span></th>
+                                    <th data-sort="laboratory" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-teal-700 hover:bg-gray-100">Lab<span class="fs-ind"></span></th>
+                                    <th data-sort="seminar" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-orange-700 hover:bg-gray-100">Seminar<span class="fs-ind"></span></th>
+                                    <th data-sort="independent" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-gray-500 hover:bg-gray-100">Mustaqil<span class="fs-ind"></span></th>
+                                    <th data-sort="total_hours" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-gray-700 hover:bg-gray-100">Jami<span class="fs-ind"></span></th>
+                                    <th data-sort="credit" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-gray-700 hover:bg-gray-100">Kredit<span class="fs-ind"></span></th>
                                 </tr>
                                 </thead>
                                 <tbody id="fsTbody" class="divide-y divide-gray-100"></tbody>
@@ -1658,6 +1659,12 @@
                     (function () {
                         const sumUrl = @json(route('admin.oquv-reja.subjects-summary'));
                         const expUrl = @json(route('admin.oquv-reja.subjects-summary.export'));
+                        const kafListUrl = @json(route('admin.oquv-reja.kafedra-list'));
+                        const setKafUrl  = @json(route('admin.oquv-reja.set-kafedra'));
+                        const csrf = document.querySelector('input[name="_token"]')?.value;
+                        const kafDatalist = document.getElementById('fsKafList');
+                        let rowsData = [];
+                        let sortKey = null, sortDir = 1;
                         const spec = document.getElementById('fsSpecialty');
                         const year = document.getElementById('fsYear');
                         const kurs = document.getElementById('fsKurs');
@@ -1726,16 +1733,41 @@
                                     bySem.classList.add('hidden');
                                 }
 
-                                if (!j.rows.length) { empty.classList.remove('hidden'); tbody.innerHTML=''; return; }
-                                tbody.innerHTML = j.rows.map(r =>
-                                    '<tr class="hover:bg-gray-50">' +
-                                    '<td class="px-2 py-1 text-gray-500 whitespace-nowrap">' + esc((r.specialty_code||'') ) + '</td>' +
+                                rowsData = j.rows || [];
+                                if (!rowsData.length) { empty.classList.remove('hidden'); tbody.innerHTML=''; return; }
+                                renderRows();
+                                wrap.classList.remove('hidden');
+                            } catch (e) {
+                                load.classList.add('hidden');
+                                empty.textContent = 'Xatolik yuz berdi.'; empty.classList.remove('hidden');
+                            }
+                        }
+
+                        function renderRows() {
+                            let rows = rowsData.slice();
+                            if (sortKey) {
+                                rows.sort((a, b) => {
+                                    let x = a[sortKey], y = b[sortKey];
+                                    if (typeof x === 'string' || typeof y === 'string') {
+                                        x = (x || '').toString().toLowerCase(); y = (y || '').toString().toLowerCase();
+                                        return x < y ? -sortDir : x > y ? sortDir : 0;
+                                    }
+                                    return ((x || 0) - (y || 0)) * sortDir;
+                                });
+                            }
+                            tbody.innerHTML = rows.map(r => {
+                                const kafHtml = r.kafedra
+                                    ? '<span class="' + (r.kafedra_manual ? 'text-emerald-700 font-medium' : 'text-gray-600') + '">' + esc(r.kafedra) + '</span>'
+                                    : '<span class="text-gray-300">— belgilash</span>';
+                                return '<tr class="hover:bg-gray-50">' +
+                                    '<td class="px-2 py-1 text-gray-700">' + esc(r.specialty_name || r.specialty_code || '') +
+                                        (r.specialty_code ? ' <span class="text-[10px] text-gray-400">' + esc(r.specialty_code) + '</span>' : '') + '</td>' +
                                     '<td class="px-2 py-1 text-center">' + (r.kurs ?? '') + '</td>' +
                                     '<td class="px-2 py-1 text-center">' + (r.semester ?? '') + '</td>' +
                                     '<td class="px-2 py-1 text-gray-500">' + esc(r.block||'') + '</td>' +
                                     '<td class="px-2 py-1 font-medium text-gray-800">' + esc(r.subject_name) +
                                         (r.reja_count > 1 ? ' <span class="text-[10px] text-gray-400">×' + r.reja_count + '</span>' : '') + '</td>' +
-                                    '<td class="px-2 py-1 text-gray-600">' + (r.kafedra ? esc(r.kafedra) : '<span class="text-gray-300">—</span>') + '</td>' +
+                                    '<td class="px-2 py-1 kaf-cell cursor-pointer hover:bg-amber-50" title="Kafedrani tahrirlash uchun bosing" data-subject="' + esc(r.subject_name) + '">' + kafHtml + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.lecture) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.practice) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.laboratory) + '</td>' +
@@ -1743,13 +1775,57 @@
                                     '<td class="px-2 py-1 text-right text-gray-500">' + n(r.independent) + '</td>' +
                                     '<td class="px-2 py-1 text-right font-semibold">' + n(r.total_hours) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.credit) + '</td>' +
-                                    '</tr>').join('');
-                                wrap.classList.remove('hidden');
-                            } catch (e) {
-                                load.classList.add('hidden');
-                                empty.textContent = 'Xatolik yuz berdi.'; empty.classList.remove('hidden');
-                            }
+                                    '</tr>';
+                            }).join('');
                         }
+
+                        // Ustun sarlavhasini bosib saralash
+                        document.querySelectorAll('.fs-sort').forEach(th => th.addEventListener('click', () => {
+                            const k = th.dataset.sort;
+                            if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = 1; }
+                            document.querySelectorAll('.fs-ind').forEach(s => s.textContent = '');
+                            th.querySelector('.fs-ind').textContent = sortDir > 0 ? ' ▲' : ' ▼';
+                            renderRows();
+                        }));
+
+                        // Kafedrani qatorда qo'lda tahrirlash (inline)
+                        tbody.addEventListener('click', function (e) {
+                            const cell = e.target.closest('.kaf-cell');
+                            if (!cell || cell.querySelector('input')) return;
+                            const subject = cell.dataset.subject;
+                            const cur = cell.textContent.replace('— belgilash', '').trim();
+                            cell.innerHTML = '<input list="fsKafList" class="w-full text-xs rounded border-amber-300 px-1 py-0.5" value="' + cur.replace(/"/g,'&quot;') + '">';
+                            const inp = cell.querySelector('input');
+                            inp.focus();
+                            let done = false;
+                            const save = async () => {
+                                if (done) return; done = true;
+                                const val = inp.value.trim();
+                                const fd = new FormData();
+                                fd.append('_token', csrf);
+                                fd.append('subject_name', subject);
+                                fd.append('kafedra_name', val);
+                                try {
+                                    const r = await fetch(setKafUrl, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
+                                    if (!r.ok) throw new Error();
+                                    // Shu nomli barcha qatorlarni yangilaymiz
+                                    rowsData.forEach(rd => { if (rd.subject_name === subject) { rd.kafedra = val || null; rd.kafedra_manual = !!val; } });
+                                    renderRows();
+                                } catch (_) {
+                                    cell.innerHTML = '<span class="text-red-500">xato</span>';
+                                }
+                            };
+                            inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } if (ev.key === 'Escape') { done = true; renderRows(); } });
+                            inp.addEventListener('blur', save);
+                        });
+
+                        // Kafedralar ro'yxatini (datalist) yuklaymiz
+                        (async () => {
+                            try {
+                                const list = await (await fetch(kafListUrl, {headers:{'Accept':'application/json'}})).json();
+                                kafDatalist.innerHTML = list.map(k => '<option value="' + String(k).replace(/"/g,'&quot;') + '">').join('');
+                            } catch (_) {}
+                        })();
 
                         [spec, year, kurs, sem, planned].forEach(el => el.addEventListener('change', reload));
                         // Boshlanishida eng so'nggi o'quv yilini tanlab qo'yamiz

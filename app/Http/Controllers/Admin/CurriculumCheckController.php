@@ -980,12 +980,26 @@ class CurriculumCheckController extends Controller
         return $map;
     }
 
+    /** Qo'lda kiritilgan kafedra tuzatishlari: norm_name → kafedra_name. */
+    private function kafedraOverrides(): array
+    {
+        return \App\Models\SubjectKafedraOverride::pluck('kafedra_name', 'norm_name')->all();
+    }
+
     public function subjectsSummary(Request $request)
     {
         $rows  = $this->subjectsSummaryQuery($request)->get();
         $kafMap = $this->kafedraMap();
+        $overrides = $this->kafedraOverrides();
 
         $num = fn($v) => $v === null ? null : (float) $v;
+        $kaf = function ($name) use ($overrides, $kafMap) {
+            $k = $this->normSubject($name);
+            if (isset($overrides[$k])) {
+                return ['name' => $overrides[$k], 'manual' => true];
+            }
+            return ['name' => $kafMap[$k] ?? null, 'manual' => false];
+        };
         $data = $rows->map(fn($r) => [
             'specialty_code' => $r->specialty_code,
             'specialty_name' => $r->specialty_name,
@@ -994,7 +1008,8 @@ class CurriculumCheckController extends Controller
             'semester'       => $r->semester ? (int) $r->semester : null,
             'block'          => $r->block,
             'subject_name'   => $r->subject_name,
-            'kafedra'        => $kafMap[$this->normSubject($r->subject_name)] ?? null,
+            'kafedra'        => $kaf($r->subject_name)['name'],
+            'kafedra_manual' => $kaf($r->subject_name)['manual'],
             'lecture'        => $num($r->lecture),
             'practice'       => $num($r->practice),
             'laboratory'     => $num($r->laboratory),
@@ -1036,27 +1051,84 @@ class CurriculumCheckController extends Controller
     {
         $rows   = $this->subjectsSummaryQuery($request)->get();
         $kafMap = $this->kafedraMap();
+        $overrides = $this->kafedraOverrides();
 
         $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan', 'Kafedra',
             'Ma\'ruza', 'Amaliy', 'Laboratoriya', 'Seminar', 'Mustaqil', 'Jami soat', 'Kredit', 'Rejalar soni'];
 
         $fname = 'otiladigan-fanlar-' . now()->format('Y-m-d') . '.csv';
 
-        return response()->streamDownload(function () use ($rows, $headers, $kafMap) {
+        return response()->streamDownload(function () use ($rows, $headers, $kafMap, $overrides) {
             $out = fopen('php://output', 'w');
             fprintf($out, "\xEF\xBB\xBF"); // UTF-8 BOM (Excel uchun)
             fputcsv($out, $headers);
             foreach ($rows as $r) {
                 $kurs = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : '';
+                $nk = $this->normSubject($r->subject_name);
                 fputcsv($out, [
                     $r->specialty_code, $r->specialty_name, $kurs, $r->semester,
-                    $r->block, $r->subject_name, $kafMap[$this->normSubject($r->subject_name)] ?? '',
+                    $r->block, $r->subject_name, $overrides[$nk] ?? ($kafMap[$nk] ?? ''),
                     $r->lecture, $r->practice, $r->laboratory, $r->seminar, $r->independent,
                     $r->total_hours, $r->credit, $r->reja_count,
                 ]);
             }
             fclose($out);
         }, $fname, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Kafedra tanlash uchun mavjud kafedralar ro'yxati (HEMIS + qo'lda kiritilganlar). */
+    public function kafedraList()
+    {
+        $fromHemis = DB::table('curriculum_subjects')
+            ->whereNotNull('department_name')->where('department_name', '!=', '')
+            ->distinct()->pluck('department_name');
+        $fromDepts = DB::table('departments')
+            ->whereNotNull('name')->where('name', '!=', '')
+            ->pluck('name');
+        $fromOverrides = \App\Models\SubjectKafedraOverride::pluck('kafedra_name');
+
+        $all = $fromHemis->merge($fromDepts)->merge($fromOverrides)
+            ->map(fn($s) => trim($s))->filter()->unique()->sort()->values();
+
+        return response()->json($all);
+    }
+
+    /** Fan uchun kafedrani qo'lda belgilash/tozalash (fan nomi bo'yicha, barqaror). */
+    public function setKafedra(Request $request)
+    {
+        $data = $request->validate([
+            'subject_name' => 'required|string|max:255',
+            'kafedra_name' => 'nullable|string|max:255',
+        ]);
+
+        $norm = $this->normSubject($data['subject_name']);
+        if ($norm === '') {
+            return response()->json(['error' => "Fan nomi bo'sh."], 422);
+        }
+
+        $kafedra = trim((string) ($data['kafedra_name'] ?? ''));
+
+        if ($kafedra === '') {
+            // Bo'sh — tuzatishni olib tashlaymiz (avtomatik moslashtirish qaytadi)
+            \App\Models\SubjectKafedraOverride::where('norm_name', $norm)->delete();
+            return response()->json(['ok' => true, 'cleared' => true]);
+        }
+
+        // Kafedra nomiga mos department_id ni topamiz (bo'lsa)
+        $deptId = DB::table('curriculum_subjects')->where('department_name', $kafedra)->value('department_id')
+            ?? DB::table('departments')->where('name', $kafedra)->value('department_hemis_id');
+
+        \App\Models\SubjectKafedraOverride::updateOrCreate(
+            ['norm_name' => $norm],
+            [
+                'sample_name'   => $data['subject_name'],
+                'kafedra_name'  => $kafedra,
+                'department_id' => $deptId,
+                'updated_by'    => Auth::id(),
+            ]
+        );
+
+        return response()->json(['ok' => true, 'kafedra' => $kafedra]);
     }
 
     public function show(ManualCurriculum $curriculum)

@@ -104,13 +104,13 @@ class CurriculumCheckController extends Controller
                 ->orderBy('department_name')
                 ->get(),
 
-            // Yo'nalishlar alohida yozuv (specialty_id) bo'yicha ko'rsatiladi:
-            // bir xil kodli dublikatlar ham alohida turadi, qaysi biriga
-            // talaba biriktirilgani talaba soni orqali bilinadi
+            // Yo'nalishlar kod bo'yicha birlashtiriladi: bir xil kodli
+            // (bir nechta specialty_id ga bo'lingan) dublikatlar bitta
+            // qatorga yig'iladi, talabalar soni jamlanadi.
             'specialties' => $this->students($request)
-                ->whereNotNull('specialty_id')
-                ->selectRaw('specialty_id as id, specialty_code as code, specialty_name as name, count(*) as student_count')
-                ->groupBy('specialty_id', 'specialty_code', 'specialty_name')
+                ->whereNotNull('specialty_code')
+                ->selectRaw('specialty_code as id, specialty_code as code, MAX(specialty_name) as name, count(*) as student_count')
+                ->groupBy('specialty_code')
                 ->orderBy('specialty_code')
                 ->get(),
 
@@ -398,12 +398,16 @@ class CurriculumCheckController extends Controller
      */
     public function batchView(Request $request)
     {
-        $request->validate(['specialty_id' => 'required|integer']);
+        $request->validate([
+            'specialty_code' => 'required_without:specialty_id|string',
+            'specialty_id'   => 'required_without:specialty_code',
+        ]);
 
-        // Faol talabalar (status 11) bo'yicha har bir kohort (curriculum_id + level) uchun ma'lumot
-        $rows = Student::query()
-            ->where('specialty_id', $request->specialty_id)
-            ->where('student_status_code', 11)
+        // Faol talabalar (status 11) bo'yicha har bir kohort (curriculum_id + level) uchun ma'lumot.
+        // Yo'nalish kod bo'yicha tanlanadi (bir nechta specialty_id birlashtiriladi),
+        // fakultet/ta'lim turi bo'yicha cheklanadi (students() helper orqali).
+        $request->merge(['current_only' => true]);
+        $rows = $this->students($request)
             ->whereNotNull('curriculum_id')
             ->selectRaw('curriculum_id, level_code, level_name, semester_code, semester_name, count(*) as student_count')
             ->groupBy('curriculum_id', 'level_code', 'level_name', 'semester_code', 'semester_name')

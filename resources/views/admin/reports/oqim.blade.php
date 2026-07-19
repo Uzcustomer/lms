@@ -542,7 +542,10 @@
                     m += '<div class="cmp-card">';
                     m += '<div class="cmp-head"><span class="cmp-title">' + esc(xm.course) + ' · ' + esc(xm.lang) + ' til</span>'
                        + '<span class="cmp-count">' + esc(xm.from_fac) + ' → ' + esc(xm.to_fac) + '</span></div>';
-                    if (xm.distributed) {
+                    if (xm.balanced) {
+                        m += '<div class="xmove-body">Fakultetlar balansi uchun <b>' + esc(xm.from_fac) + '</b> dan ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
+                           + '→ <b>' + esc(xm.to_fac) + '</b> ga o\'tkaziladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta) — talabalar soni tenglashadi.</div>';
+                    } else if (xm.distributed) {
                         m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi oxirgi guruhlar ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
                            + 'kichik oqim qoldirmaslik uchun boshqa oqimlarga tarqatiladi (guruhchalar biroz kattalashadi).</div>';
                     } else {

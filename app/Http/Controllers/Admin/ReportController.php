@@ -12174,6 +12174,7 @@ class ReportController extends Controller
                     $gkey = ($blk['merge_key'] ?? $bi) . '|' . $course['level_code'] . '|' . ($oq['lang'] ?? 'uz');
                     if (!isset($groups[$gkey])) {
                         $groups[$gkey] = [
+                            'merge_key'  => $blk['merge_key'] ?? (string) $bi,
                             'level_code' => $course['level_code'],
                             'level_name' => $course['level_name'],
                             'level_num'  => $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']),
@@ -12397,6 +12398,88 @@ class ReportController extends Controller
                         ];
                     }
                 }
+            }
+        }
+
+        // BALANS: fakultetlar orasida talabalar sonini tenglashtiramiz — har kurs (pool)
+        // bo'yicha eng ko'p yuklangan fakultetdan eng kam yuklanganiga BUTUN oqim
+        // ko'chiriladi, agar bu farqni qat'iy kamaytirsa (masalan rus/ing kichik oqimlar).
+        // Ko'chirilgan oqim guruhlar mehmon (← fakultet) deb belgilanadi.
+        $pools = [];
+        foreach ($groups as $g) {
+            $pk = $g['merge_key'] . '|' . $g['level_code'];
+            if (!isset($pools[$pk])) {
+                $pools[$pk] = [
+                    'level_name' => $g['level_name'],
+                    'level_num'  => $g['level_num'],
+                    'members'    => [], // bi => ci
+                ];
+            }
+            foreach ($g['items'] as $it) {
+                $pools[$pk]['members'][$it['bi']] = $it['ci'];
+            }
+        }
+        foreach ($pools as $pool) {
+            [, , , , $poolOn] = $this->oqimCourseNorm($params, (int) $pool['level_num']);
+            if (!$poolOn || count($pool['members']) < 2) {
+                continue;
+            }
+            $members = $pool['members'];
+            $guard = 0;
+            while ($guard++ < 50) {
+                // Fakultetlar jami (shu kurs bo'yicha)
+                $tot = [];
+                foreach ($members as $bi => $ci) {
+                    $t = 0;
+                    foreach (($courseOqims[$bi][$ci] ?? []) as $oq) { $t += (int) $oq['total']; }
+                    $tot[$bi] = $t;
+                }
+                arsort($tot);
+                $biA = array_key_first($tot); // eng ko'p yuklangan (donor)
+                $biB = array_key_last($tot);  // eng kam yuklangan (qabul qiluvchi)
+                $diff = $tot[$biA] - $tot[$biB];
+                if ($diff <= 0) { break; }
+
+                // Donorning farqni ENG YAXSHI kamaytiradigan oqimi (|diff - 2T| minimal, qat'iy yaxshilanish)
+                $bestK = -1; $bestScore = $diff;
+                foreach (($courseOqims[$biA][$members[$biA]] ?? []) as $k => $oq) {
+                    $newDiff = abs($diff - 2 * (int) $oq['total']);
+                    if ($newDiff < $bestScore) { $bestScore = $newDiff; $bestK = $k; }
+                }
+                if ($bestK < 0) { break; }
+
+                $deptA = $this->oqimFacultyShort($blocks[$biA]['department_name'] ?? '');
+                $deptB = $this->oqimFacultyShort($blocks[$biB]['department_name'] ?? '');
+                $oq = $courseOqims[$biA][$members[$biA]][$bestK];
+                array_splice($courseOqims[$biA][$members[$biA]], $bestK, 1);
+
+                // Guruhlarni mehmon deb belgilaymiz; qabul qiluvchining "o'z" guruhlari uyiga qaytadi
+                foreach ($oq['rows'] as &$r) {
+                    if (!empty($r['visitor']) && ($r['from'] ?? '') === $deptB) {
+                        unset($r['visitor'], $r['from']);
+                    } elseif (empty($r['visitor'])) {
+                        $r['visitor'] = true;
+                        $r['from'] = $deptA;
+                    }
+                }
+                unset($r);
+                $oq['has_visitor'] = !empty(array_filter($oq['rows'], fn($r) => !empty($r['visitor'])));
+                if (empty($oq['_first'])) {
+                    $oq['_first'] = $this->oqimBaseOfRow($oq['rows'][0]['name'] ?? '');
+                }
+                $courseOqims[$biB][$members[$biB]][] = $oq;
+
+                $xmoves[] = [
+                    'course'      => $pool['level_name'],
+                    'lang'        => $oq['lang_label'] ?? '',
+                    'from_fac'    => $deptA,
+                    'to_fac'      => $deptB,
+                    'moved'       => [['name' => 'butun oqim (' . count($oq['rows']) . ' guruhcha)', 'count' => $oq['total']]],
+                    'moved_total' => (int) $oq['total'],
+                    'to_before'   => $tot[$biB],
+                    'to_after'    => $tot[$biB] + (int) $oq['total'],
+                    'balanced'    => true,
+                ];
             }
         }
 

@@ -937,17 +937,32 @@
                                     const nam = r.uploaded.filter(u => u.type === 'namunaviy');
                                     const ish = r.uploaded.filter(u => u.type === 'ishchi');
 
+                                    // Semestr kodini raqamga (13 → 3) va nomga (3-semestr) aylantirish
+                                    const semNum  = c => { const n = parseInt(c); return n >= 11 ? n - 10 : n; };
+                                    const semName = c => c ? (semNum(c) + '-semestr') : 'Umumiy';
+
                                     function uploadedCell(list) {
                                         if (!list.length) return '<span class="text-gray-400">—</span>';
-                                        return list.map(u => {
+                                        // Semestr bo'yicha tartiblash (kodsizlar oxirida)
+                                        const sorted = [...list].sort((a, b) =>
+                                            (a.semester_code ? semNum(a.semester_code) : 99) -
+                                            (b.semester_code ? semNum(b.semester_code) : 99));
+                                        return '<div class="flex flex-col gap-1">' + sorted.map(u => {
                                             const isCurrent = !u.semester_code || u.semester_code === r.semester_code;
-                                            const semSuffix = !isCurrent && u.semester_code ? ' [' + u.semester_code + '-sem]' : '';
-                                            const label = (u.name.length > 30 ? u.name.slice(0,30)+'…' : u.name) + semSuffix;
-                                            const cls = isCurrent
-                                                ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                                : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-                                            return '<a href="' + showUrl.replace('__ID__', u.id) + '" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ' + cls + ' mr-1">✓ ' + escHtml(label) + '</a>';
-                                        }).join('');
+                                            const badgeCls = isCurrent
+                                                ? 'bg-green-600 text-white'
+                                                : 'bg-amber-500 text-white';
+                                            const rowCls = isCurrent
+                                                ? 'bg-green-50 hover:bg-green-100 border-green-200'
+                                                : 'bg-amber-50 hover:bg-amber-100 border-amber-200';
+                                            const shortName = u.name.length > 32 ? u.name.slice(0, 32) + '…' : u.name;
+                                            return '<a href="' + showUrl.replace('__ID__', u.id) + '" title="' + escHtml(u.name) + '" ' +
+                                                'class="inline-flex items-center gap-2 rounded-md border px-2 py-1 ' + rowCls + '">' +
+                                                '<span class="inline-flex shrink-0 items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold ' + badgeCls + '">' +
+                                                    escHtml(semName(u.semester_code)) + '</span>' +
+                                                '<span class="text-xs text-gray-700 truncate">' + escHtml(shortName) + '</span>' +
+                                            '</a>';
+                                        }).join('') + '</div>';
                                     }
 
                                     const sharedAttrs = ' data-id="' + r.curriculum_id + '" data-level="' + (r.level_code||'') + '" data-sem="' + (r.semester_code||'') + '" data-name="' + escHtml(r.curriculum_name) + '" data-year="' + escHtml(r.education_year||'') + '" data-eductype="' + escHtml(r.education_type||'') + '" data-levelname="' + escHtml(r.level_name||'') + '" data-semname="' + escHtml(r.semester_name||'') + '" data-students="' + (r.student_count||'') + '"';

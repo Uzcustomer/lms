@@ -662,6 +662,7 @@
                                 Oldin yuklangan (reja + semestr) juftliklar takror yuklanmaydi.
                             </p>
                             <div id="bulkGroups" class="space-y-3"></div>
+                            <div id="bulkPreview" class="space-y-2"></div>
                             <div id="bulkResult" class="hidden text-sm rounded-md px-4 py-3"></div>
                         </div>
                         <div class="flex justify-end gap-2 px-6 py-4 border-t bg-gray-50 rounded-b-lg">
@@ -670,7 +671,7 @@
                             </button>
                             <button type="button" id="bulkSubmitBtn"
                                     class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50">
-                                Hammasini yuklash
+                                Tekshirish
                             </button>
                         </div>
                     </div>
@@ -1086,6 +1087,7 @@
                         document.getElementById('bulkOpenBtn').addEventListener('click', () => {
                             if (!lastBatchRows.length) return;
                             bulkResult.classList.add('hidden');
+                            resetBulkStage();
 
                             // Kurs (level_code) bo'yicha guruhlash — bir kursda bir nechta reja bo'lishi mumkin
                             const groups = {};
@@ -1160,7 +1162,21 @@
                             if (e.target === this) this.classList.add('hidden');
                         });
 
-                        document.getElementById('bulkSubmitBtn').addEventListener('click', async function () {
+                        // Ikki bosqich: 1) Tekshirish (preview, saqlanmaydi) → 2) Tasdiqlash (haqiqiy yuklash)
+                        const bulkPreview   = document.getElementById('bulkPreview');
+                        const bulkSubmitBtn = document.getElementById('bulkSubmitBtn');
+                        let bulkStage = 'form';
+
+                        function resetBulkStage() {
+                            bulkStage = 'form';
+                            bulkSubmitBtn.textContent = 'Tekshirish';
+                            bulkPreview.innerHTML = '';
+                        }
+                        // Har qanday o'zgarish (fayl/kurs/semestr/tur) tasdiqni bekor qiladi — qayta tekshirish kerak
+                        bulkGroups.addEventListener('change', resetBulkStage);
+                        document.querySelectorAll('input[name="bulk_type"]').forEach(r => r.addEventListener('change', resetBulkStage));
+
+                        function buildBulkFd() {
                             const fd = new FormData();
                             fd.append('_token', document.querySelector('#batchUploadForm input[name="_token"]').value);
                             fd.append('type', document.querySelector('input[name="bulk_type"]:checked').value);
@@ -1175,15 +1191,75 @@
                                 sems.forEach(s => fd.append('items[' + i + '][semester_codes][]', s));
                                 i++;
                             });
+                            return {fd, count: i};
+                        }
+
+                        function renderBulkPreview(items) {
+                            bulkPreview.innerHTML = items.map(it => {
+                                if (it.error) {
+                                    return '<div class="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">' +
+                                        '<b>' + escHtml(it.file) + '</b>: ' + escHtml(it.error) + ' — bu fayl yuklanmaydi.</div>';
+                                }
+                                const ok = it.sem_ok;
+                                return '<div class="rounded-md border ' + (ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') + ' p-3 text-xs space-y-1">' +
+                                    '<div class="font-semibold text-gray-800">' + escHtml(it.file) + ' — ' + it.imported +
+                                        ' ta fan qatori · ' + it.credit_sum + ' kredit · ' + it.hours_sum + ' soat</div>' +
+                                    '<div class="text-gray-600">Fayl semestrlari: <b>' + (it.file_sems.join(', ') || '—') + '</b>' +
+                                        ' · Tanlangan: <b>' + it.target_sems.join(', ') + '</b> ' +
+                                        (ok ? '<span class="text-green-700 font-semibold">✓ mos</span>'
+                                            : '<span class="text-red-700 font-semibold">✗ mos emas — yuklanmaydi</span>') + '</div>' +
+                                    (it.sample.length ? '<div class="text-gray-500">Namuna: ' + it.sample.map(escHtml).join(' · ') + '</div>' : '') +
+                                    '<div class="text-gray-700">' + it.targets.map(t =>
+                                        '→ ' + escHtml(t.name) +
+                                        (t.sems.length ? ': <b>' + t.sems.map(s => s + '-sem').join(', ') + '</b>' : ': —') +
+                                        (t.skipped_sems.length ? ' <span class="text-gray-400">(mavjud, o\'tkaziladi: ' + t.skipped_sems.map(s => s + '-sem').join(', ') + ')</span>' : '')
+                                    ).join('<br>') + '</div>' +
+                                '</div>';
+                            }).join('');
+                        }
+
+                        bulkSubmitBtn.addEventListener('click', async function () {
+                            const {fd, count} = buildBulkFd();
                             bulkResult.classList.remove('hidden');
-                            if (!i) {
+                            if (!count) {
                                 bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-yellow-50 text-yellow-800';
                                 bulkResult.textContent = 'Hech qaysi kursga fayl tanlanmadi.';
                                 return;
                             }
                             this.disabled = true;
+
+                            if (bulkStage === 'form') {
+                                // 1-bosqich: faqat tekshirish, hech narsa saqlanmaydi
+                                fd.append('preview', '1');
+                                bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-gray-50 text-gray-600';
+                                bulkResult.textContent = 'Fayllar tekshirilmoqda... (' + count + ' ta)';
+                                try {
+                                    const res = await fetch(bulkUrl, {method: 'POST', body: fd, headers: {'Accept': 'application/json'}});
+                                    const j = await res.json();
+                                    if (!res.ok) throw new Error(j.message || 'Server xatosi (' + res.status + ')');
+                                    renderBulkPreview(j.items);
+                                    const okCount = j.items.filter(it => !it.error && it.sem_ok).length;
+                                    if (okCount) {
+                                        bulkStage = 'confirm';
+                                        bulkSubmitBtn.textContent = '✅ Tasdiqlayman — yuklash';
+                                        bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-blue-50 text-blue-800';
+                                        bulkResult.textContent = "Hali hech narsa saqlanmadi. Yuqoridagi natijalarni ko'rib chiqing va tasdiqlang.";
+                                    } else {
+                                        bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-red-50 text-red-700';
+                                        bulkResult.textContent = "Birorta fayl ham yuklashga yaroqli emas — fayllarni yoki kurs/semestr tanlovini to'g'rilang.";
+                                    }
+                                } catch (e) {
+                                    bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-red-50 text-red-700';
+                                    bulkResult.textContent = 'Xatolik: ' + e.message;
+                                } finally {
+                                    this.disabled = false;
+                                }
+                                return;
+                            }
+
+                            // 2-bosqich: tasdiqlangan — haqiqiy yuklash
                             bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-gray-50 text-gray-600';
-                            bulkResult.textContent = 'Yuklanmoqda... (' + i + ' ta fayl)';
+                            bulkResult.textContent = 'Yuklanmoqda... (' + count + ' ta fayl)';
                             try {
                                 const res = await fetch(bulkUrl, {method: 'POST', body: fd, headers: {'Accept': 'application/json'}});
                                 const j = await res.json();
@@ -1194,6 +1270,7 @@
                                 bulkResult.className = 'text-sm rounded-md px-4 py-3 ' +
                                     (j.errors && j.errors.length ? 'bg-yellow-50 text-yellow-800' : 'bg-green-50 text-green-800');
                                 bulkResult.textContent = parts.join('. ');
+                                resetBulkStage();
                                 spSel.dispatchEvent(new Event('change')); // orqadagi jadvalni yangilash
                             } catch (e) {
                                 bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-red-50 text-red-700';

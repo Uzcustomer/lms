@@ -460,9 +460,11 @@ class CurriculumCheckController extends Controller
         ]);
 
         $type    = $request->type;
+        $preview = $request->boolean('preview');
         $created = 0;
         $skipped = 0;
         $errors  = [];
+        $previewItems = [];
 
         foreach ($request->input('items', []) as $idx => $item) {
             $file = $request->file("items.$idx.file");
@@ -490,6 +492,77 @@ class CurriculumCheckController extends Controller
                 ->get(['curricula_hemis_id', 'semester_code'])
                 ->map(fn($m) => $m->curricula_hemis_id . '|' . $m->semester_code)
                 ->flip();
+
+            $targetSems = array_map(fn($c) => (int) $c >= 11 ? (int) $c - 10 : (int) $c, $semCodes);
+
+            // ── Preview: faylni o'qib ko'ramiz, lekin saqlamaymiz (rollback) ──
+            if ($preview) {
+                $summary = [
+                    'file'        => $file->getClientOriginalName(),
+                    'target_sems' => $targetSems,
+                    'error'       => null,
+                    'imported'    => 0,
+                    'file_sems'   => [],
+                    'sem_ok'      => true,
+                    'credit_sum'  => 0,
+                    'hours_sum'   => 0,
+                    'sample'      => [],
+                    'targets'     => [],
+                ];
+                DB::beginTransaction();
+                try {
+                    $firstCurr = $curricula[$curricIds[0]] ?? null;
+                    $tmp = ManualCurriculum::create([
+                        'type'                => $type,
+                        'name'                => '[tekshiruv] ' . $file->getClientOriginalName(),
+                        'plan_year'           => $firstCurr?->education_year_name,
+                        'curricula_hemis_id'  => $curricIds[0],
+                        'semester_code'       => $semCodes[0],
+                        'education_type_name' => $firstCurr?->education_type_name,
+                        'education_period'    => $firstCurr?->education_period,
+                        'file_original_name'  => $file->getClientOriginalName(),
+                        'file_path'           => '',
+                        'created_by'          => Auth::id(),
+                    ]);
+                    $import = new ManualCurriculumImport($tmp);
+                    Excel::import($import, $file);
+                    if (!empty($import->errors)) {
+                        throw new \RuntimeException(implode(' ', $import->errors));
+                    }
+                    $subs = $tmp->subjects()->get();
+                    $fileSems = $subs->pluck('semester')->filter()
+                        ->map(fn($s) => (int) $s)->unique()->sort()->values()->all();
+                    $summary['imported']   = $subs->count();
+                    $summary['file_sems']  = $fileSems;
+                    $summary['sem_ok']     = empty($fileSems) || count(array_intersect($fileSems, $targetSems)) > 0;
+                    $summary['credit_sum'] = round($subs->sum('credit'), 1);
+                    $summary['hours_sum']  = round($subs->sum('total_hours'), 1);
+                    $summary['sample']     = $subs->take(3)->pluck('subject_name')->all();
+                } catch (\Exception $e) {
+                    $summary['error'] = $e->getMessage();
+                }
+                DB::rollBack();
+
+                foreach ($curricIds as $cid) {
+                    $new = [];
+                    $skip = [];
+                    foreach ($semCodes as $semCode) {
+                        $n = (int) $semCode >= 11 ? (int) $semCode - 10 : (int) $semCode;
+                        if (isset($existing[$cid . '|' . $semCode])) {
+                            $skip[] = $n;
+                        } else {
+                            $new[] = $n;
+                        }
+                    }
+                    $summary['targets'][] = [
+                        'name'         => $curricula[$cid]?->name ?? ('#' . $cid),
+                        'sems'         => $new,
+                        'skipped_sems' => $skip,
+                    ];
+                }
+                $previewItems[] = $summary;
+                continue;
+            }
 
             $filePath = $file->store('manual-curricula', 'public');
 
@@ -599,6 +672,10 @@ class CurriculumCheckController extends Controller
                 Log::error("Bulk o'quv reja import xatolik: " . $e->getMessage());
                 $errors[] = $file->getClientOriginalName() . ': ' . $e->getMessage();
             }
+        }
+
+        if ($preview) {
+            return response()->json(['preview' => true, 'items' => $previewItems]);
         }
 
         return response()->json([

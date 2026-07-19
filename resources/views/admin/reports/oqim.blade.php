@@ -84,15 +84,18 @@
                                 <div><label>±</label><input type="number" id="abc_tol" class="norm-in" value="0" min="0"></div>
                             </div>
                         </div>
-                        <label class="ff-toggle" title="Fakultetlar ALOHIDA qoladi (har birining o'z dekani bor). Bir xil yo'nalishli fakultetlar (masalan 1↔2-son davolash) kam to'lgan oqimlari qo'shni fakultet guruhlari bilan me'yorgacha to'ldiriladi. Faqat optimizatsiyalangan holatga qo'llanadi.">
-                            <input type="checkbox" id="merge_faculties">
-                            <span class="ff-slider"></span>
-                            <span class="ff-txt">Fakultetlar ichidan almashtirish<small>bir yo'nalishli fakultetlar oqimlarini to'ldirish</small></span>
-                        </label>
+                        <div class="norm-group" title="Fakultetlar ALOHIDA qoladi (har birining o'z dekani bor). Bir xil yo'nalishli fakultetlar (masalan 1↔2-son davolash) kam to'lgan oqimlari qo'shni fakultet guruhlari bilan to'ldiriladi. Faqat optimizatsiyalangan holatga qo'llanadi.">
+                            <span class="norm-title">Fakultetlararo</span>
+                            <label class="ff-toggle">
+                                <input type="checkbox" id="merge_faculties">
+                                <span class="ff-slider"></span>
+                                <span class="ff-state"></span>
+                            </label>
+                        </div>
                         <div class="filter-item" style="min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport()" title="Joriy holat va optimizatsiya taklifini hisoblash">
+                                <button type="button" id="btn-calculate" class="btn-calc" onclick="openGoalModal()" title="Joriy holat va optimizatsiya taklifini hisoblash (avval maqsad so'raladi)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
                                 </button>
@@ -180,6 +183,43 @@
         </div>
     </div>
 
+    <!-- Optimizatsiya maqsadi dialogi -->
+    <div id="goal-overlay">
+        <div id="goal-dialog">
+            <div class="goal-head">
+                <div>
+                    <div class="goal-title">Optimizatsiya maqsadi</div>
+                    <div class="goal-sub">Me'yorlar bir-biriga zid kelganda qaysi maqsad ustuvor bo'lsin?</div>
+                </div>
+                <button type="button" class="goal-x" onclick="closeGoalModal()">×</button>
+            </div>
+            <div class="goal-body">
+                <label class="goal-opt">
+                    <input type="radio" name="oqim_goal" value="fill">
+                    <span class="goal-txt"><b>Oqimlarni maksimal to'ldirish</b>
+                    <small>Oqim me'yori (max ±) ustuvor. Kam to'lgan oqimlar limitgacha to'ldiriladi, qoldiq talabalar sig'sa tarqatiladi (guruhchalar biroz kattalashishi mumkin). Kichik qoldiq oqim qolishi mumkin.</small></span>
+                </label>
+                <label class="goal-opt">
+                    <input type="radio" name="oqim_goal" value="balance">
+                    <span class="goal-txt"><b>Teng taqsimlash</b>
+                    <small>Kam to'lgan oqimlar teng bo'linadi — kichik qoldiq oqim qolmaydi, lekin ba'zi oqimlar me'yordan kamroq to'ladi. Hech bir oqim limitdan oshmaydi.</small></span>
+                </label>
+                <label class="goal-opt">
+                    <input type="radio" name="oqim_goal" value="integrity">
+                    <span class="goal-txt"><b>Guruhchalar butunligi</b>
+                    <small>a,b / a,b,c guruhcha me'yorlari (15/10 ±) qat'iy — guruhchalar kattalashmaydi. Oqimlar guruhlarni butunicha ko'chirish bilan to'ldiriladi; kichik qoldiq oqim qolishi mumkin.</small></span>
+                </label>
+            </div>
+            <div class="goal-foot">
+                <button type="button" class="goal-cancel" onclick="closeGoalModal()">Bekor qilish</button>
+                <button type="button" class="goal-go" onclick="confirmGoal()">
+                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                    Hisoblash
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -194,6 +234,19 @@
         var CSRF = '{{ csrf_token() }}';
         var afterState = [];   // optimizatsiyadan keyingi holat (tahrirlanadigan) — saqlash uchun
         var editMode = false;
+        var currentGoal = localStorage.getItem('oqim_goal') || 'fill';
+
+        function openGoalModal() {
+            $('input[name="oqim_goal"][value="' + currentGoal + '"]').prop('checked', true);
+            $('#goal-overlay').css('display', 'flex');
+        }
+        function closeGoalModal() { $('#goal-overlay').hide(); }
+        function confirmGoal() {
+            currentGoal = $('input[name="oqim_goal"]:checked').val() || 'fill';
+            localStorage.setItem('oqim_goal', currentGoal);
+            closeGoalModal();
+            loadReport();
+        }
 
         function getFilters(optimize) {
             var dekanFaculty = document.getElementById('dekan_faculty_id');
@@ -210,10 +263,11 @@
                 abc_tol: $('#abc_tol').val() || 0,
                 optimize: optimize ? 1 : 0,
             };
-            // Fakultetlararo optimizatsiya FAQAT optimizatsiyalangan holatga qo'llanadi —
-            // joriy (tasdiqlangan) holat hech qachon o'zgarmaydi.
+            // Fakultetlararo optimizatsiya va maqsad FAQAT optimizatsiyalangan holatga
+            // qo'llanadi — joriy (tasdiqlangan) holat hech qachon o'zgarmaydi.
             if (optimize) {
                 f.merge_faculties = $('#merge_faculties').is(':checked') ? 1 : 0;
+                f.goal = currentGoal;
             }
             return f;
         }
@@ -564,18 +618,37 @@
 
         .norm-group { background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:5px 10px 6px; }
 
-        /* Fakultetlar ichidan almashtirish — chiroyli toggle */
-        .ff-toggle { display:inline-flex; align-items:center; gap:9px; cursor:pointer; user-select:none; background:#fff; border:1px solid #cbd5e1; border-radius:10px; padding:6px 12px; height:44px; align-self:stretch; transition:border-color .15s, box-shadow .15s; }
-        .ff-toggle:hover { border-color:#94a3b8; }
+        /* Fakultetlararo almashtirish — norm-group ichida ixcham toggle */
+        .ff-toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none; height:28px; }
         .ff-toggle input { position:absolute; opacity:0; width:0; height:0; }
-        .ff-slider { position:relative; flex:0 0 auto; width:38px; height:21px; background:#cbd5e1; border-radius:999px; transition:background .18s; }
-        .ff-slider::before { content:''; position:absolute; top:2px; left:2px; width:17px; height:17px; background:#fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.25); transition:transform .18s; }
+        .ff-slider { position:relative; flex:0 0 auto; width:36px; height:20px; background:#cbd5e1; border-radius:999px; transition:background .18s; }
+        .ff-slider::before { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; background:#fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.25); transition:transform .18s; }
         .ff-toggle input:checked + .ff-slider { background:linear-gradient(135deg,#2b5ea7,#3b7ddb); }
-        .ff-toggle input:checked + .ff-slider::before { transform:translateX(17px); }
+        .ff-toggle input:checked + .ff-slider::before { transform:translateX(16px); }
         .ff-toggle input:focus-visible + .ff-slider { box-shadow:0 0 0 3px rgba(43,94,167,0.25); }
-        .ff-txt { display:flex; flex-direction:column; line-height:1.15; font-size:12.5px; font-weight:700; color:#334155; }
-        .ff-txt small { font-weight:500; font-size:10px; color:#94a3b8; margin-top:1px; }
-        .ff-toggle input:checked ~ .ff-txt { color:#1e4b8a; }
+        .ff-state::after { content:"o'chiq"; font-size:11.5px; font-weight:700; color:#94a3b8; }
+        .ff-toggle input:checked ~ .ff-state::after { content:"yoqilgan"; color:#1e4b8a; }
+
+        /* Optimizatsiya maqsadi dialogi */
+        #goal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
+        #goal-dialog { background:#fff; border-radius:14px; width:100%; max-width:520px; box-shadow:0 24px 60px rgba(0,0,0,0.35); overflow:hidden; }
+        .goal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:14px 18px; background:linear-gradient(135deg,#2b5ea7,#3b7ddb); color:#fff; }
+        .goal-title { font-size:16px; font-weight:800; }
+        .goal-sub { font-size:12px; opacity:0.9; margin-top:2px; }
+        .goal-x { background:rgba(255,255,255,0.2); border:none; color:#fff; width:28px; height:28px; border-radius:8px; font-size:18px; line-height:1; cursor:pointer; flex-shrink:0; }
+        .goal-x:hover { background:rgba(255,255,255,0.35); }
+        .goal-body { padding:14px 18px; display:flex; flex-direction:column; gap:8px; }
+        .goal-opt { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1.5px solid #e2e8f0; border-radius:10px; cursor:pointer; transition:border-color .12s, background .12s; }
+        .goal-opt:hover { border-color:#93c5fd; background:#f8fbff; }
+        .goal-opt:has(input:checked) { border-color:#2b5ea7; background:#eff6ff; box-shadow:0 0 0 2px rgba(43,94,167,0.12); }
+        .goal-opt input { margin-top:3px; accent-color:#2b5ea7; flex-shrink:0; }
+        .goal-txt { display:flex; flex-direction:column; gap:2px; }
+        .goal-txt b { font-size:13.5px; color:#0f172a; }
+        .goal-txt small { font-size:11.5px; color:#64748b; line-height:1.45; }
+        .goal-foot { display:flex; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid #f1f5f9; background:#fbfdff; }
+        .goal-cancel { padding:8px 16px; background:#fff; color:#64748b; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+        .goal-go { display:inline-flex; align-items:center; gap:7px; padding:8px 20px; background:linear-gradient(135deg,#2b5ea7,#3b7ddb); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+        .goal-go:hover { background:linear-gradient(135deg,#1e4b8a,#2b5ea7); }
         .norm-title { display:block; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.03em; color:#475569; margin-bottom:3px; }
         .norm-inputs { display:flex; gap:8px; }
         .norm-inputs > div { display:flex; align-items:center; gap:4px; }

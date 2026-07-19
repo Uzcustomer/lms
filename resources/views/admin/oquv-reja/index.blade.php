@@ -1121,12 +1121,15 @@
                                         '<div class="bulk-sems flex items-center gap-3 text-sm"></div>' +
                                         '<input type="file" accept=".xlsx,.xls" class="bulk-file text-xs text-gray-700 border border-gray-300 rounded-md flex-1 min-w-[220px]">' +
                                     '</div>' +
+                                    '<div class="bulk-warn text-xs font-medium text-red-600 mt-1"></div>' +
                                 '</div>';
                             }).join('');
 
                             // Kurs tanlanganda semestr checkboxlarini qayta qurish (HEMIS: kod = 10 + semestr raqami)
                             bulkGroups.querySelectorAll('.bulk-group').forEach(g => {
-                                const sel = g.querySelector('.bulk-kurs');
+                                const sel  = g.querySelector('.bulk-kurs');
+                                const file = g.querySelector('.bulk-file');
+                                const warn = g.querySelector('.bulk-warn');
                                 const rebuild = () => {
                                     const k = parseInt(sel.value);
                                     const codes = [10 + 2 * k - 1, 10 + 2 * k];
@@ -1135,7 +1138,16 @@
                                         '<input type="checkbox" class="bulk-sem rounded border-gray-300 text-indigo-600" value="' + c + '" checked>' +
                                         (c - 10) + '-semestr</label>').join('');
                                 };
-                                sel.addEventListener('change', rebuild);
+                                // Fayl nomidagi kurs raqami tanlangan kursga mos kelmasa — darhol ogohlantirish
+                                const checkName = () => {
+                                    const f = file.files[0];
+                                    const m = f && f.name.match(/(\d+)\s*[-_ ]?\s*kurs/i);
+                                    warn.textContent = (m && parseInt(m[1]) !== parseInt(sel.value))
+                                        ? "⚠ Fayl nomi " + m[1] + "-kursga o'xshaydi, siz " + sel.value + "-kurs uchun tanladingiz!"
+                                        : '';
+                                };
+                                sel.addEventListener('change', () => { rebuild(); checkName(); });
+                                file.addEventListener('change', checkName);
                                 rebuild();
                             });
 

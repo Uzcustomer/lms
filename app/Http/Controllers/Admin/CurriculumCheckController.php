@@ -323,6 +323,23 @@ class CurriculumCheckController extends Controller
                         DB::rollBack();
                         return back()->with('error', implode(' ', $import->errors));
                     }
+
+                    // Himoya: fayl ichidagi semestrlar tanlangan semestrlarga
+                    // mos kelmasa — noto'g'ri (boshqa kursning) fayli
+                    $fileSems = $curriculum->subjects()->whereNotNull('semester')
+                        ->distinct()->pluck('semester')->map(fn($s) => (int) $s)->all();
+                    $targetSems = array_map(
+                        fn($c) => (int) $c >= 11 ? (int) $c - 10 : (int) $c,
+                        array_filter($semCodes)
+                    );
+                    if ($fileSems && $targetSems && !array_intersect($fileSems, $targetSems)) {
+                        DB::rollBack();
+                        return back()->with('error',
+                            'Fayl ichidagi semestrlar (' . implode(', ', $fileSems) .
+                            ') tanlangan semestrlarga (' . implode(', ', $targetSems) .
+                            "-semestr) mos kelmadi — boshqa kursning fayli bo'lishi mumkin. Yuklash bekor qilindi.");
+                    }
+
                     $firstCurriculum = $curriculum;
                 } else {
                     // Qo'shimcha semestrlar: birinchi semestrdan fanlarni nusxalaymiz
@@ -529,6 +546,20 @@ class CurriculumCheckController extends Controller
                             if (!empty($import->errors)) {
                                 throw new \RuntimeException(implode(' ', $import->errors));
                             }
+
+                            // Himoya: fayl ichidagi semestrlar tanlangan semestrlarga
+                            // mos kelmasa — noto'g'ri (boshqa kursning) fayli, bekor qilamiz
+                            $fileSems = $curriculum->subjects()->whereNotNull('semester')
+                                ->distinct()->pluck('semester')->map(fn($s) => (int) $s)->all();
+                            $targetSems = array_map(fn($c) => (int) $c >= 11 ? (int) $c - 10 : (int) $c, $semCodes);
+                            if ($fileSems && !array_intersect($fileSems, $targetSems)) {
+                                throw new \RuntimeException(
+                                    'fayl ichidagi semestrlar (' . implode(', ', $fileSems) .
+                                    ') tanlangan semestrlarga (' . implode(', ', $targetSems) .
+                                    ") mos emas — boshqa kursning fayli bo'lishi mumkin"
+                                );
+                            }
+
                             $master = $curriculum;
                         } else {
                             // Qolganlariga fanlarni nusxalaymiz

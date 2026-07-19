@@ -10,6 +10,7 @@ class ManualCurriculum extends Model
 
     protected $fillable = [
         'type',
+        'status',
         'name',
         'specialty_code',
         'specialty_name',
@@ -38,5 +39,11 @@ class ManualCurriculum extends Model
     public function typeLabel(): string
     {
         return $this->type === 'namunaviy' ? "Namunaviy o'quv reja" : "Ishchi o'quv reja";
+    }
+
+    /** Rejalashtirilgan (HEMIS'ga bog'lanmagan) reja. */
+    public function isPlanned(): bool
+    {
+        return $this->status === 'planned' || ($this->curricula_hemis_id === null && $this->status !== 'active');
     }
 }

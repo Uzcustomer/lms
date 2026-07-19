@@ -689,6 +689,219 @@ class CurriculumCheckController extends Controller
         ]);
     }
 
+    /**
+     * Rejalashtirilgan reja uchun nusxa manbalari: mavjud ishchi rejalar ro'yxati.
+     * Ixtiyoriy specialty_code bo'yicha filtrlash mumkin.
+     */
+    public function plannedSources(Request $request)
+    {
+        $q = ManualCurriculum::query()
+            ->where('type', 'ishchi')
+            ->withCount('subjects')
+            ->orderByDesc('id');
+
+        if ($request->filled('specialty_code')) {
+            $q->where('specialty_code', $request->specialty_code);
+        }
+        if ($request->filled('level_code')) {
+            $q->where('level_code', $request->level_code);
+        }
+
+        return response()->json($q->get()->map(fn($m) => [
+            'id'             => $m->id,
+            'name'           => $m->name,
+            'specialty_code' => $m->specialty_code,
+            'specialty_name' => $m->specialty_name,
+            'plan_year'      => $m->plan_year,
+            'level_code'     => $m->level_code,
+            'semester_code'  => $m->semester_code,
+            'subjects_count' => $m->subjects_count,
+        ])->values());
+    }
+
+    /**
+     * Rejalashtirilgan (HEMIS'siz) ishchi reja yaratish.
+     *  - mode=copy: mavjud reja(lar)dan nusxa (o'tgan yildan)
+     *  - mode=new : yangi yo'nalish uchun (Excel yuklab yoki bo'sh, keyin qo'lda to'ldiriladi)
+     * Har ikkalasida ham status='planned', curricula_hemis_id=NULL.
+     */
+    public function storePlanned(Request $request)
+    {
+        $request->validate([
+            'mode'      => 'required|in:copy,new',
+            'plan_year' => 'required|string|max:50',
+        ]);
+
+        // ── Nusxa rejimi ──────────────────────────────────────────────
+        if ($request->mode === 'copy') {
+            $data = $request->validate([
+                'source_ids'   => 'required|array|min:1',
+                'source_ids.*' => 'integer|exists:manual_curricula,id',
+            ]);
+
+            $sources = ManualCurriculum::with('subjects')
+                ->whereIn('id', $data['source_ids'])->get();
+            if ($sources->isEmpty()) {
+                return response()->json(['error' => 'Manba reja topilmadi.'], 422);
+            }
+
+            $created = 0;
+            DB::beginTransaction();
+            try {
+                foreach ($sources as $src) {
+                    $planned = ManualCurriculum::create([
+                        'type'                => 'ishchi',
+                        'status'              => 'planned',
+                        'name'                => $this->plannedName($src->specialty_name ?: $src->name, $request->plan_year, $src->semester_code),
+                        'specialty_code'      => $src->specialty_code,
+                        'specialty_name'      => $src->specialty_name,
+                        'plan_year'           => $request->plan_year,
+                        'curricula_hemis_id'  => null,
+                        'level_code'          => $src->level_code,
+                        'semester_code'       => $src->semester_code,
+                        'education_type_name' => $src->education_type_name,
+                        'education_period'    => $src->education_period,
+                        'notes'               => 'Nusxa manbasi: #' . $src->id . ' (' . $src->name . ')',
+                        'created_by'          => Auth::id(),
+                    ]);
+                    $this->copySubjects($planned->id, $src->subjects);
+                    $created++;
+                }
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Rejalashtirilgan reja (nusxa) xatolik: ' . $e->getMessage());
+                return response()->json(['error' => $e->getMessage()], 500);
+            }
+
+            return response()->json(['created' => $created]);
+        }
+
+        // ── Yangi yo'nalish rejimi ────────────────────────────────────
+        $data = $request->validate([
+            'specialty_code'      => 'nullable|string|max:50',
+            'specialty_name'      => 'required|string|max:255',
+            'level_code'          => 'nullable|string|max:20',
+            'education_type_name' => 'nullable|string|max:255',
+            'semester_codes'      => 'required|array|min:1',
+            'semester_codes.*'    => 'string|max:20',
+            'file'                => 'nullable|file|mimes:xlsx,xls|max:10240',
+        ]);
+
+        $semCodes = array_values(array_unique(array_filter($data['semester_codes'])));
+        $file     = $request->file('file');
+        $filePath = $file ? $file->store('manual-curricula', 'public') : null;
+
+        $created = 0;
+        DB::beginTransaction();
+        try {
+            $master = null;
+            $masterRows = null;
+            foreach ($semCodes as $semCode) {
+                $planned = ManualCurriculum::create([
+                    'type'                => 'ishchi',
+                    'status'              => 'planned',
+                    'name'                => $this->plannedName($data['specialty_name'], $request->plan_year, $semCode),
+                    'specialty_code'      => $data['specialty_code'] ?? null,
+                    'specialty_name'      => $data['specialty_name'],
+                    'plan_year'           => $request->plan_year,
+                    'curricula_hemis_id'  => null,
+                    'level_code'          => $data['level_code'] ?? null,
+                    'semester_code'       => $semCode,
+                    'education_type_name' => $data['education_type_name'] ?? null,
+                    'file_original_name'  => $file?->getClientOriginalName(),
+                    'file_path'           => $filePath,
+                    'created_by'          => Auth::id(),
+                ]);
+
+                if ($file) {
+                    if ($master === null) {
+                        $import = new ManualCurriculumImport($planned);
+                        Excel::import($import, $file);
+                        if (!empty($import->errors)) {
+                            throw new \RuntimeException(implode(' ', $import->errors));
+                        }
+                        $master = $planned;
+                        $masterRows = $master->subjects()->get();
+                    } else {
+                        $this->copySubjects($planned->id, $masterRows);
+                    }
+                }
+                $created++;
+            }
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Rejalashtirilgan reja (yangi) xatolik: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+
+        return response()->json(['created' => $created]);
+    }
+
+    /**
+     * Rejalashtirilgan rejani HEMIS o'quv rejasiga bog'lash: HEMIS reja
+     * paydo bo'lgach, curricula_hemis_id to'ldiriladi va status='active' bo'ladi.
+     * Shundan keyin reja "Yo'nalish bo'yicha" tabida ko'rinadi.
+     */
+    public function linkToHemis(Request $request, ManualCurriculum $curriculum)
+    {
+        $request->validate([
+            'curricula_hemis_id' => 'required|exists:curricula,curricula_hemis_id',
+        ]);
+
+        $hemis = Curriculum::where('curricula_hemis_id', $request->curricula_hemis_id)->first();
+
+        $curriculum->update([
+            'curricula_hemis_id'  => $hemis->curricula_hemis_id,
+            'status'              => 'active',
+            'level_code'          => $curriculum->level_code ?: null,
+            'education_type_name' => $curriculum->education_type_name ?: $hemis->education_type_name,
+        ]);
+
+        return back()->with('success', "Reja HEMIS o'quv rejasiga bog'landi: {$hemis->name}");
+    }
+
+    /** Rejalashtirilgan reja nomini shakllantirish. */
+    private function plannedName(string $base, string $planYear, ?string $semCode): string
+    {
+        $name = trim($base) . ' — ishchi (REJA · ' . $planYear;
+        if ($semCode) {
+            $n = (int) $semCode >= 11 ? (int) $semCode - 10 : (int) $semCode;
+            $name .= ', ' . $n . '-semestr';
+        }
+        return $name . ')';
+    }
+
+    /** Manba fanlarni yangi rejaga ko'chirish. */
+    private function copySubjects(int $targetId, $sourceSubjects): void
+    {
+        if ($sourceSubjects->isEmpty()) {
+            return;
+        }
+        $now = now();
+        ManualCurriculumSubject::insert($sourceSubjects->map(fn($s) => [
+            'manual_curriculum_id' => $targetId,
+            'block'          => $s->block,
+            'subject_code'   => $s->subject_code,
+            'subject_name'   => $s->subject_name,
+            'reference_name' => $s->reference_name,
+            'kurs'           => $s->kurs,
+            'semester'       => $s->semester,
+            'total_hours'    => $s->total_hours,
+            'audit_total'    => $s->audit_total,
+            'lecture'        => $s->lecture,
+            'practice'       => $s->practice,
+            'laboratory'     => $s->laboratory,
+            'seminar'        => $s->seminar,
+            'independent'    => $s->independent,
+            'credit'         => $s->credit,
+            'note'           => $s->note,
+            'created_at'     => $now,
+            'updated_at'     => $now,
+        ])->toArray());
+    }
+
     public function show(ManualCurriculum $curriculum)
     {
         $curriculum->load(['subjects' => fn($q) => $q->orderBy('id')]);

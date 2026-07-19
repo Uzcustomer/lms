@@ -554,6 +554,12 @@
                         m += '<div class="xmove-body">Fakultetlar balansi uchun <b>butun oqim</b> (' + esc(xm.oqim_rows || (xm.moved || []).length) + ' guruhcha, <b>' + esc(xm.moved_total) + ' ta</b>) '
                            + '<b>' + esc(xm.from_fac) + '</b> → <b>' + esc(xm.to_fac) + '</b> ga o\'tkaziladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta) — talabalar soni tenglashadi.'
                            + '<div class="xm-detail">Ko\'chirilayotgan guruhlar: ' + (xm.moved || []).map(function(g){ return esc(g.name) + ' (' + esc(g.count) + ')'; }).join(', ') + '</div></div>';
+                    } else if (xm.leveled) {
+                        var rt = (xm.result_totals || []).join(', ');
+                        m += '<div class="xmove-body">Kam to\'lgan oqimlar guruhlari <b>teng taqsimlanadi</b> — jami <b>' + esc(xm.moved_total) + ' ta</b> talaba '
+                           + (xm.result_totals ? xm.result_totals.length : '') + ' ta oqimga teng bo\'linadi'
+                           + (rt ? ' (natija: <b>' + esc(rt) + '</b> ta)' : '') + '.'
+                           + '<div class="xm-detail">Qatnashgan guruhlar: ' + gl + '</div></div>';
                     } else if (xm.distributed) {
                         m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> tarqatiladi — <b>[' + esc(xm.moved_total) + ' ta]</b> talaba boshqa guruhchalarga +1 tadan beriladi (guruhchalar biroz kattalashadi):';
                         var mv2 = xm.moved || [];

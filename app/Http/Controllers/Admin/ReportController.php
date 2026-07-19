@@ -12279,11 +12279,15 @@ class ReportController extends Controller
                         }
                         $names = [];
                         foreach ($partialBases as $bs) { $names[] = ['name' => $bs['base'], 'count' => $bs['total']]; }
+                        // Natijaviy oqim hajmlari (batafsil ko'rsatish uchun)
+                        $resTotals = [];
+                        for ($i = 0; $i < $cnt; $i++) { $resTotals[] = (int) $resultOqims[$tailStart + $i]['total']; }
                         $xmoves[] = [
                             'course' => $g['level_name'], 'lang' => $g['lang_label'],
                             'from_fac' => $this->oqimFacultyShort($partialBases[0]['_dept'] ?? ''),
                             'to_fac' => 'teng taqsimlash', 'moved' => $names, 'moved_total' => $Sall,
-                            'to_before' => 0, 'to_after' => 0, 'distributed' => true,
+                            'to_before' => 0, 'to_after' => 0, 'leveled' => true,
+                            'result_totals' => $resTotals,
                         ];
                     }
                 } else {

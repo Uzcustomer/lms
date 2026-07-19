@@ -48,6 +48,10 @@
                             class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
                         Yo'nalish bo'yicha
                     </button>
+                    <button type="button" data-tab="fanlar"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        O'tiladigan fanlar
+                    </button>
                 </nav>
             </div>
 
@@ -691,6 +695,92 @@
 
             </div> {{-- /panel: rejalar --}}
 
+            {{-- ===== PANEL: O'tiladigan fanlar (2-bosqich) ===== --}}
+            @php
+                $ishSpecs = $ishchiList->filter(fn($c) => $c->specialty_name)
+                    ->unique(fn($c) => $c->specialty_code . '|' . $c->specialty_name)
+                    ->sortBy('specialty_name')
+                    ->values();
+                $ishYears = $ishchiList->pluck('plan_year')->filter()->unique()->sort()->values();
+            @endphp
+            <div data-panel="fanlar" class="hidden">
+                <div class="bg-white shadow-sm sm:rounded-lg mb-6">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">O'tiladigan fanlar (barcha ishchi rejalardan)</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Barcha ishchi rejalardagi fanlar yo'nalish + kurs + semestr kesimida bir joyga to'planadi.
+                            Soatlar turlar bo'yicha (ma'ruza / amaliy / laboratoriya / seminar) alohida ko'rsatiladi —
+                            keyingi bosqichda ma'ruza oqimga, amaliy/lab guruhlarga bo'linib o'qituvchi yuklamasi hisoblanadi.
+                        </p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish</label>
+                                <select id="fsSpecialty" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Barchasi</option>
+                                    @foreach($ishSpecs as $s)
+                                        <option value="{{ $s->specialty_code }}">{{ trim($s->specialty_code . ' — ' . $s->specialty_name) }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Reja yili</label>
+                                <select id="fsYear" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Barchasi</option>
+                                    @foreach($ishYears as $y)
+                                        <option value="{{ $y }}">{{ $y }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Kurs</label>
+                                <select id="fsKurs" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Barchasi</option>
+                                    @for($k = 1; $k <= 6; $k++)
+                                        <option value="1{{ $k }}">{{ $k }}-kurs</option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                                    <input type="checkbox" id="fsPlanned" checked class="rounded border-gray-300 text-amber-600">
+                                    Rejalashtirilganlar ham
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                            <div id="fsTiles" class="flex flex-wrap gap-2 text-xs"></div>
+                            <a id="fsExport" href="#" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⬇ CSV yuklab olish</a>
+                        </div>
+
+                        <div id="fsLoading" class="hidden text-center text-sm text-gray-500 py-6">Yuklanmoqda...</div>
+                        <div id="fsEmpty" class="hidden text-center text-sm text-gray-500 py-6">Fan topilmadi.</div>
+                        <div id="fsTableWrap" class="overflow-x-auto hidden">
+                            <table class="min-w-full divide-y divide-gray-200 text-xs">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
+                                    <th class="px-2 py-2 text-center font-medium text-gray-600">Kurs</th>
+                                    <th class="px-2 py-2 text-center font-medium text-gray-600">Sem</th>
+                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Blok</th>
+                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Fan</th>
+                                    <th class="px-2 py-2 text-right font-medium text-blue-700">Ma'ruza</th>
+                                    <th class="px-2 py-2 text-right font-medium text-purple-700">Amaliy</th>
+                                    <th class="px-2 py-2 text-right font-medium text-teal-700">Lab</th>
+                                    <th class="px-2 py-2 text-right font-medium text-orange-700">Seminar</th>
+                                    <th class="px-2 py-2 text-right font-medium text-gray-500">Mustaqil</th>
+                                    <th class="px-2 py-2 text-right font-medium text-gray-700">Jami</th>
+                                    <th class="px-2 py-2 text-right font-medium text-gray-700">Kredit</th>
+                                </tr>
+                                </thead>
+                                <tbody id="fsTbody" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {{-- ===== PANEL: Yo'nalish bo'yicha ===== --}}
             <div data-panel="yonalish" class="hidden">
                 <div class="bg-white shadow-sm sm:rounded-lg mb-6">
@@ -1081,7 +1171,7 @@
 
                     // Boshlang'ich holat (URL hash bo'yicha)
                     const hash = (location.hash || '').replace('#', '');
-                    const validHashes = ['solishtirish', 'yonalish'];
+                    const validHashes = ['solishtirish', 'yonalish', 'fanlar'];
                     activateMainTab(validHashes.includes(hash) ? hash : 'rejalar');
                     const firstSub = document.querySelector('.sub-tab');
                     if (firstSub) firstSub.click();
@@ -1523,6 +1613,87 @@
                         function escHtml(s) {
                             return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                         }
+                    })();
+
+                    // ===== O'tiladigan fanlar tab (2-bosqich) =====
+                    (function () {
+                        const sumUrl = @json(route('admin.oquv-reja.subjects-summary'));
+                        const expUrl = @json(route('admin.oquv-reja.subjects-summary.export'));
+                        const spec = document.getElementById('fsSpecialty');
+                        const year = document.getElementById('fsYear');
+                        const kurs = document.getElementById('fsKurs');
+                        const planned = document.getElementById('fsPlanned');
+                        const tbody = document.getElementById('fsTbody');
+                        const wrap  = document.getElementById('fsTableWrap');
+                        const empty = document.getElementById('fsEmpty');
+                        const load  = document.getElementById('fsLoading');
+                        const tiles = document.getElementById('fsTiles');
+                        const exp   = document.getElementById('fsExport');
+                        let loadedOnce = false;
+
+                        function esc(s){return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+                        function n(v){return (v === null || v === undefined || v === 0) ? '<span class="text-gray-300">·</span>' : (Math.round(v*10)/10);}
+
+                        function params() {
+                            const p = new URLSearchParams();
+                            if (spec.value) p.set('specialty_code', spec.value);
+                            if (year.value) p.set('plan_year', year.value);
+                            if (kurs.value) p.set('level_code', kurs.value);
+                            p.set('include_planned', planned.checked ? '1' : '0');
+                            return p;
+                        }
+
+                        function tile(label, val, cls) {
+                            return '<span class="inline-flex items-center gap-1 rounded-md px-2 py-1 ' + cls + '">' +
+                                label + ': <b>' + val + '</b></span>';
+                        }
+
+                        async function reload() {
+                            load.classList.remove('hidden'); wrap.classList.add('hidden'); empty.classList.add('hidden');
+                            exp.href = expUrl + '?' + params().toString();
+                            try {
+                                const j = await (await fetch(sumUrl + '?' + params(), {headers:{'Accept':'application/json'}})).json();
+                                load.classList.add('hidden');
+                                const t = j.totals;
+                                tiles.innerHTML =
+                                    tile('Fanlar', t.subjects, 'bg-gray-100 text-gray-700') +
+                                    tile("Ma'ruza", t.lecture, 'bg-blue-50 text-blue-700') +
+                                    tile('Amaliy', t.practice, 'bg-purple-50 text-purple-700') +
+                                    tile('Lab', t.laboratory, 'bg-teal-50 text-teal-700') +
+                                    tile('Seminar', t.seminar, 'bg-orange-50 text-orange-700') +
+                                    tile('Mustaqil', t.independent, 'bg-gray-50 text-gray-600') +
+                                    tile('Jami soat', t.total_hours, 'bg-gray-800 text-white') +
+                                    tile('Kredit', t.credit, 'bg-emerald-50 text-emerald-700');
+                                if (!j.rows.length) { empty.classList.remove('hidden'); tbody.innerHTML=''; return; }
+                                tbody.innerHTML = j.rows.map(r =>
+                                    '<tr class="hover:bg-gray-50">' +
+                                    '<td class="px-2 py-1 text-gray-500 whitespace-nowrap">' + esc((r.specialty_code||'') ) + '</td>' +
+                                    '<td class="px-2 py-1 text-center">' + (r.kurs ?? '') + '</td>' +
+                                    '<td class="px-2 py-1 text-center">' + (r.semester ?? '') + '</td>' +
+                                    '<td class="px-2 py-1 text-gray-500">' + esc(r.block||'') + '</td>' +
+                                    '<td class="px-2 py-1 font-medium text-gray-800">' + esc(r.subject_name) +
+                                        (r.reja_count > 1 ? ' <span class="text-[10px] text-gray-400">×' + r.reja_count + '</span>' : '') + '</td>' +
+                                    '<td class="px-2 py-1 text-right">' + n(r.lecture) + '</td>' +
+                                    '<td class="px-2 py-1 text-right">' + n(r.practice) + '</td>' +
+                                    '<td class="px-2 py-1 text-right">' + n(r.laboratory) + '</td>' +
+                                    '<td class="px-2 py-1 text-right">' + n(r.seminar) + '</td>' +
+                                    '<td class="px-2 py-1 text-right text-gray-500">' + n(r.independent) + '</td>' +
+                                    '<td class="px-2 py-1 text-right font-semibold">' + n(r.total_hours) + '</td>' +
+                                    '<td class="px-2 py-1 text-right">' + n(r.credit) + '</td>' +
+                                    '</tr>').join('');
+                                wrap.classList.remove('hidden');
+                            } catch (e) {
+                                load.classList.add('hidden');
+                                empty.textContent = 'Xatolik yuz berdi.'; empty.classList.remove('hidden');
+                            }
+                        }
+
+                        [spec, year, kurs, planned].forEach(el => el.addEventListener('change', reload));
+                        // Tab ochilganda birinchi marta yuklaymiz
+                        document.querySelector('.main-tab[data-tab="fanlar"]').addEventListener('click', () => {
+                            if (!loadedOnce) { loadedOnce = true; reload(); }
+                        });
+                        if ((location.hash || '').replace('#','') === 'fanlar') { loadedOnce = true; reload(); }
                     })();
                 })();
             </script>

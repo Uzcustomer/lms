@@ -902,6 +902,98 @@ class CurriculumCheckController extends Controller
         ])->toArray());
     }
 
+    /**
+     * 2-BOSQICH: Barcha ishchi rejalardagi o'tiladigan fanlarni bir joyga to'plash.
+     * Yo'nalish + kurs + semestr kesimida takrorlanmas fanlar, soatlari turlar
+     * bo'yicha (ma'ruza/amaliy/lab/seminar/mustaqil) — jadval yuklamasini
+     * hisoblash uchun asos.
+     */
+    private function subjectsSummaryQuery(Request $request)
+    {
+        return DB::table('manual_curriculum_subjects as s')
+            ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
+            ->where('mc.type', 'ishchi')
+            ->when(!$request->boolean('include_planned', true), fn($q) => $q->where('mc.status', 'active'))
+            ->when($request->filled('specialty_code'), fn($q) => $q->where('mc.specialty_code', $request->specialty_code))
+            ->when($request->filled('plan_year'), fn($q) => $q->where('mc.plan_year', $request->plan_year))
+            ->when($request->filled('level_code'), fn($q) => $q->where('mc.level_code', $request->level_code))
+            ->groupBy('mc.specialty_code', 'mc.specialty_name', 'mc.level_code', 's.semester', 's.block', 's.subject_name')
+            ->selectRaw("mc.specialty_code, mc.specialty_name, mc.level_code, s.semester,
+                s.block, s.subject_name,
+                MAX(s.lecture) as lecture, MAX(s.practice) as practice, MAX(s.laboratory) as laboratory,
+                MAX(s.seminar) as seminar, MAX(s.independent) as independent,
+                MAX(s.total_hours) as total_hours, MAX(s.credit) as credit,
+                COUNT(DISTINCT s.manual_curriculum_id) as reja_count")
+            ->orderBy('mc.specialty_code')
+            ->orderBy('s.semester')
+            ->orderBy('s.block')
+            ->orderBy('s.subject_name');
+    }
+
+    public function subjectsSummary(Request $request)
+    {
+        $rows = $this->subjectsSummaryQuery($request)->get();
+
+        $num = fn($v) => $v === null ? null : (float) $v;
+        $data = $rows->map(fn($r) => [
+            'specialty_code' => $r->specialty_code,
+            'specialty_name' => $r->specialty_name,
+            'level_code'     => $r->level_code,
+            'kurs'           => $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : null,
+            'semester'       => $r->semester ? (int) $r->semester : null,
+            'block'          => $r->block,
+            'subject_name'   => $r->subject_name,
+            'lecture'        => $num($r->lecture),
+            'practice'       => $num($r->practice),
+            'laboratory'     => $num($r->laboratory),
+            'seminar'        => $num($r->seminar),
+            'independent'    => $num($r->independent),
+            'total_hours'    => $num($r->total_hours),
+            'credit'         => $num($r->credit),
+            'reja_count'     => (int) $r->reja_count,
+        ])->all();
+
+        $sum = fn($k) => round(array_sum(array_map(fn($r) => $r[$k] ?? 0, $data)), 1);
+        $totals = [
+            'subjects'    => count($data),
+            'lecture'     => $sum('lecture'),
+            'practice'    => $sum('practice'),
+            'laboratory'  => $sum('laboratory'),
+            'seminar'     => $sum('seminar'),
+            'independent' => $sum('independent'),
+            'total_hours' => $sum('total_hours'),
+            'credit'      => $sum('credit'),
+        ];
+
+        return response()->json(['rows' => $data, 'totals' => $totals]);
+    }
+
+    public function subjectsSummaryExport(Request $request)
+    {
+        $rows = $this->subjectsSummaryQuery($request)->get();
+
+        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan',
+            'Ma\'ruza', 'Amaliy', 'Laboratoriya', 'Seminar', 'Mustaqil', 'Jami soat', 'Kredit', 'Rejalar soni'];
+
+        $fname = 'otiladigan-fanlar-' . now()->format('Y-m-d') . '.csv';
+
+        return response()->streamDownload(function () use ($rows, $headers) {
+            $out = fopen('php://output', 'w');
+            fprintf($out, "\xEF\xBB\xBF"); // UTF-8 BOM (Excel uchun)
+            fputcsv($out, $headers);
+            foreach ($rows as $r) {
+                $kurs = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : '';
+                fputcsv($out, [
+                    $r->specialty_code, $r->specialty_name, $kurs, $r->semester,
+                    $r->block, $r->subject_name,
+                    $r->lecture, $r->practice, $r->laboratory, $r->seminar, $r->independent,
+                    $r->total_hours, $r->credit, $r->reja_count,
+                ]);
+            }
+            fclose($out);
+        }, $fname, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
     public function show(ManualCurriculum $curriculum)
     {
         $curriculum->load(['subjects' => fn($q) => $q->orderBy('id')]);

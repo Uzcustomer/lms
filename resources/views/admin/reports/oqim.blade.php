@@ -63,25 +63,29 @@
 
                     <!-- Me'yorlar (chegaralar) -->
                     <div class="filter-row" style="align-items:flex-end;">
-                        <div class="norm-group">
-                            <span class="norm-title">Oqim me'yori</span>
-                            <div class="norm-inputs">
-                                <div><label>max</label><input type="number" id="oqim_max" class="norm-in" value="100" min="1"></div>
-                                <div><label>±</label><input type="number" id="oqim_tol" class="norm-in" value="0" min="0"></div>
-                            </div>
-                        </div>
-                        <div class="norm-group">
-                            <span class="norm-title">a,b guruhcha</span>
-                            <div class="norm-inputs">
-                                <div><label>max</label><input type="number" id="ab_max" class="norm-in" value="15" min="1"></div>
-                                <div><label>±</label><input type="number" id="ab_tol" class="norm-in" value="0" min="0"></div>
-                            </div>
-                        </div>
-                        <div class="norm-group">
-                            <span class="norm-title">a,b,c guruhcha</span>
-                            <div class="norm-inputs">
-                                <div><label>max</label><input type="number" id="abc_max" class="norm-in" value="10" min="1"></div>
-                                <div><label>±</label><input type="number" id="abc_tol" class="norm-in" value="0" min="0"></div>
+                        <div class="norm-group" style="flex:1 1 auto;">
+                            <span class="norm-title">Kurs me'yorlari — oqim va guruhcha (kursni o'chirib qo'ysangiz u optimizatsiya qilinmaydi)</span>
+                            <div class="kn-row">
+                                @for($k = 1; $k <= 6; $k++)
+                                    <div class="kn-card" data-kurs="{{ $k }}">
+                                        <label class="kn-head">
+                                            <input type="checkbox" class="kn-on" checked>
+                                            {{ $k }}-kurs
+                                        </label>
+                                        <div class="kn-line" title="Oqim me'yori (max va tolerantlik)">
+                                            <span class="kn-lbl">oqim</span>
+                                            <input type="number" class="kn-omax norm-in kn-in" value="120" min="1">
+                                            <span class="kn-pm">±</span>
+                                            <input type="number" class="kn-otol norm-in kn-sm" value="5" min="0">
+                                        </div>
+                                        <div class="kn-line" title="Guruhcha me'yori (max va tolerantlik)">
+                                            <span class="kn-lbl">grch</span>
+                                            <input type="number" class="kn-smax norm-in kn-in" value="{{ $k <= 3 ? 15 : 10 }}" min="1">
+                                            <span class="kn-pm">±</span>
+                                            <input type="number" class="kn-stol norm-in kn-sm" value="0" min="0">
+                                        </div>
+                                    </div>
+                                @endfor
                             </div>
                         </div>
                         <div class="norm-group" title="Fakultetlar ALOHIDA qoladi (har birining o'z dekani bor). Bir xil yo'nalishli fakultetlar (masalan 1↔2-son davolash) kam to'lgan oqimlari qo'shni fakultet guruhlari bilan to'ldiriladi. Faqat optimizatsiyalangan holatga qo'llanadi.">
@@ -112,7 +116,9 @@
                     </div>
                     <p style="margin:2px 2px 0;font-size:11.5px;color:#64748b;">
                         Faqat faol (o'qiyotgan) talabalar hisobga olinadi. <b>Oqim</b> — ma'ruzaga birga boradigan guruhlar
-                        (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). <b>Joriy holat</b> — HEMISdagidek, tasdiqlanadigan holat (o'zgarmaydi);
+                        (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). Me'yorlar <b>har kurs uchun alohida</b> belgilanadi
+                        (guruhcha — yagona tushuncha: 1-3 kurs a,b; 4-6 kurs a,b,c bo'linadi, o'lchami kurs sozlamasidan olinadi);
+                        kurs katagi o'chirilsa — u kurs optimizatsiya qilinmaydi (joriy holatida qoladi). <b>Joriy holat</b> — HEMISdagidek, tasdiqlanadigan holat (o'zgarmaydi);
                         <b>Taklif etilayotgan o'zgartirish</b> — nimani nimaga o'zgartirish (kamayadigan guruh/oqimlar); <b>Optimizatsiyadan keyingi holat</b> — o'zgarishlardan keyingi to'liq holat (tasdiqlangach joriy holatga aylanadi).
                         <b>Fakultetlararo oqim optimizatsiyasi</b> yoqilsa — fakultetlar alohida qoladi, faqat bir fakultetning kam to'lgan oqimi qo'shni fakultet oqimiga ko'chiriladi (mehmon guruhlar belgilanadi).
                         Har xil tildagi guruhlar bir oqim/guruhga qo'shilmaydi.
@@ -250,17 +256,24 @@
 
         function getFilters(optimize) {
             var dekanFaculty = document.getElementById('dekan_faculty_id');
+            // Kurs bo'yicha me'yorlar: {1: {on, oqim_max, oqim_tol, sub_max, sub_tol}, ...}
+            var kurs = {};
+            $('.kn-card').each(function() {
+                var k = $(this).data('kurs');
+                kurs[k] = {
+                    on: $(this).find('.kn-on').is(':checked') ? 1 : 0,
+                    oqim_max: $(this).find('.kn-omax').val() || 120,
+                    oqim_tol: $(this).find('.kn-otol').val() || 0,
+                    sub_max: $(this).find('.kn-smax').val() || (k <= 3 ? 15 : 10),
+                    sub_tol: $(this).find('.kn-stol').val() || 0,
+                };
+            });
             var f = {
                 education_type: $('#education_type').val() || '',
                 faculty: dekanFaculty ? dekanFaculty.value : ($('#faculty').val() || ''),
                 talim: $('#talim').val() || 'all',
                 variant: $('#variant').val() || 'auto',
-                oqim_max: $('#oqim_max').val() || 100,
-                oqim_tol: $('#oqim_tol').val() || 0,
-                ab_max: $('#ab_max').val() || 15,
-                ab_tol: $('#ab_tol').val() || 0,
-                abc_max: $('#abc_max').val() || 10,
-                abc_tol: $('#abc_tol').val() || 0,
+                kurs: kurs,
                 optimize: optimize ? 1 : 0,
             };
             // Fakultetlararo optimizatsiya va maqsad FAQAT optimizatsiyalangan holatga
@@ -529,7 +542,10 @@
                     m += '<div class="cmp-card">';
                     m += '<div class="cmp-head"><span class="cmp-title">' + esc(xm.course) + ' · ' + esc(xm.lang) + ' til</span>'
                        + '<span class="cmp-count">' + esc(xm.from_fac) + ' → ' + esc(xm.to_fac) + '</span></div>';
-                    if (xm.distributed) {
+                    if (xm.balanced) {
+                        m += '<div class="xmove-body">Fakultetlar balansi uchun <b>' + esc(xm.from_fac) + '</b> dan ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
+                           + '→ <b>' + esc(xm.to_fac) + '</b> ga o\'tkaziladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta) — talabalar soni tenglashadi.</div>';
+                    } else if (xm.distributed) {
                         m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi oxirgi guruhlar ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
                            + 'kichik oqim qoldirmaslik uchun boshqa oqimlarga tarqatiladi (guruhchalar biroz kattalashadi).</div>';
                     } else {
@@ -617,6 +633,18 @@
         .btn-fix:hover { background: #fffbeb; border-color: #f59e0b; }
 
         .norm-group { background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:5px 10px 6px; }
+
+        /* Kurs bo'yicha me'yorlar */
+        .kn-row { display:flex; gap:8px; flex-wrap:wrap; }
+        .kn-card { border:1px solid #e2e8f0; border-radius:8px; padding:4px 8px 6px; background:#fbfdff; transition:opacity .15s; }
+        .kn-card:has(.kn-on:not(:checked)) { opacity:0.45; background:#f8fafc; }
+        .kn-head { display:flex; align-items:center; gap:5px; font-size:11.5px; font-weight:800; color:#1e3a5f; cursor:pointer; margin-bottom:3px; }
+        .kn-head input { width:13px; height:13px; cursor:pointer; accent-color:#2b5ea7; }
+        .kn-line { display:flex; align-items:center; gap:3px; margin-top:2px; }
+        .kn-lbl { font-size:10px; font-weight:700; color:#94a3b8; width:28px; }
+        .kn-pm { font-size:10px; font-weight:700; color:#94a3b8; }
+        .kn-in { width:46px; height:24px; font-size:11.5px; }
+        .kn-sm { width:36px; height:24px; font-size:11.5px; }
 
         /* Fakultetlararo almashtirish — norm-group ichida ixcham toggle */
         .ff-toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none; height:28px; }

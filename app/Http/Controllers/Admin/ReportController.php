@@ -11146,6 +11146,7 @@ class ReportController extends Controller
             'abc_tol'         => (int) $request->get('abc_tol', 0),
             'merge_faculties' => (int) $request->boolean('merge_faculties'),
             'goal'            => (string) $request->get('goal', 'fill'),
+            'kurs'            => $request->input('kurs', []),
         ];
         return hash('sha256', json_encode($ctx));
     }
@@ -11554,13 +11555,34 @@ class ReportController extends Controller
         $params = [
             'optimize' => $request->boolean('optimize'),
             'goal'     => $goal,
-            'oqim_max' => max(1, (int) $request->get('oqim_max', 100)),
-            'oqim_tol' => max(0, (int) $request->get('oqim_tol', 0)),
+            'oqim_max' => max(1, (int) $request->get('oqim_max', 120)),
+            'oqim_tol' => max(0, (int) $request->get('oqim_tol', 5)),
             'ab_max'   => max(1, (int) $request->get('ab_max', 15)),
             'ab_tol'   => max(0, (int) $request->get('ab_tol', 0)),
             'abc_max'  => max(1, (int) $request->get('abc_max', 10)),
             'abc_tol'  => max(0, (int) $request->get('abc_tol', 0)),
         ];
+
+        // Kurs bo'yicha me'yorlar: kurs[N][on|oqim_max|oqim_tol|sub_max|sub_tol].
+        // Berilmagan kurslar uchun yuqoridagi umumiy qiymatlar ishlatiladi.
+        $courses = [];
+        $kursParam = $request->input('kurs', []);
+        if (is_array($kursParam)) {
+            foreach ($kursParam as $k => $v) {
+                $k = (int) $k;
+                if ($k < 1 || $k > 10 || !is_array($v)) {
+                    continue;
+                }
+                $courses[$k] = [
+                    'on'       => !isset($v['on']) || (string) $v['on'] === '1',
+                    'oqim_max' => max(1, (int) ($v['oqim_max'] ?? $params['oqim_max'])),
+                    'oqim_tol' => max(0, (int) ($v['oqim_tol'] ?? $params['oqim_tol'])),
+                    'sub_max'  => max(1, (int) ($v['sub_max'] ?? ($k >= 4 ? $params['abc_max'] : $params['ab_max']))),
+                    'sub_tol'  => max(0, (int) ($v['sub_tol'] ?? 0)),
+                ];
+            }
+        }
+        $params['courses'] = $courses;
 
         // Tanlangan variant(lar). full=to'liq guruh, ab=a,b guruhcha, abc=a,b,c guruhcha,
         // auto=kursga qarab (1-3 kurs -> a,b, 4+ kurs -> a,b,c).
@@ -11746,6 +11768,10 @@ class ReportController extends Controller
                     continue;
                 }
                 $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
+                [, , , , $courseOn] = $this->oqimCourseNorm($params, $levelNum);
+                if (!$courseOn) {
+                    continue; // kurs sozlamalarda o'chirilgan — optimizatsiya qilinmaydi
+                }
                 [$subCount, $subMax, $subTol, $eff] = $this->oqimSubRule($variant, $levelNum, $params);
 
                 $curB = $this->oqimCourseBases($bases, $curParams, $variant, $levelNum);
@@ -11880,13 +11906,19 @@ class ReportController extends Controller
                 $bases    = $this->aggregateBaseGroups($course['groups']);
                 $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
                 [$subCount, $subMax, $subTol] = $this->oqimSubRule($variant, $levelNum, $params);
+                [$oMax, $oTol, , , $on] = $this->oqimCourseNorm($params, $levelNum);
+                // Kurs sozlamalarda o'chirilgan bo'lsa — optimizatsiya qilinmaydi (joriy holat)
+                $pCourse = $on ? $params : (['optimize' => false] + $params);
                 $cx[] = [
                     'level_name' => $course['level_name'],
                     'level_code' => $course['level_code'],
                     'sub_count'  => $subCount,
                     'sub_max'    => $subMax,
                     'sub_tol'    => $subTol,
-                    'bases'      => $this->oqimCourseBases($bases, $params, $variant, $levelNum),
+                    'oqim_max'   => $oMax,
+                    'oqim_tol'   => $oTol,
+                    'enabled'    => $on,
+                    'bases'      => $this->oqimCourseBases($bases, $pCourse, $variant, $levelNum),
                 ];
             }
             $prepared[$bi] = [
@@ -11908,7 +11940,11 @@ class ReportController extends Controller
         foreach ($prepared as $blk) {
             $courses = [];
             foreach ($blk['courses'] as $course) {
-                $oqims = $this->packOqims($course['bases'], $params['oqim_max'], $params['oqim_tol']);
+                $oqims = $this->packOqims(
+                    $course['bases'],
+                    $course['oqim_max'] ?? $params['oqim_max'],
+                    $course['oqim_tol'] ?? $params['oqim_tol']
+                );
                 $total = 0;
                 $displayOqims = [];
                 foreach ($oqims as $idx => $oq) {
@@ -11973,6 +12009,9 @@ class ReportController extends Controller
         $groups = [];
         foreach ($prepared as $bi => $blk) {
             foreach ($blk['courses'] as $ci => $course) {
+                if (isset($course['enabled']) && !$course['enabled']) {
+                    continue; // kurs sozlamalarda o'chirilgan — tegmaymiz
+                }
                 $subCount = $course['sub_count'];
                 foreach ($course['bases'] as $bidx => $base) {
                     if (count($base['rows']) >= $subCount) {
@@ -12117,8 +12156,6 @@ class ReportController extends Controller
      */
     private function applyCrossFacultyOqimMerge(array $blocks, array $params): array
     {
-        $limit = $params['oqim_max'] + max(0, $params['oqim_tol']);
-
         // (bi, level_code) -> ci — oqimni qabul qiluvchi fakultetning shu kursiga biriktirish uchun
         $courseIndex = [];
         foreach ($blocks as $bi => $blk) {
@@ -12137,8 +12174,10 @@ class ReportController extends Controller
                     $gkey = ($blk['merge_key'] ?? $bi) . '|' . $course['level_code'] . '|' . ($oq['lang'] ?? 'uz');
                     if (!isset($groups[$gkey])) {
                         $groups[$gkey] = [
+                            'merge_key'  => $blk['merge_key'] ?? (string) $bi,
                             'level_code' => $course['level_code'],
                             'level_name' => $course['level_name'],
+                            'level_num'  => $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']),
                             'lang'       => $oq['lang'] ?? 'uz',
                             'lang_label' => $oq['lang_label'] ?? "o'z",
                             'order'      => $gorder++,
@@ -12153,13 +12192,16 @@ class ReportController extends Controller
         $xmoves = [];
         $courseOqims = []; // [bi][ci] => [oqim, ...]
 
-        $floor = max(1, $params['oqim_max'] - max(0, $params['oqim_tol']));
-
         foreach ($groups as $g) {
             $items = $g['items'];
             $distinctBi = array_unique(array_map(fn($x) => $x['bi'], $items));
 
-            if (count($distinctBi) < 2) {
+            // Kurs bo'yicha oqim me'yori (limit/floor) va yoqilganlik
+            [$oMax, $oTol, , , $courseOn] = $this->oqimCourseNorm($params, (int) $g['level_num']);
+            $limit = $oMax + $oTol;
+            $floor = max(1, $oMax - $oTol);
+
+            if (count($distinctBi) < 2 || !$courseOn) {
                 // Bitta fakultet — oqimlar o'zgarmaydi.
                 foreach ($items as $it) {
                     $courseOqims[$it['bi']][$it['ci']][] = $it['oq'];
@@ -12356,6 +12398,88 @@ class ReportController extends Controller
                         ];
                     }
                 }
+            }
+        }
+
+        // BALANS: fakultetlar orasida talabalar sonini tenglashtiramiz — har kurs (pool)
+        // bo'yicha eng ko'p yuklangan fakultetdan eng kam yuklanganiga BUTUN oqim
+        // ko'chiriladi, agar bu farqni qat'iy kamaytirsa (masalan rus/ing kichik oqimlar).
+        // Ko'chirilgan oqim guruhlar mehmon (← fakultet) deb belgilanadi.
+        $pools = [];
+        foreach ($groups as $g) {
+            $pk = $g['merge_key'] . '|' . $g['level_code'];
+            if (!isset($pools[$pk])) {
+                $pools[$pk] = [
+                    'level_name' => $g['level_name'],
+                    'level_num'  => $g['level_num'],
+                    'members'    => [], // bi => ci
+                ];
+            }
+            foreach ($g['items'] as $it) {
+                $pools[$pk]['members'][$it['bi']] = $it['ci'];
+            }
+        }
+        foreach ($pools as $pool) {
+            [, , , , $poolOn] = $this->oqimCourseNorm($params, (int) $pool['level_num']);
+            if (!$poolOn || count($pool['members']) < 2) {
+                continue;
+            }
+            $members = $pool['members'];
+            $guard = 0;
+            while ($guard++ < 50) {
+                // Fakultetlar jami (shu kurs bo'yicha)
+                $tot = [];
+                foreach ($members as $bi => $ci) {
+                    $t = 0;
+                    foreach (($courseOqims[$bi][$ci] ?? []) as $oq) { $t += (int) $oq['total']; }
+                    $tot[$bi] = $t;
+                }
+                arsort($tot);
+                $biA = array_key_first($tot); // eng ko'p yuklangan (donor)
+                $biB = array_key_last($tot);  // eng kam yuklangan (qabul qiluvchi)
+                $diff = $tot[$biA] - $tot[$biB];
+                if ($diff <= 0) { break; }
+
+                // Donorning farqni ENG YAXSHI kamaytiradigan oqimi (|diff - 2T| minimal, qat'iy yaxshilanish)
+                $bestK = -1; $bestScore = $diff;
+                foreach (($courseOqims[$biA][$members[$biA]] ?? []) as $k => $oq) {
+                    $newDiff = abs($diff - 2 * (int) $oq['total']);
+                    if ($newDiff < $bestScore) { $bestScore = $newDiff; $bestK = $k; }
+                }
+                if ($bestK < 0) { break; }
+
+                $deptA = $this->oqimFacultyShort($blocks[$biA]['department_name'] ?? '');
+                $deptB = $this->oqimFacultyShort($blocks[$biB]['department_name'] ?? '');
+                $oq = $courseOqims[$biA][$members[$biA]][$bestK];
+                array_splice($courseOqims[$biA][$members[$biA]], $bestK, 1);
+
+                // Guruhlarni mehmon deb belgilaymiz; qabul qiluvchining "o'z" guruhlari uyiga qaytadi
+                foreach ($oq['rows'] as &$r) {
+                    if (!empty($r['visitor']) && ($r['from'] ?? '') === $deptB) {
+                        unset($r['visitor'], $r['from']);
+                    } elseif (empty($r['visitor'])) {
+                        $r['visitor'] = true;
+                        $r['from'] = $deptA;
+                    }
+                }
+                unset($r);
+                $oq['has_visitor'] = !empty(array_filter($oq['rows'], fn($r) => !empty($r['visitor'])));
+                if (empty($oq['_first'])) {
+                    $oq['_first'] = $this->oqimBaseOfRow($oq['rows'][0]['name'] ?? '');
+                }
+                $courseOqims[$biB][$members[$biB]][] = $oq;
+
+                $xmoves[] = [
+                    'course'      => $pool['level_name'],
+                    'lang'        => $oq['lang_label'] ?? '',
+                    'from_fac'    => $deptA,
+                    'to_fac'      => $deptB,
+                    'moved'       => [['name' => 'butun oqim (' . count($oq['rows']) . ' guruhcha)', 'count' => $oq['total']]],
+                    'moved_total' => (int) $oq['total'],
+                    'to_before'   => $tot[$biB],
+                    'to_after'    => $tot[$biB] + (int) $oq['total'],
+                    'balanced'    => true,
+                ];
             }
         }
 
@@ -12572,18 +12696,39 @@ class ReportController extends Controller
      */
     private function oqimSubRule(string $variant, int $levelNum, array $params): array
     {
+        // Guruhcha me'yori — kurs bo'yicha yagona qiymat (a,b va a,b,c uchun bir xil)
+        [, , $subMax, $subTol] = $this->oqimCourseNorm($params, $levelNum);
         $eff = $variant;
         if ($eff === 'auto') {
             $eff = $levelNum >= 4 ? 'abc' : 'ab';
         }
         if ($eff === 'full') {
-            // to'liq guruh — bo'linmaydi; birlashtirish sig'imi standart guruh (~2*ab_max)
-            return [1, 2 * $params['ab_max'], 0, 'full'];
+            // to'liq guruh — bo'linmaydi; birlashtirish sig'imi standart guruh (~2*guruhcha)
+            return [1, 2 * $subMax, 0, 'full'];
         }
         if ($eff === 'abc') {
-            return [3, $params['abc_max'], $params['abc_tol'], 'abc'];
+            return [3, $subMax, $subTol, 'abc'];
         }
-        return [2, $params['ab_max'], $params['ab_tol'], 'ab'];
+        return [2, $subMax, $subTol, 'ab'];
+    }
+
+    /**
+     * Kurs uchun me'yorlarni qaytaradi: [oqim_max, oqim_tol, guruhcha_max, guruhcha_tol,
+     * enabled]. Kurs sozlamalarda berilmagan bo'lsa — umumiy (legacy) qiymatlar.
+     * enabled=false — bu kurs optimizatsiya qilinmaydi (joriy holatida qoladi).
+     */
+    private function oqimCourseNorm(array $params, int $levelNum): array
+    {
+        $c = $params['courses'][$levelNum] ?? null;
+        $defSubMax = $levelNum >= 4 ? ($params['abc_max'] ?? 10) : ($params['ab_max'] ?? 15);
+        $defSubTol = $levelNum >= 4 ? ($params['abc_tol'] ?? 0) : ($params['ab_tol'] ?? 0);
+        return [
+            max(1, (int) ($c['oqim_max'] ?? ($params['oqim_max'] ?? 120))),
+            max(0, (int) ($c['oqim_tol'] ?? ($params['oqim_tol'] ?? 0))),
+            max(1, (int) ($c['sub_max'] ?? $defSubMax)),
+            max(0, (int) ($c['sub_tol'] ?? $defSubTol)),
+            (bool) ($c['on'] ?? true),
+        ];
     }
 
     /**

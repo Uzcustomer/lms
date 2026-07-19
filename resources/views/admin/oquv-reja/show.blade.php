@@ -44,6 +44,88 @@
                 </div>
             </div>
 
+            @if($curriculum->isPlanned())
+                <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                    <div class="flex items-start gap-2 mb-3">
+                        <span class="text-lg">⏳</span>
+                        <div>
+                            <div class="font-semibold text-amber-800 text-sm">Rejalashtirilgan reja — HEMIS'ga bog'lanmagan</div>
+                            <div class="text-xs text-amber-700">
+                                Bu reja HEMIS o'quv rejasiga bog'lanmagan (masalan yangi 1-kurs yoki yangi yo'nalish).
+                                HEMIS'da reja paydo bo'lgach, uni tanlab bog'lang — shundan keyin "Yo'nalish bo'yicha" tabida ko'rinadi.
+                            </div>
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ route('admin.oquv-reja.link-hemis', $curriculum) }}"
+                          class="flex flex-wrap items-end gap-2">
+                        @csrf
+                        <div class="flex-1 min-w-[280px] relative">
+                            <label class="block text-xs font-medium text-amber-800 mb-1">HEMIS o'quv rejasini qidiring (kod yoki nom)</label>
+                            <input type="text" id="hemisSearch" autocomplete="off"
+                                   placeholder="Masalan: 60910200 yoki Davolash..."
+                                   class="w-full rounded-md border-amber-300 shadow-sm text-sm focus:ring-amber-500 focus:border-amber-500">
+                            <input type="hidden" name="curricula_hemis_id" id="hemisId" required>
+                            <div id="hemisResults" class="hidden absolute z-10 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg text-sm"></div>
+                            <div id="hemisChosen" class="hidden mt-1 text-xs text-green-700 font-medium"></div>
+                        </div>
+                        <button type="submit" id="hemisLinkBtn" disabled
+                                class="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50">
+                            🔗 Bog'lash
+                        </button>
+                    </form>
+                </div>
+
+                <script>
+                    (function () {
+                        const optionsUrl = @json(route('admin.oquv-reja.options'));
+                        const search  = document.getElementById('hemisSearch');
+                        const results = document.getElementById('hemisResults');
+                        const hidden  = document.getElementById('hemisId');
+                        const chosen  = document.getElementById('hemisChosen');
+                        const linkBtn = document.getElementById('hemisLinkBtn');
+                        let timer = null;
+
+                        function esc(s) {
+                            return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                        }
+
+                        search.addEventListener('input', function () {
+                            hidden.value = ''; linkBtn.disabled = true; chosen.classList.add('hidden');
+                            clearTimeout(timer);
+                            const q = this.value.trim();
+                            if (q.length < 2) { results.classList.add('hidden'); return; }
+                            timer = setTimeout(async () => {
+                                const p = new URLSearchParams({list: 'all_curricula', q});
+                                const items = await (await fetch(optionsUrl + '?' + p, {headers: {'Accept': 'application/json'}})).json();
+                                if (!items.length) {
+                                    results.innerHTML = '<div class="px-3 py-2 text-gray-400">Topilmadi</div>';
+                                } else {
+                                    results.innerHTML = items.map(i =>
+                                        '<button type="button" class="js-hemis-pick block w-full text-left px-3 py-2 hover:bg-amber-50 border-b border-gray-100" ' +
+                                        'data-id="' + i.id + '" data-label="' + esc(i.name) + '">' +
+                                        '<div class="font-medium text-gray-800">' + esc(i.name) + '</div>' +
+                                        '<div class="text-xs text-gray-500">' + esc((i.specialty_code ? i.specialty_code + ' · ' : '') + (i.education_year_name || '')) + '</div>' +
+                                        '</button>'
+                                    ).join('');
+                                }
+                                results.classList.remove('hidden');
+                                results.querySelectorAll('.js-hemis-pick').forEach(b => b.addEventListener('click', function () {
+                                    hidden.value = this.dataset.id;
+                                    search.value = this.dataset.label;
+                                    chosen.textContent = '✓ Tanlandi: ' + this.dataset.label + ' (HEMIS id: ' + this.dataset.id + ')';
+                                    chosen.classList.remove('hidden');
+                                    results.classList.add('hidden');
+                                    linkBtn.disabled = false;
+                                }));
+                            }, 300);
+                        });
+                        document.addEventListener('click', e => {
+                            if (!results.contains(e.target) && e.target !== search) results.classList.add('hidden');
+                        });
+                    })();
+                </script>
+            @endif
+
             @php
                 $totalHours  = $curriculum->subjects->sum(fn($s) =>
                     (float) ($s->total_hours ?? ((float)($s->audit_total ?? 0) + (float)($s->independent ?? 0))));

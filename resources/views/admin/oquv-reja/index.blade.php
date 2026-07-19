@@ -413,6 +413,227 @@
                 </div>
             </div>
 
+            {{-- Rejalashtirilgan reja (HEMIS'siz) --}}
+            <div class="bg-white shadow-sm sm:rounded-lg mb-6 border-l-4 border-amber-400">
+                <div class="p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-1">⏳ Rejalashtirilgan ishchi reja (HEMIS'siz)</h3>
+                    <p class="text-sm text-gray-500 mb-4">
+                        HEMIS'da reja hali yaratilmagan kohortlar uchun: sentyabrdagi 1-kurschilar yoki yangi
+                        joriy etilayotgan yo'nalishlar (masalan Oliy hamshiralik ishi). Reja avvaldan tuziladi,
+                        keyin HEMIS reja paydo bo'lganda bog'lanadi.
+                    </p>
+
+                    <div class="flex gap-4 mb-4">
+                        <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                            <input type="radio" name="planned_mode" value="copy" class="text-amber-600" checked> O'tgan yildan nusxa
+                        </label>
+                        <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                            <input type="radio" name="planned_mode" value="new" class="text-amber-600"> Yangi yo'nalish (noldan)
+                        </label>
+                    </div>
+
+                    {{-- NUSXA rejimi --}}
+                    <div id="planned-copy" class="space-y-3">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Yangi reja yili</label>
+                                <input type="text" id="pcYear" value="2026-2027" placeholder="2026-2027"
+                                       class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Manba rejalarni qidirish (nom/kod)</label>
+                                <input type="text" id="pcFilter" placeholder="Filtrlash uchun yozing..."
+                                       class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                        </div>
+                        <div id="pcList" class="max-h-64 overflow-y-auto rounded-md border border-gray-200 divide-y divide-gray-100 text-sm">
+                            <p class="px-3 py-2 text-gray-400 italic">Yuklanmoqda...</p>
+                        </div>
+                        <button type="button" id="pcSubmit"
+                                class="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50">
+                            Tanlangan rejalardan nusxa yaratish
+                        </button>
+                        <div id="pcResult" class="hidden text-sm rounded-md px-4 py-2"></div>
+                    </div>
+
+                    {{-- YANGI YO'NALISH rejimi --}}
+                    <div id="planned-new" class="hidden space-y-3">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish nomi <span class="text-red-500">*</span></label>
+                                <input type="text" id="pnName" placeholder="Masalan: Oliy hamshiralik ishi"
+                                       class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish kodi</label>
+                                <input type="text" id="pnCode" placeholder="Masalan: 60910500"
+                                       class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Reja yili</label>
+                                <input type="text" id="pnYear" value="2026-2027" placeholder="2026-2027"
+                                       class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Kurs</label>
+                                <select id="pnKurs" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    @for($k = 1; $k <= 6; $k++)
+                                        <option value="{{ $k }}">{{ $k }}-kurs</option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Ta'lim turi</label>
+                                <select id="pnEduType" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">—</option>
+                                    @foreach($educationTypes as $et)
+                                        <option value="{{ $et->education_type_name }}">{{ $et->education_type_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Excel fayl (ixtiyoriy)</label>
+                                <input type="file" id="pnFile" accept=".xlsx,.xls"
+                                       class="w-full text-sm text-gray-700 border border-gray-300 rounded-md">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1.5">Semestrlar</label>
+                            <div id="pnSems" class="flex items-center gap-4 text-sm"></div>
+                        </div>
+                        <p class="text-xs text-gray-500">
+                            Excel yuklamasangiz, bo'sh reja yaratiladi — fanlarni keyin reja sahifasida qo'lda qo'shasiz.
+                        </p>
+                        <button type="button" id="pnSubmit"
+                                class="px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50">
+                            Rejalashtirilgan reja yaratish
+                        </button>
+                        <div id="pnResult" class="hidden text-sm rounded-md px-4 py-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function () {
+                    const srcUrl     = @json(route('admin.oquv-reja.planned-sources'));
+                    const plannedUrl = @json(route('admin.oquv-reja.store-planned'));
+                    const token      = document.querySelector('meta[name="csrf-token"]')?.content
+                                       || document.querySelector('input[name="_token"]')?.value;
+
+                    function esc(s) {
+                        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                    }
+                    function showMsg(el, cls, text) {
+                        el.className = 'text-sm rounded-md px-4 py-2 ' + cls;
+                        el.textContent = text;
+                        el.classList.remove('hidden');
+                    }
+
+                    // Rejim almashtirish
+                    document.querySelectorAll('input[name="planned_mode"]').forEach(r =>
+                        r.addEventListener('change', function () {
+                            document.getElementById('planned-copy').classList.toggle('hidden', this.value !== 'copy');
+                            document.getElementById('planned-new').classList.toggle('hidden', this.value !== 'new');
+                        }));
+
+                    // ===== NUSXA rejimi =====
+                    let allSources = [];
+                    const pcList   = document.getElementById('pcList');
+                    const pcFilter = document.getElementById('pcFilter');
+
+                    function renderSources() {
+                        const q = pcFilter.value.trim().toLowerCase();
+                        const list = allSources.filter(s =>
+                            !q || (s.name || '').toLowerCase().includes(q) || (s.specialty_code || '').toLowerCase().includes(q));
+                        if (!list.length) { pcList.innerHTML = '<p class="px-3 py-2 text-gray-400 italic">Reja topilmadi</p>'; return; }
+                        pcList.innerHTML = list.map(s =>
+                            '<label class="flex items-center gap-2 px-3 py-2 hover:bg-amber-50 cursor-pointer">' +
+                            '<input type="checkbox" class="pc-src rounded border-gray-300 text-amber-600" value="' + s.id + '">' +
+                            '<span class="flex-1"><span class="text-gray-800">' + esc(s.name) + '</span>' +
+                            '<span class="text-xs text-gray-400 ml-1">· ' + esc(s.plan_year || '') + ' · ' + s.subjects_count + ' fan</span></span>' +
+                            '</label>').join('');
+                    }
+
+                    async function loadSources() {
+                        try {
+                            allSources = await (await fetch(srcUrl, {headers: {'Accept': 'application/json'}})).json();
+                            renderSources();
+                        } catch (e) {
+                            pcList.innerHTML = '<p class="px-3 py-2 text-red-500 italic">Yuklashda xatolik</p>';
+                        }
+                    }
+                    pcFilter.addEventListener('input', renderSources);
+                    loadSources();
+
+                    document.getElementById('pcSubmit').addEventListener('click', async function () {
+                        const ids = [...document.querySelectorAll('.pc-src:checked')].map(c => c.value);
+                        const year = document.getElementById('pcYear').value.trim();
+                        const res = document.getElementById('pcResult');
+                        if (!ids.length) { showMsg(res, 'bg-yellow-50 text-yellow-800', 'Kamida bitta manba reja tanlang.'); return; }
+                        if (!year)       { showMsg(res, 'bg-yellow-50 text-yellow-800', 'Reja yilini kiriting.'); return; }
+                        this.disabled = true;
+                        showMsg(res, 'bg-gray-50 text-gray-600', 'Yaratilmoqda...');
+                        const fd = new FormData();
+                        fd.append('_token', token); fd.append('mode', 'copy'); fd.append('plan_year', year);
+                        ids.forEach(id => fd.append('source_ids[]', id));
+                        try {
+                            const r = await fetch(plannedUrl, {method: 'POST', body: fd, headers: {'Accept': 'application/json'}});
+                            const j = await r.json();
+                            if (!r.ok) throw new Error(j.error || j.message || 'Xatolik');
+                            showMsg(res, 'bg-green-50 text-green-800', j.created + ' ta rejalashtirilgan reja yaratildi. Sahifa yangilanmoqda...');
+                            setTimeout(() => location.reload(), 1200);
+                        } catch (e) {
+                            showMsg(res, 'bg-red-50 text-red-700', 'Xatolik: ' + e.message);
+                            this.disabled = false;
+                        }
+                    });
+
+                    // ===== YANGI YO'NALISH rejimi =====
+                    const pnKurs = document.getElementById('pnKurs');
+                    const pnSems = document.getElementById('pnSems');
+                    function rebuildSems() {
+                        const k = parseInt(pnKurs.value);
+                        const codes = [10 + 2 * k - 1, 10 + 2 * k];
+                        pnSems.innerHTML = codes.map(c =>
+                            '<label class="flex items-center gap-1 cursor-pointer">' +
+                            '<input type="checkbox" class="pn-sem rounded border-gray-300 text-amber-600" value="' + c + '" checked>' +
+                            (c - 10) + '-semestr</label>').join('');
+                    }
+                    pnKurs.addEventListener('change', rebuildSems);
+                    rebuildSems();
+
+                    document.getElementById('pnSubmit').addEventListener('click', async function () {
+                        const res  = document.getElementById('pnResult');
+                        const name = document.getElementById('pnName').value.trim();
+                        const sems = [...document.querySelectorAll('.pn-sem:checked')].map(c => c.value);
+                        if (!name)       { showMsg(res, 'bg-yellow-50 text-yellow-800', 'Yo\'nalish nomini kiriting.'); return; }
+                        if (!sems.length){ showMsg(res, 'bg-yellow-50 text-yellow-800', 'Kamida bitta semestr tanlang.'); return; }
+                        this.disabled = true;
+                        showMsg(res, 'bg-gray-50 text-gray-600', 'Yaratilmoqda...');
+                        const fd = new FormData();
+                        fd.append('_token', token); fd.append('mode', 'new');
+                        fd.append('plan_year', document.getElementById('pnYear').value.trim());
+                        fd.append('specialty_name', name);
+                        fd.append('specialty_code', document.getElementById('pnCode').value.trim());
+                        fd.append('education_type_name', document.getElementById('pnEduType').value);
+                        fd.append('level_code', '1' + parseInt(pnKurs.value)); // kurs k → level_code "1k"
+                        sems.forEach(s => fd.append('semester_codes[]', s));
+                        const file = document.getElementById('pnFile').files[0];
+                        if (file) fd.append('file', file);
+                        try {
+                            const r = await fetch(plannedUrl, {method: 'POST', body: fd, headers: {'Accept': 'application/json'}});
+                            const j = await r.json();
+                            if (!r.ok) throw new Error(j.error || j.message || 'Xatolik');
+                            showMsg(res, 'bg-green-50 text-green-800', j.created + ' ta rejalashtirilgan reja yaratildi. Sahifa yangilanmoqda...');
+                            setTimeout(() => location.reload(), 1200);
+                        } catch (e) {
+                            showMsg(res, 'bg-red-50 text-red-700', 'Xatolik: ' + e.message);
+                            this.disabled = false;
+                        }
+                    });
+                })();
+            </script>
+
             {{-- Diagnostika --}}
             <div class="bg-white shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6">

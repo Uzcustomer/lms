@@ -12113,6 +12113,13 @@ class ReportController extends Controller
             }
 
             $hostDept = $this->oqimFacultyShort($prepared[$hostBi]['department_name']);
+            // Batafsil: yangi to'liq guruhlar tarkibi (guruhcha nomlari + sonlari)
+            $newList = [];
+            foreach ($newBases as $nb) {
+                $subs = [];
+                foreach ($nb['rows'] as $r) { $subs[] = $r['name'] . '=' . $r['count']; }
+                $newList[] = ['name' => $nb['base'], 'count' => $nb['total'], 'subs' => $subs];
+            }
             $xbmoves[] = [
                 'course'    => $c0['level_name'],
                 'lang'      => $langLabel,
@@ -12120,6 +12127,7 @@ class ReportController extends Controller
                 'from'      => $fromNames,
                 'total'     => $Tp,
                 'new_bases' => count($newBases),
+                'new_list'  => $newList,
             ];
         }
 
@@ -12342,6 +12350,7 @@ class ReportController extends Controller
                     // Tarqatish: eng katta bo'sh joyli oqimdan boshlab, ichida eng kam
                     // to'lgan guruhchalarga +1 tadan (oqimAddStudentsToRows shunday taqsimlaydi)
                     $need = $sc;
+                    $recipients = [];
                     while ($need > 0) {
                         $bi2 = -1; $br = 0;
                         foreach ($resultOqims as $i => $ro) {
@@ -12351,14 +12360,17 @@ class ReportController extends Controller
                         }
                         if ($bi2 < 0) { break; }
                         $take = min($need, $br, max(1, count($resultOqims[$bi2]['rows'])));
-                        $this->oqimAddStudentsToRows($resultOqims[$bi2]['rows'], $take);
+                        foreach ($this->oqimAddStudentsToRows($resultOqims[$bi2]['rows'], $take) as $rc) {
+                            $recipients[] = $rc;
+                        }
                         $resultOqims[$bi2]['total'] += $take;
                         $need -= $take;
                     }
                     // Guruhchani donordan olib tashlaymiz (butunicha tarqatildi)
                     $dissolved[] = [
-                        'name'  => $resultOqims[$di]['rows'][$si]['name'],
-                        'count' => $sc,
+                        'name'       => $resultOqims[$di]['rows'][$si]['name'],
+                        'count'      => $sc,
+                        'recipients' => $recipients,
                     ];
                     array_splice($resultOqims[$di]['rows'], $si, 1);
                     $resultOqims[$di]['total'] -= $sc;
@@ -12389,12 +12401,18 @@ class ReportController extends Controller
                 ];
                 if (!empty($ro['moved'])) {
                     $hostDept = $this->oqimFacultyShort($blocks[$host]['department_name'] ?? '');
+                    // Qabul qiluvchi oqimning "o'z" guruhlari (mehmon bo'lmaganlar) — detal uchun
+                    $toGroups = [];
+                    foreach ($ro['rows'] as $r) {
+                        if (empty($r['visitor'])) { $toGroups[$this->oqimBaseOfRow($r['name'])] = true; }
+                    }
                     foreach ($ro['moved'] as $fromDept => $mv) {
                         $xmoves[] = [
                             'course' => $g['level_name'], 'lang' => $g['lang_label'],
                             'from_fac' => $fromDept, 'to_fac' => $hostDept,
                             'moved' => $mv['items'], 'moved_total' => $mv['total'],
                             'to_before' => $ro['total'] - $mv['total'], 'to_after' => $ro['total'],
+                            'to_groups' => array_keys($toGroups),
                         ];
                     }
                 }
@@ -12469,16 +12487,22 @@ class ReportController extends Controller
                 }
                 $courseOqims[$biB][$members[$biB]][] = $oq;
 
+                // Batafsil: ko'chirilayotgan oqim tarkibidagi guruhlar (asosiy guruh + soni)
+                $movedGroups = [];
+                foreach ($this->oqimRowsToBases($oq['rows']) as $bs) {
+                    $movedGroups[] = ['name' => $bs['base'], 'count' => $bs['total']];
+                }
                 $xmoves[] = [
                     'course'      => $pool['level_name'],
                     'lang'        => $oq['lang_label'] ?? '',
                     'from_fac'    => $deptA,
                     'to_fac'      => $deptB,
-                    'moved'       => [['name' => 'butun oqim (' . count($oq['rows']) . ' guruhcha)', 'count' => $oq['total']]],
+                    'moved'       => $movedGroups,
                     'moved_total' => (int) $oq['total'],
                     'to_before'   => $tot[$biB],
                     'to_after'    => $tot[$biB] + (int) $oq['total'],
                     'balanced'    => true,
+                    'oqim_rows'   => count($oq['rows']),
                 ];
             }
         }
@@ -12563,18 +12587,26 @@ class ReportController extends Controller
 
     /**
      * $k ta talabani oqim qatorlariga (kichik guruhlar) eng kam to'lganidan boshlab qo'shadi.
+     * Qaytaradi: qabul qiluvchilar ro'yxati [['name' => guruhcha, 'added' => nechta], ...]
+     * (batafsil tushuntirish uchun).
      */
-    private function oqimAddStudentsToRows(array &$rows, int $k): void
+    private function oqimAddStudentsToRows(array &$rows, int $k): array
     {
         $n = count($rows);
-        if ($n === 0) { return; }
+        if ($n === 0) { return []; }
+        $added = [];
         for ($x = 0; $x < $k; $x++) {
             $mi = 0;
             for ($j = 1; $j < $n; $j++) {
                 if ((int) $rows[$j]['count'] < (int) $rows[$mi]['count']) { $mi = $j; }
             }
             $rows[$mi]['count'] = (int) $rows[$mi]['count'] + 1;
+            $nm = $rows[$mi]['name'];
+            $added[$nm] = ($added[$nm] ?? 0) + 1;
         }
+        $out = [];
+        foreach ($added as $nm => $cnt) { $out[] = ['name' => $nm, 'added' => $cnt]; }
+        return $out;
     }
 
     /**

@@ -527,8 +527,16 @@
                     m += '<div class="cmp-head"><span class="cmp-title">' + esc(bm.course) + ' · ' + esc(bm.lang) + ' til</span>'
                        + '<span class="cmp-count">→ ' + esc(bm.to_fac) + '</span></div>';
                     m += '<div class="xmove-body">Chala guruhlar <b>' + fl + '</b> (jami <b>' + esc(bm.total) + ' ta</b>) birlashtirilib, '
-                       + '<b>' + esc(bm.to_fac) + '</b> da <b>' + esc(bm.new_bases) + ' ta to\'liq guruh</b> qilinadi — guruhcha soni oshmaydi.</div>';
-                    m += '</div>';
+                       + '<b>' + esc(bm.to_fac) + '</b> da <b>' + esc(bm.new_bases) + ' ta to\'liq guruh</b> qilinadi — guruhcha soni oshmaydi.';
+                    if (bm.new_list && bm.new_list.length) {
+                        m += '<div class="xm-detail">Yangi guruhlar tarkibi:';
+                        for (var ni = 0; ni < bm.new_list.length; ni++) {
+                            var nl = bm.new_list[ni];
+                            m += '<div class="xm-line">• <b>' + esc(nl.name) + '</b> (' + esc(nl.count) + ' ta): ' + esc((nl.subs || []).join(', ')) + '</div>';
+                        }
+                        m += '</div>';
+                    }
+                    m += '</div></div>';
                 }
             }
 
@@ -543,14 +551,24 @@
                     m += '<div class="cmp-head"><span class="cmp-title">' + esc(xm.course) + ' · ' + esc(xm.lang) + ' til</span>'
                        + '<span class="cmp-count">' + esc(xm.from_fac) + ' → ' + esc(xm.to_fac) + '</span></div>';
                     if (xm.balanced) {
-                        m += '<div class="xmove-body">Fakultetlar balansi uchun <b>' + esc(xm.from_fac) + '</b> dan ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
-                           + '→ <b>' + esc(xm.to_fac) + '</b> ga o\'tkaziladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta) — talabalar soni tenglashadi.</div>';
+                        m += '<div class="xmove-body">Fakultetlar balansi uchun <b>butun oqim</b> (' + esc(xm.oqim_rows || (xm.moved || []).length) + ' guruhcha, <b>' + esc(xm.moved_total) + ' ta</b>) '
+                           + '<b>' + esc(xm.from_fac) + '</b> → <b>' + esc(xm.to_fac) + '</b> ga o\'tkaziladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta) — talabalar soni tenglashadi.'
+                           + '<div class="xm-detail">Ko\'chirilayotgan guruhlar: ' + (xm.moved || []).map(function(g){ return esc(g.name) + ' (' + esc(g.count) + ')'; }).join(', ') + '</div></div>';
                     } else if (xm.distributed) {
-                        m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi oxirgi guruhlar ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
-                           + 'kichik oqim qoldirmaslik uchun boshqa oqimlarga tarqatiladi (guruhchalar biroz kattalashadi).</div>';
+                        m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> tarqatiladi — <b>[' + esc(xm.moved_total) + ' ta]</b> talaba boshqa guruhchalarga +1 tadan beriladi (guruhchalar biroz kattalashadi):';
+                        var mv2 = xm.moved || [];
+                        m += '<div class="xm-detail">';
+                        for (var di = 0; di < mv2.length; di++) {
+                            var dd = mv2[di];
+                            var rc = (dd.recipients || []).map(function(r){ return esc(r.name) + ' <b>+' + esc(r.added) + '</b>'; }).join(', ');
+                            m += '<div class="xm-line">• <b>' + esc(dd.name) + '</b> (' + esc(dd.count) + ' ta) → ' + (rc || 'tarqatildi') + '</div>';
+                        }
+                        m += '</div></div>';
                     } else {
                         m += '<div class="xmove-body"><b>' + esc(xm.from_fac) + '</b> dagi ' + gl + ' <b>[' + esc(xm.moved_total) + ' ta]</b> '
-                           + '→ <b>' + esc(xm.to_fac) + '</b> oqimiga qo\'shiladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta).</div>';
+                           + '→ <b>' + esc(xm.to_fac) + '</b> oqimiga qo\'shiladi (' + esc(xm.to_before) + ' → <b>' + esc(xm.to_after) + '</b> ta).'
+                           + ((xm.to_groups && xm.to_groups.length) ? '<div class="xm-detail">Qabul qiluvchi oqimning o\'z guruhlari: ' + xm.to_groups.map(function(n){ return esc(n); }).join(', ') + '</div>' : '')
+                           + '</div>';
                     }
                     m += '</div>';
                 }
@@ -733,6 +751,9 @@
         .oq-from { display:inline-block; font-size:10px; font-weight:800; color:#c2410c; background:#ffedd5; border-radius:999px; padding:0 7px; margin-left:4px; }
         .oq-mix { display:block; margin-top:2px; font-size:9.5px; font-weight:800; color:#c2410c; }
         .xmove-body { padding:8px 12px; font-size:13px; color:#334155; line-height:1.5; background:#fffbeb; }
+        .xm-detail { margin-top:6px; padding:7px 10px; background:#fff; border:1px solid #f1f5f9; border-radius:8px; font-size:12px; color:#475569; line-height:1.6; }
+        .xm-line { padding:1px 0; }
+        .xm-line b { color:#0f172a; }
 
         /* Tasdiqlash / qo'lda tahrirlash paneli */
         .af-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 13px; border-radius:8px; font-size:12.5px; font-weight:700; cursor:pointer; border:1px solid transparent; }

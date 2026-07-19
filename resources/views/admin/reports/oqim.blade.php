@@ -196,8 +196,8 @@
             <div class="goal-body">
                 <label class="goal-opt">
                     <input type="radio" name="oqim_goal" value="fill">
-                    <span class="goal-txt"><b>Oqimlarni maksimal to'ldirish</b>
-                    <small>Oqim me'yori (max ±) ustuvor. Kam to'lgan oqimlar limitgacha to'ldiriladi, qoldiq talabalar sig'sa tarqatiladi (guruhchalar biroz kattalashishi mumkin). Kichik qoldiq oqim qolishi mumkin.</small></span>
+                    <span class="goal-txt"><b>Oqim va guruhchalarni kamaytirish</b>
+                    <small>Oqim me'yori (max ±) ustuvor. Kam to'lgan oqimlar to'ldiriladi, ortiqcha guruhchalar BUTUNICHA tarqatiladi — talabalari har xil guruh/oqimlarga +1 tadan beriladi (guruhcha 10 → 11 bo'lishi mumkin, bitta joyga to'planmaydi). Hech bir oqim limitdan oshmaydi.</small></span>
                 </label>
                 <label class="goal-opt">
                     <input type="radio" name="oqim_goal" value="balance">

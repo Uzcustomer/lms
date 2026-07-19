@@ -917,6 +917,7 @@ class CurriculumCheckController extends Controller
             ->when($request->filled('specialty_code'), fn($q) => $q->where('mc.specialty_code', $request->specialty_code))
             ->when($request->filled('plan_year'), fn($q) => $q->where('mc.plan_year', $request->plan_year))
             ->when($request->filled('level_code'), fn($q) => $q->where('mc.level_code', $request->level_code))
+            ->when($request->filled('semester'), fn($q) => $q->where('s.semester', $request->semester))
             ->groupBy('mc.specialty_code', 'mc.specialty_name', 'mc.level_code', 's.semester', 's.block', 's.subject_name')
             ->selectRaw("mc.specialty_code, mc.specialty_name, mc.level_code, s.semester,
                 s.block, s.subject_name,
@@ -953,19 +954,31 @@ class CurriculumCheckController extends Controller
             'reja_count'     => (int) $r->reja_count,
         ])->all();
 
-        $sum = fn($k) => round(array_sum(array_map(fn($r) => $r[$k] ?? 0, $data)), 1);
-        $totals = [
-            'subjects'    => count($data),
-            'lecture'     => $sum('lecture'),
-            'practice'    => $sum('practice'),
-            'laboratory'  => $sum('laboratory'),
-            'seminar'     => $sum('seminar'),
-            'independent' => $sum('independent'),
-            'total_hours' => $sum('total_hours'),
-            'credit'      => $sum('credit'),
+        $sum = fn($rows, $k) => round(array_sum(array_map(fn($r) => $r[$k] ?? 0, $rows)), 1);
+        $mkTotals = fn($rows) => [
+            'subjects'    => count($rows),
+            'lecture'     => $sum($rows, 'lecture'),
+            'practice'    => $sum($rows, 'practice'),
+            'laboratory'  => $sum($rows, 'laboratory'),
+            'seminar'     => $sum($rows, 'seminar'),
+            'independent' => $sum($rows, 'independent'),
+            'total_hours' => $sum($rows, 'total_hours'),
+            'credit'      => $sum($rows, 'credit'),
         ];
 
-        return response()->json(['rows' => $data, 'totals' => $totals]);
+        // Semestr kesimida yuklama — semestrlararo balansni ko'rish uchun
+        // (keyingi bosqichda fanni semestrdan semestrga ko'chirib yuklamani tenglashtirish)
+        $bySemester = collect($data)
+            ->groupBy(fn($r) => $r['semester'] ?? 0)
+            ->map(fn($rows, $sem) => array_merge(['semester' => $sem ?: null], $mkTotals($rows->all())))
+            ->sortBy('semester')
+            ->values();
+
+        return response()->json([
+            'rows'        => $data,
+            'totals'      => $mkTotals($data),
+            'by_semester' => $bySemester,
+        ]);
     }
 
     public function subjectsSummaryExport(Request $request)

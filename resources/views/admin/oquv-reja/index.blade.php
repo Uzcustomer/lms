@@ -713,7 +713,7 @@
                             keyingi bosqichda ma'ruza oqimga, amaliy/lab guruhlarga bo'linib o'qituvchi yuklamasi hisoblanadi.
                         </p>
 
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
                             <div>
                                 <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish</label>
                                 <select id="fsSpecialty" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
@@ -741,11 +741,42 @@
                                     @endfor
                                 </select>
                             </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Semestr</label>
+                                <select id="fsSem" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Barchasi</option>
+                                    @for($sm = 1; $sm <= 12; $sm++)
+                                        <option value="{{ $sm }}">{{ $sm }}-semestr</option>
+                                    @endfor
+                                </select>
+                            </div>
                             <div class="flex items-end gap-2">
                                 <label class="flex items-center gap-1.5 text-sm cursor-pointer">
                                     <input type="checkbox" id="fsPlanned" checked class="rounded border-gray-300 text-amber-600">
                                     Rejalashtirilganlar ham
                                 </label>
+                            </div>
+                        </div>
+
+                        {{-- Semestrlararo yuklama (balans) --}}
+                        <div id="fsBySem" class="hidden mb-4">
+                            <div class="text-xs font-semibold text-gray-600 mb-1.5">Semestrlararo yuklama (fanni semestrdan semestrga ko'chirib tenglashtirish uchun)</div>
+                            <div class="overflow-x-auto">
+                                <table class="text-xs border border-gray-200 rounded">
+                                    <thead class="bg-gray-50 text-gray-600">
+                                    <tr>
+                                        <th class="px-2 py-1 text-left">Semestr</th>
+                                        <th class="px-2 py-1 text-right">Fanlar</th>
+                                        <th class="px-2 py-1 text-right text-blue-700">Ma'ruza</th>
+                                        <th class="px-2 py-1 text-right text-purple-700">Amaliy</th>
+                                        <th class="px-2 py-1 text-right text-teal-700">Lab</th>
+                                        <th class="px-2 py-1 text-right text-orange-700">Seminar</th>
+                                        <th class="px-2 py-1 text-right font-semibold">Jami soat</th>
+                                        <th class="px-2 py-1 text-right">Kredit</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody id="fsBySemBody" class="divide-y divide-gray-100"></tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -1622,7 +1653,10 @@
                         const spec = document.getElementById('fsSpecialty');
                         const year = document.getElementById('fsYear');
                         const kurs = document.getElementById('fsKurs');
+                        const sem  = document.getElementById('fsSem');
                         const planned = document.getElementById('fsPlanned');
+                        const bySem = document.getElementById('fsBySem');
+                        const bySemBody = document.getElementById('fsBySemBody');
                         const tbody = document.getElementById('fsTbody');
                         const wrap  = document.getElementById('fsTableWrap');
                         const empty = document.getElementById('fsEmpty');
@@ -1639,6 +1673,7 @@
                             if (spec.value) p.set('specialty_code', spec.value);
                             if (year.value) p.set('plan_year', year.value);
                             if (kurs.value) p.set('level_code', kurs.value);
+                            if (sem.value)  p.set('semester', sem.value);
                             p.set('include_planned', planned.checked ? '1' : '0');
                             return p;
                         }
@@ -1664,6 +1699,25 @@
                                     tile('Mustaqil', t.independent, 'bg-gray-50 text-gray-600') +
                                     tile('Jami soat', t.total_hours, 'bg-gray-800 text-white') +
                                     tile('Kredit', t.credit, 'bg-emerald-50 text-emerald-700');
+                                // Semestrlararo yuklama jadvali
+                                const bs = j.by_semester || [];
+                                if (bs.length > 1) {
+                                    bySemBody.innerHTML = bs.map(s =>
+                                        '<tr class="hover:bg-gray-50">' +
+                                        '<td class="px-2 py-1 font-semibold text-gray-800">' + (s.semester ? s.semester + '-semestr' : '—') + '</td>' +
+                                        '<td class="px-2 py-1 text-right">' + s.subjects + '</td>' +
+                                        '<td class="px-2 py-1 text-right text-blue-700">' + n(s.lecture) + '</td>' +
+                                        '<td class="px-2 py-1 text-right text-purple-700">' + n(s.practice) + '</td>' +
+                                        '<td class="px-2 py-1 text-right text-teal-700">' + n(s.laboratory) + '</td>' +
+                                        '<td class="px-2 py-1 text-right text-orange-700">' + n(s.seminar) + '</td>' +
+                                        '<td class="px-2 py-1 text-right font-semibold">' + n(s.total_hours) + '</td>' +
+                                        '<td class="px-2 py-1 text-right">' + n(s.credit) + '</td>' +
+                                        '</tr>').join('');
+                                    bySem.classList.remove('hidden');
+                                } else {
+                                    bySem.classList.add('hidden');
+                                }
+
                                 if (!j.rows.length) { empty.classList.remove('hidden'); tbody.innerHTML=''; return; }
                                 tbody.innerHTML = j.rows.map(r =>
                                     '<tr class="hover:bg-gray-50">' +
@@ -1688,7 +1742,7 @@
                             }
                         }
 
-                        [spec, year, kurs, planned].forEach(el => el.addEventListener('change', reload));
+                        [spec, year, kurs, sem, planned].forEach(el => el.addEventListener('change', reload));
                         // Tab ochilganda birinchi marta yuklaymiz
                         document.querySelector('.main-tab[data-tab="fanlar"]').addEventListener('click', () => {
                             if (!loadedOnce) { loadedOnce = true; reload(); }

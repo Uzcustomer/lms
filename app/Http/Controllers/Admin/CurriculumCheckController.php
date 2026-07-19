@@ -916,7 +916,17 @@ class CurriculumCheckController extends Controller
             ->when(!$request->boolean('include_planned', true), fn($q) => $q->where('mc.status', 'active'))
             ->when($request->filled('specialty_code'), fn($q) => $q->where('mc.specialty_code', $request->specialty_code))
             ->when($request->filled('plan_year'), fn($q) => $q->where('mc.plan_year', $request->plan_year))
+            // O'qitiladigan o'quv yili = plan_year boshi + (kurs - 1). Bir o'quv yilining
+            // barcha kurslari turli plan_year larda saqlanadi (guruh kirgan yili bo'yicha).
+            ->when($request->filled('academic_year'), function ($q) use ($request) {
+                $start = (int) substr($request->academic_year, 0, 4);
+                $q->whereRaw(
+                    "(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?",
+                    [$start]
+                );
+            })
             ->when($request->filled('level_code'), fn($q) => $q->where('mc.level_code', $request->level_code))
+            ->when($request->filled('semester'), fn($q) => $q->where('s.semester', $request->semester))
             ->groupBy('mc.specialty_code', 'mc.specialty_name', 'mc.level_code', 's.semester', 's.block', 's.subject_name')
             ->selectRaw("mc.specialty_code, mc.specialty_name, mc.level_code, s.semester,
                 s.block, s.subject_name,
@@ -930,9 +940,50 @@ class CurriculumCheckController extends Controller
             ->orderBy('s.subject_name');
     }
 
+    /** Fan nomini kafedra qidirish uchun normallashtirish (raqam/tinish belgilarsiz). */
+    private function normSubject(string $s): string
+    {
+        $s = mb_strtolower(trim($s));
+        $s = str_replace(["'", '’', 'ʻ', 'ʼ', '`', '´'], '', $s);
+        $s = preg_replace('/[.,;:()\-\–\/]/u', ' ', $s);
+        $s = preg_replace('/\b\d+([.,]\d+)?\b/u', ' ', $s); // "1.2" kabi raqamlarni olib tashlash
+        $s = preg_replace('/\s+/u', ' ', $s);
+        return trim($s);
+    }
+
+    /**
+     * Fan nomi (normallashtirilgan) → kafedra nomi xaritasi.
+     * HEMIS curriculum_subjects jadvalidagi department_name asosida.
+     */
+    private function kafedraMap(): array
+    {
+        $rows = DB::table('curriculum_subjects')
+            ->whereNotNull('department_name')
+            ->where('department_name', '!=', '')
+            ->selectRaw('subject_name, department_name, COUNT(*) as c')
+            ->groupBy('subject_name', 'department_name')
+            ->get();
+
+        $acc = [];
+        foreach ($rows as $r) {
+            $k = $this->normSubject($r->subject_name);
+            if ($k === '') {
+                continue;
+            }
+            $acc[$k][$r->department_name] = ($acc[$k][$r->department_name] ?? 0) + (int) $r->c;
+        }
+        $map = [];
+        foreach ($acc as $k => $deps) {
+            arsort($deps);
+            $map[$k] = array_key_first($deps);
+        }
+        return $map;
+    }
+
     public function subjectsSummary(Request $request)
     {
-        $rows = $this->subjectsSummaryQuery($request)->get();
+        $rows  = $this->subjectsSummaryQuery($request)->get();
+        $kafMap = $this->kafedraMap();
 
         $num = fn($v) => $v === null ? null : (float) $v;
         $data = $rows->map(fn($r) => [
@@ -943,6 +994,7 @@ class CurriculumCheckController extends Controller
             'semester'       => $r->semester ? (int) $r->semester : null,
             'block'          => $r->block,
             'subject_name'   => $r->subject_name,
+            'kafedra'        => $kafMap[$this->normSubject($r->subject_name)] ?? null,
             'lecture'        => $num($r->lecture),
             'practice'       => $num($r->practice),
             'laboratory'     => $num($r->laboratory),
@@ -953,31 +1005,44 @@ class CurriculumCheckController extends Controller
             'reja_count'     => (int) $r->reja_count,
         ])->all();
 
-        $sum = fn($k) => round(array_sum(array_map(fn($r) => $r[$k] ?? 0, $data)), 1);
-        $totals = [
-            'subjects'    => count($data),
-            'lecture'     => $sum('lecture'),
-            'practice'    => $sum('practice'),
-            'laboratory'  => $sum('laboratory'),
-            'seminar'     => $sum('seminar'),
-            'independent' => $sum('independent'),
-            'total_hours' => $sum('total_hours'),
-            'credit'      => $sum('credit'),
+        $sum = fn($rows, $k) => round(array_sum(array_map(fn($r) => $r[$k] ?? 0, $rows)), 1);
+        $mkTotals = fn($rows) => [
+            'subjects'    => count($rows),
+            'lecture'     => $sum($rows, 'lecture'),
+            'practice'    => $sum($rows, 'practice'),
+            'laboratory'  => $sum($rows, 'laboratory'),
+            'seminar'     => $sum($rows, 'seminar'),
+            'independent' => $sum($rows, 'independent'),
+            'total_hours' => $sum($rows, 'total_hours'),
+            'credit'      => $sum($rows, 'credit'),
         ];
 
-        return response()->json(['rows' => $data, 'totals' => $totals]);
+        // Semestr kesimida yuklama — semestrlararo balansni ko'rish uchun
+        // (keyingi bosqichda fanni semestrdan semestrga ko'chirib yuklamani tenglashtirish)
+        $bySemester = collect($data)
+            ->groupBy(fn($r) => $r['semester'] ?? 0)
+            ->map(fn($rows, $sem) => array_merge(['semester' => $sem ?: null], $mkTotals($rows->all())))
+            ->sortBy('semester')
+            ->values();
+
+        return response()->json([
+            'rows'        => $data,
+            'totals'      => $mkTotals($data),
+            'by_semester' => $bySemester,
+        ]);
     }
 
     public function subjectsSummaryExport(Request $request)
     {
-        $rows = $this->subjectsSummaryQuery($request)->get();
+        $rows   = $this->subjectsSummaryQuery($request)->get();
+        $kafMap = $this->kafedraMap();
 
-        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan',
+        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan', 'Kafedra',
             'Ma\'ruza', 'Amaliy', 'Laboratoriya', 'Seminar', 'Mustaqil', 'Jami soat', 'Kredit', 'Rejalar soni'];
 
         $fname = 'otiladigan-fanlar-' . now()->format('Y-m-d') . '.csv';
 
-        return response()->streamDownload(function () use ($rows, $headers) {
+        return response()->streamDownload(function () use ($rows, $headers, $kafMap) {
             $out = fopen('php://output', 'w');
             fprintf($out, "\xEF\xBB\xBF"); // UTF-8 BOM (Excel uchun)
             fputcsv($out, $headers);
@@ -985,7 +1050,7 @@ class CurriculumCheckController extends Controller
                 $kurs = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : '';
                 fputcsv($out, [
                     $r->specialty_code, $r->specialty_name, $kurs, $r->semester,
-                    $r->block, $r->subject_name,
+                    $r->block, $r->subject_name, $kafMap[$this->normSubject($r->subject_name)] ?? '',
                     $r->lecture, $r->practice, $r->laboratory, $r->seminar, $r->independent,
                     $r->total_hours, $r->credit, $r->reja_count,
                 ]);

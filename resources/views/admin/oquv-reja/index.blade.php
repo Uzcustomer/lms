@@ -505,6 +505,12 @@
                         </div>
 
                         <div id="batch-table-wrap" class="overflow-x-auto hidden">
+                            <div class="flex justify-end mb-3">
+                                <button type="button" id="bulkOpenBtn"
+                                        class="px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                                    📦 Barcha kurslarga bittada yuklash
+                                </button>
+                            </div>
                             <table class="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead class="bg-gray-50">
                                 <tr>
@@ -624,6 +630,50 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Bulk yuklash modali (yo'nalishning barcha kurslari uchun bittada) --}}
+            <div id="bulkUploadModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl">
+                        <div class="flex items-center justify-between px-6 py-4 border-b">
+                            <h3 class="text-base font-semibold text-gray-800">Barcha kurslarga bittada yuklash</h3>
+                            <button type="button" class="js-bulk-close text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <div class="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Reja turi</label>
+                                <div class="flex gap-4">
+                                    <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                                        <input type="radio" name="bulk_type" value="namunaviy" class="text-blue-600">
+                                        Namunaviy
+                                    </label>
+                                    <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                                        <input type="radio" name="bulk_type" value="ishchi" class="text-purple-600" checked>
+                                        Ishchi
+                                    </label>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                Har bir kurs (kohort) uchun Excel fayl tanlang — fayl shu kursdagi <b>barcha o'quv rejalarga</b>
+                                va tanlangan semestrlarga yuklanadi. Fayl tanlanmagan kurslar o'tkazib yuboriladi.
+                                Oldin yuklangan (reja + semestr) juftliklar takror yuklanmaydi.
+                            </p>
+                            <div id="bulkGroups" class="space-y-3"></div>
+                            <div id="bulkPreview" class="space-y-2"></div>
+                            <div id="bulkResult" class="hidden text-sm rounded-md px-4 py-3"></div>
+                        </div>
+                        <div class="flex justify-end gap-2 px-6 py-4 border-t bg-gray-50 rounded-b-lg">
+                            <button type="button" class="js-bulk-close px-4 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700">
+                                Yopish
+                            </button>
+                            <button type="button" id="bulkSubmitBtn"
+                                    class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50">
+                                Tekshirish
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -819,7 +869,9 @@
                     (function () {
                         const optionsUrl = @json(route('admin.oquv-reja.options'));
                         const batchUrl   = @json(route('admin.oquv-reja.batch-view'));
+                        const bulkUrl    = @json(route('admin.oquv-reja.store-bulk'));
                         const showUrl    = @json(route('admin.oquv-reja.show', '__ID__'));
+                        let lastBatchRows = [];
 
                         const etSel  = document.getElementById('batch-education-type');
                         const facSel = document.getElementById('batch-faculty');
@@ -877,6 +929,7 @@
                             try {
                                 const rows = await (await fetch(batchUrl + '?specialty_id=' + this.value, {headers: {'Accept': 'application/json'}})).json();
                                 loading.classList.add('hidden');
+                                lastBatchRows = rows;
                                 if (!rows.length) { empty.classList.remove('hidden'); return; }
 
                                 tbody.innerHTML = rows.map(r => {
@@ -1024,6 +1077,207 @@
                             b.addEventListener('click', () => document.getElementById('batchUploadModal').classList.add('hidden')));
                         document.getElementById('batchUploadModal').addEventListener('click', function (e) {
                             if (e.target === this) this.classList.add('hidden');
+                        });
+
+                        // ===== Bulk yuklash (barcha kurslarga bittada) =====
+                        const bulkModal  = document.getElementById('bulkUploadModal');
+                        const bulkGroups = document.getElementById('bulkGroups');
+                        const bulkResult = document.getElementById('bulkResult');
+
+                        document.getElementById('bulkOpenBtn').addEventListener('click', () => {
+                            if (!lastBatchRows.length) return;
+                            bulkResult.classList.add('hidden');
+                            resetBulkStage();
+
+                            // Kurs (level_code) bo'yicha guruhlash — bir kursda bir nechta reja bo'lishi mumkin
+                            const groups = {};
+                            lastBatchRows.forEach(r => {
+                                const lv = r.level_code || '00';
+                                if (!groups[lv]) groups[lv] = {level_name: r.level_name || lv, curricula: {}, students: 0, semCount: 12};
+                                const g = groups[lv];
+                                if (!g.curricula[r.curriculum_id]) g.curricula[r.curriculum_id] = {name: r.curriculum_name, students: 0};
+                                g.curricula[r.curriculum_id].students += r.student_count;
+                                g.students += r.student_count;
+                                if (r.semester_count) g.semCount = r.semester_count;
+                            });
+
+                            bulkGroups.innerHTML = Object.keys(groups).sort().map(lv => {
+                                const g = groups[lv];
+                                const curKurs = (parseInt(lv) - 10) || parseInt((g.level_name.match(/\d+/) || [1])[0]);
+                                const maxKurs = Math.max(1, Math.floor(g.semCount / 2));
+                                const defKurs = Math.min(curKurs + 1, maxKurs);
+                                const ids = Object.keys(g.curricula);
+                                const kursOpts = Array.from({length: maxKurs}, (_, i) => i + 1)
+                                    .map(k => '<option value="' + k + '"' + (k === defKurs ? ' selected' : '') + '>' + k + '-kurs</option>').join('');
+                                return '<div class="bulk-group rounded-lg border border-gray-200 p-3" data-curricula="' + ids.join(',') + '">' +
+                                    '<div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">' +
+                                        '<div class="text-sm font-semibold text-gray-800">Joriy ' + escHtml(g.level_name) + ' · ' + g.students + ' talaba</div>' +
+                                        '<label class="flex items-center gap-2 text-xs text-gray-600">Qaysi kurs uchun:' +
+                                            '<select class="bulk-kurs rounded border-gray-300 text-xs py-1">' + kursOpts + '</select>' +
+                                        '</label>' +
+                                    '</div>' +
+                                    '<div class="text-xs text-gray-500 mb-2">' +
+                                        ids.map(id => escHtml(g.curricula[id].name) + ' (' + g.curricula[id].students + ')').join(' · ') +
+                                    '</div>' +
+                                    '<div class="flex flex-wrap items-center gap-4">' +
+                                        '<div class="bulk-sems flex items-center gap-3 text-sm"></div>' +
+                                        '<input type="file" accept=".xlsx,.xls" class="bulk-file text-xs text-gray-700 border border-gray-300 rounded-md flex-1 min-w-[220px]">' +
+                                    '</div>' +
+                                    '<div class="bulk-warn text-xs font-medium text-red-600 mt-1"></div>' +
+                                '</div>';
+                            }).join('');
+
+                            // Kurs tanlanganda semestr checkboxlarini qayta qurish (HEMIS: kod = 10 + semestr raqami)
+                            bulkGroups.querySelectorAll('.bulk-group').forEach(g => {
+                                const sel  = g.querySelector('.bulk-kurs');
+                                const file = g.querySelector('.bulk-file');
+                                const warn = g.querySelector('.bulk-warn');
+                                const rebuild = () => {
+                                    const k = parseInt(sel.value);
+                                    const codes = [10 + 2 * k - 1, 10 + 2 * k];
+                                    g.querySelector('.bulk-sems').innerHTML = codes.map(c =>
+                                        '<label class="flex items-center gap-1 cursor-pointer">' +
+                                        '<input type="checkbox" class="bulk-sem rounded border-gray-300 text-indigo-600" value="' + c + '" checked>' +
+                                        (c - 10) + '-semestr</label>').join('');
+                                };
+                                // Fayl nomidagi kurs raqami tanlangan kursga mos kelmasa — darhol ogohlantirish
+                                const checkName = () => {
+                                    const f = file.files[0];
+                                    const m = f && f.name.match(/(\d+)\s*[-_ ]?\s*kurs/i);
+                                    warn.textContent = (m && parseInt(m[1]) !== parseInt(sel.value))
+                                        ? "⚠ Fayl nomi " + m[1] + "-kursga o'xshaydi, siz " + sel.value + "-kurs uchun tanladingiz!"
+                                        : '';
+                                };
+                                sel.addEventListener('change', () => { rebuild(); checkName(); });
+                                file.addEventListener('change', checkName);
+                                rebuild();
+                            });
+
+                            bulkModal.classList.remove('hidden');
+                        });
+
+                        bulkModal.querySelectorAll('.js-bulk-close').forEach(b =>
+                            b.addEventListener('click', () => bulkModal.classList.add('hidden')));
+                        bulkModal.addEventListener('click', function (e) {
+                            if (e.target === this) this.classList.add('hidden');
+                        });
+
+                        // Ikki bosqich: 1) Tekshirish (preview, saqlanmaydi) → 2) Tasdiqlash (haqiqiy yuklash)
+                        const bulkPreview   = document.getElementById('bulkPreview');
+                        const bulkSubmitBtn = document.getElementById('bulkSubmitBtn');
+                        let bulkStage = 'form';
+
+                        function resetBulkStage() {
+                            bulkStage = 'form';
+                            bulkSubmitBtn.textContent = 'Tekshirish';
+                            bulkPreview.innerHTML = '';
+                        }
+                        // Har qanday o'zgarish (fayl/kurs/semestr/tur) tasdiqni bekor qiladi — qayta tekshirish kerak
+                        bulkGroups.addEventListener('change', resetBulkStage);
+                        document.querySelectorAll('input[name="bulk_type"]').forEach(r => r.addEventListener('change', resetBulkStage));
+
+                        function buildBulkFd() {
+                            const fd = new FormData();
+                            fd.append('_token', document.querySelector('#batchUploadForm input[name="_token"]').value);
+                            fd.append('type', document.querySelector('input[name="bulk_type"]:checked').value);
+                            let i = 0;
+                            bulkGroups.querySelectorAll('.bulk-group').forEach(g => {
+                                const f = g.querySelector('.bulk-file').files[0];
+                                if (!f) return;
+                                const sems = [...g.querySelectorAll('.bulk-sem:checked')].map(c => c.value);
+                                if (!sems.length) return;
+                                fd.append('items[' + i + '][file]', f);
+                                g.dataset.curricula.split(',').forEach(id => fd.append('items[' + i + '][curricula][]', id));
+                                sems.forEach(s => fd.append('items[' + i + '][semester_codes][]', s));
+                                i++;
+                            });
+                            return {fd, count: i};
+                        }
+
+                        function renderBulkPreview(items) {
+                            bulkPreview.innerHTML = items.map(it => {
+                                if (it.error) {
+                                    return '<div class="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">' +
+                                        '<b>' + escHtml(it.file) + '</b>: ' + escHtml(it.error) + ' — bu fayl yuklanmaydi.</div>';
+                                }
+                                const ok = it.sem_ok;
+                                return '<div class="rounded-md border ' + (ok ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') + ' p-3 text-xs space-y-1">' +
+                                    '<div class="font-semibold text-gray-800">' + escHtml(it.file) + ' — ' + it.imported +
+                                        ' ta fan qatori · ' + it.credit_sum + ' kredit · ' + it.hours_sum + ' soat</div>' +
+                                    '<div class="text-gray-600">Fayl semestrlari: <b>' + (it.file_sems.join(', ') || '—') + '</b>' +
+                                        ' · Tanlangan: <b>' + it.target_sems.join(', ') + '</b> ' +
+                                        (ok ? '<span class="text-green-700 font-semibold">✓ mos</span>'
+                                            : '<span class="text-red-700 font-semibold">✗ mos emas — yuklanmaydi</span>') + '</div>' +
+                                    (it.sample.length ? '<div class="text-gray-500">Namuna: ' + it.sample.map(escHtml).join(' · ') + '</div>' : '') +
+                                    '<div class="text-gray-700">' + it.targets.map(t =>
+                                        '→ ' + escHtml(t.name) +
+                                        (t.sems.length ? ': <b>' + t.sems.map(s => s + '-sem').join(', ') + '</b>' : ': —') +
+                                        (t.skipped_sems.length ? ' <span class="text-gray-400">(mavjud, o\'tkaziladi: ' + t.skipped_sems.map(s => s + '-sem').join(', ') + ')</span>' : '')
+                                    ).join('<br>') + '</div>' +
+                                '</div>';
+                            }).join('');
+                        }
+
+                        bulkSubmitBtn.addEventListener('click', async function () {
+                            const {fd, count} = buildBulkFd();
+                            bulkResult.classList.remove('hidden');
+                            if (!count) {
+                                bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-yellow-50 text-yellow-800';
+                                bulkResult.textContent = 'Hech qaysi kursga fayl tanlanmadi.';
+                                return;
+                            }
+                            this.disabled = true;
+
+                            if (bulkStage === 'form') {
+                                // 1-bosqich: faqat tekshirish, hech narsa saqlanmaydi
+                                fd.append('preview', '1');
+                                bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-gray-50 text-gray-600';
+                                bulkResult.textContent = 'Fayllar tekshirilmoqda... (' + count + ' ta)';
+                                try {
+                                    const res = await fetch(bulkUrl, {method: 'POST', body: fd, headers: {'Accept': 'application/json'}});
+                                    const j = await res.json();
+                                    if (!res.ok) throw new Error(j.message || 'Server xatosi (' + res.status + ')');
+                                    renderBulkPreview(j.items);
+                                    const okCount = j.items.filter(it => !it.error && it.sem_ok).length;
+                                    if (okCount) {
+                                        bulkStage = 'confirm';
+                                        bulkSubmitBtn.textContent = '✅ Tasdiqlayman — yuklash';
+                                        bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-blue-50 text-blue-800';
+                                        bulkResult.textContent = "Hali hech narsa saqlanmadi. Yuqoridagi natijalarni ko'rib chiqing va tasdiqlang.";
+                                    } else {
+                                        bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-red-50 text-red-700';
+                                        bulkResult.textContent = "Birorta fayl ham yuklashga yaroqli emas — fayllarni yoki kurs/semestr tanlovini to'g'rilang.";
+                                    }
+                                } catch (e) {
+                                    bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-red-50 text-red-700';
+                                    bulkResult.textContent = 'Xatolik: ' + e.message;
+                                } finally {
+                                    this.disabled = false;
+                                }
+                                return;
+                            }
+
+                            // 2-bosqich: tasdiqlangan — haqiqiy yuklash
+                            bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-gray-50 text-gray-600';
+                            bulkResult.textContent = 'Yuklanmoqda... (' + count + ' ta fayl)';
+                            try {
+                                const res = await fetch(bulkUrl, {method: 'POST', body: fd, headers: {'Accept': 'application/json'}});
+                                const j = await res.json();
+                                if (!res.ok) throw new Error(j.message || 'Server xatosi (' + res.status + ')');
+                                const parts = [j.created + ' ta reja yuklandi'];
+                                if (j.skipped) parts.push(j.skipped + " ta oldin mavjud (o'tkazildi)");
+                                if (j.errors && j.errors.length) parts.push('Xatolar: ' + j.errors.join(' | '));
+                                bulkResult.className = 'text-sm rounded-md px-4 py-3 ' +
+                                    (j.errors && j.errors.length ? 'bg-yellow-50 text-yellow-800' : 'bg-green-50 text-green-800');
+                                bulkResult.textContent = parts.join('. ');
+                                resetBulkStage();
+                                spSel.dispatchEvent(new Event('change')); // orqadagi jadvalni yangilash
+                            } catch (e) {
+                                bulkResult.className = 'text-sm rounded-md px-4 py-3 bg-red-50 text-red-700';
+                                bulkResult.textContent = 'Xatolik: ' + e.message;
+                            } finally {
+                                this.disabled = false;
+                            }
                         });
 
                         function escHtml(s) {

@@ -866,6 +866,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/compare', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compare'])->name('compare');
                 Route::get('/compare/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareExport'])->name('compare-export');
                 Route::get('/batch-view', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'batchView'])->name('batch-view');
+                Route::post('/store-bulk', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeBulk'])->name('store-bulk');
                 Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
                 Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
                 Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');

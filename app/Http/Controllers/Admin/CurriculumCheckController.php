@@ -949,7 +949,8 @@ class CurriculumCheckController extends Controller
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice, MAX(s.laboratory) as laboratory,
                 MAX(s.seminar) as seminar, MAX(s.independent) as independent,
                 MAX(s.total_hours) as total_hours, MAX(s.credit) as credit,
-                COUNT(DISTINCT s.manual_curriculum_id) as reja_count")
+                COUNT(DISTINCT s.manual_curriculum_id) as reja_count,
+                GROUP_CONCAT(DISTINCT CONCAT(mc.id, '::', mc.name) SEPARATOR '|||') as reja_pairs")
             ->orderBy('mc.specialty_code')
             ->orderBy('s.semester')
             ->orderBy('s.block')
@@ -1026,6 +1027,12 @@ class CurriculumCheckController extends Controller
             'subject_name'   => $r->subject_name,
             'kafedra'        => $kaf($r->subject_name)['name'],
             'kafedra_manual' => $kaf($r->subject_name)['manual'],
+            'reja'           => collect(explode('|||', $r->reja_pairs ?? ''))
+                ->filter()
+                ->map(function ($p) {
+                    [$id, $name] = array_pad(explode('::', $p, 2), 2, '');
+                    return ['id' => (int) $id, 'name' => $name];
+                })->values()->all(),
             'lecture'        => $num($r->lecture),
             'practice'       => $num($r->practice),
             'laboratory'     => $num($r->laboratory),
@@ -1069,7 +1076,7 @@ class CurriculumCheckController extends Controller
         $kafMap = $this->kafedraMap();
         $overrides = $this->kafedraOverrides();
 
-        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan', 'Kafedra',
+        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan', 'Kafedra', 'O\'quv reja(lar)',
             'Ma\'ruza', 'Amaliy', 'Laboratoriya', 'Seminar', 'Mustaqil', 'Jami soat', 'Kredit', 'Rejalar soni'];
 
         $fname = 'otiladigan-fanlar-' . now()->format('Y-m-d') . '.csv';
@@ -1081,9 +1088,11 @@ class CurriculumCheckController extends Controller
             foreach ($rows as $r) {
                 $kurs = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : '';
                 $nk = $this->normSubject($r->subject_name);
+                $rejaNames = collect(explode('|||', $r->reja_pairs ?? ''))
+                    ->filter()->map(fn($p) => trim(explode('::', $p, 2)[1] ?? ''))->implode(' | ');
                 fputcsv($out, [
                     $r->specialty_code, $r->specialty_name, $kurs, $r->semester,
-                    $r->block, $r->subject_name, $overrides[$nk] ?? ($kafMap[$nk] ?? ''),
+                    $r->block, $r->subject_name, $overrides[$nk] ?? ($kafMap[$nk] ?? ''), $rejaNames,
                     $r->lecture, $r->practice, $r->laboratory, $r->seminar, $r->independent,
                     $r->total_hours, $r->credit, $r->reja_count,
                 ]);

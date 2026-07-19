@@ -804,6 +804,7 @@
                                     <th data-sort="semester" class="fs-sort cursor-pointer select-none px-2 py-2 text-center font-medium text-gray-600 hover:bg-gray-100">Sem<span class="fs-ind"></span></th>
                                     <th data-sort="block" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Blok<span class="fs-ind"></span></th>
                                     <th data-sort="subject_name" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Fan<span class="fs-ind"></span></th>
+                                    <th class="px-2 py-2 text-left font-medium text-gray-600">O'quv reja</th>
                                     <th data-sort="kafedra" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Kafedra<span class="fs-ind"></span></th>
                                     <th data-sort="lecture" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-blue-700 hover:bg-gray-100">Ma'ruza<span class="fs-ind"></span></th>
                                     <th data-sort="practice" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-purple-700 hover:bg-gray-100">Amaliy<span class="fs-ind"></span></th>
@@ -1724,6 +1725,7 @@
                         const expUrl = @json(route('admin.oquv-reja.subjects-summary.export'));
                         const kafListUrl = @json(route('admin.oquv-reja.kafedra-list'));
                         const setKafUrl  = @json(route('admin.oquv-reja.set-kafedra'));
+                        const showUrlFs  = @json(route('admin.oquv-reja.show', '__ID__'));
                         const csrf = document.querySelector('input[name="_token"]')?.value;
                         const kafDatalist = document.getElementById('fsKafList');
                         let rowsData = [];
@@ -1822,6 +1824,10 @@
                                 const kafHtml = r.kafedra
                                     ? '<span class="' + (r.kafedra_manual ? 'text-emerald-700 font-medium' : 'text-gray-600') + '">' + esc(r.kafedra) + '</span>'
                                     : '<span class="text-gray-300">— belgilash</span>';
+                                const rejaList = r.reja || [];
+                                const rejaHtml = rejaList.length
+                                    ? rejaList.map(rj => '<a href="' + showUrlFs.replace('__ID__', rj.id) + '" target="_blank" class="text-blue-600 hover:underline block truncate max-w-[220px]" title="' + esc(rj.name) + '">' + esc(rj.name) + '</a>').join('')
+                                    : '<span class="text-gray-300">—</span>';
                                 return '<tr class="hover:bg-gray-50">' +
                                     '<td class="px-2 py-1 text-gray-700">' + esc(r.specialty_name || r.specialty_code || '') +
                                         (r.specialty_code ? ' <span class="text-[10px] text-gray-400">' + esc(r.specialty_code) + '</span>' : '') + '</td>' +
@@ -1830,6 +1836,7 @@
                                     '<td class="px-2 py-1 text-gray-500">' + esc(r.block||'') + '</td>' +
                                     '<td class="px-2 py-1 font-medium text-gray-800">' + esc(r.subject_name) +
                                         (r.reja_count > 1 ? ' <span class="text-[10px] text-gray-400">×' + r.reja_count + '</span>' : '') + '</td>' +
+                                    '<td class="px-2 py-1">' + rejaHtml + '</td>' +
                                     '<td class="px-2 py-1 kaf-cell cursor-pointer hover:bg-amber-50" title="Kafedrani tahrirlash uchun bosing" data-subject="' + esc(r.subject_name) + '">' + kafHtml + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.lecture) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.practice) + '</td>' +

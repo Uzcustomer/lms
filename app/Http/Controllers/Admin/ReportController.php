@@ -12191,7 +12191,6 @@ class ReportController extends Controller
             // 2) Tail guruhlarni MAQSADGA (goal) qarab qayta qadoqlaymiz (nom bo'yicha —
             //    fakultet oxiridagi guruhlar olinadi, boshidagilari joyida qoladi).
             $goal = $params['goal'] ?? 'fill';
-            $remainder = null;
             $tailStart = count($resultOqims);
             if (!empty($partialBases)) {
                 usort($partialBases, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
@@ -12238,51 +12237,102 @@ class ReportController extends Controller
                         ];
                     }
                 } else {
-                    // FILL / INTEGRITY: limitgacha zich qadoqlash.
+                    // FILL / INTEGRITY: limitgacha zich qadoqlash — barcha bo'laklar oqim bo'ladi.
+                    // Qabul qiluvchi (eng katta tail) fakultet guruhlari BOSHIDAN, donor
+                    // fakultetlar guruhlari esa OXIRIDAN olinadi (masalan d2 dan avval
+                    // d2/-10, keyin d2/-09) — donorning boshidagi guruhlari joyida qoladi.
+                    $byBi = [];
+                    foreach ($partialBases as $bs) { $byBi[$bs['_bi']][] = $bs; }
+                    uasort($byBi, fn($a, $b) => array_sum(array_column($b, 'total')) <=> array_sum(array_column($a, 'total')));
+                    $ordered = [];
+                    $isFirst = true;
+                    foreach ($byBi as $list) {
+                        usort($list, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+                        if (!$isFirst) { $list = array_reverse($list); } // donor — oxiridan
+                        foreach ($list as $bs) { $ordered[] = $bs; }
+                        $isFirst = false;
+                    }
                     $chunks = []; $cur = []; $sum = 0;
-                    foreach ($partialBases as $bs) {
+                    foreach ($ordered as $bs) {
                         if (!empty($cur) && ($sum + $bs['total']) > $limit) { $chunks[] = $cur; $cur = []; $sum = 0; }
                         $cur[] = $bs; $sum += $bs['total'];
                     }
                     if (!empty($cur)) { $chunks[] = $cur; }
-
-                    $lastIdx = count($chunks) - 1;
-                    foreach ($chunks as $ci => $chunk) {
-                        $tot = array_sum(array_column($chunk, 'total'));
-                        // Faqat FILL maqsadi qoldiqni tarqatadi; INTEGRITY da guruhchalar
-                        // kattalashmaydi — qoldiq alohida oqim bo'lib qoladi.
-                        if ($goal === 'fill' && $ci === $lastIdx && $tot < $floor && (!empty($resultOqims) || count($chunks) > 1)) {
-                            $remainder = $chunk; // kichik qoldiq — talabalari tarqatiladi
-                        } else {
-                            $resultOqims[] = $this->oqimBuildFromChunk($chunk, $courseIndex, $g['level_code'], $items);
-                        }
+                    foreach ($chunks as $chunk) {
+                        // Ko'rsatishda guruhlar nom tartibida bo'lsin
+                        usort($chunk, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+                        $resultOqims[] = $this->oqimBuildFromChunk($chunk, $courseIndex, $g['level_code'], $items);
                     }
                 }
             }
 
-            // 3) Kichik qoldiq talabalarini boshqa oqimlarga TARQATAMIZ (guruhchalarni sal
-            //    kattalashtirib) — avval me'yorgacha (limit), zarur bo'lsa teng ravishda sal
-            //    oshirib. Shunda 30 talabalik kichik oqim yo'qoladi, oqim me'yori PRIORITET.
-            if ($remainder !== null) {
-                $S = (int) array_sum(array_column($remainder, 'total'));
-                // Bo'sh joy (limitgacha) — qoldiq shunga sig'sagina tarqatamiz; aks holda
-                // qoldiq ALOHIDA oqim bo'lib qoladi (hech qaysi oqim limitdan oshmaydi).
-                $room = 0;
-                foreach ($resultOqims as $ro) { $room += max(0, $limit - (int) $ro['total']); }
-                if (!empty($resultOqims) && $S <= $room) {
-                    $this->oqimDistributeStudents($resultOqims, $S, $limit);
-                    $names = [];
-                    foreach ($remainder as $bs) { $names[] = ['name' => $bs['base'], 'count' => $bs['total']]; }
-                    $fromDept = $this->oqimFacultyShort(($remainder[0]['_dept'] ?? ''));
+            // 3) FILL: guruhchalarni BUTUNICHA tarqatib kamaytiramiz. Eng kichik oqimning eng
+            //    kichik guruhchasi olinadi va talabalari BOSHQA oqimlardagi guruhchalarga
+            //    +1 tadan tarqatiladi (bitta guruhchaga to'plab emas — har xil guruh/oqimga).
+            //    Qabul qiluvchi guruhchalar me'yordan sal oshadi (10 -> 11) — oqim ustuvor.
+            //    Hech bir oqim limit (oqim_max + tol) dan OSHMAYDI. Guruhcha yarim tarqatilmaydi:
+            //    joy yetmasa — guruhcha joyida qoladi. Oqim bo'shab qolsa — oqim ham yo'qoladi.
+            if ($goal === 'fill' && count($resultOqims) > 1) {
+                $dissolved = [];
+                $guard = 0;
+                while ($guard++ < 500) {
+                    // Donor — eng kichik (kam to'lgan) oqim
+                    $di = -1; $dt = PHP_INT_MAX;
+                    foreach ($resultOqims as $i => $ro) {
+                        if (!empty($ro['rows']) && (int) $ro['total'] < $dt) { $dt = (int) $ro['total']; $di = $i; }
+                    }
+                    if ($di < 0) { break; }
+                    // Boshqa oqimlardagi bo'sh joy (limitgacha)
+                    $room = 0;
+                    foreach ($resultOqims as $i => $ro) {
+                        if ($i !== $di) { $room += max(0, $limit - (int) $ro['total']); }
+                    }
+                    // Donorning OXIRIDAGI guruhchasidan boshlaymiz (nom bo'yicha eng
+                    // oxirgisi) — sig'sagina tarqatiladi; sig'masa oldingisini ko'ramiz.
+                    $cand = [];
+                    foreach ($resultOqims[$di]['rows'] as $j => $r) { $cand[] = [$j, $r['name'], (int) $r['count']]; }
+                    usort($cand, fn($a, $b) => $this->oqimNatCmp($b[1], $a[1]));
+                    $si = -1; $sc = 0;
+                    foreach ($cand as $c) {
+                        if ($c[2] > 0 && $c[2] <= $room) { $si = $c[0]; $sc = $c[2]; break; }
+                    }
+                    if ($si < 0) { break; } // hech biri butunicha sig'madi — tarqatmaymiz
+                    // Tarqatish: eng katta bo'sh joyli oqimdan boshlab, ichida eng kam
+                    // to'lgan guruhchalarga +1 tadan (oqimAddStudentsToRows shunday taqsimlaydi)
+                    $need = $sc;
+                    while ($need > 0) {
+                        $bi2 = -1; $br = 0;
+                        foreach ($resultOqims as $i => $ro) {
+                            if ($i === $di) { continue; }
+                            $r2 = $limit - (int) $ro['total'];
+                            if ($r2 > $br) { $br = $r2; $bi2 = $i; }
+                        }
+                        if ($bi2 < 0) { break; }
+                        $take = min($need, $br, max(1, count($resultOqims[$bi2]['rows'])));
+                        $this->oqimAddStudentsToRows($resultOqims[$bi2]['rows'], $take);
+                        $resultOqims[$bi2]['total'] += $take;
+                        $need -= $take;
+                    }
+                    // Guruhchani donordan olib tashlaymiz (butunicha tarqatildi)
+                    $dissolved[] = [
+                        'name'  => $resultOqims[$di]['rows'][$si]['name'],
+                        'count' => $sc,
+                    ];
+                    array_splice($resultOqims[$di]['rows'], $si, 1);
+                    $resultOqims[$di]['total'] -= $sc;
+                    if (empty($resultOqims[$di]['rows'])) {
+                        array_splice($resultOqims, $di, 1); // oqim butunlay bo'shadi — yo'qoladi
+                    }
+                }
+                if (!empty($dissolved)) {
                     $xmoves[] = [
                         'course' => $g['level_name'], 'lang' => $g['lang_label'],
-                        'from_fac' => $fromDept, 'to_fac' => 'oqimlar orasiga',
-                        'moved' => $names, 'moved_total' => $S,
+                        'from_fac' => count($dissolved) . " ta guruhcha",
+                        'to_fac' => 'boshqa guruhchalarga (+1 tadan)',
+                        'moved' => $dissolved,
+                        'moved_total' => array_sum(array_column($dissolved, 'count')),
                         'to_before' => 0, 'to_after' => 0, 'distributed' => true,
                     ];
-                } else {
-                    // Sig'madi — qoldiqni o'z holicha (alohida oqim) qoldiramiz.
-                    $resultOqims[] = $this->oqimBuildFromChunk($remainder, $courseIndex, $g['level_code'], $items);
                 }
             }
 
@@ -12385,28 +12435,6 @@ class ReportController extends Controller
         }
         return ['rows' => $rows, 'total' => $total, 'host' => $host,
                 'first' => $chunk[0]['base'] ?? '', 'has_visitor' => $hasVisitor, 'moved' => $moved];
-    }
-
-    /**
-     * $S ta talabani oqimlar orasiga tarqatadi (guruhchalarni sal kattalashtirib): avval
-     * har oqimni $limit gacha to'ldiradi, keyin qolganini teng ravishda (sal oshib ketishi
-     * mumkin — oqim me'yori prioritet). Qabul qilgan oqim "fakultetlararo" deb belgilanadi.
-     */
-    private function oqimDistributeStudents(array &$oqims, int $S, int $limit): void
-    {
-        if ($S <= 0 || empty($oqims)) { return; }
-        // Har oqimni FAQAT me'yorgacha (limit = oqim_max + tolerantlik) to'ldiramiz —
-        // hech qachon limitdan oshmaydi (±5 qat'iy). Sig'magan talaba bo'lsa, chaqiruvchi
-        // uni alohida oqim qilib qoldiradi.
-        foreach ($oqims as &$oq) {
-            if ($S <= 0) { break; }
-            $room = $limit - (int) $oq['total'];
-            if ($room <= 0) { continue; }
-            $add = min($room, $S);
-            $this->oqimAddStudentsToRows($oq['rows'], $add);
-            $oq['total'] += $add; $S -= $add;
-        }
-        unset($oq);
     }
 
     /**

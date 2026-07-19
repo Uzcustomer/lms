@@ -927,7 +927,11 @@
                             if (!this.value) return;
                             loading.classList.remove('hidden');
                             try {
-                                const rows = await (await fetch(batchUrl + '?specialty_id=' + this.value, {headers: {'Accept': 'application/json'}})).json();
+                                // Yo'nalish kod bo'yicha tanlanadi; fakultet/ta'lim turi bo'yicha cheklanadi
+                                const p = new URLSearchParams({specialty_code: this.value});
+                                if (facSel.value) p.set('department_id', facSel.value);
+                                if (etSel.value)  p.set('education_type_code', etSel.value);
+                                const rows = await (await fetch(batchUrl + '?' + p, {headers: {'Accept': 'application/json'}})).json();
                                 loading.classList.add('hidden');
                                 lastBatchRows = rows;
                                 if (!rows.length) { empty.classList.remove('hidden'); return; }

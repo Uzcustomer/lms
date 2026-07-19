@@ -26,6 +26,43 @@ class CurriculumComparisonService
 
     public function compare(ManualCurriculum $reference, ManualCurriculum $working, array $hemisNames = []): array
     {
+        return $this->run(
+            $reference->subjects()->orderBy('id')->get(),
+            $working->subjects()->orderBy('id')->get(),
+            $hemisNames
+        );
+    }
+
+    /**
+     * Jamlangan solishtirish: bitta namunaviy reja bilan unga tegishli BARCHA
+     * ishchi rejalar (turli yillarda, turli semestrlar uchun yuklangan) birgalikda
+     * solishtiriladi. Batch yuklashda bitta fayl bir nechta semestr yozuviga
+     * nusxalanadi — ikki marta hisoblanmasligi uchun har bir yozuvdan faqat o'z
+     * semestriga tegishli qatorlar olinadi va takrorlar chiqarib tashlanadi.
+     * Namunaviy reja esa faqat yuklangan (qamrab olingan) semestrlar bo'yicha
+     * filtrlanadi — shunda hali yuklanmagan semestrlar farq sifatida ko'rinmaydi.
+     */
+    public function compareGroup(ManualCurriculum $reference, Collection $workings, array $hemisNames = []): array
+    {
+        [$workSubjects, $covered, $plans] = $this->mergeWorkingSubjects($workings);
+
+        $refSubjects = $reference->subjects()->orderBy('id')->get();
+        if (!empty($covered)) {
+            $refSubjects = $refSubjects->filter(function ($s) use ($covered) {
+                $sem = ($s->semester !== null && $s->semester !== '') ? (int) $s->semester : null;
+                return $sem === null || in_array($sem, $covered, true);
+            })->values();
+        }
+
+        $result = $this->run($refSubjects, $workSubjects, $hemisNames);
+        $result['covered_semesters'] = $covered;
+        $result['plans'] = $plans;
+
+        return $result;
+    }
+
+    private function run(Collection $refSubjects, Collection $workSubjects, array $hemisNames = []): array
+    {
         // HEMIS fan nomlari xaritasi: normalizatsiya qilingan kalit => asl nom.
         // Bu namunaviy/ishchi nomlarini HEMIS nomi bilan solishtirish uchun.
         $hemisMap = [];
@@ -36,8 +73,8 @@ class CurriculumComparisonService
             }
         }
 
-        $refGroups = $this->groupSubjects($reference->subjects()->orderBy('id')->get(), false);
-        $workGroups = $this->groupSubjects($working->subjects()->orderBy('id')->get(), true);
+        $refGroups = $this->groupSubjects($refSubjects, false);
+        $workGroups = $this->groupSubjects($workSubjects, true);
 
         $rows = [];
         foreach ($refGroups as $key => $ref) {
@@ -60,6 +97,86 @@ class CurriculumComparisonService
         $totals['credit_diff'] = round($totals['work_credit'] - $totals['ref_credit'], 2);
 
         return ['rows' => $rows, 'totals' => $totals, 'stats' => $stats];
+    }
+
+    /**
+     * Ishchi rejalar fanlarini bitta ro'yxatga yig'ish.
+     *
+     * Qoidalar:
+     *  - yozuvda semester_code bo'lsa, fayldan faqat shu semestr qatorlari olinadi
+     *    (batch yuklashda bir fayl bir nechta semestr yozuviga to'liq nusxalanadi);
+     *  - takror (semestr + fan nomi) juftliklari bir marta olinadi, eng oxirgi
+     *    yuklangan reja ustunlik qiladi;
+     *  - semestri ko'rsatilmagan qatorlar fayl bo'yicha bir marta olinadi.
+     *
+     * @return array{0: Collection, 1: array<int>, 2: array<int, array>}
+     *         [jamlangan fanlar, qamrab olingan semestrlar, har bir reja bo'yicha xulosa]
+     */
+    private function mergeWorkingSubjects(Collection $workings): array
+    {
+        $seen = [];
+        $combined = collect();
+        $covered = [];
+        $plans = [];
+
+        // Eng oxirgi yuklangan reja takror qatorlarda ustun bo'lishi uchun ID kamayish tartibida
+        foreach ($workings->sortByDesc('id')->values() as $working) {
+            $recSem = self::semesterNumber($working->semester_code);
+            $taken = 0;
+            $hours = 0.0;
+            $credit = 0.0;
+
+            foreach ($working->subjects()->orderBy('id')->get() as $s) {
+                $rowSem = ($s->semester !== null && $s->semester !== '') ? (int) $s->semester : null;
+                if ($recSem !== null && $rowSem !== null && $rowSem !== $recSem) {
+                    continue;
+                }
+                $name = $this->normalize($s->reference_name ?: $s->subject_name);
+                $key = $rowSem !== null
+                    ? 's' . $rowSem . '|' . $name
+                    : 'n|' . ($working->file_path ?: $working->id) . '|' . $name;
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $combined->push($s);
+                $taken++;
+                $hours += (float) ($s->total_hours ?? 0);
+                $credit += (float) ($s->credit ?? 0);
+
+                $sem = $rowSem ?? $recSem;
+                if ($sem !== null && !in_array($sem, $covered, true)) {
+                    $covered[] = $sem;
+                }
+            }
+
+            $plans[] = [
+                'id'            => $working->id,
+                'name'          => $working->name,
+                'plan_year'     => $working->plan_year,
+                'semester'      => $recSem,
+                'semester_code' => $working->semester_code,
+                'subjects'      => $taken,
+                'hours'         => round($hours, 2),
+                'credit'        => round($credit, 2),
+            ];
+        }
+
+        sort($covered);
+        usort($plans, fn($a, $b) => [$a['semester'] ?? 99, $a['id']] <=> [$b['semester'] ?? 99, $b['id']]);
+
+        return [$combined->values(), $covered, $plans];
+    }
+
+    /** HEMIS semestr kodini tartib raqamiga o'tkazish (11 => 1, 12 => 2, ...). */
+    public static function semesterNumber(?string $code): ?int
+    {
+        if ($code === null || $code === '') {
+            return null;
+        }
+        $n = (int) $code;
+
+        return $n >= 11 ? $n - 10 : $n;
     }
 
     private function buildRow(?array $ref, ?array $work, array $hemisMap = []): array

@@ -902,6 +902,69 @@
             {{-- ===== PANEL: Solishtirish ===== --}}
             <div data-panel="solishtirish" class="hidden">
 
+                {{-- Jamlangan solishtirish: namunaviy -> barcha ishchi semestrlar --}}
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">Jamlangan solishtirish</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Har bir namunaviy reja shu rejaga tegishli <b>barcha</b> yuklangan ishchi rejalar (barcha semestrlar)
+                            bilan bitta jadvalda solishtiriladi. Yangi semestr ishchi rejasi yuklansa, guruhga avtomatik qo'shiladi.
+                        </p>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">#</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Namunaviy reja</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Yuklangan ishchi semestrlar</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Amal</th>
+                                </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                @forelse($groupedComparisons as $i => $group)
+                                    @php
+                                        $ref = $group['reference'];
+                                        $groupUrl = route('admin.oquv-reja.compare-group', ['reference_id' => $ref->id]);
+                                    @endphp
+                                    <tr class="hover:bg-blue-50 cursor-pointer" onclick="window.location='{{ $groupUrl }}'">
+                                        <td class="px-4 py-2">{{ $i + 1 }}</td>
+                                        <td class="px-4 py-2">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1">Namunaviy</span>
+                                            {{ $ref->name }}
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <div class="flex flex-wrap gap-1">
+                                                @foreach($group['workings'] as $w)
+                                                    @php $semNum = \App\Services\CurriculumComparisonService::semesterNumber($w->semester_code); @endphp
+                                                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800"
+                                                          title="{{ $w->name }}">
+                                                        {{ $semNum !== null ? $semNum . '-sem' : 'semestrsiz' }}{{ $w->plan_year ? ' · ' . $w->plan_year : '' }}
+                                                    </span>
+                                                @endforeach
+                                                <span class="text-xs text-gray-400 self-center">({{ $group['workings']->count() }} ta reja)</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-2">{{ trim(($ref->specialty_code ?? '') . ' ' . ($ref->specialty_name ?? '')) ?: '—' }}</td>
+                                        <td class="px-4 py-2 whitespace-nowrap" onclick="event.stopPropagation();">
+                                            <a href="{{ $groupUrl }}" class="text-blue-600 hover:underline font-medium">
+                                                Jamlab solishtirish →
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="5" class="px-4 py-6 text-center text-gray-500">
+                                            Jamlash uchun bitta HEMIS rejaga ham namunaviy, ham ishchi reja yuklangan bo'lishi kerak.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Qo'lda solishtirish --}}
                 <div class="bg-white shadow-sm sm:rounded-lg mb-6">
                     <div class="p-6">

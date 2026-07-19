@@ -796,6 +796,7 @@
                                     <th class="px-2 py-2 text-center font-medium text-gray-600">Sem</th>
                                     <th class="px-2 py-2 text-left font-medium text-gray-600">Blok</th>
                                     <th class="px-2 py-2 text-left font-medium text-gray-600">Fan</th>
+                                    <th class="px-2 py-2 text-left font-medium text-gray-600">Kafedra</th>
                                     <th class="px-2 py-2 text-right font-medium text-blue-700">Ma'ruza</th>
                                     <th class="px-2 py-2 text-right font-medium text-purple-700">Amaliy</th>
                                     <th class="px-2 py-2 text-right font-medium text-teal-700">Lab</th>
@@ -1727,6 +1728,7 @@
                                     '<td class="px-2 py-1 text-gray-500">' + esc(r.block||'') + '</td>' +
                                     '<td class="px-2 py-1 font-medium text-gray-800">' + esc(r.subject_name) +
                                         (r.reja_count > 1 ? ' <span class="text-[10px] text-gray-400">×' + r.reja_count + '</span>' : '') + '</td>' +
+                                    '<td class="px-2 py-1 text-gray-600">' + (r.kafedra ? esc(r.kafedra) : '<span class="text-gray-300">—</span>') + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.lecture) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.practice) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.laboratory) + '</td>' +

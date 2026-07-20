@@ -11122,8 +11122,9 @@ class ReportController extends Controller
         // bashorat kiritilgan yillar + joriy yildan keyingi yil.
         $projectionYears = ContingentProjection::distinct()
             ->orderByDesc('academic_year')->pluck('academic_year')->all();
+        // Kelasi o'quv yili boshi: iyuldan keyin — shu yil (masalan 2026-iyul → 2026-2027)
         $nextYear = (now()->month >= 7 ? now()->year : now()->year - 1);
-        $nextYearLabel = ($nextYear + 1) . '-' . ($nextYear + 2);
+        $nextYearLabel = $nextYear . '-' . ($nextYear + 1);
         if (!in_array($nextYearLabel, $projectionYears, true)) {
             array_unshift($projectionYears, $nextYearLabel);
         }

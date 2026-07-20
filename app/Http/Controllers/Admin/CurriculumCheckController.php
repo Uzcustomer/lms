@@ -1500,6 +1500,23 @@ class CurriculumCheckController extends Controller
         }
         $snaps = $q->get();
 
+        // Dublikatlarni yo'qotamiz: bir xil yo'nalish/kursni ikki marta sanamaslik uchun
+        // har fakultet konteksti bo'yicha faqat ENG SO'NGGI tasdiqni olamiz. Agar fakultetga
+        // xos snapshotlar bo'lsa — umumiy ('') snapshotni tashlaymiz (u ham o'sha fakultetlarni
+        // qamraydi, aks holda ikki marta hisoblanardi).
+        $byFaculty = [];
+        foreach ($snaps as $snap) {
+            $fk = (string) ($snap->context['faculty'] ?? '');
+            if (!isset($byFaculty[$fk]) || $snap->approved_at > $byFaculty[$fk]->approved_at) {
+                $byFaculty[$fk] = $snap;
+            }
+        }
+        $hasSpecific = collect(array_keys($byFaculty))->contains(fn ($k) => $k !== '');
+        if ($hasSpecific) {
+            unset($byFaculty['']);
+        }
+        $snaps = array_values($byFaculty);
+
         $map = [];
         foreach ($snaps as $snap) {
             foreach ($snap->data ?? [] as $bl) {

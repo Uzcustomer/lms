@@ -142,9 +142,10 @@
                 <div id="contingent-panel" style="display:none;margin:12px 20px 0;border:1px solid #c7d2fe;border-radius:10px;background:#f5f7ff;">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid #e0e7ff;">
                         <div style="font-weight:800;color:#3730a3;font-size:13px;">🎓 Yangi 1-kurs bashorati (yangi qabul)</div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <button type="button" id="ct-copy-all" class="af-btn" style="background:#e0e7ff;color:#3730a3;border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">↺ Joriy 1-kursdan nusxa (hammasi)</button>
                             <button type="button" id="ct-save" class="af-btn af-approve" onclick="saveContingent()" style="padding:5px 12px;">💾 Saqlash</button>
+                            <button type="button" id="btn-promote" onclick="promoteApproved()" style="background:#7c3aed;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;" title="Tasdiqlangan joriy oqimni +1 kursga o'tkazadi (2-6 kurs qo'lda tuzatilgani saqlanadi), yangi 1-kurs bashoratdan. To'g'ridan-to'g'ri tahrirlash rejimida ochiladi.">↗ Tasdiqlangan oqimni o'tkazish</button>
                         </div>
                     </div>
                     <div style="padding:6px 14px 4px;font-size:11.5px;color:#6366f1;">
@@ -277,6 +278,7 @@
         var SNAP_SHOW_URL = '{{ route("admin.reports.oqim.snapshot.show") }}';
         var CONTINGENT_URL = '{{ route("admin.reports.oqim.contingent") }}';
         var CONTINGENT_SAVE_URL = '{{ route("admin.reports.oqim.contingent.save") }}';
+        var DATA_URL = '{{ route("admin.reports.oqim.data") }}';
         var CSRF = '{{ csrf_token() }}';
         var afterState = [];   // optimizatsiyadan keyingi holat (tahrirlanadigan) — saqlash uchun
         var editMode = false;
@@ -735,6 +737,72 @@
             $('#ct-new-name,#ct-new-code,#ct-new-cnt').val('');
             renderContingent();
         });
+
+        // ===== Tasdiqlangan oqimni kelasi yilga o'tkazish =====
+        function ctLevelNum(course) {
+            var m = (course.level_name || '').match(/(\d+)/); if (m) return +m[1];
+            var n = parseInt(course.level_code) || 0; return n > 6 ? n - 10 : n;
+        }
+        // Tasdiqlangan bloklarni +1 kursga suramiz (6-kursdan oshsa — bitiradi, tushadi)
+        function promoteBlocks(blocks) {
+            var out = JSON.parse(JSON.stringify(blocks || []));
+            out.forEach(function(bl) {
+                bl.courses = (bl.courses || []).map(function(co) {
+                    var num = ctLevelNum(co) + 1;
+                    if (num > 6) return null;
+                    co.level_name = num + '-kurs';
+                    co.level_code = String(10 + num);
+                    return co;
+                }).filter(Boolean);
+            });
+            return out.filter(function(bl) { return bl.courses.length; });
+        }
+        // 2-6 kurslarni tasdiqlangan (surilgan) holat bilan almashtiramiz
+        function overlayApproved(base, promoted) {
+            var map = {};
+            promoted.forEach(function(bl) { bl.courses.forEach(function(co) { map[bl.title + '|' + co.level_code] = co; }); });
+            base.forEach(function(bl) {
+                bl.courses.forEach(function(co) {
+                    if (ctLevelNum(co) >= 2 && map[bl.title + '|' + co.level_code]) {
+                        var ap = map[bl.title + '|' + co.level_code];
+                        co.oqims = ap.oqims; co.total = ap.total;
+                    }
+                });
+            });
+        }
+        function promoteApproved() {
+            if (!$('#projection').is(':checked')) { alert('Avval "Kelasi yil (reja)" ni yoqing va bashoratni saqlang.'); return; }
+            $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
+            var pf = getFilters(false); // projection yoqilgan, optimize=0 — asos (1-kurs + surilgan 2-6)
+            $.get(DATA_URL, pf).done(function(base) {
+                var blocks = base.blocks || [];
+                // Tasdiqlangan JORIY oqim (projection'siz kontekst)
+                var cf = getFilters(true); delete cf.projection; delete cf.academic_year;
+                $.get(SNAP_SHOW_URL, cf).done(function(snap) {
+                    var used = false;
+                    if (snap && snap.found && snap.data && snap.data.length) {
+                        overlayApproved(blocks, promoteBlocks(snap.data));
+                        used = true;
+                    }
+                    $('#loading-state').hide();
+                    afterState = blocks; editMode = true;
+                    $('#table-area').show(); switchTab('after'); renderAfterBody();
+                    $('#after-actions').css('display', CAN_APPROVE ? 'flex' : 'none');
+                    $('#btn-edit').addClass('on').text('✎ Tahrirlash yoqilgan'); $('#edit-hint').show();
+                    $('#snap-badge').hide(); $('#btn-unapprove').hide(); $('#btn-load-snap').hide();
+                    $('#snap-status').css('color', used ? '#166534' : '#b45309').text(
+                        used ? "Tasdiqlangan oqim +1 kursga o'tkazildi (2-6 kurs). Yangi 1-kurs bashoratdan. Tahrirlang va tasdiqlang."
+                             : "Tasdiqlangan joriy oqim topilmadi — to'liq hisoblangan holat ko'rsatildi. Tahrirlang va tasdiqlang.");
+                    $('#btn-excel').prop('disabled', false).css('opacity', '1');
+                }).fail(function() {
+                    $('#loading-state').hide(); afterState = blocks; editMode = true;
+                    $('#table-area').show(); switchTab('after'); renderAfterBody();
+                });
+            }).fail(function(xhr) {
+                $('#loading-state').hide();
+                $('#empty-state').show().find('p:first').text('Xatolik (HTTP ' + xhr.status + ')');
+            });
+        }
 
         $(document).ready(function() {
             $('.select2').each(function() {

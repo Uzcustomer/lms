@@ -667,9 +667,11 @@
                     if (!$('#projection-banner').length) {
                         $('#result-area').prepend(
                             '<div id="projection-banner" style="margin:12px 20px 0;padding:10px 14px;border-radius:8px;' +
-                            'background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:13px;font-weight:600;">' +
-                            '⏳ Rejalashtirilgan (kelasi yil) rejimi — joriy talabalar +1 kursga surilgan, yangi 1-kurs ' +
-                            'bashoratdan. Bu holat joriy tasdiqqa tegmaydi, alohida saqlanadi.</div>');
+                            'background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:13px;font-weight:600;line-height:1.5;">' +
+                            '⏳ Rejalashtirilgan (kelasi yil) rejimi — <b>2-6 kurs</b> joriy talabalardan avtomatik +1 kursga suriladi. ' +
+                            '<b>Yangi 1-kurs</b> bashorati esa <u>O\'quv reja to\'g\'riligi → Bo\'lajak kontingent</u> bo\'limida ' +
+                            'tanlangan o\'quv yili uchun kiritilib <b>saqlangan</b> bo\'lishi kerak (aks holda 1-kurs chiqmaydi). ' +
+                            'Yilni shu bo\'limdagi yil bilan bir xil tanlang. Bu holat joriy tasdiqqa tegmaydi.</div>');
                     }
                     $('#projection-banner').show();
                 } else {

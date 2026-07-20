@@ -1016,6 +1016,40 @@ class CurriculumCheckController extends Controller
     }
 
     /**
+     * Kafedra nomini guruhlash uchun normallashtirish — tinish belgilari, apostroflar,
+     * ortiqcha bo'sh joy va katta-kichik harf farqlarini yo'qotadi. Shu tufayli "..., ..."
+     * va "... ..." kabi bir xil kafedralarning turli yozilishlari bitta qatorga birlashadi.
+     */
+    private function normKafedra(string $s): string
+    {
+        $s = mb_strtolower(trim($s));
+        $s = str_replace(["'", '’', 'ʻ', 'ʼ', '`', '´'], '', $s);
+        $s = preg_replace('/[.,;:()\-\–\/]/u', ' ', $s);
+        $s = preg_replace('/\s+/u', ' ', $s);
+        return trim($s);
+    }
+
+    /**
+     * Ikki normallashtirilgan kafedra nomi imloviy jihatdan (typo/variant) yaqinmi?
+     * Uzun tibbiy kafedra nomlari uchun ≥92% o'xshashlik bir xil kafedra deb hisoblanadi
+     * (masalan "radiologiya" ↔ "radiologia").
+     */
+    private function kafedraSimilar(string $a, string $b): bool
+    {
+        if ($a === $b) {
+            return true;
+        }
+        $la = mb_strlen($a);
+        $lb = mb_strlen($b);
+        $max = max($la, $lb);
+        if ($max < 8 || abs($la - $lb) > 4) {
+            return false; // qisqa nomlar yoki uzunlik farqi katta bo'lsa — birlashtirmaymiz
+        }
+        $dist = levenshtein(mb_substr($a, 0, 250), mb_substr($b, 0, 250));
+        return ($dist / $max) <= 0.08;
+    }
+
+    /**
      * Fan nomi (normallashtirilgan) → kafedra nomi xaritasi.
      * HEMIS curriculum_subjects jadvalidagi department_name asosida.
      */
@@ -1611,8 +1645,9 @@ class CurriculumCheckController extends Controller
         // Oqim/talaba ma'lumoti (tasdiqlangan snapshotlardan)
         $oqim = $this->oqimCountsForDemand($academicYear, $kind, $facultyId);
 
-        $kafedras = [];   // kafedra => ['lecture'=>, 'practice'=>, 'subjects'=>[]]
+        $kafedras = [];   // normKey => ['lecture'=>, 'practice'=>, 'subjects'=>[], 'names'=>[]]
         $unmatched = [];
+        $NONE = '— (kafedra belgilanmagan)';
 
         foreach ($rows as $r) {
             $course = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : 0;
@@ -1625,7 +1660,7 @@ class CurriculumCheckController extends Controller
 
             $nk = $this->normSubject($r->subject_name);
             $ov = $overrides[$nk] ?? null;
-            $kafedra = ($ov && $ov['kafedra']) ? $ov['kafedra'] : ($kafMap[$nk] ?? '— (kafedra belgilanmagan)');
+            $kafedra = ($ov && $ov['kafedra']) ? $ov['kafedra'] : ($kafMap[$nk] ?? $NONE);
             $psize = ($ov && $ov['practice']) ? (int) $ov['practice'] : $this->defaultPracticeSize($r->subject_name, $r->block);
 
             $lecture = (float) ($r->lecture ?? 0);
@@ -1640,38 +1675,89 @@ class CurriculumCheckController extends Controller
             }
             $practLoad = $practHours * $practGroups;
 
-            if (!isset($kafedras[$kafedra])) {
-                $kafedras[$kafedra] = ['lecture' => 0, 'practice' => 0, 'subjects' => []];
+            // Bir xil kafedraning turli yozilishlari bitta qatorga tushishi uchun
+            // normallashtirilgan kalit bo'yicha guruhlaymiz; ko'rsatiladigan nomni alohida saqlaymiz.
+            $isNone = ($kafedra === $NONE);
+            $kafKey = $isNone ? '__none__' : ($this->normKafedra($kafedra) ?: '__none__');
+            if (!isset($kafedras[$kafKey])) {
+                $kafedras[$kafKey] = ['lecture' => 0, 'practice' => 0, 'subjects' => [], 'names' => []];
             }
-            $kafedras[$kafedra]['lecture']  += $lectureLoad;
-            $kafedras[$kafedra]['practice'] += $practLoad;
-            $kafedras[$kafedra]['subjects'][] = [
-                'subject'   => $r->subject_name,
-                'specialty' => $r->specialty_name,
-                'course'    => $course,
-                'oqim'      => $info['oqim'],
-                'pract_grp' => $practGroups,
-                'lecture'   => round($lectureLoad, 1),
-                'practice'  => round($practLoad, 1),
-            ];
+            $weight = $lectureLoad + $practLoad;
+            $kafedras[$kafKey]['lecture']  += $lectureLoad;
+            $kafedras[$kafKey]['practice'] += $practLoad;
+            // Kanonik ko'rsatiladigan nomni tanlash uchun yuklama bo'yicha ovoz beramiz
+            $dispName = $isNone ? $NONE : $kafedra;
+            $kafedras[$kafKey]['names'][$dispName] = ($kafedras[$kafKey]['names'][$dispName] ?? 0) + $weight + 1;
+
+            // Fanlar kesimi — fan nomi bo'yicha yig'amiz (yo'nalish/kurs bo'yicha jamlab)
+            $skk = $this->normSubject($r->subject_name);
+            if (!isset($kafedras[$kafKey]['subjects'][$skk])) {
+                $kafedras[$kafKey]['subjects'][$skk] = ['subject' => $r->subject_name, 'lecture' => 0, 'practice' => 0];
+            }
+            $kafedras[$kafKey]['subjects'][$skk]['lecture']  += $lectureLoad;
+            $kafedras[$kafKey]['subjects'][$skk]['practice'] += $practLoad;
+        }
+
+        // Imloviy variantlarni (typo) birlashtirish: og'irroq guruh kanonik bo'ladi.
+        $keys = array_values(array_filter(array_keys($kafedras), fn($k) => $k !== '__none__'));
+        usort($keys, fn($a, $b) => ($kafedras[$b]['lecture'] + $kafedras[$b]['practice'])
+            <=> ($kafedras[$a]['lecture'] + $kafedras[$a]['practice']));
+        $canonKeys = [];
+        foreach ($keys as $k) {
+            $target = null;
+            foreach ($canonKeys as $ck) {
+                if ($this->kafedraSimilar($k, $ck)) { $target = $ck; break; }
+            }
+            if ($target === null) { $canonKeys[] = $k; continue; }
+            $kafedras[$target]['lecture']  += $kafedras[$k]['lecture'];
+            $kafedras[$target]['practice'] += $kafedras[$k]['practice'];
+            foreach ($kafedras[$k]['names'] as $nm => $wt) {
+                $kafedras[$target]['names'][$nm] = ($kafedras[$target]['names'][$nm] ?? 0) + $wt;
+            }
+            foreach ($kafedras[$k]['subjects'] as $skk => $s) {
+                if (!isset($kafedras[$target]['subjects'][$skk])) {
+                    $kafedras[$target]['subjects'][$skk] = ['subject' => $s['subject'], 'lecture' => 0, 'practice' => 0];
+                }
+                $kafedras[$target]['subjects'][$skk]['lecture']  += $s['lecture'];
+                $kafedras[$target]['subjects'][$skk]['practice'] += $s['practice'];
+            }
+            unset($kafedras[$k]);
         }
 
         $result = [];
         $grand = ['lecture' => 0, 'practice' => 0, 'total' => 0, 'stavka' => 0];
-        foreach ($kafedras as $name => $k) {
+        foreach ($kafedras as $k) {
             $total = $k['lecture'] + $k['practice'];
             $stavka = round($total / $norm, 2);
             $grand['lecture']  += $k['lecture'];
             $grand['practice'] += $k['practice'];
             $grand['total']    += $total;
             $grand['stavka']   += $stavka;
+
+            // Kanonik ko'rsatiladigan nom: eng ko'p ovoz olgan (yuklama) yozilish
+            arsort($k['names']);
+            $name = (string) array_key_first($k['names']);
+
+            // Fanlar ro'yxatini soat bo'yicha kamayish tartibida
+            $subs = [];
+            foreach ($k['subjects'] as $s) {
+                $st = $s['lecture'] + $s['practice'];
+                $subs[] = [
+                    'subject'  => $s['subject'],
+                    'lecture'  => round($s['lecture'], 1),
+                    'practice' => round($s['practice'], 1),
+                    'total'    => round($st, 1),
+                ];
+            }
+            usort($subs, fn($a, $b) => $b['total'] <=> $a['total']);
+
             $result[] = [
                 'kafedra'  => $name,
                 'lecture'  => round($k['lecture'], 1),
                 'practice' => round($k['practice'], 1),
                 'total'    => round($total, 1),
                 'stavka'   => $stavka,
-                'subjects' => $k['subjects'],
+                'subjects' => $subs,
             ];
         }
         usort($result, fn($a, $b) => $b['total'] <=> $a['total']);

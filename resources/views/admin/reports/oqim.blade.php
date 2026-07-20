@@ -316,6 +316,7 @@
                 talim: $('#talim').val() || 'all',
                 variant: $('#variant').val() || 'auto',
                 kurs: kurs,
+                // Reja (kurs o'tishi) ikkala holatga ham ta'sir qiladi — yagona farq shu
                 optimize: optimize ? 1 : 0,
             };
             // Kelasi yil (rejalashtirilgan) rejim — joriy va optimizatsiya so'rovlariga ham qo'llanadi
@@ -396,8 +397,12 @@
                 for (var c = 0; c < block.courses.length; c++) {
                     var course = block.courses[c];
                     grand += course.total;
+                    // Kurs kesimida oqim va guruhcha soni
+                    var oqN = (course.oqims || []).length, subN = 0;
+                    for (var oi = 0; oi < oqN; oi++) { subN += (course.oqims[oi].rows || []).length; }
                     html += '<div class="oqim-course">';
-                    html += '<table class="oqim-table"><thead><tr><th colspan="3">' + esc(course.level_name) + '</th></tr></thead><tbody>';
+                    html += '<table class="oqim-table"><thead><tr><th colspan="3">' + esc(course.level_name)
+                         + ' <span class="crs-stats">' + oqN + ' oqim · ' + subN + ' grch</span></th></tr></thead><tbody>';
                     for (var o = 0; o < course.oqims.length; o++) {
                         var oq = course.oqims[o];
                         var lc = 'lang-' + (oq.lang || 'uz');
@@ -435,10 +440,14 @@
             return grand;
         }
 
+        function rejaPrefix() {
+            return $('#projection').is(':checked') ? 'REJA (kelasi yil) · ' : '';
+        }
+
         function renderReport(res) {
             var grand = renderBlocks(res.blocks, '#report-body', false);
             var variantLabel = $('#variant option:selected').text();
-            $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
+            $('#total-badge').text(rejaPrefix() + 'Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
         }
 
         function afterVariantLabel() {
@@ -447,7 +456,7 @@
 
         function renderAfterBody() {
             var grand = renderBlocks(afterState, '#opt-body', editMode);
-            $('#after-total-badge').text('Jami talaba: ' + grand + ' ta · ' + afterVariantLabel());
+            $('#after-total-badge').text(rejaPrefix() + 'Jami talaba: ' + grand + ' ta · ' + afterVariantLabel());
         }
 
         // Optimizatsiyadan keyingi holat — to'liq layout. Tahrirlash/tasdiqlash bloklari.
@@ -967,6 +976,7 @@
         .oqim-course { flex: 0 0 auto; }
         .oqim-table { border-collapse: collapse; font-size: 12px; min-width: 190px; }
         .oqim-table th { background: linear-gradient(135deg, #dbe4ef, #cbd7e8); color: #1e3a5f; font-weight: 700; padding: 6px 8px; text-align: center; border: 1px solid #b8c6dc; font-size: 12px; }
+        .crs-stats { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.65); border-radius: 999px; padding: 1px 8px; }
         .oqim-table td { border: 1px solid #e2e8f0; padding: 4px 8px; }
         .oq-label { text-align: center; font-weight: 700; color: #2b5ea7; background: #f0f6ff; white-space: nowrap; }
         .oq-sum { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: #16a34a; }

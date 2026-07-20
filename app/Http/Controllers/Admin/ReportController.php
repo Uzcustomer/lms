@@ -11293,20 +11293,32 @@ class ReportController extends Controller
         $jVar = array_key_first($joriy['byVariant']);
         $aVar = array_key_first($after['byVariant']);
 
+        // Kelasi yil (reja) rejimi — fayl nomi, varaq nomlari va sarlavhada aniq belgilanadi,
+        // aks holda rejalashtirilgan taqsimot joriy hisobot bilan adashtirilishi mumkin.
+        $isReja   = $request->boolean('projection');
+        $rejaYear = trim((string) $request->get('academic_year', ''));
+        $rejaTag  = $isReja ? ('REJA' . ($rejaYear !== '' ? ' ' . $rejaYear : '')) : '';
+        if ($isReja) {
+            $mark = 'KELASI YIL REJASI' . ($rejaYear !== '' ? ' (' . $rejaYear . ')' : '')
+                . " — talabalar +1 kursga surilgan, yangi 1-kurs bashoratdan";
+            $joriy['header'][1] = $mark . ' · ' . ($joriy['header'][1] ?? '');
+            $after['header'][1] = $mark . ' · ' . ($after['header'][1] ?? '');
+        }
+
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
 
         $s1 = $spreadsheet->createSheet();
-        $s1->setTitle('Joriy holat');
+        $s1->setTitle($isReja ? 'REJA — joriy taqsimot' : 'Joriy holat');
         $this->fillOqimSheet($s1, $joriy['byVariant'][$jVar], $joriy['header']);
 
         $s2 = $spreadsheet->createSheet();
-        $s2->setTitle('Optimizatsiyadan keyingi holat');
+        $s2->setTitle($isReja ? 'REJA — optimizatsiyadan keyin' : 'Optimizatsiyadan keyingi holat');
         $this->fillOqimSheet($s2, $after['byVariant'][$aVar], $after['header']);
 
         $spreadsheet->setActiveSheetIndex(0);
 
-        $fileName = 'Oqim_' . date('Y-m-d_H-i') . '.xlsx';
+        $fileName = 'Oqim_' . ($isReja ? str_replace(['/', ' '], '-', $rejaTag) . '_' : '') . date('Y-m-d_H-i') . '.xlsx';
         $temp = tempnam(sys_get_temp_dir(), 'oqim_');
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($temp);
@@ -11564,6 +11576,7 @@ class ReportController extends Controller
         $crossFaculty = $request->boolean('merge_faculties');
 
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar (fakultetlar alohida) ----
+        // (Kelasi yil rejasi yuqorida applyOqimProjection orqali qatorlar darajasida qo'llangan.)
         $blocks = $this->assembleOqimBlocks(
             $rows, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang
         );
@@ -11829,6 +11842,9 @@ class ReportController extends Controller
                 continue;
             }
 
+            $lvlCode = (string) $r->level_code;
+            $lvlName = $r->level_name ?: ($r->level_code . '-kurs');
+
             // Blok kaliti — HAQIQIY fakultet + yo'nalish NOMI + ta'lim turi bo'yicha
             // (fakultetlar birlashmaydi). Qo'shma va oddiy ta'lim hech qachon aralashmaydi.
             $dept = $r->department_name;
@@ -11852,11 +11868,11 @@ class ReportController extends Controller
                     'courses'         => [],
                 ];
             }
-            $lvlKey = (string) $r->level_code;
+            $lvlKey = $lvlCode;
             if (!isset($blocks[$blockKey]['courses'][$lvlKey])) {
                 $blocks[$blockKey]['courses'][$lvlKey] = [
-                    'level_code' => $r->level_code,
-                    'level_name' => $r->level_name ?: ($r->level_code . '-kurs'),
+                    'level_code' => $lvlCode,
+                    'level_name' => $lvlName,
                     'groups'     => [],
                 ];
             }

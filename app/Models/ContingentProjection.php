@@ -11,6 +11,8 @@ class ContingentProjection extends Model
         'specialty_code',
         'specialty_name',
         'level_code',
+        'department_id',
+        'department_name',
         'expected_count',
         'updated_by',
     ];

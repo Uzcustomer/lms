@@ -1197,6 +1197,27 @@ class CurriculumCheckController extends Controller
             }
         }
 
+        // Joriy talabasi yo'q, lekin bashorat saqlangan yangi yo'nalishlar (1-kurs) ham ko'rinsin
+        $present = collect($out)->filter(fn($r) => $r['course'] === 1)
+            ->keyBy('specialty_code');
+        foreach ($saved as $ov) {
+            if ((string) $ov->level_code !== '11' || $present->has($ov->specialty_code)) {
+                continue;
+            }
+            $out[] = [
+                'specialty_code'  => $ov->specialty_code,
+                'specialty_name'  => $ov->specialty_name ?: $ov->specialty_code,
+                'course'          => 1,
+                'level_code'      => '11',
+                'current_prev'    => null,
+                'current_first'   => 0,
+                'department_id'   => $ov->department_id,
+                'department_name' => $ov->department_name,
+                'projected'       => (int) $ov->expected_count,
+                'has_override'    => true,
+            ];
+        }
+
         usort($out, fn($a, $b) => [$a['specialty_name'], $a['course']] <=> [$b['specialty_name'], $b['course']]);
 
         return response()->json(['rows' => $out]);
@@ -1205,12 +1226,14 @@ class CurriculumCheckController extends Controller
     public function contingentSave(Request $request)
     {
         $data = $request->validate([
-            'academic_year'          => 'required|string|max:50',
-            'items'                  => 'required|array|min:1',
-            'items.*.specialty_code' => 'required|string|max:50',
-            'items.*.specialty_name' => 'nullable|string|max:255',
-            'items.*.level_code'     => 'required|string|max:20',
-            'items.*.expected_count' => 'nullable|integer|min:0',
+            'academic_year'            => 'required|string|max:50',
+            'items'                    => 'required|array|min:1',
+            'items.*.specialty_code'   => 'required|string|max:50',
+            'items.*.specialty_name'   => 'nullable|string|max:255',
+            'items.*.level_code'       => 'required|string|max:20',
+            'items.*.department_id'    => 'nullable',
+            'items.*.department_name'  => 'nullable|string|max:255',
+            'items.*.expected_count'   => 'nullable|integer|min:0',
         ]);
 
         foreach ($data['items'] as $it) {
@@ -1221,9 +1244,11 @@ class CurriculumCheckController extends Controller
                     'level_code'     => $it['level_code'],
                 ],
                 [
-                    'specialty_name' => $it['specialty_name'] ?? null,
-                    'expected_count' => $it['expected_count'] ?? 0,
-                    'updated_by'     => Auth::id(),
+                    'specialty_name'  => $it['specialty_name'] ?? null,
+                    'department_id'   => $it['department_id'] ?? null,
+                    'department_name' => $it['department_name'] ?? null,
+                    'expected_count'  => (int) ($it['expected_count'] ?? 0),
+                    'updated_by'      => Auth::id(),
                 ]
             );
         }

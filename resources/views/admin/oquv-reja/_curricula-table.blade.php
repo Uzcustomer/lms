@@ -24,8 +24,16 @@
                     <a href="{{ route('admin.oquv-reja.show', $curriculum) }}" class="text-blue-600 hover:underline">
                         {{ $curriculum->name }}
                     </a>
+                    @if($curriculum->isPlanned())
+                        <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800" title="HEMIS'ga bog'lanmagan rejalashtirilgan reja">⏳ Rejalashtirilgan</span>
+                    @endif
                 </td>
-                <td class="px-4 py-2">{{ trim($curriculum->specialty_code . ' ' . $curriculum->specialty_name) ?: '—' }}</td>
+                <td class="px-4 py-2">
+                    {{ trim($curriculum->specialty_code . ' ' . $curriculum->specialty_name) ?: '—' }}
+                    @if($curriculum->isPlanned())
+                        <div class="text-[11px] text-amber-600">HEMIS'ga bog'lanmagan</div>
+                    @endif
+                </td>
                 <td class="px-4 py-2">{{ $curriculum->plan_year ?: '—' }}</td>
                 <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->subjects_count }}">{{ $curriculum->subjects_count }}</td>
                 <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->total_hours ?? 0 }}">{{ rtrim(rtrim(number_format($curriculum->total_hours ?? 0, 2, '.', ' '), '0'), '.') }}</td>

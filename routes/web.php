@@ -757,6 +757,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/oqim/overrides/delete', [ReportController::class, 'oqimOverrideDelete'])->name('reports.oqim.overrides.delete');
         Route::get('/reports/oqim/snapshot', [ReportController::class, 'oqimSnapshotShow'])->name('reports.oqim.snapshot.show');
         Route::post('/reports/oqim/snapshot/save', [ReportController::class, 'oqimSnapshotSave'])->name('reports.oqim.snapshot.save');
+        // Bo'lajak kontingent (yangi 1-kurs) — oqim sahifasi bilan bir xil ruxsat ostida
+        Route::get('/reports/oqim/contingent', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentData'])->name('reports.oqim.contingent');
+        Route::post('/reports/oqim/contingent/save', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentSave'])->name('reports.oqim.contingent.save');
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
@@ -865,7 +868,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/options', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'options'])->name('options');
                 Route::get('/compare', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compare'])->name('compare');
                 Route::get('/compare/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareExport'])->name('compare-export');
+                Route::get('/compare-group', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareGroup'])->name('compare-group');
+                Route::get('/compare-group/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareGroupExport'])->name('compare-group-export');
                 Route::get('/batch-view', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'batchView'])->name('batch-view');
+                Route::post('/store-bulk', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeBulk'])->name('store-bulk');
+                Route::get('/planned-sources', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'plannedSources'])->name('planned-sources');
+                Route::post('/store-planned', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storePlanned'])->name('store-planned');
+                Route::post('/{curriculum}/link-hemis', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'linkToHemis'])->name('link-hemis');
+                Route::get('/subjects-summary', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'subjectsSummary'])->name('subjects-summary');
+                Route::get('/subjects-summary/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'subjectsSummaryExport'])->name('subjects-summary.export');
+                Route::get('/kafedra-list', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'kafedraList'])->name('kafedra-list');
+                Route::post('/set-kafedra', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setKafedra'])->name('set-kafedra');
                 Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
                 Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
                 Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');

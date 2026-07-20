@@ -6,6 +6,7 @@ use App\Exports\CurriculumComparisonExport;
 use App\Exports\ManualCurriculumExport;
 use App\Http\Controllers\Controller;
 use App\Imports\ManualCurriculumImport;
+use App\Models\ContingentProjection;
 use App\Models\Curriculum;
 use App\Models\ManualCurriculum;
 use App\Models\ManualCurriculumComparison;
@@ -49,7 +50,23 @@ class CurriculumCheckController extends Controller
             ->filter(fn ($c) => $c->reference && $c->working)
             ->values();
 
-        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons'));
+        // Jamlangan solishtirish: har bir namunaviy reja uchun shu HEMIS rejaga
+        // tegishli barcha ishchi rejalar (barcha yuklangan semestrlar) yig'iladi.
+        // Yangi semestr yuklansa, guruhga avtomatik qo'shiladi.
+        $ishchiByHemis = $curricula->where('type', 'ishchi')
+            ->filter(fn ($c) => $c->curricula_hemis_id)
+            ->groupBy('curricula_hemis_id');
+        $groupedComparisons = $curricula->where('type', 'namunaviy')
+            ->filter(fn ($c) => $c->curricula_hemis_id && $ishchiByHemis->has($c->curricula_hemis_id))
+            ->map(fn ($c) => [
+                'reference' => $c,
+                'workings'  => $ishchiByHemis[$c->curricula_hemis_id]
+                    ->sortBy(fn ($w) => [CurriculumComparisonService::semesterNumber($w->semester_code) ?? 99, $w->id])
+                    ->values(),
+            ])
+            ->values();
+
+        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons', 'groupedComparisons'));
     }
 
     /**
@@ -104,13 +121,13 @@ class CurriculumCheckController extends Controller
                 ->orderBy('department_name')
                 ->get(),
 
-            // Yo'nalishlar alohida yozuv (specialty_id) bo'yicha ko'rsatiladi:
-            // bir xil kodli dublikatlar ham alohida turadi, qaysi biriga
-            // talaba biriktirilgani talaba soni orqali bilinadi
+            // Yo'nalishlar kod bo'yicha birlashtiriladi: bir xil kodli
+            // (bir nechta specialty_id ga bo'lingan) dublikatlar bitta
+            // qatorga yig'iladi, talabalar soni jamlanadi.
             'specialties' => $this->students($request)
-                ->whereNotNull('specialty_id')
-                ->selectRaw('specialty_id as id, specialty_code as code, specialty_name as name, count(*) as student_count')
-                ->groupBy('specialty_id', 'specialty_code', 'specialty_name')
+                ->whereNotNull('specialty_code')
+                ->selectRaw('specialty_code as id, specialty_code as code, MAX(specialty_name) as name, count(*) as student_count')
+                ->groupBy('specialty_code')
                 ->orderBy('specialty_code')
                 ->get(),
 
@@ -323,6 +340,23 @@ class CurriculumCheckController extends Controller
                         DB::rollBack();
                         return back()->with('error', implode(' ', $import->errors));
                     }
+
+                    // Himoya: fayl ichidagi semestrlar tanlangan semestrlarga
+                    // mos kelmasa — noto'g'ri (boshqa kursning) fayli
+                    $fileSems = $curriculum->subjects()->whereNotNull('semester')
+                        ->distinct()->pluck('semester')->map(fn($s) => (int) $s)->all();
+                    $targetSems = array_map(
+                        fn($c) => (int) $c >= 11 ? (int) $c - 10 : (int) $c,
+                        array_filter($semCodes)
+                    );
+                    if ($fileSems && $targetSems && !array_intersect($fileSems, $targetSems)) {
+                        DB::rollBack();
+                        return back()->with('error',
+                            'Fayl ichidagi semestrlar (' . implode(', ', $fileSems) .
+                            ') tanlangan semestrlarga (' . implode(', ', $targetSems) .
+                            "-semestr) mos kelmadi — boshqa kursning fayli bo'lishi mumkin. Yuklash bekor qilindi.");
+                    }
+
                     $firstCurriculum = $curriculum;
                 } else {
                     // Qo'shimcha semestrlar: birinchi semestrdan fanlarni nusxalaymiz
@@ -381,12 +415,16 @@ class CurriculumCheckController extends Controller
      */
     public function batchView(Request $request)
     {
-        $request->validate(['specialty_id' => 'required|integer']);
+        $request->validate([
+            'specialty_code' => 'required_without:specialty_id|string',
+            'specialty_id'   => 'required_without:specialty_code',
+        ]);
 
-        // Faol talabalar (status 11) bo'yicha har bir kohort (curriculum_id + level) uchun ma'lumot
-        $rows = Student::query()
-            ->where('specialty_id', $request->specialty_id)
-            ->where('student_status_code', 11)
+        // Faol talabalar (status 11) bo'yicha har bir kohort (curriculum_id + level) uchun ma'lumot.
+        // Yo'nalish kod bo'yicha tanlanadi (bir nechta specialty_id birlashtiriladi),
+        // fakultet/ta'lim turi bo'yicha cheklanadi (students() helper orqali).
+        $request->merge(['current_only' => true]);
+        $rows = $this->students($request)
             ->whereNotNull('curriculum_id')
             ->selectRaw('curriculum_id, level_code, level_name, semester_code, semester_name, count(*) as student_count')
             ->groupBy('curriculum_id', 'level_code', 'level_name', 'semester_code', 'semester_name')
@@ -423,6 +461,823 @@ class CurriculumCheckController extends Controller
                 'semester_code' => $m->semester_code,
             ])->values()->all(),
         ])->values());
+    }
+
+    /**
+     * Bulk yuklash: har bir kurs (kohort) uchun bitta fayl — shu kursdagi barcha
+     * curriculum va tanlangan semestrlarga qo'llanadi. Fayl bir marta o'qiladi,
+     * qolgan (curriculum, semestr) juftliklariga fanlar nusxalanadi.
+     */
+    public function storeBulk(Request $request)
+    {
+        $request->validate([
+            'type'                     => 'required|in:namunaviy,ishchi',
+            'items'                    => 'required|array|min:1',
+            'items.*.file'             => 'nullable|file|mimes:xlsx,xls|max:10240',
+            'items.*.curricula'        => 'required|array|min:1',
+            'items.*.curricula.*'      => 'integer|exists:curricula,curricula_hemis_id',
+            'items.*.semester_codes'   => 'required|array|min:1',
+            'items.*.semester_codes.*' => 'string|max:20',
+        ]);
+
+        $type    = $request->type;
+        $preview = $request->boolean('preview');
+        $created = 0;
+        $skipped = 0;
+        $errors  = [];
+        $previewItems = [];
+
+        foreach ($request->input('items', []) as $idx => $item) {
+            $file = $request->file("items.$idx.file");
+            if (!$file) {
+                continue; // fayl tanlanmagan kurs — o'tkazib yuboriladi
+            }
+
+            $curricIds = array_values(array_unique(array_map('intval', $item['curricula'])));
+            $semCodes  = array_values(array_unique(array_filter($item['semester_codes'])));
+            if (!$curricIds || !$semCodes) {
+                continue;
+            }
+
+            $curricula = Curriculum::whereIn('curricula_hemis_id', $curricIds)
+                ->get()->keyBy('curricula_hemis_id');
+            $semesterInfo = Semester::whereIn('curriculum_hemis_id', $curricIds)
+                ->whereIn('code', $semCodes)
+                ->get(['curriculum_hemis_id', 'code', 'name', 'level_code'])
+                ->groupBy('curriculum_hemis_id');
+
+            // Oldin yuklangan (curriculum, semestr) juftliklar takror yuklanmaydi
+            $existing = ManualCurriculum::whereIn('curricula_hemis_id', $curricIds)
+                ->where('type', $type)
+                ->whereIn('semester_code', $semCodes)
+                ->get(['curricula_hemis_id', 'semester_code'])
+                ->map(fn($m) => $m->curricula_hemis_id . '|' . $m->semester_code)
+                ->flip();
+
+            $targetSems = array_map(fn($c) => (int) $c >= 11 ? (int) $c - 10 : (int) $c, $semCodes);
+
+            // ── Preview: faylni o'qib ko'ramiz, lekin saqlamaymiz (rollback) ──
+            if ($preview) {
+                $summary = [
+                    'file'        => $file->getClientOriginalName(),
+                    'target_sems' => $targetSems,
+                    'error'       => null,
+                    'imported'    => 0,
+                    'file_sems'   => [],
+                    'sem_ok'      => true,
+                    'credit_sum'  => 0,
+                    'hours_sum'   => 0,
+                    'sample'      => [],
+                    'targets'     => [],
+                ];
+                DB::beginTransaction();
+                try {
+                    $firstCurr = $curricula[$curricIds[0]] ?? null;
+                    $tmp = ManualCurriculum::create([
+                        'type'                => $type,
+                        'name'                => '[tekshiruv] ' . $file->getClientOriginalName(),
+                        'plan_year'           => $firstCurr?->education_year_name,
+                        'curricula_hemis_id'  => $curricIds[0],
+                        'semester_code'       => $semCodes[0],
+                        'education_type_name' => $firstCurr?->education_type_name,
+                        'education_period'    => $firstCurr?->education_period,
+                        'file_original_name'  => $file->getClientOriginalName(),
+                        'file_path'           => '',
+                        'created_by'          => Auth::id(),
+                    ]);
+                    $import = new ManualCurriculumImport($tmp);
+                    Excel::import($import, $file);
+                    if (!empty($import->errors)) {
+                        throw new \RuntimeException(implode(' ', $import->errors));
+                    }
+                    $subs = $tmp->subjects()->get();
+                    $fileSems = $subs->pluck('semester')->filter()
+                        ->map(fn($s) => (int) $s)->unique()->sort()->values()->all();
+                    $summary['imported']   = $subs->count();
+                    $summary['file_sems']  = $fileSems;
+                    $summary['sem_ok']     = empty($fileSems) || count(array_intersect($fileSems, $targetSems)) > 0;
+                    $summary['credit_sum'] = round($subs->sum('credit'), 1);
+                    $summary['hours_sum']  = round($subs->sum('total_hours'), 1);
+                    $summary['sample']     = $subs->take(3)->pluck('subject_name')->all();
+                } catch (\Exception $e) {
+                    $summary['error'] = $e->getMessage();
+                }
+                DB::rollBack();
+
+                foreach ($curricIds as $cid) {
+                    $new = [];
+                    $skip = [];
+                    foreach ($semCodes as $semCode) {
+                        $n = (int) $semCode >= 11 ? (int) $semCode - 10 : (int) $semCode;
+                        if (isset($existing[$cid . '|' . $semCode])) {
+                            $skip[] = $n;
+                        } else {
+                            $new[] = $n;
+                        }
+                    }
+                    $summary['targets'][] = [
+                        'name'         => $curricula[$cid]?->name ?? ('#' . $cid),
+                        'sems'         => $new,
+                        'skipped_sems' => $skip,
+                    ];
+                }
+                $previewItems[] = $summary;
+                continue;
+            }
+
+            $filePath = $file->store('manual-curricula', 'public');
+
+            DB::beginTransaction();
+            try {
+                $master      = null;
+                $masterRows  = null;
+                $itemCreated = 0;
+
+                foreach ($curricIds as $cid) {
+                    $hemisCurriculum = $curricula[$cid] ?? null;
+                    if (!$hemisCurriculum) {
+                        continue;
+                    }
+                    $specialty = Student::where('curriculum_id', $cid)
+                        ->whereNotNull('specialty_code')
+                        ->select('specialty_code as code', 'specialty_name as name')
+                        ->first();
+                    $semInfos = ($semesterInfo[$cid] ?? collect())->keyBy('code');
+
+                    foreach ($semCodes as $semCode) {
+                        if (isset($existing[$cid . '|' . $semCode])) {
+                            $skipped++;
+                            continue;
+                        }
+                        $semInfo   = $semInfos[$semCode] ?? null;
+                        $semName   = $semInfo?->name ?? ($semCode . '-semestr');
+                        $typeLabel = $type === 'namunaviy' ? 'namunaviy' : 'ishchi';
+                        $name = $hemisCurriculum->name . ' — ' . $typeLabel;
+                        if ($type === 'ishchi') {
+                            $name .= ' (' . $semName . ')';
+                        }
+
+                        $curriculum = ManualCurriculum::create([
+                            'type'                => $type,
+                            'name'                => $name,
+                            'specialty_code'      => $specialty?->code,
+                            'specialty_name'      => $specialty?->name,
+                            'plan_year'           => $hemisCurriculum->education_year_name,
+                            'curricula_hemis_id'  => $cid,
+                            'level_code'          => $semInfo?->level_code,
+                            'semester_code'       => $semCode,
+                            'education_type_name' => $hemisCurriculum->education_type_name,
+                            'education_period'    => $hemisCurriculum->education_period,
+                            'file_original_name'  => $file->getClientOriginalName(),
+                            'file_path'           => $filePath,
+                            'created_by'          => Auth::id(),
+                        ]);
+
+                        if ($master === null) {
+                            // Birinchi juftlik: Exceldan import
+                            $import = new ManualCurriculumImport($curriculum);
+                            Excel::import($import, $file);
+                            if (!empty($import->errors)) {
+                                throw new \RuntimeException(implode(' ', $import->errors));
+                            }
+
+                            // Himoya: fayl ichidagi semestrlar tanlangan semestrlarga
+                            // mos kelmasa — noto'g'ri (boshqa kursning) fayli, bekor qilamiz
+                            $fileSems = $curriculum->subjects()->whereNotNull('semester')
+                                ->distinct()->pluck('semester')->map(fn($s) => (int) $s)->all();
+                            $targetSems = array_map(fn($c) => (int) $c >= 11 ? (int) $c - 10 : (int) $c, $semCodes);
+                            if ($fileSems && !array_intersect($fileSems, $targetSems)) {
+                                throw new \RuntimeException(
+                                    'fayl ichidagi semestrlar (' . implode(', ', $fileSems) .
+                                    ') tanlangan semestrlarga (' . implode(', ', $targetSems) .
+                                    ") mos emas — boshqa kursning fayli bo'lishi mumkin"
+                                );
+                            }
+
+                            $master = $curriculum;
+                        } else {
+                            // Qolganlariga fanlarni nusxalaymiz
+                            if ($masterRows === null) {
+                                $masterRows = $master->subjects()->get();
+                            }
+                            $now = now();
+                            ManualCurriculumSubject::insert($masterRows->map(fn($s) => [
+                                'manual_curriculum_id' => $curriculum->id,
+                                'block'          => $s->block,
+                                'subject_code'   => $s->subject_code,
+                                'subject_name'   => $s->subject_name,
+                                'reference_name' => $s->reference_name,
+                                'kurs'           => $s->kurs,
+                                'semester'       => $s->semester,
+                                'total_hours'    => $s->total_hours,
+                                'audit_total'    => $s->audit_total,
+                                'lecture'        => $s->lecture,
+                                'practice'       => $s->practice,
+                                'laboratory'     => $s->laboratory,
+                                'seminar'        => $s->seminar,
+                                'independent'    => $s->independent,
+                                'credit'         => $s->credit,
+                                'note'           => $s->note,
+                                'created_at'     => $now,
+                                'updated_at'     => $now,
+                            ])->toArray());
+                        }
+                        $itemCreated++;
+                    }
+                }
+
+                DB::commit();
+                $created += $itemCreated;
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error("Bulk o'quv reja import xatolik: " . $e->getMessage());
+                $errors[] = $file->getClientOriginalName() . ': ' . $e->getMessage();
+            }
+        }
+
+        if ($preview) {
+            return response()->json(['preview' => true, 'items' => $previewItems]);
+        }
+
+        return response()->json([
+            'created' => $created,
+            'skipped' => $skipped,
+            'errors'  => $errors,
+        ]);
+    }
+
+    /**
+     * Rejalashtirilgan reja uchun nusxa manbalari: mavjud ishchi rejalar ro'yxati.
+     * Ixtiyoriy specialty_code bo'yicha filtrlash mumkin.
+     */
+    public function plannedSources(Request $request)
+    {
+        $q = ManualCurriculum::query()
+            ->where('type', 'ishchi')
+            ->withCount('subjects')
+            ->orderByDesc('id');
+
+        if ($request->filled('specialty_code')) {
+            $q->where('specialty_code', $request->specialty_code);
+        }
+        if ($request->filled('level_code')) {
+            $q->where('level_code', $request->level_code);
+        }
+
+        return response()->json($q->get()->map(fn($m) => [
+            'id'             => $m->id,
+            'name'           => $m->name,
+            'specialty_code' => $m->specialty_code,
+            'specialty_name' => $m->specialty_name,
+            'plan_year'      => $m->plan_year,
+            'level_code'     => $m->level_code,
+            'semester_code'  => $m->semester_code,
+            'subjects_count' => $m->subjects_count,
+        ])->values());
+    }
+
+    /**
+     * Rejalashtirilgan (HEMIS'siz) ishchi reja yaratish.
+     *  - mode=copy: mavjud reja(lar)dan nusxa (o'tgan yildan)
+     *  - mode=new : yangi yo'nalish uchun (Excel yuklab yoki bo'sh, keyin qo'lda to'ldiriladi)
+     * Har ikkalasida ham status='planned', curricula_hemis_id=NULL.
+     */
+    public function storePlanned(Request $request)
+    {
+        $request->validate([
+            'mode'      => 'required|in:copy,new',
+            'plan_year' => 'required|string|max:50',
+        ]);
+
+        // ── Nusxa rejimi ──────────────────────────────────────────────
+        if ($request->mode === 'copy') {
+            $data = $request->validate([
+                'source_ids'   => 'required|array|min:1',
+                'source_ids.*' => 'integer|exists:manual_curricula,id',
+            ]);
+
+            $sources = ManualCurriculum::with('subjects')
+                ->whereIn('id', $data['source_ids'])->get();
+            if ($sources->isEmpty()) {
+                return response()->json(['error' => 'Manba reja topilmadi.'], 422);
+            }
+
+            $created = 0;
+            DB::beginTransaction();
+            try {
+                foreach ($sources as $src) {
+                    $planned = ManualCurriculum::create([
+                        'type'                => 'ishchi',
+                        'status'              => 'planned',
+                        'name'                => $this->plannedName($src->specialty_name ?: $src->name, $request->plan_year, $src->semester_code),
+                        'specialty_code'      => $src->specialty_code,
+                        'specialty_name'      => $src->specialty_name,
+                        'plan_year'           => $request->plan_year,
+                        'curricula_hemis_id'  => null,
+                        'level_code'          => $src->level_code,
+                        'semester_code'       => $src->semester_code,
+                        'education_type_name' => $src->education_type_name,
+                        'education_period'    => $src->education_period,
+                        'notes'               => 'Nusxa manbasi: #' . $src->id . ' (' . $src->name . ')',
+                        'created_by'          => Auth::id(),
+                    ]);
+                    $this->copySubjects($planned->id, $src->subjects);
+                    $created++;
+                }
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Rejalashtirilgan reja (nusxa) xatolik: ' . $e->getMessage());
+                return response()->json(['error' => $e->getMessage()], 500);
+            }
+
+            return response()->json(['created' => $created]);
+        }
+
+        // ── Yangi yo'nalish rejimi ────────────────────────────────────
+        $data = $request->validate([
+            'specialty_code'      => 'nullable|string|max:50',
+            'specialty_name'      => 'required|string|max:255',
+            'level_code'          => 'nullable|string|max:20',
+            'education_type_name' => 'nullable|string|max:255',
+            'semester_codes'      => 'required|array|min:1',
+            'semester_codes.*'    => 'string|max:20',
+            'file'                => 'nullable|file|mimes:xlsx,xls|max:10240',
+        ]);
+
+        $semCodes = array_values(array_unique(array_filter($data['semester_codes'])));
+        $file     = $request->file('file');
+        $filePath = $file ? $file->store('manual-curricula', 'public') : null;
+
+        $created = 0;
+        DB::beginTransaction();
+        try {
+            $master = null;
+            $masterRows = null;
+            foreach ($semCodes as $semCode) {
+                $planned = ManualCurriculum::create([
+                    'type'                => 'ishchi',
+                    'status'              => 'planned',
+                    'name'                => $this->plannedName($data['specialty_name'], $request->plan_year, $semCode),
+                    'specialty_code'      => $data['specialty_code'] ?? null,
+                    'specialty_name'      => $data['specialty_name'],
+                    'plan_year'           => $request->plan_year,
+                    'curricula_hemis_id'  => null,
+                    'level_code'          => $data['level_code'] ?? null,
+                    'semester_code'       => $semCode,
+                    'education_type_name' => $data['education_type_name'] ?? null,
+                    'file_original_name'  => $file?->getClientOriginalName(),
+                    'file_path'           => $filePath,
+                    'created_by'          => Auth::id(),
+                ]);
+
+                if ($file) {
+                    if ($master === null) {
+                        $import = new ManualCurriculumImport($planned);
+                        Excel::import($import, $file);
+                        if (!empty($import->errors)) {
+                            throw new \RuntimeException(implode(' ', $import->errors));
+                        }
+                        $master = $planned;
+                        $masterRows = $master->subjects()->get();
+                    } else {
+                        $this->copySubjects($planned->id, $masterRows);
+                    }
+                }
+                $created++;
+            }
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Rejalashtirilgan reja (yangi) xatolik: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+
+        return response()->json(['created' => $created]);
+    }
+
+    /**
+     * Rejalashtirilgan rejani HEMIS o'quv rejasiga bog'lash: HEMIS reja
+     * paydo bo'lgach, curricula_hemis_id to'ldiriladi va status='active' bo'ladi.
+     * Shundan keyin reja "Yo'nalish bo'yicha" tabida ko'rinadi.
+     */
+    public function linkToHemis(Request $request, ManualCurriculum $curriculum)
+    {
+        $request->validate([
+            'curricula_hemis_id' => 'required|exists:curricula,curricula_hemis_id',
+        ]);
+
+        $hemis = Curriculum::where('curricula_hemis_id', $request->curricula_hemis_id)->first();
+
+        $curriculum->update([
+            'curricula_hemis_id'  => $hemis->curricula_hemis_id,
+            'status'              => 'active',
+            'level_code'          => $curriculum->level_code ?: null,
+            'education_type_name' => $curriculum->education_type_name ?: $hemis->education_type_name,
+        ]);
+
+        return back()->with('success', "Reja HEMIS o'quv rejasiga bog'landi: {$hemis->name}");
+    }
+
+    /** Rejalashtirilgan reja nomini shakllantirish. */
+    private function plannedName(string $base, string $planYear, ?string $semCode): string
+    {
+        $name = trim($base) . ' — ishchi (REJA · ' . $planYear;
+        if ($semCode) {
+            $n = (int) $semCode >= 11 ? (int) $semCode - 10 : (int) $semCode;
+            $name .= ', ' . $n . '-semestr';
+        }
+        return $name . ')';
+    }
+
+    /** Manba fanlarni yangi rejaga ko'chirish. */
+    private function copySubjects(int $targetId, $sourceSubjects): void
+    {
+        if ($sourceSubjects->isEmpty()) {
+            return;
+        }
+        $now = now();
+        ManualCurriculumSubject::insert($sourceSubjects->map(fn($s) => [
+            'manual_curriculum_id' => $targetId,
+            'block'          => $s->block,
+            'subject_code'   => $s->subject_code,
+            'subject_name'   => $s->subject_name,
+            'reference_name' => $s->reference_name,
+            'kurs'           => $s->kurs,
+            'semester'       => $s->semester,
+            'total_hours'    => $s->total_hours,
+            'audit_total'    => $s->audit_total,
+            'lecture'        => $s->lecture,
+            'practice'       => $s->practice,
+            'laboratory'     => $s->laboratory,
+            'seminar'        => $s->seminar,
+            'independent'    => $s->independent,
+            'credit'         => $s->credit,
+            'note'           => $s->note,
+            'created_at'     => $now,
+            'updated_at'     => $now,
+        ])->toArray());
+    }
+
+    /**
+     * 2-BOSQICH: Barcha ishchi rejalardagi o'tiladigan fanlarni bir joyga to'plash.
+     * Yo'nalish + kurs + semestr kesimida takrorlanmas fanlar, soatlari turlar
+     * bo'yicha (ma'ruza/amaliy/lab/seminar/mustaqil) — jadval yuklamasini
+     * hisoblash uchun asos.
+     */
+    private function subjectsSummaryQuery(Request $request)
+    {
+        return DB::table('manual_curriculum_subjects as s')
+            ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
+            ->where('mc.type', 'ishchi')
+            ->when(!$request->boolean('include_planned', true), fn($q) => $q->where('mc.status', 'active'))
+            ->when($request->filled('specialty_code'), fn($q) => $q->where('mc.specialty_code', $request->specialty_code))
+            ->when($request->filled('plan_year'), fn($q) => $q->where('mc.plan_year', $request->plan_year))
+            // O'qitiladigan o'quv yili = plan_year boshi + (kurs - 1). Bir o'quv yilining
+            // barcha kurslari turli plan_year larda saqlanadi (guruh kirgan yili bo'yicha).
+            ->when($request->filled('academic_year'), function ($q) use ($request) {
+                $start = (int) substr($request->academic_year, 0, 4);
+                $q->whereRaw(
+                    "(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?",
+                    [$start]
+                );
+            })
+            ->when($request->filled('level_code'), fn($q) => $q->where('mc.level_code', $request->level_code))
+            ->when($request->filled('semester'), fn($q) => $q->where('s.semester', $request->semester))
+            ->groupBy('mc.specialty_code', 'mc.specialty_name', 'mc.level_code', 's.semester', 's.block', 's.subject_name')
+            ->selectRaw("mc.specialty_code, mc.specialty_name, mc.level_code, s.semester,
+                s.block, s.subject_name,
+                MAX(s.lecture) as lecture, MAX(s.practice) as practice, MAX(s.laboratory) as laboratory,
+                MAX(s.seminar) as seminar, MAX(s.independent) as independent,
+                MAX(s.total_hours) as total_hours, MAX(s.credit) as credit,
+                COUNT(DISTINCT s.manual_curriculum_id) as reja_count,
+                GROUP_CONCAT(DISTINCT CONCAT(mc.id, '::', mc.name) SEPARATOR '|||') as reja_pairs")
+            ->orderBy('mc.specialty_code')
+            ->orderBy('s.semester')
+            ->orderBy('s.block')
+            ->orderBy('s.subject_name');
+    }
+
+    /** Fan nomini kafedra qidirish uchun normallashtirish (raqam/tinish belgilarsiz). */
+    private function normSubject(string $s): string
+    {
+        $s = mb_strtolower(trim($s));
+        $s = str_replace(["'", '’', 'ʻ', 'ʼ', '`', '´'], '', $s);
+        $s = preg_replace('/[.,;:()\-\–\/]/u', ' ', $s);
+        $s = preg_replace('/\b\d+([.,]\d+)?\b/u', ' ', $s); // "1.2" kabi raqamlarni olib tashlash
+        $s = preg_replace('/\s+/u', ' ', $s);
+        return trim($s);
+    }
+
+    /**
+     * Fan nomi (normallashtirilgan) → kafedra nomi xaritasi.
+     * HEMIS curriculum_subjects jadvalidagi department_name asosida.
+     */
+    private function kafedraMap(): array
+    {
+        $rows = DB::table('curriculum_subjects')
+            ->whereNotNull('department_name')
+            ->where('department_name', '!=', '')
+            ->selectRaw('subject_name, department_name, COUNT(*) as c')
+            ->groupBy('subject_name', 'department_name')
+            ->get();
+
+        $acc = [];
+        foreach ($rows as $r) {
+            $k = $this->normSubject($r->subject_name);
+            if ($k === '') {
+                continue;
+            }
+            $acc[$k][$r->department_name] = ($acc[$k][$r->department_name] ?? 0) + (int) $r->c;
+        }
+        $map = [];
+        foreach ($acc as $k => $deps) {
+            arsort($deps);
+            $map[$k] = array_key_first($deps);
+        }
+        return $map;
+    }
+
+    /** Qo'lda kiritilgan kafedra tuzatishlari: norm_name → kafedra_name. */
+    private function kafedraOverrides(): array
+    {
+        return \App\Models\SubjectKafedraOverride::pluck('kafedra_name', 'norm_name')->all();
+    }
+
+    public function subjectsSummary(Request $request)
+    {
+        $rows  = $this->subjectsSummaryQuery($request)->get();
+        $kafMap = $this->kafedraMap();
+        $overrides = $this->kafedraOverrides();
+
+        $num = fn($v) => $v === null ? null : (float) $v;
+        $kaf = function ($name) use ($overrides, $kafMap) {
+            $k = $this->normSubject($name);
+            if (isset($overrides[$k])) {
+                return ['name' => $overrides[$k], 'manual' => true];
+            }
+            return ['name' => $kafMap[$k] ?? null, 'manual' => false];
+        };
+        $data = $rows->map(fn($r) => [
+            'specialty_code' => $r->specialty_code,
+            'specialty_name' => $r->specialty_name,
+            'level_code'     => $r->level_code,
+            'kurs'           => $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : null,
+            'semester'       => $r->semester ? (int) $r->semester : null,
+            'block'          => $r->block,
+            'subject_name'   => $r->subject_name,
+            'kafedra'        => $kaf($r->subject_name)['name'],
+            'kafedra_manual' => $kaf($r->subject_name)['manual'],
+            'reja'           => collect(explode('|||', $r->reja_pairs ?? ''))
+                ->filter()
+                ->map(function ($p) {
+                    [$id, $name] = array_pad(explode('::', $p, 2), 2, '');
+                    return ['id' => (int) $id, 'name' => $name];
+                })->values()->all(),
+            'lecture'        => $num($r->lecture),
+            'practice'       => $num($r->practice),
+            'laboratory'     => $num($r->laboratory),
+            'seminar'        => $num($r->seminar),
+            'independent'    => $num($r->independent),
+            'total_hours'    => $num($r->total_hours),
+            'credit'         => $num($r->credit),
+            'reja_count'     => (int) $r->reja_count,
+        ])->all();
+
+        $sum = fn($rows, $k) => round(array_sum(array_map(fn($r) => $r[$k] ?? 0, $rows)), 1);
+        $mkTotals = fn($rows) => [
+            'subjects'    => count($rows),
+            'lecture'     => $sum($rows, 'lecture'),
+            'practice'    => $sum($rows, 'practice'),
+            'laboratory'  => $sum($rows, 'laboratory'),
+            'seminar'     => $sum($rows, 'seminar'),
+            'independent' => $sum($rows, 'independent'),
+            'total_hours' => $sum($rows, 'total_hours'),
+            'credit'      => $sum($rows, 'credit'),
+        ];
+
+        // Semestr kesimida yuklama — semestrlararo balansni ko'rish uchun
+        // (keyingi bosqichda fanni semestrdan semestrga ko'chirib yuklamani tenglashtirish)
+        $bySemester = collect($data)
+            ->groupBy(fn($r) => $r['semester'] ?? 0)
+            ->map(fn($rows, $sem) => array_merge(['semester' => $sem ?: null], $mkTotals($rows->all())))
+            ->sortBy('semester')
+            ->values();
+
+        return response()->json([
+            'rows'        => $data,
+            'totals'      => $mkTotals($data),
+            'by_semester' => $bySemester,
+        ]);
+    }
+
+    public function subjectsSummaryExport(Request $request)
+    {
+        $rows   = $this->subjectsSummaryQuery($request)->get();
+        $kafMap = $this->kafedraMap();
+        $overrides = $this->kafedraOverrides();
+
+        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan', 'Kafedra', 'O\'quv reja(lar)',
+            'Ma\'ruza', 'Amaliy', 'Laboratoriya', 'Seminar', 'Mustaqil', 'Jami soat', 'Kredit', 'Rejalar soni'];
+
+        $fname = 'otiladigan-fanlar-' . now()->format('Y-m-d') . '.csv';
+
+        return response()->streamDownload(function () use ($rows, $headers, $kafMap, $overrides) {
+            $out = fopen('php://output', 'w');
+            fprintf($out, "\xEF\xBB\xBF"); // UTF-8 BOM (Excel uchun)
+            fputcsv($out, $headers);
+            foreach ($rows as $r) {
+                $kurs = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : '';
+                $nk = $this->normSubject($r->subject_name);
+                $rejaNames = collect(explode('|||', $r->reja_pairs ?? ''))
+                    ->filter()->map(fn($p) => trim(explode('::', $p, 2)[1] ?? ''))->implode(' | ');
+                fputcsv($out, [
+                    $r->specialty_code, $r->specialty_name, $kurs, $r->semester,
+                    $r->block, $r->subject_name, $overrides[$nk] ?? ($kafMap[$nk] ?? ''), $rejaNames,
+                    $r->lecture, $r->practice, $r->laboratory, $r->seminar, $r->independent,
+                    $r->total_hours, $r->credit, $r->reja_count,
+                ]);
+            }
+            fclose($out);
+        }, $fname, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Kafedra tanlash uchun mavjud kafedralar ro'yxati (HEMIS + qo'lda kiritilganlar). */
+    public function kafedraList()
+    {
+        $fromHemis = DB::table('curriculum_subjects')
+            ->whereNotNull('department_name')->where('department_name', '!=', '')
+            ->distinct()->pluck('department_name');
+        $fromDepts = DB::table('departments')
+            ->whereNotNull('name')->where('name', '!=', '')
+            ->pluck('name');
+        $fromOverrides = \App\Models\SubjectKafedraOverride::pluck('kafedra_name');
+
+        $all = $fromHemis->merge($fromDepts)->merge($fromOverrides)
+            ->map(fn($s) => trim($s))->filter()->unique()->sort()->values();
+
+        return response()->json($all);
+    }
+
+    /** Fan uchun kafedrani qo'lda belgilash/tozalash (fan nomi bo'yicha, barqaror). */
+    public function setKafedra(Request $request)
+    {
+        $data = $request->validate([
+            'subject_name' => 'required|string|max:255',
+            'kafedra_name' => 'nullable|string|max:255',
+        ]);
+
+        $norm = $this->normSubject($data['subject_name']);
+        if ($norm === '') {
+            return response()->json(['error' => "Fan nomi bo'sh."], 422);
+        }
+
+        $kafedra = trim((string) ($data['kafedra_name'] ?? ''));
+
+        if ($kafedra === '') {
+            // Bo'sh — tuzatishni olib tashlaymiz (avtomatik moslashtirish qaytadi)
+            \App\Models\SubjectKafedraOverride::where('norm_name', $norm)->delete();
+            return response()->json(['ok' => true, 'cleared' => true]);
+        }
+
+        // Kafedra nomiga mos department_id ni topamiz (bo'lsa)
+        $deptId = DB::table('curriculum_subjects')->where('department_name', $kafedra)->value('department_id')
+            ?? DB::table('departments')->where('name', $kafedra)->value('department_hemis_id');
+
+        \App\Models\SubjectKafedraOverride::updateOrCreate(
+            ['norm_name' => $norm],
+            [
+                'sample_name'   => $data['subject_name'],
+                'kafedra_name'  => $kafedra,
+                'department_id' => $deptId,
+                'updated_by'    => Auth::id(),
+            ]
+        );
+
+        return response()->json(['ok' => true, 'kafedra' => $kafedra]);
+    }
+
+    /**
+     * 3-BOSQICH: Bo'lajak kontingent — kelasi o'quv yili uchun har yo'nalish+kursda
+     * kutilayotgan talaba soni va undan hisoblanadigan oqim/guruh soni.
+     * Proyeksiya: joriy (k-1)-kurs talabalari kelasi yili k-kurs bo'ladi.
+     * 1-kurs = yangi qabul (joriy 1-kurs soni taxminiy default sifatida).
+     */
+    public function contingentData(Request $request)
+    {
+        $request->merge(['current_only' => true]);
+        $rows = $this->students($request)
+            ->whereNotNull('specialty_code')
+            ->selectRaw('specialty_code, MAX(specialty_name) as specialty_name, level_code, COUNT(*) as cnt')
+            ->groupBy('specialty_code', 'level_code')
+            ->get();
+
+        $cur = [];   // [specialty][course] = joriy talaba soni
+        $names = [];
+        foreach ($rows as $r) {
+            $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
+            if ($course < 1) {
+                continue;
+            }
+            $cur[$r->specialty_code][$course] = (int) $r->cnt;
+            $names[$r->specialty_code] = $r->specialty_name;
+        }
+
+        $saved = ContingentProjection::where('academic_year', $request->input('academic_year', ''))
+            ->get()->keyBy(fn($p) => $p->specialty_code . '|' . $p->level_code);
+
+        $out = [];
+        foreach ($cur as $spec => $courses) {
+            $maxCourse = max(array_keys($courses));
+            for ($k = 1; $k <= min($maxCourse + 1, 6); $k++) {
+                $prev = $k >= 2 ? ($courses[$k - 1] ?? 0) : null;   // shu kursni to'ldiradigan joriy kohort
+                $lvl  = (string) (10 + $k);
+                $ov   = $saved[$spec . '|' . $lvl] ?? null;
+                // Default bashorat: k>=2 → oldingi kurs soni; k=1 → joriy 1-kurs soni (taxminiy)
+                $default = $k >= 2 ? ($prev ?? 0) : ($courses[1] ?? 0);
+                $projected = $ov ? (int) $ov->expected_count : $default;
+
+                if (!$ov && $projected <= 0 && !$prev && $k !== 1) {
+                    continue;
+                }
+                $out[] = [
+                    'specialty_code' => (string) $spec,   // PHP raqamli kalitni int qiladi — string'ga qaytaramiz
+                    'specialty_name' => $names[$spec] ?? (string) $spec,
+                    'course'         => $k,
+                    'level_code'     => $lvl,
+                    'current_prev'   => $prev,        // k>=2: shu kursga o'tadigan joriy kohort soni
+                    'current_first'  => $courses[1] ?? 0,  // joriy 1-kurs (yangi qabulga nusxa uchun)
+                    'projected'      => $projected,
+                    'has_override'   => (bool) $ov,
+                ];
+            }
+        }
+
+        // Joriy talabasi yo'q, lekin bashorat saqlangan yangi yo'nalishlar (1-kurs) ham ko'rinsin
+        $present = collect($out)->filter(fn($r) => $r['course'] === 1)
+            ->keyBy('specialty_code');
+        foreach ($saved as $ov) {
+            if ((string) $ov->level_code !== '11' || $present->has($ov->specialty_code)) {
+                continue;
+            }
+            $out[] = [
+                'specialty_code'  => $ov->specialty_code,
+                'specialty_name'  => $ov->specialty_name ?: $ov->specialty_code,
+                'course'          => 1,
+                'level_code'      => '11',
+                'current_prev'    => null,
+                'current_first'   => 0,
+                'department_id'   => $ov->department_id,
+                'department_name' => $ov->department_name,
+                'projected'       => (int) $ov->expected_count,
+                'has_override'    => true,
+            ];
+        }
+
+        usort($out, fn($a, $b) => [$a['specialty_name'], $a['course']] <=> [$b['specialty_name'], $b['course']]);
+
+        return response()->json(['rows' => $out]);
+    }
+
+    public function contingentSave(Request $request)
+    {
+        $data = $request->validate([
+            'academic_year'            => 'required|string|max:50',
+            'items'                    => 'required|array|min:1',
+            'items.*.specialty_code'   => 'required|string|max:50',
+            'items.*.specialty_name'   => 'nullable|string|max:255',
+            'items.*.level_code'       => 'required|string|max:20',
+            'items.*.department_id'    => 'nullable',
+            'items.*.department_name'  => 'nullable|string|max:255',
+            'items.*.expected_count'   => 'nullable|integer|min:0',
+        ]);
+
+        foreach ($data['items'] as $it) {
+            // Fakultet mahalliy id sifatida kelsa — oqim proyeksiyasi uchun HEMIS id ga o'giramiz
+            $deptId = $it['department_id'] ?? null;
+            if ($deptId) {
+                $hemis = DB::table('departments')->where('id', $deptId)->value('department_hemis_id');
+                if ($hemis) {
+                    $deptId = $hemis;
+                }
+            }
+            ContingentProjection::updateOrCreate(
+                [
+                    'academic_year'  => $data['academic_year'],
+                    'specialty_code' => $it['specialty_code'],
+                    'level_code'     => $it['level_code'],
+                ],
+                [
+                    'specialty_name'  => $it['specialty_name'] ?? null,
+                    'department_id'   => $deptId,
+                    'department_name' => $it['department_name'] ?? null,
+                    'expected_count'  => (int) ($it['expected_count'] ?? 0),
+                    'updated_by'      => Auth::id(),
+                ]
+            );
+        }
+
+        return response()->json(['ok' => true, 'saved' => count($data['items'])]);
     }
 
     public function show(ManualCurriculum $curriculum)
@@ -525,6 +1380,91 @@ class CurriculumCheckController extends Controller
         return view('admin.oquv-reja.compare', compact('reference', 'working', 'comparison'));
     }
 
+    /**
+     * Jamlangan solishtirish: bitta namunaviy reja bilan shu HEMIS rejaga
+     * tegishli barcha ishchi rejalar (barcha semestrlar) birgalikda.
+     */
+    public function compareGroup(Request $request, CurriculumComparisonService $service)
+    {
+        [$reference, $workings] = $this->resolveGroup($request);
+        if ($workings->isEmpty()) {
+            return redirect()->route('admin.oquv-reja.index')
+                ->with('error', "Ushbu namunaviy rejaga mos ishchi reja topilmadi. Avval ishchi rejani yuklang.");
+        }
+
+        $comparison = $service->compareGroup($reference, $workings,
+            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)));
+
+        // Rejaning barcha semestrlaridan hali yuklanmaganlari
+        $missingSemesters = $this->missingSemesters($reference, $comparison['covered_semesters'] ?? []);
+
+        return view('admin.oquv-reja.compare-group',
+            compact('reference', 'workings', 'comparison', 'missingSemesters'));
+    }
+
+    public function compareGroupExport(Request $request, CurriculumComparisonService $service)
+    {
+        [$reference, $workings] = $this->resolveGroup($request);
+        abort_if($workings->isEmpty(), 404);
+
+        $comparison = $service->compareGroup($reference, $workings,
+            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)));
+
+        $title = "{$reference->name} <-> barcha ishchi rejalar (jamlangan) solishtirma";
+        $fileName = 'oquv-reja-jamlangan-solishtirma-' . now()->format('Y-m-d_His') . '.xlsx';
+
+        return Excel::download(new CurriculumComparisonExport($title, $comparison), $fileName);
+    }
+
+    /** Namunaviy reja va unga tegishli barcha ishchi rejalarni aniqlash. */
+    private function resolveGroup(Request $request): array
+    {
+        $request->validate([
+            'reference_id' => 'required|exists:manual_curricula,id',
+        ]);
+
+        $reference = ManualCurriculum::findOrFail($request->reference_id);
+        abort_unless($reference->type === 'namunaviy', 404);
+
+        $workings = ManualCurriculum::where('type', 'ishchi')
+            ->when($reference->curricula_hemis_id,
+                fn ($q) => $q->where('curricula_hemis_id', $reference->curricula_hemis_id),
+                fn ($q) => $q->where('specialty_code', $reference->specialty_code)
+                    ->where('plan_year', $reference->plan_year))
+            ->orderBy('semester_code')
+            ->orderBy('id')
+            ->get();
+
+        return [$reference, $workings];
+    }
+
+    private function groupHemisIds(ManualCurriculum $reference, $workings): array
+    {
+        return array_values(array_unique(array_filter(array_merge(
+            [$reference->curricula_hemis_id],
+            $workings->pluck('curricula_hemis_id')->all(),
+        ))));
+    }
+
+    /** HEMIS'dagi reja semestrlaridan hali ishchi reja yuklanmaganlari. */
+    private function missingSemesters(ManualCurriculum $reference, array $covered): array
+    {
+        if (!$reference->curricula_hemis_id) {
+            return [];
+        }
+
+        $all = Semester::where('curriculum_hemis_id', $reference->curricula_hemis_id)
+            ->pluck('code')
+            ->map(fn ($c) => CurriculumComparisonService::semesterNumber($c))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return array_values(array_diff($all, $covered));
+    }
+
     public function destroyComparison(ManualCurriculumComparison $comparison)
     {
         $comparison->delete();
@@ -550,10 +1490,14 @@ class CurriculumCheckController extends Controller
      */
     private function hemisSubjectNames(ManualCurriculum $reference, ManualCurriculum $working): array
     {
-        $ids = array_values(array_unique(array_filter([
+        return $this->hemisSubjectNamesForIds(array_values(array_unique(array_filter([
             $reference->curricula_hemis_id,
             $working->curricula_hemis_id,
-        ])));
+        ]))));
+    }
+
+    private function hemisSubjectNamesForIds(array $ids): array
+    {
         if (empty($ids)) {
             return [];
         }

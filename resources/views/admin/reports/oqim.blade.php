@@ -287,6 +287,7 @@
                 </select>
                 <input id="hist-year" placeholder="O'quv yili (masalan 2026-2027)" style="border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:13px;width:200px;">
                 <button type="button" onclick="loadHistory()" style="background:#2b5ea7;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;">Filtrlash</button>
+                <button type="button" id="hist-export" onclick="exportHistory()" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Excel</button>
                 <span id="hist-back" style="display:none;margin-left:auto;"><button type="button" onclick="historyList()" style="background:#e2e8f0;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;">← Ro'yxatga qaytish</button></span>
             </div>
             <div id="hist-body" style="padding:12px 20px;overflow:auto;flex:1;"></div>
@@ -927,11 +928,20 @@
         // ===== Tasdiqlangan oqimlar tarixi =====
         var HISTORY_URL = '{{ route("admin.reports.oqim.history") }}';
         var HISTORY_SHOW_URL = '{{ url("admin/reports/oqim/history") }}';
+        var HISTORY_EXPORT_URL = '{{ route("admin.reports.oqim.history.export") }}';
+        var histViewId = null;
+        function exportHistory() {
+            var p = new URLSearchParams();
+            if (histViewId) { p.set('id', histViewId); }
+            else { if ($('#hist-kind').val()) p.set('kind', $('#hist-kind').val()); if ($('#hist-year').val()) p.set('academic_year', $('#hist-year').val()); }
+            window.location = HISTORY_EXPORT_URL + '?' + p.toString();
+        }
         function openHistory() { $('#history-overlay').css('display', 'block'); loadHistory(); }
         function closeHistory() { $('#history-overlay').hide(); }
         function historyList() { $('#hist-back').hide(); loadHistory(); }
         function loadHistory() {
             $('#hist-back').hide();
+            histViewId = null;
             $('#hist-body').html('<div style="color:#94a3b8;">Yuklanmoqda...</div>');
             $.get(HISTORY_URL, { kind: $('#hist-kind').val(), academic_year: $('#hist-year').val() }).done(function(rows) {
                 if (!rows.length) { $('#hist-body').html('<div style="color:#94a3b8;">Tasdiqlangan oqim topilmadi.</div>'); return; }
@@ -962,6 +972,7 @@
             }).fail(function() { $('#hist-body').html('<div style="color:#dc2626;">Xatolik.</div>'); });
         }
         function viewHistory(id) {
+            histViewId = id;
             $('#hist-body').html('<div style="color:#94a3b8;">Yuklanmoqda...</div>');
             $.get(HISTORY_SHOW_URL + '/' + id).done(function(res) {
                 $('#hist-back').show();

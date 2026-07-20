@@ -761,6 +761,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/oqim/contingent', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentData'])->name('reports.oqim.contingent');
         Route::post('/reports/oqim/contingent/save', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentSave'])->name('reports.oqim.contingent.save');
         Route::get('/reports/oqim/history', [ReportController::class, 'oqimHistory'])->name('reports.oqim.history');
+        Route::get('/reports/oqim/history-export', [ReportController::class, 'oqimHistoryExport'])->name('reports.oqim.history.export');
         Route::get('/reports/oqim/history/{id}', [ReportController::class, 'oqimHistoryShow'])->name('reports.oqim.history.show');
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');

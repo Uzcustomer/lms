@@ -11750,7 +11750,17 @@ class ReportController extends Controller
         $synthId  = -1;
 
         foreach ($proj as $p) {
-            $shares = $fy[$p->specialty_code] ?? collect();
+            // 1) Bashoratda fakultet ko'rsatilgan bo'lsa (yangi yo'nalish) — o'shani ishlatamiz
+            if (!empty($p->department_id)) {
+                $shares = collect([(object) [
+                    'department_id'   => $p->department_id,
+                    'department_name' => $p->department_name,
+                    'specialty_id'    => DB::table('specialties')->where('code', $p->specialty_code)->value('specialty_hemis_id') ?? $p->specialty_code,
+                    'c'               => 1,
+                ]]);
+            } else {
+                $shares = $fy[$p->specialty_code] ?? collect();
+            }
             if ($shares->isEmpty()) {
                 // Yangi yo'nalish (joriy 1-kurs yo'q) — specialties dan fakultet olamiz
                 $sp = DB::table('specialties')->where('code', $p->specialty_code)

@@ -150,8 +150,17 @@
                     <div style="padding:6px 14px 4px;font-size:11.5px;color:#6366f1;">
                         2-6 kurslar joriy talabalardan avtomatik olinadi — bu yerda faqat yangi qabul (1-kurs) kiritiladi.
                         "Nusxa" — 2-kursga o'tayotgan joriy 1-kurs sonini yangi qabulga ko'chiradi.
+                        Ro'yxatda yo'q yangi yo'nalish (masalan Oliy hamshiralik) uchun pastdan qo'shing.
                     </div>
-                    <div id="ct-body" style="padding:8px 14px 12px;max-height:280px;overflow:auto;"></div>
+                    <div id="ct-body" style="padding:8px 14px 4px;max-height:280px;overflow:auto;"></div>
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 14px 12px;border-top:1px dashed #c7d2fe;">
+                        <span style="font-size:11.5px;font-weight:700;color:#3730a3;">➕ Yangi yo'nalish:</span>
+                        <input id="ct-new-name" placeholder="Nomi (Oliy hamshiralik ishi)" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;width:200px;">
+                        <input id="ct-new-code" placeholder="Kodi" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;width:90px;">
+                        <select id="ct-new-fac" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;"></select>
+                        <input id="ct-new-cnt" type="number" min="0" placeholder="Soni" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;width:70px;">
+                        <button type="button" id="ct-add" style="background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">Qo'shish</button>
+                    </div>
                 </div>
 
                 <!-- Result Area -->
@@ -681,6 +690,7 @@
                 education_type_code: $('#education_type').val() || '',
                 department_id: dekanFaculty ? dekanFaculty.value : ($('#faculty').val() || ''),
             };
+            ctFillFaculties();
             $('#ct-body').html('<div style="color:#94a3b8;font-size:12px;">Yuklanmoqda...</div>');
             $.get(CONTINGENT_URL, p).done(function(res){
                 // Faqat 1-kurs (yangi qabul) qatorlari
@@ -694,8 +704,9 @@
                 '<th style="padding:3px 6px;">Yo\'nalish</th><th style="padding:3px 6px;text-align:right;">Joriy 1-kurs</th>' +
                 '<th style="padding:3px 6px;text-align:right;">Yangi qabul (bashorat)</th><th></th></tr></thead><tbody>';
             CT_ROWS.forEach(function(r, i){
+                var newBadge = r.department_id ? ' <span style="background:#e0e7ff;color:#4f46e5;font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;">yangi · ' + esc(r.department_name || '') + '</span>' : '';
                 h += '<tr style="border-top:1px solid #e0e7ff;">' +
-                    '<td style="padding:3px 6px;">' + esc(r.specialty_name || r.specialty_code) + ' <span style="color:#a5b4fc;font-size:10px;">' + esc(r.specialty_code) + '</span></td>' +
+                    '<td style="padding:3px 6px;">' + esc(r.specialty_name || r.specialty_code) + ' <span style="color:#a5b4fc;font-size:10px;">' + esc(r.specialty_code) + '</span>' + newBadge + '</td>' +
                     '<td style="padding:3px 6px;text-align:right;color:#64748b;">' + (r.current_first || 0) + '</td>' +
                     '<td style="padding:3px 6px;text-align:right;"><input type="number" min="0" value="' + (r.projected || 0) + '" data-i="' + i + '" class="ct-in" style="width:80px;text-align:right;border:1px solid #c7d2fe;border-radius:6px;padding:2px 6px;"></td>' +
                     '<td style="padding:3px 6px;"><button type="button" class="ct-copy" data-i="' + i + '" style="background:none;border:none;color:#6366f1;cursor:pointer;font-size:11px;">↺ nusxa</button></td>' +
@@ -707,15 +718,46 @@
             $('.ct-copy').on('click', function(){ var i = +$(this).data('i'); CT_ROWS[i].projected = CT_ROWS[i].current_first || 0; renderContingent(); });
         }
         function saveContingent() {
-            var items = CT_ROWS.map(function(r){ return { specialty_code: r.specialty_code, specialty_name: r.specialty_name, level_code: r.level_code, expected_count: r.projected || 0 }; });
+            var items = CT_ROWS.map(function(r){ return {
+                specialty_code: r.specialty_code, specialty_name: r.specialty_name, level_code: r.level_code,
+                department_id: r.department_id || null, department_name: r.department_name || null,
+                expected_count: r.projected || 0
+            }; });
             if (!items.length) return;
             var btn = $('#ct-save').prop('disabled', true).text('...');
             $.ajax({ url: CONTINGENT_SAVE_URL, method: 'POST', contentType: 'application/json',
                 headers: { 'X-CSRF-TOKEN': CSRF },
                 data: JSON.stringify({ academic_year: $('#projection_year').val() || '', items: items })
             }).done(function(){ btn.text('✓ Saqlandi'); setTimeout(function(){ btn.prop('disabled', false).text('💾 Saqlash'); }, 1500); })
-              .fail(function(){ btn.prop('disabled', false).text('Xato!'); });
+              .fail(function(xhr){
+                  var msg = (xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.error)) || ('HTTP ' + xhr.status);
+                  btn.prop('disabled', false).text('Xato: ' + msg);
+                  console.error('Kontingent saqlash xatosi:', xhr.status, xhr.responseText);
+              });
         }
+        // Yangi yo'nalish qo'shish (fakultet ro'yxatini asosiy filtrdan olamiz)
+        function ctFillFaculties() {
+            var $sel = $('#ct-new-fac'); if ($sel.children().length) return;
+            $('#faculty option').each(function(){
+                if (!this.value) return;
+                $sel.append('<option value="' + this.value + '">' + esc($(this).text()) + '</option>');
+            });
+        }
+        $(document).on('click', '#ct-add', function(){
+            var name = $('#ct-new-name').val().trim();
+            var code = $('#ct-new-code').val().trim();
+            var facId = $('#ct-new-fac').val();
+            var facName = $('#ct-new-fac option:selected').text();
+            var cnt = parseInt($('#ct-new-cnt').val()) || 0;
+            if (!name || !code) { alert("Yo'nalish nomi va kodini kiriting."); return; }
+            // Mavjud bo'lsa yangilaymiz
+            var ex = CT_ROWS.find(function(r){ return r.specialty_code === code; });
+            if (ex) { ex.projected = cnt; ex.department_id = facId; ex.department_name = facName; }
+            else CT_ROWS.push({ specialty_code: code, specialty_name: name, level_code: '11', course: 1,
+                current_first: 0, projected: cnt, department_id: facId, department_name: facName, is_new: true });
+            $('#ct-new-name,#ct-new-code,#ct-new-cnt').val('');
+            renderContingent();
+        });
 
         $(document).ready(function() {
             $('.select2').each(function() {

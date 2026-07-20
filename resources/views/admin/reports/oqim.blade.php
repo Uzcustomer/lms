@@ -275,8 +275,8 @@
         var CAN_APPROVE = {{ ($canApprove ?? false) ? 'true' : 'false' }};
         var SNAP_SAVE_URL = '{{ route("admin.reports.oqim.snapshot.save") }}';
         var SNAP_SHOW_URL = '{{ route("admin.reports.oqim.snapshot.show") }}';
-        var CONTINGENT_URL = '{{ route("admin.oquv-reja.contingent") }}';
-        var CONTINGENT_SAVE_URL = '{{ route("admin.oquv-reja.contingent.save") }}';
+        var CONTINGENT_URL = '{{ route("admin.reports.oqim.contingent") }}';
+        var CONTINGENT_SAVE_URL = '{{ route("admin.reports.oqim.contingent.save") }}';
         var CSRF = '{{ csrf_token() }}';
         var afterState = [];   // optimizatsiyadan keyingi holat (tahrirlanadigan) — saqlash uchun
         var editMode = false;

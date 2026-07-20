@@ -760,6 +760,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Bo'lajak kontingent (yangi 1-kurs) — oqim sahifasi bilan bir xil ruxsat ostida
         Route::get('/reports/oqim/contingent', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentData'])->name('reports.oqim.contingent');
         Route::post('/reports/oqim/contingent/save', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentSave'])->name('reports.oqim.contingent.save');
+        Route::get('/reports/oqim/history', [ReportController::class, 'oqimHistory'])->name('reports.oqim.history');
+        Route::get('/reports/oqim/history/{id}', [ReportController::class, 'oqimHistoryShow'])->name('reports.oqim.history.show');
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');

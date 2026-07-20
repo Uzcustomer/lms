@@ -11266,11 +11266,92 @@ class ReportController extends Controller
         }
         $snap->save();
 
+        // Tasdiqlanganda — tarixga yangi versiya yozamiz (real yoki reja)
+        if ($data['action'] === 'approve') {
+            $ctx = $data['context'];
+            $students = 0; $oqimCnt = 0; $subCnt = 0;
+            foreach ($data['data'] as $bl) {
+                foreach ($bl['courses'] ?? [] as $co) {
+                    $students += (int) ($co['total'] ?? 0);
+                    foreach ($co['oqims'] ?? [] as $oq) {
+                        $oqimCnt++;
+                        $subCnt += count($oq['rows'] ?? []);
+                    }
+                }
+            }
+            $facId = $ctx['faculty'] ?? null;
+            \App\Models\OqimSnapshotVersion::create([
+                'context_key'     => $key,
+                'context'         => $ctx,
+                'kind'            => !empty($ctx['projection']) ? 'plan' : 'real',
+                'academic_year'   => $ctx['academic_year'] ?? null,
+                'faculty_id'      => $facId ?: null,
+                'faculty_name'    => $facId ? optional(Department::find($facId))->name : null,
+                'education_type'  => $ctx['education_type'] ?? null,
+                'data'            => $data['data'],
+                'summary'         => ['students' => $students, 'oqim' => $oqimCnt, 'guruhcha' => $subCnt],
+                'note'            => $data['note'] ?? null,
+                'approved_by'     => $user->id,
+                'approved_at'     => now(),
+            ]);
+        }
+
         return response()->json([
             'ok'          => true,
             'status'      => $snap->status,
             'approved_at' => optional($snap->approved_at)->format('d.m.Y H:i'),
             'approver'    => $snap->approved_by ? optional($user)->name : null,
+        ]);
+    }
+
+    /**
+     * Tasdiqlangan oqimlar tarixi (versiyalar ro'yxati — real va reja).
+     */
+    public function oqimHistory(Request $request)
+    {
+        $q = \App\Models\OqimSnapshotVersion::query()->orderByDesc('approved_at');
+        if ($request->filled('kind')) {
+            $q->where('kind', $request->kind);
+        }
+        if ($request->filled('academic_year')) {
+            $q->where('academic_year', $request->academic_year);
+        }
+        if ($request->filled('faculty')) {
+            $q->where('faculty_id', $request->faculty);
+        }
+        $rows = $q->limit(300)->get([
+            'id', 'kind', 'academic_year', 'faculty_name', 'education_type',
+            'summary', 'note', 'approved_by', 'approved_at',
+        ]);
+        $names = \App\Models\User::whereIn('id', $rows->pluck('approved_by')->filter()->unique())
+            ->pluck('name', 'id');
+
+        return response()->json($rows->map(fn($r) => [
+            'id'            => $r->id,
+            'kind'          => $r->kind,
+            'academic_year' => $r->academic_year,
+            'faculty_name'  => $r->faculty_name ?: 'Barcha fakultetlar',
+            'summary'       => $r->summary,
+            'note'          => $r->note,
+            'approver'      => $names[$r->approved_by] ?? null,
+            'approved_at'   => optional($r->approved_at)->format('d.m.Y H:i'),
+        ]));
+    }
+
+    /**
+     * Tarixdagi bitta tasdiqlangan versiyani ko'rish (bloklari bilan).
+     */
+    public function oqimHistoryShow($id)
+    {
+        $v = \App\Models\OqimSnapshotVersion::findOrFail($id);
+        return response()->json([
+            'id'            => $v->id,
+            'kind'          => $v->kind,
+            'academic_year' => $v->academic_year,
+            'faculty_name'  => $v->faculty_name ?: 'Barcha fakultetlar',
+            'approved_at'   => optional($v->approved_at)->format('d.m.Y H:i'),
+            'approver'      => optional(\App\Models\User::find($v->approved_by))->name,
+            'blocks'        => $v->data ?: [],
         ]);
     }
 

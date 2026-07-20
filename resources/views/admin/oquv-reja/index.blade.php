@@ -874,7 +874,11 @@
 
                         <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
                             <div id="td-tiles" class="flex flex-wrap gap-2 text-xs"></div>
-                            <div class="flex gap-2">
+                            <div class="flex gap-2 items-center">
+                                <label class="inline-flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none mr-1">
+                                    <input type="checkbox" id="td-show-subjects" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    Fanlar kesimida
+                                </label>
                                 <button type="button" id="td-norms-btn" class="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">⚙ Normalar</button>
                                 <a id="td-export" href="#" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 hidden">⬇ CSV</a>
                             </div>
@@ -2045,6 +2049,7 @@
                         const load = document.getElementById('td-loading');
                         const tiles = document.getElementById('td-tiles');
                         const exp = document.getElementById('td-export');
+                        const showSub = document.getElementById('td-show-subjects');
                         const unmatched = document.getElementById('td-unmatched');
                         let norms = [];
                         let lastResult = null;
@@ -2092,14 +2097,28 @@
                                 empty.classList.remove('hidden'); wrap.classList.add('hidden'); exp.classList.add('hidden'); return;
                             }
                             empty.classList.add('hidden'); wrap.classList.remove('hidden'); exp.classList.remove('hidden');
-                            tbody.innerHTML = j.kafedras.map(k =>
-                                '<tr class="hover:bg-gray-50">' +
-                                '<td class="px-3 py-1.5 text-gray-800">' + esc(k.kafedra) + '</td>' +
-                                '<td class="px-3 py-1.5 text-right">' + num(k.lecture) + '</td>' +
-                                '<td class="px-3 py-1.5 text-right">' + num(k.practice) + '</td>' +
-                                '<td class="px-3 py-1.5 text-right font-semibold">' + num(k.total) + '</td>' +
-                                '<td class="px-3 py-1.5 text-right font-semibold text-emerald-700">' + k.stavka + '</td>' +
-                                '</tr>').join('') +
+                            const withSub = showSub.checked;
+                            tbody.innerHTML = j.kafedras.map(k => {
+                                let html =
+                                    '<tr class="hover:bg-gray-50' + (withSub ? ' font-medium' : '') + '">' +
+                                    '<td class="px-3 py-1.5 text-gray-800">' + esc(k.kafedra) + '</td>' +
+                                    '<td class="px-3 py-1.5 text-right">' + num(k.lecture) + '</td>' +
+                                    '<td class="px-3 py-1.5 text-right">' + num(k.practice) + '</td>' +
+                                    '<td class="px-3 py-1.5 text-right font-semibold">' + num(k.total) + '</td>' +
+                                    '<td class="px-3 py-1.5 text-right font-semibold text-emerald-700">' + k.stavka + '</td>' +
+                                    '</tr>';
+                                if (withSub && k.subjects && k.subjects.length) {
+                                    html += k.subjects.map(s =>
+                                        '<tr class="bg-gray-50/60 text-xs text-gray-500">' +
+                                        '<td class="px-3 py-1 pl-8">↳ ' + esc(s.subject) + '</td>' +
+                                        '<td class="px-3 py-1 text-right">' + num(s.lecture) + '</td>' +
+                                        '<td class="px-3 py-1 text-right">' + num(s.practice) + '</td>' +
+                                        '<td class="px-3 py-1 text-right">' + num(s.total) + '</td>' +
+                                        '<td class="px-3 py-1"></td>' +
+                                        '</tr>').join('');
+                                }
+                                return html;
+                            }).join('') +
                                 '<tr class="bg-gray-50 font-bold"><td class="px-3 py-2">JAMI</td>' +
                                 '<td class="px-3 py-2 text-right">' + num(g.lecture) + '</td>' +
                                 '<td class="px-3 py-2 text-right">' + num(g.practice) + '</td>' +
@@ -2120,14 +2139,30 @@
                         }
                         document.getElementById('td-run').addEventListener('click', run);
                         normSel.addEventListener('change', () => { if (lastResult) run(); });
+                        showSub.addEventListener('change', () => { if (lastResult) render(lastResult); });
 
                         exp.addEventListener('click', function (e) {
                             e.preventDefault();
                             if (!lastResult) return;
-                            let csv = '﻿Kafedra;Ma\'ruza soat;Amaliy soat;Jami soat;Stavka\n';
-                            lastResult.kafedras.forEach(k => { csv += [k.kafedra, k.lecture, k.practice, k.total, k.stavka].join(';') + '\n'; });
+                            const withSub = showSub.checked;
+                            const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+                            let csv = withSub
+                                ? '﻿Kafedra;Fan;Ma\'ruza soat;Amaliy soat;Jami soat;Stavka\n'
+                                : '﻿Kafedra;Ma\'ruza soat;Amaliy soat;Jami soat;Stavka\n';
+                            lastResult.kafedras.forEach(k => {
+                                if (withSub) {
+                                    csv += [q(k.kafedra), '', k.lecture, k.practice, k.total, k.stavka].join(';') + '\n';
+                                    (k.subjects || []).forEach(s => {
+                                        csv += ['', q(s.subject), s.lecture, s.practice, s.total, ''].join(';') + '\n';
+                                    });
+                                } else {
+                                    csv += [q(k.kafedra), k.lecture, k.practice, k.total, k.stavka].join(';') + '\n';
+                                }
+                            });
                             const g = lastResult.grand;
-                            csv += ['JAMI', g.lecture, g.practice, g.total, g.stavka].join(';') + '\n';
+                            csv += withSub
+                                ? ['JAMI', '', g.lecture, g.practice, g.total, g.stavka].join(';') + '\n'
+                                : ['JAMI', g.lecture, g.practice, g.total, g.stavka].join(';') + '\n';
                             const a = document.createElement('a');
                             a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
                             a.download = 'oqituvchilar-ehtiyoji-' + year.value + '.csv'; a.click();

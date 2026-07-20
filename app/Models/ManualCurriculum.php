@@ -41,6 +41,25 @@ class ManualCurriculum extends Model
         return $this->type === 'namunaviy' ? "Namunaviy o'quv reja" : "Ishchi o'quv reja";
     }
 
+    /**
+     * Bir HEMIS o'quv reja uchun namunaviy BITTA bo'lishi kerak. Agar tarixda
+     * bir nechta namunaviy yuklangan bo'lsa (masalan, xato bilan qayta yuklash),
+     * "kanonik" (asosiy) reja sifatida eng to'liq — eng ko'p fan qatorli — reja
+     * olinadi; fan soni teng bo'lsa, eng oxirgi yuklangani (katta id) ustun.
+     *
+     * Ro'yxat, solishtirish va tozalash buyrug'i — hammasi shu yagona mezonga
+     * tayanadi, shunda qaysi namunaviy tanlanishi barcha joyda bir xil bo'ladi.
+     *
+     * subjects_count oldindan yuklangan bo'lsa (withCount('subjects')) qo'shimcha
+     * so'rovsiz ishlaydi; bo'lmasa fanlar sanab olinadi.
+     */
+    public static function canonicalRank(self $curriculum): array
+    {
+        $count = $curriculum->subjects_count ?? $curriculum->subjects()->count();
+
+        return [(int) $count, (int) $curriculum->id];
+    }
+
     /** Rejalashtirilgan (HEMIS'ga bog'lanmagan) reja. */
     public function isPlanned(): bool
     {

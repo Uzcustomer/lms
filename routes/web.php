@@ -879,6 +879,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/subjects-summary/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'subjectsSummaryExport'])->name('subjects-summary.export');
                 Route::get('/kafedra-list', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'kafedraList'])->name('kafedra-list');
                 Route::post('/set-kafedra', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setKafedra'])->name('set-kafedra');
+                Route::post('/set-practice-size', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setPracticeSize'])->name('set-practice-size');
                 Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
                 Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
                 Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');

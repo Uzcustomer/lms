@@ -806,6 +806,7 @@
                                     <th data-sort="subject_name" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Fan<span class="fs-ind"></span></th>
                                     <th class="px-2 py-2 text-left font-medium text-gray-600">O'quv reja</th>
                                     <th data-sort="kafedra" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Kafedra<span class="fs-ind"></span></th>
+                                    <th data-sort="practice_size" class="fs-sort cursor-pointer select-none px-2 py-2 text-center font-medium text-gray-600 hover:bg-gray-100" title="Amaliy mashg'ulot guruhi nechta kishilik">Amaliy guruh<span class="fs-ind"></span></th>
                                     <th data-sort="lecture" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-blue-700 hover:bg-gray-100">Ma'ruza<span class="fs-ind"></span></th>
                                     <th data-sort="practice" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-purple-700 hover:bg-gray-100">Amaliy<span class="fs-ind"></span></th>
                                     <th data-sort="laboratory" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-teal-700 hover:bg-gray-100">Lab<span class="fs-ind"></span></th>
@@ -1662,6 +1663,7 @@
                         const expUrl = @json(route('admin.oquv-reja.subjects-summary.export'));
                         const kafListUrl = @json(route('admin.oquv-reja.kafedra-list'));
                         const setKafUrl  = @json(route('admin.oquv-reja.set-kafedra'));
+                        const setPsUrl   = @json(route('admin.oquv-reja.set-practice-size'));
                         const showUrlFs  = @json(route('admin.oquv-reja.show', '__ID__'));
                         const csrf = document.querySelector('input[name="_token"]')?.value;
                         const kafDatalist = document.getElementById('fsKafList');
@@ -1775,6 +1777,7 @@
                                         (r.reja_count > 1 ? ' <span class="text-[10px] text-gray-400">×' + r.reja_count + '</span>' : '') + '</td>' +
                                     '<td class="px-2 py-1">' + rejaHtml + '</td>' +
                                     '<td class="px-2 py-1 kaf-cell cursor-pointer hover:bg-amber-50" title="Kafedrani tahrirlash uchun bosing" data-subject="' + esc(r.subject_name) + '">' + kafHtml + '</td>' +
+                                    '<td class="px-2 py-1 text-center ps-cell cursor-pointer hover:bg-amber-50" title="Amaliy guruh o\'lchamini tahrirlash uchun bosing" data-subject="' + esc(r.subject_name) + '"><span class="' + (r.practice_manual ? 'text-emerald-700 font-semibold' : 'text-gray-500') + '">' + (r.practice_size || '') + '</span></td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.lecture) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.practice) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.laboratory) + '</td>' +
@@ -1817,6 +1820,37 @@
                                     if (!r.ok) throw new Error();
                                     // Shu nomli barcha qatorlarni yangilaymiz
                                     rowsData.forEach(rd => { if (rd.subject_name === subject) { rd.kafedra = val || null; rd.kafedra_manual = !!val; } });
+                                    renderRows();
+                                } catch (_) {
+                                    cell.innerHTML = '<span class="text-red-500">xato</span>';
+                                }
+                            };
+                            inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } if (ev.key === 'Escape') { done = true; renderRows(); } });
+                            inp.addEventListener('blur', save);
+                        });
+
+                        // Amaliy guruh o'lchamini qatorda tahrirlash
+                        tbody.addEventListener('click', function (e) {
+                            const cell = e.target.closest('.ps-cell');
+                            if (!cell || cell.querySelector('input')) return;
+                            const subject = cell.dataset.subject;
+                            const cur = cell.textContent.trim();
+                            cell.innerHTML = '<input type="number" min="1" class="w-14 text-xs text-center rounded border-amber-300 px-1 py-0.5" value="' + cur + '">';
+                            const inp = cell.querySelector('input');
+                            inp.focus();
+                            let done = false;
+                            const save = async () => {
+                                if (done) return; done = true;
+                                const val = inp.value.trim();
+                                const fd = new FormData();
+                                fd.append('_token', csrf);
+                                fd.append('subject_name', subject);
+                                fd.append('practice_group_size', val);
+                                try {
+                                    const r = await fetch(setPsUrl, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
+                                    if (!r.ok) throw new Error();
+                                    const num = parseInt(val) || null;
+                                    rowsData.forEach(rd => { if (rd.subject_name === subject) { rd.practice_size = num; rd.practice_manual = !!num; } });
                                     renderRows();
                                 } catch (_) {
                                     cell.innerHTML = '<span class="text-red-500">xato</span>';

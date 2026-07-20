@@ -982,25 +982,58 @@ class CurriculumCheckController extends Controller
         return $map;
     }
 
-    /** Qo'lda kiritilgan kafedra tuzatishlari: norm_name → kafedra_name. */
-    private function kafedraOverrides(): array
+    /** Qo'lda kiritilgan fan tuzatishlari: norm_name → ['kafedra'=>, 'practice'=>]. */
+    private function subjectOverrides(): array
     {
-        return \App\Models\SubjectKafedraOverride::pluck('kafedra_name', 'norm_name')->all();
+        return \App\Models\SubjectKafedraOverride::get()->keyBy('norm_name')
+            ->map(fn($o) => [
+                'kafedra'  => $o->kafedra_name ?: null,
+                'practice' => $o->practice_group_size ?: null,
+            ])->all();
+    }
+
+    /** Fanning amaliy guruh o'lchamining sukut qiymati (blok/nom kalit so'zlaridan). */
+    private function defaultPracticeSize(?string $name, ?string $block): int
+    {
+        $t = $this->normSubject(($block ?? '') . ' ' . ($name ?? ''));
+        foreach (['klinik', 'kasallik', 'terapiya', 'xirurgiya', 'jarrohlik', 'pediatriya', 'akusher',
+                  'ginekolog', 'nevrolog', 'kardiolog', 'onkolog', 'urolog', 'endokrin', 'dermato',
+                  'psixiatr', 'stomatolog', 'ftiziatr', 'reanimatsiya', 'anesteziolog', 'yuqumli'] as $kw) {
+            if (str_contains($t, $kw)) {
+                return 10;
+            }
+        }
+        foreach (['ijtimoiy', 'gumanitar', 'tarix', 'falsafa', 'din', 'huquq', 'iqtisod', 'pedagog',
+                  'psixolog', 'xorijiy', 'tili', 'ona til', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
+            if (str_contains($t, $kw)) {
+                return 30;
+            }
+        }
+        return 15;
     }
 
     public function subjectsSummary(Request $request)
     {
         $rows  = $this->subjectsSummaryQuery($request)->get();
         $kafMap = $this->kafedraMap();
-        $overrides = $this->kafedraOverrides();
+        $overrides = $this->subjectOverrides();
 
         $num = fn($v) => $v === null ? null : (float) $v;
         $kaf = function ($name) use ($overrides, $kafMap) {
             $k = $this->normSubject($name);
-            if (isset($overrides[$k])) {
-                return ['name' => $overrides[$k], 'manual' => true];
+            $ov = $overrides[$k] ?? null;
+            if ($ov && $ov['kafedra']) {
+                return ['name' => $ov['kafedra'], 'manual' => true];
             }
             return ['name' => $kafMap[$k] ?? null, 'manual' => false];
+        };
+        $psize = function ($name, $block) use ($overrides) {
+            $k = $this->normSubject($name);
+            $ov = $overrides[$k] ?? null;
+            if ($ov && $ov['practice']) {
+                return ['size' => (int) $ov['practice'], 'manual' => true];
+            }
+            return ['size' => $this->defaultPracticeSize($name, $block), 'manual' => false];
         };
         $data = $rows->map(fn($r) => [
             'specialty_code' => $r->specialty_code,
@@ -1012,6 +1045,8 @@ class CurriculumCheckController extends Controller
             'subject_name'   => $r->subject_name,
             'kafedra'        => $kaf($r->subject_name)['name'],
             'kafedra_manual' => $kaf($r->subject_name)['manual'],
+            'practice_size'  => $psize($r->subject_name, $r->block)['size'],
+            'practice_manual'=> $psize($r->subject_name, $r->block)['manual'],
             'reja'           => collect(explode('|||', $r->reja_pairs ?? ''))
                 ->filter()
                 ->map(function ($p) {
@@ -1059,9 +1094,9 @@ class CurriculumCheckController extends Controller
     {
         $rows   = $this->subjectsSummaryQuery($request)->get();
         $kafMap = $this->kafedraMap();
-        $overrides = $this->kafedraOverrides();
+        $overrides = $this->subjectOverrides();
 
-        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan', 'Kafedra', 'O\'quv reja(lar)',
+        $headers = ['Yo\'nalish kodi', 'Yo\'nalish', 'Kurs', 'Semestr', 'Blok', 'Fan', 'Kafedra', 'Amaliy guruh (kishi)', 'O\'quv reja(lar)',
             'Ma\'ruza', 'Amaliy', 'Laboratoriya', 'Seminar', 'Mustaqil', 'Jami soat', 'Kredit', 'Rejalar soni'];
 
         $fname = 'otiladigan-fanlar-' . now()->format('Y-m-d') . '.csv';
@@ -1073,11 +1108,14 @@ class CurriculumCheckController extends Controller
             foreach ($rows as $r) {
                 $kurs = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : '';
                 $nk = $this->normSubject($r->subject_name);
+                $ov = $overrides[$nk] ?? null;
+                $kafedra = ($ov && $ov['kafedra']) ? $ov['kafedra'] : ($kafMap[$nk] ?? '');
+                $psize = ($ov && $ov['practice']) ? $ov['practice'] : $this->defaultPracticeSize($r->subject_name, $r->block);
                 $rejaNames = collect(explode('|||', $r->reja_pairs ?? ''))
                     ->filter()->map(fn($p) => trim(explode('::', $p, 2)[1] ?? ''))->implode(' | ');
                 fputcsv($out, [
                     $r->specialty_code, $r->specialty_name, $kurs, $r->semester,
-                    $r->block, $r->subject_name, $overrides[$nk] ?? ($kafMap[$nk] ?? ''), $rejaNames,
+                    $r->block, $r->subject_name, $kafedra, $psize, $rejaNames,
                     $r->lecture, $r->practice, $r->laboratory, $r->seminar, $r->independent,
                     $r->total_hours, $r->credit, $r->reja_count,
                 ]);
@@ -1117,28 +1155,58 @@ class CurriculumCheckController extends Controller
         }
 
         $kafedra = trim((string) ($data['kafedra_name'] ?? ''));
+        $ov = \App\Models\SubjectKafedraOverride::firstOrNew(['norm_name' => $norm]);
+        $ov->sample_name  = $data['subject_name'];
+        $ov->kafedra_name = $kafedra;
+        $ov->department_id = $kafedra !== ''
+            ? (DB::table('curriculum_subjects')->where('department_name', $kafedra)->value('department_id')
+                ?? DB::table('departments')->where('name', $kafedra)->value('department_hemis_id'))
+            : null;
+        $ov->updated_by = Auth::id();
 
-        if ($kafedra === '') {
-            // Bo'sh — tuzatishni olib tashlaymiz (avtomatik moslashtirish qaytadi)
-            \App\Models\SubjectKafedraOverride::where('norm_name', $norm)->delete();
+        // Ikkala sozlama ham bo'sh bo'lsa — yozuvni o'chiramiz (avtomatik qaytadi)
+        if ($kafedra === '' && !$ov->practice_group_size) {
+            if ($ov->exists) {
+                $ov->delete();
+            }
             return response()->json(['ok' => true, 'cleared' => true]);
         }
-
-        // Kafedra nomiga mos department_id ni topamiz (bo'lsa)
-        $deptId = DB::table('curriculum_subjects')->where('department_name', $kafedra)->value('department_id')
-            ?? DB::table('departments')->where('name', $kafedra)->value('department_hemis_id');
-
-        \App\Models\SubjectKafedraOverride::updateOrCreate(
-            ['norm_name' => $norm],
-            [
-                'sample_name'   => $data['subject_name'],
-                'kafedra_name'  => $kafedra,
-                'department_id' => $deptId,
-                'updated_by'    => Auth::id(),
-            ]
-        );
+        $ov->save();
 
         return response()->json(['ok' => true, 'kafedra' => $kafedra]);
+    }
+
+    /** Fan uchun amaliy guruh o'lchamini (nechta kishilik) qo'lda belgilash/tozalash. */
+    public function setPracticeSize(Request $request)
+    {
+        $data = $request->validate([
+            'subject_name'        => 'required|string|max:255',
+            'practice_group_size' => 'nullable|integer|min:1|max:500',
+        ]);
+
+        $norm = $this->normSubject($data['subject_name']);
+        if ($norm === '') {
+            return response()->json(['error' => "Fan nomi bo'sh."], 422);
+        }
+
+        $size = $data['practice_group_size'] ?? null;
+        $ov = \App\Models\SubjectKafedraOverride::firstOrNew(['norm_name' => $norm]);
+        $ov->sample_name = $data['subject_name'];
+        $ov->practice_group_size = $size ?: null;
+        if ($ov->kafedra_name === null) {
+            $ov->kafedra_name = '';
+        }
+        $ov->updated_by = Auth::id();
+
+        if (!$size && ($ov->kafedra_name === '' || $ov->kafedra_name === null)) {
+            if ($ov->exists) {
+                $ov->delete();
+            }
+            return response()->json(['ok' => true, 'cleared' => true]);
+        }
+        $ov->save();
+
+        return response()->json(['ok' => true, 'practice_group_size' => $size]);
     }
 
     /**

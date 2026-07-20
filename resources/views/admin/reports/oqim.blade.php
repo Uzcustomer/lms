@@ -695,9 +695,10 @@
         }
         function saveContingent() {
             var items = CT_ROWS.map(function(r){ return {
-                specialty_code: r.specialty_code, specialty_name: r.specialty_name, level_code: r.level_code,
+                specialty_code: String(r.specialty_code), specialty_name: r.specialty_name ? String(r.specialty_name) : null,
+                level_code: String(r.level_code),
                 department_id: r.department_id || null, department_name: r.department_name || null,
-                expected_count: r.projected || 0
+                expected_count: parseInt(r.projected) || 0
             }; });
             if (!items.length) return;
             var btn = $('#ct-save').prop('disabled', true).text('...');

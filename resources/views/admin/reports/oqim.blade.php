@@ -138,6 +138,22 @@
                     </p>
                 </div>
 
+                <!-- Bo'lajak kontingent (yangi 1-kurs) — faqat rejalashtirilgan rejimda -->
+                <div id="contingent-panel" style="display:none;margin:12px 20px 0;border:1px solid #c7d2fe;border-radius:10px;background:#f5f7ff;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid #e0e7ff;">
+                        <div style="font-weight:800;color:#3730a3;font-size:13px;">🎓 Yangi 1-kurs bashorati (yangi qabul)</div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <button type="button" id="ct-copy-all" class="af-btn" style="background:#e0e7ff;color:#3730a3;border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">↺ Joriy 1-kursdan nusxa (hammasi)</button>
+                            <button type="button" id="ct-save" class="af-btn af-approve" onclick="saveContingent()" style="padding:5px 12px;">💾 Saqlash</button>
+                        </div>
+                    </div>
+                    <div style="padding:6px 14px 4px;font-size:11.5px;color:#6366f1;">
+                        2-6 kurslar joriy talabalardan avtomatik olinadi — bu yerda faqat yangi qabul (1-kurs) kiritiladi.
+                        "Nusxa" — 2-kursga o'tayotgan joriy 1-kurs sonini yangi qabulga ko'chiradi.
+                    </div>
+                    <div id="ct-body" style="padding:8px 14px 12px;max-height:280px;overflow:auto;"></div>
+                </div>
+
                 <!-- Result Area -->
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
@@ -250,6 +266,8 @@
         var CAN_APPROVE = {{ ($canApprove ?? false) ? 'true' : 'false' }};
         var SNAP_SAVE_URL = '{{ route("admin.reports.oqim.snapshot.save") }}';
         var SNAP_SHOW_URL = '{{ route("admin.reports.oqim.snapshot.show") }}';
+        var CONTINGENT_URL = '{{ route("admin.oquv-reja.contingent") }}';
+        var CONTINGENT_SAVE_URL = '{{ route("admin.oquv-reja.contingent.save") }}';
         var CSRF = '{{ csrf_token() }}';
         var afterState = [];   // optimizatsiyadan keyingi holat (tahrirlanadigan) — saqlash uchun
         var editMode = false;
@@ -654,12 +672,57 @@
             window.location.href = '{{ route("admin.reports.oqim.export") }}?' + query;
         }
 
+        // ===== Bo'lajak kontingent (yangi 1-kurs) =====
+        var CT_ROWS = [];
+        function loadContingent() {
+            var dekanFaculty = document.getElementById('dekan_faculty_id');
+            var p = {
+                academic_year: $('#projection_year').val() || '',
+                education_type_code: $('#education_type').val() || '',
+                department_id: dekanFaculty ? dekanFaculty.value : ($('#faculty').val() || ''),
+            };
+            $('#ct-body').html('<div style="color:#94a3b8;font-size:12px;">Yuklanmoqda...</div>');
+            $.get(CONTINGENT_URL, p).done(function(res){
+                // Faqat 1-kurs (yangi qabul) qatorlari
+                CT_ROWS = (res.rows || []).filter(function(r){ return r.course === 1; });
+                renderContingent();
+            }).fail(function(){ $('#ct-body').html('<div style="color:#dc2626;font-size:12px;">Xatolik.</div>'); });
+        }
+        function renderContingent() {
+            if (!CT_ROWS.length) { $('#ct-body').html('<div style="color:#94a3b8;font-size:12px;">Yo\'nalish topilmadi. (Ta\'lim turi/fakultetni tanlang)</div>'); return; }
+            var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;">' +
+                '<th style="padding:3px 6px;">Yo\'nalish</th><th style="padding:3px 6px;text-align:right;">Joriy 1-kurs</th>' +
+                '<th style="padding:3px 6px;text-align:right;">Yangi qabul (bashorat)</th><th></th></tr></thead><tbody>';
+            CT_ROWS.forEach(function(r, i){
+                h += '<tr style="border-top:1px solid #e0e7ff;">' +
+                    '<td style="padding:3px 6px;">' + esc(r.specialty_name || r.specialty_code) + ' <span style="color:#a5b4fc;font-size:10px;">' + esc(r.specialty_code) + '</span></td>' +
+                    '<td style="padding:3px 6px;text-align:right;color:#64748b;">' + (r.current_first || 0) + '</td>' +
+                    '<td style="padding:3px 6px;text-align:right;"><input type="number" min="0" value="' + (r.projected || 0) + '" data-i="' + i + '" class="ct-in" style="width:80px;text-align:right;border:1px solid #c7d2fe;border-radius:6px;padding:2px 6px;"></td>' +
+                    '<td style="padding:3px 6px;"><button type="button" class="ct-copy" data-i="' + i + '" style="background:none;border:none;color:#6366f1;cursor:pointer;font-size:11px;">↺ nusxa</button></td>' +
+                    '</tr>';
+            });
+            h += '</tbody></table>';
+            $('#ct-body').html(h);
+            $('.ct-in').on('input', function(){ CT_ROWS[+$(this).data('i')].projected = parseInt(this.value) || 0; });
+            $('.ct-copy').on('click', function(){ var i = +$(this).data('i'); CT_ROWS[i].projected = CT_ROWS[i].current_first || 0; renderContingent(); });
+        }
+        function saveContingent() {
+            var items = CT_ROWS.map(function(r){ return { specialty_code: r.specialty_code, specialty_name: r.specialty_name, level_code: r.level_code, expected_count: r.projected || 0 }; });
+            if (!items.length) return;
+            var btn = $('#ct-save').prop('disabled', true).text('...');
+            $.ajax({ url: CONTINGENT_SAVE_URL, method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRF-TOKEN': CSRF },
+                data: JSON.stringify({ academic_year: $('#projection_year').val() || '', items: items })
+            }).done(function(){ btn.text('✓ Saqlandi'); setTimeout(function(){ btn.prop('disabled', false).text('💾 Saqlash'); }, 1500); })
+              .fail(function(){ btn.prop('disabled', false).text('Xato!'); });
+        }
+
         $(document).ready(function() {
             $('.select2').each(function() {
                 $(this).select2({ theme: 'classic', width: '100%', placeholder: $(this).find('option:first').text() });
             });
 
-            // Kelasi yil (rejalashtirilgan) rejim: yil tanlovini ko'rsatish + banner
+            // Kelasi yil (rejalashtirilgan) rejim: yil tanlovini ko'rsatish + banner + kontingent paneli
             function toggleProjection() {
                 var on = $('#projection').is(':checked');
                 $('#projection_year').toggle(on).next('.select2-container').toggle(on);
@@ -669,16 +732,24 @@
                             '<div id="projection-banner" style="margin:12px 20px 0;padding:10px 14px;border-radius:8px;' +
                             'background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:13px;font-weight:600;line-height:1.5;">' +
                             '⏳ Rejalashtirilgan (kelasi yil) rejimi — <b>2-6 kurs</b> joriy talabalardan avtomatik +1 kursga suriladi. ' +
-                            '<b>Yangi 1-kurs</b> bashorati esa <u>O\'quv reja to\'g\'riligi → Bo\'lajak kontingent</u> bo\'limida ' +
-                            'tanlangan o\'quv yili uchun kiritilib <b>saqlangan</b> bo\'lishi kerak (aks holda 1-kurs chiqmaydi). ' +
-                            'Yilni shu bo\'limdagi yil bilan bir xil tanlang. Bu holat joriy tasdiqqa tegmaydi.</div>');
+                            '<b>Yangi 1-kurs</b> bashoratini quyidagi panelda kiriting va saqlang, keyin "Hisoblash". ' +
+                            'Bu holat joriy tasdiqqa tegmaydi.</div>');
                     }
                     $('#projection-banner').show();
+                    $('#contingent-panel').show();
+                    loadContingent();
                 } else {
                     $('#projection-banner').hide();
+                    $('#contingent-panel').hide();
                 }
             }
             $('#projection').on('change', toggleProjection);
+            $('#projection_year').on('change', function(){ if ($('#projection').is(':checked')) loadContingent(); });
+            $('#education_type, #faculty').on('change', function(){ if ($('#projection').is(':checked')) loadContingent(); });
+            $('#ct-copy-all').on('click', function(){
+                CT_ROWS.forEach(function(r){ r.projected = r.current_first || 0; });
+                renderContingent();
+            });
             toggleProjection();
         });
     </script>

@@ -6,6 +6,7 @@ use App\Exports\CurriculumComparisonExport;
 use App\Exports\ManualCurriculumExport;
 use App\Http\Controllers\Controller;
 use App\Imports\ManualCurriculumImport;
+use App\Models\ContingentProjection;
 use App\Models\Curriculum;
 use App\Models\ManualCurriculum;
 use App\Models\ManualCurriculumComparison;
@@ -1154,6 +1155,95 @@ class CurriculumCheckController extends Controller
         );
 
         return response()->json(['ok' => true, 'kafedra' => $kafedra]);
+    }
+
+    /**
+     * 3-BOSQICH: Bo'lajak kontingent — kelasi o'quv yili uchun har yo'nalish+kursda
+     * kutilayotgan talaba soni va undan hisoblanadigan oqim/guruh soni.
+     * Proyeksiya: joriy (k-1)-kurs talabalari kelasi yili k-kurs bo'ladi.
+     * 1-kurs = yangi qabul (joriy 1-kurs soni taxminiy default sifatida).
+     */
+    public function contingentData(Request $request)
+    {
+        $request->merge(['current_only' => true]);
+        $rows = $this->students($request)
+            ->whereNotNull('specialty_code')
+            ->selectRaw('specialty_code, MAX(specialty_name) as specialty_name, level_code, COUNT(*) as cnt')
+            ->groupBy('specialty_code', 'level_code')
+            ->get();
+
+        $cur = [];   // [specialty][course] = joriy talaba soni
+        $names = [];
+        foreach ($rows as $r) {
+            $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
+            if ($course < 1) {
+                continue;
+            }
+            $cur[$r->specialty_code][$course] = (int) $r->cnt;
+            $names[$r->specialty_code] = $r->specialty_name;
+        }
+
+        $saved = ContingentProjection::where('academic_year', $request->input('academic_year', ''))
+            ->get()->keyBy(fn($p) => $p->specialty_code . '|' . $p->level_code);
+
+        $out = [];
+        foreach ($cur as $spec => $courses) {
+            $maxCourse = max(array_keys($courses));
+            for ($k = 1; $k <= min($maxCourse + 1, 6); $k++) {
+                $prev = $k >= 2 ? ($courses[$k - 1] ?? 0) : null;   // shu kursni to'ldiradigan joriy kohort
+                $lvl  = (string) (10 + $k);
+                $ov   = $saved[$spec . '|' . $lvl] ?? null;
+                // Default bashorat: k>=2 → oldingi kurs soni; k=1 → joriy 1-kurs soni (taxminiy)
+                $default = $k >= 2 ? ($prev ?? 0) : ($courses[1] ?? 0);
+                $projected = $ov ? (int) $ov->expected_count : $default;
+
+                if (!$ov && $projected <= 0 && !$prev && $k !== 1) {
+                    continue;
+                }
+                $out[] = [
+                    'specialty_code' => $spec,
+                    'specialty_name' => $names[$spec] ?? $spec,
+                    'course'         => $k,
+                    'level_code'     => $lvl,
+                    'current_prev'   => $prev,        // k>=2: shu kursga o'tadigan joriy kohort soni
+                    'projected'      => $projected,
+                    'has_override'   => (bool) $ov,
+                ];
+            }
+        }
+
+        usort($out, fn($a, $b) => [$a['specialty_name'], $a['course']] <=> [$b['specialty_name'], $b['course']]);
+
+        return response()->json(['rows' => $out]);
+    }
+
+    public function contingentSave(Request $request)
+    {
+        $data = $request->validate([
+            'academic_year'          => 'required|string|max:50',
+            'items'                  => 'required|array|min:1',
+            'items.*.specialty_code' => 'required|string|max:50',
+            'items.*.specialty_name' => 'nullable|string|max:255',
+            'items.*.level_code'     => 'required|string|max:20',
+            'items.*.expected_count' => 'nullable|integer|min:0',
+        ]);
+
+        foreach ($data['items'] as $it) {
+            ContingentProjection::updateOrCreate(
+                [
+                    'academic_year'  => $data['academic_year'],
+                    'specialty_code' => $it['specialty_code'],
+                    'level_code'     => $it['level_code'],
+                ],
+                [
+                    'specialty_name' => $it['specialty_name'] ?? null,
+                    'expected_count' => $it['expected_count'] ?? 0,
+                    'updated_by'     => Auth::id(),
+                ]
+            );
+        }
+
+        return response()->json(['ok' => true, 'saved' => count($data['items'])]);
     }
 
     public function show(ManualCurriculum $curriculum)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ContingentProjection;
 use App\Models\Department;
 use App\Models\Curriculum;
 use App\Models\Deadline;
@@ -11117,12 +11118,23 @@ class ReportController extends Controller
         $user = auth()->user();
         $canApprove = $user && $user->hasAnyRole(['superadmin', 'admin', 'registrator_ofisi']);
 
+        // Rejalashtirilgan (kelasi yil) rejim uchun o'quv yillari:
+        // bashorat kiritilgan yillar + joriy yildan keyingi yil.
+        $projectionYears = ContingentProjection::distinct()
+            ->orderByDesc('academic_year')->pluck('academic_year')->all();
+        $nextYear = (now()->month >= 7 ? now()->year : now()->year - 1);
+        $nextYearLabel = ($nextYear + 1) . '-' . ($nextYear + 2);
+        if (!in_array($nextYearLabel, $projectionYears, true)) {
+            array_unshift($projectionYears, $nextYearLabel);
+        }
+
         return view('admin.reports.oqim', compact(
             'educationTypes',
             'selectedEducationType',
             'faculties',
             'dekanFacultyId',
-            'canApprove'
+            'canApprove',
+            'projectionYears'
         ));
     }
 
@@ -11147,6 +11159,9 @@ class ReportController extends Controller
             'merge_faculties' => (int) $request->boolean('merge_faculties'),
             'goal'            => (string) $request->get('goal', 'fill'),
             'kurs'            => $request->input('kurs', []),
+            // Rejalashtirilgan (kelasi yil) snapshot joriy tasdiqdan alohida saqlanadi
+            'projection'      => (int) $request->boolean('projection'),
+            'academic_year'   => (string) $request->get('academic_year', ''),
         ];
         return hash('sha256', json_encode($ctx));
     }
@@ -11491,6 +11506,13 @@ class ReportController extends Controller
 
         $rows = $q->get();
 
+        // ---- Kelasi yil (rejalashtirilgan) rejim ----
+        // Joriy talabalarni +1 kursga suramiz, yangi 1-kursni bashoratdan qo'shamiz.
+        // O'chirilgan (projection=0) holda hech narsa o'zgarmaydi.
+        if ($request->boolean('projection')) {
+            $rows = $this->applyOqimProjection($rows, $request);
+        }
+
         // Guruhlarning ta'lim tili (rus/ingliz oqimlarini alohida ajratish uchun)
         $langMap = DB::table('groups')
             ->whereNotNull('group_hemis_id')
@@ -11662,6 +11684,118 @@ class ReportController extends Controller
      * oladi; fakultetlararo oqim ko'chirish faqat shu kalit doirasida bo'ladi.
      * Bloklar tartiblangan holda qaytariladi.
      */
+    /**
+     * Kelasi yil (rejalashtirilgan) proyeksiya:
+     *  - Joriy talabalarni +1 kursga suradi (real guruhlar, tillar saqlanadi).
+     *    Bitiruvchi kurs (yo'nalish o'qish muddatidan oshsa) tushib qoladi.
+     *  - Yangi 1-kursni ContingentProjection bashoratidan sun'iy guruhlar sifatida qo'shadi.
+     * Natijada mavjud optimizator o'zgarishsiz kelasi yil oqimini quradi.
+     */
+    private function applyOqimProjection($rows, Request $request)
+    {
+        $academicYear = (string) $request->get('academic_year', '');
+
+        // Yo'nalish o'qish muddati (yil) — bitiruvchi kursni tushirish uchun
+        $periodMap = DB::table('curricula')
+            ->whereNotNull('education_period')
+            ->selectRaw('specialty_hemis_id, MAX(education_period) as p')
+            ->groupBy('specialty_hemis_id')
+            ->pluck('p', 'specialty_hemis_id');
+
+        // 1) Joriy talabalarni +1 kursga surish
+        $out = [];
+        foreach ($rows as $r) {
+            $course = (int) $r->level_code - 10;
+            if ($course < 1) {
+                continue;
+            }
+            $newCourse = $course + 1;
+            $period = (int) ($periodMap[$r->specialty_id] ?? 6);
+            if ($newCourse > $period) {
+                continue; // bitirdi
+            }
+            $nr = clone $r;
+            $nr->level_code = (string) (10 + $newCourse);
+            $nr->level_name = $newCourse . '-kurs';
+            $out[] = $nr;
+        }
+
+        // 2) Yangi 1-kurs — bashoratdan sun'iy guruhlar
+        $facHemis = null;
+        $facId = get_dekan_faculty_id() ?: $request->get('faculty');
+        if ($facId) {
+            $facHemis = optional(Department::find($facId))->department_hemis_id;
+        }
+
+        // Joriy 1-kurs bo'yicha fakultet ulushi (yangi qabulni fakultetlarga taqsimlash uchun)
+        $fyQuery = DB::table('students')
+            ->where('student_status_code', 11)
+            ->where('level_code', '11')
+            ->whereNotNull('specialty_code');
+        if ($request->filled('education_type')) {
+            $fyQuery->where('education_type_code', $request->education_type);
+        }
+        $fy = $fyQuery->selectRaw('specialty_code, department_id, department_name, specialty_id, COUNT(*) as c')
+            ->groupBy('specialty_code', 'department_id', 'department_name', 'specialty_id')
+            ->get()->groupBy('specialty_code');
+
+        $proj = ContingentProjection::where('academic_year', $academicYear)
+            ->where('level_code', '11')
+            ->where('expected_count', '>', 0)
+            ->get();
+
+        $abMax    = max(1, (int) $request->get('ab_max', 15));
+        $baseSize = max(10, 2 * $abMax); // to'liq guruh o'lchami (~30)
+        $synthId  = -1;
+
+        foreach ($proj as $p) {
+            $shares = $fy[$p->specialty_code] ?? collect();
+            if ($shares->isEmpty()) {
+                // Yangi yo'nalish (joriy 1-kurs yo'q) — specialties dan fakultet olamiz
+                $sp = DB::table('specialties')->where('code', $p->specialty_code)
+                    ->select('department_hemis_id as department_id', 'department_name', 'specialty_hemis_id as specialty_id')
+                    ->first();
+                if (!$sp) {
+                    continue;
+                }
+                $shares = collect([$sp]);
+                $shares[0]->c = 1;
+            }
+            $totShare = max(1, $shares->sum('c'));
+
+            foreach ($shares as $sh) {
+                if ($facHemis && (int) $sh->department_id !== (int) $facHemis) {
+                    continue;
+                }
+                $n = (int) round($p->expected_count * $sh->c / $totShare);
+                if ($n <= 0) {
+                    continue;
+                }
+                $groups = max(1, (int) ceil($n / $baseSize));
+                for ($g = 0; $g < $groups; $g++) {
+                    $cnt = intdiv($n, $groups) + ($g < ($n % $groups) ? 1 : 0);
+                    if ($cnt <= 0) {
+                        continue;
+                    }
+                    $out[] = (object) [
+                        'department_id'   => $sh->department_id,
+                        'department_name' => $sh->department_name,
+                        'specialty_id'    => $sh->specialty_id,
+                        'specialty_name'  => $p->specialty_name ?: $p->specialty_code,
+                        'level_code'      => '11',
+                        'level_name'      => '1-kurs',
+                        'group_id'        => $synthId--,
+                        // Raqamga tugaydigan nom — a/b harf sifatida ajralib ketmasligi uchun
+                        'group_name'      => 'Y1K' . $sh->specialty_id . '-' . ($g + 1),
+                        'cnt'             => $cnt,
+                    ];
+                }
+            }
+        }
+
+        return collect($out);
+    }
+
     private function assembleOqimBlocks(
         $rows, array $excludedIds, array $trackMap,
         string $talimFilter, $langMap, array $overrideLang

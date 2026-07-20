@@ -96,6 +96,19 @@
                                 <span class="ff-state"></span>
                             </label>
                         </div>
+                        <div class="norm-group" title="Kelasi o'quv yili uchun rejalashtirilgan oqim: joriy talabalar +1 kursga suriladi, yangi 1-kurs bashoratdan (Bo'lajak kontingent) qo'shiladi. Joriy tasdiqlangan holatga tegmaydi — alohida saqlanadi.">
+                            <span class="norm-title">Kelasi yil (reja)</span>
+                            <label class="ff-toggle">
+                                <input type="checkbox" id="projection">
+                                <span class="ff-slider"></span>
+                                <span class="ff-state"></span>
+                            </label>
+                            <select id="projection_year" class="select2" style="width:130px;margin-top:4px;display:none;">
+                                @foreach($projectionYears as $py)
+                                    <option value="{{ $py }}">{{ $py }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="filter-item" style="min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
@@ -276,6 +289,11 @@
                 kurs: kurs,
                 optimize: optimize ? 1 : 0,
             };
+            // Kelasi yil (rejalashtirilgan) rejim — joriy va optimizatsiya so'rovlariga ham qo'llanadi
+            if ($('#projection').is(':checked')) {
+                f.projection = 1;
+                f.academic_year = $('#projection_year').val() || '';
+            }
             // Fakultetlararo optimizatsiya va maqsad FAQAT optimizatsiyalangan holatga
             // qo'llanadi — joriy (tasdiqlangan) holat hech qachon o'zgarmaydi.
             if (optimize) {
@@ -640,6 +658,26 @@
             $('.select2').each(function() {
                 $(this).select2({ theme: 'classic', width: '100%', placeholder: $(this).find('option:first').text() });
             });
+
+            // Kelasi yil (rejalashtirilgan) rejim: yil tanlovini ko'rsatish + banner
+            function toggleProjection() {
+                var on = $('#projection').is(':checked');
+                $('#projection_year').toggle(on).next('.select2-container').toggle(on);
+                if (on) {
+                    if (!$('#projection-banner').length) {
+                        $('#result-area').prepend(
+                            '<div id="projection-banner" style="margin:12px 20px 0;padding:10px 14px;border-radius:8px;' +
+                            'background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:13px;font-weight:600;">' +
+                            '⏳ Rejalashtirilgan (kelasi yil) rejimi — joriy talabalar +1 kursga surilgan, yangi 1-kurs ' +
+                            'bashoratdan. Bu holat joriy tasdiqqa tegmaydi, alohida saqlanadi.</div>');
+                    }
+                    $('#projection-banner').show();
+                } else {
+                    $('#projection-banner').hide();
+                }
+            }
+            $('#projection').on('change', toggleProjection);
+            toggleProjection();
         });
     </script>
 

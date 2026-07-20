@@ -876,6 +876,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/subjects-summary/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'subjectsSummaryExport'])->name('subjects-summary.export');
                 Route::get('/kafedra-list', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'kafedraList'])->name('kafedra-list');
                 Route::post('/set-kafedra', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setKafedra'])->name('set-kafedra');
+                Route::get('/contingent', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentData'])->name('contingent');
+                Route::post('/contingent/save', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentSave'])->name('contingent.save');
                 Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
                 Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
                 Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');

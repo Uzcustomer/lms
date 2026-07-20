@@ -11147,6 +11147,7 @@ class ReportController extends Controller
             'merge_faculties' => (int) $request->boolean('merge_faculties'),
             'goal'            => (string) $request->get('goal', 'fill'),
             'kurs'            => $request->input('kurs', []),
+            'reja'            => (int) $request->boolean('reja'),
         ];
         return hash('sha256', json_encode($ctx));
     }
@@ -11540,9 +11541,14 @@ class ReportController extends Controller
         // birlashmaydi. Bayroq FAQAT optimizatsiya so'rovida yuboriladi.
         $crossFaculty = $request->boolean('merge_faculties');
 
+        // REJA: keyingi o'quv yili — talabalar bir kursga ko'chirilgan holda (1->2 ... 5->6)
+        // hisoblanadi; hozirgi 6-kurs bitiruvchi sifatida chiqariladi. Yagona farq shu —
+        // qolgan barcha logika (me'yorlar, maqsadlar, optimizatsiya) o'zgarmaydi.
+        $reja = $request->boolean('reja');
+
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar (fakultetlar alohida) ----
         $blocks = $this->assembleOqimBlocks(
-            $rows, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang
+            $rows, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang, $reja
         );
 
         // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----
@@ -11664,7 +11670,7 @@ class ReportController extends Controller
      */
     private function assembleOqimBlocks(
         $rows, array $excludedIds, array $trackMap,
-        string $talimFilter, $langMap, array $overrideLang
+        string $talimFilter, $langMap, array $overrideLang, bool $reja = false
     ): array {
         $blocks = [];
         foreach ($rows as $r) {
@@ -11677,6 +11683,19 @@ class ReportController extends Controller
             $track = $trackMap[(int) $r->group_id] ?? 'oddiy';
             if ($talimFilter !== 'all' && $track !== $talimFilter) {
                 continue;
+            }
+
+            // REJA: kurs +1 ga ko'chiriladi (1->2 ... 5->6); hozirgi 6-kurs bitiruvchi —
+            // hisobdan chiqadi. Me'yorlar/qoidalar YANGI kursga qarab qo'llanadi.
+            $lvlCode = (string) $r->level_code;
+            $lvlName = $r->level_name ?: ($r->level_code . '-kurs');
+            if ($reja) {
+                $lnum = $this->oqimLevelNumber($r->level_name, (string) $r->level_code);
+                if ($lnum >= 6) {
+                    continue; // bitiruvchi
+                }
+                $lvlCode = (string) ($lnum + 1);
+                $lvlName = ($lnum + 1) . '-kurs';
             }
 
             // Blok kaliti — HAQIQIY fakultet + yo'nalish NOMI + ta'lim turi bo'yicha
@@ -11702,11 +11721,11 @@ class ReportController extends Controller
                     'courses'         => [],
                 ];
             }
-            $lvlKey = (string) $r->level_code;
+            $lvlKey = $lvlCode;
             if (!isset($blocks[$blockKey]['courses'][$lvlKey])) {
                 $blocks[$blockKey]['courses'][$lvlKey] = [
-                    'level_code' => $r->level_code,
-                    'level_name' => $r->level_name ?: ($r->level_code . '-kurs'),
+                    'level_code' => $lvlCode,
+                    'level_name' => $lvlName,
                     'groups'     => [],
                 ];
             }

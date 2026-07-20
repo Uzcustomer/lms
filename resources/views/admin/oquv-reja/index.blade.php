@@ -2058,8 +2058,17 @@
                         function esc(s){return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
                         async function loadNorms() {
-                            norms = await (await fetch(normsUrl, {headers:{'Accept':'application/json'}})).json();
+                            try {
+                                norms = await (await fetch(normsUrl, {headers:{'Accept':'application/json'}})).json();
+                            } catch (e) { norms = []; }
+                            if (!Array.isArray(norms)) norms = [];
                             normSel.innerHTML = norms.map(n => '<option value="' + n.annual_hours + '">' + esc(n.position) + ' — ' + n.annual_hours + ' soat</option>').join('');
+                            // Ro'yxat bo'sh bo'lsa — bitta namunaviy qator qo'shib, tahrir panelini
+                            // ochamiz. Shunda foydalanuvchi darrov lavozimlarni kiritib saqlay oladi.
+                            if (!norms.length) {
+                                norms = [{position:'Assistent', annual_hours:900}];
+                                document.getElementById('td-norms-panel').classList.remove('hidden');
+                            }
                             renderNormsEditor();
                         }
                         function renderNormsEditor() {
@@ -2072,15 +2081,24 @@
                         document.getElementById('td-norms-btn').addEventListener('click', () => document.getElementById('td-norms-panel').classList.toggle('hidden'));
                         document.getElementById('td-norm-add').addEventListener('click', () => { norms.push({position:'Yangi lavozim', annual_hours:900}); renderNormsEditor(); });
                         document.getElementById('td-norms-save').addEventListener('click', async function () {
+                            const btn = this;
                             const items = [...document.querySelectorAll('#td-norms-rows > div')].map(d => ({
                                 position: d.querySelector('.td-nm-pos').value.trim(),
                                 annual_hours: parseInt(d.querySelector('.td-nm-hrs').value) || 900,
                             })).filter(x => x.position);
+                            if (!items.length) { alert('Kamida bitta lavozim kiriting.'); return; }
                             const fd = new FormData(); fd.append('_token', csrf2);
                             items.forEach((it,i) => { fd.append('items['+i+'][position]', it.position); fd.append('items['+i+'][annual_hours]', it.annual_hours); });
-                            await fetch(normsSave, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
-                            await loadNorms();
-                            document.getElementById('td-norms-panel').classList.add('hidden');
+                            const old = btn.textContent; btn.disabled = true; btn.textContent = 'Saqlanmoqda...';
+                            try {
+                                const res = await fetch(normsSave, {method:'POST', body:fd, headers:{'Accept':'application/json','X-CSRF-TOKEN':csrf2||''}});
+                                if (!res.ok) throw new Error('Server javobi: ' + res.status);
+                                await loadNorms();
+                                document.getElementById('td-norms-panel').classList.add('hidden');
+                                if (lastResult) run();
+                            } catch (e) {
+                                alert('Saqlashda xatolik: ' + e.message + '.\nSahifani yangilab qayta urinib ko\'ring.');
+                            } finally { btn.disabled = false; btn.textContent = old; }
                         });
 
                         function num(v){ return (Math.round((v||0)*10)/10).toLocaleString('ru-RU'); }
@@ -2171,6 +2189,10 @@
                         document.querySelector('.main-tab[data-tab="oqituvchi"]').addEventListener('click', () => {
                             if (!loadedOnce) { loadedOnce = true; loadNorms(); if (year.options.length) run(); }
                         });
+                        // URL to'g'ridan-to'g'ri #oqituvchi bilan ochilsa ham normalarni yuklaymiz
+                        if ((location.hash || '').replace('#','') === 'oqituvchi') {
+                            loadedOnce = true; loadNorms(); if (year.options.length) run();
+                        }
                     })();
                 })();
             </script>

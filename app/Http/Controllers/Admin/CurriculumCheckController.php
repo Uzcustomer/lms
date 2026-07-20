@@ -1190,6 +1190,7 @@ class CurriculumCheckController extends Controller
                     'course'         => $k,
                     'level_code'     => $lvl,
                     'current_prev'   => $prev,        // k>=2: shu kursga o'tadigan joriy kohort soni
+                    'current_first'  => $courses[1] ?? 0,  // joriy 1-kurs (yangi qabulga nusxa uchun)
                     'projected'      => $projected,
                     'has_override'   => (bool) $ov,
                 ];

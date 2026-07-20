@@ -11745,8 +11745,10 @@ class ReportController extends Controller
             ->where('expected_count', '>', 0)
             ->get();
 
-        $abMax    = max(1, (int) $request->get('ab_max', 15));
-        $baseSize = max(10, 2 * $abMax); // to'liq guruh o'lchami (~30)
+        // 1-kurs guruhcha (kichik guruh) o'lchami — norma kartochkasidan (kurs[1].sub_max), bo'lmasa ab_max
+        $subSize  = (int) ($request->input('kurs.1.sub_max') ?: $request->get('ab_max', 15));
+        $subSize  = max(1, $subSize);
+        $subCount = 2; // 1-kurs: a,b guruhchalar
         $synthId  = -1;
 
         foreach ($proj as $p) {
@@ -11782,12 +11784,16 @@ class ReportController extends Controller
                 if ($n <= 0) {
                     continue;
                 }
-                $groups = max(1, (int) ceil($n / $baseSize));
-                for ($g = 0; $g < $groups; $g++) {
-                    $cnt = intdiv($n, $groups) + ($g < ($n % $groups) ? 1 : 0);
+                // Guruhchalar soni (~subSize kishidan), a/b tarzida bazaviy guruhlarga taqsimlanadi.
+                // Nom: "1K-01a", "1K-01b", ... — a/b guruhchalar ko'rinib turishi uchun (keyin qayta nomlanadi).
+                $nSub = max(1, (int) round($n / $subSize));
+                for ($si = 0; $si < $nSub; $si++) {
+                    $cnt = intdiv($n, $nSub) + ($si < ($n % $nSub) ? 1 : 0);
                     if ($cnt <= 0) {
                         continue;
                     }
+                    $baseNum = intdiv($si, $subCount) + 1;
+                    $letter  = chr(97 + ($si % $subCount)); // a, b
                     $out[] = (object) [
                         'department_id'   => $sh->department_id,
                         'department_name' => $sh->department_name,
@@ -11796,8 +11802,7 @@ class ReportController extends Controller
                         'level_code'      => '11',
                         'level_name'      => '1-kurs',
                         'group_id'        => $synthId--,
-                        // Raqamga tugaydigan nom — a/b harf sifatida ajralib ketmasligi uchun
-                        'group_name'      => 'Y1K' . $sh->specialty_id . '-' . ($g + 1),
+                        'group_name'      => '1K-' . str_pad((string) $baseNum, 2, '0', STR_PAD_LEFT) . $letter,
                         'cnt'             => $cnt,
                     ];
                 }

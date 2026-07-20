@@ -405,9 +405,18 @@
                             var first = (r === 0), last = (r === oq.rows.length - 1);
                             var row = oq.rows[r];
                             html += '<tr class="' + lc + (first ? ' oq-first' : '') + (last ? ' oq-last' : '') + (row.visitor ? ' oq-visitor' : '') + '">';
-                            if (first) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum" data-oqt="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>' + (oq.has_visitor ? '<span class="oq-mix">fakultetlararo</span>' : '') + '</td>';
-                            html += '<td class="oq-grp">' + esc(row.name)
-                                 + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from) + '</span>' : '') + '</td>';
+                            if (first) {
+                                var labelCell = editable
+                                    ? '<input class="label-in" value="' + esc(oq.label) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" style="width:66px;font-weight:700;font-size:11px;border:1px solid #cbd5e1;border-radius:4px;padding:1px 3px;">'
+                                    : esc(oq.label);
+                                html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + labelCell + '<span class="oq-sum" data-oqt="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>' + (oq.has_visitor ? '<span class="oq-mix">fakultetlararo</span>' : '') + '</td>';
+                            }
+                            if (editable) {
+                                html += '<td class="oq-grp"><input class="grp-in" value="' + esc(row.name) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r + '" style="width:140px;font-size:11px;border:1px solid #cbd5e1;border-radius:4px;padding:1px 4px;"></td>';
+                            } else {
+                                html += '<td class="oq-grp">' + esc(row.name)
+                                     + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from) + '</span>' : '') + '</td>';
+                            }
                             if (editable) {
                                 html += '<td class="oq-cnt"><input class="cnt-in" type="number" min="0" value="' + esc(row.count) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r + '"></td>';
                             } else {
@@ -482,6 +491,17 @@
             $('#edit-hint').toggle(editMode);
             renderAfterBody();
         }
+
+        // Guruh nomini tahrirlash
+        $(document).on('input', '#opt-body .grp-in', function() {
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o'), r = +$(this).data('r');
+            afterState[b].courses[c].oqims[o].rows[r].name = this.value;
+        });
+        // Oqim nomini (label) tahrirlash
+        $(document).on('input', '#opt-body .label-in', function() {
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o');
+            afterState[b].courses[c].oqims[o].label = this.value;
+        });
 
         // Talaba sonini tahrirlaganda — jami (oqim/kurs/umumiy) avtomatik yangilanadi.
         $(document).on('input', '#opt-body .cnt-in', function() {

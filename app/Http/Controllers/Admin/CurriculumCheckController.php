@@ -1184,7 +1184,12 @@ class CurriculumCheckController extends Controller
         }
 
         $saved = ContingentProjection::where('academic_year', $request->input('academic_year', ''))
-            ->get()->keyBy(fn($p) => $p->specialty_code . '|' . $p->level_code);
+            ->get();
+        // Til bilan: [specialty|level|lang] => yozuv
+        $savedByLang = $saved->keyBy(fn($p) => $p->specialty_code . '|' . $p->level_code . '|' . ($p->lang ?: 'uz'));
+
+        // Joriy 1-kurs talabalarining til bo'yicha taqsimoti (yangi qabul uchun default)
+        $curLangSplit = $this->contingentCurrentFirstYearLangSplit($request); // [specialty] => [uz,rus,ing]
 
         $out = [];
         foreach ($cur as $spec => $courses) {
@@ -1192,23 +1197,46 @@ class CurriculumCheckController extends Controller
             for ($k = 1; $k <= min($maxCourse + 1, 6); $k++) {
                 $prev = $k >= 2 ? ($courses[$k - 1] ?? 0) : null;   // shu kursni to'ldiradigan joriy kohort
                 $lvl  = (string) (10 + $k);
-                $ov   = $saved[$spec . '|' . $lvl] ?? null;
-                // Default bashorat: k>=2 → oldingi kurs soni; k=1 → joriy 1-kurs soni (taxminiy)
-                $default = $k >= 2 ? ($prev ?? 0) : ($courses[1] ?? 0);
-                $projected = $ov ? (int) $ov->expected_count : $default;
 
-                if (!$ov && $projected <= 0 && !$prev && $k !== 1) {
+                if ($k === 1) {
+                    // 1-kurs (yangi qabul) — TIL bo'yicha alohida
+                    $split = $curLangSplit[(string) $spec] ?? ['uz' => ($courses[1] ?? 0), 'rus' => 0, 'ing' => 0];
+                    $langs = [];
+                    $hasOv = false;
+                    foreach (['uz', 'rus', 'ing'] as $lg) {
+                        $ov = $savedByLang[$spec . '|' . $lvl . '|' . $lg] ?? null;
+                        $langs[$lg] = $ov ? (int) $ov->expected_count : (int) ($split[$lg] ?? 0);
+                        if ($ov) { $hasOv = true; }
+                    }
+                    $out[] = [
+                        'specialty_code' => (string) $spec,
+                        'specialty_name' => $names[$spec] ?? (string) $spec,
+                        'course'         => 1,
+                        'level_code'     => $lvl,
+                        'current_prev'   => null,
+                        'current_first'  => $courses[1] ?? 0,
+                        'langs'          => $langs,     // {uz, rus, ing} — saqlangan yoki joriy split
+                        'cur_langs'      => ['uz' => (int) ($split['uz'] ?? 0), 'rus' => (int) ($split['rus'] ?? 0), 'ing' => (int) ($split['ing'] ?? 0)],
+                        'projected'      => array_sum($langs),
+                        'has_override'   => $hasOv,
+                    ];
+                    continue;
+                }
+
+                // 2+ kurs — joriy talabalardan avtomatik (til bu yerda kiritilmaydi).
+                // Bo'sh (oldingi kurs yo'q) kurslarni chiqarmaymiz.
+                if ((int) ($prev ?? 0) <= 0) {
                     continue;
                 }
                 $out[] = [
-                    'specialty_code' => (string) $spec,   // PHP raqamli kalitni int qiladi — string'ga qaytaramiz
+                    'specialty_code' => (string) $spec,
                     'specialty_name' => $names[$spec] ?? (string) $spec,
                     'course'         => $k,
                     'level_code'     => $lvl,
-                    'current_prev'   => $prev,        // k>=2: shu kursga o'tadigan joriy kohort soni
-                    'current_first'  => $courses[1] ?? 0,  // joriy 1-kurs (yangi qabulga nusxa uchun)
-                    'projected'      => $projected,
-                    'has_override'   => (bool) $ov,
+                    'current_prev'   => $prev,
+                    'current_first'  => $courses[1] ?? 0,
+                    'projected'      => $prev ?? 0,
+                    'has_override'   => false,
                 ];
             }
         }
@@ -1216,22 +1244,32 @@ class CurriculumCheckController extends Controller
         // Joriy talabasi yo'q, lekin bashorat saqlangan yangi yo'nalishlar (1-kurs) ham ko'rinsin
         $present = collect($out)->filter(fn($r) => $r['course'] === 1)
             ->keyBy('specialty_code');
+        // Yangi yo'nalishlarni til bo'yicha yig'amiz
+        $newSpecs = [];
         foreach ($saved as $ov) {
             if ((string) $ov->level_code !== '11' || $present->has($ov->specialty_code)) {
                 continue;
             }
-            $out[] = [
-                'specialty_code'  => $ov->specialty_code,
-                'specialty_name'  => $ov->specialty_name ?: $ov->specialty_code,
-                'course'          => 1,
-                'level_code'      => '11',
-                'current_prev'    => null,
-                'current_first'   => 0,
-                'department_id'   => $ov->department_id,
-                'department_name' => $ov->department_name,
-                'projected'       => (int) $ov->expected_count,
-                'has_override'    => true,
-            ];
+            $sc = $ov->specialty_code;
+            if (!isset($newSpecs[$sc])) {
+                $newSpecs[$sc] = [
+                    'specialty_code'  => $sc,
+                    'specialty_name'  => $ov->specialty_name ?: $sc,
+                    'course'          => 1,
+                    'level_code'      => '11',
+                    'current_prev'    => null,
+                    'current_first'   => 0,
+                    'department_id'   => $ov->department_id,
+                    'department_name' => $ov->department_name,
+                    'langs'           => ['uz' => 0, 'rus' => 0, 'ing' => 0],
+                    'has_override'    => true,
+                ];
+            }
+            $newSpecs[$sc]['langs'][$ov->lang ?: 'uz'] = (int) $ov->expected_count;
+        }
+        foreach ($newSpecs as $row) {
+            $row['projected'] = array_sum($row['langs']);
+            $out[] = $row;
         }
 
         usort($out, fn($a, $b) => [$a['specialty_name'], $a['course']] <=> [$b['specialty_name'], $b['course']]);
@@ -1247,11 +1285,13 @@ class CurriculumCheckController extends Controller
             'items.*.specialty_code'   => 'required|string|max:50',
             'items.*.specialty_name'   => 'nullable|string|max:255',
             'items.*.level_code'       => 'required|string|max:20',
+            'items.*.lang'             => 'nullable|string|in:uz,rus,ing',
             'items.*.department_id'    => 'nullable',
             'items.*.department_name'  => 'nullable|string|max:255',
             'items.*.expected_count'   => 'nullable|integer|min:0',
         ]);
 
+        $n = 0;
         foreach ($data['items'] as $it) {
             // Fakultet mahalliy id sifatida kelsa — oqim proyeksiyasi uchun HEMIS id ga o'giramiz
             $deptId = $it['department_id'] ?? null;
@@ -1261,11 +1301,13 @@ class CurriculumCheckController extends Controller
                     $deptId = $hemis;
                 }
             }
+            $lang = $it['lang'] ?? 'uz';
             ContingentProjection::updateOrCreate(
                 [
                     'academic_year'  => $data['academic_year'],
                     'specialty_code' => $it['specialty_code'],
                     'level_code'     => $it['level_code'],
+                    'lang'           => $lang,
                 ],
                 [
                     'specialty_name'  => $it['specialty_name'] ?? null,
@@ -1275,9 +1317,48 @@ class CurriculumCheckController extends Controller
                     'updated_by'      => Auth::id(),
                 ]
             );
+            $n++;
         }
 
-        return response()->json(['ok' => true, 'saved' => count($data['items'])]);
+        return response()->json(['ok' => true, 'saved' => $n]);
+    }
+
+    /**
+     * Joriy 1-kurs talabalarining yo'nalish + til bo'yicha taqsimoti (yangi qabul
+     * bashorati uchun default). Qaytaradi: [specialty_code => ['uz'=>n,'rus'=>n,'ing'=>n]].
+     */
+    private function contingentCurrentFirstYearLangSplit(Request $request): array
+    {
+        $q = DB::table('students as s')
+            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 's.group_id')
+            ->where('s.student_status_code', 11)
+            ->where('s.level_code', '11')
+            ->whereNotNull('s.specialty_code');
+        if ($request->filled('education_type_code')) {
+            $q->where('s.education_type_code', $request->education_type_code);
+        }
+        if ($request->filled('department_id')) {
+            $q->where('s.department_id', $request->department_id);
+        }
+        $rows = $q->selectRaw('s.specialty_code, g.education_lang_name as lang_name, s.group_name, COUNT(*) as c')
+            ->groupBy('s.specialty_code', 'g.education_lang_name', 's.group_name')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $sc = (string) $r->specialty_code;
+            if (!isset($out[$sc])) { $out[$sc] = ['uz' => 0, 'rus' => 0, 'ing' => 0]; }
+            $s = mb_strtolower(trim(($r->lang_name ?? '') . ' ' . ($r->group_name ?? '')));
+            if (str_contains($s, 'рус') || str_contains($s, 'rus') || str_contains($s, '(rus')) {
+                $out[$sc]['rus'] += (int) $r->c;
+            } elseif (str_contains($s, 'ingl') || str_contains($s, 'engl') || str_contains($s, 'англ')
+                || str_contains($s, '(ing') || str_contains($s, '(ang')) {
+                $out[$sc]['ing'] += (int) $r->c;
+            } else {
+                $out[$sc]['uz'] += (int) $r->c;
+            }
+        }
+        return $out;
     }
 
     public function show(ManualCurriculum $curriculum)

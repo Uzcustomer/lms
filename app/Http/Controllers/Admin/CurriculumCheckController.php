@@ -58,6 +58,12 @@ class CurriculumCheckController extends Controller
             ->groupBy('curricula_hemis_id');
         $groupedComparisons = $curricula->where('type', 'namunaviy')
             ->filter(fn ($c) => $c->curricula_hemis_id && $ishchiByHemis->has($c->curricula_hemis_id))
+            // Bir HEMIS reja uchun bir nechta namunaviy yuklangan bo'lsa, faqat
+            // kanonigini (eng to'liq) qoldiramiz — aks holda ro'yxatda dublikat
+            // qatorlar chiqadi va kam fanli namunaviy solishtirishga tushib qolib,
+            // ishchi rejadagi fanlar noto'g'ri "Namunaviy rejada yo'q" bo'ladi.
+            ->groupBy('curricula_hemis_id')
+            ->map(fn ($group) => $group->sortByDesc(fn ($c) => ManualCurriculum::canonicalRank($c))->first())
             ->map(fn ($c) => [
                 'reference' => $c,
                 'workings'  => $ishchiByHemis[$c->curricula_hemis_id]
@@ -303,6 +309,7 @@ class CurriculumCheckController extends Controller
         try {
             $firstCurriculum = null;
             $import          = null;
+            $createdIds      = [];
 
             foreach ($semCodes as $i => $semCode) {
                 $semInfo   = $semCode ? ($semesterInfo[$semCode] ?? null) : null;
@@ -330,6 +337,7 @@ class CurriculumCheckController extends Controller
                     'file_path'          => $filePath,
                     'created_by'         => Auth::id(),
                 ]);
+                $createdIds[] = $curriculum->id;
 
                 if ($i === 0) {
                     // Birinchi semestr: Exceldan import
@@ -385,12 +393,30 @@ class CurriculumCheckController extends Controller
                 }
             }
 
+            // Bir HEMIS o'quv reja uchun namunaviy BITTA bo'lishi shart. Yangi
+            // namunaviy muvaffaqiyatli yuklangach, xuddi shu HEMIS rejaga tegishli
+            // eski namunaviy(lar) almashtiriladi (o'chiriladi) — fanlari va saqlangan
+            // solishtirishlari kaskad orqali tozalanadi. Shunda dublikat va noto'g'ri
+            // "Namunaviy rejada yo'q" natijalari qaytmaydi.
+            $replaced = 0;
+            if ($request->type === 'namunaviy' && $hemisCurriculum->curricula_hemis_id) {
+                $replaced = ManualCurriculum::where('type', 'namunaviy')
+                    ->where('curricula_hemis_id', $hemisCurriculum->curricula_hemis_id)
+                    ->whereNotIn('id', $createdIds)
+                    ->get()
+                    ->each(fn ($old) => $old->delete())
+                    ->count();
+            }
+
             DB::commit();
 
             $semCount = count($semCodes);
             $msg = $semCount > 1
                 ? "{$semCount} ta semestr uchun o'quv reja yuklandi: {$import->imported} ta fan qatori."
                 : "O'quv reja yuklandi: {$import->imported} ta fan qatori o'qib olindi.";
+            if ($replaced > 0) {
+                $msg .= " Shu HEMIS reja uchun eski namunaviy ({$replaced} ta) almashtirildi.";
+            }
 
             return redirect()->route('admin.oquv-reja.show', $firstCurriculum)->with('success', $msg);
         } catch (\Exception $e) {
@@ -589,9 +615,10 @@ class CurriculumCheckController extends Controller
 
             DB::beginTransaction();
             try {
-                $master      = null;
-                $masterRows  = null;
-                $itemCreated = 0;
+                $master          = null;
+                $masterRows      = null;
+                $itemCreated     = 0;
+                $createdIdsByCid = [];
 
                 foreach ($curricIds as $cid) {
                     $hemisCurriculum = $curricula[$cid] ?? null;
@@ -632,6 +659,7 @@ class CurriculumCheckController extends Controller
                             'file_path'           => $filePath,
                             'created_by'          => Auth::id(),
                         ]);
+                        $createdIdsByCid[$cid][] = $curriculum->id;
 
                         if ($master === null) {
                             // Birinchi juftlik: Exceldan import
@@ -683,6 +711,20 @@ class CurriculumCheckController extends Controller
                             ])->toArray());
                         }
                         $itemCreated++;
+                    }
+                }
+
+                // Namunaviy uchun: har bir HEMIS reja bo'yicha yangi namunaviy
+                // yuklangach, o'sha rejaga tegishli eski namunaviy(lar) almashtiriladi
+                // (bir HEMIS reja = bitta namunaviy). Fanlar va solishtirishlar kaskad
+                // orqali o'chadi.
+                if ($type === 'namunaviy') {
+                    foreach ($createdIdsByCid as $cid => $newIds) {
+                        ManualCurriculum::where('type', 'namunaviy')
+                            ->where('curricula_hemis_id', $cid)
+                            ->whereNotIn('id', $newIds)
+                            ->get()
+                            ->each(fn ($old) => $old->delete());
                     }
                 }
 
@@ -1574,6 +1616,21 @@ class CurriculumCheckController extends Controller
 
         $reference = ManualCurriculum::findOrFail($request->reference_id);
         abort_unless($reference->type === 'namunaviy', 404);
+
+        // Bir HEMIS reja uchun bir nechta namunaviy bo'lsa, solishtirish har doim
+        // kanonik (eng to'liq) namunaviyga tayanadi — havolada eski/kam fanli
+        // dublikat ko'rsatilgan bo'lsa ham to'g'ri natija chiqadi.
+        if ($reference->curricula_hemis_id) {
+            $canonical = ManualCurriculum::where('type', 'namunaviy')
+                ->where('curricula_hemis_id', $reference->curricula_hemis_id)
+                ->withCount('subjects')
+                ->get()
+                ->sortByDesc(fn ($c) => ManualCurriculum::canonicalRank($c))
+                ->first();
+            if ($canonical) {
+                $reference = $canonical;
+            }
+        }
 
         $workings = ManualCurriculum::where('type', 'ishchi')
             ->when($reference->curricula_hemis_id,

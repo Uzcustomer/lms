@@ -1521,9 +1521,27 @@ class CurriculumCheckController extends Controller
 
     // ===== 4-BOSQICH: O'qituvchilar ehtiyoji =====
 
-    /** O'qituvchi lavozim normalari ro'yxati. */
+    /** O'qituvchi lavozim normalari uchun sukut (default) ro'yxati. */
+    private function defaultTeacherNorms(): array
+    {
+        return [
+            ['position' => 'Assistent',        'annual_hours' => 900],
+            ['position' => "Katta o'qituvchi", 'annual_hours' => 800],
+            ['position' => 'Dotsent',          'annual_hours' => 750],
+            ['position' => 'Professor',        'annual_hours' => 700],
+        ];
+    }
+
+    /** O'qituvchi lavozim normalari ro'yxati. Bo'sh bo'lsa sukut normalar tiklanadi. */
     public function teacherNorms()
     {
+        if (\App\Models\TeacherNorm::count() === 0) {
+            $now = now();
+            foreach ($this->defaultTeacherNorms() as $i => $n) {
+                \App\Models\TeacherNorm::create($n + ['sort' => $i + 1]);
+            }
+        }
+
         return response()->json(
             \App\Models\TeacherNorm::orderBy('sort')->orderBy('id')->get(['id', 'position', 'annual_hours'])
         );

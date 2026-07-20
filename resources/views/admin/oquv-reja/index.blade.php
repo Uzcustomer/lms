@@ -52,6 +52,10 @@
                             class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
                         O'tiladigan fanlar
                     </button>
+                    <button type="button" data-tab="kontingent"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        Bo'lajak kontingent
+                    </button>
                 </nav>
             </div>
 
@@ -822,6 +826,71 @@
                 </div>
             </div>
 
+            {{-- ===== PANEL: Bo'lajak kontingent (3-bosqich) ===== --}}
+            <div data-panel="kontingent" class="hidden">
+                <div class="bg-white shadow-sm sm:rounded-lg mb-6">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">Bo'lajak kontingent va oqim/guruh soni</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Kelasi o'quv yili uchun har yo'nalish + kursda kutilayotgan talaba soni.
+                            Joriy talabalar keyingi kursga o'tkazilmagan bo'lsa ham hisoblanadi:
+                            <b>joriy (k−1)-kurs talabalari kelasi yili k-kurs bo'ladi</b>. 1-kurs — yangi qabul
+                            (taxminiy), qo'lda tuzatiladi. Oqim/guruh soni me'yorlar asosida avtomatik chiqadi.
+                        </p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">O'quv yili</label>
+                                <select id="ktYear" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    @foreach($acadYears as $y)
+                                        <option value="{{ $y }}">{{ $y }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Oqim (max talaba)</label>
+                                <input type="number" id="ktOqimMax" value="120" min="1" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Guruh 1-3 kurs (max)</label>
+                                <input type="number" id="ktGr13" value="15" min="1" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Guruh 4-6 kurs (max)</label>
+                                <input type="number" id="ktGr46" value="10" min="1" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish qidirish</label>
+                                <input type="text" id="ktFilter" placeholder="Nom bo'yicha..." class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                            <div id="ktTiles" class="flex flex-wrap gap-2 text-xs"></div>
+                            <button type="button" id="ktSave" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700">💾 Bashoratni saqlash</button>
+                        </div>
+
+                        <div id="ktLoading" class="hidden text-center text-sm text-gray-500 py-6">Yuklanmoqda...</div>
+                        <div id="ktEmpty" class="hidden text-center text-sm text-gray-500 py-6">Ma'lumot topilmadi.</div>
+                        <div id="ktWrap" class="overflow-x-auto hidden">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600">Kurs</th>
+                                    <th class="px-3 py-2 text-right font-medium text-gray-600">Joriy (o'tadigan)</th>
+                                    <th class="px-3 py-2 text-right font-medium text-indigo-700">Bashorat talaba</th>
+                                    <th class="px-3 py-2 text-right font-medium text-blue-700">Oqim soni</th>
+                                    <th class="px-3 py-2 text-right font-medium text-purple-700">Guruh soni</th>
+                                </tr>
+                                </thead>
+                                <tbody id="ktTbody" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {{-- ===== PANEL: Yo'nalish bo'yicha ===== --}}
             <div data-panel="yonalish" class="hidden">
                 <div class="bg-white shadow-sm sm:rounded-lg mb-6">
@@ -1212,7 +1281,7 @@
 
                     // Boshlang'ich holat (URL hash bo'yicha)
                     const hash = (location.hash || '').replace('#', '');
-                    const validHashes = ['solishtirish', 'yonalish', 'fanlar'];
+                    const validHashes = ['solishtirish', 'yonalish', 'fanlar', 'kontingent'];
                     activateMainTab(validHashes.includes(hash) ? hash : 'rejalar');
                     const firstSub = document.querySelector('.sub-tab');
                     if (firstSub) firstSub.click();
@@ -1842,6 +1911,114 @@
                             if (!loadedOnce) { loadedOnce = true; reload(); }
                         });
                         if ((location.hash || '').replace('#','') === 'fanlar') { loadedOnce = true; reload(); }
+                    })();
+
+                    // ===== Bo'lajak kontingent tab (3-bosqich) =====
+                    (function () {
+                        const dataUrl = @json(route('admin.oquv-reja.contingent'));
+                        const saveUrl = @json(route('admin.oquv-reja.contingent.save'));
+                        const csrf = document.querySelector('input[name="_token"]')?.value;
+                        const year = document.getElementById('ktYear');
+                        const oqimMax = document.getElementById('ktOqimMax');
+                        const gr13 = document.getElementById('ktGr13');
+                        const gr46 = document.getElementById('ktGr46');
+                        const filter = document.getElementById('ktFilter');
+                        const tbody = document.getElementById('ktTbody');
+                        const wrap = document.getElementById('ktWrap');
+                        const empty = document.getElementById('ktEmpty');
+                        const load = document.getElementById('ktLoading');
+                        const tiles = document.getElementById('ktTiles');
+                        let rows = [];
+                        let loadedOnce = false;
+
+                        function esc(s){return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+                        const grMax = c => c <= 3 ? (parseInt(gr13.value)||15) : (parseInt(gr46.value)||10);
+                        const oMax  = () => parseInt(oqimMax.value) || 120;
+                        const oqimOf  = n => n > 0 ? Math.ceil(n / oMax()) : 0;
+                        const guruhOf = (n, c) => n > 0 ? Math.ceil(n / grMax(c)) : 0;
+
+                        function tile(label, val, cls) {
+                            return '<span class="inline-flex items-center gap-1 rounded-md px-2 py-1 ' + cls + '">' + label + ': <b>' + val + '</b></span>';
+                        }
+
+                        function render() {
+                            const q = filter.value.trim().toLowerCase();
+                            const list = rows.filter(r => !q || (r.specialty_name||'').toLowerCase().includes(q) || (r.specialty_code||'').includes(q));
+                            if (!list.length) { empty.classList.remove('hidden'); wrap.classList.add('hidden'); return; }
+                            empty.classList.add('hidden'); wrap.classList.remove('hidden');
+                            let tStud = 0, tOqim = 0, tGuruh = 0;
+                            tbody.innerHTML = list.map((r, i) => {
+                                const idx = rows.indexOf(r);
+                                const oq = oqimOf(r.projected), gr = guruhOf(r.projected, r.course);
+                                tStud += r.projected; tOqim += oq; tGuruh += gr;
+                                return '<tr class="hover:bg-gray-50">' +
+                                    '<td class="px-3 py-1.5 text-gray-700">' + esc(r.specialty_name || r.specialty_code) +
+                                        ' <span class="text-[10px] text-gray-400">' + esc(r.specialty_code) + '</span></td>' +
+                                    '<td class="px-3 py-1.5 text-center">' + r.course + '-kurs' + (r.course === 1 ? ' <span class="text-[10px] text-amber-600">(yangi qabul)</span>' : '') + '</td>' +
+                                    '<td class="px-3 py-1.5 text-right text-gray-500">' + (r.current_prev === null ? '—' : r.current_prev) + '</td>' +
+                                    '<td class="px-3 py-1.5 text-right"><input type="number" min="0" data-idx="' + idx + '" value="' + r.projected + '" ' +
+                                        'class="kt-inp w-20 text-right rounded border-gray-300 text-sm py-0.5 ' + (r.has_override ? 'bg-indigo-50 font-semibold' : '') + '"></td>' +
+                                    '<td class="px-3 py-1.5 text-right font-semibold text-blue-700">' + oq + '</td>' +
+                                    '<td class="px-3 py-1.5 text-right font-semibold text-purple-700">' + gr + '</td>' +
+                                    '</tr>';
+                            }).join('');
+                            tiles.innerHTML =
+                                tile('Yo\'nalish-kurs', list.length, 'bg-gray-100 text-gray-700') +
+                                tile('Jami talaba', tStud, 'bg-indigo-50 text-indigo-700') +
+                                tile('Jami oqim', tOqim, 'bg-blue-50 text-blue-700') +
+                                tile('Jami guruh', tGuruh, 'bg-purple-50 text-purple-700');
+
+                            tbody.querySelectorAll('.kt-inp').forEach(inp => inp.addEventListener('input', function () {
+                                const r = rows[parseInt(this.dataset.idx)];
+                                r.projected = parseInt(this.value) || 0;
+                                r.has_override = true;
+                                render();
+                            }));
+                        }
+
+                        async function reload() {
+                            load.classList.remove('hidden'); wrap.classList.add('hidden'); empty.classList.add('hidden');
+                            try {
+                                const j = await (await fetch(dataUrl + '?academic_year=' + encodeURIComponent(year.value), {headers:{'Accept':'application/json'}})).json();
+                                load.classList.add('hidden');
+                                rows = j.rows || [];
+                                if (!rows.length) { empty.classList.remove('hidden'); return; }
+                                render();
+                            } catch (e) {
+                                load.classList.add('hidden'); empty.textContent = 'Xatolik.'; empty.classList.remove('hidden');
+                            }
+                        }
+
+                        year.addEventListener('change', reload);
+                        filter.addEventListener('input', render);
+                        [oqimMax, gr13, gr46].forEach(el => el.addEventListener('input', render));
+
+                        document.getElementById('ktSave').addEventListener('click', async function () {
+                            this.disabled = true;
+                            const fd = new FormData();
+                            fd.append('_token', csrf);
+                            fd.append('academic_year', year.value);
+                            rows.forEach((r, i) => {
+                                fd.append('items[' + i + '][specialty_code]', r.specialty_code);
+                                fd.append('items[' + i + '][specialty_name]', r.specialty_name || '');
+                                fd.append('items[' + i + '][level_code]', r.level_code);
+                                fd.append('items[' + i + '][expected_count]', r.projected);
+                            });
+                            try {
+                                const r = await fetch(saveUrl, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
+                                const j = await r.json();
+                                if (!r.ok) throw new Error(j.message || 'Xatolik');
+                                this.textContent = '✓ Saqlandi';
+                                setTimeout(() => { this.textContent = '💾 Bashoratni saqlash'; this.disabled = false; }, 1500);
+                            } catch (e) {
+                                this.textContent = 'Xato!'; this.disabled = false;
+                            }
+                        });
+
+                        document.querySelector('.main-tab[data-tab="kontingent"]').addEventListener('click', () => {
+                            if (!loadedOnce) { loadedOnce = true; reload(); }
+                        });
+                        if ((location.hash || '').replace('#','') === 'kontingent') { loadedOnce = true; reload(); }
                     })();
                 })();
             </script>

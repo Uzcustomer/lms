@@ -11,6 +11,7 @@ class SubjectKafedraOverride extends Model
         'sample_name',
         'kafedra_name',
         'department_id',
+        'practice_group_size',
         'updated_by',
     ];
 }

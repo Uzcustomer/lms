@@ -124,6 +124,10 @@
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                     Guruh tuzatish
                                 </a>
+                                <button type="button" class="btn-fix" style="color:#7c3aed;border-color:#ddd6fe;" onclick="openHistory()" title="Tasdiqlangan oqimlar tarixi (real va reja)">
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    Tarix
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -265,6 +269,27 @@
                     Hisoblash
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Tasdiqlangan oqimlar tarixi -->
+    <div id="history-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:9999;">
+        <div style="position:absolute;top:4%;left:50%;transform:translateX(-50%);width:92%;max-width:1100px;max-height:90vh;background:#fff;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #e2e8f0;">
+                <div style="font-weight:800;color:#1e293b;">📋 Tasdiqlangan oqimlar tarixi</div>
+                <button type="button" onclick="closeHistory()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;">×</button>
+            </div>
+            <div style="display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap;align-items:center;">
+                <select id="hist-kind" style="border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:13px;">
+                    <option value="">Barchasi (real + reja)</option>
+                    <option value="real">Faqat real</option>
+                    <option value="plan">Faqat reja (kelasi yil)</option>
+                </select>
+                <input id="hist-year" placeholder="O'quv yili (masalan 2026-2027)" style="border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:13px;width:200px;">
+                <button type="button" onclick="loadHistory()" style="background:#2b5ea7;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;">Filtrlash</button>
+                <span id="hist-back" style="display:none;margin-left:auto;"><button type="button" onclick="historyList()" style="background:#e2e8f0;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;">← Ro'yxatga qaytish</button></span>
+            </div>
+            <div id="hist-body" style="padding:12px 20px;overflow:auto;flex:1;"></div>
         </div>
     </div>
 
@@ -897,6 +922,55 @@
                 $('#loading-state').hide();
                 $('#empty-state').show().find('p:first').text('Xatolik (HTTP ' + xhr.status + ')');
             });
+        }
+
+        // ===== Tasdiqlangan oqimlar tarixi =====
+        var HISTORY_URL = '{{ route("admin.reports.oqim.history") }}';
+        var HISTORY_SHOW_URL = '{{ url("admin/reports/oqim/history") }}';
+        function openHistory() { $('#history-overlay').css('display', 'block'); loadHistory(); }
+        function closeHistory() { $('#history-overlay').hide(); }
+        function historyList() { $('#hist-back').hide(); loadHistory(); }
+        function loadHistory() {
+            $('#hist-back').hide();
+            $('#hist-body').html('<div style="color:#94a3b8;">Yuklanmoqda...</div>');
+            $.get(HISTORY_URL, { kind: $('#hist-kind').val(), academic_year: $('#hist-year').val() }).done(function(rows) {
+                if (!rows.length) { $('#hist-body').html('<div style="color:#94a3b8;">Tasdiqlangan oqim topilmadi.</div>'); return; }
+                var h = '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="color:#64748b;text-align:left;border-bottom:2px solid #e2e8f0;">' +
+                    '<th style="padding:6px 8px;">Turi</th><th style="padding:6px 8px;">O\'quv yili</th><th style="padding:6px 8px;">Fakultet</th>' +
+                    '<th style="padding:6px 8px;text-align:right;">Talaba</th><th style="padding:6px 8px;text-align:right;">Oqim</th><th style="padding:6px 8px;text-align:right;">Guruhcha</th>' +
+                    '<th style="padding:6px 8px;">Tasdiqlangan</th><th style="padding:6px 8px;">Mas\'ul</th><th></th></tr></thead><tbody>';
+                rows.forEach(function(r) {
+                    var badge = r.kind === 'plan'
+                        ? '<span style="background:#ede9fe;color:#6d28d9;font-weight:700;font-size:11px;padding:2px 8px;border-radius:8px;">Reja</span>'
+                        : '<span style="background:#dcfce7;color:#166534;font-weight:700;font-size:11px;padding:2px 8px;border-radius:8px;">Real</span>';
+                    var s = r.summary || {};
+                    h += '<tr style="border-bottom:1px solid #f1f5f9;">' +
+                        '<td style="padding:6px 8px;">' + badge + '</td>' +
+                        '<td style="padding:6px 8px;">' + esc(r.academic_year || '—') + '</td>' +
+                        '<td style="padding:6px 8px;">' + esc(r.faculty_name) + '</td>' +
+                        '<td style="padding:6px 8px;text-align:right;">' + (s.students || 0) + '</td>' +
+                        '<td style="padding:6px 8px;text-align:right;">' + (s.oqim || 0) + '</td>' +
+                        '<td style="padding:6px 8px;text-align:right;">' + (s.guruhcha || 0) + '</td>' +
+                        '<td style="padding:6px 8px;">' + esc(r.approved_at || '') + '</td>' +
+                        '<td style="padding:6px 8px;">' + esc(r.approver || '') + '</td>' +
+                        '<td style="padding:6px 8px;"><button type="button" onclick="viewHistory(' + r.id + ')" style="background:#2b5ea7;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;">Ko\'rish</button></td>' +
+                        (r.note ? '</tr><tr><td colspan="9" style="padding:0 8px 6px;color:#94a3b8;font-size:11.5px;">Izoh: ' + esc(r.note) + '</td>' : '') +
+                        '</tr>';
+                });
+                h += '</tbody></table>';
+                $('#hist-body').html(h);
+            }).fail(function() { $('#hist-body').html('<div style="color:#dc2626;">Xatolik.</div>'); });
+        }
+        function viewHistory(id) {
+            $('#hist-body').html('<div style="color:#94a3b8;">Yuklanmoqda...</div>');
+            $.get(HISTORY_SHOW_URL + '/' + id).done(function(res) {
+                $('#hist-back').show();
+                var head = '<div style="margin-bottom:10px;font-weight:700;color:#1e293b;">' +
+                    (res.kind === 'plan' ? 'Reja' : 'Real') + ' · ' + esc(res.academic_year || '') + ' · ' + esc(res.faculty_name) +
+                    ' · ' + esc(res.approved_at || '') + ' · ' + esc(res.approver || '') + '</div>';
+                $('#hist-body').html(head + '<div id="hist-view"></div>');
+                renderBlocks(res.blocks || [], '#hist-view', false);
+            }).fail(function() { $('#hist-body').html('<div style="color:#dc2626;">Xatolik.</div>'); });
         }
 
         $(document).ready(function() {

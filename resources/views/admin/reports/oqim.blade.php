@@ -159,6 +159,9 @@
                         <input id="ct-new-name" placeholder="Nomi (Oliy hamshiralik ishi)" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;width:200px;">
                         <input id="ct-new-code" placeholder="Kodi" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;width:90px;">
                         <select id="ct-new-fac" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;"></select>
+                        <select id="ct-new-lang" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;" title="Ta'lim tili">
+                            <option value="uz">o'z</option><option value="rus">rus</option><option value="ing">ing</option>
+                        </select>
                         <input id="ct-new-cnt" type="number" min="0" placeholder="Soni" style="border:1px solid #c7d2fe;border-radius:6px;padding:3px 7px;font-size:12px;width:70px;">
                         <button type="button" id="ct-add" style="background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">Qo'shish</button>
                     </div>
@@ -417,7 +420,12 @@
                                 html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + labelCell + '<span class="oq-sum" data-oqt="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>' + (oq.has_visitor ? '<span class="oq-mix">fakultetlararo</span>' : '') + '</td>';
                             }
                             if (editable) {
-                                html += '<td class="oq-grp"><input class="grp-in" value="' + esc(row.name) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r + '" style="width:140px;font-size:11px;border:1px solid #cbd5e1;border-radius:4px;padding:1px 4px;"></td>';
+                                var rl = row.lang || oq.lang || 'uz';
+                                var langSel = '<select class="lang-in" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r + '" style="font-size:10px;border:1px solid #cbd5e1;border-radius:4px;padding:1px 2px;margin-left:3px;">'
+                                    + '<option value="uz"' + (rl === 'uz' ? ' selected' : '') + '>o\'z</option>'
+                                    + '<option value="rus"' + (rl === 'rus' ? ' selected' : '') + '>rus</option>'
+                                    + '<option value="ing"' + (rl === 'ing' ? ' selected' : '') + '>ing</option></select>';
+                                html += '<td class="oq-grp"><input class="grp-in" value="' + esc(row.name) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r + '" style="width:120px;font-size:11px;border:1px solid #cbd5e1;border-radius:4px;padding:1px 4px;">' + langSel + '</td>';
                             } else {
                                 html += '<td class="oq-grp">' + esc(row.name)
                                      + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from) + '</span>' : '') + '</td>';
@@ -510,6 +518,16 @@
         $(document).on('input', '#opt-body .label-in', function() {
             var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o');
             afterState[b].courses[c].oqims[o].label = this.value;
+        });
+        // Guruh tilini o'zgartirish — nomdagi til qavsini ham yangilaydi
+        $(document).on('change', '#opt-body .lang-in', function() {
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o'), r = +$(this).data('r');
+            var lg = this.value;
+            var row = afterState[b].courses[c].oqims[o].rows[r];
+            row.lang = lg;
+            var sfx = { uz: " (o'z)", rus: ' (rus)', ing: ' (ing)' }[lg] || '';
+            row.name = String(row.name).replace(/\s*\((?:o['’‘]?z|oz|uz|rus|ru|ing|eng|ang)\s*\)\s*$/i, '') + sfx;
+            renderAfterBody();
         });
 
         // Talaba sonini tahrirlaganda — jami (oqim/kurs/umumiy) avtomatik yangilanadi.
@@ -729,32 +747,55 @@
                 renderContingent();
             }).fail(function(){ $('#ct-body').html('<div style="color:#dc2626;font-size:12px;">Xatolik.</div>'); });
         }
+        function ctLangs(r) { return r.langs || { uz: (r.projected || 0), rus: 0, ing: 0 }; }
+        function ctSum(r) { var L = ctLangs(r); return (+L.uz || 0) + (+L.rus || 0) + (+L.ing || 0); }
         function renderContingent() {
             if (!CT_ROWS.length) { $('#ct-body').html('<div style="color:#94a3b8;font-size:12px;">Yo\'nalish topilmadi. (Ta\'lim turi/fakultetni tanlang)</div>'); return; }
             var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;">' +
                 '<th style="padding:3px 6px;">Yo\'nalish</th><th style="padding:3px 6px;text-align:right;">Joriy 1-kurs</th>' +
-                '<th style="padding:3px 6px;text-align:right;">Yangi qabul (bashorat)</th><th></th></tr></thead><tbody>';
+                '<th style="padding:3px 6px;text-align:center;color:#1d4ed8;">o\'z</th>' +
+                '<th style="padding:3px 6px;text-align:center;color:#be123c;">rus</th>' +
+                '<th style="padding:3px 6px;text-align:center;color:#6d28d9;">ing</th>' +
+                '<th style="padding:3px 6px;text-align:right;">Jami</th><th></th></tr></thead><tbody>';
             CT_ROWS.forEach(function(r, i){
                 var newBadge = r.department_id ? ' <span style="background:#e0e7ff;color:#4f46e5;font-size:9px;font-weight:700;padding:1px 5px;border-radius:6px;">yangi · ' + esc(r.department_name || '') + '</span>' : '';
+                var L = ctLangs(r);
+                function inp(lg, col){ return '<input type="number" min="0" value="' + (+L[lg] || 0) + '" data-i="' + i + '" data-lg="' + lg + '" class="ct-in" style="width:54px;text-align:right;border:1px solid ' + col + ';border-radius:6px;padding:2px 5px;">'; }
                 h += '<tr style="border-top:1px solid #e0e7ff;">' +
                     '<td style="padding:3px 6px;">' + esc(r.specialty_name || r.specialty_code) + ' <span style="color:#a5b4fc;font-size:10px;">' + esc(r.specialty_code) + '</span>' + newBadge + '</td>' +
                     '<td style="padding:3px 6px;text-align:right;color:#64748b;">' + (r.current_first || 0) + '</td>' +
-                    '<td style="padding:3px 6px;text-align:right;"><input type="number" min="0" value="' + (r.projected || 0) + '" data-i="' + i + '" class="ct-in" style="width:80px;text-align:right;border:1px solid #c7d2fe;border-radius:6px;padding:2px 6px;"></td>' +
-                    '<td style="padding:3px 6px;"><button type="button" class="ct-copy" data-i="' + i + '" style="background:none;border:none;color:#6366f1;cursor:pointer;font-size:11px;">↺ nusxa</button></td>' +
+                    '<td style="padding:3px 6px;text-align:center;">' + inp('uz', '#bfdbfe') + '</td>' +
+                    '<td style="padding:3px 6px;text-align:center;">' + inp('rus', '#fecdd3') + '</td>' +
+                    '<td style="padding:3px 6px;text-align:center;">' + inp('ing', '#ddd6fe') + '</td>' +
+                    '<td style="padding:3px 6px;text-align:right;font-weight:700;color:#3730a3;" class="ct-sum" data-i="' + i + '">' + ctSum(r) + '</td>' +
+                    '<td style="padding:3px 6px;"><button type="button" class="ct-copy" data-i="' + i + '" style="background:none;border:none;color:#6366f1;cursor:pointer;font-size:11px;" title="Joriy 1-kursning til taqsimotidan nusxa">↺ nusxa</button></td>' +
                     '</tr>';
             });
             h += '</tbody></table>';
             $('#ct-body').html(h);
-            $('.ct-in').on('input', function(){ CT_ROWS[+$(this).data('i')].projected = parseInt(this.value) || 0; });
-            $('.ct-copy').on('click', function(){ var i = +$(this).data('i'); CT_ROWS[i].projected = CT_ROWS[i].current_first || 0; renderContingent(); });
+            $('.ct-in').on('input', function(){
+                var i = +$(this).data('i'), lg = $(this).data('lg');
+                if (!CT_ROWS[i].langs) CT_ROWS[i].langs = { uz:0, rus:0, ing:0 };
+                CT_ROWS[i].langs[lg] = parseInt(this.value) || 0;
+                CT_ROWS[i].projected = ctSum(CT_ROWS[i]);
+                $('.ct-sum[data-i="' + i + '"]').text(CT_ROWS[i].projected);
+            });
+            $('.ct-copy').on('click', function(){ var i = +$(this).data('i'); CT_ROWS[i].langs = Object.assign({uz:0,rus:0,ing:0}, CT_ROWS[i].cur_langs || {}); CT_ROWS[i].projected = ctSum(CT_ROWS[i]); renderContingent(); });
         }
         function saveContingent() {
-            var items = CT_ROWS.map(function(r){ return {
-                specialty_code: String(r.specialty_code), specialty_name: r.specialty_name ? String(r.specialty_name) : null,
-                level_code: String(r.level_code),
-                department_id: r.department_id || null, department_name: r.department_name || null,
-                expected_count: parseInt(r.projected) || 0
-            }; });
+            // Har yo'nalish × til uchun alohida yozuv (0 ham saqlanadi — o'chirishni aks ettirish uchun)
+            var items = [];
+            CT_ROWS.forEach(function(r){
+                var L = ctLangs(r);
+                ['uz','rus','ing'].forEach(function(lg){
+                    items.push({
+                        specialty_code: String(r.specialty_code), specialty_name: r.specialty_name ? String(r.specialty_name) : null,
+                        level_code: String(r.level_code), lang: lg,
+                        department_id: r.department_id || null, department_name: r.department_name || null,
+                        expected_count: parseInt(L[lg]) || 0
+                    });
+                });
+            });
             if (!items.length) return;
             var btn = $('#ct-save').prop('disabled', true).text('...');
             $.ajax({ url: CONTINGENT_SAVE_URL, method: 'POST', contentType: 'application/json',
@@ -780,13 +821,14 @@
             var code = $('#ct-new-code').val().trim();
             var facId = $('#ct-new-fac').val();
             var facName = $('#ct-new-fac option:selected').text();
+            var lang = $('#ct-new-lang').val() || 'uz';
             var cnt = parseInt($('#ct-new-cnt').val()) || 0;
             if (!name || !code) { alert("Yo'nalish nomi va kodini kiriting."); return; }
-            // Mavjud bo'lsa yangilaymiz
+            // Mavjud bo'lsa — tanlangan tilga qo'shamiz
             var ex = CT_ROWS.find(function(r){ return r.specialty_code === code; });
-            if (ex) { ex.projected = cnt; ex.department_id = facId; ex.department_name = facName; }
-            else CT_ROWS.push({ specialty_code: code, specialty_name: name, level_code: '11', course: 1,
-                current_first: 0, projected: cnt, department_id: facId, department_name: facName, is_new: true });
+            if (ex) { if (!ex.langs) ex.langs = {uz:0,rus:0,ing:0}; ex.langs[lang] = cnt; ex.projected = ctSum(ex); ex.department_id = facId; ex.department_name = facName; }
+            else { var L = {uz:0,rus:0,ing:0}; L[lang] = cnt; CT_ROWS.push({ specialty_code: code, specialty_name: name, level_code: '11', course: 1,
+                current_first: 0, langs: L, cur_langs: {uz:0,rus:0,ing:0}, projected: cnt, department_id: facId, department_name: facName, is_new: true }); }
             $('#ct-new-name,#ct-new-code,#ct-new-cnt').val('');
             renderContingent();
         });
@@ -887,7 +929,7 @@
             $('#projection_year').on('change', function(){ if ($('#projection').is(':checked')) loadContingent(); });
             $('#education_type, #faculty').on('change', function(){ if ($('#projection').is(':checked')) loadContingent(); });
             $('#ct-copy-all').on('click', function(){
-                CT_ROWS.forEach(function(r){ r.projected = r.current_first || 0; });
+                CT_ROWS.forEach(function(r){ r.langs = Object.assign({uz:0,rus:0,ing:0}, r.cur_langs || {}); r.projected = ctSum(r); });
                 renderContingent();
             });
             toggleProjection();

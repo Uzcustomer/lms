@@ -11789,6 +11789,13 @@ class ReportController extends Controller
             }
             $totShare = max(1, $shares->sum('c'));
 
+            // Til bo'yicha nom prefiksi + qavs (oqim tili aniqlanishi uchun)
+            $lg = in_array($p->lang ?? 'uz', ['uz', 'rus', 'ing'], true) ? $p->lang : 'uz';
+            $prefixMap = ['uz' => '1K', 'rus' => '1KR', 'ing' => '1KI'];
+            $suffixMap = ['uz' => " (o'z)", 'rus' => ' (rus)', 'ing' => ' (ing)'];
+            $namePrefix = $prefixMap[$lg];
+            $nameSuffix = $suffixMap[$lg];
+
             foreach ($shares as $sh) {
                 if ($facHemis && (int) $sh->department_id !== (int) $facHemis) {
                     continue;
@@ -11798,7 +11805,7 @@ class ReportController extends Controller
                     continue;
                 }
                 // Guruhchalar soni (~subSize kishidan), a/b tarzida bazaviy guruhlarga taqsimlanadi.
-                // Nom: "1K-01a", "1K-01b", ... — a/b guruhchalar ko'rinib turishi uchun (keyin qayta nomlanadi).
+                // Nom: "1K-01a (o'z)", "1KR-01a (rus)" ... — til qavsi oqim tilini aniqlaydi.
                 $nSub = max(1, (int) round($n / $subSize));
                 for ($si = 0; $si < $nSub; $si++) {
                     $cnt = intdiv($n, $nSub) + ($si < ($n % $nSub) ? 1 : 0);
@@ -11815,7 +11822,7 @@ class ReportController extends Controller
                         'level_code'      => '11',
                         'level_name'      => '1-kurs',
                         'group_id'        => $synthId--,
-                        'group_name'      => '1K-' . str_pad((string) $baseNum, 2, '0', STR_PAD_LEFT) . $letter,
+                        'group_name'      => $namePrefix . '-' . str_pad((string) $baseNum, 2, '0', STR_PAD_LEFT) . $letter . $nameSuffix,
                         'cnt'             => $cnt,
                     ];
                 }

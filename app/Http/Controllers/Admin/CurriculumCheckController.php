@@ -1012,6 +1012,8 @@ class CurriculumCheckController extends Controller
     private function defaultPracticeSize(?string $name, ?string $block): int
     {
         $t = $this->normSubject(($block ?? '') . ' ' . ($name ?? ''));
+
+        // Klinik fanlar — kichik guruh (~10)
         foreach (['klinik', 'kasallik', 'terapiya', 'xirurgiya', 'jarrohlik', 'pediatriya', 'akusher',
                   'ginekolog', 'nevrolog', 'kardiolog', 'onkolog', 'urolog', 'endokrin', 'dermato',
                   'psixiatr', 'stomatolog', 'ftiziatr', 'reanimatsiya', 'anesteziolog', 'yuqumli'] as $kw) {
@@ -1019,12 +1021,20 @@ class CurriculumCheckController extends Controller
                 return 10;
             }
         }
+
+        // Til fanlari (xorijiy til, rus/o'zbek tili, lotin tili) — kichik til guruhi
+        if (preg_match('/(\btil|xorijiy|ingliz|inglis)/u', $t)) {
+            return 15;
+        }
+
+        // Gumanitar-ijtimoiy fanlar — butun guruh (~30)
         foreach (['ijtimoiy', 'gumanitar', 'tarix', 'falsafa', 'din', 'huquq', 'iqtisod', 'pedagog',
-                  'psixolog', 'xorijiy', 'tili', 'ona til', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
+                  'psixolog', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
             if (str_contains($t, $kw)) {
                 return 30;
             }
         }
+
         return 15;
     }
 

@@ -275,8 +275,8 @@
         var CAN_APPROVE = {{ ($canApprove ?? false) ? 'true' : 'false' }};
         var SNAP_SAVE_URL = '{{ route("admin.reports.oqim.snapshot.save") }}';
         var SNAP_SHOW_URL = '{{ route("admin.reports.oqim.snapshot.show") }}';
-        var CONTINGENT_URL = '{{ route("admin.oquv-reja.contingent") }}';
-        var CONTINGENT_SAVE_URL = '{{ route("admin.oquv-reja.contingent.save") }}';
+        var CONTINGENT_URL = '{{ route("admin.reports.oqim.contingent") }}';
+        var CONTINGENT_SAVE_URL = '{{ route("admin.reports.oqim.contingent.save") }}';
         var CSRF = '{{ csrf_token() }}';
         var afterState = [];   // optimizatsiyadan keyingi holat (tahrirlanadigan) — saqlash uchun
         var editMode = false;
@@ -719,9 +719,10 @@
         }
         function saveContingent() {
             var items = CT_ROWS.map(function(r){ return {
-                specialty_code: r.specialty_code, specialty_name: r.specialty_name, level_code: r.level_code,
+                specialty_code: String(r.specialty_code), specialty_name: r.specialty_name ? String(r.specialty_name) : null,
+                level_code: String(r.level_code),
                 department_id: r.department_id || null, department_name: r.department_name || null,
-                expected_count: r.projected || 0
+                expected_count: parseInt(r.projected) || 0
             }; });
             if (!items.length) return;
             var btn = $('#ct-save').prop('disabled', true).text('...');

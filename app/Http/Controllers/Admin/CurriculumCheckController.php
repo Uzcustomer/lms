@@ -1201,8 +1201,8 @@ class CurriculumCheckController extends Controller
                     continue;
                 }
                 $out[] = [
-                    'specialty_code' => $spec,
-                    'specialty_name' => $names[$spec] ?? $spec,
+                    'specialty_code' => (string) $spec,   // PHP raqamli kalitni int qiladi — string'ga qaytaramiz
+                    'specialty_name' => $names[$spec] ?? (string) $spec,
                     'course'         => $k,
                     'level_code'     => $lvl,
                     'current_prev'   => $prev,        // k>=2: shu kursga o'tadigan joriy kohort soni
@@ -1253,6 +1253,14 @@ class CurriculumCheckController extends Controller
         ]);
 
         foreach ($data['items'] as $it) {
+            // Fakultet mahalliy id sifatida kelsa — oqim proyeksiyasi uchun HEMIS id ga o'giramiz
+            $deptId = $it['department_id'] ?? null;
+            if ($deptId) {
+                $hemis = DB::table('departments')->where('id', $deptId)->value('department_hemis_id');
+                if ($hemis) {
+                    $deptId = $hemis;
+                }
+            }
             ContingentProjection::updateOrCreate(
                 [
                     'academic_year'  => $data['academic_year'],
@@ -1261,7 +1269,7 @@ class CurriculumCheckController extends Controller
                 ],
                 [
                     'specialty_name'  => $it['specialty_name'] ?? null,
-                    'department_id'   => $it['department_id'] ?? null,
+                    'department_id'   => $deptId,
                     'department_name' => $it['department_name'] ?? null,
                     'expected_count'  => (int) ($it['expected_count'] ?? 0),
                     'updated_by'      => Auth::id(),

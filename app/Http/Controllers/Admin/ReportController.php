@@ -11316,7 +11316,11 @@ class ReportController extends Controller
         if ($request->filled('academic_year')) {
             $q->where('academic_year', $request->academic_year);
         }
-        if ($request->filled('faculty')) {
+        // Dekan — faqat o'z fakulteti tarixini ko'radi
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId) {
+            $q->where('faculty_id', $dekanFacultyId);
+        } elseif ($request->filled('faculty')) {
             $q->where('faculty_id', $request->faculty);
         }
         $rows = $q->limit(300)->get([
@@ -11344,6 +11348,10 @@ class ReportController extends Controller
     public function oqimHistoryShow($id)
     {
         $v = \App\Models\OqimSnapshotVersion::findOrFail($id);
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && (int) $v->faculty_id !== (int) $dekanFacultyId) {
+            abort(403);
+        }
         return response()->json([
             'id'            => $v->id,
             'kind'          => $v->kind,
@@ -11361,9 +11369,14 @@ class ReportController extends Controller
      */
     public function oqimHistoryExport(Request $request)
     {
+        $dekanFacultyId = get_dekan_faculty_id();
+
         // Bitta versiya — batafsil taqsimot
         if ($request->filled('id')) {
             $v = \App\Models\OqimSnapshotVersion::findOrFail($request->id);
+            if ($dekanFacultyId && (int) $v->faculty_id !== (int) $dekanFacultyId) {
+                abort(403);
+            }
             $fname = 'oqim-' . ($v->kind === 'plan' ? 'reja' : 'real') . '-' . ($v->academic_year ?: '') . '-' . $v->id . '.csv';
             $headers = ['Fakultet/Yo\'nalish', 'Kurs', 'Oqim', 'Til', 'Guruh', 'Talaba'];
             return response()->streamDownload(function () use ($v, $headers) {
@@ -11394,6 +11407,9 @@ class ReportController extends Controller
         }
         if ($request->filled('academic_year')) {
             $q->where('academic_year', $request->academic_year);
+        }
+        if ($dekanFacultyId) {
+            $q->where('faculty_id', $dekanFacultyId);
         }
         $rows = $q->limit(1000)->get();
         $names = \App\Models\User::whereIn('id', $rows->pluck('approved_by')->filter()->unique())->pluck('name', 'id');

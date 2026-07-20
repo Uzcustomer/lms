@@ -761,6 +761,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/oqim/contingent', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentData'])->name('reports.oqim.contingent');
         Route::post('/reports/oqim/contingent/save', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentSave'])->name('reports.oqim.contingent.save');
         Route::get('/reports/oqim/history', [ReportController::class, 'oqimHistory'])->name('reports.oqim.history');
+        Route::get('/reports/oqim/history-export', [ReportController::class, 'oqimHistoryExport'])->name('reports.oqim.history.export');
         Route::get('/reports/oqim/history/{id}', [ReportController::class, 'oqimHistoryShow'])->name('reports.oqim.history.show');
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
@@ -882,6 +883,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/kafedra-list', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'kafedraList'])->name('kafedra-list');
                 Route::post('/set-kafedra', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setKafedra'])->name('set-kafedra');
                 Route::post('/set-practice-size', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setPracticeSize'])->name('set-practice-size');
+                Route::get('/teacher-norms', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'teacherNorms'])->name('teacher-norms');
+                Route::post('/teacher-norms/save', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'teacherNormsSave'])->name('teacher-norms.save');
+                Route::get('/teacher-demand', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'teacherDemand'])->name('teacher-demand');
                 Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
                 Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
                 Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');

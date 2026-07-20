@@ -11316,7 +11316,11 @@ class ReportController extends Controller
         if ($request->filled('academic_year')) {
             $q->where('academic_year', $request->academic_year);
         }
-        if ($request->filled('faculty')) {
+        // Dekan — faqat o'z fakulteti tarixini ko'radi
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId) {
+            $q->where('faculty_id', $dekanFacultyId);
+        } elseif ($request->filled('faculty')) {
             $q->where('faculty_id', $request->faculty);
         }
         $rows = $q->limit(300)->get([
@@ -11344,6 +11348,10 @@ class ReportController extends Controller
     public function oqimHistoryShow($id)
     {
         $v = \App\Models\OqimSnapshotVersion::findOrFail($id);
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && (int) $v->faculty_id !== (int) $dekanFacultyId) {
+            abort(403);
+        }
         return response()->json([
             'id'            => $v->id,
             'kind'          => $v->kind,
@@ -11353,6 +11361,75 @@ class ReportController extends Controller
             'approver'      => optional(\App\Models\User::find($v->approved_by))->name,
             'blocks'        => $v->data ?: [],
         ]);
+    }
+
+    /**
+     * Tarixni Excel (CSV) ga yuklash. id berilsa — bitta versiyaning to'liq
+     * guruh/oqim taqsimoti; aks holda — filtrlangan ro'yxat.
+     */
+    public function oqimHistoryExport(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+
+        // Bitta versiya — batafsil taqsimot
+        if ($request->filled('id')) {
+            $v = \App\Models\OqimSnapshotVersion::findOrFail($request->id);
+            if ($dekanFacultyId && (int) $v->faculty_id !== (int) $dekanFacultyId) {
+                abort(403);
+            }
+            $fname = 'oqim-' . ($v->kind === 'plan' ? 'reja' : 'real') . '-' . ($v->academic_year ?: '') . '-' . $v->id . '.csv';
+            $headers = ['Fakultet/Yo\'nalish', 'Kurs', 'Oqim', 'Til', 'Guruh', 'Talaba'];
+            return response()->streamDownload(function () use ($v, $headers) {
+                $out = fopen('php://output', 'w');
+                fprintf($out, "\xEF\xBB\xBF");
+                fputcsv($out, $headers);
+                foreach ($v->data ?? [] as $bl) {
+                    foreach ($bl['courses'] ?? [] as $co) {
+                        foreach ($co['oqims'] ?? [] as $oq) {
+                            foreach ($oq['rows'] ?? [] as $row) {
+                                fputcsv($out, [
+                                    $bl['title'] ?? '', $co['level_name'] ?? '',
+                                    $oq['label'] ?? '', $oq['lang'] ?? '',
+                                    $row['name'] ?? '', $row['count'] ?? 0,
+                                ]);
+                            }
+                        }
+                    }
+                }
+                fclose($out);
+            }, $fname, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }
+
+        // Ro'yxat
+        $q = \App\Models\OqimSnapshotVersion::query()->orderByDesc('approved_at');
+        if ($request->filled('kind')) {
+            $q->where('kind', $request->kind);
+        }
+        if ($request->filled('academic_year')) {
+            $q->where('academic_year', $request->academic_year);
+        }
+        if ($dekanFacultyId) {
+            $q->where('faculty_id', $dekanFacultyId);
+        }
+        $rows = $q->limit(1000)->get();
+        $names = \App\Models\User::whereIn('id', $rows->pluck('approved_by')->filter()->unique())->pluck('name', 'id');
+
+        return response()->streamDownload(function () use ($rows, $names) {
+            $out = fopen('php://output', 'w');
+            fprintf($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Turi', 'O\'quv yili', 'Fakultet', 'Talaba', 'Oqim', 'Guruhcha', 'Tasdiqlangan', 'Mas\'ul', 'Izoh']);
+            foreach ($rows as $r) {
+                $s = $r->summary ?? [];
+                fputcsv($out, [
+                    $r->kind === 'plan' ? 'Reja' : 'Real',
+                    $r->academic_year, $r->faculty_name ?: 'Barcha fakultetlar',
+                    $s['students'] ?? 0, $s['oqim'] ?? 0, $s['guruhcha'] ?? 0,
+                    optional($r->approved_at)->format('d.m.Y H:i'),
+                    $names[$r->approved_by] ?? '', $r->note,
+                ]);
+            }
+            fclose($out);
+        }, 'oqim-tarix-' . now()->format('Y-m-d') . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     /**

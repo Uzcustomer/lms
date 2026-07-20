@@ -72,7 +72,11 @@ class CurriculumCheckController extends Controller
             ])
             ->values();
 
-        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons', 'groupedComparisons'));
+        // O'qituvchilar ehtiyoji tabidagi fakultet filtri uchun
+        $faculties = \App\Models\Department::where('structure_type_code', 11)
+            ->where('active', true)->orderBy('name')->get(['id', 'name']);
+
+        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons', 'groupedComparisons', 'faculties'));
     }
 
     /**
@@ -1054,6 +1058,8 @@ class CurriculumCheckController extends Controller
     private function defaultPracticeSize(?string $name, ?string $block): int
     {
         $t = $this->normSubject(($block ?? '') . ' ' . ($name ?? ''));
+
+        // Klinik fanlar — kichik guruh (~10)
         foreach (['klinik', 'kasallik', 'terapiya', 'xirurgiya', 'jarrohlik', 'pediatriya', 'akusher',
                   'ginekolog', 'nevrolog', 'kardiolog', 'onkolog', 'urolog', 'endokrin', 'dermato',
                   'psixiatr', 'stomatolog', 'ftiziatr', 'reanimatsiya', 'anesteziolog', 'yuqumli'] as $kw) {
@@ -1061,12 +1067,20 @@ class CurriculumCheckController extends Controller
                 return 10;
             }
         }
+
+        // Til fanlari (xorijiy til, rus/o'zbek tili, lotin tili) — kichik til guruhi
+        if (preg_match('/(\btil|xorijiy|ingliz|inglis)/u', $t)) {
+            return 15;
+        }
+
+        // Gumanitar-ijtimoiy fanlar — butun guruh (~30)
         foreach (['ijtimoiy', 'gumanitar', 'tarix', 'falsafa', 'din', 'huquq', 'iqtisod', 'pedagog',
-                  'psixolog', 'xorijiy', 'tili', 'ona til', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
+                  'psixolog', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
             if (str_contains($t, $kw)) {
                 return 30;
             }
         }
+
         return 15;
     }
 
@@ -1469,6 +1483,193 @@ class CurriculumCheckController extends Controller
             }
         }
         return $out;
+    }
+
+    // ===== 4-BOSQICH: O'qituvchilar ehtiyoji =====
+
+    /** O'qituvchi lavozim normalari ro'yxati. */
+    public function teacherNorms()
+    {
+        return response()->json(
+            \App\Models\TeacherNorm::orderBy('sort')->orderBy('id')->get(['id', 'position', 'annual_hours'])
+        );
+    }
+
+    /** Normalarni saqlash (qo'shish/tahrirlash/o'chirish). */
+    public function teacherNormsSave(Request $request)
+    {
+        $data = $request->validate([
+            'items'               => 'required|array',
+            'items.*.position'    => 'required|string|max:100',
+            'items.*.annual_hours'=> 'required|integer|min:1|max:5000',
+        ]);
+        \App\Models\TeacherNorm::truncate();
+        foreach (array_values($data['items']) as $i => $it) {
+            \App\Models\TeacherNorm::create([
+                'position'     => $it['position'],
+                'annual_hours' => $it['annual_hours'],
+                'sort'         => $i + 1,
+            ]);
+        }
+        return response()->json(['ok' => true]);
+    }
+
+    /** Yo'nalish nomini solishtirish uchun kalit (harf/raqamdan boshqasi olib tashlanadi). */
+    private function specKey(?string $name): string
+    {
+        return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim((string) $name)));
+    }
+
+    /**
+     * Tasdiqlangan oqim snapshotlaridan yo'nalish+kurs kesimida oqim/talaba
+     * ma'lumotini yig'ish: [specKey][course] => ['oqim'=>N, 'students'=>N,
+     * 'pract_by_lang'=>[lang=>students]].
+     */
+    private function oqimCountsForDemand(string $academicYear, string $kind, $facultyId = null): array
+    {
+        $q = \App\Models\OqimSnapshot::where('status', 'approved');
+        if ($kind === 'plan') {
+            $q->where('context->projection', 1)
+              ->where('context->academic_year', $academicYear);
+        } else {
+            // Real (joriy) — projection kaliti yo'q yoki 0
+            $q->where(function ($w) {
+                $w->whereNull('context->projection')->orWhere('context->projection', 0);
+            });
+        }
+        if ($facultyId) {
+            $q->where('context->faculty', (string) $facultyId);
+        }
+        $snaps = $q->get();
+
+        $map = [];
+        foreach ($snaps as $snap) {
+            foreach ($snap->data ?? [] as $bl) {
+                // merge_key = dept|specialty|track → yo'nalish nomi
+                $spec = $this->specKey(explode('|', $bl['merge_key'] ?? '')[1] ?? '');
+                if ($spec === '') {
+                    $spec = $this->specKey($bl['title'] ?? '');
+                }
+                foreach ($bl['courses'] ?? [] as $co) {
+                    $lvl = (int) ($co['level_code'] ?? 0);
+                    $course = $lvl >= 11 ? $lvl - 10 : $lvl;
+                    if ($course < 1) {
+                        continue;
+                    }
+                    $ref = &$map[$spec][$course];
+                    if (!isset($ref)) {
+                        $ref = ['oqim' => 0, 'students' => 0, 'pract_by_lang' => []];
+                    }
+                    foreach ($co['oqims'] ?? [] as $oq) {
+                        $lang = $oq['lang'] ?? 'uz';
+                        $ref['oqim'] += 1;
+                        $ref['students'] += (int) ($oq['total'] ?? 0);
+                        $ref['pract_by_lang'][$lang] = ($ref['pract_by_lang'][$lang] ?? 0) + (int) ($oq['total'] ?? 0);
+                    }
+                    unset($ref);
+                }
+            }
+        }
+        return $map;
+    }
+
+    public function teacherDemand(Request $request)
+    {
+        $request->validate([
+            'academic_year' => 'required|string|max:50',
+            'kind'          => 'nullable|in:plan,real',
+            'norm_hours'    => 'nullable|integer|min:1',
+        ]);
+        $academicYear = $request->academic_year;
+        $kind = $request->input('kind', 'plan');
+        $norm = max(1, (int) $request->input('norm_hours', 900));
+        $facultyId = $request->input('faculty') ?: null;
+
+        // Fanlar (o'quv yili bo'yicha)
+        $subReq = new Request(['academic_year' => $academicYear, 'include_planned' => 1]);
+        $rows = $this->subjectsSummaryQuery($subReq)->get();
+        $kafMap = $this->kafedraMap();
+        $overrides = $this->subjectOverrides();
+
+        // Oqim/talaba ma'lumoti (tasdiqlangan snapshotlardan)
+        $oqim = $this->oqimCountsForDemand($academicYear, $kind, $facultyId);
+
+        $kafedras = [];   // kafedra => ['lecture'=>, 'practice'=>, 'subjects'=>[]]
+        $unmatched = [];
+
+        foreach ($rows as $r) {
+            $course = $r->level_code ? ((int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code) : 0;
+            $sk = $this->specKey($r->specialty_name ?: $r->specialty_code);
+            $info = $oqim[$sk][$course] ?? null;
+            if (!$info || ($info['oqim'] <= 0)) {
+                $unmatched[$r->specialty_name . ' ' . $course . '-kurs'] = true;
+                continue;
+            }
+
+            $nk = $this->normSubject($r->subject_name);
+            $ov = $overrides[$nk] ?? null;
+            $kafedra = ($ov && $ov['kafedra']) ? $ov['kafedra'] : ($kafMap[$nk] ?? '— (kafedra belgilanmagan)');
+            $psize = ($ov && $ov['practice']) ? (int) $ov['practice'] : $this->defaultPracticeSize($r->subject_name, $r->block);
+
+            $lecture = (float) ($r->lecture ?? 0);
+            $practHours = (float) ($r->practice ?? 0) + (float) ($r->laboratory ?? 0) + (float) ($r->seminar ?? 0);
+
+            // Ma'ruza: har til oqimiga alohida o'qiladi → oqim soni
+            $lectureLoad = $lecture * $info['oqim'];
+            // Amaliy: har til bo'yicha ⌈talaba / amaliy_o'lcham⌉ guruh
+            $practGroups = 0;
+            foreach ($info['pract_by_lang'] as $st) {
+                $practGroups += (int) ceil($st / max(1, $psize));
+            }
+            $practLoad = $practHours * $practGroups;
+
+            if (!isset($kafedras[$kafedra])) {
+                $kafedras[$kafedra] = ['lecture' => 0, 'practice' => 0, 'subjects' => []];
+            }
+            $kafedras[$kafedra]['lecture']  += $lectureLoad;
+            $kafedras[$kafedra]['practice'] += $practLoad;
+            $kafedras[$kafedra]['subjects'][] = [
+                'subject'   => $r->subject_name,
+                'specialty' => $r->specialty_name,
+                'course'    => $course,
+                'oqim'      => $info['oqim'],
+                'pract_grp' => $practGroups,
+                'lecture'   => round($lectureLoad, 1),
+                'practice'  => round($practLoad, 1),
+            ];
+        }
+
+        $result = [];
+        $grand = ['lecture' => 0, 'practice' => 0, 'total' => 0, 'stavka' => 0];
+        foreach ($kafedras as $name => $k) {
+            $total = $k['lecture'] + $k['practice'];
+            $stavka = round($total / $norm, 2);
+            $grand['lecture']  += $k['lecture'];
+            $grand['practice'] += $k['practice'];
+            $grand['total']    += $total;
+            $grand['stavka']   += $stavka;
+            $result[] = [
+                'kafedra'  => $name,
+                'lecture'  => round($k['lecture'], 1),
+                'practice' => round($k['practice'], 1),
+                'total'    => round($total, 1),
+                'stavka'   => $stavka,
+                'subjects' => $k['subjects'],
+            ];
+        }
+        usort($result, fn($a, $b) => $b['total'] <=> $a['total']);
+        $grand['lecture'] = round($grand['lecture'], 1);
+        $grand['practice'] = round($grand['practice'], 1);
+        $grand['total'] = round($grand['total'], 1);
+        $grand['stavka'] = round($grand['stavka'], 2);
+
+        return response()->json([
+            'kafedras'  => $result,
+            'grand'     => $grand,
+            'norm'      => $norm,
+            'unmatched' => array_keys($unmatched),
+            'has_oqim'  => !empty($oqim),
+        ]);
     }
 
     public function show(ManualCurriculum $curriculum)

@@ -52,6 +52,10 @@
                             class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
                         O'tiladigan fanlar
                     </button>
+                    <button type="button" data-tab="oqituvchi"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        O'qituvchilar ehtiyoji
+                    </button>
                 </nav>
             </div>
 
@@ -823,6 +827,90 @@
                 </div>
             </div>
 
+            {{-- ===== PANEL: O'qituvchilar ehtiyoji (4-bosqich) ===== --}}
+            <div data-panel="oqituvchi" class="hidden">
+                <div class="bg-white shadow-sm sm:rounded-lg mb-6">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">O'qituvchilar ehtiyoji (kafedra bo'yicha)</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Ma'ruza yuklama = ma'ruza soati × oqim soni (tillar bo'yicha) · Amaliy yuklama =
+                            (amaliy+lab+seminar) soati × amaliy guruh soni (talaba / amaliy o'lcham). Kafedra bo'yicha
+                            jami soat → tanlangan lavozim me'yoriga bo'lib stavka chiqadi. Tasdiqlangan oqim asosida.
+                        </p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">O'quv yili</label>
+                                <select id="td-year" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    @foreach($acadYears as $y)
+                                        <option value="{{ $y }}">{{ $y }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Oqim turi</label>
+                                <select id="td-kind" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="plan">Reja (kelasi yil)</option>
+                                    <option value="real">Real (joriy)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Fakultet</label>
+                                <select id="td-faculty" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Barcha fakultet (umumiy)</option>
+                                    @foreach($faculties as $f)
+                                        <option value="{{ $f->id }}">{{ $f->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Lavozim (norma)</label>
+                                <select id="td-norm" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
+                            </div>
+                            <div class="flex items-end">
+                                <button type="button" id="td-run" class="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Hisoblash</button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                            <div id="td-tiles" class="flex flex-wrap gap-2 text-xs"></div>
+                            <div class="flex gap-2">
+                                <button type="button" id="td-norms-btn" class="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">⚙ Normalar</button>
+                                <a id="td-export" href="#" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 hidden">⬇ CSV</a>
+                            </div>
+                        </div>
+
+                        {{-- Normalar tahriri --}}
+                        <div id="td-norms-panel" class="hidden mb-3 rounded-md border border-gray-200 p-3 bg-gray-50">
+                            <div class="text-xs font-semibold text-gray-600 mb-2">Lavozim bo'yicha yillik yuklama me'yori (soat)</div>
+                            <div id="td-norms-rows" class="space-y-1.5"></div>
+                            <div class="mt-2 flex gap-2">
+                                <button type="button" id="td-norm-add" class="px-2 py-1 text-xs bg-gray-200 rounded">+ Qator</button>
+                                <button type="button" id="td-norms-save" class="px-3 py-1 text-xs bg-indigo-600 text-white rounded">Saqlash</button>
+                            </div>
+                        </div>
+
+                        <div id="td-loading" class="hidden text-center text-sm text-gray-500 py-6">Yuklanmoqda...</div>
+                        <div id="td-empty" class="hidden text-center text-sm text-gray-500 py-6"></div>
+                        <div id="td-wrap" class="overflow-x-auto hidden">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Kafedra</th>
+                                    <th class="px-3 py-2 text-right font-medium text-blue-700">Ma'ruza soat</th>
+                                    <th class="px-3 py-2 text-right font-medium text-purple-700">Amaliy soat</th>
+                                    <th class="px-3 py-2 text-right font-medium text-gray-800">Jami soat</th>
+                                    <th class="px-3 py-2 text-right font-medium text-emerald-700">Stavka</th>
+                                </tr>
+                                </thead>
+                                <tbody id="td-tbody" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                        <div id="td-unmatched" class="mt-3 text-xs text-amber-600"></div>
+                    </div>
+                </div>
+            </div>
+
             {{-- ===== PANEL: Yo'nalish bo'yicha ===== --}}
             <div data-panel="yonalish" class="hidden">
                 <div class="bg-white shadow-sm sm:rounded-lg mb-6">
@@ -1276,7 +1364,7 @@
 
                     // Boshlang'ich holat (URL hash bo'yicha)
                     const hash = (location.hash || '').replace('#', '');
-                    const validHashes = ['solishtirish', 'yonalish', 'fanlar'];
+                    const validHashes = ['solishtirish', 'yonalish', 'fanlar', 'oqituvchi'];
                     activateMainTab(validHashes.includes(hash) ? hash : 'rejalar');
                     const firstSub = document.querySelector('.sub-tab');
                     if (firstSub) firstSub.click();
@@ -1939,6 +2027,115 @@
                             if (!loadedOnce) { loadedOnce = true; reload(); }
                         });
                         if ((location.hash || '').replace('#','') === 'fanlar') { loadedOnce = true; reload(); }
+                    })();
+
+                    // ===== O'qituvchilar ehtiyoji tab (4-bosqich) =====
+                    (function () {
+                        const normsUrl   = @json(route('admin.oquv-reja.teacher-norms'));
+                        const normsSave  = @json(route('admin.oquv-reja.teacher-norms.save'));
+                        const demandUrl  = @json(route('admin.oquv-reja.teacher-demand'));
+                        const csrf2 = document.querySelector('input[name="_token"]')?.value;
+                        const year = document.getElementById('td-year');
+                        const kind = document.getElementById('td-kind');
+                        const fac  = document.getElementById('td-faculty');
+                        const normSel = document.getElementById('td-norm');
+                        const tbody = document.getElementById('td-tbody');
+                        const wrap = document.getElementById('td-wrap');
+                        const empty = document.getElementById('td-empty');
+                        const load = document.getElementById('td-loading');
+                        const tiles = document.getElementById('td-tiles');
+                        const exp = document.getElementById('td-export');
+                        const unmatched = document.getElementById('td-unmatched');
+                        let norms = [];
+                        let lastResult = null;
+                        let loadedOnce = false;
+
+                        function esc(s){return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+                        async function loadNorms() {
+                            norms = await (await fetch(normsUrl, {headers:{'Accept':'application/json'}})).json();
+                            normSel.innerHTML = norms.map(n => '<option value="' + n.annual_hours + '">' + esc(n.position) + ' — ' + n.annual_hours + ' soat</option>').join('');
+                            renderNormsEditor();
+                        }
+                        function renderNormsEditor() {
+                            document.getElementById('td-norms-rows').innerHTML = norms.map((n, i) =>
+                                '<div class="flex gap-2 items-center"><input class="td-nm-pos flex-1 rounded border-gray-300 text-sm py-0.5 px-2" value="' + esc(n.position) + '">' +
+                                '<input type="number" class="td-nm-hrs w-24 rounded border-gray-300 text-sm py-0.5 px-2 text-right" value="' + n.annual_hours + '">' +
+                                '<button type="button" class="td-nm-del text-red-500 text-xs" data-i="' + i + '">✕</button></div>').join('');
+                            document.querySelectorAll('.td-nm-del').forEach(b => b.addEventListener('click', function(){ norms.splice(+this.dataset.i,1); renderNormsEditor(); }));
+                        }
+                        document.getElementById('td-norms-btn').addEventListener('click', () => document.getElementById('td-norms-panel').classList.toggle('hidden'));
+                        document.getElementById('td-norm-add').addEventListener('click', () => { norms.push({position:'Yangi lavozim', annual_hours:900}); renderNormsEditor(); });
+                        document.getElementById('td-norms-save').addEventListener('click', async function () {
+                            const items = [...document.querySelectorAll('#td-norms-rows > div')].map(d => ({
+                                position: d.querySelector('.td-nm-pos').value.trim(),
+                                annual_hours: parseInt(d.querySelector('.td-nm-hrs').value) || 900,
+                            })).filter(x => x.position);
+                            const fd = new FormData(); fd.append('_token', csrf2);
+                            items.forEach((it,i) => { fd.append('items['+i+'][position]', it.position); fd.append('items['+i+'][annual_hours]', it.annual_hours); });
+                            await fetch(normsSave, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
+                            await loadNorms();
+                            document.getElementById('td-norms-panel').classList.add('hidden');
+                        });
+
+                        function num(v){ return (Math.round((v||0)*10)/10).toLocaleString('ru-RU'); }
+                        function render(j) {
+                            lastResult = j;
+                            const g = j.grand;
+                            tiles.innerHTML =
+                                '<span class="inline-flex rounded-md px-2 py-1 bg-blue-50 text-blue-700">Ma\'ruza: <b class="ml-1">' + num(g.lecture) + '</b></span>' +
+                                '<span class="inline-flex rounded-md px-2 py-1 bg-purple-50 text-purple-700">Amaliy: <b class="ml-1">' + num(g.practice) + '</b></span>' +
+                                '<span class="inline-flex rounded-md px-2 py-1 bg-gray-800 text-white">Jami soat: <b class="ml-1">' + num(g.total) + '</b></span>' +
+                                '<span class="inline-flex rounded-md px-2 py-1 bg-emerald-50 text-emerald-700">Jami stavka: <b class="ml-1">' + g.stavka + '</b> (' + j.norm + ' soat/norma)</span>';
+                            if (!j.kafedras.length) {
+                                empty.textContent = j.has_oqim ? 'Fan topilmadi.' : 'Bu o\'quv yili uchun tasdiqlangan oqim topilmadi (avval oqimni tasdiqlang).';
+                                empty.classList.remove('hidden'); wrap.classList.add('hidden'); exp.classList.add('hidden'); return;
+                            }
+                            empty.classList.add('hidden'); wrap.classList.remove('hidden'); exp.classList.remove('hidden');
+                            tbody.innerHTML = j.kafedras.map(k =>
+                                '<tr class="hover:bg-gray-50">' +
+                                '<td class="px-3 py-1.5 text-gray-800">' + esc(k.kafedra) + '</td>' +
+                                '<td class="px-3 py-1.5 text-right">' + num(k.lecture) + '</td>' +
+                                '<td class="px-3 py-1.5 text-right">' + num(k.practice) + '</td>' +
+                                '<td class="px-3 py-1.5 text-right font-semibold">' + num(k.total) + '</td>' +
+                                '<td class="px-3 py-1.5 text-right font-semibold text-emerald-700">' + k.stavka + '</td>' +
+                                '</tr>').join('') +
+                                '<tr class="bg-gray-50 font-bold"><td class="px-3 py-2">JAMI</td>' +
+                                '<td class="px-3 py-2 text-right">' + num(g.lecture) + '</td>' +
+                                '<td class="px-3 py-2 text-right">' + num(g.practice) + '</td>' +
+                                '<td class="px-3 py-2 text-right">' + num(g.total) + '</td>' +
+                                '<td class="px-3 py-2 text-right text-emerald-700">' + g.stavka + '</td></tr>';
+                            unmatched.innerHTML = (j.unmatched && j.unmatched.length)
+                                ? '⚠ Oqim topilmagan (hisobga kirmagan): ' + j.unmatched.map(esc).join(' · ') : '';
+                        }
+
+                        async function run() {
+                            load.classList.remove('hidden'); wrap.classList.add('hidden'); empty.classList.add('hidden');
+                            const p = new URLSearchParams({academic_year: year.value, kind: kind.value, norm_hours: normSel.value || 900});
+                            if (fac.value) p.set('faculty', fac.value);
+                            try {
+                                const j = await (await fetch(demandUrl + '?' + p, {headers:{'Accept':'application/json'}})).json();
+                                load.classList.add('hidden'); render(j);
+                            } catch (e) { load.classList.add('hidden'); empty.textContent = 'Xatolik.'; empty.classList.remove('hidden'); }
+                        }
+                        document.getElementById('td-run').addEventListener('click', run);
+                        normSel.addEventListener('change', () => { if (lastResult) run(); });
+
+                        exp.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            if (!lastResult) return;
+                            let csv = '﻿Kafedra;Ma\'ruza soat;Amaliy soat;Jami soat;Stavka\n';
+                            lastResult.kafedras.forEach(k => { csv += [k.kafedra, k.lecture, k.practice, k.total, k.stavka].join(';') + '\n'; });
+                            const g = lastResult.grand;
+                            csv += ['JAMI', g.lecture, g.practice, g.total, g.stavka].join(';') + '\n';
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+                            a.download = 'oqituvchilar-ehtiyoji-' + year.value + '.csv'; a.click();
+                        });
+
+                        document.querySelector('.main-tab[data-tab="oqituvchi"]').addEventListener('click', () => {
+                            if (!loadedOnce) { loadedOnce = true; loadNorms(); if (year.options.length) run(); }
+                        });
                     })();
                 })();
             </script>

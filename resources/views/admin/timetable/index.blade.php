@@ -898,13 +898,19 @@
                 if (!board || !curSpec) return;
                 const whole = $('autoScope').checked;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
-                const scopeLabel = (whole ? 'Butun doska' : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs')) + typeLbl;
+                // Qamrov: butun doska / shu kursning barcha yo'nalishlari (allSpec) /
+                // shu yo'nalish+kurs (barcha fakultetlar bilan yoki bittasi).
+                const scopeLabel = (whole ? 'Butun doska'
+                    : allSpec ? ('Barcha yo\'nalishlar · ' + curSpec.course + '-kurs')
+                    : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs')) + typeLbl;
                 if ($('autoReset').checked &&
                     !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
                 this.disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
                 try {
                     const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0 };
-                    if (!whole) { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
+                    if (whole) { /* butun doska — qamrov yubormaymiz */ }
+                    else if (allSpec) { body.course = curSpec.course; }
+                    else { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
                     if (typeFilter !== 'all') body.training_type = typeFilter;
                     const j = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
                     await loadBoard(board.id);

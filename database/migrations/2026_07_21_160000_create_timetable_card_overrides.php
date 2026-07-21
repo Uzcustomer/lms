@@ -17,6 +17,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('timetable_card_overrides')) {
+            return;
+        }
         Schema::create('timetable_card_overrides', function (Blueprint $table) {
             $table->id();
             $table->foreignId('card_id')->constrained('timetable_cards')->cascadeOnDelete();

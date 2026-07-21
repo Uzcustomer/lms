@@ -13,6 +13,7 @@ use App\Models\TimetableGridSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Dars jadvali tuzish (aSc Timetables uslubida).
@@ -298,6 +299,18 @@ class TimetableController extends Controller
         return $rows;
     }
 
+    /** Migratsiya kechiksa — timetable_cards da hali yo'q ustunlarni insert qatorlaridan olib tashlash. */
+    private function stripUnsupportedColumns(array $rows): array
+    {
+        if (empty($rows) || Schema::hasColumn('timetable_cards', 'faculty_name')) {
+            return $rows;
+        }
+        return array_map(function ($r) {
+            unset($r['faculty_name']);
+            return $r;
+        }, $rows);
+    }
+
     /** Topilgan yo'nalish+kurslar uchun grid sozlamasini (bo'lmasa) doska sukutidan yaratish. */
     private function ensureGridSettings(TimetableBoard $board, array $specsFound): void
     {
@@ -321,6 +334,7 @@ class TimetableController extends Controller
             return response()->json(['error' => "Tasdiqlangan oqim topilmadi. Avval Oqim sahifasida "
                 . ($board->kind === 'plan' ? "kelasi yil (reja) oqimini" : "joriy oqimni") . " tasdiqlang."], 422);
         }
+        $rows = $this->stripUnsupportedColumns($rows);
 
         DB::transaction(function () use ($board, $rows, $specsFound) {
             TimetableCard::where('board_id', $board->id)->delete();
@@ -368,7 +382,7 @@ class TimetableController extends Controller
         // Hafta soni o'zgargan bo'lsa — shu yo'nalishning kartochkalari qayta yaratiladi
         if ($weeksChanged) {
             $sf = [];
-            $rows = $this->assembleRows($board, $this->specKey($data['specialty_name']), (int) $data['course'], $sf);
+            $rows = $this->stripUnsupportedColumns($this->assembleRows($board, $this->specKey($data['specialty_name']), (int) $data['course'], $sf) ?? []);
             DB::transaction(function () use ($board, $data, $rows) {
                 TimetableCard::where('board_id', $board->id)
                     ->where('specialty_name', $data['specialty_name'])
@@ -629,18 +643,21 @@ class TimetableController extends Controller
         $grids = TimetableGridSetting::where('board_id', $board->id)
             ->get(['specialty_name', 'course', 'days', 'pairs_per_day', 'weeks']);
 
-        // Hafta bo'yicha istisnolar (individual haftalar)
-        $overrides = DB::table('timetable_card_overrides as o')
-            ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
-            ->where('c.board_id', $board->id)
-            ->get(['o.card_id', 'o.week', 'o.day', 'o.pair', 'o.cancelled'])
-            ->map(fn($o) => [
-                'card_id'   => (int) $o->card_id,
-                'week'      => (int) $o->week,
-                'day'       => $o->day !== null ? (int) $o->day : null,
-                'pair'      => $o->pair !== null ? (int) $o->pair : null,
-                'cancelled' => (bool) $o->cancelled,
-            ]);
+        // Hafta bo'yicha istisnolar (individual haftalar) — migratsiya kechiksa bo'sh
+        $overrides = collect();
+        if (Schema::hasTable('timetable_card_overrides')) {
+            $overrides = DB::table('timetable_card_overrides as o')
+                ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
+                ->where('c.board_id', $board->id)
+                ->get(['o.card_id', 'o.week', 'o.day', 'o.pair', 'o.cancelled'])
+                ->map(fn($o) => [
+                    'card_id'   => (int) $o->card_id,
+                    'week'      => (int) $o->week,
+                    'day'       => $o->day !== null ? (int) $o->day : null,
+                    'pair'      => $o->pair !== null ? (int) $o->pair : null,
+                    'cancelled' => (bool) $o->cancelled,
+                ]);
+        }
 
         return response()->json([
             'board' => array_merge(

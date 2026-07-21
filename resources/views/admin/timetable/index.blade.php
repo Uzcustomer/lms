@@ -123,6 +123,10 @@
                         <input type="checkbox" id="allFacChk" class="rounded border-gray-300">
                         Barcha fakultetlar (ketma-ket)
                     </label>
+                    <label class="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap pb-1.5" title="Shu kursdagi barcha fakultet va yo'nalishlar ketma-ket ko'rsatiladi">
+                        <input type="checkbox" id="allSpecChk" class="rounded border-gray-300">
+                        Barcha fakultet + yo'nalish (ketma-ket)
+                    </label>
                     <div class="flex items-end gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2">
                         <div>
                             <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Kunlar</label>
@@ -753,19 +757,21 @@
             // ===== Kaskadli tanlov: Fakultet → Yo'nalish → Kurs =====
             const facLabel = f => f || '— (fakultetsiz)';
             const facultiesList = () => [...new Set(specList.map(s => s.faculty))].sort((a, b) => a.localeCompare(b, 'uz'));
-            // allFac rejimida yo'nalish/kurs ro'yxatlari fakultetга bog'lanmaydi
-            // (barcha fakultetlar bo'yicha umumiy).
-            const facMatch = (s, fac) => allFac || s.faculty === fac;
+            // allFac — barcha fakultetlar (bir yo'nalish); allSpec — barcha
+            // fakultet + barcha yo'nalish (shu kursda). Ro'yxatlar shunga qarab
+            // fakultet/yo'nalishга bog'lanmaydi.
+            const facMatch = (s, fac) => allFac || allSpec || s.faculty === fac;
             const dirsOf = fac => [...new Set(specList.filter(s => facMatch(s, fac)).map(s => s.specialty_name))]
                 .sort((a, b) => a.localeCompare(b, 'uz'));
             const coursesOf = (fac, dir) => [...new Set(specList
-                .filter(s => facMatch(s, fac) && s.specialty_name === dir).map(s => s.course))].sort((a, b) => a - b);
+                .filter(s => allSpec || (facMatch(s, fac) && s.specialty_name === dir)).map(s => s.course))].sort((a, b) => a - b);
 
             // curSpec ni (fac, dir, course) bo'yicha aniqlaymiz. course berilmasa
             // shu yo'nalishning birinchi kursi olinadi.
             function setCurSpec(fac, dir, course) {
-                let found = specList.find(s => facMatch(s, fac) && s.specialty_name === dir && s.course === course);
-                if (!found) found = specList.find(s => facMatch(s, fac) && s.specialty_name === dir);
+                const match = s => facMatch(s, fac) && (allSpec || s.specialty_name === dir);
+                let found = specList.find(s => match(s) && s.course === course);
+                if (!found) found = specList.find(match);
                 if (found) curSpec = found;
                 return found;
             }
@@ -786,8 +792,12 @@
             }
             function fillCourseControls(fac, dir) {
                 const courses = coursesOf(fac, dir);
-                const curCourse = (curSpec && (allFac || curSpec.faculty === fac) && curSpec.specialty_name === dir && courses.includes(curSpec.course))
-                    ? curSpec.course : (courses[0] ?? null);
+                let curCourse = courses[0] ?? null;
+                if (curSpec && courses.includes(curSpec.course)
+                    && (allSpec || allFac || curSpec.faculty === fac)
+                    && (allSpec || curSpec.specialty_name === dir)) {
+                    curCourse = curSpec.course;
+                }
                 $('courseSel').innerHTML = courses.map(c => '<option value="' + c + '">' + c + '-kurs</option>').join('');
                 $('courseSel').value = String(curCourse);
                 setCurSpec(fac, dir, curCourse);
@@ -809,7 +819,18 @@
                 allFac = this.checked;
                 // Ketma-ket rejimda fakultet selektori ta'sir qilmaydi; yo'nalish/kurs
                 // ro'yxatlari barcha fakultetlar bo'yicha qayta to'ldiriladi.
-                $('facSel').disabled = allFac;
+                $('facSel').disabled = allFac || allSpec;
+                selected = null;
+                fillDirControls($('facSel').value);
+                fillGridInputs(); renderAll();
+            };
+            $('allSpecChk').onchange = function () {
+                allSpec = this.checked;
+                // Barcha fakultet + yo'nalish: fakultet/yo'nalish selektorlari va
+                // "Barcha fakultetlar" checkbox'i o'chiriladi; faqat kurs qoladi.
+                $('facSel').disabled = allSpec || allFac;
+                $('dirSel').disabled = allSpec;
+                $('allFacChk').disabled = allSpec;
                 selected = null;
                 fillDirControls($('facSel').value);
                 fillGridInputs(); renderAll();
@@ -895,11 +916,17 @@
             };
 
             // ===== Yordamchilar =====
-            // Fakultet cheklovi: allFac=true bo'lsa — shu yo'nalish+kursдаги
-            // barcha fakultetlar (ketma-ket) ko'rsatiladi.
+            // Fakultet cheklovi: allFac — shu yo'nalish+kursдаги barcha
+            // fakultetlar; allSpec — shu kursдаги barcha fakultet + barcha
+            // yo'nalish (ketma-ket).
             let allFac = false;
-            const specCards = () => cards.filter(c => curSpec && c.specialty_name === curSpec.specialty_name && c.course === curSpec.course
-                && (allFac || (c.faculty_name || '') === curSpec.faculty));
+            let allSpec = false;
+            const specCards = () => cards.filter(c => {
+                if (!curSpec) return false;
+                if (allSpec) return c.course === curSpec.course;
+                if (c.specialty_name !== curSpec.specialty_name || c.course !== curSpec.course) return false;
+                return allFac || (c.faculty_name || '') === curSpec.faculty;
+            });
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
             // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
             let typeFilter = 'all';
@@ -911,13 +938,13 @@
                 const seen = {};
                 specCards().forEach(c => {
                     cardGroups(c).forEach(g => {
-                        if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '' }); }
+                        if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '', specialty: c.specialty_name || '' }); }
                     });
                 });
-                // Fakultet birinchi — bir fakultet ustunlari ketma-ket (blok bo'lib)
-                // tursin; keyin oqim, keyin guruh tartibida.
-                groupRows.sort((a, b) => (a.faculty + '|' + a.oqim_label + a.group)
-                    .localeCompare(b.faculty + '|' + b.oqim_label + b.group, undefined, { numeric: true }));
+                // Fakultet → yo'nalish → oqim → guruh: bir fakultet (va yo'nalish)
+                // ustunlari ketma-ket blok bo'lib tursin.
+                groupRows.sort((a, b) => (a.faculty + '|' + a.specialty + '|' + a.oqim_label + a.group)
+                    .localeCompare(b.faculty + '|' + b.specialty + '|' + b.oqim_label + b.group, undefined, { numeric: true }));
             }
 
             // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha)
@@ -991,7 +1018,14 @@
 
             function renderGrid() {
                 const g = curGrid();
-                const D = g.days, P = g.pairs_per_day;
+                let D = g.days, P = g.pairs_per_day;
+                // allSpec — turli yo'nalishlarning grid sozlamalari har xil; eng
+                // kattasini olamiz (barcha ustunlar sig'sin).
+                if (allSpec) {
+                    [...new Set(specCards().map(c => c.specialty_name + '|' + c.course))].forEach(k => {
+                        const gg = grids[k]; if (gg) { D = Math.max(D, gg.days); P = Math.max(P, gg.pairs_per_day); }
+                    });
+                }
                 const dayNames = boardDayNames();
 
                 // Ustunlar: guruhlar oqim bo'yicha guruhlangan (groupRows tartibida)
@@ -1000,9 +1034,12 @@
                 groupRows.forEach(gr => {
                     const lab = gr.oqim_label || '';
                     const fac = gr.faculty || '';
-                    // Fakultet o'zgarsa ham yangi oqim bloki (turli fakultetning bir xil
-                    // nomli oqimlari birlashib ketmasin).
-                    if (!curO || curO.label !== lab || curO.faculty !== fac) { curO = { label: lab, faculty: fac, groups: [] }; oqimCols.push(curO); }
+                    const spec = gr.specialty || '';
+                    // Fakultet yoki yo'nalish o'zgarsa ham yangi oqim bloki (turli
+                    // fakultet/yo'nalishning bir xil nomli oqimlari birlashib ketmasin).
+                    if (!curO || curO.label !== lab || curO.faculty !== fac || curO.specialty !== spec) {
+                        curO = { label: lab, faculty: fac, specialty: spec, groups: [] }; oqimCols.push(curO);
+                    }
                     curO.groups.push(gr.group);
                 });
 
@@ -1059,7 +1096,7 @@
                     facRuns.forEach((r, ri) => h += '<th class="tt-fac px-2 py-1' + (ri > 0 ? ' sep-oqim' : '') + '" colspan="' + r.span + '">' + esc(r.faculty || '—') + '</th>');
                     h += '</tr><tr>';
                 }
-                oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' + esc(o.label || '—') + '</th>');
+                oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' + esc((allSpec && o.specialty ? o.specialty + ' · ' : '') + (o.label || '—')) + '</th>');
                 h += '</tr><tr>';
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gr) + '</th>'));
                 h += '</tr></thead><tbody>';
@@ -1073,9 +1110,9 @@
                             (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
                         oqimCols.forEach((o, oi) => {
                             // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan).
-                            // allFac rejimida faqat o'z fakulteti oqimi yonadi.
+                            // allFac/allSpec rejimida faqat o'z fakulteti+yo'nalishi oqimi yonadi.
                             if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label
-                                && (selected.faculty_name || '') === o.faculty) {
+                                && (selected.faculty_name || '') === o.faculty && (selected.specialty_name || '') === o.specialty) {
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
                                     const bad = conflictsAt(selected, d, p).length > 0;

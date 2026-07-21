@@ -399,9 +399,11 @@ class TimetableController extends Controller
             'course'         => 'nullable|integer|min:1|max:7',
             'reset'          => 'nullable|boolean',
             'assign_rooms'   => 'nullable|boolean',
+            'training_type'  => 'nullable|in:lecture,practice',
         ]);
         $scopeSpec = $data['specialty_name'] ?? null;
         $scopeCourse = isset($data['course']) ? (int) $data['course'] : null;
+        $scopeType = $data['training_type'] ?? null;   // faqat ma'ruza yoki faqat amaliy
         $reset = (bool) ($data['reset'] ?? false);
         $assignRooms = (bool) ($data['assign_rooms'] ?? false);
 
@@ -410,6 +412,9 @@ class TimetableController extends Controller
             $q = TimetableCard::where('board_id', $board->id);
             if ($scopeSpec !== null) {
                 $q->where('specialty_name', $scopeSpec)->where('course', $scopeCourse);
+            }
+            if ($scopeType !== null) {
+                $q->where('training_type', $scopeType);
             }
             $q->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
         }
@@ -440,8 +445,11 @@ class TimetableController extends Controller
             : collect();
 
         // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar
-        $toPlace = $all->filter(function ($c) use ($scopeSpec, $scopeCourse) {
+        $toPlace = $all->filter(function ($c) use ($scopeSpec, $scopeCourse, $scopeType) {
             if ($c->day && $c->pair) {
+                return false;
+            }
+            if ($scopeType !== null && $c->training_type !== $scopeType) {
                 return false;
             }
             return $scopeSpec === null

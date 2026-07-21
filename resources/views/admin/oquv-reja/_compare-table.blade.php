@@ -77,7 +77,15 @@
                     <td class="px-3 py-2 text-right">{{ $fmt($row['work_credit']) }}</td>
                     <td class="px-3 py-2 text-right {{ ($row['credit_diff'] ?? 0) != 0 ? 'font-semibold text-red-600' : '' }}">{{ $fmtDiff($row['credit_diff']) }}</td>
                     <td class="px-3 py-2">{{ $row['kurslar'] }}</td>
-                    <td class="px-3 py-2">{{ $row['semestrlar'] }}</td>
+                    <td class="px-3 py-2">
+                        @if(!empty($row['semester_differs']))
+                            <span class="inline-flex items-center gap-1 text-amber-700 font-medium whitespace-nowrap" title="Namunaviy va ishchi rejada fan turli semestrlarda">
+                                ⚠ Nam: {{ $row['ref_semestrlar'] }} / Ishchi: {{ $row['work_semestrlar'] }}
+                            </span>
+                        @else
+                            {{ $row['semestrlar'] }}
+                        @endif
+                    </td>
                     <td class="px-3 py-2">
                         <span class="px-2 py-1 rounded text-xs font-medium whitespace-nowrap {{ $statusClasses[$row['status']] ?? 'bg-gray-100 text-gray-700' }}">
                             {{ $row['status'] }}

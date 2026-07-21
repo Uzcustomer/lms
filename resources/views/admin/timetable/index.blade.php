@@ -1456,12 +1456,15 @@
                     const specMap = {};
                     cards.forEach(c => {
                         const sk = c.specialty_name + '|' + c.course;
-                        (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, groups: new Set() });
+                        (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, faculty: c.faculty_name || '', groups: new Set() });
                         cardGroups(c).forEach(g => specMap[sk].groups.add(g));
                     });
+                    // Ustunlar fakultet bo'yicha guruhlanadi — bir fakultet
+                    // ustunlari ketma-ket (davomida) kelib, tepasida fakultet
+                    // super-sarlavhasi ustma-ust turadi.
                     Object.values(specMap)
                         .map(s => ({ ...s, groups: [...s.groups].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) }))
-                        .sort((a, b) => (a.name + a.course).localeCompare(b.name + b.course))
+                        .sort((a, b) => (a.faculty + '|' + a.name + a.course).localeCompare(b.faculty + '|' + b.name + b.course, 'uz'))
                         .forEach(s => headGroups.push({ title: s.name + ' · ' + s.course + '-kurs', cols: s.groups.map(g => ({ key: g, label: g })) }));
                     placed.forEach(c => { const pl = effPlace(c); cardGroups(c).forEach(g => push(g, pl.day, pl.pair, c)); });
                 } else if (excelMode === 'teacher') {
@@ -1505,9 +1508,11 @@
                 const dayNames = boardDayNames();
                 const sched = boardSchedule().filter(it => it.print !== false || it.type === 'pair');
 
-                // Katak matni rejimga qarab
-                const cellHtml = c => {
-                    const cls = c.training_type === 'lecture' ? 'ex-lec' : 'ex-prc';
+                // Katak matni rejimga qarab. span — ma'ruzani oqim ustunlari
+                // bo'ylab birlashtirish (colspan) uchun.
+                const cellHtml = (c, span) => {
+                    const isLec = c.training_type === 'lecture';
+                    const cls = isLec ? 'ex-lec' : 'ex-prc';
                     let extra;
                     if (excelMode === 'group') extra = [c.teacher_name, c.auditorium_name];
                     else if (excelMode === 'teacher') extra = [c.group_name || (c.oqim_label ? c.oqim_label : ''), c.auditorium_name];
@@ -1515,9 +1520,11 @@
                     const sub = extra.filter(Boolean).join(' · ');
                     // Ma'ruza — sariq class'ida qoladi (inline rang yo'q); amaliy — fan rangi.
                     const s = subjColor(c.subject_name);
-                    const st = c.training_type === 'lecture' ? ''
-                        : 'background-color:' + s.bg + ';border-left:3px solid ' + s.border + ';';
-                    return '<td class="ex-cell ' + cls + '" style="' + st + '"><div>' + esc(c.subject_name) + '</div>' +
+                    const st = isLec ? '' : 'background-color:' + s.bg + ';border-left:3px solid ' + s.border + ';';
+                    const cs = (span && span > 1) ? ' colspan="' + span + '"' : '';
+                    const tag = '[' + (isLec ? 'M' : 'A') + '] ';
+                    return '<td class="ex-cell ' + cls + '"' + cs + ' style="' + st + '">' +
+                        '<div><b>' + tag + '</b>' + esc(c.subject_name) + '</div>' +
                         (sub ? '<div style="color:#64748b;font-size:9px">' + esc(sub) + '</div>' : '') + '</td>';
                 };
 
@@ -1547,15 +1554,33 @@
                             return;
                         }
                         h += '<td class="ex-para">' + esc(it.abbr || it.no) + '</td><td class="ex-time">' + esc(timeStr) + '</td>';
-                        cols.forEach(col => {
-                            const list = idx[col.key + '|' + d + '|' + it.no] || [];
-                            if (!list.length) { h += '<td class="ex-cell"></td>'; return; }
-                            if (list.length === 1) { h += cellHtml(list[0]); return; }
+                        const cellAt = ci => idx[cols[ci].key + '|' + d + '|' + it.no] || [];
+                        let ci = 0;
+                        while (ci < cols.length) {
+                            const list = cellAt(ci);
+                            if (!list.length) { h += '<td class="ex-cell"></td>'; ci++; continue; }
+                            if (list.length === 1) {
+                                const c = list[0];
+                                // Ma'ruza — bir xil karta ketma-ket ustunlarda kelsa
+                                // (oqim guruhlari) bitta birlashtirilgan katakka jamlanadi.
+                                let span = 1;
+                                if (c.training_type === 'lecture') {
+                                    while (ci + span < cols.length) {
+                                        const nx = cellAt(ci + span);
+                                        if (nx.length === 1 && nx[0].id === c.id) span++; else break;
+                                    }
+                                }
+                                h += cellHtml(c, span);
+                                ci += span;
+                                continue;
+                            }
                             // Bir katakda bir nechta (konflikt) — qizil ramka bilan
                             h += '<td class="ex-cell" style="outline:2px solid #ef4444;outline-offset:-2px">' +
-                                list.map(c => '<div>' + esc(c.subject_name) + '<span style="color:#64748b;font-size:9px"> · ' +
+                                list.map(c => '<div><b>[' + (c.training_type === 'lecture' ? 'M' : 'A') + ']</b> ' +
+                                    esc(c.subject_name) + '<span style="color:#64748b;font-size:9px"> · ' +
                                     esc(excelMode === 'teacher' ? (c.group_name || c.oqim_label || '') : (c.teacher_name || '')) + '</span></div>').join('') + '</td>';
-                        });
+                            ci++;
+                        }
                         h += '</tr>';
                     });
                 }

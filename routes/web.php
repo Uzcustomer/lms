@@ -876,6 +876,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
                 Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
                 Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');
+                // Umumiy sozlamalar (qo'ng'iroqlar jadvali, kunlar)
+                Route::get('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'settings'])->name('settings');
+                Route::post('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSettings'])->name('settings.save');
                 // aSc uslubidagi boshqaruv dialoglari
                 Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
                 Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');

@@ -75,6 +75,10 @@
             {{-- aSc Timetables uslubidagi boshqaruv paneli --}}
             <div id="ascToolbar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-2">
                 <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" id="settingsBtn" class="asc-tool">
+                        <span class="asc-ic">⚙️</span> Sozlamalar
+                    </button>
+                    <span class="mx-1 h-6 w-px bg-gray-200"></span>
                     <button type="button" class="asc-tool" data-dialog="subjects">
                         <span class="asc-ic">📚</span> Fanlar
                     </button>
@@ -280,6 +284,120 @@
                 </div>
             </div>
 
+            {{-- ═══ Umumiy sozlamalar (aSc "Установки" uslubida) ═══ --}}
+            <div id="setModal" class="hidden fixed inset-0 z-50 bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 92vh;">
+                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
+                            <div class="flex items-center gap-2 text-sm font-semibold text-white">⚙️ Umumiy sozlamalar</div>
+                            <button type="button" id="setClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                        </div>
+                        {{-- Tablar --}}
+                        <div class="flex gap-1 px-2 pt-2 bg-[#f0f0f0]">
+                            <button type="button" class="set-tab active" data-tab="basic">Asosiy ma'lumotlar</button>
+                            <button type="button" class="set-tab" data-tab="bells">Qo'ng'iroqlar (juftliklar vaqti)</button>
+                            <button type="button" class="set-tab" data-tab="days">Kunlar</button>
+                        </div>
+                        <div class="bg-white border border-gray-300 mx-2 mb-2 rounded-b p-4 overflow-auto" style="max-height: 66vh;">
+                            {{-- Asosiy --}}
+                            <div id="setBasic" class="set-pane grid grid-cols-2 gap-4">
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Muassasa nomi (chop etishda)</label>
+                                    <input id="stInst" class="w-full rounded-md border-gray-300 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">O'quv yili</label>
+                                    <input id="stYear" disabled class="w-full rounded-md border-gray-200 bg-gray-50 text-sm text-gray-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Haftada kunlar</label>
+                                    <select id="stDays" class="w-full rounded-md border-gray-300 text-sm">
+                                        @for($i=1;$i<=7;$i++)<option value="{{ $i }}">{{ $i }}</option>@endfor
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Kuniga para (qo'ng'iroqlardan)</label>
+                                    <input id="stPairs" disabled class="w-full rounded-md border-gray-200 bg-gray-50 text-sm text-gray-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Dam olish kuni</label>
+                                    <input id="stDayOff" placeholder="Yakshanba" class="w-full rounded-md border-gray-300 text-sm">
+                                </div>
+                                <div class="col-span-2 flex flex-col gap-2 pt-1">
+                                    <label class="flex items-center gap-2 text-sm text-gray-600">
+                                        <input id="stAllowZero" type="checkbox" class="rounded border-gray-300"> Nol para (0-para)ga ruxsat berish
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-600">
+                                        <input id="stShowNum" type="checkbox" class="rounded border-gray-300"> Kun nomi o'rniga raqamini ko'rsatish
+                                    </label>
+                                </div>
+                                <p class="col-span-2 text-xs text-gray-400">O'quv yili va semestr doska yaratilganda belgilangan — o'zgartirish uchun yangi doska yarating.</p>
+                            </div>
+                            {{-- Qo'ng'iroqlar --}}
+                            <div id="setBells" class="set-pane hidden">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <button type="button" id="stAddPair" class="asc-btn primary">➕ Para qo'shish</button>
+                                    <button type="button" id="stAddBreak" class="asc-btn">➕ Tanaffus qo'shish</button>
+                                    <button type="button" id="stResetBells" class="asc-btn ml-auto">↺ Standart jadval</button>
+                                </div>
+                                <table class="w-full text-xs asc-table" id="stBellTable"></table>
+                                <p class="text-xs text-gray-400 mt-2">Juftliklar (para) tartib bilan raqamlanadi va panjaradagi para sonini belgilaydi. Tanaffuslar faqat chop/Excel ko'rinishida ko'rinadi. Vaqt formati <b>SS:DD</b> (masalan 08:30).</p>
+                            </div>
+                            {{-- Kunlar --}}
+                            <div id="setDays" class="set-pane hidden">
+                                <p class="text-xs text-gray-500 mb-2">Kun nomlarini o'zgartirishingiz mumkin (chop etishda ishlatiladi).</p>
+                                <div id="stDayNames" class="grid grid-cols-2 gap-2"></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
+                            <div id="setMsg" class="text-xs text-gray-500"></div>
+                            <div class="flex gap-2">
+                                <button type="button" id="setCancel" class="asc-btn">Bekor</button>
+                                <button type="button" id="setSave" class="asc-btn primary">Saqlash</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Qo'ng'iroq qatorini tahrirlash mini-modali --}}
+            <div id="bellEditModal" class="hidden fixed inset-0 z-[60] bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                        <div class="flex items-center justify-between px-5 py-3 border-b">
+                            <div id="beTitle" class="font-semibold text-gray-800 text-sm">Qatorni tahrirlash</div>
+                            <button type="button" id="beClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <div class="px-5 py-4 grid grid-cols-2 gap-3">
+                            <div class="col-span-2">
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Nomi</label>
+                                <input id="beName" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Qisqartma</label>
+                                <input id="beAbbr" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Bosib chiqarish</label>
+                                <select id="bePrint" class="w-full rounded-md border-gray-300 text-sm"><option value="1">Ha</option><option value="0">Yo'q</option></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Boshlanishi (SS:DD)</label>
+                                <input id="beStart" placeholder="08:30" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Tugashi (SS:DD)</label>
+                                <input id="beEnd" placeholder="09:50" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
+                            <button type="button" id="beCancel" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-700">Bekor</button>
+                            <button type="button" id="beSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -320,6 +438,14 @@
         .asc-table tr:hover td { background: #f1f5f9; }
         .asc-table tr.sel:hover td { background: #cfe0fb; }
         .asc-row-head td { background: #f8fafc; font-weight: 700; color: #1e40af; }
+        .set-tab { padding: 6px 14px; font-size: 13px; border: 1px solid #cbd5e1; border-bottom: none;
+            border-radius: 6px 6px 0 0; background: #e2e8f0; color: #475569; }
+        .set-tab.active { background: #fff; color: #1e40af; font-weight: 600; }
+        #stBellTable td { padding: 3px 6px; }
+        #stBellTable tr.is-break td { background: #f0fdf4; color: #15803d; }
+        .asc-mini { padding: 1px 5px; margin-left: 2px; font-size: 12px; border: 1px solid #cbd5e1;
+            border-radius: 4px; background: #f8fafc; color: #475569; }
+        .asc-mini:hover { background: #e2e8f0; }
         /* ── Excel ko'rinish ── */
         #excelBody table { border-collapse: collapse; font-size: 11px; }
         #excelBody th, #excelBody td { border: 1px solid #9aa7b4; padding: 2px 4px; vertical-align: middle; }
@@ -981,11 +1107,21 @@
             $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
             $('excelPrint').onclick = () => window.print();
 
+            // Doska sozlamalari yordamchilari (default fallback bilan)
+            function boardSchedule() {
+                if (board && board.bell_schedule && board.bell_schedule.length) return board.bell_schedule;
+                return PAIR_TIMES.slice(0, board ? board.pairs_per_day : 6).map((t, i) => {
+                    const [start, end] = t.split('-');
+                    return { type: 'pair', no: i + 1, name: (ROMAN[i] || (i + 1)) + '-para', abbr: ROMAN[i] || String(i + 1), start, end, print: true };
+                });
+            }
+            function boardDayNames() {
+                return (board && board.day_names && board.day_names.length) ? board.day_names : DAY_NAMES;
+            }
+
             function buildExcelView() {
-                // Faqat joylashgan kartalar. Ustunlar: yo'nalish → guruh. Qatorlar: kun → para.
-                const placed = cards.filter(c => c.day && c.pair);
-                // Ustun tuzilishi: yo'nalish+kurs → guruhlar
-                const specMap = {};   // specKey → { name, course, groups:Set }
+                // Ustunlar: yo'nalish → guruh. Qatorlar: kun → (para/tanaffus) qo'ng'iroq jadvali bo'yicha.
+                const specMap = {};
                 cards.forEach(c => {
                     const sk = c.specialty_name + '|' + c.course;
                     (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, groups: new Set() });
@@ -996,21 +1132,20 @@
                     .sort((a, b) => (a.name + a.course).localeCompare(b.name + b.course));
                 const cols = [];
                 specs.forEach(s => s.groups.forEach(g => cols.push({ spec: s, group: g })));
+                if (!cols.length) { $('excelBody').innerHTML = '<div class="p-4 text-gray-500">Joylashgan darslar yo\'q.</div>'; return; }
 
-                // Panjara o'lchami — maksimal kun/para
-                let D = board.days, P = board.pairs_per_day;
-                Object.values(grids).forEach(g => { D = Math.max(D, g.days); P = Math.max(P, g.pairs_per_day); });
+                let D = board.days;
+                Object.values(grids).forEach(g => { D = Math.max(D, g.days); });
+                const dayNames = boardDayNames();
+                const sched = boardSchedule().filter(it => it.print !== false || it.type === 'pair');
 
                 // Joylashgan karta indeksi: group|day|pair
                 const idx = {};
-                placed.forEach(c => cardGroups(c).forEach(g => { idx[g + '|' + c.day + '|' + c.pair] = c; }));
+                cards.filter(c => c.day && c.pair).forEach(c => cardGroups(c).forEach(g => { idx[g + '|' + c.day + '|' + c.pair] = c; }));
 
-                if (!cols.length) { $('excelBody').innerHTML = '<div class="p-4 text-gray-500">Joylashgan darslar yo\'q.</div>'; return; }
-
-                const title = (board.name || 'Dars jadvali');
+                const title = (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali');
                 let h = '<table><thead>';
                 h += '<tr><td class="ex-title" colspan="' + (cols.length + 3) + '">' + esc(title) + '</td></tr>';
-                // Yo'nalish sarlavhasi
                 h += '<tr><th rowspan="2" class="ex-para">Kun</th><th rowspan="2" class="ex-para">Para</th><th rowspan="2" class="ex-para">Soati</th>';
                 specs.forEach(s => h += '<th class="ex-spec" colspan="' + s.groups.length + '">' + esc(s.name) + ' · ' + s.course + '-kurs</th>');
                 h += '</tr><tr>';
@@ -1018,12 +1153,19 @@
                 h += '</tr></thead><tbody>';
 
                 for (let d = 1; d <= D; d++) {
-                    for (let p = 1; p <= P; p++) {
+                    sched.forEach((it, si) => {
                         h += '<tr>';
-                        if (p === 1) h += '<td class="ex-day" rowspan="' + P + '">' + esc(DAY_NAMES[d - 1]) + '</td>';
-                        h += '<td class="ex-para">' + (ROMAN[p - 1] || p) + '</td><td class="ex-time">' + (PAIR_TIMES[p - 1] || '') + '</td>';
+                        if (si === 0) h += '<td class="ex-day" rowspan="' + sched.length + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
+                        const timeStr = (it.start || '') + (it.end ? '-' + it.end : '');
+                        if (it.type === 'break') {
+                            h += '<td class="ex-para" colspan="2">' + esc(it.name || 'Tanaffus') + '</td>';
+                            h += '<td class="ex-time" colspan="' + cols.length + '" style="text-align:center;color:#15803d;background:#f0fdf4">' + esc(timeStr) + '</td>';
+                            h += '</tr>';
+                            return;
+                        }
+                        h += '<td class="ex-para">' + esc(it.abbr || it.no) + '</td><td class="ex-time">' + esc(timeStr) + '</td>';
                         cols.forEach(col => {
-                            const c = idx[col.group + '|' + d + '|' + p];
+                            const c = idx[col.group + '|' + d + '|' + it.no];
                             if (c) {
                                 const cls = c.training_type === 'lecture' ? 'ex-lec' : 'ex-prc';
                                 const extra = [c.teacher_name, c.auditorium_name].filter(Boolean).join(' · ');
@@ -1032,11 +1174,176 @@
                             } else { h += '<td class="ex-cell"></td>'; }
                         });
                         h += '</tr>';
-                    }
+                    });
                 }
                 h += '</tbody></table>';
                 $('excelBody').innerHTML = h;
             }
+
+            // ══════════════════════════════════════════════════════════════
+            //  Umumiy sozlamalar dialogi (qo'ng'iroqlar / juftliklar vaqti)
+            // ══════════════════════════════════════════════════════════════
+            let bellDraft = [];       // tahrirlanayotgan qo'ng'iroq jadvali
+            let dayDraft = [];        // tahrirlanayotgan kun nomlari
+            let bellEditIdx = null;
+
+            const SETTINGS_URL = id => BASE + '/boards/' + id + '/settings';
+
+            $('settingsBtn').onclick = async () => {
+                if (!board) return;
+                $('setMsg').textContent = '';
+                setTab('basic');
+                $('setModal').classList.remove('hidden');
+                try {
+                    const s = await api(SETTINGS_URL(board.id));
+                    $('stInst').value = s.institution_name || '';
+                    $('stYear').value = s.academic_year || '';
+                    $('stDays').value = s.days;
+                    $('stPairs').value = s.pairs_per_day;
+                    const set = s.settings || {};
+                    $('stDayOff').value = (set.days_off || []).join(', ');
+                    $('stAllowZero').checked = !!set.allow_zero;
+                    $('stShowNum').checked = !!set.show_day_number;
+                    bellDraft = (s.bell_schedule || []).map(x => ({ ...x }));
+                    dayDraft = (s.day_names || []).slice();
+                    renderBellTable(); renderDayNames();
+                } catch (e) { $('setMsg').textContent = 'Xatolik: ' + e.message; }
+            };
+
+            document.querySelectorAll('.set-tab').forEach(t => t.onclick = () => setTab(t.dataset.tab));
+            function setTab(name) {
+                document.querySelectorAll('.set-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+                $('setBasic').classList.toggle('hidden', name !== 'basic');
+                $('setBells').classList.toggle('hidden', name !== 'bells');
+                $('setDays').classList.toggle('hidden', name !== 'days');
+            }
+            $('setClose').onclick = $('setCancel').onclick = () => $('setModal').classList.add('hidden');
+
+            // Kun soni o'zgarsa — kun nomlari maydonini moslash
+            $('stDays').onchange = function () {
+                const n = +this.value;
+                while (dayDraft.length < n) dayDraft.push(DAY_NAMES[dayDraft.length] || ('Kun ' + (dayDraft.length + 1)));
+                dayDraft = dayDraft.slice(0, n);
+                renderDayNames();
+            };
+
+            function renderBellTable() {
+                let pn = 0;
+                let h = '<thead><tr><th>#</th><th>Nomi</th><th>Qisqartma</th><th>Boshi</th><th>Oxiri</th><th>Chop</th><th></th></tr></thead><tbody>';
+                bellDraft.forEach((it, i) => {
+                    const isBreak = it.type === 'break';
+                    const label = isBreak ? '<span class="text-green-600">tanaffus</span>' : (++pn);
+                    h += '<tr class="' + (isBreak ? 'is-break' : '') + '">' +
+                        '<td class="text-center">' + label + '</td>' +
+                        '<td>' + esc(it.name || '') + '</td><td>' + esc(it.abbr || '') + '</td>' +
+                        '<td>' + esc(it.start || '') + '</td><td>' + esc(it.end || '') + '</td>' +
+                        '<td class="text-center">' + (it.print === false ? '—' : 'Ha') + '</td>' +
+                        '<td class="whitespace-nowrap text-right">' +
+                            '<button class="asc-mini" data-up="' + i + '" title="Yuqoriga">▲</button>' +
+                            '<button class="asc-mini" data-down="' + i + '" title="Pastga">▼</button>' +
+                            '<button class="asc-mini" data-edit="' + i + '" title="Tahrirlash">✏️</button>' +
+                            '<button class="asc-mini" data-del="' + i + '" title="O\'chirish">🗑</button>' +
+                        '</td></tr>';
+                });
+                h += '</tbody>';
+                $('stBellTable').innerHTML = h;
+                const T = $('stBellTable');
+                T.querySelectorAll('[data-up]').forEach(b => b.onclick = () => moveBell(+b.dataset.up, -1));
+                T.querySelectorAll('[data-down]').forEach(b => b.onclick = () => moveBell(+b.dataset.down, 1));
+                T.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openBellEdit(+b.dataset.edit));
+                T.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { bellDraft.splice(+b.dataset.del, 1); renderBellTable(); });
+            }
+            function moveBell(i, dir) {
+                const j = i + dir;
+                if (j < 0 || j >= bellDraft.length) return;
+                [bellDraft[i], bellDraft[j]] = [bellDraft[j], bellDraft[i]];
+                renderBellTable();
+            }
+            $('stAddPair').onclick = () => {
+                const pairs = bellDraft.filter(x => x.type === 'pair').length;
+                bellDraft.push({ type: 'pair', name: (pairs + 1) + '-para', abbr: ROMAN[pairs] || String(pairs + 1),
+                    start: '', end: '', print: true });
+                renderBellTable();
+            };
+            $('stAddBreak').onclick = () => {
+                bellDraft.push({ type: 'break', name: 'Tanaffus', abbr: '—', start: '', end: '', print: false });
+                renderBellTable();
+            };
+            $('stResetBells').onclick = () => {
+                if (!confirm('Qo\'ng\'iroqlar jadvali standart holatga qaytarilsinmi?')) return;
+                const n = +$('stPairs').value || 6;
+                bellDraft = [];
+                for (let i = 0; i < n; i++) {
+                    const [s, e] = (PAIR_TIMES[i] || '-').split('-');
+                    bellDraft.push({ type: 'pair', name: (ROMAN[i] || (i + 1)) + '-para', abbr: ROMAN[i] || String(i + 1), start: s, end: e, print: true });
+                    if (i < n - 1) bellDraft.push({ type: 'break', name: 'Tanaffus', abbr: '—', start: e, end: (PAIR_TIMES[i + 1] || '').split('-')[0] || '', print: false });
+                }
+                renderBellTable();
+            };
+
+            // Qo'ng'iroq qatorini tahrirlash
+            function openBellEdit(i) {
+                bellEditIdx = i; const it = bellDraft[i];
+                $('beTitle').textContent = it.type === 'break' ? 'Tanaffus' : 'Para (juftlik)';
+                $('beName').value = it.name || ''; $('beAbbr').value = it.abbr || '';
+                $('beStart').value = it.start || ''; $('beEnd').value = it.end || '';
+                $('bePrint').value = it.print === false ? '0' : '1';
+                $('bellEditModal').classList.remove('hidden');
+            }
+            $('beClose').onclick = $('beCancel').onclick = () => $('bellEditModal').classList.add('hidden');
+            $('beSave').onclick = () => {
+                const it = bellDraft[bellEditIdx]; if (!it) return;
+                it.name = $('beName').value.trim(); it.abbr = $('beAbbr').value.trim();
+                it.start = $('beStart').value.trim(); it.end = $('beEnd').value.trim();
+                it.print = $('bePrint').value === '1';
+                $('bellEditModal').classList.add('hidden');
+                renderBellTable();
+            };
+
+            function renderDayNames() {
+                $('stDayNames').innerHTML = dayDraft.map((d, i) =>
+                    '<div class="flex items-center gap-2"><span class="text-xs text-gray-400 w-4">' + (i + 1) + '</span>' +
+                    '<input class="flex-1 rounded-md border-gray-300 text-sm dn-inp" data-i="' + i + '" value="' + esc(d) + '"></div>').join('');
+                $('stDayNames').querySelectorAll('.dn-inp').forEach(inp =>
+                    inp.oninput = () => { dayDraft[+inp.dataset.i] = inp.value; });
+            }
+
+            $('setSave').onclick = async function () {
+                if (!board) return;
+                const pairs = bellDraft.filter(x => x.type === 'pair').length;
+                if (!pairs) { $('setMsg').textContent = 'Kamida bitta para bo\'lishi kerak.'; return; }
+                this.disabled = true; $('setMsg').textContent = 'Saqlanmoqda...';
+                const dayOff = $('stDayOff').value.split(',').map(s => s.trim()).filter(Boolean);
+                const body = {
+                    institution_name: $('stInst').value.trim(),
+                    days: $('stDays').value,
+                };
+                // Massivlarni FormData ga qo'lda joylash uchun maxsus yuborish
+                const fd = new FormData();
+                fd.append('_token', CSRF);
+                fd.append('institution_name', body.institution_name);
+                fd.append('days', body.days);
+                dayDraft.slice(0, +body.days).forEach((d, i) => fd.append('day_names[' + i + ']', d || ''));
+                bellDraft.forEach((it, i) => {
+                    fd.append('bell_schedule[' + i + '][type]', it.type);
+                    fd.append('bell_schedule[' + i + '][name]', it.name || '');
+                    fd.append('bell_schedule[' + i + '][abbr]', it.abbr || '');
+                    fd.append('bell_schedule[' + i + '][start]', it.start || '');
+                    fd.append('bell_schedule[' + i + '][end]', it.end || '');
+                    fd.append('bell_schedule[' + i + '][print]', it.print === false ? 0 : 1);
+                });
+                dayOff.forEach((d, i) => fd.append('settings[days_off][' + i + ']', d));
+                fd.append('settings[allow_zero]', $('stAllowZero').checked ? 1 : 0);
+                fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
+                try {
+                    const r = await fetch(SETTINGS_URL(board.id), { method: 'POST', headers: { 'Accept': 'application/json' }, body: fd });
+                    const j = await r.json();
+                    if (!r.ok) throw new Error(j.error || j.message || 'Xatolik');
+                    $('setModal').classList.add('hidden');
+                    await loadBoard(board.id);   // yangi o'lcham/vaqtlar bilan qayta yuklash
+                } catch (e) { $('setMsg').textContent = 'Xatolik: ' + e.message; }
+                this.disabled = false;
+            };
 
             // URLdan doska ochish
             const urlBoard = new URLSearchParams(location.search).get('board');

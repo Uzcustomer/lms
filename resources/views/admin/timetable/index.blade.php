@@ -108,7 +108,7 @@
             <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-4">
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="min-w-[300px]">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish · kurs</label>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Fakultet · yo'nalish · kurs</label>
                         <select id="specSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
                     </div>
                     <div class="flex items-end gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2">
@@ -598,12 +598,24 @@
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
             // ===== Fan rangi (aSc Timetables uslubida) =====
-            // Har bir fanga o'ziga xos, boshqalardan farqli bitta rang beriladi.
-            // Ranglar doskaning barcha fanlari alfavit tartibida oltin burchak
-            // (137.5°) bo'yicha teng taqsimlanadi — shu tufayli qo'shni fanlar
-            // ranglari bir-biridan yaxshi ajralib turadi va bir fan hamma joyda
-            // (panel, panjara, Excel) aynan bir xil rangda ko'rinadi.
+            // FAQAT amaliy (praktik) darslar fan bo'yicha o'ziga xos rangda
+            // bo'yaladi; ma'ruza ([M]) o'zining sariq rangida qoladi. Ranglar
+            // doskaning barcha fanlari alfavit tartibida oltin burchak (137.5°)
+            // bo'yicha teng taqsimlanadi — qo'shni fanlar bir-biridan ajraladi
+            // va bir fan hamma joyda (panel, panjara, Excel) bir xil rangda.
+            // HSL emas, HEX ishlatiladi — Excel (.xls) HTML importi hsl() ni
+            // tushunmaydi, hex esa brauzerda ham, Excelda ham bir xil chiqadi.
             let subjectColors = {};
+            function hslToHex(h, s, l) {
+                s /= 100; l /= 100;
+                const k = n => (n + h / 30) % 12;
+                const a = s * Math.min(l, 1 - l);
+                const f = n => {
+                    const c = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+                    return Math.round(255 * c).toString(16).padStart(2, '0');
+                };
+                return '#' + f(0) + f(8) + f(4);
+            }
             function buildSubjectColors() {
                 const names = [...new Set(cards.map(c => c.subject_name).filter(Boolean))]
                     .sort((a, b) => a.localeCompare(b, 'uz'));
@@ -611,16 +623,16 @@
                 const GOLDEN = 137.508;
                 names.forEach((n, i) => {
                     const h = Math.round((i * GOLDEN) % 360);
-                    subjectColors[n] = {
-                        bg:     'hsl(' + h + ', 70%, 88%)',
-                        border: 'hsl(' + h + ', 62%, 45%)',
-                        text:   'hsl(' + h + ', 45%, 25%)',
-                    };
+                    subjectColors[n] = { bg: hslToHex(h, 70, 88), border: hslToHex(h, 62, 45) };
                 });
             }
-            const subjColor = name => subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8', text: '#334155' };
-            const subjStyle = c => { const s = subjColor(c.subject_name);
-                return 'background:' + s.bg + ';border-left-color:' + s.border + ';color:' + s.text + ';'; };
+            const subjColor = name => subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8' };
+            // Ma'ruza — hech qanday inline rang bermaymiz (sariq class'i qoladi,
+            // yozuvi ham qayta bo'yalmaydi). Amaliy — fan rangi (matn rangi
+            // o'zgarmaydi, faqat fon va chap chiziq).
+            const subjStyle = c => { if (c.training_type === 'lecture') return '';
+                const s = subjColor(c.subject_name);
+                return 'background-color:' + s.bg + ';border-left-color:' + s.border + ';'; };
 
             async function api(url, method = 'GET', body = null) {
                 const opt = { method, headers: { 'Accept': 'application/json' } };
@@ -716,11 +728,19 @@
                 specList = [];
                 cards.forEach(c => {
                     const k = c.specialty_name + '|' + c.course;
-                    if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: c.specialty_name, course: c.course }); }
+                    if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: c.specialty_name, course: c.course, faculty: c.faculty_name || '' }); }
                 });
-                specList.sort((a, b) => (a.specialty_name + a.course).localeCompare(b.specialty_name + b.course));
-                $('specSel').innerHTML = specList.map(s =>
-                    '<option value="' + esc(s.key) + '">' + esc(s.specialty_name) + ' · ' + s.course + '-kurs</option>').join('');
+                specList.sort((a, b) =>
+                    (a.faculty + '|' + a.specialty_name + a.course).localeCompare(b.faculty + '|' + b.specialty_name + b.course, 'uz'));
+                // Fakultet bo'yicha optgroup'larga ajratib ko'rsatamiz
+                const byFac = {};
+                specList.forEach(s => { (byFac[s.faculty] = byFac[s.faculty] || []).push(s); });
+                $('specSel').innerHTML = Object.keys(byFac)
+                    .sort((a, b) => a.localeCompare(b, 'uz')).map(fac => {
+                        const opts = byFac[fac].map(s =>
+                            '<option value="' + esc(s.key) + '">' + esc(s.specialty_name) + ' · ' + s.course + '-kurs</option>').join('');
+                        return fac ? '<optgroup label="' + esc(fac) + '">' + opts + '</optgroup>' : opts;
+                    }).join('');
                 if (curSpec) $('specSel').value = curSpec.key;
             }
             $('specSel').onchange = function () {
@@ -1384,9 +1404,15 @@
             $('excelDownload').onclick = () => {
                 const tableHtml = $('excelBody').innerHTML;
                 if (!tableHtml.includes('<table')) { alert('Yuklab olish uchun joylashgan darslar yo\'q.'); return; }
+                // Ekrandagi (#excelBody) stillar bilan aynan bir xil — yuklab
+                // olingan .xls fayl ekrandagidek ko'rinishi uchun. Amaliy
+                // kataklarning fan ranglari inline (hex) bo'lgani uchun Excel
+                // ularni saqlaydi; ma'ruza esa .ex-lec (sariq-havorang) class'ida.
                 const styles = 'table{border-collapse:collapse}td,th{border:1px solid #888;padding:2px 4px;font-size:11px;text-align:center;vertical-align:middle}' +
-                    'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:700}' +
-                    '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc}.ex-lec{background:#fef9c3}.ex-prc{background:#faf5ff}';
+                    'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:800}' +
+                    '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc;font-weight:600}' +
+                    '.ex-day{background:#f1f5f9;font-weight:700}.ex-para{background:#f8fafc;font-weight:600}' +
+                    '.ex-time{background:#fbfcfe;color:#64748b}.ex-lec{background:#eff6ff}.ex-prc{background:#faf5ff}';
                 const html = '<html xmlns="http://www.w3.org/TR/REC-html40">' +
                     '<head><meta charset="utf-8"><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
                 const modeLabel = { group: 'guruh', teacher: 'oqituvchi', room: 'auditoriya' }[excelMode];
@@ -1481,8 +1507,10 @@
                     else if (excelMode === 'teacher') extra = [c.group_name || (c.oqim_label ? c.oqim_label : ''), c.auditorium_name];
                     else extra = [c.group_name || c.oqim_label, c.teacher_name];
                     const sub = extra.filter(Boolean).join(' · ');
+                    // Ma'ruza — sariq class'ida qoladi (inline rang yo'q); amaliy — fan rangi.
                     const s = subjColor(c.subject_name);
-                    const st = 'background:' + s.bg + ';border-left:3px solid ' + s.border + ';color:' + s.text;
+                    const st = c.training_type === 'lecture' ? ''
+                        : 'background-color:' + s.bg + ';border-left:3px solid ' + s.border + ';';
                     return '<td class="ex-cell ' + cls + '" style="' + st + '"><div>' + esc(c.subject_name) + '</div>' +
                         (sub ? '<div style="color:#64748b;font-size:9px">' + esc(sub) + '</div>' : '') + '</td>';
                 };

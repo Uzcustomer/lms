@@ -363,6 +363,218 @@ class TimetableController extends Controller
         return response()->json(['ok' => true, 'regenerated' => $weeksChanged]);
     }
 
+    /**
+     * Avtomatik (optimal) joylashtirish — aSc Timetables uslubidagi generator.
+     *
+     * Qattiq cheklovlar (hech qachon buzilmaydi):
+     *   - guruh bir vaqtda ikki darsda bo'lmaydi (yo'nalish+kurs ichida);
+     *   - o'qituvchi biriktirilgan bo'lsa — bir vaqtda bitta darsda (butun doska);
+     *   - auditoriya biriktirilsa — sig'imi yetarli va bir vaqtda bo'sh xona.
+     * Yumshoq cheklovlar (jarima minimallashtiriladi):
+     *   - guruhda "oyna" (bo'sh para) bo'lmasligi — kun ichida paralar zich;
+     *   - bir fanni hafta bo'ylab teng taqsimlash (bir kunga to'planmasin);
+     *   - kunlar bo'ylab yukni tekislash + ertalabki paralarga ustunlik.
+     *
+     * Ochko'z (greedy) + jarima baholash: har karta eng kam jarimali bo'sh
+     * katakka qo'yiladi. Qo'lda joylashtirilgan kartalar (reset=0 bo'lsa)
+     * qo'zg'atilmaydi — ular band katak sifatida hisobga olinadi.
+     */
+    public function autoPlace(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'specialty_name' => 'nullable|string|max:255',
+            'course'         => 'nullable|integer|min:1|max:7',
+            'reset'          => 'nullable|boolean',
+            'assign_rooms'   => 'nullable|boolean',
+        ]);
+        $scopeSpec = $data['specialty_name'] ?? null;
+        $scopeCourse = isset($data['course']) ? (int) $data['course'] : null;
+        $reset = (bool) ($data['reset'] ?? false);
+        $assignRooms = (bool) ($data['assign_rooms'] ?? false);
+
+        // Reset — tanlangan qamrovdagi mavjud joylashuvlarni bo'shatamiz
+        if ($reset) {
+            $q = TimetableCard::where('board_id', $board->id);
+            if ($scopeSpec !== null) {
+                $q->where('specialty_name', $scopeSpec)->where('course', $scopeCourse);
+            }
+            $q->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
+        }
+
+        // Panjara o'lchamlari (yo'nalish+kurs bo'yicha)
+        $gridSettings = TimetableGridSetting::where('board_id', $board->id)->get()
+            ->keyBy(fn($g) => $g->specialty_name . '|' . $g->course);
+        $dimsFor = function ($spec, $course) use ($gridSettings, $board) {
+            $g = $gridSettings[$spec . '|' . $course] ?? null;
+            return [(int) ($g->days ?? $board->days), (int) ($g->pairs_per_day ?? $board->pairs_per_day)];
+        };
+
+        $all = TimetableCard::where('board_id', $board->id)->get();
+
+        // Band kataklar — joylashgan (fiks) kartalardan
+        $groupBusy = [];   // "spec|course|day|pair" => [group,...]
+        $teacherBusy = []; // "teacher_id|day|pair" => true
+        $roomBusy = [];    // "code|day|pair" => true
+        foreach ($all as $c) {
+            if ($c->day && $c->pair) {
+                $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
+            }
+        }
+
+        // Auditoriya havzasi (sig'im o'sish tartibida — zich joylash uchun)
+        $rooms = $assignRooms
+            ? Auditorium::where('active', true)->orderBy('volume')->get(['code', 'name', 'volume'])
+            : collect();
+
+        // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar
+        $toPlace = $all->filter(function ($c) use ($scopeSpec, $scopeCourse) {
+            if ($c->day && $c->pair) {
+                return false;
+            }
+            return $scopeSpec === null
+                || ($c->specialty_name === $scopeSpec && (int) $c->course === $scopeCourse);
+        });
+
+        // Tartib: eng ko'p cheklovli avval — ma'ruza (ko'p guruh band qiladi),
+        // ko'proq guruh, ko'proq talaba
+        $toPlace = $toPlace->sort(function ($a, $b) {
+            $ka = [$a->specialty_name, (int) $a->course, $a->training_type === 'lecture' ? 0 : 1,
+                   -count($a->occupiedGroups()), -(int) $a->students];
+            $kb = [$b->specialty_name, (int) $b->course, $b->training_type === 'lecture' ? 0 : 1,
+                   -count($b->occupiedGroups()), -(int) $b->students];
+            return $ka <=> $kb;
+        })->values();
+
+        $subjDay = [];  // "spreadKey|day" => count (fan taqsimoti uchun)
+        $placed = 0;
+        $unplaced = 0;
+        $roomsAssigned = 0;
+        $touched = [];
+
+        foreach ($toPlace as $c) {
+            [$days, $pairs] = $dimsFor($c->specialty_name, (int) $c->course);
+            $groups = $c->occupiedGroups();
+            $best = null;
+            $bestPen = INF;
+            $bestRoom = null;
+
+            for ($d = 1; $d <= $days; $d++) {
+                for ($p = 1; $p <= $pairs; $p++) {
+                    // Qattiq: guruh bandligi
+                    $gk = $c->specialty_name . '|' . $c->course . '|' . $d . '|' . $p;
+                    if (!empty($groupBusy[$gk]) && array_intersect($groups, $groupBusy[$gk])) {
+                        continue;
+                    }
+                    // Qattiq: o'qituvchi bandligi (biriktirilgan bo'lsa)
+                    if ($c->teacher_id && !empty($teacherBusy[$c->teacher_id . '|' . $d . '|' . $p])) {
+                        continue;
+                    }
+                    // Qattiq: auditoriya (sig'im yetarli + bo'sh)
+                    $room = null;
+                    if ($assignRooms) {
+                        foreach ($rooms as $r) {
+                            if ((int) ($r->volume ?? 0) < (int) $c->students) {
+                                continue;
+                            }
+                            if (!empty($roomBusy[$r->code . '|' . $d . '|' . $p])) {
+                                continue;
+                            }
+                            $room = $r;
+                            break; // sig'imi yetadigan eng kichik bo'sh xona
+                        }
+                        if (!$room) {
+                            continue; // bu katakka mos xona yo'q
+                        }
+                    }
+                    // Yumshoq jarima
+                    $pen = $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay);
+                    if ($pen < $bestPen) {
+                        $bestPen = $pen;
+                        $best = [$d, $p];
+                        $bestRoom = $room;
+                    }
+                }
+            }
+
+            if ($best === null) {
+                $unplaced++;
+                continue;
+            }
+            [$d, $p] = $best;
+            $c->day = $d;
+            $c->pair = $p;
+            if ($assignRooms && $bestRoom) {
+                $c->auditorium_code = $bestRoom->code;
+                $c->auditorium_name = $bestRoom->name;
+                $roomsAssigned++;
+            }
+            $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
+            $sk = $this->spreadKey($c) . '|' . $d;
+            $subjDay[$sk] = ($subjDay[$sk] ?? 0) + 1;
+            $touched[] = $c;
+            $placed++;
+        }
+
+        DB::transaction(function () use ($touched) {
+            foreach ($touched as $c) {
+                $c->save();
+            }
+        });
+
+        return response()->json([
+            'ok' => true,
+            'placed' => $placed,
+            'unplaced' => $unplaced,
+            'rooms_assigned' => $roomsAssigned,
+        ]);
+    }
+
+    /** Katakni band deb belgilash (guruh/o'qituvchi/auditoriya xaritalarida). */
+    private function markBusy(array &$groupBusy, array &$teacherBusy, array &$roomBusy, TimetableCard $c): void
+    {
+        $k = $c->specialty_name . '|' . $c->course . '|' . $c->day . '|' . $c->pair;
+        $groupBusy[$k] = array_merge($groupBusy[$k] ?? [], $c->occupiedGroups());
+        if ($c->teacher_id) {
+            $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $c->pair] = true;
+        }
+        if ($c->auditorium_code) {
+            $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $c->pair] = true;
+        }
+    }
+
+    /** Fan taqsimoti kaliti: ma'ruza — oqim bo'yicha, amaliyot — guruhcha bo'yicha. */
+    private function spreadKey(TimetableCard $c): string
+    {
+        $who = $c->training_type === 'lecture' ? ('L' . $c->oqim_label) : ('P' . $c->group_name);
+        return $c->specialty_name . '|' . $c->course . '|' . $who . '|' . $this->normSubject((string) $c->subject_name);
+    }
+
+    /** Katak jarimasi: oyna + fan taqsimoti + kun yuki + ertalab ustunligi. */
+    private function slotPenalty(TimetableCard $c, array $groups, int $d, int $p, int $pairs, array $groupBusy, array $subjDay): float
+    {
+        $spc = $c->specialty_name . '|' . $c->course;
+        $pen = ($p - 1) * 0.2; // ertalabki paralarga yengil ustunlik
+        foreach ($groups as $g) {
+            $used = [$p => true];
+            for ($pp = 1; $pp <= $pairs; $pp++) {
+                if ($pp === $p) {
+                    continue;
+                }
+                $busy = $groupBusy[$spc . '|' . $d . '|' . $pp] ?? [];
+                if (in_array($g, $busy, true)) {
+                    $used[$pp] = true;
+                }
+            }
+            $keys = array_keys($used);
+            $holes = (max($keys) - min($keys) + 1) - count($keys);
+            $pen += $holes * 10;               // oyna — eng og'ir jarima
+            $pen += (count($keys) - 1) * 1;    // kun yukini kunlar bo'ylab tekislash
+        }
+        $sk = $this->spreadKey($c) . '|' . $d;
+        $pen += ($subjDay[$sk] ?? 0) * 6;      // shu fan shu kunda takrorlansa — jarima
+        return $pen;
+    }
+
     /** Doska ma'lumotlari: barcha kartochkalar (konflikt tekshiruvi butun doska bo'ylab). */
     public function data(TimetableBoard $board)
     {

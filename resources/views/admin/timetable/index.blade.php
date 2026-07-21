@@ -63,7 +63,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Hafta soni (sukut)</label>
-                        <input type="number" id="nbWeeks" value="18" min="1" max="30" class="w-full rounded-md border-gray-300 text-sm">
+                        <input type="number" id="nbWeeks" value="15" min="1" max="30" class="w-full rounded-md border-gray-300 text-sm">
                     </div>
                     <div class="md:col-span-7">
                         <button type="button" id="createBoardBtn" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Yaratish</button>
@@ -97,8 +97,16 @@
                     </div>
                     <div id="statChips" class="flex flex-wrap gap-2 text-xs"></div>
                 </div>
+                <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+                    <button type="button" id="autoBtn" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⚡ Avtomatik joylash</button>
+                    <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska (barcha yo'nalishlar)</label>
+                    <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash (mavjudini bo'shatib)</label>
+                    <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoRooms" class="rounded border-gray-300"> Auditoriya biriktirilsin (sig'im bo'yicha)</label>
+                    <span id="autoMsg" class="text-xs text-emerald-700 font-medium"></span>
+                </div>
                 <div class="mt-2 text-xs text-gray-400">
                     Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin.
+                    <b>Avtomatik joylash</b> — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.
                 </div>
             </div>
 
@@ -326,6 +334,26 @@
                         await loadBoard(board.id);
                     }
                 } catch (e) { alert('Xatolik: ' + e.message); }
+                this.disabled = false;
+            };
+
+            // ===== Avtomatik (optimal) joylashtirish =====
+            $('autoBtn').onclick = async function () {
+                if (!board || !curSpec) return;
+                const whole = $('autoScope').checked;
+                const scopeLabel = whole ? 'Butun doska' : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs');
+                if ($('autoReset').checked &&
+                    !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
+                this.disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
+                try {
+                    const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0 };
+                    if (!whole) { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
+                    const j = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
+                    await loadBoard(board.id);
+                    $('autoMsg').textContent = 'Joylandi: ' + j.placed +
+                        (j.unplaced ? (' · joy topilmadi: ' + j.unplaced) : '') +
+                        (j.rooms_assigned ? (' · xona biriktirildi: ' + j.rooms_assigned) : '');
+                } catch (e) { $('autoMsg').textContent = ''; alert('Xatolik: ' + e.message); }
                 this.disabled = false;
             };
 

@@ -281,6 +281,11 @@
                         <div class="flex items-center justify-between px-4 py-2 border-b bg-gray-50 rounded-t">
                             <div class="font-semibold text-gray-800 text-sm">📊 Dars jadvali — Excel ko'rinish</div>
                             <div class="flex items-center gap-2">
+                                <div class="flex rounded-md overflow-hidden border border-gray-300 text-xs">
+                                    <button type="button" class="ex-mode active px-2.5 py-1" data-mode="group">Guruh bo'yicha</button>
+                                    <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="teacher">O'qituvchi bo'yicha</button>
+                                    <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="room">Auditoriya bo'yicha</button>
+                                </div>
                                 <button type="button" id="excelPrint" class="asc-btn">🖨 Chop / PDF</button>
                                 <button type="button" id="excelClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none px-1">&times;</button>
                             </div>
@@ -510,6 +515,8 @@
         .asc-mini { padding: 1px 5px; margin-left: 2px; font-size: 12px; border: 1px solid #cbd5e1;
             border-radius: 4px; background: #f8fafc; color: #475569; }
         .asc-mini:hover { background: #e2e8f0; }
+        .ex-mode { background: #fff; color: #475569; }
+        .ex-mode.active { background: #2c5896; color: #fff; font-weight: 600; }
         /* ── Excel ko'rinish ── */
         #excelBody table { border-collapse: collapse; font-size: 11px; }
         #excelBody th, #excelBody td { border: 1px solid #9aa7b4; padding: 2px 4px; vertical-align: middle; }
@@ -1167,9 +1174,15 @@
             // ══════════════════════════════════════════════════════════════
             //  Excel ko'rinishidagi jadval (kunlar/paralar qatorda, guruhlar ustunda)
             // ══════════════════════════════════════════════════════════════
+            let excelMode = 'group';   // group | teacher | room
             $('excelViewBtn').onclick = () => { buildExcelView(); $('excelModal').classList.remove('hidden'); };
             $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
             $('excelPrint').onclick = () => window.print();
+            document.querySelectorAll('.ex-mode').forEach(b => b.onclick = () => {
+                excelMode = b.dataset.mode;
+                document.querySelectorAll('.ex-mode').forEach(x => x.classList.toggle('active', x === b));
+                buildExcelView();
+            });
 
             // Doska sozlamalari yordamchilari (default fallback bilan)
             function boardSchedule() {
@@ -1184,36 +1197,70 @@
             }
 
             function buildExcelView() {
-                // Ustunlar: yo'nalish → guruh. Qatorlar: kun → (para/tanaffus) qo'ng'iroq jadvali bo'yicha.
-                const specMap = {};
-                cards.forEach(c => {
-                    const sk = c.specialty_name + '|' + c.course;
-                    (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, groups: new Set() });
-                    cardGroups(c).forEach(g => specMap[sk].groups.add(g));
-                });
-                const specs = Object.values(specMap)
-                    .map(s => ({ ...s, groups: [...s.groups].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) }))
-                    .sort((a, b) => (a.name + a.course).localeCompare(b.name + b.course));
-                const cols = [];
-                specs.forEach(s => s.groups.forEach(g => cols.push({ spec: s, group: g })));
-                if (!cols.length) { $('excelBody').innerHTML = '<div class="p-4 text-gray-500">Joylashgan darslar yo\'q.</div>'; return; }
+                const placed = cards.filter(c => c.day && c.pair);
+                // Ustun tuzilishi rejimga qarab: guruh / o'qituvchi / auditoriya.
+                // headGroups: [{title, span, cols:[{key,label}]}]; idx: "colKey|day|pair" → karta(lar)
+                let headGroups = [], idx = {};
+                const push = (key, d, p, c) => { const k = key + '|' + d + '|' + p; (idx[k] = idx[k] || []).push(c); };
+
+                if (excelMode === 'group') {
+                    const specMap = {};
+                    cards.forEach(c => {
+                        const sk = c.specialty_name + '|' + c.course;
+                        (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, groups: new Set() });
+                        cardGroups(c).forEach(g => specMap[sk].groups.add(g));
+                    });
+                    Object.values(specMap)
+                        .map(s => ({ ...s, groups: [...s.groups].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) }))
+                        .sort((a, b) => (a.name + a.course).localeCompare(b.name + b.course))
+                        .forEach(s => headGroups.push({ title: s.name + ' · ' + s.course + '-kurs', cols: s.groups.map(g => ({ key: g, label: g })) }));
+                    placed.forEach(c => cardGroups(c).forEach(g => push(g, c.day, c.pair, c)));
+                } else if (excelMode === 'teacher') {
+                    const names = [...new Set(placed.filter(c => c.teacher_name).map(c => c.teacher_name))]
+                        .sort((a, b) => a.localeCompare(b));
+                    headGroups.push({ title: "O'qituvchilar", cols: names.map(n => ({ key: n, label: n })) });
+                    placed.forEach(c => { if (c.teacher_name) push(c.teacher_name, c.day, c.pair, c); });
+                } else { // room
+                    const names = [...new Set(placed.filter(c => c.auditorium_name).map(c => c.auditorium_name))]
+                        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                    headGroups.push({ title: 'Auditoriyalar', cols: names.map(n => ({ key: n, label: n })) });
+                    placed.forEach(c => { if (c.auditorium_name) push(c.auditorium_name, c.day, c.pair, c); });
+                }
+
+                const cols = headGroups.flatMap(hg => hg.cols);
+                if (!cols.length) {
+                    $('excelBody').innerHTML = '<div class="p-4 text-gray-500">' +
+                        (excelMode === 'group' ? 'Joylashgan darslar yo\'q.' :
+                         excelMode === 'teacher' ? 'Biriktirilgan va joylashgan darslar yo\'q.' :
+                         'Auditoriya biriktirilgan darslar yo\'q.') + '</div>';
+                    return;
+                }
 
                 let D = board.days;
                 Object.values(grids).forEach(g => { D = Math.max(D, g.days); });
                 const dayNames = boardDayNames();
                 const sched = boardSchedule().filter(it => it.print !== false || it.type === 'pair');
 
-                // Joylashgan karta indeksi: group|day|pair
-                const idx = {};
-                cards.filter(c => c.day && c.pair).forEach(c => cardGroups(c).forEach(g => { idx[g + '|' + c.day + '|' + c.pair] = c; }));
+                // Katak matni rejimga qarab
+                const cellHtml = c => {
+                    const cls = c.training_type === 'lecture' ? 'ex-lec' : 'ex-prc';
+                    let extra;
+                    if (excelMode === 'group') extra = [c.teacher_name, c.auditorium_name];
+                    else if (excelMode === 'teacher') extra = [c.group_name || (c.oqim_label ? c.oqim_label : ''), c.auditorium_name];
+                    else extra = [c.group_name || c.oqim_label, c.teacher_name];
+                    const sub = extra.filter(Boolean).join(' · ');
+                    return '<td class="ex-cell ' + cls + '"><div>' + esc(c.subject_name) + '</div>' +
+                        (sub ? '<div style="color:#64748b;font-size:9px">' + esc(sub) + '</div>' : '') + '</td>';
+                };
 
-                const title = (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali');
+                const modeLabel = { group: 'guruh', teacher: "o'qituvchi", room: 'auditoriya' }[excelMode];
+                const title = (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali') + ' (' + modeLabel + ' kesimida)';
                 let h = '<table><thead>';
                 h += '<tr><td class="ex-title" colspan="' + (cols.length + 3) + '">' + esc(title) + '</td></tr>';
                 h += '<tr><th rowspan="2" class="ex-para">Kun</th><th rowspan="2" class="ex-para">Para</th><th rowspan="2" class="ex-para">Soati</th>';
-                specs.forEach(s => h += '<th class="ex-spec" colspan="' + s.groups.length + '">' + esc(s.name) + ' · ' + s.course + '-kurs</th>');
+                headGroups.forEach(hg => h += '<th class="ex-spec" colspan="' + hg.cols.length + '">' + esc(hg.title) + '</th>');
                 h += '</tr><tr>';
-                cols.forEach(col => h += '<th class="ex-grp">' + esc(col.group) + '</th>');
+                cols.forEach(col => h += '<th class="ex-grp">' + esc(col.label) + '</th>');
                 h += '</tr></thead><tbody>';
 
                 for (let d = 1; d <= D; d++) {
@@ -1223,19 +1270,18 @@
                         const timeStr = (it.start || '') + (it.end ? '-' + it.end : '');
                         if (it.type === 'break') {
                             h += '<td class="ex-para" colspan="2">' + esc(it.name || 'Tanaffus') + '</td>';
-                            h += '<td class="ex-time" colspan="' + cols.length + '" style="text-align:center;color:#15803d;background:#f0fdf4">' + esc(timeStr) + '</td>';
-                            h += '</tr>';
+                            h += '<td class="ex-time" colspan="' + cols.length + '" style="text-align:center;color:#15803d;background:#f0fdf4">' + esc(timeStr) + '</td></tr>';
                             return;
                         }
                         h += '<td class="ex-para">' + esc(it.abbr || it.no) + '</td><td class="ex-time">' + esc(timeStr) + '</td>';
                         cols.forEach(col => {
-                            const c = idx[col.group + '|' + d + '|' + it.no];
-                            if (c) {
-                                const cls = c.training_type === 'lecture' ? 'ex-lec' : 'ex-prc';
-                                const extra = [c.teacher_name, c.auditorium_name].filter(Boolean).join(' · ');
-                                h += '<td class="ex-cell ' + cls + '"><div>' + esc(c.subject_name) + '</div>' +
-                                    (extra ? '<div style="color:#64748b;font-size:9px">' + esc(extra) + '</div>' : '') + '</td>';
-                            } else { h += '<td class="ex-cell"></td>'; }
+                            const list = idx[col.key + '|' + d + '|' + it.no] || [];
+                            if (!list.length) { h += '<td class="ex-cell"></td>'; return; }
+                            if (list.length === 1) { h += cellHtml(list[0]); return; }
+                            // Bir katakda bir nechta (konflikt) — qizil ramka bilan
+                            h += '<td class="ex-cell" style="outline:2px solid #ef4444;outline-offset:-2px">' +
+                                list.map(c => '<div>' + esc(c.subject_name) + '<span style="color:#64748b;font-size:9px"> · ' +
+                                    esc(excelMode === 'teacher' ? (c.group_name || c.oqim_label || '') : (c.teacher_name || '')) + '</span></div>').join('') + '</td>';
                         });
                         h += '</tr>';
                     });

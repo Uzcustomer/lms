@@ -98,6 +98,9 @@
                     <button type="button" id="excelViewBtn" class="asc-tool">
                         <span class="asc-ic">📊</span> Excel ko'rinish
                     </button>
+                    <button type="button" id="checkBtn" class="asc-tool">
+                        <span class="asc-ic">🔍</span> Tekshiruv <span id="checkBadge" class="hidden ml-1 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold"></span>
+                    </button>
                 </div>
             </div>
 
@@ -446,6 +449,19 @@
                 </div>
             </div>
 
+            {{-- ═══ Tekshiruv (konflikt / oyna) hisoboti ═══ --}}
+            <div id="checkModal" class="hidden fixed inset-0 z-50 bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 90vh;">
+                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
+                            <div class="flex items-center gap-2 text-sm font-semibold text-white">🔍 Jadval tekshiruvi</div>
+                            <button type="button" id="chkClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                        </div>
+                        <div id="chkBody" class="bg-white border border-gray-300 mx-2 my-2 rounded p-3 overflow-auto" style="max-height: 76vh;"></div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -724,7 +740,7 @@
             }
 
             // ===== Render =====
-            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); }
+            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); }
 
             function renderStats() {
                 const sc = specCards();
@@ -1531,6 +1547,107 @@
                     renderAsgTable();
                 } catch (e) { $('asgMsg').textContent = 'Xatolik: ' + e.message; }
                 $('asgApply').disabled = $('asgClear').disabled = false;
+            }
+
+            // ══════════════════════════════════════════════════════════════
+            //  Tekshiruv (konflikt / oyna) hisoboti — client-side
+            // ══════════════════════════════════════════════════════════════
+            function computeDiagnostics() {
+                const placed = cards.filter(c => c.day && c.pair);
+                const dayName = i => (boardDayNames()[i - 1] || ('Kun ' + i));
+
+                // 1) Joylashmagan kartalar — yo'nalish bo'yicha
+                const unplacedBySpec = {};
+                cards.filter(c => !c.day).forEach(c => {
+                    const k = c.specialty_name + ' · ' + c.course + '-kurs';
+                    unplacedBySpec[k] = (unplacedBySpec[k] || 0) + 1;
+                });
+
+                // 2/3) O'qituvchi va auditoriya konfliktlari (day|pair bo'yicha)
+                const bySlot = {};
+                placed.forEach(c => { (bySlot[c.day + '|' + c.pair] = bySlot[c.day + '|' + c.pair] || []).push(c); });
+                const teacherConf = [], roomConf = [];
+                Object.entries(bySlot).forEach(([slot, list]) => {
+                    const [d, p] = slot.split('|').map(Number);
+                    const byT = {}, byR = {};
+                    list.forEach(c => {
+                        if (c.teacher_id) (byT[c.teacher_id] = byT[c.teacher_id] || []).push(c);
+                        if (c.auditorium_code) (byR[c.auditorium_code] = byR[c.auditorium_code] || []).push(c);
+                    });
+                    Object.values(byT).forEach(g => { if (g.length > 1) teacherConf.push({ d, p, name: g[0].teacher_name, subs: g.map(x => x.subject_name) }); });
+                    Object.values(byR).forEach(g => { if (g.length > 1) roomConf.push({ d, p, name: g[0].auditorium_name, subs: g.map(x => x.subject_name) }); });
+                });
+
+                // 4) Guruh oynalari (oyna): guruh × kun ichida bo'sh paralar
+                const gday = {};   // group|day => Set(pairs)
+                placed.forEach(c => cardGroups(c).forEach(g => {
+                    const k = g + '|' + c.day; (gday[k] = gday[k] || new Set()).add(c.pair);
+                }));
+                const gaps = [];
+                Object.entries(gday).forEach(([k, set]) => {
+                    const [g, d] = k.split('|');
+                    const arr = [...set].sort((a, b) => a - b);
+                    const hole = (arr[arr.length - 1] - arr[0] + 1) - arr.length;
+                    if (hole > 0) gaps.push({ group: g, day: +d, holes: hole, pairs: arr });
+                });
+                gaps.sort((a, b) => b.holes - a.holes);
+
+                // 5) O'qituvchisiz dars birliklari
+                const unitTeacher = {};
+                cards.forEach(c => {
+                    const scope = c.training_type === 'lecture' ? ('L|' + c.oqim_label) : ('P|' + c.group_name);
+                    const k = [c.specialty_name, c.course, c.subject_name, c.training_type, scope].join('¦');
+                    if (!(k in unitTeacher)) unitTeacher[k] = { has: false, sub: c.subject_name, spec: c.specialty_name, course: c.course };
+                    if (c.teacher_id) unitTeacher[k].has = true;
+                });
+                const noTeacher = Object.values(unitTeacher).filter(u => !u.has);
+
+                const totalUnplaced = Object.values(unplacedBySpec).reduce((a, b) => a + b, 0);
+                const issues = teacherConf.length + roomConf.length + gaps.length;
+                return { unplacedBySpec, totalUnplaced, teacherConf, roomConf, gaps, noTeacher, issues, dayName };
+            }
+
+            function updateCheckBadge() {
+                if (!board || !cards.length) { $('checkBadge').classList.add('hidden'); return; }
+                const d = computeDiagnostics();
+                const n = d.issues;
+                if (n > 0) { $('checkBadge').textContent = n; $('checkBadge').classList.remove('hidden'); }
+                else { $('checkBadge').classList.add('hidden'); }
+            }
+
+            $('checkBtn').onclick = () => { renderCheck(); $('checkModal').classList.remove('hidden'); };
+            $('chkClose').onclick = () => $('checkModal').classList.add('hidden');
+
+            function renderCheck() {
+                const d = computeDiagnostics();
+                const sec = (icon, title, count, ok, body) =>
+                    '<div class="mb-3 border border-gray-200 rounded">' +
+                    '<div class="px-3 py-2 font-semibold text-sm flex items-center gap-2 ' + (count ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700') + '">' +
+                    icon + ' ' + title + ' <span class="ml-auto text-xs font-bold">' + (count ? count + ' ta' : '✓ ' + ok) + '</span></div>' +
+                    (count ? '<div class="px-3 py-2 text-xs text-gray-700 space-y-1">' + body + '</div>' : '') + '</div>';
+
+                let h = '';
+                // Joylashmagan
+                h += sec('📌', 'Joylashmagan darslar', d.totalUnplaced, 'hammasi joyida',
+                    Object.entries(d.unplacedBySpec).map(([k, v]) => '<div>' + esc(k) + ' — <b>' + v + '</b> karta</div>').join(''));
+                // O'qituvchi konflikti
+                h += sec('🧑‍🏫', "O'qituvchi to'qnashuvlari", d.teacherConf.length, 'to\'qnashuv yo\'q',
+                    d.teacherConf.map(c => '<div>' + esc(d.dayName(c.d)) + ', ' + c.p + '-para — <b>' + esc(c.name || '') + '</b>: ' + esc(c.subs.join(' / ')) + '</div>').join(''));
+                // Auditoriya konflikti
+                h += sec('🚪', 'Auditoriya to\'qnashuvlari', d.roomConf.length, 'to\'qnashuv yo\'q',
+                    d.roomConf.map(c => '<div>' + esc(d.dayName(c.d)) + ', ' + c.p + '-para — <b>' + esc(c.name || '') + '</b>: ' + esc(c.subs.join(' / ')) + '</div>').join(''));
+                // Oynalar
+                h += sec('🕳', 'Guruh oynalari (bo\'sh para)', d.gaps.length, 'oyna yo\'q',
+                    d.gaps.slice(0, 40).map(g => '<div>' + esc(g.group) + ' · ' + esc(d.dayName(g.day)) + ' — <b>' + g.holes + '</b> oyna (paralar: ' + g.pairs.join(',') + ')</div>').join('') +
+                    (d.gaps.length > 40 ? '<div class="text-gray-400">... yana ' + (d.gaps.length - 40) + '</div>' : ''));
+                // O'qituvchisiz
+                h += sec('❓', 'O\'qituvchisi biriktirilmagan birliklar', d.noTeacher.length, 'hammasiga biriktirilgan',
+                    d.noTeacher.slice(0, 40).map(u => '<div>' + esc(u.spec) + ' · ' + u.course + '-kurs — ' + esc(u.sub) + '</div>').join('') +
+                    (d.noTeacher.length > 40 ? '<div class="text-gray-400">... yana ' + (d.noTeacher.length - 40) + '</div>' : ''));
+
+                const okAll = !d.totalUnplaced && !d.issues && !d.noTeacher.length;
+                $('chkBody').innerHTML = (okAll
+                    ? '<div class="mb-3 p-3 rounded bg-green-50 text-green-700 text-sm font-semibold">✓ Jadval to\'liq va konfliktsiz.</div>' : '') + h;
             }
 
             // URLdan doska ochish

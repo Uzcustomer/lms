@@ -14,6 +14,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('timetable_cards', 'faculty_name')) {
+            return;
+        }
         Schema::table('timetable_cards', function (Blueprint $table) {
             $table->string('faculty_name')->nullable()->after('course');
         });
@@ -21,6 +24,9 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('timetable_cards', 'faculty_name')) {
+            return;
+        }
         Schema::table('timetable_cards', function (Blueprint $table) {
             $table->dropColumn('faculty_name');
         });

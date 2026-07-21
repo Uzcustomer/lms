@@ -735,8 +735,12 @@
                 const seen = {};
                 specList = [];
                 cards.forEach(c => {
-                    const k = c.specialty_name + '|' + c.course;
-                    if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: c.specialty_name, course: c.course, faculty: c.faculty_name || '' }); }
+                    // Kalitga fakultetni ham qo'shamiz — bir yo'nalish (mas.
+                    // "davolash ishi") bir nechta fakultetда bo'lса ham
+                    // ular alohida qolsin (aks holda biri ikkinchisini yutadi).
+                    const fac = c.faculty_name || '';
+                    const k = fac + '|' + c.specialty_name + '|' + c.course;
+                    if (!seen[k]) { seen[k] = 1; specList.push({ key: k, specialty_name: c.specialty_name, course: c.course, faculty: fac }); }
                 });
                 specList.sort((a, b) =>
                     (a.faculty + '|' + a.specialty_name + a.course).localeCompare(b.faculty + '|' + b.specialty_name + b.course, 'uz'));
@@ -875,7 +879,8 @@
             };
 
             // ===== Yordamchilar =====
-            const specCards = () => cards.filter(c => curSpec && c.specialty_name === curSpec.specialty_name && c.course === curSpec.course);
+            const specCards = () => cards.filter(c => curSpec && (c.faculty_name || '') === curSpec.faculty
+                && c.specialty_name === curSpec.specialty_name && c.course === curSpec.course);
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
             // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
             let typeFilter = 'all';

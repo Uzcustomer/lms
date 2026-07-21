@@ -119,6 +119,10 @@
                         <label class="block text-xs font-medium text-gray-600 mb-1">Kurs</label>
                         <select id="courseSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
                     </div>
+                    <label class="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap pb-1.5" title="Shu yo'nalish+kursdagi barcha fakultetlar ketma-ket ko'rsatiladi">
+                        <input type="checkbox" id="allFacChk" class="rounded border-gray-300">
+                        Barcha fakultetlar (ketma-ket)
+                    </label>
                     <div class="flex items-end gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2">
                         <div>
                             <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Kunlar</label>
@@ -749,16 +753,19 @@
             // ===== Kaskadli tanlov: Fakultet → Yo'nalish → Kurs =====
             const facLabel = f => f || '— (fakultetsiz)';
             const facultiesList = () => [...new Set(specList.map(s => s.faculty))].sort((a, b) => a.localeCompare(b, 'uz'));
-            const dirsOf = fac => [...new Set(specList.filter(s => s.faculty === fac).map(s => s.specialty_name))]
+            // allFac rejimida yo'nalish/kurs ro'yxatlari fakultetга bog'lanmaydi
+            // (barcha fakultetlar bo'yicha umumiy).
+            const facMatch = (s, fac) => allFac || s.faculty === fac;
+            const dirsOf = fac => [...new Set(specList.filter(s => facMatch(s, fac)).map(s => s.specialty_name))]
                 .sort((a, b) => a.localeCompare(b, 'uz'));
             const coursesOf = (fac, dir) => [...new Set(specList
-                .filter(s => s.faculty === fac && s.specialty_name === dir).map(s => s.course))].sort((a, b) => a - b);
+                .filter(s => facMatch(s, fac) && s.specialty_name === dir).map(s => s.course))].sort((a, b) => a - b);
 
             // curSpec ni (fac, dir, course) bo'yicha aniqlaymiz. course berilmasa
             // shu yo'nalishning birinchi kursi olinadi.
             function setCurSpec(fac, dir, course) {
-                let found = specList.find(s => s.faculty === fac && s.specialty_name === dir && s.course === course);
-                if (!found) found = specList.find(s => s.faculty === fac && s.specialty_name === dir);
+                let found = specList.find(s => facMatch(s, fac) && s.specialty_name === dir && s.course === course);
+                if (!found) found = specList.find(s => facMatch(s, fac) && s.specialty_name === dir);
                 if (found) curSpec = found;
                 return found;
             }
@@ -772,14 +779,14 @@
             }
             function fillDirControls(fac) {
                 const dirs = dirsOf(fac);
-                const curDir = (curSpec && curSpec.faculty === fac && dirs.includes(curSpec.specialty_name)) ? curSpec.specialty_name : (dirs[0] ?? '');
+                const curDir = (curSpec && (allFac || curSpec.faculty === fac) && dirs.includes(curSpec.specialty_name)) ? curSpec.specialty_name : (dirs[0] ?? '');
                 $('dirSel').innerHTML = dirs.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
                 $('dirSel').value = curDir;
                 fillCourseControls(fac, curDir);
             }
             function fillCourseControls(fac, dir) {
                 const courses = coursesOf(fac, dir);
-                const curCourse = (curSpec && curSpec.faculty === fac && curSpec.specialty_name === dir && courses.includes(curSpec.course))
+                const curCourse = (curSpec && (allFac || curSpec.faculty === fac) && curSpec.specialty_name === dir && courses.includes(curSpec.course))
                     ? curSpec.course : (courses[0] ?? null);
                 $('courseSel').innerHTML = courses.map(c => '<option value="' + c + '">' + c + '-kurs</option>').join('');
                 $('courseSel').value = String(curCourse);
@@ -797,6 +804,15 @@
             $('courseSel').onchange = function () {
                 setCurSpec($('facSel').value, $('dirSel').value, +this.value);
                 selected = null; fillGridInputs(); renderAll();
+            };
+            $('allFacChk').onchange = function () {
+                allFac = this.checked;
+                // Ketma-ket rejimda fakultet selektori ta'sir qilmaydi; yo'nalish/kurs
+                // ro'yxatlari barcha fakultetlar bo'yicha qayta to'ldiriladi.
+                $('facSel').disabled = allFac;
+                selected = null;
+                fillDirControls($('facSel').value);
+                fillGridInputs(); renderAll();
             };
 
             // ===== Panjara sozlamasi (yo'nalish+kurs bo'yicha) =====
@@ -879,8 +895,11 @@
             };
 
             // ===== Yordamchilar =====
-            const specCards = () => cards.filter(c => curSpec && (c.faculty_name || '') === curSpec.faculty
-                && c.specialty_name === curSpec.specialty_name && c.course === curSpec.course);
+            // Fakultet cheklovi: allFac=true bo'lsa — shu yo'nalish+kursдаги
+            // barcha fakultetlar (ketma-ket) ko'rsatiladi.
+            let allFac = false;
+            const specCards = () => cards.filter(c => curSpec && c.specialty_name === curSpec.specialty_name && c.course === curSpec.course
+                && (allFac || (c.faculty_name || '') === curSpec.faculty));
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
             // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
             let typeFilter = 'all';
@@ -895,7 +914,10 @@
                         if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '' }); }
                     });
                 });
-                groupRows.sort((a, b) => (a.oqim_label + a.group).localeCompare(b.oqim_label + b.group, undefined, { numeric: true }));
+                // Fakultet birinchi — bir fakultet ustunlari ketma-ket (blok bo'lib)
+                // tursin; keyin oqim, keyin guruh tartibida.
+                groupRows.sort((a, b) => (a.faculty + '|' + a.oqim_label + a.group)
+                    .localeCompare(b.faculty + '|' + b.oqim_label + b.group, undefined, { numeric: true }));
             }
 
             // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha)
@@ -977,7 +999,10 @@
                 let curO = null;
                 groupRows.forEach(gr => {
                     const lab = gr.oqim_label || '';
-                    if (!curO || curO.label !== lab) { curO = { label: lab, groups: [] }; oqimCols.push(curO); }
+                    const fac = gr.faculty || '';
+                    // Fakultet o'zgarsa ham yangi oqim bloki (turli fakultetning bir xil
+                    // nomli oqimlari birlashib ketmasin).
+                    if (!curO || curO.label !== lab || curO.faculty !== fac) { curO = { label: lab, faculty: fac, groups: [] }; oqimCols.push(curO); }
                     curO.groups.push(gr.group);
                 });
 
@@ -1047,8 +1072,10 @@
                         h += '<td class="tt-para"><div>' + p + '</div>' +
                             (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
                         oqimCols.forEach((o, oi) => {
-                            // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan)
-                            if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label) {
+                            // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan).
+                            // allFac rejimida faqat o'z fakulteti oqimi yonadi.
+                            if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label
+                                && (selected.faculty_name || '') === o.faculty) {
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
                                     const bad = conflictsAt(selected, d, p).length > 0;

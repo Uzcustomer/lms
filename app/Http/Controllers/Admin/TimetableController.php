@@ -236,6 +236,9 @@ class TimetableController extends Controller
             foreach ($snap->data ?? [] as $bl) {
                 $specName = trim(explode('|', $bl['merge_key'] ?? '')[1] ?? '') ?: ($bl['title'] ?? '');
                 $sk = $this->specKey($specName);
+                // HAQIQIY fakultet — blokning department_name'i (snapshot faculty
+                // konteksti "Barcha fakultetlar"da bo'sh bo'lgani uchun undan olamiz).
+                $blockFac = trim((string) ($bl['department_name'] ?? '')) ?: $facName;
                 foreach ($bl['courses'] ?? [] as $co) {
                     $lvl = (int) ($co['level_code'] ?? 0);
                     $course = $lvl >= 11 ? $lvl - 10 : $lvl;
@@ -261,7 +264,7 @@ class TimetableController extends Controller
                             for ($i = 0; $i < $paras($s->lecture, $weeks); $i++) {
                                 $rows[] = [
                                     'board_id' => $board->id,
-                                    'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $facName,
+                                    'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
                                     'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
                                     'training_type' => 'lecture',
                                     'group_name' => null, 'group_names' => json_encode($groupNames),
@@ -280,7 +283,7 @@ class TimetableController extends Controller
                                     for ($i = 0; $i < $pw; $i++) {
                                         $rows[] = [
                                             'board_id' => $board->id,
-                                            'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $facName,
+                                            'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
                                             'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
                                             'training_type' => 'practice',
                                             'group_name' => $gn, 'group_names' => null,
@@ -345,49 +348,87 @@ class TimetableController extends Controller
             $this->ensureGridSettings($board, $specsFound);
         });
 
-        // Snapshot fakultet konteksti bo'sh bo'lsa ham fakultet nomini guruh
-        // ma'lumotidan to'ldiramiz (panjara/selektor/Excel fakultet ajratmasi uchun).
-        $this->backfillFacultyFromGroups($board->id);
+        // Fakultet nomini to'ldiramiz (snapshot bloklaridagi department_name →
+        // oqim guruhlari orqali). Generatsiya blockFac'ni yozadi; bu esa
+        // eski/qo'lda holatlar uchun himoya (faqat NULL qatorlar).
+        $this->backfillFacultyNames($board);
 
         return response()->json(['ok' => true, 'created' => count($rows)]);
     }
 
     /**
-     * Dars kartochkalariga fakultet nomini `groups` jadvalidan to'ldirish.
-     * Amaliy — guruh nomi bo'yicha; ma'ruza va qolganlar — xuddi shu
-     * doska+yo'nalish+kurs dagi to'ldirilgan qardosh kartadan. Faqat NULL
-     * qiymatlar yangilanadi.
+     * Dars kartochkalariga fakultet nomini SNAPSHOT ma'lumotidan to'ldirish.
+     *
+     * Snapshot bloki `department_name` = HAQIQIY fakultet; blok ichidagi har
+     * oqimning guruhlari o'sha fakultetга tegishli. Shundan guruh → fakultet
+     * xaritasini quramiz:
+     *  - amaliy karta: `group_name` bo'yicha;
+     *  - ma'ruza karta (group_name = NULL): `group_names` ichidagi birinchi
+     *    tanilgan guruh bo'yicha.
+     * Faqat NULL qiymatlar yangilanadi. Yo'nalish (specialty_name) bir nechta
+     * fakultetга umumiy bo'lganda ham guruh orqali to'g'ri ajraladi.
      */
-    private function backfillFacultyFromGroups(?int $boardId = null): void
+    private function backfillFacultyNames(TimetableBoard $board): void
     {
-        if (!Schema::hasColumn('timetable_cards', 'faculty_name') || !Schema::hasTable('groups')) {
+        if (!Schema::hasColumn('timetable_cards', 'faculty_name')) {
             return;
         }
         try {
-            $scope = fn($q) => $boardId ? $q->where('board_id', $boardId) : $q;
-
-            $groupFac = DB::table('groups')
-                ->whereNotNull('department_name')->where('department_name', '<>', '')
-                ->whereNotNull('name')->where('name', '<>', '')
-                ->pluck('department_name', 'name');
-            foreach ($groupFac as $name => $fac) {
-                $scope(DB::table('timetable_cards')->where('group_name', $name))
-                    ->whereNull('faculty_name')->update(['faculty_name' => $fac]);
+            // 1) Guruh nomi → fakultet (snapshot bloklaridan)
+            $groupFac = [];
+            foreach ($this->boardSnapshots($board) as $snap) {
+                foreach ($snap->data ?? [] as $bl) {
+                    $fac = trim((string) ($bl['department_name'] ?? ''));
+                    if ($fac === '') {
+                        continue;
+                    }
+                    foreach ($bl['courses'] ?? [] as $co) {
+                        foreach ($co['oqims'] ?? [] as $oq) {
+                            foreach ($oq['rows'] ?? [] as $gr) {
+                                $gn = trim((string) ($gr['name'] ?? ''));
+                                if ($gn !== '') {
+                                    $groupFac[$gn] = $fac;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (empty($groupFac)) {
+                return;
             }
 
-            $filled = $scope(DB::table('timetable_cards'))
-                ->whereNotNull('faculty_name')->where('faculty_name', '<>', '')
-                ->select('board_id', 'specialty_name', 'course', 'faculty_name')
-                ->distinct()->get();
-            foreach ($filled as $r) {
-                DB::table('timetable_cards')
-                    ->where('board_id', $r->board_id)
-                    ->where('specialty_name', $r->specialty_name)
-                    ->where('course', $r->course)
-                    ->whereNull('faculty_name')->update(['faculty_name' => $r->faculty_name]);
+            // 2) Amaliy kartalar — guruh nomi bo'yicha
+            foreach ($groupFac as $gn => $fac) {
+                DB::table('timetable_cards')->where('board_id', $board->id)
+                    ->where('group_name', $gn)->whereNull('faculty_name')
+                    ->update(['faculty_name' => $fac]);
+            }
+
+            // 3) Ma'ruza kartalar (group_name = NULL) — group_names ichidagi
+            //    birinchi tanilgan guruh bo'yicha
+            $lecs = DB::table('timetable_cards')->where('board_id', $board->id)
+                ->whereNull('faculty_name')->whereNotNull('group_names')
+                ->select('id', 'group_names')->get();
+            $idsByFac = [];
+            foreach ($lecs as $c) {
+                $names = json_decode($c->group_names, true) ?: [];
+                foreach ($names as $gn) {
+                    $gn = trim((string) $gn);
+                    if (isset($groupFac[$gn])) {
+                        $idsByFac[$groupFac[$gn]][] = $c->id;
+                        break;
+                    }
+                }
+            }
+            foreach ($idsByFac as $fac => $ids) {
+                foreach (array_chunk($ids, 500) as $chunk) {
+                    DB::table('timetable_cards')->whereIn('id', $chunk)
+                        ->update(['faculty_name' => $fac]);
+                }
             }
         } catch (\Throwable $e) {
-            Log::warning('backfillFacultyFromGroups: ' . $e->getMessage());
+            Log::warning('backfillFacultyNames: ' . $e->getMessage());
         }
     }
 

@@ -250,10 +250,17 @@
             }
 
             async function loadBoard(id) {
+                // Boshqa doskaga o'tayotgan bo'lsak — eski doskaga oid holatni tozalaymiz
+                const switching = !board || String(board.id) !== String(id);
                 const j = await api(BASE + '/boards/' + id + '/data');
                 board = j.board; cards = j.cards;
                 grids = {};
                 (j.grids || []).forEach(g => { grids[g.specialty_name + '|' + g.course] = g; });
+                // Eski kartaga ishora qiluvchi tanlovlarni bekor qilamiz (eski doskaga yozib
+                // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
+                selected = null; modalCard = null;
+                $('cardModal').classList.add('hidden');
+                if (switching) curSpec = null;
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');

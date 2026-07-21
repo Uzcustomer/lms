@@ -130,6 +130,15 @@
                     <div id="statChips" class="flex flex-wrap gap-2 text-xs"></div>
                 </div>
                 <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-500">Dars turi:</span>
+                        <div class="flex rounded-md overflow-hidden border border-gray-300 text-xs">
+                            <button type="button" class="tt-type active px-3 py-1" data-type="all">Hammasi</button>
+                            <button type="button" class="tt-type px-3 py-1 border-l border-gray-300" data-type="lecture">Ma'ruza</button>
+                            <button type="button" class="tt-type px-3 py-1 border-l border-gray-300" data-type="practice">Amaliy</button>
+                        </div>
+                    </div>
+                    <span class="h-6 w-px bg-gray-200"></span>
                     <button type="button" id="autoBtn" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⚡ Avtomatik joylash</button>
                     <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska (barcha yo'nalishlar)</label>
                     <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash (mavjudini bo'shatib)</label>
@@ -517,6 +526,8 @@
         .asc-mini:hover { background: #e2e8f0; }
         .ex-mode { background: #fff; color: #475569; }
         .ex-mode.active { background: #2c5896; color: #fff; font-weight: 600; }
+        .tt-type { background: #fff; color: #475569; }
+        .tt-type.active { background: #059669; color: #fff; font-weight: 600; }
         /* ── Excel ko'rinish ── */
         #excelBody table { border-collapse: collapse; font-size: 11px; }
         #excelBody th, #excelBody td { border: 1px solid #9aa7b4; padding: 2px 4px; vertical-align: middle; }
@@ -699,13 +710,15 @@
             $('autoBtn').onclick = async function () {
                 if (!board || !curSpec) return;
                 const whole = $('autoScope').checked;
-                const scopeLabel = whole ? 'Butun doska' : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs');
+                const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
+                const scopeLabel = (whole ? 'Butun doska' : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs')) + typeLbl;
                 if ($('autoReset').checked &&
                     !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
                 this.disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
                 try {
                     const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0 };
                     if (!whole) { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
+                    if (typeFilter !== 'all') body.training_type = typeFilter;
                     const j = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
                     await loadBoard(board.id);
                     $('autoMsg').textContent = 'Joylandi: ' + j.placed +
@@ -718,6 +731,10 @@
             // ===== Yordamchilar =====
             const specCards = () => cards.filter(c => curSpec && c.specialty_name === curSpec.specialty_name && c.course === curSpec.course);
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
+            // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
+            let typeFilter = 'all';
+            const typeVisible = c => typeFilter === 'all' || c.training_type === typeFilter;
+            const visibleSpecCards = () => specCards().filter(typeVisible);
 
             function buildGroupRows() {
                 groupRows = [];
@@ -750,11 +767,12 @@
             function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); }
 
             function renderStats() {
-                const sc = specCards();
+                const sc = visibleSpecCards();
                 const placed = sc.filter(c => c.day).length;
                 const totPlaced = cards.filter(c => c.day).length;
+                const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
                 $('statChips').innerHTML =
-                    '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b></span>' +
+                    '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + '</span>' +
                     '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + cards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
             }
@@ -766,7 +784,7 @@
             }
 
             function renderPanel() {
-                const un = specCards().filter(c => !c.day);
+                const un = visibleSpecCards().filter(c => !c.day);
                 // Fan bo'yicha guruhlash
                 const bySubj = {};
                 un.forEach(c => { (bySubj[c.subject_name] = bySubj[c.subject_name] || []).push(c); });
@@ -804,9 +822,9 @@
                     h += '<th class="bg-gray-50 px-1 py-0.5 text-gray-500 font-normal">' + p + '</th>';
                 h += '</tr></thead><tbody>';
 
-                // Joylashgan kartalar indeksi: group|day|pair → [卡]
+                // Joylashgan kartalar indeksi: group|day|pair → [karta] (dars turi filtriga muvofiq)
                 const placedIdx = {};
-                specCards().filter(c => c.day).forEach(c => {
+                visibleSpecCards().filter(c => c.day).forEach(c => {
                     cardGroups(c).forEach(g => {
                         const k = g + '|' + c.day + '|' + c.pair;
                         (placedIdx[k] = placedIdx[k] || []).push(c);
@@ -1197,7 +1215,8 @@
             }
 
             function buildExcelView() {
-                const placed = cards.filter(c => c.day && c.pair);
+                // Dars turi filtri Excel ko'rinishga ham qo'llanadi (masalan faqat ma'ruza jadvali)
+                const placed = cards.filter(c => c.day && c.pair && typeVisible(c));
                 // Ustun tuzilishi rejimga qarab: guruh / o'qituvchi / auditoriya.
                 // headGroups: [{title, span, cols:[{key,label}]}]; idx: "colKey|day|pair" → karta(lar)
                 let headGroups = [], idx = {};
@@ -1695,6 +1714,14 @@
                 $('chkBody').innerHTML = (okAll
                     ? '<div class="mb-3 p-3 rounded bg-green-50 text-green-700 text-sm font-semibold">✓ Jadval to\'liq va konfliktsiz.</div>' : '') + h;
             }
+
+            // ===== Dars turi filtri (Hammasi / Ma'ruza / Amaliy) =====
+            document.querySelectorAll('.tt-type').forEach(b => b.onclick = () => {
+                typeFilter = b.dataset.type;
+                document.querySelectorAll('.tt-type').forEach(x => x.classList.toggle('active', x === b));
+                if (selected && !typeVisible(selected)) selected = null;   // filtrga mos kelmasa tanlovni bekor qilamiz
+                renderAll();
+            });
 
             // URLdan doska ochish
             const urlBoard = new URLSearchParams(location.search).get('board');

@@ -72,6 +72,28 @@
                 </div>
             </div>
 
+            {{-- aSc Timetables uslubidagi boshqaruv paneli --}}
+            <div id="ascToolbar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-2">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" class="asc-tool" data-dialog="subjects">
+                        <span class="asc-ic">📚</span> Fanlar
+                    </button>
+                    <button type="button" class="asc-tool" data-dialog="groups">
+                        <span class="asc-ic">👥</span> Guruhlar
+                    </button>
+                    <button type="button" class="asc-tool" data-dialog="auditoriums">
+                        <span class="asc-ic">🚪</span> Auditoriyalar
+                    </button>
+                    <button type="button" class="asc-tool" data-dialog="teachers">
+                        <span class="asc-ic">🧑‍🏫</span> O'qituvchilar
+                    </button>
+                    <span class="mx-1 h-6 w-px bg-gray-200"></span>
+                    <button type="button" id="excelViewBtn" class="asc-tool">
+                        <span class="asc-ic">📊</span> Excel ko'rinish
+                    </button>
+                </div>
+            </div>
+
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
             <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-4">
                 <div class="flex flex-wrap items-end gap-3">
@@ -161,6 +183,103 @@
                 </div>
             </div>
 
+            {{-- ═══ aSc Timetables uslubidagi boshqaruv dialogi (Fanlar/Guruhlar/Auditoriyalar/O'qituvchilar) ═══ --}}
+            <div id="ascModal" class="hidden fixed inset-0 z-50 bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-5xl flex flex-col" style="max-height: 90vh;">
+                        {{-- Sarlavha satri --}}
+                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
+                            <div class="flex items-center gap-2 text-sm font-semibold text-white">
+                                <span id="ascIcon"></span><span id="ascTitle"></span>
+                            </div>
+                            <button type="button" id="ascClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                        </div>
+                        {{-- Tana: chapda ro'yxat, o'ngda tugmalar --}}
+                        <div class="flex gap-2 p-2 overflow-hidden" style="min-height: 340px;">
+                            <div class="flex-1 flex flex-col bg-white border border-gray-300 rounded overflow-hidden">
+                                <div class="flex items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
+                                    <span id="ascListLabel" class="text-xs font-semibold text-gray-600">Ro'yxat:</span>
+                                    <input id="ascSearch" placeholder="Qidirish..." class="ml-auto w-56 rounded border-gray-300 text-xs py-1">
+                                    <select id="ascFilter" class="hidden rounded border-gray-300 text-xs py-1"></select>
+                                    <span id="ascCount" class="text-xs text-gray-400"></span>
+                                </div>
+                                <div class="overflow-auto" style="max-height: 58vh;">
+                                    <table id="ascTable" class="w-full text-xs asc-table"></table>
+                                </div>
+                            </div>
+                            {{-- O'ng tugmalar ustuni --}}
+                            <div id="ascButtons" class="w-40 shrink-0 flex flex-col gap-1.5"></div>
+                        </div>
+                        {{-- Pastki panel --}}
+                        <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
+                            <div id="ascFootMsg" class="text-xs text-gray-500"></div>
+                            <button type="button" id="ascCloseBtn" class="asc-btn">Yopish</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Auditoriya tahrirlash mini-formasi --}}
+            <div id="audEditModal" class="hidden fixed inset-0 z-[60] bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+                        <div class="flex items-center justify-between px-5 py-3 border-b">
+                            <div id="aeTitle" class="font-semibold text-gray-800 text-sm">Auditoriya</div>
+                            <button type="button" id="aeClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <div class="px-5 py-4 grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Kod *</label>
+                                <input id="aeCode" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Sig'im *</label>
+                                <input id="aeVolume" type="number" min="0" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Nomi *</label>
+                                <input id="aeName" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Bino</label>
+                                <input id="aeBuilding" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Turi</label>
+                                <input id="aeType" class="w-full rounded-md border-gray-300 text-sm">
+                            </div>
+                            <label class="col-span-2 flex items-center gap-2 text-sm text-gray-600">
+                                <input id="aeActive" type="checkbox" class="rounded border-gray-300" checked> Faol
+                            </label>
+                            <div id="aeMsg" class="col-span-2 hidden text-sm rounded px-3 py-2"></div>
+                        </div>
+                        <div class="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
+                            <button type="button" id="aeCancel" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-700">Bekor</button>
+                            <button type="button" id="aeSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Saqlash</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Import uchun yashirin fayl input --}}
+            <input type="file" id="audImportFile" accept=".xlsx,.xls,.csv" class="hidden">
+
+            {{-- ═══ Excel ko'rinishidagi jadval (kunlar/paralar qatorda, guruhlar ustunda) ═══ --}}
+            <div id="excelModal" class="hidden fixed inset-0 z-50 bg-black/50">
+                <div class="flex min-h-full items-start justify-center p-3">
+                    <div class="bg-white rounded shadow-2xl w-full max-w-[1500px] flex flex-col" style="max-height: 94vh;">
+                        <div class="flex items-center justify-between px-4 py-2 border-b bg-gray-50 rounded-t">
+                            <div class="font-semibold text-gray-800 text-sm">📊 Dars jadvali — Excel ko'rinish</div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" id="excelPrint" class="asc-btn">🖨 Chop / PDF</button>
+                                <button type="button" id="excelClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none px-1">&times;</button>
+                            </div>
+                        </div>
+                        <div id="excelBody" class="overflow-auto p-3" style="max-height: 86vh;"></div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -179,6 +298,46 @@
         .pn-card.sel { outline: 2px solid #f59e0b; }
         .lang-rus { box-shadow: inset 0 0 0 1px #fca5a5; }
         .lang-ing { box-shadow: inset 0 0 0 1px #86efac; }
+
+        /* ── aSc uslubidagi toolbar va dialoglar ── */
+        .asc-tool { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px;
+            background: linear-gradient(#fff,#eef1f5); border: 1px solid #cbd5e1; border-radius: 6px; color: #334155; }
+        .asc-tool:hover { background: linear-gradient(#fff,#e2e8f0); border-color: #94a3b8; }
+        .asc-tool .asc-ic { font-size: 16px; }
+        .asc-titlebar { background: linear-gradient(#3b6fb5,#2c5896); }
+        .asc-btn { padding: 6px 14px; font-size: 13px; background: linear-gradient(#fff,#e8edf3);
+            border: 1px solid #b6c2d1; border-radius: 5px; color: #2c3e50; }
+        .asc-btn:hover:not(:disabled) { background: linear-gradient(#fff,#dbe3ec); border-color: #8ea3ba; }
+        .asc-btn:disabled { opacity: .45; cursor: not-allowed; }
+        .asc-btn.primary { background: linear-gradient(#4a90d9,#2c6bb3); border-color: #2c6bb3; color: #fff; }
+        .asc-btn.primary:hover:not(:disabled) { background: linear-gradient(#3f82c8,#255d9c); }
+        .asc-btn.danger:hover:not(:disabled) { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+        .asc-btn.block { display: block; width: 100%; text-align: left; }
+        .asc-table th { position: sticky; top: 0; background: #eef1f5; border: 1px solid #d5dbe3;
+            padding: 4px 8px; text-align: left; font-weight: 600; color: #475569; white-space: nowrap; z-index: 1; }
+        .asc-table td { border: 1px solid #edf0f3; padding: 3px 8px; color: #334155; white-space: nowrap; }
+        .asc-table tr.sel td { background: #dbeafe; }
+        .asc-table tr:hover td { background: #f1f5f9; }
+        .asc-table tr.sel:hover td { background: #cfe0fb; }
+        .asc-row-head td { background: #f8fafc; font-weight: 700; color: #1e40af; }
+        /* ── Excel ko'rinish ── */
+        #excelBody table { border-collapse: collapse; font-size: 11px; }
+        #excelBody th, #excelBody td { border: 1px solid #9aa7b4; padding: 2px 4px; vertical-align: middle; }
+        #excelBody .ex-title { text-align: center; font-weight: 700; font-size: 14px; border: none; padding: 6px; }
+        #excelBody .ex-fac { text-align: center; font-weight: 700; background: #dbeafe; }
+        #excelBody .ex-spec { text-align: center; font-weight: 700; background: #eef2ff; }
+        #excelBody .ex-grp { text-align: center; font-weight: 600; background: #f8fafc; }
+        #excelBody .ex-day { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: 700; background: #f1f5f9; text-align: center; }
+        #excelBody .ex-para { text-align: center; background: #f8fafc; font-weight: 600; }
+        #excelBody .ex-time { text-align: center; background: #fbfcfe; color: #64748b; white-space: nowrap; }
+        #excelBody .ex-cell { min-width: 92px; height: 30px; }
+        #excelBody .ex-lec { background: #eff6ff; }
+        #excelBody .ex-prc { background: #faf5ff; }
+        @media print {
+            body * { visibility: hidden; }
+            #excelBody, #excelBody * { visibility: visible; }
+            #excelBody { position: absolute; left: 0; top: 0; }
+        }
     </style>
 
     <script>
@@ -254,6 +413,7 @@
             function hideBoard() {
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
+                $('ascToolbar').classList.add('hidden');
                 $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
             }
 
@@ -272,6 +432,7 @@
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
+                $('ascToolbar').classList.remove('hidden');
                 buildSpecList();
                 if (!cards.length) {
                     $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
@@ -573,6 +734,309 @@
                 $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                 renderAll();
             };
+
+            // ══════════════════════════════════════════════════════════════
+            //  aSc uslubidagi boshqaruv dialoglari
+            // ══════════════════════════════════════════════════════════════
+            const PAIR_TIMES = ['08:30-09:50','10:00-11:20','12:00-13:20','13:30-14:50','15:00-16:20','16:30-17:50','17:00-18:20'];
+            const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X'];
+            const LANG_LABEL = { uz: "o'zbek", rus: 'rus', ru: 'rus', ing: 'ingliz', en: 'ingliz' };
+
+            let ascType = null;       // joriy dialog turi
+            let ascData = [];         // dialog ma'lumotlari (xom)
+            let ascSelId = null;      // tanlangan qator id/kalit
+
+            const dialogMeta = {
+                subjects:    { icon: '📚', title: 'Fanlar',       listLabel: 'Fanlar ro\'yxati:',  filter: 'spec' },
+                groups:      { icon: '👥', title: 'Guruhlar',     listLabel: 'Guruhlar ro\'yxati:', filter: 'spec' },
+                auditoriums: { icon: '🚪', title: 'Auditoriyalar', listLabel: 'Auditoriyalar:',     filter: null   },
+                teachers:    { icon: '🧑‍🏫', title: "O'qituvchilar", listLabel: 'O\'qituvchilar:',   filter: null   },
+            };
+
+            document.querySelectorAll('.asc-tool[data-dialog]').forEach(btn =>
+                btn.onclick = () => openDialog(btn.dataset.dialog));
+
+            async function openDialog(type) {
+                if (!board) return;
+                ascType = type; ascSelId = null;
+                const m = dialogMeta[type];
+                $('ascIcon').textContent = m.icon;
+                $('ascTitle').textContent = m.title;
+                $('ascListLabel').textContent = m.listLabel;
+                $('ascSearch').value = '';
+                $('ascFootMsg').textContent = '';
+                $('ascModal').classList.remove('hidden');
+                $('ascTable').innerHTML = '<tbody><tr><td class="p-3 text-gray-400">Yuklanmoqda...</td></tr></tbody>';
+                renderAscButtons();
+                try {
+                    if (type === 'subjects') {
+                        const j = await api(BASE + '/boards/' + board.id + '/subjects');
+                        ascData = j.subjects || [];
+                        $('ascFootMsg').textContent = 'Manba: ishchi o\'quv rejalar · hafta soni: ' + j.weeks;
+                    } else if (type === 'groups') {
+                        const j = await api(BASE + '/boards/' + board.id + '/groups');
+                        ascData = j.groups || [];
+                    } else if (type === 'auditoriums') {
+                        ascData = await api(AUDS_URL);
+                    } else if (type === 'teachers') {
+                        ascData = await api(TEACHERS_URL);
+                    }
+                } catch (e) { ascData = []; $('ascFootMsg').textContent = 'Xatolik: ' + e.message; }
+                buildAscFilter();
+                renderAscTable();
+            }
+
+            function buildAscFilter() {
+                const f = $('ascFilter');
+                const meta = dialogMeta[ascType];
+                if (meta.filter === 'spec') {
+                    const specs = [...new Set(ascData.map(r => r.specialty_name + ' · ' + r.course + '-kurs'))].sort();
+                    f.innerHTML = '<option value="">— barcha yo\'nalishlar —</option>' +
+                        specs.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+                    f.classList.remove('hidden');
+                } else { f.classList.add('hidden'); }
+            }
+
+            function filteredAsc() {
+                const q = ($('ascSearch').value || '').toLowerCase().trim();
+                const fv = $('ascFilter').value;
+                return ascData.filter(r => {
+                    if (fv && (r.specialty_name + ' · ' + r.course + '-kurs') !== fv) return false;
+                    if (!q) return true;
+                    return JSON.stringify(r).toLowerCase().includes(q);
+                });
+            }
+
+            function renderAscTable() {
+                const rows = filteredAsc();
+                $('ascCount').textContent = rows.length + ' ta';
+                let h = '';
+                if (ascType === 'subjects') {
+                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th></tr></thead><tbody>';
+                    let lastSpec = null;
+                    rows.forEach((r, i) => {
+                        const sk = r.specialty_name + '·' + r.course;
+                        if (sk !== lastSpec) {
+                            h += '<tr class="asc-row-head"><td colspan="7">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</td></tr>';
+                            lastSpec = sk;
+                        }
+                        h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td>' + esc(r.specialty_name) + ' · ' + r.course + '</td>' +
+                            '<td>' + esc(r.kafedra_name || '—') + '</td><td>' + fmt(r.lecture) + '</td><td>' + fmt(r.practice + r.laboratory + r.seminar) +
+                            '</td><td>' + r.lec_pairs + '</td><td>' + r.prc_pairs + '</td></tr>';
+                    });
+                } else if (ascType === 'groups') {
+                    h = '<thead><tr><th>Guruh</th><th>Yo\'nalish · kurs</th><th>Oqim</th><th>Til</th><th>Talaba</th></tr></thead><tbody>';
+                    rows.forEach((r, i) => {
+                        h += rowTag(i) + '<td class="font-semibold">' + esc(r.group_name) + '</td><td>' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</td>' +
+                            '<td>' + esc(r.oqim_label || '—') + '</td><td>' + esc(LANG_LABEL[r.lang] || r.lang || '—') + '</td><td>' + r.students + '</td></tr>';
+                    });
+                } else if (ascType === 'auditoriums') {
+                    h = '<thead><tr><th>Kod</th><th>Nomi</th><th>Sig\'im</th><th>Bino</th><th>Turi</th><th>Holat</th></tr></thead><tbody>';
+                    rows.forEach((r, i) => {
+                        h += rowTag(i, r.id) + '<td class="font-semibold">' + esc(r.code) + '</td><td>' + esc(r.name) + '</td>' +
+                            '<td>' + (r.volume || 0) + '</td><td>' + esc(r.building_name || '—') + '</td><td>' + esc(r.auditorium_type_name || '—') + '</td>' +
+                            '<td>' + (r.active ? '<span class="text-green-600">faol</span>' : '<span class="text-gray-400">nofaol</span>') + '</td></tr>';
+                    });
+                } else if (ascType === 'teachers') {
+                    h = '<thead><tr><th>F.I.O.</th><th>Qisqa</th><th>Kafedra</th><th>Lavozim</th></tr></thead><tbody>';
+                    rows.forEach((r, i) => {
+                        h += rowTag(i, r.id) + '<td>' + esc(r.full_name) + '</td><td>' + esc(r.short_name || '—') + '</td>' +
+                            '<td>' + esc(r.department || '—') + '</td><td>' + esc(r.lavozim || '—') + '</td></tr>';
+                    });
+                }
+                h += '</tbody>';
+                $('ascTable').innerHTML = h;
+                document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => tr.onclick = () => {
+                    ascSelId = tr.dataset.id || tr.dataset.idx;
+                    document.querySelectorAll('#ascTable tbody tr').forEach(x => x.classList.remove('sel'));
+                    tr.classList.add('sel');
+                    renderAscButtons();
+                });
+            }
+            const rowTag = (i, id) => '<tr data-idx="' + i + '"' + (id != null ? ' data-id="' + id + '"' : '') + '>';
+            const fmt = v => { v = +v || 0; return Number.isInteger(v) ? v : v.toFixed(1); };
+
+            function renderAscButtons() {
+                const b = $('ascButtons');
+                const hasSel = ascSelId !== null;
+                if (ascType === 'auditoriums') {
+                    b.innerHTML =
+                        '<button class="asc-btn primary block" id="aBtnNew">➕ Yangi</button>' +
+                        '<button class="asc-btn block" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>✏️ Tahrirlash</button>' +
+                        '<button class="asc-btn danger block" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>🗑 O\'chirish</button>' +
+                        '<div class="my-1 border-t border-gray-300"></div>' +
+                        '<button class="asc-btn block" id="aBtnImport">📥 Import (Excel)</button>' +
+                        '<button class="asc-btn block" id="aBtnTemplate">📄 Namuna shabloni</button>';
+                    $('aBtnNew').onclick = () => openAudEdit(null);
+                    $('aBtnEdit').onclick = () => hasSel && openAudEdit(ascData.find(x => String(x.id) === String(ascSelId)));
+                    $('aBtnDel').onclick = () => hasSel && deleteAud();
+                    $('aBtnImport').onclick = () => $('audImportFile').click();
+                    $('aBtnTemplate').onclick = downloadAudTemplate;
+                } else {
+                    // Faqat o'qish (manba HEMIS/o'quv reja) — eksport imkoniyati
+                    b.innerHTML =
+                        '<button class="asc-btn block" id="aBtnCsv">📤 CSV ga eksport</button>' +
+                        '<div class="text-[11px] text-gray-500 leading-snug mt-1 px-1">' +
+                        (ascType === 'subjects'
+                            ? 'Fanlar ishchi o\'quv rejalardan olinadi. Soatlar reja tahririda o\'zgartiriladi.'
+                            : ascType === 'groups'
+                            ? 'Guruhlar tasdiqlangan oqim tuzilishidan olinadi.'
+                            : 'O\'qituvchilar HEMIS sinxronizatsiyasidan olinadi.') + '</div>';
+                    $('aBtnCsv').onclick = exportAscCsv;
+                }
+            }
+
+            $('ascSearch').oninput = () => renderAscTable();
+            $('ascFilter').onchange = () => { ascSelId = null; renderAscTable(); renderAscButtons(); };
+            $('ascClose').onclick = $('ascCloseBtn').onclick = () => $('ascModal').classList.add('hidden');
+
+            // ── CSV eksport (faqat o'qiladigan dialoglar) ──
+            function exportAscCsv() {
+                const rows = filteredAsc();
+                if (!rows.length) return;
+                const cols = Object.keys(rows[0]);
+                const csv = [cols.join(',')].concat(rows.map(r =>
+                    cols.map(c => '"' + String(r[c] ?? '').replace(/"/g, '""') + '"').join(','))).join('\n');
+                dl('﻿' + csv, ascType + '.csv', 'text/csv');
+            }
+            function downloadAudTemplate() {
+                dl('﻿kod,nomi,sigim,bino,turi\n101,"1-bino №101",30,"1-bino","Amaliy xona"\n', 'auditoriya-namuna.csv', 'text/csv');
+            }
+            function dl(content, name, type) {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([content], { type }));
+                a.download = name; a.click(); URL.revokeObjectURL(a.href);
+            }
+
+            // ── Auditoriya CRUD ──
+            let audEditId = null;
+            function openAudEdit(a) {
+                audEditId = a ? a.id : null;
+                $('aeTitle').textContent = a ? 'Auditoriyani tahrirlash' : 'Yangi auditoriya';
+                $('aeCode').value = a ? a.code : '';
+                $('aeName').value = a ? a.name : '';
+                $('aeVolume').value = a ? (a.volume || 0) : 30;
+                $('aeBuilding').value = a ? (a.building_name || '') : '';
+                $('aeType').value = a ? (a.auditorium_type_name || '') : '';
+                $('aeActive').checked = a ? !!a.active : true;
+                $('aeMsg').classList.add('hidden');
+                $('audEditModal').classList.remove('hidden');
+            }
+            $('aeClose').onclick = $('aeCancel').onclick = () => $('audEditModal').classList.add('hidden');
+            $('aeSave').onclick = async function () {
+                this.disabled = true;
+                const body = {
+                    code: $('aeCode').value.trim(), name: $('aeName').value.trim(),
+                    volume: $('aeVolume').value || 0, building_name: $('aeBuilding').value.trim(),
+                    auditorium_type_name: $('aeType').value.trim(), active: $('aeActive').checked ? 1 : 0,
+                };
+                const url = BASE + '/auditoriums' + (audEditId ? '/' + audEditId : '');
+                try {
+                    await api(url, 'POST', body);
+                    $('audEditModal').classList.add('hidden');
+                    audCache = null;                       // rekvizit modalidagi kesh eskirdi
+                    ascData = await api(AUDS_URL); ascSelId = null;
+                    renderAscTable(); renderAscButtons();
+                } catch (e) {
+                    const m = $('aeMsg'); m.className = 'col-span-2 text-sm rounded px-3 py-2 bg-red-50 text-red-700';
+                    m.textContent = e.message; m.classList.remove('hidden');
+                }
+                this.disabled = false;
+            };
+            async function deleteAud() {
+                const a = ascData.find(x => String(x.id) === String(ascSelId));
+                if (!a || !confirm('«' + a.name + '» auditoriyasi o\'chirilsinmi?')) return;
+                try {
+                    const f = new FormData(); f.append('_token', CSRF); f.append('_method', 'DELETE');
+                    const r = await fetch(BASE + '/auditoriums/' + a.id, { method: 'POST', headers: { 'Accept': 'application/json' }, body: f });
+                    const j = await r.json();
+                    $('ascFootMsg').textContent = j.deactivated
+                        ? 'Auditoriya jadvalda ishlatilgani uchun nofaol qilindi.' : 'O\'chirildi.';
+                    audCache = null;
+                    ascData = await api(AUDS_URL); ascSelId = null;
+                    renderAscTable(); renderAscButtons();
+                } catch (e) { alert('Xatolik: ' + e.message); }
+            }
+            $('audImportFile').onchange = async function () {
+                if (!this.files.length) return;
+                const f = new FormData(); f.append('_token', CSRF); f.append('file', this.files[0]);
+                $('ascFootMsg').textContent = 'Import qilinmoqda...';
+                try {
+                    const r = await fetch(BASE + '/auditoriums/import', { method: 'POST', headers: { 'Accept': 'application/json' }, body: f });
+                    const j = await r.json();
+                    if (!r.ok) throw new Error(j.error || j.message || 'Xatolik');
+                    $('ascFootMsg').textContent = 'Import: ' + j.imported + ' qo\'shildi, ' + j.updated + ' yangilandi' +
+                        (j.errors && j.errors.length ? ' · ' + j.errors.length + ' xato' : '');
+                    audCache = null;
+                    ascData = await api(AUDS_URL); ascSelId = null;
+                    renderAscTable(); renderAscButtons();
+                } catch (e) { $('ascFootMsg').textContent = 'Xatolik: ' + e.message; }
+                this.value = '';
+            };
+
+            // ══════════════════════════════════════════════════════════════
+            //  Excel ko'rinishidagi jadval (kunlar/paralar qatorda, guruhlar ustunda)
+            // ══════════════════════════════════════════════════════════════
+            $('excelViewBtn').onclick = () => { buildExcelView(); $('excelModal').classList.remove('hidden'); };
+            $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
+            $('excelPrint').onclick = () => window.print();
+
+            function buildExcelView() {
+                // Faqat joylashgan kartalar. Ustunlar: yo'nalish → guruh. Qatorlar: kun → para.
+                const placed = cards.filter(c => c.day && c.pair);
+                // Ustun tuzilishi: yo'nalish+kurs → guruhlar
+                const specMap = {};   // specKey → { name, course, groups:Set }
+                cards.forEach(c => {
+                    const sk = c.specialty_name + '|' + c.course;
+                    (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, groups: new Set() });
+                    cardGroups(c).forEach(g => specMap[sk].groups.add(g));
+                });
+                const specs = Object.values(specMap)
+                    .map(s => ({ ...s, groups: [...s.groups].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) }))
+                    .sort((a, b) => (a.name + a.course).localeCompare(b.name + b.course));
+                const cols = [];
+                specs.forEach(s => s.groups.forEach(g => cols.push({ spec: s, group: g })));
+
+                // Panjara o'lchami — maksimal kun/para
+                let D = board.days, P = board.pairs_per_day;
+                Object.values(grids).forEach(g => { D = Math.max(D, g.days); P = Math.max(P, g.pairs_per_day); });
+
+                // Joylashgan karta indeksi: group|day|pair
+                const idx = {};
+                placed.forEach(c => cardGroups(c).forEach(g => { idx[g + '|' + c.day + '|' + c.pair] = c; }));
+
+                if (!cols.length) { $('excelBody').innerHTML = '<div class="p-4 text-gray-500">Joylashgan darslar yo\'q.</div>'; return; }
+
+                const title = (board.name || 'Dars jadvali');
+                let h = '<table><thead>';
+                h += '<tr><td class="ex-title" colspan="' + (cols.length + 3) + '">' + esc(title) + '</td></tr>';
+                // Yo'nalish sarlavhasi
+                h += '<tr><th rowspan="2" class="ex-para">Kun</th><th rowspan="2" class="ex-para">Para</th><th rowspan="2" class="ex-para">Soati</th>';
+                specs.forEach(s => h += '<th class="ex-spec" colspan="' + s.groups.length + '">' + esc(s.name) + ' · ' + s.course + '-kurs</th>');
+                h += '</tr><tr>';
+                cols.forEach(col => h += '<th class="ex-grp">' + esc(col.group) + '</th>');
+                h += '</tr></thead><tbody>';
+
+                for (let d = 1; d <= D; d++) {
+                    for (let p = 1; p <= P; p++) {
+                        h += '<tr>';
+                        if (p === 1) h += '<td class="ex-day" rowspan="' + P + '">' + esc(DAY_NAMES[d - 1]) + '</td>';
+                        h += '<td class="ex-para">' + (ROMAN[p - 1] || p) + '</td><td class="ex-time">' + (PAIR_TIMES[p - 1] || '') + '</td>';
+                        cols.forEach(col => {
+                            const c = idx[col.group + '|' + d + '|' + p];
+                            if (c) {
+                                const cls = c.training_type === 'lecture' ? 'ex-lec' : 'ex-prc';
+                                const extra = [c.teacher_name, c.auditorium_name].filter(Boolean).join(' · ');
+                                h += '<td class="ex-cell ' + cls + '"><div>' + esc(c.subject_name) + '</div>' +
+                                    (extra ? '<div style="color:#64748b;font-size:9px">' + esc(extra) + '</div>' : '') + '</td>';
+                            } else { h += '<td class="ex-cell"></td>'; }
+                        });
+                        h += '</tr>';
+                    }
+                }
+                h += '</tbody></table>';
+                $('excelBody').innerHTML = h;
+            }
 
             // URLdan doska ochish
             const urlBoard = new URLSearchParams(location.search).get('board');

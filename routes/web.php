@@ -876,7 +876,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
                 Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
                 Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');
+                // aSc uslubidagi boshqaruv dialoglari
+                Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
+                Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');
                 Route::get('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriums'])->name('auditoriums');
+                Route::post('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'storeAuditorium'])->name('auditoriums.store');
+                Route::post('/auditoriums/import', [\App\Http\Controllers\Admin\TimetableController::class, 'importAuditoriums'])->name('auditoriums.import');
+                Route::post('/auditoriums/{auditorium}', [\App\Http\Controllers\Admin\TimetableController::class, 'updateAuditorium'])->name('auditoriums.update');
+                Route::delete('/auditoriums/{auditorium}', [\App\Http\Controllers\Admin\TimetableController::class, 'destroyAuditorium'])->name('auditoriums.destroy');
             });
 
         // O'quv reja to'g'riligi (akkreditatsiya): namunaviy <-> ishchi reja solishtirish

@@ -106,6 +106,32 @@ class TimetableController extends Controller
         return ($overrides[$k] ?? null) ?: ($kafMap[$k] ?? null);
     }
 
+    /** Fan → kafedra xaritasi: [$kafMap, $overrides] (assembleRows va subjects uchun umumiy). */
+    private function buildKafedraMap(): array
+    {
+        $kafRows = DB::table('curriculum_subjects')
+            ->whereNotNull('department_name')->where('department_name', '!=', '')
+            ->selectRaw('subject_name, department_name, COUNT(*) as c')
+            ->groupBy('subject_name', 'department_name')->get();
+        $acc = [];
+        foreach ($kafRows as $r) {
+            $k = $this->normSubject($r->subject_name);
+            if ($k !== '') {
+                $acc[$k][$r->department_name] = ($acc[$k][$r->department_name] ?? 0) + (int) $r->c;
+            }
+        }
+        $kafMap = [];
+        foreach ($acc as $k => $deps) {
+            arsort($deps);
+            $kafMap[$k] = array_key_first($deps);
+        }
+        $overrides = DB::table('subject_kafedra_overrides')
+            ->where('kafedra_name', '!=', '')
+            ->pluck('kafedra_name', 'norm_name')->all();
+
+        return [$kafMap, $overrides];
+    }
+
     private function specKey(?string $name): string
     {
         return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim((string) $name)));
@@ -169,25 +195,7 @@ class TimetableController extends Controller
             ->get();
 
         // Kafedra xaritasi
-        $kafRows = DB::table('curriculum_subjects')
-            ->whereNotNull('department_name')->where('department_name', '!=', '')
-            ->selectRaw('subject_name, department_name, COUNT(*) as c')
-            ->groupBy('subject_name', 'department_name')->get();
-        $acc = [];
-        foreach ($kafRows as $r) {
-            $k = $this->normSubject($r->subject_name);
-            if ($k !== '') {
-                $acc[$k][$r->department_name] = ($acc[$k][$r->department_name] ?? 0) + (int) $r->c;
-            }
-        }
-        $kafMap = [];
-        foreach ($acc as $k => $deps) {
-            arsort($deps);
-            $kafMap[$k] = array_key_first($deps);
-        }
-        $overrides = DB::table('subject_kafedra_overrides')
-            ->where('kafedra_name', '!=', '')
-            ->pluck('kafedra_name', 'norm_name')->all();
+        [$kafMap, $overrides] = $this->buildKafedraMap();
 
         // Fanlarni yo'nalish+kurs bo'yicha guruhlash
         $subjBySpec = [];
@@ -729,16 +737,172 @@ class TimetableController extends Controller
             $q->where('full_name', 'like', '%' . $request->search . '%');
         }
         return response()->json(
-            $q->orderBy('full_name')->limit(100)->get(['id', 'full_name', 'department', 'lavozim'])
+            $q->orderBy('full_name')->limit(100)->get(['id', 'full_name', 'short_name', 'department', 'lavozim'])
         );
     }
 
-    /** Auditoriyalar ro'yxati. */
+    // ══════════════════════════════════════════════════════════════════════
+    //  aSc Timetables uslubidagi boshqaruv dialoglari: Fanlar, Guruhlar,
+    //  Auditoriyalar, O'qituvchilar. Har biri ro'yxat + qidiruv, auditoriya
+    //  esa to'liq CRUD + Excel import.
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Fanlar dialogi — doskaning o'quv yili + semestr juftligi bo'yicha
+     * ishchi rejalardagi fanlar, yo'nalish+kurs kesimida (Excel "fanlar
+     * royxati" varag'i uslubida). Har fan uchun ma'ruza/amaliy/laboratoriya
+     * soatlari va kafedra ko'rsatiladi.
+     */
+    public function subjects(TimetableBoard $board)
+    {
+        $start = (int) substr($board->academic_year, 0, 4);
+        $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
+
+        $rows = DB::table('manual_curriculum_subjects as s')
+            ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
+            ->where('mc.type', 'ishchi')
+            ->whereNotNull('s.semester')
+            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->groupBy('mc.specialty_name', 'mc.level_code', 's.semester', 's.subject_name')
+            ->selectRaw("mc.specialty_name, mc.level_code, s.semester, s.subject_name,
+                MAX(s.lecture) as lecture, MAX(s.practice) as practice,
+                MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar")
+            ->orderBy('mc.specialty_name')->orderBy('mc.level_code')->orderBy('s.subject_name')
+            ->get();
+
+        [$kafMap, $overrides] = $this->buildKafedraMap();
+        $weeks = max(1, (int) $board->weeks);
+
+        $out = [];
+        foreach ($rows as $r) {
+            $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
+            $lec = (float) $r->lecture;
+            $prc = (float) $r->practice + (float) $r->laboratory + (float) $r->seminar;
+            $out[] = [
+                'specialty_name' => $r->specialty_name,
+                'course'         => $course,
+                'semester'       => (int) $r->semester,
+                'subject_name'   => $r->subject_name,
+                'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),
+                'lecture'        => $lec,
+                'practice'       => (float) $r->practice,
+                'laboratory'     => (float) $r->laboratory,
+                'seminar'        => (float) $r->seminar,
+                // Haftalik para (1 para = 2 akademik soat)
+                'lec_pairs'      => $lec > 0 ? max(1, (int) round($lec / $weeks / 2)) : 0,
+                'prc_pairs'      => $prc > 0 ? max(1, (int) round($prc / $weeks / 2)) : 0,
+            ];
+        }
+
+        return response()->json(['weeks' => $weeks, 'subjects' => $out]);
+    }
+
+    /**
+     * Guruhlar dialogi — doskaning tasdiqlangan oqim snapshotlaridagi
+     * guruhchalar (yo'nalish+kurs+oqim+til kesimida, talaba soni bilan).
+     */
+    public function groups(TimetableBoard $board)
+    {
+        $byFaculty = $this->boardSnapshots($board);
+        $out = [];
+        foreach ($byFaculty as $snap) {
+            foreach ($snap->data ?? [] as $bl) {
+                $specName = trim(explode('|', $bl['merge_key'] ?? '')[1] ?? '') ?: ($bl['title'] ?? '');
+                foreach ($bl['courses'] ?? [] as $co) {
+                    $lvl = (int) ($co['level_code'] ?? 0);
+                    $course = $lvl >= 11 ? $lvl - 10 : $lvl;
+                    foreach ($co['oqims'] ?? [] as $oq) {
+                        foreach ($oq['rows'] ?? [] as $gr) {
+                            $gn = trim((string) ($gr['name'] ?? ''));
+                            if ($gn === '') {
+                                continue;
+                            }
+                            $out[] = [
+                                'group_name'     => $gn,
+                                'specialty_name' => $specName,
+                                'course'         => $course,
+                                'oqim_label'     => $oq['label'] ?? null,
+                                'lang'           => $oq['lang'] ?? 'uz',
+                                'students'       => (int) ($gr['count'] ?? 0),
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        usort($out, fn($a, $b) => [$a['specialty_name'], $a['course'], $a['group_name']]
+            <=> [$b['specialty_name'], $b['course'], $b['group_name']]);
+
+        return response()->json(['groups' => $out]);
+    }
+
+    /** Auditoriyalar ro'yxati (dialog uchun — barcha maydonlar). */
     public function auditoriums()
     {
         return response()->json(
-            Auditorium::where('active', true)->orderBy('name')
-                ->get(['code', 'name', 'volume', 'auditorium_type_name', 'building_name'])
+            Auditorium::orderBy('active', 'desc')->orderBy('name')
+                ->get(['id', 'code', 'name', 'volume', 'active', 'auditorium_type_name', 'building_name'])
         );
+    }
+
+    /** Yangi auditoriya qo'shish. */
+    public function storeAuditorium(Request $request)
+    {
+        $data = $this->validateAuditorium($request);
+        $a = Auditorium::create($data);
+        return response()->json(['ok' => true, 'auditorium' => $a]);
+    }
+
+    /** Auditoriyani tahrirlash. */
+    public function updateAuditorium(Request $request, Auditorium $auditorium)
+    {
+        $data = $this->validateAuditorium($request, $auditorium->id);
+        $auditorium->update($data);
+        return response()->json(['ok' => true, 'auditorium' => $auditorium]);
+    }
+
+    /** Auditoriyani o'chirish (kartochkalarda ishlatilsa faqat nofaollashadi). */
+    public function destroyAuditorium(Auditorium $auditorium)
+    {
+        $used = TimetableCard::where('auditorium_code', $auditorium->code)->exists();
+        if ($used) {
+            $auditorium->update(['active' => false]);
+            return response()->json(['ok' => true, 'deactivated' => true]);
+        }
+        $auditorium->delete();
+        return response()->json(['ok' => true, 'deactivated' => false]);
+    }
+
+    private function validateAuditorium(Request $request, ?int $ignoreId = null): array
+    {
+        return $request->validate([
+            'code'                 => 'required|string|max:50|unique:auditoriums,code' . ($ignoreId ? ',' . $ignoreId : ''),
+            'name'                 => 'required|string|max:255',
+            'volume'               => 'required|integer|min:0|max:2000',
+            'active'               => 'nullable|boolean',
+            'building_name'        => 'nullable|string|max:255',
+            'auditorium_type_name' => 'nullable|string|max:255',
+        ]);
+    }
+
+    /**
+     * Auditoriyalarni Excel/CSV dan import qilish. Kutilgan sarlavhalar
+     * (kichik harf, bo'sh joy "_"): kod | nomi | sigim | bino | turi.
+     * Mavjud kod yangilanadi, yo'q kod qo'shiladi (upsert).
+     */
+    public function importAuditoriums(Request $request)
+    {
+        $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv,txt']);
+
+        $import = new \App\Imports\AuditoriumImport();
+        \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+        return response()->json([
+            'ok' => true,
+            'imported' => $import->imported,
+            'updated' => $import->updated,
+            'errors' => $import->errors,
+        ]);
     }
 }

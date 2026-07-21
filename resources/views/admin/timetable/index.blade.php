@@ -54,33 +54,51 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Kunlar</label>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Kunlar (sukut)</label>
                         <input type="number" id="nbDays" value="6" min="1" max="7" class="w-full rounded-md border-gray-300 text-sm">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Kuniga para</label>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Kuniga para (sukut)</label>
                         <input type="number" id="nbPairs" value="6" min="1" max="10" class="w-full rounded-md border-gray-300 text-sm">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Hafta soni</label>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Hafta soni (sukut)</label>
                         <input type="number" id="nbWeeks" value="18" min="1" max="30" class="w-full rounded-md border-gray-300 text-sm">
                     </div>
                     <div class="md:col-span-7">
                         <button type="button" id="createBoardBtn" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Yaratish</button>
-                        <span class="ml-2 text-xs text-gray-500">Doska yaratilgach "Kartochkalarni yaratish" bosiladi — tasdiqlangan oqim + ishchi reja fanlaridan dars kartochkalari hosil bo'ladi.</span>
+                        <span class="ml-2 text-xs text-gray-500">Bu sukut sozlamalar — har yo'nalish+kurs uchun keyin alohida o'zgartiriladi. Doska yaratilgach "Kartochkalarni yaratish" bosiladi.</span>
                     </div>
                 </div>
             </div>
 
-            {{-- Yo'nalish tanlash + statistika --}}
-            <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-4 flex flex-wrap items-center gap-3">
-                <div class="min-w-[320px]">
-                    <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish · kurs</label>
-                    <select id="specSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
+            {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
+            <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-4">
+                <div class="flex flex-wrap items-end gap-3">
+                    <div class="min-w-[300px]">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish · kurs</label>
+                        <select id="specSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
+                    </div>
+                    <div class="flex items-end gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2">
+                        <div>
+                            <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Kunlar</label>
+                            <input type="number" id="gsDays" min="1" max="7" class="w-16 rounded border-gray-300 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Kuniga para</label>
+                            <input type="number" id="gsPairs" min="1" max="10" class="w-16 rounded border-gray-300 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Hafta soni</label>
+                            <input type="number" id="gsWeeks" min="1" max="30" class="w-16 rounded border-gray-300 text-sm">
+                        </div>
+                        <button type="button" id="gsSave" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Saqlash</button>
+                        <span class="text-[10px] text-indigo-400 max-w-[160px] leading-tight">Faqat shu yo'nalish+kursga. Hafta soni o'zgarsa kartalar qayta yaratiladi.</span>
+                    </div>
+                    <div id="statChips" class="flex flex-wrap gap-2 text-xs"></div>
                 </div>
-                <div id="statChips" class="flex flex-wrap gap-2 text-xs"></div>
-                <div class="ml-auto text-xs text-gray-400">
-                    Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish mumkin.
+                <div class="mt-2 text-xs text-gray-400">
+                    Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin.
                 </div>
             </div>
 
@@ -166,6 +184,7 @@
 
             let board = null;      // {id, days, pairs_per_day, ...}
             let cards = [];        // barcha kartochkalar
+            let grids = {};        // "specialty|course" => {days, pairs_per_day, weeks}
             let specList = [];     // [{key, specialty_name, course}]
             let curSpec = null;    // tanlangan {specialty_name, course}
             let groupRows = [];    // [{oqim_label, lang, group}]
@@ -233,6 +252,8 @@
             async function loadBoard(id) {
                 const j = await api(BASE + '/boards/' + id + '/data');
                 board = j.board; cards = j.cards;
+                grids = {};
+                (j.grids || []).forEach(g => { grids[g.specialty_name + '|' + g.course] = g; });
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
@@ -244,7 +265,9 @@
                 }
                 $('boardMsg').textContent = '';
                 $('specBar').classList.remove('hidden'); $('mainArea').classList.remove('hidden');
-                if (!curSpec && specList.length) curSpec = specList[0];
+                if ((!curSpec || !specList.find(s => s.key === curSpec.key)) && specList.length) curSpec = specList[0];
+                if (curSpec) $('specSel').value = curSpec.key;
+                fillGridInputs();
                 renderAll();
             }
 
@@ -263,7 +286,40 @@
             $('specSel').onchange = function () {
                 curSpec = specList.find(s => s.key === this.value) || null;
                 selected = null;
+                fillGridInputs();
                 renderAll();
+            };
+
+            // ===== Panjara sozlamasi (yo'nalish+kurs bo'yicha) =====
+            function curGrid() {
+                const g = curSpec && grids[curSpec.specialty_name + '|' + curSpec.course];
+                return g || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
+            }
+            function fillGridInputs() {
+                const g = curGrid();
+                $('gsDays').value = g.days; $('gsPairs').value = g.pairs_per_day; $('gsWeeks').value = g.weeks;
+            }
+            $('gsSave').onclick = async function () {
+                if (!curSpec) return;
+                this.disabled = true;
+                const weeksBefore = curGrid().weeks;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/grid', 'POST', {
+                        specialty_name: curSpec.specialty_name, course: curSpec.course,
+                        days: $('gsDays').value, pairs_per_day: $('gsPairs').value, weeks: $('gsWeeks').value,
+                    });
+                    if (j.regenerated || +$('gsWeeks').value !== +weeksBefore) {
+                        await loadBoard(board.id);   // kartalar qayta yaratildi — to'liq yangilash
+                    } else {
+                        grids[curSpec.specialty_name + '|' + curSpec.course] = {
+                            specialty_name: curSpec.specialty_name, course: curSpec.course,
+                            days: +$('gsDays').value, pairs_per_day: +$('gsPairs').value, weeks: +$('gsWeeks').value,
+                        };
+                        // Doskadan kelgan bo'shatilgan joylashuvlarni yangilash uchun qayta yuklaymiz
+                        await loadBoard(board.id);
+                    }
+                } catch (e) { alert('Xatolik: ' + e.message); }
+                this.disabled = false;
             };
 
             // ===== Yordamchilar =====
@@ -346,7 +402,8 @@
             }
 
             function renderGrid() {
-                const D = board.days, P = board.pairs_per_day;
+                const g = curGrid();
+                const D = g.days, P = g.pairs_per_day;
                 let h = '<thead><tr><th class="bg-gray-50 px-2 py-1 sticky left-0 z-10">Guruh</th>';
                 for (let d = 1; d <= D; d++) h += '<th colspan="' + P + '" class="bg-gray-100 px-2 py-1">' + DAY_NAMES[d - 1] + '</th>';
                 h += '</tr><tr><th class="bg-gray-50 sticky left-0 z-10"></th>';

@@ -8,6 +8,7 @@ use App\Models\OqimSnapshot;
 use App\Models\Teacher;
 use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
+use App\Models\TimetableGridSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -110,14 +111,9 @@ class TimetableController extends Controller
         return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim((string) $name)));
     }
 
-    /**
-     * Kartochkalarni yaratish: tasdiqlangan oqim + ishchi reja fanlari.
-     * Mavjud kartochkalar o'chirilib qaytadan yaratiladi (joylashuvlar yo'qoladi) —
-     * shuning uchun UI tasdiqlash so'raydi.
-     */
-    public function generateCards(TimetableBoard $board)
+    /** Tasdiqlangan oqim snapshotlari (fakultet kontekstida dedup — eng so'nggisi). */
+    private function boardSnapshots(TimetableBoard $board): array
     {
-        // 1) Tasdiqlangan oqim snapshotlari (fakultet kontekstida dedup — eng so'nggisi)
         $q = OqimSnapshot::where('status', 'approved');
         if ($board->kind === 'plan') {
             $q->where('context->projection', 1)
@@ -140,12 +136,24 @@ class TimetableController extends Controller
         if (count($byFaculty) > 1) {
             unset($byFaculty['']);
         }
+        return $byFaculty;
+    }
+
+    /**
+     * Kartochka qatorlarini yig'ish. $filterSpecKey/$filterCourse berilsa — faqat
+     * o'sha yo'nalish+kurs. Haftalik para har yo'nalish+kurs uchun alohida
+     * sozlanadigan hafta soniga qarab hisoblanadi. $specsFound — topilgan
+     * (yo'nalish, kurs) larni yig'adi (grid sozlamalarini yaratish uchun).
+     * Snapshot topilmasa null qaytaradi.
+     */
+    private function assembleRows(TimetableBoard $board, ?string $filterSpecKey, ?int $filterCourse, array &$specsFound): ?array
+    {
+        $byFaculty = $this->boardSnapshots($board);
         if (empty($byFaculty)) {
-            return response()->json(['error' => "Tasdiqlangan oqim topilmadi. Avval Oqim sahifasida "
-                . ($board->kind === 'plan' ? "kelasi yil (reja) oqimini" : "joriy oqimni") . " tasdiqlang."], 422);
+            return null;
         }
 
-        // 2) Fanlar: o'quv yili + semestr juft/toqligi bo'yicha
+        // Fanlar: o'quv yili + semestr juft/toqligi bo'yicha
         $start = (int) substr($board->academic_year, 0, 4);
         $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
         $subjects = DB::table('manual_curriculum_subjects as s')
@@ -188,16 +196,19 @@ class TimetableController extends Controller
             $subjBySpec[$this->specKey($s->specialty_name)][$course][] = $s;
         }
 
-        // 3) Kartochkalar
-        $weeks = max(1, (int) $board->weeks);
+        // Har yo'nalish+kurs uchun hafta soni (alohida sozlama yoki doska sukut qiymati)
+        $gset = TimetableGridSetting::where('board_id', $board->id)->get()
+            ->mapWithKeys(fn($g) => [$this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks])
+            ->all();
+
         $now = now();
         $rows = [];
-        $paras = function ($hours) use ($weeks) {
+        $paras = function ($hours, $weeks) {
             $h = (float) $hours;
             if ($h <= 0) {
                 return 0;
             }
-            return max(1, (int) round($h / $weeks / 2)); // 1 para = 2 akademik soat
+            return max(1, (int) round($h / max(1, $weeks) / 2)); // 1 para = 2 akademik soat
         };
 
         foreach ($byFaculty as $snap) {
@@ -207,10 +218,15 @@ class TimetableController extends Controller
                 foreach ($bl['courses'] ?? [] as $co) {
                     $lvl = (int) ($co['level_code'] ?? 0);
                     $course = $lvl >= 11 ? $lvl - 10 : $lvl;
+                    if ($filterSpecKey !== null && ($sk !== $filterSpecKey || $course !== $filterCourse)) {
+                        continue;
+                    }
                     $subs = $subjBySpec[$sk][$course] ?? null;
                     if (!$subs) {
                         continue;
                     }
+                    $specsFound[$sk . '|' . $course] = ['name' => $specName, 'course' => $course];
+                    $weeks = $gset[$sk . '|' . $course] ?? (int) $board->weeks;
                     foreach ($co['oqims'] ?? [] as $oq) {
                         $groupNames = array_values(array_filter(array_map(
                             fn($r) => trim((string) ($r['name'] ?? '')), $oq['rows'] ?? []
@@ -221,8 +237,7 @@ class TimetableController extends Controller
                         $oqTotal = (int) ($oq['total'] ?? 0);
                         foreach ($subs as $s) {
                             $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name);
-                            // Ma'ruza — oqimga
-                            for ($i = 0; $i < $paras($s->lecture); $i++) {
+                            for ($i = 0; $i < $paras($s->lecture, $weeks); $i++) {
                                 $rows[] = [
                                     'board_id' => $board->id,
                                     'specialty_name' => $specName, 'course' => $course,
@@ -234,8 +249,7 @@ class TimetableController extends Controller
                                     'created_at' => $now, 'updated_at' => $now,
                                 ];
                             }
-                            // Amaliy (amaliy+lab+seminar) — har guruhchaga
-                            $pw = $paras((float) $s->practice + (float) $s->laboratory + (float) $s->seminar);
+                            $pw = $paras((float) $s->practice + (float) $s->laboratory + (float) $s->seminar, $weeks);
                             if ($pw > 0) {
                                 foreach ($oq['rows'] ?? [] as $gr) {
                                     $gn = trim((string) ($gr['name'] ?? ''));
@@ -262,14 +276,91 @@ class TimetableController extends Controller
             }
         }
 
-        DB::transaction(function () use ($board, $rows) {
+        return $rows;
+    }
+
+    /** Topilgan yo'nalish+kurslar uchun grid sozlamasini (bo'lmasa) doska sukutidan yaratish. */
+    private function ensureGridSettings(TimetableBoard $board, array $specsFound): void
+    {
+        foreach ($specsFound as $info) {
+            TimetableGridSetting::firstOrCreate(
+                ['board_id' => $board->id, 'specialty_name' => $info['name'], 'course' => $info['course']],
+                ['days' => $board->days, 'pairs_per_day' => $board->pairs_per_day, 'weeks' => $board->weeks]
+            );
+        }
+    }
+
+    /**
+     * Kartochkalarni yaratish: tasdiqlangan oqim + ishchi reja fanlari.
+     * Mavjud kartochkalar o'chirilib qaytadan yaratiladi (joylashuvlar yo'qoladi).
+     */
+    public function generateCards(TimetableBoard $board)
+    {
+        $specsFound = [];
+        $rows = $this->assembleRows($board, null, null, $specsFound);
+        if ($rows === null) {
+            return response()->json(['error' => "Tasdiqlangan oqim topilmadi. Avval Oqim sahifasida "
+                . ($board->kind === 'plan' ? "kelasi yil (reja) oqimini" : "joriy oqimni") . " tasdiqlang."], 422);
+        }
+
+        DB::transaction(function () use ($board, $rows, $specsFound) {
             TimetableCard::where('board_id', $board->id)->delete();
             foreach (array_chunk($rows, 500) as $chunk) {
                 TimetableCard::insert($chunk);
             }
+            $this->ensureGridSettings($board, $specsFound);
         });
 
         return response()->json(['ok' => true, 'created' => count($rows)]);
+    }
+
+    /** Yo'nalish+kurs uchun panjara sozlamasini saqlash (kun/para/hafta). */
+    public function saveGrid(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'specialty_name' => 'required|string|max:255',
+            'course'         => 'required|integer|min:1|max:7',
+            'days'           => 'required|integer|min:1|max:7',
+            'pairs_per_day'  => 'required|integer|min:1|max:10',
+            'weeks'          => 'required|integer|min:1|max:30',
+        ]);
+
+        $gs = TimetableGridSetting::firstOrNew([
+            'board_id' => $board->id,
+            'specialty_name' => $data['specialty_name'],
+            'course' => $data['course'],
+        ]);
+        $weeksChanged = $gs->exists && (int) $gs->weeks !== (int) $data['weeks'];
+        $gs->fill([
+            'days' => $data['days'],
+            'pairs_per_day' => $data['pairs_per_day'],
+            'weeks' => $data['weeks'],
+        ])->save();
+
+        // Panjaradan tashqarida qolgan joylashuvlarni bo'shatamiz
+        TimetableCard::where('board_id', $board->id)
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('course', $data['course'])
+            ->where(function ($q) use ($data) {
+                $q->where('day', '>', $data['days'])->orWhere('pair', '>', $data['pairs_per_day']);
+            })
+            ->update(['day' => null, 'pair' => null]);
+
+        // Hafta soni o'zgargan bo'lsa — shu yo'nalishning kartochkalari qayta yaratiladi
+        if ($weeksChanged) {
+            $sf = [];
+            $rows = $this->assembleRows($board, $this->specKey($data['specialty_name']), (int) $data['course'], $sf);
+            DB::transaction(function () use ($board, $data, $rows) {
+                TimetableCard::where('board_id', $board->id)
+                    ->where('specialty_name', $data['specialty_name'])
+                    ->where('course', $data['course'])->delete();
+                foreach (array_chunk($rows ?? [], 500) as $chunk) {
+                    TimetableCard::insert($chunk);
+                }
+            });
+        }
+
+        return response()->json(['ok' => true, 'regenerated' => $weeksChanged]);
     }
 
     /** Doska ma'lumotlari: barcha kartochkalar (konflikt tekshiruvi butun doska bo'ylab). */
@@ -295,19 +386,35 @@ class TimetableController extends Controller
             'pair' => $c->pair,
         ]);
 
+        $grids = TimetableGridSetting::where('board_id', $board->id)
+            ->get(['specialty_name', 'course', 'days', 'pairs_per_day', 'weeks']);
+
         return response()->json([
             'board' => $board->only(['id', 'name', 'days', 'pairs_per_day', 'weeks', 'academic_year', 'semester_parity', 'kind']),
             'cards' => $cards,
+            'grids' => $grids,
         ]);
+    }
+
+    /** Yo'nalish+kurs uchun panjara o'lchami (alohida sozlama yoki doska sukuti). */
+    private function gridFor(TimetableBoard $board, string $specialty, int $course): array
+    {
+        $gs = TimetableGridSetting::where('board_id', $board->id)
+            ->where('specialty_name', $specialty)->where('course', $course)->first();
+        return [
+            'days'  => $gs->days ?? $board->days,
+            'pairs' => $gs->pairs_per_day ?? $board->pairs_per_day,
+        ];
     }
 
     /** Kartochkani joylash/ko'chirish/olib tashlash — konflikt tekshiruvi bilan. */
     public function placeCard(Request $request, TimetableCard $card)
     {
         $board = $card->board;
+        $grid = $this->gridFor($board, $card->specialty_name, (int) $card->course);
         $data = $request->validate([
-            'day'  => 'nullable|integer|min:1|max:' . $board->days,
-            'pair' => 'nullable|integer|min:1|max:' . $board->pairs_per_day,
+            'day'  => 'nullable|integer|min:1|max:' . $grid['days'],
+            'pair' => 'nullable|integer|min:1|max:' . $grid['pairs'],
         ]);
 
         $day = $data['day'] ?? null;

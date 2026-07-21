@@ -107,9 +107,17 @@
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
             <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-4">
                 <div class="flex flex-wrap items-end gap-3">
-                    <div class="min-w-[300px]">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Fakultet · yo'nalish · kurs</label>
-                        <select id="specSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
+                    <div class="min-w-[200px]">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Fakultet</label>
+                        <select id="facSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
+                    </div>
+                    <div class="min-w-[200px]">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish</label>
+                        <select id="dirSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
+                    </div>
+                    <div class="min-w-[90px]">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Kurs</label>
+                        <select id="courseSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
                     </div>
                     <div class="flex items-end gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2">
                         <div>
@@ -718,7 +726,7 @@
                 $('boardMsg').textContent = '';
                 $('specBar').classList.remove('hidden'); $('mainArea').classList.remove('hidden');
                 if ((!curSpec || !specList.find(s => s.key === curSpec.key)) && specList.length) curSpec = specList[0];
-                if (curSpec) $('specSel').value = curSpec.key;
+                fillSpecControls();
                 fillGridInputs();
                 renderAll();
             }
@@ -732,22 +740,59 @@
                 });
                 specList.sort((a, b) =>
                     (a.faculty + '|' + a.specialty_name + a.course).localeCompare(b.faculty + '|' + b.specialty_name + b.course, 'uz'));
-                // Fakultet bo'yicha optgroup'larga ajratib ko'rsatamiz
-                const byFac = {};
-                specList.forEach(s => { (byFac[s.faculty] = byFac[s.faculty] || []).push(s); });
-                $('specSel').innerHTML = Object.keys(byFac)
-                    .sort((a, b) => a.localeCompare(b, 'uz')).map(fac => {
-                        const opts = byFac[fac].map(s =>
-                            '<option value="' + esc(s.key) + '">' + esc(s.specialty_name) + ' · ' + s.course + '-kurs</option>').join('');
-                        return fac ? '<optgroup label="' + esc(fac) + '">' + opts + '</optgroup>' : opts;
-                    }).join('');
-                if (curSpec) $('specSel').value = curSpec.key;
             }
-            $('specSel').onchange = function () {
-                curSpec = specList.find(s => s.key === this.value) || null;
-                selected = null;
-                fillGridInputs();
-                renderAll();
+
+            // ===== Kaskadli tanlov: Fakultet → Yo'nalish → Kurs =====
+            const facLabel = f => f || '— (fakultetsiz)';
+            const facultiesList = () => [...new Set(specList.map(s => s.faculty))].sort((a, b) => a.localeCompare(b, 'uz'));
+            const dirsOf = fac => [...new Set(specList.filter(s => s.faculty === fac).map(s => s.specialty_name))]
+                .sort((a, b) => a.localeCompare(b, 'uz'));
+            const coursesOf = (fac, dir) => [...new Set(specList
+                .filter(s => s.faculty === fac && s.specialty_name === dir).map(s => s.course))].sort((a, b) => a - b);
+
+            // curSpec ni (fac, dir, course) bo'yicha aniqlaymiz. course berilmasa
+            // shu yo'nalishning birinchi kursi olinadi.
+            function setCurSpec(fac, dir, course) {
+                let found = specList.find(s => s.faculty === fac && s.specialty_name === dir && s.course === course);
+                if (!found) found = specList.find(s => s.faculty === fac && s.specialty_name === dir);
+                if (found) curSpec = found;
+                return found;
+            }
+            // Uch selektorni curSpec holatiga qarab (yoki birinchi mavjudga) to'ldiradi.
+            function fillSpecControls() {
+                const facs = facultiesList();
+                const curFac = (curSpec && facs.includes(curSpec.faculty)) ? curSpec.faculty : (facs[0] ?? '');
+                $('facSel').innerHTML = facs.map(f => '<option value="' + esc(f) + '">' + esc(facLabel(f)) + '</option>').join('');
+                $('facSel').value = curFac;
+                fillDirControls(curFac);
+            }
+            function fillDirControls(fac) {
+                const dirs = dirsOf(fac);
+                const curDir = (curSpec && curSpec.faculty === fac && dirs.includes(curSpec.specialty_name)) ? curSpec.specialty_name : (dirs[0] ?? '');
+                $('dirSel').innerHTML = dirs.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+                $('dirSel').value = curDir;
+                fillCourseControls(fac, curDir);
+            }
+            function fillCourseControls(fac, dir) {
+                const courses = coursesOf(fac, dir);
+                const curCourse = (curSpec && curSpec.faculty === fac && curSpec.specialty_name === dir && courses.includes(curSpec.course))
+                    ? curSpec.course : (courses[0] ?? null);
+                $('courseSel').innerHTML = courses.map(c => '<option value="' + c + '">' + c + '-kurs</option>').join('');
+                $('courseSel').value = String(curCourse);
+                setCurSpec(fac, dir, curCourse);
+            }
+
+            $('facSel').onchange = function () {
+                fillDirControls(this.value);   // yo'nalish + kurs + curSpec yangilanadi
+                selected = null; fillGridInputs(); renderAll();
+            };
+            $('dirSel').onchange = function () {
+                fillCourseControls($('facSel').value, this.value);
+                selected = null; fillGridInputs(); renderAll();
+            };
+            $('courseSel').onchange = function () {
+                setCurSpec($('facSel').value, $('dirSel').value, +this.value);
+                selected = null; fillGridInputs(); renderAll();
             };
 
             // ===== Panjara sozlamasi (yo'nalish+kurs bo'yicha) =====

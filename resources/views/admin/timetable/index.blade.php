@@ -597,6 +597,31 @@
             const $ = id => document.getElementById(id);
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+            // ===== Fan rangi (aSc Timetables uslubida) =====
+            // Har bir fanga o'ziga xos, boshqalardan farqli bitta rang beriladi.
+            // Ranglar doskaning barcha fanlari alfavit tartibida oltin burchak
+            // (137.5°) bo'yicha teng taqsimlanadi — shu tufayli qo'shni fanlar
+            // ranglari bir-biridan yaxshi ajralib turadi va bir fan hamma joyda
+            // (panel, panjara, Excel) aynan bir xil rangda ko'rinadi.
+            let subjectColors = {};
+            function buildSubjectColors() {
+                const names = [...new Set(cards.map(c => c.subject_name).filter(Boolean))]
+                    .sort((a, b) => a.localeCompare(b, 'uz'));
+                subjectColors = {};
+                const GOLDEN = 137.508;
+                names.forEach((n, i) => {
+                    const h = Math.round((i * GOLDEN) % 360);
+                    subjectColors[n] = {
+                        bg:     'hsl(' + h + ', 70%, 88%)',
+                        border: 'hsl(' + h + ', 62%, 45%)',
+                        text:   'hsl(' + h + ', 45%, 25%)',
+                    };
+                });
+            }
+            const subjColor = name => subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8', text: '#334155' };
+            const subjStyle = c => { const s = subjColor(c.subject_name);
+                return 'background:' + s.bg + ';border-left-color:' + s.border + ';color:' + s.text + ';'; };
+
             async function api(url, method = 'GET', body = null) {
                 const opt = { method, headers: { 'Accept': 'application/json' } };
                 if (body) {
@@ -657,6 +682,7 @@
                 const switching = !board || String(board.id) !== String(id);
                 const j = await api(BASE + '/boards/' + id + '/data');
                 board = j.board; cards = j.cards;
+                buildSubjectColors();
                 grids = {};
                 (j.grids || []).forEach(g => { grids[g.specialty_name + '|' + g.course] = g; });
                 // Hafta bo'yicha istisnolar
@@ -853,7 +879,7 @@
                         esc(subj.length > 34 ? subj.slice(0, 34) + '…' : subj) + ' <span class="text-gray-400">(' + list.length + ')</span></summary>' +
                         list.map(c =>
                             '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (selected && selected.id === c.id ? ' sel' : '') +
-                            ' lang-' + (c.lang || 'uz') + '" data-id="' + c.id + '">' +
+                            ' lang-' + (c.lang || 'uz') + '" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '">' +
                             cardLabel(c, true) +
                             '<div class="text-[10px] text-gray-500">' +
                             (c.training_type === 'lecture'
@@ -900,7 +926,8 @@
 
                 const chipHtml = c =>
                     '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
-                    (selected && selected.id === c.id ? ' sel' : '') + '" data-chip="' + c.id + '" title="' +
+                    (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
+                    '" data-chip="' + c.id + '" title="' +
                     esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '')) + '">' +
                     cardLabel(c, true) +
                     (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
@@ -1454,7 +1481,9 @@
                     else if (excelMode === 'teacher') extra = [c.group_name || (c.oqim_label ? c.oqim_label : ''), c.auditorium_name];
                     else extra = [c.group_name || c.oqim_label, c.teacher_name];
                     const sub = extra.filter(Boolean).join(' · ');
-                    return '<td class="ex-cell ' + cls + '"><div>' + esc(c.subject_name) + '</div>' +
+                    const s = subjColor(c.subject_name);
+                    const st = 'background:' + s.bg + ';border-left:3px solid ' + s.border + ';color:' + s.text;
+                    return '<td class="ex-cell ' + cls + '" style="' + st + '"><div>' + esc(c.subject_name) + '</div>' +
                         (sub ? '<div style="color:#64748b;font-size:9px">' + esc(sub) + '</div>' : '') + '</td>';
                 };
 

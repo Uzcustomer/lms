@@ -53,6 +53,13 @@ return Application::configure(basePath: dirname(__DIR__))
             // ushbu idempotent endpointlar CSRF'dan ozod etiladi.
             'admin/student-photos/*/check-similarity',
             'admin/student-photos/*/check-quality',
+            // Dars jadvali tuzish — admin/registrator paneli. Bu sahifa uzoq
+            // vaqt ochiq turadi va "Avtomatik joylash" og'ir (minglab kartochka)
+            // AJAX operatsiyasi bo'lgani uchun sessiya CSRF tokeni eskirib
+            // "419 CSRF token mismatch" beradi. Endpointlar auth + role
+            // (superadmin|admin|kichik_admin|registrator_ofisi) middleware bilan
+            // himoyalangan, shuning uchun CSRF'dan ozod etamiz.
+            'admin/dars-jadvali-tuzish/*',
         ]);
 
     })

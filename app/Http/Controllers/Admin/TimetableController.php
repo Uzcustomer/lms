@@ -8,6 +8,7 @@ use App\Models\OqimSnapshot;
 use App\Models\Teacher;
 use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
+use App\Models\TimetableCardOverride;
 use App\Models\TimetableGridSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -622,6 +623,19 @@ class TimetableController extends Controller
         $grids = TimetableGridSetting::where('board_id', $board->id)
             ->get(['specialty_name', 'course', 'days', 'pairs_per_day', 'weeks']);
 
+        // Hafta bo'yicha istisnolar (individual haftalar)
+        $overrides = DB::table('timetable_card_overrides as o')
+            ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
+            ->where('c.board_id', $board->id)
+            ->get(['o.card_id', 'o.week', 'o.day', 'o.pair', 'o.cancelled'])
+            ->map(fn($o) => [
+                'card_id'   => (int) $o->card_id,
+                'week'      => (int) $o->week,
+                'day'       => $o->day !== null ? (int) $o->day : null,
+                'pair'      => $o->pair !== null ? (int) $o->pair : null,
+                'cancelled' => (bool) $o->cancelled,
+            ]);
+
         return response()->json([
             'board' => array_merge(
                 $board->only(['id', 'name', 'institution_name', 'days', 'pairs_per_day', 'weeks',
@@ -634,7 +648,92 @@ class TimetableController extends Controller
             ),
             'cards' => $cards,
             'grids' => $grids,
+            'overrides' => $overrides,
         ]);
+    }
+
+    /**
+     * Hafta bo'yicha dars istisnosi: shu haftada ko'chirish / bekor qilish / shablonga qaytarish.
+     * Faqat tanlangan haftaga ta'sir qiladi — boshqa haftalar shablon bo'yicha qoladi.
+     */
+    public function weekOverride(Request $request, TimetableCard $card)
+    {
+        $data = $request->validate([
+            'week'   => 'required|integer|min:1|max:30',
+            'action' => 'required|in:move,cancel,reset',
+            'day'    => 'nullable|integer|min:1|max:10',
+            'pair'   => 'nullable|integer|min:1|max:10',
+        ]);
+        $week = (int) $data['week'];
+
+        if ($data['action'] === 'reset') {
+            TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->delete();
+            return response()->json(['ok' => true]);
+        }
+
+        if ($data['action'] === 'cancel') {
+            TimetableCardOverride::updateOrCreate(
+                ['card_id' => $card->id, 'week' => $week],
+                ['day' => null, 'pair' => null, 'cancelled' => true]
+            );
+            return response()->json(['ok' => true]);
+        }
+
+        // move — tanlangan haftadagi konfliktni tekshiramiz
+        $day = $data['day'] ?? null;
+        $pair = $data['pair'] ?? null;
+        if (!$day || !$pair) {
+            return response()->json(['error' => 'Kun va para ko\'rsatilishi kerak'], 422);
+        }
+        $conflicts = $this->findWeekConflicts($card, $week, $day, $pair);
+        if (!empty($conflicts)) {
+            return response()->json(['error' => implode(' · ', $conflicts)], 422);
+        }
+        TimetableCardOverride::updateOrCreate(
+            ['card_id' => $card->id, 'week' => $week],
+            ['day' => $day, 'pair' => $pair, 'cancelled' => false]
+        );
+        return response()->json(['ok' => true]);
+    }
+
+    /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi. */
+    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair): array
+    {
+        $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $card->board_id))
+            ->where('week', $week)->get()->keyBy('card_id');
+        $others = TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)->get();
+
+        $myGroups = $card->occupiedGroups();
+        $errors = [];
+        foreach ($others as $o) {
+            $ov = $ovr->get($o->id);
+            if ($ov) {
+                if ($ov->cancelled) {
+                    continue;
+                }
+                $od = $ov->day;
+                $op = $ov->pair;
+            } else {
+                $od = $o->day;
+                $op = $o->pair;
+            }
+            if ((int) $od !== $day || (int) $op !== $pair) {
+                continue;
+            }
+            if ($o->specialty_name === $card->specialty_name && (int) $o->course === (int) $card->course) {
+                $overlap = array_intersect($myGroups, $o->occupiedGroups());
+                if (!empty($overlap)) {
+                    $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';
+                }
+            }
+            if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
+                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' (' . $o->subject_name . ')';
+            }
+            if ($card->auditorium_code && $o->auditorium_code === $card->auditorium_code) {
+                $errors[] = 'Auditoriya band: ' . $o->auditorium_name . ' (' . $o->subject_name . ')';
+            }
+        }
+        return array_unique($errors);
     }
 
     /** Yo'nalish+kurs uchun panjara o'lchami (alohida sozlama yoki doska sukuti). */

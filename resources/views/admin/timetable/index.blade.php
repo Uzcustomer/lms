@@ -138,6 +138,11 @@
                             <button type="button" class="tt-type px-3 py-1 border-l border-gray-300" data-type="practice">Amaliy</button>
                         </div>
                     </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-medium text-gray-500">Hafta:</span>
+                        <select id="weekSel" class="rounded-md border-gray-300 text-xs py-1"></select>
+                        <span id="weekHint" class="hidden text-[11px] text-amber-600 font-medium">individual</span>
+                    </div>
                     <span class="h-6 w-px bg-gray-200"></span>
                     <button type="button" id="autoBtn" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⚡ Avtomatik joylash</button>
                     <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska (barcha yo'nalishlar)</label>
@@ -192,7 +197,10 @@
                             <div id="cmMsg" class="hidden text-sm rounded px-3 py-2"></div>
                         </div>
                         <div class="flex justify-between gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
-                            <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100">↩ Jadvaldan olish</button>
+                            <div class="flex gap-2">
+                                <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100">↩ Jadvaldan olish</button>
+                                <button type="button" id="cmResetWeek" class="hidden px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100">↺ Shablonga qaytarish</button>
+                            </div>
                             <div class="flex gap-2">
                                 <button type="button" id="cmCancel" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-700">Yopish</button>
                                 <button type="button" id="cmSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Saqlash</button>
@@ -488,10 +496,14 @@
         #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; }
         #grid td.tt-day { background: #f1f5f9; font-weight: 700; color: #334155; writing-mode: vertical-rl; transform: rotate(180deg);
             text-align: center; white-space: nowrap; position: sticky; left: 0; z-index: 4; }
-        #grid td.tt-para { background: #f8fafc; font-weight: 600; color: #475569; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 26px; }
+        #grid td.tt-para { background: #f8fafc; font-weight: 600; color: #475569; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 42px; padding: 2px; }
+        #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 500; color: #94a3b8; line-height: 1.1; margin-top: 1px; }
         #grid thead th { position: sticky; top: 0; z-index: 5; }
-        #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 700; }
-        #grid th.tt-grp { background: #eef1f5; color: #475569; font-weight: 600; white-space: nowrap; }
+        #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 700; text-align: center; }
+        #grid th.tt-grp { background: #eef1f5; color: #475569; font-weight: 600; white-space: nowrap; text-align: center; }
+        /* Oqimlar orasi — qo'sh chiziq; asos guruhlar (a/b) orasi — qalin chiziq */
+        #grid td.sep-oqim, #grid th.sep-oqim { border-left: 3px double #475569; }
+        #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #94a3b8; }
         .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
         /* Ma'ruza — sariq; amaliy — binafsha */
         .tt-chip.lec { background: #fef08a; border-left: 3px solid #f59e0b; color: #713f12; font-weight: 600; }
@@ -576,6 +588,8 @@
             let selected = null;   // tanlangan karta (obyekt)
             let audCache = null;
             let modalCard = null;
+            let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
+            let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
 
             const $ = id => document.getElementById(id);
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -642,6 +656,9 @@
                 board = j.board; cards = j.cards;
                 grids = {};
                 (j.grids || []).forEach(g => { grids[g.specialty_name + '|' + g.course] = g; });
+                // Hafta bo'yicha istisnolar
+                overrides = {};
+                (j.overrides || []).forEach(o => { overrides[o.card_id + '|' + o.week] = { day: o.day, pair: o.pair, cancelled: o.cancelled }; });
                 // Eski kartaga ishora qiluvchi tanlovlarni bekor qilamiz (eski doskaga yozib
                 // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
                 selected = null; modalCard = null;
@@ -692,7 +709,32 @@
             function fillGridInputs() {
                 const g = curGrid();
                 $('gsDays').value = g.days; $('gsPairs').value = g.pairs_per_day; $('gsWeeks').value = g.weeks;
+                fillWeekSel();
             }
+
+            // ===== Hafta tanlash (individual haftalar) =====
+            function fillWeekSel() {
+                const w = +curGrid().weeks || +board.weeks || 15;
+                if (curWeek > w) curWeek = 0;
+                let opts = '<option value="0">Barcha haftalar (shablon)</option>';
+                for (let i = 1; i <= w; i++) opts += '<option value="' + i + '">' + i + '-hafta</option>';
+                $('weekSel').innerHTML = opts;
+                $('weekSel').value = String(curWeek);
+            }
+            $('weekSel').onchange = function () {
+                curWeek = +this.value || 0;
+                selected = null;
+                renderAll();
+            };
+            // Kartaning tanlangan haftadagi (yoki shablon) effektiv joylashuvi: {day,pair} yoki null
+            function effPlace(c) {
+                if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
+                const ov = overrides[c.id + '|' + curWeek];
+                if (ov) return ov.cancelled ? null : { day: ov.day, pair: ov.pair };
+                return c.day ? { day: c.day, pair: c.pair } : null;
+            }
+            // Karta shu haftada shablondan farq qiladimi (individual)?
+            const hasWeekOverride = c => curWeek && !!overrides[c.id + '|' + curWeek];
             $('gsSave').onclick = async function () {
                 if (!curSpec) return;
                 this.disabled = true;
@@ -757,12 +799,14 @@
                 groupRows.sort((a, b) => (a.oqim_label + a.group).localeCompare(b.oqim_label + b.group, undefined, { numeric: true }));
             }
 
-            // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati
+            // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha)
             function conflictsAt(card, day, pair) {
                 const my = cardGroups(card);
                 const errs = [];
                 cards.forEach(o => {
-                    if (o.id === card.id || o.day !== day || o.pair !== pair) return;
+                    if (o.id === card.id) return;
+                    const pl = effPlace(o);
+                    if (!pl || pl.day !== day || pl.pair !== pair) return;
                     if (o.specialty_name === card.specialty_name && o.course === card.course) {
                         const ov = cardGroups(o).filter(g => my.includes(g));
                         if (ov.length) errs.push('Guruh band: ' + ov.join(','));
@@ -778,13 +822,15 @@
 
             function renderStats() {
                 const sc = visibleSpecCards();
-                const placed = sc.filter(c => c.day).length;
-                const totPlaced = cards.filter(c => c.day).length;
+                const placed = sc.filter(c => effPlace(c)).length;
+                const totPlaced = cards.filter(c => effPlace(c)).length;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
+                const weekLbl = curWeek ? ' · ' + curWeek + '-hafta' : '';
                 $('statChips').innerHTML =
-                    '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + '</span>' +
+                    '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>' +
                     '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + cards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
+                $('weekHint').classList.toggle('hidden', !curWeek);
             }
 
             function cardLabel(c, short) {
@@ -794,7 +840,7 @@
             }
 
             function renderPanel() {
-                const un = visibleSpecCards().filter(c => !c.day);
+                const un = visibleSpecCards().filter(c => !effPlace(c));
                 // Fan bo'yicha guruhlash
                 const bySubj = {};
                 un.forEach(c => { (bySubj[c.subject_name] = bySubj[c.subject_name] || []).push(c); });
@@ -836,10 +882,17 @@
                     curO.groups.push(gr.group);
                 });
 
-                // Joylashgan kartalar indeksi: group|day|pair → karta (dars turi filtriga muvofiq)
+                // Para → boshlanish-tugash vaqti (sozlangan qo'ng'iroq jadvalidan)
+                const pairTime = {};
+                boardSchedule().filter(it => it.type === 'pair').forEach((it, i) => {
+                    pairTime[it.no || (i + 1)] = { start: it.start || '', end: it.end || '' };
+                });
+
+                // Joylashgan kartalar indeksi: group|day|pair → karta (dars turi filtri + tanlangan hafta bo'yicha)
                 const placedIdx = {};
-                visibleSpecCards().filter(c => c.day).forEach(c => {
-                    cardGroups(c).forEach(gg => { placedIdx[gg + '|' + c.day + '|' + c.pair] = c; });
+                visibleSpecCards().forEach(c => {
+                    const pl = effPlace(c);
+                    if (pl) cardGroups(c).forEach(gg => { placedIdx[gg + '|' + pl.day + '|' + pl.pair] = c; });
                 });
 
                 const chipHtml = c =>
@@ -851,27 +904,38 @@
                     (c.auditorium_name ? '<div class="text-[9px] text-gray-500">' + esc(c.auditorium_name) + '</div>' : '') +
                     '</div>';
 
+                // Asos guruh kaliti: til qo'shimchasi "(o'z)" va a/b pastki guruh harfini olib tashlab
+                // (masalan "1K-01a (o'z)" → "1K-01"). Bir asos guruh = a va b pastki guruhlari.
+                const baseKey = gn => String(gn).replace(/\s*\([^)]*\)\s*$/, '').replace(/[a-z]$/i, '');
+                // Ustun chap chegara sinfi: oqim boshi (qo'sh chiziq) yoki asos guruh boshi (qalin chiziq)
+                const colBorder = (oqimIdx, gi, groups) => {
+                    if (gi === 0) return oqimIdx > 0 ? ' sep-oqim' : '';
+                    return baseKey(groups[gi]) !== baseKey(groups[gi - 1]) ? ' sep-base' : '';
+                };
+
                 // Sarlavha: Kun | Para | (oqim → guruhlar)
                 let h = '<thead><tr>' +
                     '<th class="tt-corner px-1 py-1" rowspan="2">Kun</th>' +
                     '<th class="tt-corner px-1 py-1" rowspan="2" style="left:28px">Para</th>';
-                oqimCols.forEach(o => h += '<th class="tt-oqim px-2 py-1" colspan="' + o.groups.length + '">' + esc(o.label || '—') + '</th>');
+                oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' + esc(o.label || '—') + '</th>');
                 h += '</tr><tr>';
-                oqimCols.forEach(o => o.groups.forEach(gr => h += '<th class="tt-grp px-2 py-1">' + esc(gr) + '</th>'));
+                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gr) + '</th>'));
                 h += '</tr></thead><tbody>';
 
                 for (let d = 1; d <= D; d++) {
                     for (let p = 1; p <= P; p++) {
                         h += '<tr>';
                         if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
-                        h += '<td class="tt-para">' + p + '</td>';
-                        oqimCols.forEach(o => {
+                        const pt = pairTime[p];
+                        h += '<td class="tt-para"><div>' + p + '</div>' +
+                            (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
+                        oqimCols.forEach((o, oi) => {
                             // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan)
                             if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label) {
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
                                     const bad = conflictsAt(selected, d, p).length > 0;
-                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + '" colspan="' + o.groups.length + '"' +
+                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + colBorder(oi, 0, o.groups) + '" colspan="' + o.groups.length + '"' +
                                         (bad ? '' : ' data-place="' + d + '-' + p + '"') + '></td>';
                                     return;
                                 }
@@ -880,6 +944,7 @@
                             let gi = 0;
                             while (gi < o.groups.length) {
                                 const grp = o.groups[gi];
+                                const bord = colBorder(oi, gi, o.groups);
                                 const c = placedIdx[grp + '|' + d + '|' + p];
                                 if (c && c.training_type === 'lecture') {
                                     let span = 1;
@@ -887,14 +952,14 @@
                                         const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
                                         if (c2 && c2.id === c.id) span++; else break;
                                     }
-                                    h += '<td class="tt-cell tt-lec" colspan="' + span + '">' + chipHtml(c) + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '">' + chipHtml(c) + '</td>';
                                     gi += span;
                                 } else if (c) {
-                                    h += '<td class="tt-cell">' + chipHtml(c) + '</td>';
+                                    h += '<td class="tt-cell' + bord + '">' + chipHtml(c) + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
-                                    let cls = 'tt-cell', clickable = '';
+                                    let cls = 'tt-cell' + bord, clickable = '';
                                     if (selected && selected.training_type === 'practice' && cardGroups(selected).includes(grp)) {
                                         if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
                                         else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
@@ -910,13 +975,19 @@
                 h += '</tbody>';
                 $('grid').innerHTML = h;
 
-                // Yashil katakni bosish — joylash
+                // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)
                 document.querySelectorAll('[data-place]').forEach(td => td.onclick = async () => {
                     if (!selected) return;
                     const [d, p] = td.dataset.place.split('-').map(Number);
                     try {
-                        await api(BASE + '/cards/' + selected.id + '/place', 'POST', { day: d, pair: p });
-                        selected.day = d; selected.pair = p;
+                        if (!curWeek) {
+                            await api(BASE + '/cards/' + selected.id + '/place', 'POST', { day: d, pair: p });
+                            selected.day = d; selected.pair = p;
+                        } else {
+                            await api(BASE + '/cards/' + selected.id + '/week-override', 'POST',
+                                { week: curWeek, action: 'move', day: d, pair: p });
+                            overrides[selected.id + '|' + curWeek] = { day: d, pair: p, cancelled: false };
+                        }
                         selected = null;
                         renderAll();
                     } catch (e) { alert('Konflikt: ' + e.message); }
@@ -937,8 +1008,12 @@
                 modalCard = c;
                 $('cmTitle').textContent = c.subject_name;
                 $('cmSub').textContent = (c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + (c.group_name || '')) +
-                    ' · ' + c.students + ' talaba' + (c.kafedra_name ? ' · ' + c.kafedra_name : '');
+                    ' · ' + c.students + ' talaba' + (c.kafedra_name ? ' · ' + c.kafedra_name : '') +
+                    (curWeek ? ' · ' + curWeek + '-hafta' + (hasWeekOverride(c) ? ' (individual)' : '') : '');
                 $('cmCap').textContent = '(kamida ' + c.students + ' o\'rin)';
+                // Hafta rejimida: "olib tashlash" shu haftada bekor qilish; override bo'lsa shablonga qaytarish
+                $('cmUnplace').textContent = curWeek ? '✖ Shu haftada bekor qilish' : '↩ Jadvaldan olish';
+                $('cmResetWeek').classList.toggle('hidden', !(curWeek && hasWeekOverride(c)));
                 $('cmMsg').classList.add('hidden');
                 $('cardModal').classList.remove('hidden');
                 await Promise.all([loadTeachers(''), loadAuds()]);
@@ -988,8 +1063,26 @@
             };
             $('cmUnplace').onclick = async () => {
                 if (!modalCard) return;
-                await api(BASE + '/cards/' + modalCard.id + '/place', 'POST', {});
-                modalCard.day = null; modalCard.pair = null;
+                try {
+                    if (!curWeek) {
+                        // Shablondan olib tashlash (barcha haftalardan)
+                        await api(BASE + '/cards/' + modalCard.id + '/place', 'POST', {});
+                        modalCard.day = null; modalCard.pair = null;
+                    } else {
+                        // Faqat shu haftada bekor qilish
+                        await api(BASE + '/cards/' + modalCard.id + '/week-override', 'POST', { week: curWeek, action: 'cancel' });
+                        overrides[modalCard.id + '|' + curWeek] = { day: null, pair: null, cancelled: true };
+                    }
+                } catch (e) { alert('Xatolik: ' + e.message); return; }
+                $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
+                renderAll();
+            };
+            $('cmResetWeek').onclick = async () => {
+                if (!modalCard || !curWeek) return;
+                try {
+                    await api(BASE + '/cards/' + modalCard.id + '/week-override', 'POST', { week: curWeek, action: 'reset' });
+                    delete overrides[modalCard.id + '|' + curWeek];
+                } catch (e) { alert('Xatolik: ' + e.message); return; }
                 $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                 renderAll();
             };
@@ -1259,8 +1352,8 @@
             }
 
             function buildExcelView() {
-                // Dars turi filtri Excel ko'rinishga ham qo'llanadi (masalan faqat ma'ruza jadvali)
-                const placed = cards.filter(c => c.day && c.pair && typeVisible(c));
+                // Dars turi filtri + tanlangan hafta Excel ko'rinishga ham qo'llanadi
+                const placed = cards.filter(c => effPlace(c) && typeVisible(c));
                 // Ustun tuzilishi rejimga qarab: guruh / o'qituvchi / auditoriya.
                 // headGroups: [{title, span, cols:[{key,label}]}]; idx: "colKey|day|pair" → karta(lar)
                 let headGroups = [], idx = {};
@@ -1277,17 +1370,17 @@
                         .map(s => ({ ...s, groups: [...s.groups].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) }))
                         .sort((a, b) => (a.name + a.course).localeCompare(b.name + b.course))
                         .forEach(s => headGroups.push({ title: s.name + ' · ' + s.course + '-kurs', cols: s.groups.map(g => ({ key: g, label: g })) }));
-                    placed.forEach(c => cardGroups(c).forEach(g => push(g, c.day, c.pair, c)));
+                    placed.forEach(c => { const pl = effPlace(c); cardGroups(c).forEach(g => push(g, pl.day, pl.pair, c)); });
                 } else if (excelMode === 'teacher') {
                     const names = [...new Set(placed.filter(c => c.teacher_name).map(c => c.teacher_name))]
                         .sort((a, b) => a.localeCompare(b));
                     headGroups.push({ title: "O'qituvchilar", cols: names.map(n => ({ key: n, label: n })) });
-                    placed.forEach(c => { if (c.teacher_name) push(c.teacher_name, c.day, c.pair, c); });
+                    placed.forEach(c => { if (c.teacher_name) { const pl = effPlace(c); push(c.teacher_name, pl.day, pl.pair, c); } });
                 } else { // room
                     const names = [...new Set(placed.filter(c => c.auditorium_name).map(c => c.auditorium_name))]
                         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
                     headGroups.push({ title: 'Auditoriyalar', cols: names.map(n => ({ key: n, label: n })) });
-                    placed.forEach(c => { if (c.auditorium_name) push(c.auditorium_name, c.day, c.pair, c); });
+                    placed.forEach(c => { if (c.auditorium_name) { const pl = effPlace(c); push(c.auditorium_name, pl.day, pl.pair, c); } });
                 }
 
                 const cols = headGroups.flatMap(hg => hg.cols);

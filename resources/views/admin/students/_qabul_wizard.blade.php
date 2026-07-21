@@ -11,9 +11,13 @@
     if (is_string($sportQob)) { $sportQob = json_decode($sportQob, true) ?: []; }
     $existingFiles = \App\Models\StudentFile::where('student_id', $student->id)->pluck('path', 'name')->toArray();
 
-    $sel = function($field, $optionValue) use ($a) {
+    $normalizeCompare = function ($value) {
+        $value = (string) $value;
+        return str_replace(["\u{2018}", "\u{2019}", "\u{02BB}", '`'], "'", $value);
+    };
+    $sel = function($field, $optionValue) use ($a, $normalizeCompare) {
         $v = old($field, $a?->{$field} ?? '');
-        return (string)$v === (string)$optionValue ? 'selected' : '';
+        return $normalizeCompare($v) === $normalizeCompare($optionValue) ? 'selected' : '';
     };
     $chk = function($field) use ($a) {
         return (bool) old($field, $a?->{$field} ?? false) ? 'checked' : '';

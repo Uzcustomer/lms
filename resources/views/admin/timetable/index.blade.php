@@ -63,7 +63,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Hafta soni (sukut)</label>
-                        <input type="number" id="nbWeeks" value="18" min="1" max="30" class="w-full rounded-md border-gray-300 text-sm">
+                        <input type="number" id="nbWeeks" value="15" min="1" max="30" class="w-full rounded-md border-gray-300 text-sm">
                     </div>
                     <div class="md:col-span-7">
                         <button type="button" id="createBoardBtn" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Yaratish</button>

@@ -29,7 +29,7 @@ return new class extends Migration {
             $table->string('faculty_name')->nullable();
             $table->unsignedTinyInteger('days')->default(6);          // haftada kunlar
             $table->unsignedTinyInteger('pairs_per_day')->default(6); // kuniga paralar
-            $table->unsignedTinyInteger('weeks')->default(18);        // semestr haftalari
+            $table->unsignedTinyInteger('weeks')->default(15);        // semestr haftalari
             $table->string('status', 20)->default('draft');           // draft | approved
             $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();

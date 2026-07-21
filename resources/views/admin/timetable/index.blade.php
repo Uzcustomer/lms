@@ -1397,7 +1397,13 @@
             //  Excel ko'rinishidagi jadval (kunlar/paralar qatorda, guruhlar ustunda)
             // ══════════════════════════════════════════════════════════════
             let excelMode = 'group';   // group | teacher | room
-            $('excelViewBtn').onclick = () => { buildExcelView(); $('excelModal').classList.remove('hidden'); };
+            $('excelViewBtn').onclick = () => {
+                // buildExcelView xatosi modalni ochilmay qolishiga (va shu bilan
+                // "Excelga yuklab olish" tugmasi ko'rinmasligiga) sabab bo'lmasin.
+                try { buildExcelView(); }
+                catch (e) { $('excelBody').innerHTML = '<div class="p-4 text-red-600">Excel ko\'rinishda xatolik: ' + esc(e.message) + '</div>'; }
+                $('excelModal').classList.remove('hidden');
+            };
             $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
             $('excelPrint').onclick = () => window.print();
             // Jadvalni Excel (.xls) fayl sifatida yuklab olish — joriy rejim/hafta/dars turi bo'yicha

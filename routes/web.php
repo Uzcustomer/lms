@@ -862,6 +862,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
         });
 
+        // Dars jadvali tuzish (aSc Timetables uslubida)
+        Route::prefix('dars-jadvali-tuzish')->name('timetable.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\TimetableController::class, 'index'])->name('index');
+                Route::post('/boards', [\App\Http\Controllers\Admin\TimetableController::class, 'storeBoard'])->name('boards.store');
+                Route::delete('/boards/{board}', [\App\Http\Controllers\Admin\TimetableController::class, 'destroyBoard'])->name('boards.destroy');
+                Route::post('/boards/{board}/generate', [\App\Http\Controllers\Admin\TimetableController::class, 'generateCards'])->name('boards.generate');
+                Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
+                Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
+                Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
+                Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');
+                Route::get('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriums'])->name('auditoriums');
+            });
+
         // O'quv reja to'g'riligi (akkreditatsiya): namunaviy <-> ishchi reja solishtirish
         Route::prefix('oquv-reja')->name('oquv-reja.')
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi')

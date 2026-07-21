@@ -48,9 +48,23 @@ class CurriculumComparisonService
 
         $refSubjects = $reference->subjects()->orderBy('id')->get();
         if (!empty($covered)) {
-            $refSubjects = $refSubjects->filter(function ($s) use ($covered) {
+            // Setka formatida ko'p semestrli fanning umumiy soati faqat BIRINCHI
+            // semestr qatorida saqlanadi (masalan, 3-semestrda 120 soat, keyingi
+            // semestr qatorlarida soat bo'sh). Agar qatorlarni semestr bo'yicha
+            // alohida filtrlasak — qamrab olingan semestrga tushmagan, ammo aynan
+            // soatni saqlab turgan qator yo'qolib, "Nam. soat" ustuni bo'sh ("—")
+            // chiqadi. Shuning uchun avval fan NOMI bo'yicha qaysi fanlar qamrab
+            // olingan semestrda uchrashini aniqlaymiz, so'ng shu fanlarning BARCHA
+            // qatorlarini (boshqa semestrdagi soat qatori bilan birga) saqlaymiz.
+            $coveredNames = [];
+            foreach ($refSubjects as $s) {
                 $sem = ($s->semester !== null && $s->semester !== '') ? (int) $s->semester : null;
-                return $sem === null || in_array($sem, $covered, true);
+                if ($sem === null || in_array($sem, $covered, true)) {
+                    $coveredNames[$this->normalize((string) $s->subject_name)] = true;
+                }
+            }
+            $refSubjects = $refSubjects->filter(function ($s) use ($coveredNames) {
+                return isset($coveredNames[$this->normalize((string) $s->subject_name)]);
             })->values();
         }
 

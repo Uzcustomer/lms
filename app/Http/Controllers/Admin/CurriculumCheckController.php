@@ -1815,6 +1815,9 @@ class CurriculumCheckController extends Controller
         $data['audit_total'] = $this->auditTotal($data);
         $curriculum->subjects()->create($data);
 
+        // Batch nusxa yozuvlarga ham qo'shamiz — nusxalar bir xil qolishi uchun
+        $this->syncSiblingSubjects($curriculum, 'create', [], $data);
+
         return redirect()->route('admin.oquv-reja.show', $curriculum)
             ->with('success', "Yangi fan qatori qo'shildi.");
     }
@@ -1828,10 +1831,25 @@ class CurriculumCheckController extends Controller
 
         $data = $this->validateSubject($request);
         $data['audit_total'] = $this->auditTotal($data);
+
+        // Tahrirdan OLDINGI belgilar — nusxa yozuvlardagi mos qatorni topish uchun
+        $old = [
+            'subject_name' => $subject->subject_name,
+            'semester'     => $subject->semester,
+            'block'        => $subject->block,
+        ];
+
         $subject->update($data);
 
-        return redirect()->route('admin.oquv-reja.show', $curriculum)
-            ->with('success', "Fan qatori yangilandi.");
+        // Batch yuklangan nusxa yozuvlarga tahrirni tarqatish (pastdagi izohga qarang)
+        $synced = $this->syncSiblingSubjects($curriculum, 'update', $old, $data);
+
+        $msg = 'Fan qatori yangilandi.';
+        if ($synced > 0) {
+            $msg .= " Shu rejaning boshqa semestr nusxalarida ham ({$synced} ta) yangilandi.";
+        }
+
+        return redirect()->route('admin.oquv-reja.show', $curriculum)->with('success', $msg);
     }
 
     /**
@@ -1841,10 +1859,80 @@ class CurriculumCheckController extends Controller
     {
         abort_unless($subject->manual_curriculum_id === $curriculum->id, 404);
 
+        $old = [
+            'subject_name' => $subject->subject_name,
+            'semester'     => $subject->semester,
+            'block'        => $subject->block,
+        ];
         $subject->delete();
+
+        // Batch nusxa yozuvlardan ham o'chiramiz
+        $this->syncSiblingSubjects($curriculum, 'delete', $old);
 
         return redirect()->route('admin.oquv-reja.show', $curriculum)
             ->with('success', "Fan qatori o'chirildi.");
+    }
+
+    /**
+     * Batch yuklangan ishchi reja bir nechta semestr yozuviga TO'LIQ nusxalanadi
+     * (har semestr uchun alohida manual_curricula yozuvi, hammasida bir xil fanlar).
+     * Solishtirishda esa har bir semestr fani o'z semestr yozuvidan olinadi. Shu
+     * sabab bitta yozuvda fan tahrirlansa (masalan nomi tuzatilsa), boshqa nusxalar
+     * eskicha qolib, tahrir solishtirishda ko'rinmaydi.
+     *
+     * Bu metod tahrir/qo'shish/o'chirishni xuddi shu reja guruhidagi (bir HEMIS reja,
+     * bir reja yili, bir yo'nalish) boshqa nusxa yozuvlarga tarqatadi. Mos qator eski
+     * nom + semestr + blok bo'yicha topiladi (nusxalar aynan bir xil bo'lgani uchun).
+     *
+     * @return int  ta'sirlangan qatorlar soni
+     */
+    private function syncSiblingSubjects(ManualCurriculum $curriculum, string $op, array $old, array $data = []): int
+    {
+        if (!$curriculum->curricula_hemis_id) {
+            return 0; // rejalashtirilgan (HEMIS'siz) reja — batch guruhi yo'q
+        }
+
+        $siblingIds = ManualCurriculum::where('type', $curriculum->type)
+            ->where('curricula_hemis_id', $curriculum->curricula_hemis_id)
+            ->where('id', '!=', $curriculum->id)
+            ->when($curriculum->plan_year !== null, fn ($q) => $q->where('plan_year', $curriculum->plan_year))
+            ->when($curriculum->specialty_code !== null, fn ($q) => $q->where('specialty_code', $curriculum->specialty_code))
+            ->pluck('id');
+
+        if ($siblingIds->isEmpty()) {
+            return 0;
+        }
+
+        if ($op === 'create') {
+            $rows = $siblingIds->map(fn ($id) => array_merge($data, [
+                'manual_curriculum_id' => $id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]))->all();
+            ManualCurriculumSubject::insert($rows);
+
+            return count($rows);
+        }
+
+        // update / delete: eski belgilar bo'yicha mos qatorlarni topamiz
+        $matches = ManualCurriculumSubject::whereIn('manual_curriculum_id', $siblingIds)
+            ->where('subject_name', $old['subject_name'])
+            ->where(fn ($q) => $this->whereNullable($q, 'semester', $old['semester'] ?? null))
+            ->where(fn ($q) => $this->whereNullable($q, 'block', $old['block'] ?? null));
+
+        if ($op === 'delete') {
+            return $matches->delete();
+        }
+
+        return $matches->update($data);
+    }
+
+    /** null qiymatni to'g'ri solishtirish uchun (= NULL emas, IS NULL). */
+    private function whereNullable($query, string $column, $value)
+    {
+        return $value === null || $value === ''
+            ? $query->whereNull($column)
+            : $query->where($column, $value);
     }
 
     private function validateSubject(Request $request): array

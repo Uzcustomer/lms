@@ -481,15 +481,25 @@
 
     <style>
         #grid th, #grid td { border: 1px solid #e2e8f0; }
-        #grid td.tt-cell { min-width: 92px; height: 44px; vertical-align: top; cursor: default; padding: 1px; }
+        #grid td.tt-cell { min-width: 96px; height: 40px; vertical-align: middle; text-align: center; cursor: default; padding: 1px; }
         #grid td.tt-ok { background: #dcfce7; cursor: pointer; }
         #grid td.tt-bad { background: #fee2e2; }
-        .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.25; cursor: pointer; }
-        .tt-chip.lec { background: #dbeafe; border-left: 3px solid #2563eb; }
+        /* Transpoze panjara: chapdagi kun/para sarlavhalari */
+        #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; }
+        #grid td.tt-day { background: #f1f5f9; font-weight: 700; color: #334155; writing-mode: vertical-rl; transform: rotate(180deg);
+            text-align: center; white-space: nowrap; position: sticky; left: 0; z-index: 4; }
+        #grid td.tt-para { background: #f8fafc; font-weight: 600; color: #475569; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 26px; }
+        #grid thead th { position: sticky; top: 0; z-index: 5; }
+        #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 700; }
+        #grid th.tt-grp { background: #eef1f5; color: #475569; font-weight: 600; white-space: nowrap; }
+        .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
+        /* Ma'ruza — sariq; amaliy — binafsha */
+        .tt-chip.lec { background: #fef08a; border-left: 3px solid #f59e0b; color: #713f12; font-weight: 600; }
         .tt-chip.prc { background: #f3e8ff; border-left: 3px solid #9333ea; }
-        .tt-chip.sel { outline: 2px solid #f59e0b; }
+        #grid td.tt-lec { background: #fef9c3; }               /* butun oqimga tegishli ma'ruza katagi */
+        .tt-chip.sel { outline: 2px solid #ef4444; }
         .pn-card { border-radius: 6px; padding: 4px 6px; font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
-        .pn-card.lec { background: #eff6ff; }
+        .pn-card.lec { background: #fefce8; border-color: #fde68a; }
         .pn-card.prc { background: #faf5ff; }
         .pn-card.sel { outline: 2px solid #f59e0b; }
         .lang-rus { box-shadow: inset 0 0 0 1px #fca5a5; }
@@ -815,54 +825,88 @@
             function renderGrid() {
                 const g = curGrid();
                 const D = g.days, P = g.pairs_per_day;
-                let h = '<thead><tr><th class="bg-gray-50 px-2 py-1 sticky left-0 z-10">Guruh</th>';
-                for (let d = 1; d <= D; d++) h += '<th colspan="' + P + '" class="bg-gray-100 px-2 py-1">' + DAY_NAMES[d - 1] + '</th>';
-                h += '</tr><tr><th class="bg-gray-50 sticky left-0 z-10"></th>';
-                for (let d = 1; d <= D; d++) for (let p = 1; p <= P; p++)
-                    h += '<th class="bg-gray-50 px-1 py-0.5 text-gray-500 font-normal">' + p + '</th>';
-                h += '</tr></thead><tbody>';
+                const dayNames = boardDayNames();
 
-                // Joylashgan kartalar indeksi: group|day|pair → [karta] (dars turi filtriga muvofiq)
+                // Ustunlar: guruhlar oqim bo'yicha guruhlangan (groupRows tartibida)
+                const oqimCols = [];
+                let curO = null;
+                groupRows.forEach(gr => {
+                    const lab = gr.oqim_label || '';
+                    if (!curO || curO.label !== lab) { curO = { label: lab, groups: [] }; oqimCols.push(curO); }
+                    curO.groups.push(gr.group);
+                });
+
+                // Joylashgan kartalar indeksi: group|day|pair → karta (dars turi filtriga muvofiq)
                 const placedIdx = {};
                 visibleSpecCards().filter(c => c.day).forEach(c => {
-                    cardGroups(c).forEach(g => {
-                        const k = g + '|' + c.day + '|' + c.pair;
-                        (placedIdx[k] = placedIdx[k] || []).push(c);
-                    });
+                    cardGroups(c).forEach(gg => { placedIdx[gg + '|' + c.day + '|' + c.pair] = c; });
                 });
 
-                let lastOqim = null;
-                groupRows.forEach(gr => {
-                    h += '<tr>';
-                    const oqimBadge = gr.oqim_label && gr.oqim_label !== lastOqim
-                        ? '<span class="text-[9px] text-blue-500 font-bold mr-1">' + esc(gr.oqim_label) + '</span>' : '';
-                    lastOqim = gr.oqim_label;
-                    h += '<td class="bg-white px-2 py-1 font-semibold text-gray-700 whitespace-nowrap sticky left-0 z-10">' + oqimBadge + esc(gr.group) + '</td>';
-                    for (let d = 1; d <= D; d++) {
-                        for (let p = 1; p <= P; p++) {
-                            const list = placedIdx[gr.group + '|' + d + '|' + p] || [];
-                            let cls = 'tt-cell';
-                            let clickable = '';
-                            if (selected && !list.length && cardGroups(selected).includes(gr.group)) {
-                                const errs = conflictsAt(selected, d, p);
-                                if (errs.length) { cls += ' tt-bad'; }
-                                else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
+                const chipHtml = c =>
+                    '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
+                    (selected && selected.id === c.id ? ' sel' : '') + '" data-chip="' + c.id + '" title="' +
+                    esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '')) + '">' +
+                    cardLabel(c, true) +
+                    (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
+                    (c.auditorium_name ? '<div class="text-[9px] text-gray-500">' + esc(c.auditorium_name) + '</div>' : '') +
+                    '</div>';
+
+                // Sarlavha: Kun | Para | (oqim → guruhlar)
+                let h = '<thead><tr>' +
+                    '<th class="tt-corner px-1 py-1" rowspan="2">Kun</th>' +
+                    '<th class="tt-corner px-1 py-1" rowspan="2" style="left:28px">Para</th>';
+                oqimCols.forEach(o => h += '<th class="tt-oqim px-2 py-1" colspan="' + o.groups.length + '">' + esc(o.label || '—') + '</th>');
+                h += '</tr><tr>';
+                oqimCols.forEach(o => o.groups.forEach(gr => h += '<th class="tt-grp px-2 py-1">' + esc(gr) + '</th>'));
+                h += '</tr></thead><tbody>';
+
+                for (let d = 1; d <= D; d++) {
+                    for (let p = 1; p <= P; p++) {
+                        h += '<tr>';
+                        if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
+                        h += '<td class="tt-para">' + p + '</td>';
+                        oqimCols.forEach(o => {
+                            // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan)
+                            if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label) {
+                                const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
+                                if (!occupied) {
+                                    const bad = conflictsAt(selected, d, p).length > 0;
+                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + '" colspan="' + o.groups.length + '"' +
+                                        (bad ? '' : ' data-place="' + d + '-' + p + '"') + '></td>';
+                                    return;
+                                }
                             }
-                            h += '<td class="' + cls + '"' + clickable + '>';
-                            list.forEach(c => {
-                                h += '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
-                                    (selected && selected.id === c.id ? ' sel' : '') + '" data-chip="' + c.id + '" title="' +
-                                    esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '')) + '">' +
-                                    cardLabel(c, true) +
-                                    (c.teacher_name ? '<div class="text-[9px] text-gray-500">' + esc(c.teacher_name) + '</div>' : '') +
-                                    (c.auditorium_name ? '<div class="text-[9px] text-gray-400">' + esc(c.auditorium_name) + '</div>' : '') +
-                                    '</div>';
-                            });
-                            h += '</td>';
-                        }
+                            // Oddiy yurish: ma'ruzani oqim guruhlari bo'ylab birlashtirish, amaliy/bo'sh — alohida
+                            let gi = 0;
+                            while (gi < o.groups.length) {
+                                const grp = o.groups[gi];
+                                const c = placedIdx[grp + '|' + d + '|' + p];
+                                if (c && c.training_type === 'lecture') {
+                                    let span = 1;
+                                    while (gi + span < o.groups.length) {
+                                        const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
+                                        if (c2 && c2.id === c.id) span++; else break;
+                                    }
+                                    h += '<td class="tt-cell tt-lec" colspan="' + span + '">' + chipHtml(c) + '</td>';
+                                    gi += span;
+                                } else if (c) {
+                                    h += '<td class="tt-cell">' + chipHtml(c) + '</td>';
+                                    gi++;
+                                } else {
+                                    // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
+                                    let cls = 'tt-cell', clickable = '';
+                                    if (selected && selected.training_type === 'practice' && cardGroups(selected).includes(grp)) {
+                                        if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
+                                        else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
+                                    }
+                                    h += '<td class="' + cls + '"' + clickable + '></td>';
+                                    gi++;
+                                }
+                            }
+                        });
+                        h += '</tr>';
                     }
-                    h += '</tr>';
-                });
+                }
                 h += '</tbody>';
                 $('grid').innerHTML = h;
 

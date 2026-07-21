@@ -1360,10 +1360,8 @@
                 const styles = 'table{border-collapse:collapse}td,th{border:1px solid #888;padding:2px 4px;font-size:11px;text-align:center;vertical-align:middle}' +
                     'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:700}' +
                     '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc}.ex-lec{background:#fef9c3}.ex-prc{background:#faf5ff}';
-                const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
-                    '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>' +
-                    '<x:Name>Dars jadvali</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>' +
-                    '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
+                const html = '<html xmlns="http://www.w3.org/TR/REC-html40">' +
+                    '<head><meta charset="utf-8"><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
                 const modeLabel = { group: 'guruh', teacher: 'oqituvchi', room: 'auditoriya' }[excelMode];
                 const fname = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') + '_' + modeLabel +
                     (curWeek ? '_' + curWeek + '-hafta' : '') + '.xls';

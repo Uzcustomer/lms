@@ -763,7 +763,8 @@
             if (isReq) $el.prop('required', true);
             else { $el.prop('required', false).removeClass('is-invalid'); }
         }
-        function validateStep(stepNum){
+        function validateStep(stepNum, options = {}){
+            const showAlert = options.showAlert !== false;
             const $section = $('#qwStep' + stepNum);
             if (!$section.length) return true;
             const $required = $section.find('[required]').filter(function(){
@@ -795,19 +796,30 @@
                 try { firstInvalid.focus({preventScroll: true}); } catch(_) { $(firstInvalid).trigger('focus'); }
                 const off = $(firstInvalid).offset();
                 if (off) $('html, body').animate({scrollTop: Math.max(off.top - 120, 0)}, 250);
-                setTimeout(()=> alert("Iltimos, barcha majburiy maydonlarni to'ldiring."), 100);
+                if (showAlert) {
+                    setTimeout(()=> alert("Iltimos, barcha majburiy maydonlarni to'ldiring."), 100);
+                }
                 return false;
             }
             return true;
         }
         $(document).on('click', '.qw-next', function(){
             const next = +$(this).data('next');
-            if (!validateStep(next - 1)) return;
             goStep(next);
         });
         $(document).on('click', '.qw-back', function(){ goStep(+$(this).data('back')); });
         $(document).on('input change', '.qw-wrap input, .qw-wrap select, .qw-wrap textarea', function(){
             $(this).removeClass('is-invalid');
+        });
+        $('#qwForm').on('submit', function(e){
+            for (let step = 1; step <= 5; step++) {
+                if (!validateStep(step, { showAlert: false })) {
+                    e.preventDefault();
+                    goStep(step);
+                    setTimeout(() => alert(`Iltimos, ${step}-bosqichdagi barcha majburiy maydonlarni to'ldiring.`), 100);
+                    return false;
+                }
+            }
         });
 
         // ===== Clear all data button =====

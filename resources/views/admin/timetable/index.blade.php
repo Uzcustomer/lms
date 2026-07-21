@@ -303,6 +303,7 @@
                                     <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="teacher">O'qituvchi bo'yicha</button>
                                     <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="room">Auditoriya bo'yicha</button>
                                 </div>
+                                <button type="button" id="excelDownload" class="asc-btn">⬇ Excelga yuklab olish</button>
                                 <button type="button" id="excelPrint" class="asc-btn">🖨 Chop / PDF</button>
                                 <button type="button" id="excelClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none px-1">&times;</button>
                             </div>
@@ -499,6 +500,7 @@
         #grid td.tt-para { background: #f8fafc; font-weight: 600; color: #475569; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 42px; padding: 2px; }
         #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 500; color: #94a3b8; line-height: 1.1; margin-top: 1px; }
         #grid thead th { position: sticky; top: 0; z-index: 5; }
+        #grid th.tt-fac { background: #c7d2fe; color: #1e1b4b; font-weight: 800; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: .2px; }
         #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 700; text-align: center; }
         #grid th.tt-grp { background: #eef1f5; color: #475569; font-weight: 600; white-space: nowrap; text-align: center; }
         /* Oqimlar orasi — qo'sh chiziq; asos guruhlar (a/b) orasi — qalin chiziq */
@@ -555,6 +557,7 @@
         #excelBody th, #excelBody td { border: 1px solid #9aa7b4; padding: 2px 4px; vertical-align: middle; }
         #excelBody .ex-title { text-align: center; font-weight: 700; font-size: 14px; border: none; padding: 6px; }
         #excelBody .ex-fac { text-align: center; font-weight: 700; background: #dbeafe; }
+        #excelBody .ex-fac { text-align: center; font-weight: 800; background: #dbeafe; text-transform: uppercase; }
         #excelBody .ex-spec { text-align: center; font-weight: 700; background: #eef2ff; }
         #excelBody .ex-grp { text-align: center; font-weight: 600; background: #f8fafc; }
         #excelBody .ex-day { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: 700; background: #f1f5f9; text-align: center; }
@@ -793,7 +796,7 @@
                 const seen = {};
                 specCards().forEach(c => {
                     cardGroups(c).forEach(g => {
-                        if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g }); }
+                        if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '' }); }
                     });
                 });
                 groupRows.sort((a, b) => (a.oqim_label + a.group).localeCompare(b.oqim_label + b.group, undefined, { numeric: true }));
@@ -913,10 +916,27 @@
                     return baseKey(groups[gi]) !== baseKey(groups[gi - 1]) ? ' sep-base' : '';
                 };
 
-                // Sarlavha: Kun | Para | (oqim → guruhlar)
+                // Fakultet sarlavhasi (Excel dars jadvali kabi): guruh → fakultet xaritasidan
+                // qo'shni bir xil fakultet ustunlari bitta blokka birlashtiriladi.
+                const facOf = {};
+                groupRows.forEach(gr => { facOf[gr.group] = gr.faculty || ''; });
+                const facRuns = [];
+                oqimCols.forEach(o => o.groups.forEach(gr => {
+                    const f = facOf[gr] || '';
+                    const last = facRuns[facRuns.length - 1];
+                    if (last && last.faculty === f) last.span++; else facRuns.push({ faculty: f, span: 1 });
+                }));
+                const showFac = facRuns.some(r => r.faculty);
+                const corSpan = showFac ? 3 : 2;
+
+                // Sarlavha: Kun | Para | [fakultet] | oqim | guruhlar
                 let h = '<thead><tr>' +
-                    '<th class="tt-corner px-1 py-1" rowspan="2">Kun</th>' +
-                    '<th class="tt-corner px-1 py-1" rowspan="2" style="left:28px">Para</th>';
+                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '">Kun</th>' +
+                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="left:28px">Para</th>';
+                if (showFac) {
+                    facRuns.forEach((r, ri) => h += '<th class="tt-fac px-2 py-1' + (ri > 0 ? ' sep-oqim' : '') + '" colspan="' + r.span + '">' + esc(r.faculty || '—') + '</th>');
+                    h += '</tr><tr>';
+                }
                 oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' + esc(o.label || '—') + '</th>');
                 h += '</tr><tr>';
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gr) + '</th>'));
@@ -1333,6 +1353,22 @@
             $('excelViewBtn').onclick = () => { buildExcelView(); $('excelModal').classList.remove('hidden'); };
             $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
             $('excelPrint').onclick = () => window.print();
+            // Jadvalni Excel (.xls) fayl sifatida yuklab olish — joriy rejim/hafta/dars turi bo'yicha
+            $('excelDownload').onclick = () => {
+                const tableHtml = $('excelBody').innerHTML;
+                if (!tableHtml.includes('<table')) { alert('Yuklab olish uchun joylashgan darslar yo\'q.'); return; }
+                const styles = 'table{border-collapse:collapse}td,th{border:1px solid #888;padding:2px 4px;font-size:11px;text-align:center;vertical-align:middle}' +
+                    'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:700}' +
+                    '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc}.ex-lec{background:#fef9c3}.ex-prc{background:#faf5ff}';
+                const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
+                    '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>' +
+                    '<x:Name>Dars jadvali</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>' +
+                    '</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
+                const modeLabel = { group: 'guruh', teacher: 'oqituvchi', room: 'auditoriya' }[excelMode];
+                const fname = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') + '_' + modeLabel +
+                    (curWeek ? '_' + curWeek + '-hafta' : '') + '.xls';
+                dl('﻿' + html, fname, 'application/vnd.ms-excel');
+            };
             document.querySelectorAll('.ex-mode').forEach(b => b.onclick = () => {
                 excelMode = b.dataset.mode;
                 document.querySelectorAll('.ex-mode').forEach(x => x.classList.toggle('active', x === b));
@@ -1392,6 +1428,21 @@
                     return;
                 }
 
+                // Fakultet super-sarlavhasi (faqat guruh rejimida): guruh → fakultet
+                let facHead = null;
+                if (excelMode === 'group') {
+                    const gFac = {};
+                    cards.forEach(c => cardGroups(c).forEach(g => { if (!(g in gFac)) gFac[g] = c.faculty_name || ''; }));
+                    if (cols.some(col => gFac[col.key])) {
+                        facHead = [];
+                        cols.forEach(col => {
+                            const f = gFac[col.key] || '';
+                            const last = facHead[facHead.length - 1];
+                            if (last && last.faculty === f) last.span++; else facHead.push({ faculty: f, span: 1 });
+                        });
+                    }
+                }
+
                 let D = board.days;
                 Object.values(grids).forEach(g => { D = Math.max(D, g.days); });
                 const dayNames = boardDayNames();
@@ -1413,7 +1464,12 @@
                 const title = (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali') + ' (' + modeLabel + ' kesimida)';
                 let h = '<table><thead>';
                 h += '<tr><td class="ex-title" colspan="' + (cols.length + 3) + '">' + esc(title) + '</td></tr>';
-                h += '<tr><th rowspan="2" class="ex-para">Kun</th><th rowspan="2" class="ex-para">Para</th><th rowspan="2" class="ex-para">Soati</th>';
+                const kpSpan = facHead ? 3 : 2;
+                h += '<tr><th rowspan="' + kpSpan + '" class="ex-para">Kun</th><th rowspan="' + kpSpan + '" class="ex-para">Para</th><th rowspan="' + kpSpan + '" class="ex-para">Soati</th>';
+                if (facHead) {
+                    facHead.forEach(r => h += '<th class="ex-fac" colspan="' + r.span + '">' + esc(r.faculty || '—') + '</th>');
+                    h += '</tr><tr>';
+                }
                 headGroups.forEach(hg => h += '<th class="ex-spec" colspan="' + hg.cols.length + '">' + esc(hg.title) + '</th>');
                 h += '</tr><tr>';
                 cols.forEach(col => h += '<th class="ex-grp">' + esc(col.label) + '</th>');

@@ -56,6 +56,14 @@ class CurriculumComparisonService
             // chiqadi. Shuning uchun avval fan NOMI bo'yicha qaysi fanlar qamrab
             // olingan semestrda uchrashini aniqlaymiz, so'ng shu fanlarning BARCHA
             // qatorlarini (boshqa semestrdagi soat qatori bilan birga) saqlaymiz.
+            // Bundan tashqari ishchi rejada mavjud bo'lgan fanlar ham saqlanadi —
+            // hatto namunaviyda boshqa semestrda turgan bo'lsa ham (semestr farqi
+            // holati): shunda fan tushib qolmaydi, balki farq bilan ko'rsatiladi.
+            $workNames = [];
+            foreach ($workSubjects as $s) {
+                $workNames[$this->normalize((string) ($s->reference_name ?: $s->subject_name))] = true;
+                $workNames[$this->normalize((string) $s->subject_name)] = true;
+            }
             $coveredNames = [];
             foreach ($refSubjects as $s) {
                 $sem = ($s->semester !== null && $s->semester !== '') ? (int) $s->semester : null;
@@ -63,8 +71,9 @@ class CurriculumComparisonService
                     $coveredNames[$this->normalize((string) $s->subject_name)] = true;
                 }
             }
-            $refSubjects = $refSubjects->filter(function ($s) use ($coveredNames) {
-                return isset($coveredNames[$this->normalize((string) $s->subject_name)]);
+            $refSubjects = $refSubjects->filter(function ($s) use ($coveredNames, $workNames) {
+                $key = $this->normalize((string) $s->subject_name);
+                return isset($coveredNames[$key]) || isset($workNames[$key]);
             })->values();
         }
 
@@ -117,12 +126,20 @@ class CurriculumComparisonService
      * Ishchi rejalar fanlarini bitta ro'yxatga yig'ish.
      *
      * Qoidalar:
-     *  - yozuvda semester_code bo'lsa, fayldan faqat shu semestr qatorlari olinadi
-     *    (batch yuklashda bir fayl bir nechta semestr yozuviga to'liq nusxalanadi);
      *  - takror (semestr + fan nomi) juftliklari bir marta olinadi, eng oxirgi
-     *    yuklangan reja ustunlik qiladi;
-     *  - semestri ko'rsatilmagan qatorlar butun guruh bo'ylab nom bo'yicha
-     *    bir marta olinadi (batch nusxa va qayta yuklashlar takrorlanmaydi).
+     *    yuklangan reja ustunlik qiladi (shu bilan batch nusxalar ikki marta
+     *    hisoblanmaydi);
+     *  - fan qaysi semestr qatorida bo'lsa ham JAMLANGAN ro'yxatga kiritiladi —
+     *    hatto yozuv yorlig'i (semester_code) boshqa semestrni ko'rsatsa ham.
+     *    Chunki bir fayl ko'pincha bir necha semestrni o'z ichiga oladi (masalan
+     *    7- va 8-semestr birga), fan esa 8-semestr yozuvida bo'lsa ham aslida
+     *    7-semestrda turishi mumkin. Filtrlab tashlansa, u fan "Ishchi rejada
+     *    yo'q" bo'lib noto'g'ri ko'rinardi;
+     *  - "qamrab olingan semestrlar" esa yozuvlarning semester_code'i bo'yicha
+     *    aniqlanadi (tasodifiy boshqa-semestr qatori butun semestrni "yuklangan"
+     *    deb belgilab qo'ymasligi uchun);
+     *  - har bir reja xulosasi (fanlar/soat/kredit) yozuvning O'Z semestriga
+     *    tegishli qatorlar bo'yicha hisoblanadi.
      *
      * @return array{0: Collection, 1: array<int>, 2: array<int, array>}
      *         [jamlangan fanlar, qamrab olingan semestrlar, har bir reja bo'yicha xulosa]
@@ -131,29 +148,30 @@ class CurriculumComparisonService
     {
         $seen = [];
         $combined = collect();
-        $covered = [];
+        $coveredSet = [];
         $plans = [];
 
         // Eng oxirgi yuklangan reja takror qatorlarda ustun bo'lishi uchun ID kamayish tartibida
         foreach ($workings->sortByDesc('id')->values() as $working) {
             $recSem = self::semesterNumber($working->semester_code);
-            $hadNullRows = false;
-            $taken = 0;
-            $hours = 0.0;
-            $credit = 0.0;
+            $ownCount = 0;
+            $ownHours = 0.0;
+            $ownCredit = 0.0;
 
             foreach ($working->subjects()->orderBy('id')->get() as $s) {
                 $rowSem = ($s->semester !== null && $s->semester !== '') ? (int) $s->semester : null;
-                if ($recSem !== null && $rowSem !== null && $rowSem !== $recSem) {
-                    continue;
+
+                // Reja xulosasi: yozuvning o'z semestriga tegishli qatorlar
+                // (semester_code yo'q bo'lsa — barcha qatorlar).
+                if ($recSem === null || $rowSem === null || $rowSem === $recSem) {
+                    $ownCount++;
+                    $ownHours += (float) ($s->total_hours ?? 0);
+                    $ownCredit += (float) ($s->credit ?? 0);
                 }
-                if ($rowSem === null) {
-                    $hadNullRows = true;
-                }
+
+                // Jamlangan ro'yxat: BARCHA qatorlar (semestr mos kelmasa ham).
+                // Takror (semestr + nom / nomsiz) juftliklari bir marta olinadi.
                 $name = $this->normalize($s->reference_name ?: $s->subject_name);
-                // Semestri ko'rsatilmagan qator qaysi semestrga tegishligini bilib
-                // bo'lmaydi — bunday fan butun guruh bo'ylab nom bo'yicha bir marta
-                // olinadi (batch nusxalar va tuzatib qayta yuklashlar bir marta sanaladi).
                 $key = $rowSem !== null
                     ? 's' . $rowSem . '|' . $name
                     : 'n|' . $name;
@@ -162,20 +180,19 @@ class CurriculumComparisonService
                 }
                 $seen[$key] = true;
                 $combined->push($s);
-                $taken++;
-                $hours += (float) ($s->total_hours ?? 0);
-                $credit += (float) ($s->credit ?? 0);
 
-                $sem = $rowSem ?? $recSem;
-                if ($sem !== null && !in_array($sem, $covered, true)) {
-                    $covered[] = $sem;
+                // Rejalashtirilgan (semester_code'siz) yozuvda qamrovni qator
+                // semestridan olamiz.
+                if ($recSem === null && $rowSem !== null) {
+                    $coveredSet[$rowSem] = true;
                 }
             }
 
-            // Qatorlari nusxa sifatida o'tkazib yuborilgan bo'lsa ham,
-            // yozuv mo'ljallangan semestr qamrab olingan hisoblanadi
-            if ($hadNullRows && $recSem !== null && !in_array($recSem, $covered, true)) {
-                $covered[] = $recSem;
+            // Asosiy qamrov manbai — yozuvning semester_code'i (ishchi reja
+            // yuklangan semestr). Tasodifiy boshqa-semestr qatorlari qamrovni
+            // kengaytirmaydi.
+            if ($recSem !== null) {
+                $coveredSet[$recSem] = true;
             }
 
             $plans[] = [
@@ -184,12 +201,13 @@ class CurriculumComparisonService
                 'plan_year'     => $working->plan_year,
                 'semester'      => $recSem,
                 'semester_code' => $working->semester_code,
-                'subjects'      => $taken,
-                'hours'         => round($hours, 2),
-                'credit'        => round($credit, 2),
+                'subjects'      => $ownCount,
+                'hours'         => round($ownHours, 2),
+                'credit'        => round($ownCredit, 2),
             ];
         }
 
+        $covered = array_keys($coveredSet);
         sort($covered);
         usort($plans, fn($a, $b) => [$a['semester'] ?? 99, $a['id']] <=> [$b['semester'] ?? 99, $b['id']]);
 
@@ -266,6 +284,19 @@ class CurriculumComparisonService
             $notes[] = "HEMIS bazasida fan topilmadi";
         }
 
+        // Semestr farqi: fan namunaviy va ishchi rejada turli semestrlarda turgan
+        // bo'lsa — ogohlantirish. (Ilgari mos kelmaydigan semestr fanni umuman
+        // tushirib qoldirardi; endi fan ko'rsatiladi va farq belgilanadi.)
+        $refSems = $ref['semestrlar'] ?? [];
+        $workSems = $work['semestrlar'] ?? [];
+        $semesterDiffers = $ref !== null && $work !== null
+            && !empty($refSems) && !empty($workSems)
+            && array_map('intval', $refSems) !== array_map('intval', $workSems);
+        if ($semesterDiffers) {
+            $notes[] = 'Semestr farqi: namunaviyda ' . implode(',', $refSems)
+                . '-semestr, ishchida ' . implode(',', $workSems) . '-semestr';
+        }
+
         return [
             'block' => $ref['block'] ?? $work['block'] ?? null,
             'hemis_name' => $hemisName,
@@ -282,6 +313,9 @@ class CurriculumComparisonService
             'credit_diff' => ($ref && $work) ? round(($work['credit'] ?? 0) - ($ref['credit'] ?? 0), 2) : null,
             'kurslar' => implode(',', $work['kurslar'] ?? []),
             'semestrlar' => implode(',', collect(array_merge($ref['semestrlar'] ?? [], $work['semestrlar'] ?? []))->unique()->sort()->values()->all()),
+            'ref_semestrlar' => implode(',', $refSems),
+            'work_semestrlar' => implode(',', $workSems),
+            'semester_differs' => $semesterDiffers,
             'status' => $status,
             'note' => implode('; ', array_unique($notes)),
         ];

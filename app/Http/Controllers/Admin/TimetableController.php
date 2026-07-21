@@ -13,6 +13,7 @@ use App\Models\TimetableGridSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -344,7 +345,50 @@ class TimetableController extends Controller
             $this->ensureGridSettings($board, $specsFound);
         });
 
+        // Snapshot fakultet konteksti bo'sh bo'lsa ham fakultet nomini guruh
+        // ma'lumotidan to'ldiramiz (panjara/selektor/Excel fakultet ajratmasi uchun).
+        $this->backfillFacultyFromGroups($board->id);
+
         return response()->json(['ok' => true, 'created' => count($rows)]);
+    }
+
+    /**
+     * Dars kartochkalariga fakultet nomini `groups` jadvalidan to'ldirish.
+     * Amaliy — guruh nomi bo'yicha; ma'ruza va qolganlar — xuddi shu
+     * doska+yo'nalish+kurs dagi to'ldirilgan qardosh kartadan. Faqat NULL
+     * qiymatlar yangilanadi.
+     */
+    private function backfillFacultyFromGroups(?int $boardId = null): void
+    {
+        if (!Schema::hasColumn('timetable_cards', 'faculty_name') || !Schema::hasTable('groups')) {
+            return;
+        }
+        try {
+            $scope = fn($q) => $boardId ? $q->where('board_id', $boardId) : $q;
+
+            $groupFac = DB::table('groups')
+                ->whereNotNull('department_name')->where('department_name', '<>', '')
+                ->whereNotNull('name')->where('name', '<>', '')
+                ->pluck('department_name', 'name');
+            foreach ($groupFac as $name => $fac) {
+                $scope(DB::table('timetable_cards')->where('group_name', $name))
+                    ->whereNull('faculty_name')->update(['faculty_name' => $fac]);
+            }
+
+            $filled = $scope(DB::table('timetable_cards'))
+                ->whereNotNull('faculty_name')->where('faculty_name', '<>', '')
+                ->select('board_id', 'specialty_name', 'course', 'faculty_name')
+                ->distinct()->get();
+            foreach ($filled as $r) {
+                DB::table('timetable_cards')
+                    ->where('board_id', $r->board_id)
+                    ->where('specialty_name', $r->specialty_name)
+                    ->where('course', $r->course)
+                    ->whereNull('faculty_name')->update(['faculty_name' => $r->faculty_name]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('backfillFacultyFromGroups: ' . $e->getMessage());
+        }
     }
 
     /** Yo'nalish+kurs uchun panjara sozlamasini saqlash (kun/para/hafta). */

@@ -512,11 +512,16 @@ class TimetableController extends Controller
         $reset = (bool) ($data['reset'] ?? false);
         $assignRooms = (bool) ($data['assign_rooms'] ?? false);
 
-        // Reset — tanlangan qamrovdagi mavjud joylashuvlarni bo'shatamiz
+        // Reset — tanlangan qamrovdagi mavjud joylashuvlarni bo'shatamiz.
+        // Qamrov: yo'nalish+kurs (scopeSpec) → faqat o'sha; aks holda kurs
+        // berilsa (scopeSpec=null, scopeCourse!=null) → shu kursning barcha
+        // yo'nalishlari; ikkalasi ham null → butun doska.
         if ($reset) {
             $q = TimetableCard::where('board_id', $board->id);
             if ($scopeSpec !== null) {
                 $q->where('specialty_name', $scopeSpec)->where('course', $scopeCourse);
+            } elseif ($scopeCourse !== null) {
+                $q->where('course', $scopeCourse);
             }
             if ($scopeType !== null) {
                 $q->where('training_type', $scopeType);
@@ -557,8 +562,12 @@ class TimetableController extends Controller
             if ($scopeType !== null && $c->training_type !== $scopeType) {
                 return false;
             }
-            return $scopeSpec === null
-                || ($c->specialty_name === $scopeSpec && (int) $c->course === $scopeCourse);
+            if ($scopeSpec !== null) {
+                return $c->specialty_name === $scopeSpec && (int) $c->course === $scopeCourse;
+            }
+            // Yo'nalish berilmagan: kurs berilsa — shu kursning barcha
+            // yo'nalishlari; aks holda butun doska.
+            return $scopeCourse === null || (int) $c->course === $scopeCourse;
         });
 
         // Tartib: eng ko'p cheklovli avval — ma'ruza (ko'p guruh band qiladi),

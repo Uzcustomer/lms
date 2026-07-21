@@ -91,6 +91,9 @@
                     <button type="button" class="asc-tool" data-dialog="teachers">
                         <span class="asc-ic">🧑‍🏫</span> O'qituvchilar
                     </button>
+                    <button type="button" id="assignBtn" class="asc-tool">
+                        <span class="asc-ic">🔗</span> O'qituvchi biriktirish
+                    </button>
                     <span class="mx-1 h-6 w-px bg-gray-200"></span>
                     <button type="button" id="excelViewBtn" class="asc-tool">
                         <span class="asc-ic">📊</span> Excel ko'rinish
@@ -393,6 +396,51 @@
                         <div class="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
                             <button type="button" id="beCancel" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-700">Bekor</button>
                             <button type="button" id="beSave" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- ═══ O'qituvchi biriktirish matritsasi ═══ --}}
+            <div id="assignModal" class="hidden fixed inset-0 z-50 bg-black/40">
+                <div class="flex min-h-full items-center justify-center p-4">
+                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col" style="max-height: 92vh;">
+                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
+                            <div class="flex items-center gap-2 text-sm font-semibold text-white">🔗 O'qituvchi biriktirish</div>
+                            <button type="button" id="asgClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                        </div>
+                        <div class="flex gap-2 p-2 overflow-hidden" style="min-height: 400px;">
+                            {{-- Chap: dars birliklari --}}
+                            <div class="flex-1 flex flex-col bg-white border border-gray-300 rounded overflow-hidden">
+                                <div class="flex items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
+                                    <span class="text-xs font-semibold text-gray-600">Dars birliklari:</span>
+                                    <select id="asgFilter" class="rounded border-gray-300 text-xs py-1"></select>
+                                    <label class="flex items-center gap-1 text-xs text-gray-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-gray-300"> faqat biriktirilmagan</label>
+                                    <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-44 rounded border-gray-300 text-xs py-1">
+                                    <span id="asgCount" class="text-xs text-gray-400"></span>
+                                </div>
+                                <div class="overflow-auto" style="max-height: 64vh;">
+                                    <table id="asgTable" class="w-full text-xs asc-table"></table>
+                                </div>
+                            </div>
+                            {{-- O'ng: o'qituvchi tanlash --}}
+                            <div class="w-72 shrink-0 flex flex-col bg-white border border-gray-300 rounded overflow-hidden">
+                                <div class="px-2 py-1.5 border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600">O'qituvchi</div>
+                                <div class="p-2 space-y-2 flex-1 flex flex-col overflow-hidden">
+                                    <div id="asgUnitInfo" class="text-xs text-gray-500 min-h-[32px]">← Chapdan dars birligini tanlang</div>
+                                    <input id="asgTeacherSearch" placeholder="Qidirish..." class="w-full rounded-md border-gray-300 text-xs" disabled>
+                                    <label class="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" id="asgKafedraOnly" class="rounded border-gray-300" checked> shu kafedra bo'yicha</label>
+                                    <select id="asgTeacher" size="10" class="w-full rounded-md border-gray-300 text-xs flex-1" disabled></select>
+                                    <div class="flex gap-1">
+                                        <button type="button" id="asgApply" class="asc-btn primary flex-1" disabled>Biriktirish</button>
+                                        <button type="button" id="asgClear" class="asc-btn" disabled title="Biriktirishni olib tashlash">✖</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
+                            <div id="asgMsg" class="text-xs text-gray-500"></div>
+                            <button type="button" id="asgCloseBtn" class="asc-btn">Yopish</button>
                         </div>
                     </div>
                 </div>
@@ -1344,6 +1392,146 @@
                 } catch (e) { $('setMsg').textContent = 'Xatolik: ' + e.message; }
                 this.disabled = false;
             };
+
+            // ══════════════════════════════════════════════════════════════
+            //  O'qituvchi biriktirish matritsasi
+            // ══════════════════════════════════════════════════════════════
+            let asgUnits = [];        // dars birliklari
+            let asgSel = null;        // tanlangan birlik
+            let asgTeacherTimer = null;
+
+            $('assignBtn').onclick = async () => {
+                if (!board) return;
+                asgSel = null; setAsgTeacherPanel(null);
+                $('assignModal').classList.remove('hidden');
+                $('asgMsg').textContent = '';
+                $('asgTable').innerHTML = '<tbody><tr><td class="p-3 text-gray-400">Yuklanmoqda...</td></tr></tbody>';
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/teacher-units');
+                    asgUnits = j.units || [];
+                } catch (e) { asgUnits = []; $('asgMsg').textContent = 'Xatolik: ' + e.message; }
+                const specs = [...new Set(asgUnits.map(u => u.specialty_name + ' · ' + u.course + '-kurs'))].sort();
+                $('asgFilter').innerHTML = '<option value="">— barcha yo\'nalishlar —</option>' +
+                    specs.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+                renderAsgTable();
+            };
+            $('asgClose').onclick = $('asgCloseBtn').onclick = () => {
+                $('assignModal').classList.add('hidden');
+                renderAll();   // grid/panel o'qituvchi o'zgarishlarini aks ettirsin
+            };
+            $('asgFilter').onchange = $('asgSearch').oninput = $('asgOnlyEmpty').onchange = () => renderAsgTable();
+
+            function asgFiltered() {
+                const q = ($('asgSearch').value || '').toLowerCase().trim();
+                const fv = $('asgFilter').value;
+                const onlyEmpty = $('asgOnlyEmpty').checked;
+                return asgUnits.filter(u => {
+                    if (fv && (u.specialty_name + ' · ' + u.course + '-kurs') !== fv) return false;
+                    if (onlyEmpty && u.teacher_id) return false;
+                    if (q && !(u.subject_name.toLowerCase().includes(q) || (u.kafedra_name || '').toLowerCase().includes(q))) return false;
+                    return true;
+                });
+            }
+
+            function renderAsgTable() {
+                const rows = asgFiltered();
+                $('asgCount').textContent = rows.length + ' ta';
+                let h = '<thead><tr><th>Fan</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th></tr></thead><tbody>';
+                let lastSpec = null;
+                rows.forEach((u, i) => {
+                    const sk = u.specialty_name + '·' + u.course;
+                    if (sk !== lastSpec) {
+                        h += '<tr class="asc-row-head"><td colspan="6">' + esc(u.specialty_name) + ' · ' + u.course + '-kurs</td></tr>';
+                        lastSpec = sk;
+                    }
+                    const scope = u.training_type === 'lecture' ? (u.oqim_label || 'oqim') : (u.group_name || '');
+                    const tt = u.training_type === 'lecture'
+                        ? '<span class="text-blue-600 font-semibold">M</span>' : '<span class="text-purple-600 font-semibold">A</span>';
+                    const teacher = u.teacher_mixed
+                        ? '<span class="text-amber-600">⚠ turlicha</span>'
+                        : (u.teacher_name ? esc(u.teacher_name) : '<span class="text-gray-400">— biriktirilmagan —</span>');
+                    h += '<tr data-i="' + i + '"' + (asgSel === rows[i] ? ' class="sel"' : '') + '>' +
+                        '<td>' + esc(u.subject_name) + '</td><td class="text-center">' + tt + '</td>' +
+                        '<td>' + esc(scope) + '</td><td>' + esc(u.kafedra_name || '—') + '</td>' +
+                        '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '⚑)</span>' : '') + '</td>' +
+                        '<td>' + teacher + '</td></tr>';
+                });
+                h += '</tbody>';
+                $('asgTable').innerHTML = h;
+                const rowsRef = rows;
+                $('asgTable').querySelectorAll('tbody tr[data-i]').forEach(tr => tr.onclick = () => {
+                    asgSel = rowsRef[+tr.dataset.i];
+                    $('asgTable').querySelectorAll('tbody tr').forEach(x => x.classList.remove('sel'));
+                    tr.classList.add('sel');
+                    selectAsgUnit();
+                });
+            }
+
+            async function selectAsgUnit() {
+                const u = asgSel;
+                setAsgTeacherPanel(u);
+                $('asgUnitInfo').innerHTML = '<b>' + esc(u.subject_name) + '</b><br>' +
+                    (u.training_type === 'lecture' ? "Ma'ruza · " + esc(u.oqim_label || '') : 'Amaliy · ' + esc(u.group_name || '')) +
+                    ' · ' + u.cards + ' karta' + (u.kafedra_name ? '<br><span class="text-gray-400">' + esc(u.kafedra_name) + '</span>' : '');
+                await loadAsgTeachers('');
+            }
+
+            function setAsgTeacherPanel(u) {
+                const on = !!u;
+                ['asgTeacherSearch', 'asgTeacher', 'asgApply', 'asgClear', 'asgKafedraOnly'].forEach(id => $(id).disabled = !on);
+                if (!on) { $('asgUnitInfo').textContent = '← Chapdan dars birligini tanlang'; $('asgTeacher').innerHTML = ''; $('asgTeacherSearch').value = ''; }
+            }
+
+            async function loadAsgTeachers(search) {
+                if (!asgSel) return;
+                const p = new URLSearchParams();
+                if ($('asgKafedraOnly').checked && asgSel.kafedra_name && !search) p.set('kafedra', asgSel.kafedra_name.split(' ')[0]);
+                if (search) p.set('search', search);
+                try {
+                    const list = await api(TEACHERS_URL + '?' + p);
+                    $('asgTeacher').innerHTML = list.map(t =>
+                        '<option value="' + t.id + '"' + (asgSel.teacher_id === t.id ? ' selected' : '') + '>' +
+                        esc(t.short_name || t.full_name) + (t.lavozim ? ' · ' + esc(t.lavozim) : '') + '</option>').join('')
+                        || '<option disabled>topilmadi</option>';
+                } catch (e) { $('asgTeacher').innerHTML = '<option disabled>xato</option>'; }
+            }
+            $('asgTeacherSearch').oninput = function () {
+                clearTimeout(asgTeacherTimer);
+                asgTeacherTimer = setTimeout(() => loadAsgTeachers(this.value.trim()), 300);
+            };
+            $('asgKafedraOnly').onchange = () => loadAsgTeachers($('asgTeacherSearch').value.trim());
+
+            $('asgApply').onclick = () => applyAsg($('asgTeacher').value || null);
+            $('asgClear').onclick = () => applyAsg(null);
+
+            async function applyAsg(teacherId) {
+                if (!asgSel) return;
+                $('asgApply').disabled = $('asgClear').disabled = true;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/assign-teacher', 'POST', {
+                        specialty_name: asgSel.specialty_name, course: asgSel.course,
+                        subject_name: asgSel.subject_name, training_type: asgSel.training_type,
+                        oqim_label: asgSel.oqim_label || '', group_name: asgSel.group_name || '',
+                        teacher_id: teacherId || '',
+                    });
+                    // Mahalliy holatni yangilaymiz (birlik + tegishli kartalar)
+                    asgSel.teacher_id = teacherId ? +teacherId : null;
+                    asgSel.teacher_name = j.teacher_name;
+                    asgSel.teacher_mixed = false;
+                    cards.forEach(c => {
+                        const sameScope = asgSel.training_type === 'lecture'
+                            ? (c.oqim_label === asgSel.oqim_label) : (c.group_name === asgSel.group_name);
+                        if (c.specialty_name === asgSel.specialty_name && c.course === asgSel.course &&
+                            c.subject_name === asgSel.subject_name && c.training_type === asgSel.training_type && sameScope) {
+                            c.teacher_id = asgSel.teacher_id; c.teacher_name = j.teacher_name;
+                        }
+                    });
+                    $('asgMsg').textContent = (j.teacher_name ? '«' + j.teacher_name + '» biriktirildi' : 'Biriktirish olib tashlandi') +
+                        ' · ' + j.affected + ' karta';
+                    renderAsgTable();
+                } catch (e) { $('asgMsg').textContent = 'Xatolik: ' + e.message; }
+                $('asgApply').disabled = $('asgClear').disabled = false;
+            }
 
             // URLdan doska ochish
             const urlBoard = new URLSearchParams(location.search).get('board');

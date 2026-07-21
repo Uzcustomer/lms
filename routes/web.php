@@ -882,6 +882,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // aSc uslubidagi boshqaruv dialoglari
                 Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
                 Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');
+                // O'qituvchi biriktirish matritsasi
+                Route::get('/boards/{board}/teacher-units', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherUnits'])->name('teacher-units');
+                Route::post('/boards/{board}/assign-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignTeacher'])->name('assign-teacher');
                 Route::get('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriums'])->name('auditoriums');
                 Route::post('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'storeAuditorium'])->name('auditoriums.store');
                 Route::post('/auditoriums/import', [\App\Http\Controllers\Admin\TimetableController::class, 'importAuditoriums'])->name('auditoriums.import');

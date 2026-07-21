@@ -920,6 +920,89 @@ class TimetableController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    //  O'qituvchi biriktirish: dars birliklari (subject × oqim/guruh) bo'yicha
+    //  ommaviy biriktirish. Bir birlikning barcha (haftalik takror) kartalari
+    //  bitta o'qituvchiga tegishli bo'ladi.
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Karta uchun dars birligi kaliti (ma'ruza — oqim; amaliy — guruhcha). */
+    private function unitKey(TimetableCard $c): string
+    {
+        $scope = $c->training_type === 'lecture' ? ('L|' . $c->oqim_label) : ('P|' . $c->group_name);
+        return implode('¦', [$c->specialty_name, $c->course, $c->subject_name, $c->training_type, $scope]);
+    }
+
+    /** Doskadagi dars birliklari + joriy o'qituvchi (biriktirish matritsasi uchun). */
+    public function teacherUnits(TimetableBoard $board)
+    {
+        $cards = TimetableCard::where('board_id', $board->id)->get();
+        $units = [];
+        foreach ($cards as $c) {
+            $k = $this->unitKey($c);
+            if (!isset($units[$k])) {
+                $units[$k] = [
+                    'specialty_name' => $c->specialty_name, 'course' => (int) $c->course,
+                    'subject_name'   => $c->subject_name, 'training_type' => $c->training_type,
+                    'oqim_label'     => $c->oqim_label, 'group_name' => $c->group_name,
+                    'kafedra_name'   => $c->kafedra_name, 'lang' => $c->lang,
+                    'students'       => (int) $c->students, 'cards' => 0,
+                    'placed'         => 0,
+                    'teacher_id'     => $c->teacher_id, 'teacher_name' => $c->teacher_name,
+                    'teacher_mixed'  => false,
+                ];
+            }
+            $units[$k]['cards']++;
+            if ($c->day && $c->pair) {
+                $units[$k]['placed']++;
+            }
+            if ($units[$k]['teacher_id'] !== $c->teacher_id) {
+                $units[$k]['teacher_mixed'] = true;
+            }
+        }
+        $out = array_values($units);
+        usort($out, fn($a, $b) => [$a['specialty_name'], $a['course'], $b['training_type'], $a['subject_name'], (string) $a['oqim_label'], (string) $a['group_name']]
+            <=> [$b['specialty_name'], $b['course'], $a['training_type'], $b['subject_name'], (string) $b['oqim_label'], (string) $b['group_name']]);
+
+        return response()->json(['units' => $out]);
+    }
+
+    /** Dars birligiga o'qituvchini ommaviy biriktirish (barcha kartalariga). */
+    public function assignTeacher(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'specialty_name' => 'required|string|max:255',
+            'course'         => 'required|integer|min:1|max:7',
+            'subject_name'   => 'required|string|max:255',
+            'training_type'  => 'required|in:lecture,practice',
+            'oqim_label'     => 'nullable|string|max:50',
+            'group_name'     => 'nullable|string|max:255',
+            'teacher_id'     => 'nullable|integer',
+        ]);
+
+        $q = TimetableCard::where('board_id', $board->id)
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('course', $data['course'])
+            ->where('subject_name', $data['subject_name'])
+            ->where('training_type', $data['training_type']);
+        if ($data['training_type'] === 'lecture') {
+            isset($data['oqim_label']) ? $q->where('oqim_label', $data['oqim_label']) : $q->whereNull('oqim_label');
+        } else {
+            isset($data['group_name']) ? $q->where('group_name', $data['group_name']) : $q->whereNull('group_name');
+        }
+
+        $teacherName = null;
+        if (!empty($data['teacher_id'])) {
+            $t = Teacher::find($data['teacher_id']);
+            $teacherName = $t?->short_name ?: $t?->full_name;
+            $affected = $q->update(['teacher_id' => $t?->id, 'teacher_name' => $teacherName]);
+        } else {
+            $affected = $q->update(['teacher_id' => null, 'teacher_name' => null]);
+        }
+
+        return response()->json(['ok' => true, 'teacher_name' => $teacherName, 'affected' => $affected]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     //  Umumiy sozlamalar (aSc "Установки" uslubida): muassasa nomi, kunlar,
     //  dam olish kunlari va qo'ng'iroqlar jadvali (juftliklar vaqtlari).
     // ══════════════════════════════════════════════════════════════════════

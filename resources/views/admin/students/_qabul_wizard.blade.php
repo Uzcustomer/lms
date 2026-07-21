@@ -22,8 +22,15 @@
     $chk = function($field) use ($a) {
         return (bool) old($field, $a?->{$field} ?? false) ? 'checked' : '';
     };
-    $val = function($field, $default = '') use ($a) {
-        return e(old($field, $a?->{$field} ?? $default));
+    $decodeDisplayValue = function ($value) {
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        return html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    };
+    $val = function($field, $default = '') use ($a, $decodeDisplayValue) {
+        return e($decodeDisplayValue(old($field, $a?->{$field} ?? $default)));
     };
 @endphp
 

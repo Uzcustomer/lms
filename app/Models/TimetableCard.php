@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class TimetableCard extends Model
 {
     protected $fillable = [
-        'board_id', 'specialty_name', 'course', 'oqim_label', 'lang',
+        'board_id', 'specialty_name', 'course', 'faculty_name', 'oqim_label', 'lang',
         'training_type', 'group_name', 'group_names', 'subject_name',
         'kafedra_name', 'students', 'teacher_id', 'teacher_name',
         'auditorium_code', 'auditorium_name', 'day', 'pair',

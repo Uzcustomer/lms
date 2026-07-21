@@ -215,6 +215,10 @@ class TimetableController extends Controller
             ->mapWithKeys(fn($g) => [$this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks])
             ->all();
 
+        // Fakultet id → nomi (snapshot fakultet kontekstidan kartaga yozish uchun)
+        $facMap = \App\Models\Department::where('structure_type_code', 11)
+            ->pluck('name', 'id')->all();
+
         $now = now();
         $rows = [];
         $paras = function ($hours, $weeks) {
@@ -225,7 +229,8 @@ class TimetableController extends Controller
             return max(1, (int) round($h / max(1, $weeks) / 2)); // 1 para = 2 akademik soat
         };
 
-        foreach ($byFaculty as $snap) {
+        foreach ($byFaculty as $fk => $snap) {
+            $facName = $facMap[(int) $fk] ?? ($facMap[$fk] ?? null);
             foreach ($snap->data ?? [] as $bl) {
                 $specName = trim(explode('|', $bl['merge_key'] ?? '')[1] ?? '') ?: ($bl['title'] ?? '');
                 $sk = $this->specKey($specName);
@@ -254,7 +259,7 @@ class TimetableController extends Controller
                             for ($i = 0; $i < $paras($s->lecture, $weeks); $i++) {
                                 $rows[] = [
                                     'board_id' => $board->id,
-                                    'specialty_name' => $specName, 'course' => $course,
+                                    'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $facName,
                                     'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
                                     'training_type' => 'lecture',
                                     'group_name' => null, 'group_names' => json_encode($groupNames),
@@ -273,7 +278,7 @@ class TimetableController extends Controller
                                     for ($i = 0; $i < $pw; $i++) {
                                         $rows[] = [
                                             'board_id' => $board->id,
-                                            'specialty_name' => $specName, 'course' => $course,
+                                            'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $facName,
                                             'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
                                             'training_type' => 'practice',
                                             'group_name' => $gn, 'group_names' => null,
@@ -604,6 +609,7 @@ class TimetableController extends Controller
             'id' => $c->id,
             'specialty_name' => $c->specialty_name,
             'course' => $c->course,
+            'faculty_name' => $c->faculty_name,
             'oqim_label' => $c->oqim_label,
             'lang' => $c->lang,
             'training_type' => $c->training_type,

@@ -122,6 +122,8 @@
                     <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Butun doska (barcha yo'nalishlar)"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska</label>
                     <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Qaytadan joylash (mavjudini bo'shatib)"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash</label>
                     <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Auditoriya biriktirilsin (sig'im bo'yicha)"><input type="checkbox" id="autoRooms" class="rounded border-gray-300"> Auditoriya</label>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Ma'ruzalarga faqat ma'ruza xonalarini to'qnashuvsiz biriktirish"><input type="checkbox" id="autoLecRooms" class="rounded border-gray-300"> Ma'ruza xonasi</label>
+                    <button type="button" id="unplaceBtn" class="px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi">🗑 Bo'shatish</button>
                     <span id="autoMsg" class="text-[11px] text-emerald-700 font-medium"></span>
 
                     <div id="statChips" class="flex flex-wrap gap-1.5 text-[11px] ml-auto"></div>
@@ -948,7 +950,8 @@
                     !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
                 $('autoBtn').disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
                 try {
-                    const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0 };
+                    const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0,
+                        lecture_rooms: $('autoLecRooms').checked ? 1 : 0 };
                     if (whole) { /* butun doska — qamrov yubormaymiz */ }
                     else if (allSpec) { body.course = curSpec.course; }
                     else { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
@@ -972,6 +975,28 @@
                 $('autoBtn').disabled = false;
             }
             $('autoBtn').onclick = doAutoPlace;
+
+            // Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatish (panelga qaytarish)
+            $('unplaceBtn').onclick = async function () {
+                if (!board || !curSpec) return;
+                const whole = $('autoScope').checked;
+                const scopeLabel = whole ? 'Butun doska'
+                    : allSpec ? ('Barcha yo\'nalishlar · ' + curSpec.course + '-kurs')
+                    : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs');
+                if (!confirm(scopeLabel + ' bo\'yicha barcha joylashuvlar bo\'shatilib, kartochkalar panelga qaytariladi. Davom etamizmi?')) return;
+                this.disabled = true; $('autoMsg').textContent = 'Bo\'shatilmoqda...';
+                try {
+                    const body = {};
+                    if (whole) { /* butun doska */ }
+                    else if (allSpec) { body.course = curSpec.course; }
+                    else { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
+                    if (typeFilter !== 'all') body.training_type = typeFilter;
+                    const j = await api(BASE + '/boards/' + board.id + '/unplace', 'POST', body);
+                    await loadBoard(board.id);
+                    $('autoMsg').textContent = (j.unplaced || 0) + ' ta joylashuv bo\'shatildi';
+                } catch (e) { $('autoMsg').textContent = ''; alert('Xatolik: ' + e.message); }
+                this.disabled = false;
+            };
 
             // ===== Yordamchilar =====
             // Fakultet cheklovi: allFac — shu yo'nalish+kursдаги barcha

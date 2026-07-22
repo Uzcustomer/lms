@@ -567,6 +567,7 @@ class TimetableController extends Controller
             'course'         => 'nullable|integer|min:1|max:7',
             'reset'          => 'nullable|boolean',
             'assign_rooms'   => 'nullable|boolean',
+            'lecture_rooms'  => 'nullable|boolean',
             'training_type'  => 'nullable|in:lecture,practice',
         ]);
         $scopeSpec = $data['specialty_name'] ?? null;
@@ -574,6 +575,9 @@ class TimetableController extends Controller
         $scopeType = $data['training_type'] ?? null;   // faqat ma'ruza yoki faqat amaliy
         $reset = (bool) ($data['reset'] ?? false);
         $assignRooms = (bool) ($data['assign_rooms'] ?? false);
+        // Ma'ruza xonalari: ma'ruzalarga faqat ma'ruza tipidagi auditoriyalarni
+        // to'qnashuvsiz biriktirish
+        $lectureRooms = (bool) ($data['lecture_rooms'] ?? false);
 
         // Sozlamalar: bir fanning haftalik paralarini bir kunga / ketma-ket qo'yish
         $set = $board->settings ?? [];
@@ -622,9 +626,24 @@ class TimetableController extends Controller
         }
 
         // Auditoriya havzasi (sig'im o'sish tartibida — zich joylash uchun)
-        $rooms = $assignRooms
-            ? Auditorium::where('active', true)->orderBy('volume')->get(['code', 'name', 'volume'])
+        $rooms = ($assignRooms || $lectureRooms)
+            ? Auditorium::where('active', true)->orderBy('volume')->get(['code', 'name', 'volume', 'auditorium_type_name'])
             : collect();
+        // Ma'ruza xonalari havzasi — tipida "ma'ruza" bo'lganlar (topilmasa — hammasi)
+        $lecRooms = collect();
+        if ($lectureRooms) {
+            $lecRooms = $rooms->filter(fn($r) => mb_stripos((string) ($r->auditorium_type_name ?? ''), 'ruza') !== false)->values();
+            if ($lecRooms->isEmpty()) {
+                $lecRooms = $rooms;
+            }
+        }
+        // Kartaga mos xona havzasini tanlash (ma'ruza → ma'ruza xonalari)
+        $poolFor = function (TimetableCard $c) use ($assignRooms, $lectureRooms, $rooms, $lecRooms) {
+            if ($lectureRooms && $c->training_type === 'lecture') {
+                return $lecRooms;
+            }
+            return $assignRooms ? $rooms : collect();
+        };
 
         // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar
         $toPlace = $all->filter(function ($c) use ($scopeSpec, $scopeCourse, $scopeType) {
@@ -685,10 +704,12 @@ class TimetableController extends Controller
                     if (!$freeAll) {
                         continue;
                     }
-                    // Qattiq: auditoriya (sig'im yetarli + barcha paralarda bo'sh)
+                    // Qattiq: auditoriya (sig'im yetarli + barcha paralarda bo'sh) —
+                    // kartaga mos havzadan (ma'ruza → ma'ruza xonalari), to'qnashuvsiz.
                     $room = null;
-                    if ($assignRooms) {
-                        foreach ($rooms as $r) {
+                    $pool = $poolFor($c);
+                    if ($pool->isNotEmpty()) {
+                        foreach ($pool as $r) {
                             if ((int) ($r->volume ?? 0) < (int) $c->students) {
                                 continue;
                             }
@@ -706,7 +727,7 @@ class TimetableController extends Controller
                             break; // sig'imi yetadigan eng kichik bo'sh xona
                         }
                         if (!$room) {
-                            continue; // bu katakka mos xona yo'q
+                            continue; // bu katakka mos bo'sh xona yo'q — boshqa katak
                         }
                     }
                     // Yumshoq jarima
@@ -727,7 +748,7 @@ class TimetableController extends Controller
             $c->day = $d;
             $c->pair = $p;
             $c->start_half = 0;   // avto-joylash para chegarasidan boshlaydi
-            if ($assignRooms && $bestRoom) {
+            if ($bestRoom) {
                 $c->auditorium_code = $bestRoom->code;
                 $c->auditorium_name = $bestRoom->name;
                 $roomsAssigned++;
@@ -762,6 +783,36 @@ class TimetableController extends Controller
     private function parasNeeded(TimetableCard $c): int
     {
         return $c->lenHalf();
+    }
+
+    /**
+     * Joylashuvlarni bo'shatish (kartochkalarni panelga qaytarish) — qamrov
+     * bo'yicha: yo'nalish+kurs / kurs (barcha yo'nalishlar) / butun doska.
+     * Kartochkalar o'chirilmaydi; faqat kun/para/auditoriya tozalanadi.
+     */
+    public function unplaceAll(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'specialty_name' => 'nullable|string|max:255',
+            'course'         => 'nullable|integer|min:1|max:7',
+            'training_type'  => 'nullable|in:lecture,practice',
+        ]);
+
+        $q = TimetableCard::where('board_id', $board->id)
+            ->where(function ($w) { $w->whereNotNull('day')->orWhereNotNull('pair'); });
+        if (!empty($data['specialty_name'])) {
+            $q->where('specialty_name', $data['specialty_name'])->where('course', $data['course']);
+        } elseif (isset($data['course'])) {
+            $q->where('course', (int) $data['course']);
+        }
+        if (!empty($data['training_type'])) {
+            $q->where('training_type', $data['training_type']);
+        }
+
+        $count = (clone $q)->count();
+        $q->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
+
+        return response()->json(['ok' => true, 'unplaced' => $count]);
     }
 
     /**

@@ -3,8 +3,8 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dars jadvali tuzish</h2>
     </x-slot>
 
-    <div class="py-6" style="overflow-x: hidden;">
-        <div class="max-w-full mx-auto sm:px-6 lg:px-8" style="overflow-x: hidden;">
+    <div class="py-6">
+        <div class="max-w-full mx-auto sm:px-6 lg:px-8">
 
             {{-- Yuqori boshqaruv qatorlari — doim ko'rinib turadi (sticky), pastdagi
                  "Joylashmagan kartalar" paneli bilan birga sahifa qanday skroll

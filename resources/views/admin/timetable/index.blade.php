@@ -3,16 +3,16 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dars jadvali tuzish</h2>
     </x-slot>
 
-    <div class="py-6">
-        <div class="max-w-full mx-auto sm:px-6 lg:px-8">
+    {{-- Butun sahifa ekran balandligiga sig'adi (page-scroll yo'q): yuqori
+         boshqaruv qatorlari va pastdagi panel doim ko'rinadi, faqat oradagi
+         panjara ichida skroll bo'ladi. --}}
+    <div class="max-w-full mx-auto px-2 lg:px-4" style="height: calc(100vh - 130px); display: flex; flex-direction: column; overflow: hidden;">
 
-            {{-- Yuqori boshqaruv qatorlari — doim ko'rinib turadi (sticky), pastdagi
-                 "Joylashmagan kartalar" paneli bilan birga sahifa qanday skroll
-                 qilinsa ham ekranda qoladi. --}}
-            <div class="sticky top-0 z-40 bg-gray-100 pt-1 pb-1 -mx-1 px-1" style="box-shadow: 0 4px 6px -4px rgba(0,0,0,.15);">
+            {{-- Yuqori boshqaruv qatorlari (flex-shrink-0 — doim ko'rinadi) --}}
+            <div style="flex: 0 0 auto;">
 
             {{-- Doska tanlash + boshqaruv paneli — bitta ixcham qatorda --}}
-            <div class="bg-white shadow-sm sm:rounded-lg mb-3">
+            <div class="bg-white shadow-sm sm:rounded-lg mb-2">
                 <div class="p-2 flex flex-wrap items-center gap-1.5">
                     <select id="boardSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[220px] max-w-[300px]">
                         <option value="">— Tanlang yoki yangi yarating —</option>
@@ -128,22 +128,23 @@
                 </div>
             </div>
 
-            </div>{{-- /sticky top --}}
+            </div>{{-- /yuqori boshqaruv qatorlari --}}
 
-            {{-- Asosiy maydon: panjara + pastda joylashmagan kartalar (aSc uslubida) --}}
-            <div id="mainArea" class="hidden">
+            {{-- Asosiy maydon: panjara (flex bilan qolgan balandlikni to'ldiradi,
+                 faqat shu ichida skroll) + pastda joylashmagan kartalar --}}
+            <div id="mainArea" class="hidden" style="flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0;">
                 {{-- Panjara --}}
-                <div class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="height: calc(100vh - 260px); max-width: 100%;">
+                <div class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="flex: 1 1 auto; min-height: 0; max-width: 100%;">
                     <table id="grid" class="border-collapse text-[11px] w-full"></table>
                 </div>
 
-                {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel, doim ko'rinib turadi (sticky) --}}
-                <div class="sticky bottom-0 z-30 bg-white shadow-sm sm:rounded-lg mt-3" style="box-shadow: 0 -6px 12px -4px rgba(0,0,0,.15);">
-                    <div class="px-3 py-1.5 border-b border-gray-100 flex items-center justify-between">
+                {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel (flex-shrink-0 — doim ko'rinadi) --}}
+                <div class="bg-white shadow-sm sm:rounded-lg mt-2" style="flex: 0 0 auto; box-shadow: 0 -6px 12px -4px rgba(0,0,0,.15);">
+                    <div class="px-3 py-1 border-b border-gray-100 flex items-center justify-between">
                         <span class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
                         <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                     </div>
-                    <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 150px;"></div>
+                    <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
                 </div>
             </div>
 
@@ -492,12 +493,11 @@
             </div>
 
         </div>
-    </div>
 
     <style>
         /* Jadval chiziqlari — qora, eniga va bo'yiga (barcha katak chegaralari) */
         #grid th, #grid td { border: 1px solid #000; }
-        #grid td.tt-cell { min-width: 67px; height: 40px; vertical-align: middle; text-align: center; cursor: default; padding: 1px; }
+        #grid td.tt-cell { width: 52px; min-width: 52px; max-width: 52px; height: 34px; vertical-align: middle; text-align: center; cursor: default; padding: 1px; overflow: hidden; }
         #grid td.tt-ok { background: #dcfce7; cursor: pointer; }
         #grid td.tt-bad { background: #fee2e2; }
         /* Drag-and-drop: sudralayotgan katak ustidan o'tganda */
@@ -507,15 +507,17 @@
         .pn-card { cursor: grab; }
         /* Transpoze panjara: chapdagi kun/para sarlavhalari — qalin (jiringlagan) yozuv */
         #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; font-weight: 800; }
-        #grid td.tt-day { background: #f1f5f9; font-weight: 900; color: #1e293b; writing-mode: vertical-rl; transform: rotate(180deg);
-            text-align: center; white-space: nowrap; position: sticky; left: 0; z-index: 4; border-bottom: 4px solid #000 !important; }
-        #grid td.tt-para { background: #f8fafc; font-weight: 700; color: #334155; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 42px; padding: 2px; }
-        #grid td.tt-para .tt-para-name { font-size: 10px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
+        #grid td.tt-day { background: #f1f5f9; font-weight: 900; color: #1e293b; font-size: 15px; writing-mode: vertical-rl; transform: rotate(180deg);
+            text-align: center; white-space: nowrap; letter-spacing: .3px; position: sticky; left: 0; z-index: 4; min-width: 26px; border-bottom: 4px solid #000 !important; }
+        #grid td.tt-para { background: #f8fafc; font-weight: 700; color: #334155; text-align: center; position: sticky; left: 26px; z-index: 4; min-width: 40px; width: 40px; padding: 2px; }
+        #grid td.tt-para .tt-para-name { font-size: 11px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
         #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 700; color: #64748b; line-height: 1.1; margin-top: 1px; }
         #grid thead th { position: sticky; top: 0; z-index: 5; }
         #grid th.tt-fac { background: #c7d2fe; color: #1e1b4b; font-weight: 900; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: .2px; }
-        #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 900; text-align: center; }
-        #grid th.tt-grp { background: #eef1f5; color: #1e293b; font-weight: 800; white-space: nowrap; text-align: center; }
+        #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 900; text-align: center; font-size: 11px; }
+        /* Guruh sarlavhasi — o'ralib chiqadi (ustunni kengaytirmaydi), ustun ingichka bo'ladi */
+        #grid th.tt-grp { background: #eef1f5; color: #1e293b; font-weight: 800; white-space: normal; word-break: break-word;
+            text-align: center; font-size: 9px; line-height: 1.05; width: 52px; min-width: 52px; max-width: 52px; padding: 2px 1px; }
         /* Oqimlar orasi — qo'sh chiziq; asos guruhlar (a/b) orasi — qalin chiziq */
         #grid td.sep-oqim, #grid th.sep-oqim { border-left: 3px double #000; }
         #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #000; }

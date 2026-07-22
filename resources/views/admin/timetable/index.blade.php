@@ -544,6 +544,8 @@
         .tt-chip.prc { border-left: 3px dotted #94a3b8; color: #1f2937; font-weight: 500; }
         #grid td.tt-lec { background: #fde68a; }   /* butun oqimga tegishli ma'ruza katagi — bir xil sariq */
         .tt-chip.sel { outline: 2px solid #ef4444; }
+        .tt-merge-badge { display: inline-block; margin-left: 4px; padding: 0 4px; font-size: 8px; font-weight: 700;
+            background: rgba(0,0,0,.12); border-radius: 6px; color: #334155; vertical-align: middle; }
         .pn-card { border-radius: 6px; padding: 4px 6px; font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
         .pn-card.prc { background: #faf5ff; }
@@ -561,11 +563,11 @@
         .tt-modal { position: fixed; inset: 0; z-index: 60; background: rgba(15,23,42,.55); overflow-y: auto; }
         .tt-modal.hidden { display: none; }
         .tt-modal.tt-modal-top { z-index: 70; }   /* boshqa modal ustidagi ichki dialog */
-        .tt-modal-body { min-height: 100%; display: flex; align-items: flex-start; justify-content: center;
-            padding: 3vh 14px; box-sizing: border-box; }
-        .tt-modal-win { width: 100%; max-width: min(1080px, 96vw); background: #eef2f7;
-            border-radius: 12px; box-shadow: 0 24px 70px rgba(2,6,23,.5); border: 1px solid #cbd5e1;
-            display: flex; flex-direction: column; max-height: 94vh; overflow: hidden; }
+        .tt-modal-body { min-height: 100%; display: flex; align-items: center; justify-content: center;
+            padding: 2.5vh 16px; box-sizing: border-box; }
+        .tt-modal-win { width: 100%; max-width: min(1200px, 96vw); background: #eef2f7;
+            border-radius: 12px; box-shadow: 0 28px 80px rgba(2,6,23,.55); border: 1px solid #cbd5e1;
+            display: flex; flex-direction: column; max-height: 95vh; overflow: hidden; }
         .tt-modal .asc-titlebar { box-shadow: 0 1px 0 rgba(255,255,255,.15) inset; }
         .asc-btn { padding: 6px 14px; font-size: 13px; background: linear-gradient(#fff,#e8edf3);
             border: 1px solid #b6c2d1; border-radius: 5px; color: #2c3e50; }
@@ -1023,32 +1025,42 @@
             }
 
             // ===== Joylash (bosish yoki drag-and-drop uchun umumiy) =====
+            async function placeOneCard(card, d, p) {
+                if (!curWeek) {
+                    await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p });
+                    card.day = d; card.pair = p;
+                } else {
+                    await api(BASE + '/cards/' + card.id + '/week-override', 'POST',
+                        { week: curWeek, action: 'move', day: d, pair: p });
+                    overrides[card.id + '|' + curWeek] = { day: d, pair: p, cancelled: false };
+                }
+            }
             async function placeCardAt(card, d, p) {
+                try { await placeOneCard(card, d, p); selected = null; renderAll(); }
+                catch (e) { alert('Konflikt: ' + e.message); }
+            }
+            // Birlashtirilgan (ketma-ket) blok — kartalarni ketma-ket paralarga joylaymiz
+            async function placeBlockAt(ids, d, p) {
                 try {
-                    if (!curWeek) {
-                        await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p });
-                        card.day = d; card.pair = p;
-                    } else {
-                        await api(BASE + '/cards/' + card.id + '/week-override', 'POST',
-                            { week: curWeek, action: 'move', day: d, pair: p });
-                        overrides[card.id + '|' + curWeek] = { day: d, pair: p, cancelled: false };
+                    for (let k = 0; k < ids.length; k++) {
+                        const card = cards.find(x => x.id === ids[k]);
+                        if (card) await placeOneCard(card, d, p + k);
                     }
-                    selected = null;
-                    renderAll();
+                    selected = null; renderAll();
                 } catch (e) { alert('Konflikt: ' + e.message); }
             }
-            // ===== Drag-and-drop holati =====
-            let dragCardId = null;
-            function startDrag(id, ev) {
-                dragCardId = id;
+            // ===== Drag-and-drop holati (blok = bir yoki bir necha ketma-ket karta) =====
+            let dragCardIds = null;
+            function startDrag(ids, ev) {
+                dragCardIds = Array.isArray(ids) ? ids.slice() : [ids];
                 if (ev && ev.dataTransfer) {
                     ev.dataTransfer.effectAllowed = 'move';
-                    try { ev.dataTransfer.setData('text/plain', String(id)); } catch (e) { /* ba'zi brauzerlar */ }
+                    try { ev.dataTransfer.setData('text/plain', dragCardIds.join(',')); } catch (e) { /* ba'zi brauzerlar */ }
                 }
             }
             // Sudrash tugagach holatni tozalash (tashlanmagan bo'lsa ham)
             document.addEventListener('dragend', () => {
-                dragCardId = null;
+                dragCardIds = null;
                 document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
             });
 
@@ -1146,15 +1158,33 @@
                     if (pl) cardGroups(c).forEach(gg => { placedIdx[gg + '|' + pl.day + '|' + pl.pair] = c; });
                 });
 
-                const chipHtml = c =>
-                    '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
-                    (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
-                    '" data-chip="' + c.id + '" title="' +
-                    esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '')) + '">' +
-                    cardLabel(c, true) +
-                    (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
-                    (c.auditorium_name ? '<div class="text-[9px] text-gray-500">' + esc(c.auditorium_name) + '</div>' : '') +
-                    '</div>';
+                // Vertikal birlashma: ketma-ket paralarда bir xil fan (bir guruh/oqim)
+                // bo'lsa — bitta katak (rowspan). vConsumed — yuqoridagi rowspan
+                // qamragan (chiqarilmaydigan) kataklar.
+                const vConsumed = {};
+                const vMerge = (grp, d, p, c) => {
+                    let s = 1;
+                    while (true) {
+                        const n = placedIdx[grp + '|' + d + '|' + (p + s)];
+                        if (n && n.training_type === c.training_type && n.subject_name === c.subject_name) s++;
+                        else break;
+                    }
+                    return s;
+                };
+
+                const chipHtml = (c, ids) => {
+                    const merged = ids && ids.length > 1;
+                    const mids = merged ? ' data-merge-ids="' + ids.join(',') + '"' : '';
+                    const badge = merged ? '<span class="tt-merge-badge">' + ids.length + ' para</span>' : '';
+                    return '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
+                        (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
+                        '" data-chip="' + c.id + '"' + mids + ' title="' +
+                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '')) + '">' +
+                        cardLabel(c, true) + badge +
+                        (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
+                        (c.auditorium_name ? '<div class="text-[9px] text-gray-500">' + esc(c.auditorium_name) + '</div>' : '') +
+                        '</div>';
+                };
 
                 // Asos guruh kaliti: til qo'shimchasi "(o'z)" va a/b pastki guruh harfini olib tashlab
                 // (masalan "1K-01a (o'z)" → "1K-01"). Bir asos guruh = a va b pastki guruhlari.
@@ -1217,6 +1247,8 @@
                             let gi = 0;
                             while (gi < o.groups.length) {
                                 const grp = o.groups[gi];
+                                // Yuqoridagi vertikal birlashma (rowspan) qamragan bo'lsa — katak chiqarmaymiz
+                                if (vConsumed[grp + '|' + d + '|' + p]) { gi++; continue; }
                                 const bord = colBorder(oi, gi, o.groups);
                                 const c = placedIdx[grp + '|' + d + '|' + p];
                                 if (c && c.training_type === 'lecture') {
@@ -1225,10 +1257,30 @@
                                         const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
                                         if (c2 && c2.id === c.id) span++; else break;
                                     }
-                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '"' + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
+                                    // Vertikal: ketma-ket paralarda bir xil fan ma'ruzasi bo'lsa birlashtiramiz
+                                    const vs = vMerge(o.groups[gi], d, p, c);
+                                    const ids = [];
+                                    for (let k = 0; k < vs; k++) {
+                                        for (let gg = gi; gg < gi + span; gg++) {
+                                            if (k > 0) vConsumed[o.groups[gg] + '|' + d + '|' + (p + k)] = 1;
+                                        }
+                                        const cc = placedIdx[o.groups[gi] + '|' + d + '|' + (p + k)];
+                                        if (cc) ids.push(cc.id);
+                                    }
+                                    const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
+                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
                                     gi += span;
                                 } else if (c) {
-                                    h += '<td class="tt-cell' + bord + '"' + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
+                                    // Vertikal: ketma-ket paralarda bir xil fan amaliyoti bo'lsa — bitta katak
+                                    const vs = vMerge(grp, d, p, c);
+                                    const ids = [c.id];
+                                    for (let k = 1; k < vs; k++) {
+                                        vConsumed[grp + '|' + d + '|' + (p + k)] = 1;
+                                        const cc = placedIdx[grp + '|' + d + '|' + (p + k)];
+                                        if (cc) ids.push(cc.id);
+                                    }
+                                    const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
+                                    h += '<td class="tt-cell' + bord + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
@@ -1265,21 +1317,23 @@
                 });
 
                 // ===== Drag-and-drop (aSc Timetables uslubida) =====
-                // Joylashgan chiplar ham sudraladi (ko'chirish uchun)
+                // Joylashgan chiplar ham sudraladi. Birlashtirilgan (ketma-ket)
+                // chip — butun blok bo'lib ko'chadi (data-merge-ids).
                 document.querySelectorAll('#grid [data-chip]').forEach(el => {
                     el.setAttribute('draggable', 'true');
                     el.addEventListener('dragstart', ev => {
                         ev.stopPropagation();
-                        startDrag(+el.dataset.chip, ev);
+                        const ids = el.dataset.mergeIds ? el.dataset.mergeIds.split(',').map(Number) : [+el.dataset.chip];
+                        startDrag(ids, ev);
                     });
                 });
                 // Kataklarni tashlash nishoni qilamiz
                 document.querySelectorAll('#grid td[data-day]').forEach(td => {
                     td.addEventListener('dragover', ev => {
-                        if (dragCardId == null) return;
+                        if (!dragCardIds) return;
                         ev.preventDefault();
                         ev.dataTransfer.dropEffect = 'move';
-                        const card = cards.find(x => x.id === dragCardId);
+                        const card = cards.find(x => x.id === dragCardIds[0]);
                         const d = +td.dataset.day, p = +td.dataset.pair;
                         td.classList.add(card && conflictsAt(card, d, p).length ? 'drag-bad' : 'drag-ok');
                     });
@@ -1287,11 +1341,11 @@
                     td.addEventListener('drop', ev => {
                         ev.preventDefault();
                         td.classList.remove('drag-ok', 'drag-bad');
-                        if (dragCardId == null) return;
-                        const card = cards.find(x => x.id === dragCardId);
+                        if (!dragCardIds) return;
+                        const ids = dragCardIds;
                         const d = +td.dataset.day, p = +td.dataset.pair;
-                        dragCardId = null;
-                        if (card) placeCardAt(card, d, p);
+                        dragCardIds = null;
+                        placeBlockAt(ids, d, p);
                     });
                 });
             }

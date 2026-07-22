@@ -60,4 +60,21 @@ class TimetableBoard extends Model
         }
         return $out;
     }
+
+    /**
+     * Panjaradagi yarim-slot (grid qatori) soni bir kunda. Qo'ng'iroq jadvalidagi
+     * "pair" elementlar sonidan olinadi (bir "pair" = bir yarim-slot). Jadval yo'q
+     * bo'lsa — pairs_per_day ustuniga qaytamiz.
+     */
+    public function pairCount(): int
+    {
+        $sched = $this->bell_schedule;
+        if (is_array($sched) && count($sched)) {
+            $n = count(array_filter($sched, fn($it) => ($it['type'] ?? 'pair') === 'pair'));
+            if ($n > 0) {
+                return $n;
+            }
+        }
+        return max(1, (int) $this->pairs_per_day);
+    }
 }

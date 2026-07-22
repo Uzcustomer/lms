@@ -1121,12 +1121,16 @@
 
             function renderGrid() {
                 const g = curGrid();
-                let D = g.days, P = g.pairs_per_day;
-                // allSpec — turli yo'nalishlarning grid sozlamalari har xil; eng
-                // kattasini olamiz (barcha ustunlar sig'sin).
+                let D = g.days;
+                // Yarim-slot (qator) soni — doska qo'ng'iroq jadvalidagi "pair" elementlar
+                // soni (bir "pair" = bir yarim-slot). Yo'nalish bo'yicha faqat kun soni farq
+                // qilishi mumkin, para soni butun doska uchun bir xil.
+                let P = boardSchedule().filter(it => it.type === 'pair').length || g.pairs_per_day;
+                // allSpec — turli yo'nalishlarning kun soni har xil bo'lishi mumkin; eng
+                // kattasini olamiz (barcha kunlar sig'sin).
                 if (allSpec) {
                     [...new Set(specCards().map(c => c.specialty_name + '|' + c.course))].forEach(k => {
-                        const gg = grids[k]; if (gg) { D = Math.max(D, gg.days); P = Math.max(P, gg.pairs_per_day); }
+                        const gg = grids[k]; if (gg) { D = Math.max(D, gg.days); }
                     });
                 }
                 const dayNames = boardDayNames();
@@ -1389,21 +1393,14 @@
                 const el = $('cmTimeHint');
                 if (!modalCard || !modalCard.day || !modalCard.pair) { el.textContent = 'Joylashtirilmagan — uzunlik saqlanadi.'; return; }
                 const sched = boardSchedule().filter(it => it.type === 'pair');
-                const len = +$('cmLen').value, sh = +$('cmStartHalf').value;
-                // Mutlaq yarim-slot: (pair-1)*2 + start_half; har para 2 yarimdan iborat
-                const startHalfIdx = (modalCard.pair - 1) * 2 + sh;
-                const halfTime = idx => {
-                    const p = sched[Math.floor(idx / 2)]; if (!p) return '';
-                    const s = p.start || '', e = p.end || '';
-                    if (idx % 2 === 0) return s;                       // para boshi
-                    return midTime(s, e);                              // para o'rtasi
-                };
-                const startT = halfTime(startHalfIdx);
-                const endT = (() => {
-                    const endIdx = startHalfIdx + len;                 // tugash yarim-sloti (kirmaydi)
-                    const p = sched[Math.floor((endIdx - 1) / 2)]; if (!p) return '';
-                    return (endIdx % 2 === 0) ? (p.end || '') : midTime(p.start || '', p.end || '');
-                })();
+                const len = +$('cmLen').value;
+                // Bu modelda `pair` — yarim-slot indeksi; har qo'ng'iroq elementi bitta
+                // yarim-slot (o'z start/end vaqti bilan). Dars pair'dan boshlab len ta
+                // yarim-slotni egallaydi.
+                const startEntry = sched[modalCard.pair - 1];
+                const endEntry = sched[modalCard.pair - 1 + len - 1] || startEntry;
+                const startT = startEntry ? (startEntry.start || '') : '';
+                const endT = endEntry ? (endEntry.end || '') : '';
                 const label = { 1: '0.5 para', 2: '1 para', 3: '1.5 para', 4: '2 para' }[len] || len;
                 el.textContent = '⏱ ' + label + (startT && endT ? ' · ' + startT + '–' + endT : '');
             }

@@ -747,15 +747,19 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Dars egallaydigan butun paralar soni (avto-joylash uchun): ceil(len_half/2). */
+    /**
+     * Dars egallaydigan yarim-slotlar soni. Bu modelda `pair` — yarim-slot
+     * indeksi (grid qatori), shuning uchun dars len_half ta ketma-ket yarim-slotni
+     * egallaydi (2 = to'liq para = 2 soat).
+     */
     private function parasNeeded(TimetableCard $c): int
     {
-        return intdiv($c->lenHalf() + 1, 2);
+        return $c->lenHalf();
     }
 
     /**
-     * Katakni band deb belgilash. Dars uzunligiga qarab ceil(len_half/2) ta
-     * ketma-ket parani band qiladi (avto-joylash konfliktsiz bo'lishi uchun).
+     * Katakni band deb belgilash. Dars uzunligiga qarab len_half ta ketma-ket
+     * yarim-slotni band qiladi (avto-joylash konfliktsiz bo'lishi uchun).
      */
     private function markBusy(array &$groupBusy, array &$teacherBusy, array &$roomBusy, TimetableCard $c): void
     {
@@ -1090,10 +1094,10 @@ class TimetableController extends Controller
         return $a[0] < $b[1] && $b[0] < $a[1];
     }
 
-    /** Kartaning berilgan (day,pair,start_half) da yarim-slot oralig'i. */
-    private function rangeFor(TimetableCard $card, int $pair, int $startHalf): array
+    /** Kartaning `pair` (yarim-slot) da yarim-slot oralig'i: [pair-1, pair-1+len_half). */
+    private function rangeFor(TimetableCard $card, int $pair, int $startHalf = 0): array
     {
-        $s = ($pair - 1) * 2 + $startHalf;
+        $s = $pair - 1;
         return [$s, $s + $card->lenHalf()];
     }
 

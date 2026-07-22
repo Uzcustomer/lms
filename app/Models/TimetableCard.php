@@ -29,15 +29,16 @@ class TimetableCard extends Model
     }
 
     /**
-     * Kartaning mutlaq yarim-slot oralig'i: [boshlanish, tugash) (tugash kirmaydi).
-     * Slot indeksi = (pair-1)*2 + start_half. Joylashmagan bo'lsa null.
+     * Kartaning yarim-slot oralig'i: [boshlanish, tugash) (tugash kirmaydi).
+     * Bu modelda `pair` — yarim-slot (grid qatori) indeksi, dars len_half ta
+     * yarim-slotni egallaydi. Joylashmagan bo'lsa null.
      */
     public function halfRange(): ?array
     {
         if (!$this->day || !$this->pair) {
             return null;
         }
-        $s = ((int) $this->pair - 1) * 2 + (int) ($this->start_half ?? 0);
+        $s = (int) $this->pair - 1;
         return [$s, $s + $this->lenHalf()];
     }
 

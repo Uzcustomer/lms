@@ -523,10 +523,10 @@
         #grid td.sep-oqim, #grid th.sep-oqim { border-left: 3px double #475569; }
         #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #94a3b8; }
         .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
-        /* Ma'ruza — bir xil sariq; amaliy — fan rangi (inline) */
-        .tt-chip.lec { background: #fef08a; border-left: 3px solid #f59e0b; color: #713f12; font-weight: 700; }
+        /* Ma'ruza — butun katak bitta sariq (chip'ning alohida foni yo'q); amaliy — fan rangi (inline) */
+        .tt-chip.lec { background: transparent; border-left: none; color: #713f12; font-weight: 700; }
         .tt-chip.prc { border-left: 3px dotted #94a3b8; color: #1f2937; font-weight: 500; }
-        #grid td.tt-lec { background: #fef9c3; }   /* butun oqimga tegishli ma'ruza katagi — bir xil sariq */
+        #grid td.tt-lec { background: #fde68a; }   /* butun oqimga tegishli ma'ruza katagi — bir xil sariq */
         .tt-chip.sel { outline: 2px solid #ef4444; }
         .pn-card { border-radius: 6px; padding: 4px 6px; font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
@@ -580,7 +580,7 @@
         #excelBody .ex-para { text-align: center; background: #f8fafc; font-weight: 600; }
         #excelBody .ex-time { text-align: center; background: #fbfcfe; color: #64748b; white-space: nowrap; }
         #excelBody .ex-cell { min-width: 92px; height: 30px; }
-        #excelBody .ex-lec { background: #fef9c3; }
+        #excelBody .ex-lec { background: #fde68a; }
         #excelBody .ex-prc { background: #faf5ff; }
         @media print {
             body * { visibility: hidden; }
@@ -1540,7 +1540,7 @@
                     'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:800}' +
                     '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc;font-weight:600}' +
                     '.ex-day{background:#f1f5f9;font-weight:700}.ex-para{background:#f8fafc;font-weight:600}' +
-                    '.ex-time{background:#fbfcfe;color:#64748b}.ex-lec{background:#fef9c3}.ex-prc{background:#faf5ff}';
+                    '.ex-time{background:#fbfcfe;color:#64748b}.ex-lec{background:#fde68a}.ex-prc{background:#faf5ff}';
                 const html = '<html xmlns="http://www.w3.org/TR/REC-html40">' +
                     '<head><meta charset="utf-8"><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
                 const modeLabel = { group: 'guruh', teacher: 'oqituvchi', room: 'auditoriya' }[excelMode];
@@ -1665,7 +1665,7 @@
                     // Ma'ruza — bir xil sariq; amaliy — har fan o'z rangida (nuqtali chegara).
                     // Ranglar inline (hex) — Excelга eksport qilinganда ham saqlanadi.
                     const s = subjColor(c.subject_name);
-                    const st = isLec ? 'background-color:#fef9c3;'
+                    const st = isLec ? 'background-color:#fde68a;'
                         : 'background-color:' + s.bg + ';border-left:3px dotted ' + s.border + ';';
                     const cs = (span && span > 1) ? ' colspan="' + span + '"' : '';
                     const tag = '[' + (isLec ? 'M' : 'A') + '] ';

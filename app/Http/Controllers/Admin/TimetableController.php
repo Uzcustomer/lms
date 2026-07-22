@@ -367,22 +367,27 @@ class TimetableController extends Controller
         $start = (int) substr($board->academic_year, 0, 4);
         $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
 
+        // Eng so'nggi tahrirlangan avval — bir xil normadagi (mas. "Biokimyo" va
+        // "Biokimyo 1,2") dublikatlarda foydalanuvchining oxirgi tahriri (yangi
+        // nom) ustuvor bo'lsin.
         $subjects = DB::table('manual_curriculum_subjects as s')
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
             ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
-            ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
-            ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name')
-            ->get();
+            ->orderByDesc('s.updated_at')
+            ->orderByDesc('s.id')
+            ->get(['mc.specialty_name', 'mc.level_code', 's.subject_name']);
 
-        // Kalit: specKey|kurs|normFan => joriy ko'rinadigan nom
+        // Kalit: specKey|kurs|normFan => joriy ko'rinadigan nom (birinchi = eng yangi)
         $map = [];
         foreach ($subjects as $s) {
             $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
             $key = $this->specKey($s->specialty_name) . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
-            $map[$key] = $s->subject_name;
+            if (!isset($map[$key])) {
+                $map[$key] = $s->subject_name;
+            }
         }
 
         // Kafedra xaritasi ham yangilanadi (nom o'zgarsa kafedra ham to'g'rilansin)

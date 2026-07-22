@@ -92,7 +92,8 @@
                 <div class="flex flex-wrap items-center gap-1.5">
                     <select id="facSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
                     <select id="dirSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
-                    <select id="courseSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[60px]"></select>
+                    <span class="text-[11px] text-gray-500">Kurs:</span>
+                    <span id="courseChecks" class="flex items-center gap-1.5 flex-wrap rounded-md border border-gray-300 px-2 py-1 bg-white"></span>
                     <label class="flex items-center gap-1 text-[11px] text-gray-600 whitespace-nowrap" title="Shu yo'nalish+kursdagi barcha fakultetlar ketma-ket ko'rsatiladi">
                         <input type="checkbox" id="allFacChk" class="rounded border-gray-300"> Barcha fak.
                     </label>
@@ -641,7 +642,8 @@
             let cards = [];        // barcha kartochkalar
             let grids = {};        // "specialty|course" => {days, pairs_per_day, weeks}
             let specList = [];     // [{key, specialty_name, course}]
-            let curSpec = null;    // tanlangan {specialty_name, course}
+            let curSpec = null;    // tanlangan {specialty_name, course} (asosiy/primary)
+            let selectedCourses = new Set();   // tanlangan kurslar (checkbox — bir nechta)
             let groupRows = [];    // [{oqim_label, lang, group}]
             let selected = null;   // tanlangan karta (obyekt)
             let audCache = null;
@@ -850,16 +852,29 @@
             }
             function fillCourseControls(fac, dir) {
                 const courses = coursesOf(fac, dir);
-                let curCourse = courses[0] ?? null;
-                if (curSpec && courses.includes(curSpec.course)
-                    && (allSpec || allFac || curSpec.faculty === fac)
-                    && (allSpec || curSpec.specialty_name === dir)) {
-                    curCourse = curSpec.course;
+                // Avvalgi tanlangan kurslardan mavjudlarini saqlaymiz; bo'lmasa primary/birinchi
+                let sel = new Set([...selectedCourses].filter(c => courses.includes(c)));
+                if (!sel.size) {
+                    const primary = (curSpec && courses.includes(curSpec.course)) ? curSpec.course : (courses[0] ?? null);
+                    if (primary != null) sel = new Set([primary]);
                 }
-                $('courseSel').innerHTML = courses.map(c => '<option value="' + c + '">' + c + '-kurs</option>').join('');
-                $('courseSel').value = String(curCourse);
-                setCurSpec(fac, dir, curCourse);
+                selectedCourses = sel;
+                $('courseChecks').innerHTML = courses.map(c =>
+                    '<label class="flex items-center gap-0.5 text-xs text-gray-700 cursor-pointer"><input type="checkbox" class="course-chk rounded border-gray-300" value="' + c + '"' +
+                    (sel.has(c) ? ' checked' : '') + '>' + c + '</label>').join('') || '<span class="text-xs text-gray-400">—</span>';
+                const primary = [...sel].sort((a, b) => a - b)[0] ?? (courses[0] ?? null);
+                setCurSpec(fac, dir, primary);
             }
+            // Kurs checkboxlari — bir nechta kursni tanlash
+            $('courseChecks').addEventListener('change', ev => {
+                if (!ev.target.classList || !ev.target.classList.contains('course-chk')) return;
+                const c = +ev.target.value;
+                if (ev.target.checked) selectedCourses.add(c); else selectedCourses.delete(c);
+                if (!selectedCourses.size) { selectedCourses.add(c); ev.target.checked = true; } // kamida bitta
+                const primary = [...selectedCourses].sort((a, b) => a - b)[0];
+                setCurSpec($('facSel').value, $('dirSel').value, primary);
+                selected = null; fillGridInputs(); renderAll();
+            });
 
             $('facSel').onchange = function () {
                 fillDirControls(this.value);   // yo'nalish + kurs + curSpec yangilanadi
@@ -867,10 +882,6 @@
             };
             $('dirSel').onchange = function () {
                 fillCourseControls($('facSel').value, this.value);
-                selected = null; fillGridInputs(); renderAll();
-            };
-            $('courseSel').onchange = function () {
-                setCurSpec($('facSel').value, $('dirSel').value, +this.value);
                 selected = null; fillGridInputs(); renderAll();
             };
             $('allFacChk').onchange = function () {
@@ -1025,10 +1036,12 @@
             let allFac = false;
             let allSpec = false;
             let viewMode = 'group';   // group | teacher | room | subject (jadval kesimi)
+            // Kurs mosligi — tanlangan kurslar (checkbox); bo'sh bo'lsa primary curSpec.course
+            const inCourses = c => selectedCourses.size ? selectedCourses.has(c.course) : (curSpec && c.course === curSpec.course);
             const specCards = () => cards.filter(c => {
-                if (!curSpec) return false;
-                if (allSpec) return c.course === curSpec.course;
-                if (c.specialty_name !== curSpec.specialty_name || c.course !== curSpec.course) return false;
+                if (!curSpec || !inCourses(c)) return false;
+                if (allSpec) return true;
+                if (c.specialty_name !== curSpec.specialty_name) return false;
                 return allFac || (c.faculty_name || '') === curSpec.faculty;
             });
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
@@ -1042,13 +1055,12 @@
                 const seen = {};
                 specCards().forEach(c => {
                     cardGroups(c).forEach(g => {
-                        if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '', specialty: c.specialty_name || '' }); }
+                        if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: c.course }); }
                     });
                 });
-                // Fakultet → yo'nalish → oqim → guruh: bir fakultet (va yo'nalish)
-                // ustunlari ketma-ket blok bo'lib tursin.
-                groupRows.sort((a, b) => (a.faculty + '|' + a.specialty + '|' + a.oqim_label + a.group)
-                    .localeCompare(b.faculty + '|' + b.specialty + '|' + b.oqim_label + b.group, undefined, { numeric: true }));
+                // Fakultet → yo'nalish → kurs → oqim → guruh: bir blok ketma-ket tursin.
+                const sk = x => x.faculty + '|' + x.specialty + '|' + x.course + '|' + x.oqim_label + x.group;
+                groupRows.sort((a, b) => sk(a).localeCompare(sk(b), undefined, { numeric: true }));
             }
 
             // Karta uzunligi yarim-slot birligida (1=0.5 para, 2=1 para ...). Sukut 2.
@@ -1296,10 +1308,11 @@
                     const lab = gr.oqim_label || '';
                     const fac = gr.faculty || '';
                     const spec = gr.specialty || '';
-                    // Fakultet yoki yo'nalish o'zgarsa ham yangi oqim bloki (turli
-                    // fakultet/yo'nalishning bir xil nomli oqimlari birlashib ketmasin).
-                    if (!curO || curO.label !== lab || curO.faculty !== fac || curO.specialty !== spec) {
-                        curO = { label: lab, faculty: fac, specialty: spec, groups: [] }; oqimCols.push(curO);
+                    const crs = gr.course;
+                    // Fakultet / yo'nalish / kurs o'zgarsa ham yangi oqim bloki (turli
+                    // fakultet/yo'nalish/kursning bir xil nomli oqimlari birlashib ketmasin).
+                    if (!curO || curO.label !== lab || curO.faculty !== fac || curO.specialty !== spec || curO.course !== crs) {
+                        curO = { label: lab, faculty: fac, specialty: spec, course: crs, groups: [] }; oqimCols.push(curO);
                     }
                     curO.groups.push(gr.group);
                 });
@@ -1387,7 +1400,9 @@
                     facRuns.forEach((r, ri) => h += '<th class="tt-fac px-2 py-1' + (ri > 0 ? ' sep-oqim' : '') + '" colspan="' + r.span + '">' + esc(r.faculty || '—') + '</th>');
                     h += '</tr><tr>';
                 }
-                oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' + esc((allSpec && o.specialty ? o.specialty + ' · ' : '') + (o.label || '—')) + '</th>');
+                const multiCourse = selectedCourses.size > 1;
+                oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
+                    esc((allSpec && o.specialty ? o.specialty + ' · ' : '') + (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—')) + '</th>');
                 h += '</tr><tr>';
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gr) + '</th>'));
                 h += '</tr></thead><tbody>';
@@ -1412,7 +1427,8 @@
                             // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan).
                             // allFac/allSpec rejimida faqat o'z fakulteti+yo'nalishi oqimi yonadi.
                             if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label
-                                && (selected.faculty_name || '') === o.faculty && (selected.specialty_name || '') === o.specialty) {
+                                && (selected.faculty_name || '') === o.faculty && (selected.specialty_name || '') === o.specialty
+                                && selected.course === o.course) {
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
                                     const bad = conflictsAt(selected, d, p).length > 0;

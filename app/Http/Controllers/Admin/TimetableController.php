@@ -512,6 +512,11 @@ class TimetableController extends Controller
         $reset = (bool) ($data['reset'] ?? false);
         $assignRooms = (bool) ($data['assign_rooms'] ?? false);
 
+        // Sozlamalar: bir fanning haftalik paralarini bir kunga / ketma-ket qo'yish
+        $set = $board->settings ?? [];
+        $sameDay = (bool) ($set['pair_same_day'] ?? false);
+        $consecutive = (bool) ($set['pair_consecutive'] ?? false);
+
         // Reset — tanlangan qamrovdagi mavjud joylashuvlarni bo'shatamiz.
         // Qamrov: yo'nalish+kurs (scopeSpec) → faqat o'sha; aks holda kurs
         // berilsa (scopeSpec=null, scopeCourse!=null) → shu kursning barcha
@@ -580,7 +585,8 @@ class TimetableController extends Controller
             return $ka <=> $kb;
         })->values();
 
-        $subjDay = [];  // "spreadKey|day" => count (fan taqsimoti uchun)
+        $subjDay = [];    // "spreadKey|day" => count (fan taqsimoti uchun)
+        $subjSlots = [];  // "spreadKey" => [[day,pair],...] (klaster: bir kun/ketma-ket)
         $placed = 0;
         $unplaced = 0;
         $roomsAssigned = 0;
@@ -622,7 +628,7 @@ class TimetableController extends Controller
                         }
                     }
                     // Yumshoq jarima
-                    $pen = $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay);
+                    $pen = $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots);
                     if ($pen < $bestPen) {
                         $bestPen = $pen;
                         $best = [$d, $p];
@@ -644,8 +650,9 @@ class TimetableController extends Controller
                 $roomsAssigned++;
             }
             $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
-            $sk = $this->spreadKey($c) . '|' . $d;
-            $subjDay[$sk] = ($subjDay[$sk] ?? 0) + 1;
+            $skBase = $this->spreadKey($c);
+            $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
+            $subjSlots[$skBase][] = [$d, $p];
             $touched[] = $c;
             $placed++;
         }
@@ -684,8 +691,12 @@ class TimetableController extends Controller
         return $c->specialty_name . '|' . $c->course . '|' . $who . '|' . $this->normSubject((string) $c->subject_name);
     }
 
-    /** Katak jarimasi: oyna + fan taqsimoti + kun yuki + ertalab ustunligi. */
-    private function slotPenalty(TimetableCard $c, array $groups, int $d, int $p, int $pairs, array $groupBusy, array $subjDay): float
+    /**
+     * Katak jarimasi: oyna + fan taqsimoti + kun yuki + ertalab ustunligi.
+     * $sameDay/$consecutive — sozlamalar: bir fanning paralarini bir kunga /
+     * ketma-ket joylash (default — kunlar bo'ylab yoyish).
+     */
+    private function slotPenalty(TimetableCard $c, array $groups, int $d, int $p, int $pairs, array $groupBusy, array $subjDay, bool $sameDay = false, bool $consecutive = false, array $subjSlots = []): float
     {
         $spc = $c->specialty_name . '|' . $c->course;
         $pen = ($p - 1) * 0.2; // ertalabki paralarga yengil ustunlik
@@ -705,8 +716,34 @@ class TimetableController extends Controller
             $pen += $holes * 10;               // oyna — eng og'ir jarima
             $pen += (count($keys) - 1) * 1;    // kun yukini kunlar bo'ylab tekislash
         }
-        $sk = $this->spreadKey($c) . '|' . $d;
-        $pen += ($subjDay[$sk] ?? 0) * 6;      // shu fan shu kunda takrorlansa — jarima
+
+        $skBase = $this->spreadKey($c);
+        if ($sameDay || $consecutive) {
+            // Klaster rejimi: shu fan-guruhning oldin joylashgan paralari bilan
+            // bir kun / ketma-ket bo'lishni rag'batlantiramiz.
+            $slots = $subjSlots[$skBase] ?? [];
+            $onSameDay = 0;
+            $adjacent = false;
+            foreach ($slots as [$sd, $sp]) {
+                if ($sd === $d) {
+                    $onSameDay++;
+                    if (abs($sp - $p) === 1) {
+                        $adjacent = true;
+                    }
+                }
+            }
+            if ($sameDay) {
+                $pen -= $onSameDay * 25;                          // shu kunda — mukofot
+                if (!empty($slots) && $onSameDay === 0) {
+                    $pen += 15;                                   // yangi kun ochish — jarima
+                }
+            }
+            if ($consecutive && !empty($slots)) {
+                $pen += $adjacent ? -35 : 12;                    // ketma-ket bo'lsa — mukofot
+            }
+        } else {
+            $pen += ($subjDay[$skBase . '|' . $d] ?? 0) * 6;      // default: kunlar bo'ylab yoyish
+        }
         return $pen;
     }
 

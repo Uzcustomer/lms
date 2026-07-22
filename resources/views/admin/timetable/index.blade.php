@@ -3,8 +3,8 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dars jadvali tuzish</h2>
     </x-slot>
 
-    <div class="py-6">
-        <div class="max-w-full mx-auto sm:px-6 lg:px-8">
+    <div class="py-6" style="overflow-x: hidden;">
+        <div class="max-w-full mx-auto sm:px-6 lg:px-8" style="overflow-x: hidden;">
 
             {{-- Doska tanlash + boshqaruv paneli — bitta ixcham qatorda --}}
             <div class="bg-white shadow-sm sm:rounded-lg mb-3">
@@ -126,7 +126,7 @@
             {{-- Asosiy maydon: panjara + pastda joylashmagan kartalar (aSc uslubida) --}}
             <div id="mainArea" class="hidden">
                 {{-- Panjara --}}
-                <div class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="max-height: calc(100vh - 300px);">
+                <div class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="height: calc(100vh - 260px); max-width: 100%;">
                     <table id="grid" class="border-collapse text-[11px] w-full"></table>
                 </div>
 

@@ -442,13 +442,13 @@
                                         || str_contains(mb_strtolower((string) ($student->level_name ?? ''), 'UTF-8'), '1-kurs');
                                 @endphp
 
-                                @include('admin.students._admission_files_panel', ['student' => $student, 'studentFiles' => $studentFiles, 'canUploadFiles' => $canUploadFiles])
-
                                 @if($isFirstCourse && $admissionData)
                                     @include('admin.students._qabul_summary', ['student' => $student, 'admissionData' => $admissionData])
                                 @else
                                     @include('admin.students._qabul_wizard', ['student' => $student, 'admissionData' => $admissionData])
                                 @endif
+
+                                @include('admin.students._admission_files_panel', ['student' => $student, 'studentFiles' => $studentFiles, 'canUploadFiles' => $canUploadFiles])
                             </div>{{-- /qabul tab --}}
                             @endif
 

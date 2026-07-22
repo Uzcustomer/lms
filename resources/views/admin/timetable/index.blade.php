@@ -135,7 +135,7 @@
             <div id="mainArea" class="hidden" style="flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0;">
                 {{-- Panjara --}}
                 <div class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="flex: 1 1 auto; min-height: 0; max-width: 100%;">
-                    <table id="grid" class="border-collapse text-[11px] w-full"></table>
+                    <table id="grid" class="border-collapse text-[11px]"></table>
                 </div>
 
                 {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel (flex-shrink-0 — doim ko'rinadi) --}}
@@ -508,7 +508,8 @@
         /* Transpoze panjara: chapdagi kun/para sarlavhalari — qalin (jiringlagan) yozuv */
         #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; font-weight: 800; }
         #grid td.tt-day { background: #f1f5f9; font-weight: 900; color: #1e293b; font-size: 15px; writing-mode: vertical-rl; transform: rotate(180deg);
-            text-align: center; white-space: nowrap; letter-spacing: .3px; position: sticky; left: 0; z-index: 4; min-width: 26px; border-bottom: 4px solid #000 !important; }
+            text-align: center; white-space: nowrap; letter-spacing: .3px; position: sticky; left: 0; z-index: 4;
+            width: 26px; min-width: 26px; max-width: 26px; padding: 2px 0; border-bottom: 4px solid #000 !important; }
         #grid td.tt-para { background: #f8fafc; font-weight: 700; color: #334155; text-align: center; position: sticky; left: 26px; z-index: 4; min-width: 40px; width: 40px; padding: 2px; }
         #grid td.tt-para .tt-para-name { font-size: 11px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
         #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 700; color: #64748b; line-height: 1.1; margin-top: 1px; }
@@ -1204,8 +1205,8 @@
 
                 // Sarlavha: Kun | Para | [fakultet] | oqim | guruhlar
                 let h = '<thead><tr>' +
-                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '">Kun</th>' +
-                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="left:28px">Para</th>';
+                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="width:26px;min-width:26px;max-width:26px">Kun</th>' +
+                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="left:26px">Para</th>';
                 if (showFac) {
                     facRuns.forEach((r, ri) => h += '<th class="tt-fac px-2 py-1' + (ri > 0 ? ' sep-oqim' : '') + '" colspan="' + r.span + '">' + esc(r.faculty || '—') + '</th>');
                     h += '</tr><tr>';
@@ -1718,33 +1719,68 @@
             //  Excel ko'rinishidagi jadval (kunlar/paralar qatorda, guruhlar ustunda)
             // ══════════════════════════════════════════════════════════════
             let excelMode = 'group';   // group | teacher | room
-            // Tugma bosilganda to'g'ridan-to'g'ri Excel (.xls) fayl yuklab olinadi
-            // (modal ochilmaydi). Jadval avval #excelBody ga tayyorlanadi.
-            $('excelViewBtn').onclick = () => {
-                try { buildExcelView(); }
-                catch (e) { alert('Excel tayyorlashda xatolik: ' + e.message); return; }
-                downloadExcelXls();
-            };
+            // "Excelga yuklash" — ekrandagi HAQIQIY panjarani (chiziqlar, ranglar,
+            // birlashgan kataklar bilan) aynan o'zini Excel'ga chiqaradi.
+            $('excelViewBtn').onclick = () => downloadExcelXls();
             $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
             $('excelPrint').onclick = () => window.print();
             $('excelDownload').onclick = () => downloadExcelXls();
+
+            // ── Ekrandagi panjarani inline-uslubli HTML jadval sifatida tayyorlash ──
+            const rgbToHex = c => {
+                const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (!m) return null;
+                return '#' + [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
+            };
+            const cssBorder = (cs, side) => {
+                const w = parseFloat(cs['border' + side + 'Width']) || 0;
+                if (w <= 0) return 'none';
+                return Math.round(w) + 'px solid ' + (rgbToHex(cs['border' + side + 'Color']) || '#000');
+            };
+            // #grid jadvalini nusxalab, har katakning hisoblangan (computed) fon/chegara/
+            // shrift uslublarini inline qo'yamiz — Excel aynan ekrandagidek ko'rsatadi.
+            function gridExportHtml() {
+                const grid = document.getElementById('grid');
+                if (!grid || !grid.querySelector('tbody tr')) return null;
+                const clone = grid.cloneNode(true);
+                const origCells = grid.querySelectorAll('th, td');
+                const cloneCells = clone.querySelectorAll('th, td');
+                for (let i = 0; i < origCells.length; i++) {
+                    const cs = getComputedStyle(origCells[i]);
+                    const el = cloneCells[i];
+                    const st = [];
+                    const bg = rgbToHex(cs.backgroundColor);
+                    if (bg && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent') st.push('background-color:' + bg);
+                    ['Top', 'Right', 'Bottom', 'Left'].forEach(s => st.push('border-' + s.toLowerCase() + ':' + cssBorder(cs, s)));
+                    st.push('font-weight:' + cs.fontWeight);
+                    st.push('font-size:' + cs.fontSize);
+                    st.push('text-align:' + cs.textAlign);
+                    st.push('vertical-align:middle');
+                    st.push('color:' + (rgbToHex(cs.color) || '#000'));
+                    if (cs.writingMode && cs.writingMode.indexOf('vertical') === 0) st.push('mso-rotate:90');
+                    el.setAttribute('style', st.join(';'));
+                    ['data-day', 'data-pair', 'data-place', 'data-chip', 'data-merge-ids', 'title', 'class'].forEach(a => el.removeAttribute(a));
+                }
+                clone.querySelectorAll('[draggable]').forEach(x => x.removeAttribute('draggable'));
+                clone.querySelectorAll('[data-chip],[data-merge-ids],[data-place]').forEach(x => {
+                    ['data-chip', 'data-merge-ids', 'data-place', 'title'].forEach(a => x.removeAttribute(a));
+                });
+                return '<table style="border-collapse:collapse">' + clone.innerHTML + '</table>';
+            }
             // Jadvalni HAQIQIY .xlsx fayl sifatida yuklab olish (serverda PhpSpreadsheet
             // orqali) — Excel "format kengaytmага mos emas" ogohlantirishi chiqmaydi.
             // Xato bo'lsa — eski HTML .xls ga qaytamiz (ogohlantirish bilan bo'lса ham ishlaydi).
             async function downloadExcelXls() {
-                const tableHtml = $('excelBody').innerHTML;
-                if (!tableHtml.includes('<table')) { alert('Yuklab olish uchun joylashgan darslar yo\'q.'); return; }
-                // Kataklar ranglari inline (hex) — Excel/PhpSpreadsheet ularni saqlaydi;
-                // sarlavhalar esa <style> class'lari orqali.
-                const styles = 'table{border-collapse:collapse}td,th{border:1px solid #888;padding:2px 4px;font-size:11px;text-align:center;vertical-align:middle}' +
-                    'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:800}' +
-                    '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc;font-weight:600}' +
-                    '.ex-day{background:#f1f5f9;font-weight:700}.ex-para{background:#f8fafc;font-weight:600}' +
-                    '.ex-time{background:#fbfcfe;color:#64748b}.ex-lec{background:#fde68a}.ex-prc{background:#faf5ff}';
+                const tableHtml = gridExportHtml();
+                if (!tableHtml) { alert('Yuklab olish uchun panjara yo\'q.'); return; }
+                // Kataklar uslublari inline (fon/chegara/shrift) — Excel aynan ekrandagidek chiqaradi.
+                const title = (board.institution_name ? esc(board.institution_name) + ' — ' : '') + esc(board.name || 'Dars jadvali') +
+                    (curWeek ? ' · ' + curWeek + '-hafta' : '');
+                const titleRow = '<div style="font-weight:700;font-size:14px;padding:6px 2px">' + title + '</div>';
                 const html = '<html xmlns="http://www.w3.org/TR/REC-html40">' +
-                    '<head><meta charset="utf-8"><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
-                const modeLabel = { group: 'guruh', teacher: 'oqituvchi', room: 'auditoriya' }[excelMode];
-                const base = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') + '_' + modeLabel +
+                    '<head><meta charset="utf-8"><style>table{border-collapse:collapse}td,th{padding:2px 4px}</style></head><body>' +
+                    titleRow + tableHtml + '</body></html>';
+                const base = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') +
                     (curWeek ? '_' + curWeek + '-hafta' : '');
                 try {
                     const fd = new FormData();

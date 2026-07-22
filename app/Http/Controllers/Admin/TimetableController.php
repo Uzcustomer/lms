@@ -659,25 +659,40 @@ class TimetableController extends Controller
             $bestPen = INF;
             $bestRoom = null;
 
+            $need = $this->parasNeeded($c);
             for ($d = 1; $d <= $days; $d++) {
-                for ($p = 1; $p <= $pairs; $p++) {
-                    // Qattiq: guruh bandligi
-                    $gk = $c->specialty_name . '|' . $c->course . '|' . $d . '|' . $p;
-                    if (!empty($groupBusy[$gk]) && array_intersect($groups, $groupBusy[$gk])) {
+                for ($p = 1; $p <= $pairs - $need + 1; $p++) {
+                    // Qattiq: dars egallaydigan barcha paralar bo'sh bo'lishi kerak
+                    $freeAll = true;
+                    for ($i = 0; $i < $need; $i++) {
+                        $gk = $c->specialty_name . '|' . $c->course . '|' . $d . '|' . ($p + $i);
+                        if (!empty($groupBusy[$gk]) && array_intersect($groups, $groupBusy[$gk])) {
+                            $freeAll = false;
+                            break;
+                        }
+                        if ($c->teacher_id && !empty($teacherBusy[$c->teacher_id . '|' . $d . '|' . ($p + $i)])) {
+                            $freeAll = false;
+                            break;
+                        }
+                    }
+                    if (!$freeAll) {
                         continue;
                     }
-                    // Qattiq: o'qituvchi bandligi (biriktirilgan bo'lsa)
-                    if ($c->teacher_id && !empty($teacherBusy[$c->teacher_id . '|' . $d . '|' . $p])) {
-                        continue;
-                    }
-                    // Qattiq: auditoriya (sig'im yetarli + bo'sh)
+                    // Qattiq: auditoriya (sig'im yetarli + barcha paralarda bo'sh)
                     $room = null;
                     if ($assignRooms) {
                         foreach ($rooms as $r) {
                             if ((int) ($r->volume ?? 0) < (int) $c->students) {
                                 continue;
                             }
-                            if (!empty($roomBusy[$r->code . '|' . $d . '|' . $p])) {
+                            $roomFree = true;
+                            for ($i = 0; $i < $need; $i++) {
+                                if (!empty($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)])) {
+                                    $roomFree = false;
+                                    break;
+                                }
+                            }
+                            if (!$roomFree) {
                                 continue;
                             }
                             $room = $r;
@@ -704,6 +719,7 @@ class TimetableController extends Controller
             [$d, $p] = $best;
             $c->day = $d;
             $c->pair = $p;
+            $c->start_half = 0;   // avto-joylash para chegarasidan boshlaydi
             if ($assignRooms && $bestRoom) {
                 $c->auditorium_code = $bestRoom->code;
                 $c->auditorium_name = $bestRoom->name;
@@ -731,16 +747,29 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Katakni band deb belgilash (guruh/o'qituvchi/auditoriya xaritalarida). */
+    /** Dars egallaydigan butun paralar soni (avto-joylash uchun): ceil(len_half/2). */
+    private function parasNeeded(TimetableCard $c): int
+    {
+        return intdiv($c->lenHalf() + 1, 2);
+    }
+
+    /**
+     * Katakni band deb belgilash. Dars uzunligiga qarab ceil(len_half/2) ta
+     * ketma-ket parani band qiladi (avto-joylash konfliktsiz bo'lishi uchun).
+     */
     private function markBusy(array &$groupBusy, array &$teacherBusy, array &$roomBusy, TimetableCard $c): void
     {
-        $k = $c->specialty_name . '|' . $c->course . '|' . $c->day . '|' . $c->pair;
-        $groupBusy[$k] = array_merge($groupBusy[$k] ?? [], $c->occupiedGroups());
-        if ($c->teacher_id) {
-            $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $c->pair] = true;
-        }
-        if ($c->auditorium_code) {
-            $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $c->pair] = true;
+        $need = $this->parasNeeded($c);
+        for ($i = 0; $i < $need; $i++) {
+            $p = (int) $c->pair + $i;
+            $k = $c->specialty_name . '|' . $c->course . '|' . $c->day . '|' . $p;
+            $groupBusy[$k] = array_merge($groupBusy[$k] ?? [], $c->occupiedGroups());
+            if ($c->teacher_id) {
+                $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $p] = true;
+            }
+            if ($c->auditorium_code) {
+                $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $p] = true;
+            }
         }
     }
 
@@ -829,6 +858,8 @@ class TimetableController extends Controller
             'auditorium_name' => $c->auditorium_name,
             'day' => $c->day,
             'pair' => $c->pair,
+            'start_half' => (int) ($c->start_half ?? 0),
+            'len_half' => $c->lenHalf(),
         ]);
 
         $grids = TimetableGridSetting::where('board_id', $board->id)
@@ -928,12 +959,14 @@ class TimetableController extends Controller
     public function weekOverride(Request $request, TimetableCard $card)
     {
         $data = $request->validate([
-            'week'   => 'required|integer|min:1|max:30',
-            'action' => 'required|in:move,cancel,reset',
-            'day'    => 'nullable|integer|min:1|max:10',
-            'pair'   => 'nullable|integer|min:1|max:10',
+            'week'       => 'required|integer|min:1|max:30',
+            'action'     => 'required|in:move,cancel,reset',
+            'day'        => 'nullable|integer|min:1|max:10',
+            'pair'       => 'nullable|integer|min:1|max:10',
+            'start_half' => 'nullable|integer|min:0|max:1',
         ]);
         $week = (int) $data['week'];
+        $startHalf = (int) ($data['start_half'] ?? 0);
 
         if ($data['action'] === 'reset') {
             TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->delete();
@@ -954,24 +987,25 @@ class TimetableController extends Controller
         if (!$day || !$pair) {
             return response()->json(['error' => 'Kun va para ko\'rsatilishi kerak'], 422);
         }
-        $conflicts = $this->findWeekConflicts($card, $week, $day, $pair);
+        $conflicts = $this->findWeekConflicts($card, $week, $day, $pair, $startHalf);
         if (!empty($conflicts)) {
             return response()->json(['error' => implode(' · ', $conflicts)], 422);
         }
         TimetableCardOverride::updateOrCreate(
             ['card_id' => $card->id, 'week' => $week],
-            ['day' => $day, 'pair' => $pair, 'cancelled' => false]
+            ['day' => $day, 'pair' => $pair, 'start_half' => $startHalf, 'cancelled' => false]
         );
         return response()->json(['ok' => true]);
     }
 
-    /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi. */
-    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair): array
+    /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi (yarim-slot oralig'i). */
+    private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0): array
     {
         $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $card->board_id))
             ->where('week', $week)->get()->keyBy('card_id');
         $others = TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)->get();
 
+        $myRange = $this->rangeFor($card, $pair, $startHalf);
         $myGroups = $card->occupiedGroups();
         $errors = [];
         foreach ($others as $o) {
@@ -982,11 +1016,16 @@ class TimetableController extends Controller
                 }
                 $od = $ov->day;
                 $op = $ov->pair;
+                $osh = (int) ($ov->start_half ?? 0);
             } else {
                 $od = $o->day;
                 $op = $o->pair;
+                $osh = (int) ($o->start_half ?? 0);
             }
-            if ((int) $od !== $day || (int) $op !== $pair) {
+            if (!$od || !$op || (int) $od !== $day) {
+                continue;
+            }
+            if (!$this->halfOverlap($myRange, $this->rangeFor($o, (int) $op, $osh))) {
                 continue;
             }
             if ($o->specialty_name === $card->specialty_name && (int) $o->course === (int) $card->course) {
@@ -1022,34 +1061,58 @@ class TimetableController extends Controller
         $board = $card->board;
         $grid = $this->gridFor($board, $card->specialty_name, (int) $card->course);
         $data = $request->validate([
-            'day'  => 'nullable|integer|min:1|max:' . $grid['days'],
-            'pair' => 'nullable|integer|min:1|max:' . $grid['pairs'],
+            'day'        => 'nullable|integer|min:1|max:' . $grid['days'],
+            'pair'       => 'nullable|integer|min:1|max:' . $grid['pairs'],
+            'start_half' => 'nullable|integer|min:0|max:1',
         ]);
 
         $day = $data['day'] ?? null;
         $pair = $data['pair'] ?? null;
+        $startHalf = (int) ($data['start_half'] ?? 0);
 
         if ($day && $pair) {
-            $conflicts = $this->findConflicts($card, $day, $pair);
+            $conflicts = $this->findConflicts($card, $day, $pair, $startHalf);
             if (!empty($conflicts)) {
                 return response()->json(['error' => implode(' · ', $conflicts)], 422);
             }
         }
 
-        $card->update(['day' => $day, 'pair' => $pair]);
+        $card->update([
+            'day' => $day, 'pair' => $pair,
+            'start_half' => $day && $pair ? $startHalf : 0,
+        ]);
         return response()->json(['ok' => true]);
     }
 
-    private function findConflicts(TimetableCard $card, int $day, int $pair): array
+    /** Ikki yarim-slot oralig'i kesishadimi: [a1,a2) va [b1,b2). */
+    private function halfOverlap(array $a, array $b): bool
     {
+        return $a[0] < $b[1] && $b[0] < $a[1];
+    }
+
+    /** Kartaning berilgan (day,pair,start_half) da yarim-slot oralig'i. */
+    private function rangeFor(TimetableCard $card, int $pair, int $startHalf): array
+    {
+        $s = ($pair - 1) * 2 + $startHalf;
+        return [$s, $s + $card->lenHalf()];
+    }
+
+    private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0): array
+    {
+        // Shu kundagi barcha joylashgan kartalar (para bo'yicha emas — oraliq kesishuvi bilan)
         $others = TimetableCard::where('board_id', $card->board_id)
             ->where('id', '!=', $card->id)
-            ->where('day', $day)->where('pair', $pair)
+            ->where('day', $day)->whereNotNull('pair')
             ->get();
 
+        $myRange = $this->rangeFor($card, $pair, $startHalf);
         $myGroups = $card->occupiedGroups();
         $errors = [];
         foreach ($others as $o) {
+            $oRange = $o->halfRange();
+            if (!$oRange || !$this->halfOverlap($myRange, $oRange)) {
+                continue;
+            }
             // Guruh konflikti — bir yo'nalish+kurs ichida
             if ($o->specialty_name === $card->specialty_name && (int) $o->course === (int) $card->course) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
@@ -1075,8 +1138,16 @@ class TimetableController extends Controller
         $data = $request->validate([
             'teacher_id'      => 'nullable|integer',
             'auditorium_code' => 'nullable|string|max:50',
+            'len_half'        => 'nullable|integer|min:1|max:4',
+            'start_half'      => 'nullable|integer|min:0|max:1',
         ]);
 
+        if (array_key_exists('len_half', $data) && $data['len_half']) {
+            $card->len_half = (int) $data['len_half'];
+        }
+        if (array_key_exists('start_half', $data) && $data['start_half'] !== null && $card->day && $card->pair) {
+            $card->start_half = (int) $data['start_half'];
+        }
         if (array_key_exists('teacher_id', $data)) {
             if ($data['teacher_id']) {
                 $t = Teacher::find($data['teacher_id']);
@@ -1098,9 +1169,9 @@ class TimetableController extends Controller
             }
         }
 
-        // Joylashgan bo'lsa — yangi rekvizit bilan konflikt tekshiramiz
+        // Joylashgan bo'lsa — yangi rekvizit/uzunlik bilan konflikt tekshiramiz
         if ($card->day && $card->pair) {
-            $conflicts = $this->findConflicts($card, $card->day, $card->pair);
+            $conflicts = $this->findConflicts($card, $card->day, $card->pair, (int) ($card->start_half ?? 0));
             if (!empty($conflicts)) {
                 return response()->json(['error' => implode(' · ', $conflicts)], 422);
             }
@@ -1112,6 +1183,7 @@ class TimetableController extends Controller
             'teacher_name' => $card->teacher_name,
             'auditorium_name' => $card->auditorium_name,
             'auditorium_code' => $card->auditorium_code,
+            'len_half' => $card->lenHalf(),
         ]);
     }
 

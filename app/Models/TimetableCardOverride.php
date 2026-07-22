@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class TimetableCardOverride extends Model
 {
     protected $fillable = [
-        'card_id', 'week', 'day', 'pair', 'cancelled',
+        'card_id', 'week', 'day', 'pair', 'start_half', 'cancelled',
     ];
 
     protected $casts = [

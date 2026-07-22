@@ -20,6 +20,7 @@
                     </div>
                     <button type="button" id="newBoardBtn" class="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">+ Yangi doska</button>
                     <button type="button" id="genBtn" class="hidden px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700">⚙ Kartochkalarni yaratish</button>
+                    <button type="button" id="refreshNamesBtn" class="hidden px-3 py-2 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)">🔄 Fan nomlarini yangilash</button>
                     <button type="button" id="delBoardBtn" class="hidden px-3 py-2 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100">O'chirish</button>
                     <span id="boardMsg" class="text-sm"></span>
                 </div>
@@ -713,10 +714,22 @@
                 } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
                 this.disabled = false;
             };
+            // Fan nomlarini ishchi rejadagi joriy nomga yangilash (qayta yaratmasdan)
+            $('refreshNamesBtn').onclick = async function () {
+                if (!board) return;
+                this.disabled = true; $('boardMsg').textContent = 'Fan nomlari yangilanmoqda...';
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/refresh-names', 'POST', {});
+                    $('boardMsg').textContent = (j.updated || 0) + ' ta kartochka nomi yangilandi';
+                    await loadBoard(board.id);
+                } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
+                this.disabled = false;
+            };
 
             function hideBoard() {
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
+                $('refreshNamesBtn').classList.add('hidden');
                 $('ascToolbar').classList.add('hidden');
                 $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
             }
@@ -739,6 +752,7 @@
                 if (switching) curSpec = null;
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
+                $('refreshNamesBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
                 $('ascToolbar').classList.remove('hidden');
                 buildSpecList();

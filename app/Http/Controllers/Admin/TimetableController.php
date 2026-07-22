@@ -357,6 +357,61 @@ class TimetableController extends Controller
     }
 
     /**
+     * Kartochkalarni QAYTA YARATMASDAN fan nomlarini ishchi rejadagi joriy
+     * nomga yangilash (joylashuvlar saqlanadi). Moslashtirish yo'nalish+kurs+
+     * normallashtirilgan fan nomi bo'yicha — masalan "Biokimyo 1,2" va
+     * "Biokimyo" bir xil normaga tushadi, shuning uchun nom yangilanadi.
+     */
+    public function refreshSubjectNames(TimetableBoard $board)
+    {
+        $start = (int) substr($board->academic_year, 0, 4);
+        $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
+
+        $subjects = DB::table('manual_curriculum_subjects as s')
+            ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
+            ->where('mc.type', 'ishchi')
+            ->whereNotNull('s.semester')
+            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
+            ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name')
+            ->get();
+
+        // Kalit: specKey|kurs|normFan => joriy ko'rinadigan nom
+        $map = [];
+        foreach ($subjects as $s) {
+            $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
+            $key = $this->specKey($s->specialty_name) . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
+            $map[$key] = $s->subject_name;
+        }
+
+        // Kafedra xaritasi ham yangilanadi (nom o'zgarsa kafedra ham to'g'rilansin)
+        [$kafMap, $overrides] = $this->buildKafedraMap();
+
+        $updated = 0;
+        $touched = [];
+        foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
+            $key = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+            $new = $map[$key] ?? null;
+            if ($new === null || $new === $c->subject_name) {
+                continue;
+            }
+            $c->subject_name = $new;
+            $c->kafedra_name = $this->kafedraFor($overrides, $kafMap, $new) ?: $c->kafedra_name;
+            $touched[] = $c;
+            $updated++;
+        }
+
+        DB::transaction(function () use ($touched) {
+            foreach ($touched as $c) {
+                $c->save();
+            }
+        });
+
+        return response()->json(['ok' => true, 'updated' => $updated]);
+    }
+
+    /**
      * Dars kartochkalariga fakultet nomini SNAPSHOT ma'lumotidan to'ldirish.
      *
      * Snapshot bloki `department_name` = HAQIQIY fakultet; blok ichidagi har

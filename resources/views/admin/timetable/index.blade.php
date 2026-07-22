@@ -96,7 +96,7 @@
                     </button>
                     <span class="mx-1 h-6 w-px bg-gray-200"></span>
                     <button type="button" id="excelViewBtn" class="asc-tool">
-                        <span class="asc-ic">📊</span> Excel ko'rinish
+                        <span class="asc-ic">⬇</span> Excelga yuklash
                     </button>
                     <button type="button" id="checkBtn" class="asc-tool">
                         <span class="asc-ic">🔍</span> Tekshiruv <span id="checkBadge" class="hidden ml-1 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold"></span>
@@ -1517,17 +1517,18 @@
             //  Excel ko'rinishidagi jadval (kunlar/paralar qatorda, guruhlar ustunda)
             // ══════════════════════════════════════════════════════════════
             let excelMode = 'group';   // group | teacher | room
+            // Tugma bosilganda to'g'ridan-to'g'ri Excel (.xls) fayl yuklab olinadi
+            // (modal ochilmaydi). Jadval avval #excelBody ga tayyorlanadi.
             $('excelViewBtn').onclick = () => {
-                // buildExcelView xatosi modalni ochilmay qolishiga (va shu bilan
-                // "Excelga yuklab olish" tugmasi ko'rinmasligiga) sabab bo'lmasin.
                 try { buildExcelView(); }
-                catch (e) { $('excelBody').innerHTML = '<div class="p-4 text-red-600">Excel ko\'rinishda xatolik: ' + esc(e.message) + '</div>'; }
-                $('excelModal').classList.remove('hidden');
+                catch (e) { alert('Excel tayyorlashda xatolik: ' + e.message); return; }
+                downloadExcelXls();
             };
             $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
             $('excelPrint').onclick = () => window.print();
+            $('excelDownload').onclick = () => downloadExcelXls();
             // Jadvalni Excel (.xls) fayl sifatida yuklab olish — joriy rejim/hafta/dars turi bo'yicha
-            $('excelDownload').onclick = () => {
+            function downloadExcelXls() {
                 const tableHtml = $('excelBody').innerHTML;
                 if (!tableHtml.includes('<table')) { alert('Yuklab olish uchun joylashgan darslar yo\'q.'); return; }
                 // Ekrandagi (#excelBody) stillar bilan aynan bir xil — yuklab

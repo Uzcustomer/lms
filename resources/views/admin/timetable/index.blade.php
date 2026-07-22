@@ -512,6 +512,8 @@
         #grid td.drag-bad { outline: 3px solid #ef4444; outline-offset: -3px; }
         #grid [data-chip] { cursor: grab; }
         .pn-card { cursor: grab; }
+        /* Faol katak — sichqoncha ustidan o'tganda / strelkalar bilan */
+        #grid td.tt-active { outline: 2px solid #2563eb; outline-offset: -2px; box-shadow: inset 0 0 0 2px rgba(37,99,235,.25); }
         /* Transpoze panjara: chapdagi kun/para sarlavhalari — qalin (jiringlagan) yozuv */
         #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; font-weight: 800; }
         #grid td.tt-day { background: #f1f5f9; font-weight: 900; color: #1e293b; font-size: 15px; writing-mode: vertical-rl; transform: rotate(180deg);
@@ -1100,6 +1102,46 @@
                 document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
             });
 
+            // ===== Faol katak: sichqoncha ustidan o'tganda belgilash + strelkalar bilan yurish =====
+            let activeCell = null;
+            function setActiveCell(td) {
+                if (activeCell === td) return;
+                if (activeCell) activeCell.classList.remove('tt-active');
+                activeCell = td || null;
+                if (activeCell) activeCell.classList.add('tt-active');
+            }
+            // Sichqoncha katak ustidan o'tganda faollashtiramiz (delegatsiya — qayta render'da ham ishlaydi)
+            $('grid').addEventListener('mouseover', ev => {
+                const td = ev.target.closest && ev.target.closest('#grid td[data-day]');
+                if (td) setActiveCell(td);
+            });
+            // Strelkalar — faol katakni yo'nalish bo'yicha eng yaqin katakka ko'chiramiz
+            document.addEventListener('keydown', ev => {
+                if (!activeCell || !activeCell.isConnected) return;
+                const dir = { ArrowRight: 'r', ArrowLeft: 'l', ArrowDown: 'd', ArrowUp: 'u' }[ev.key];
+                if (!dir) return;
+                const t = ev.target;
+                if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+                ev.preventDefault();
+                const cells = [...document.querySelectorAll('#grid td[data-day]')];
+                const r = activeCell.getBoundingClientRect();
+                const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+                let best = null, bestScore = Infinity;
+                for (const td of cells) {
+                    if (td === activeCell) continue;
+                    const rr = td.getBoundingClientRect();
+                    const x = rr.left + rr.width / 2, y = rr.top + rr.height / 2;
+                    const dx = x - cx, dy = y - cy;
+                    let ok, score;
+                    if (dir === 'r') { ok = dx > 3; score = dx + Math.abs(dy) * 3; }
+                    else if (dir === 'l') { ok = dx < -3; score = -dx + Math.abs(dy) * 3; }
+                    else if (dir === 'd') { ok = dy > 3; score = dy + Math.abs(dx) * 3; }
+                    else { ok = dy < -3; score = -dy + Math.abs(dx) * 3; }
+                    if (ok && score < bestScore) { bestScore = score; best = td; }
+                }
+                if (best) { setActiveCell(best); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+            });
+
             // ===== Render =====
             function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); }
 
@@ -1347,6 +1389,7 @@
                 }
                 h += '</tbody>';
                 $('grid').innerHTML = h;
+                activeCell = null;   // qayta render — eski faol katak eskirdi
 
                 // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)
                 document.querySelectorAll('[data-place]').forEach(td => td.onclick = () => {

@@ -515,12 +515,15 @@ class TimetableController extends Controller
             'weeks' => $data['weeks'],
         ])->save();
 
-        // Panjaradan tashqarida qolgan joylashuvlarni bo'shatamiz
+        // Panjaradan tashqarida qolgan joylashuvlarni bo'shatamiz. Yarim-slot (pair)
+        // soni doska qo'ng'iroq jadvalidan olinadi, shuning uchun kunlar chegarasi bilan
+        // birga o'sha son bo'yicha tozalanadi (yo'nalish pairs_per_day emas).
+        $boardPairs = $board->pairCount();
         TimetableCard::where('board_id', $board->id)
             ->where('specialty_name', $data['specialty_name'])
             ->where('course', $data['course'])
-            ->where(function ($q) use ($data) {
-                $q->where('day', '>', $data['days'])->orWhere('pair', '>', $data['pairs_per_day']);
+            ->where(function ($q) use ($data, $boardPairs) {
+                $q->where('day', '>', $data['days'])->orWhere('pair', '>', $boardPairs);
             })
             ->update(['day' => null, 'pair' => null]);
 
@@ -597,9 +600,13 @@ class TimetableController extends Controller
         // Panjara o'lchamlari (yo'nalish+kurs bo'yicha)
         $gridSettings = TimetableGridSetting::where('board_id', $board->id)->get()
             ->keyBy(fn($g) => $g->specialty_name . '|' . $g->course);
-        $dimsFor = function ($spec, $course) use ($gridSettings, $board) {
+        // Yarim-slot (grid qatori) soni butun doska bo'yicha qo'ng'iroq jadvalidan
+        // olinadi (bir "pair" = bir yarim-slot); yo'nalish bo'yicha faqat kun soni
+        // (days) farq qilishi mumkin.
+        $boardPairs = $board->pairCount();
+        $dimsFor = function ($spec, $course) use ($gridSettings, $board, $boardPairs) {
             $g = $gridSettings[$spec . '|' . $course] ?? null;
-            return [(int) ($g->days ?? $board->days), (int) ($g->pairs_per_day ?? $board->pairs_per_day)];
+            return [(int) ($g->days ?? $board->days), $boardPairs];
         };
 
         $all = TimetableCard::where('board_id', $board->id)->get();
@@ -1055,7 +1062,8 @@ class TimetableController extends Controller
             ->where('specialty_name', $specialty)->where('course', $course)->first();
         return [
             'days'  => $gs->days ?? $board->days,
-            'pairs' => $gs->pairs_per_day ?? $board->pairs_per_day,
+            // Yarim-slot soni doska qo'ng'iroq jadvalidan (yo'nalish bo'yicha bir xil)
+            'pairs' => $board->pairCount(),
         ];
     }
 

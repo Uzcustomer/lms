@@ -6,6 +6,11 @@
     <div class="py-6" style="overflow-x: hidden;">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8" style="overflow-x: hidden;">
 
+            {{-- Yuqori boshqaruv qatorlari — doim ko'rinib turadi (sticky), pastdagi
+                 "Joylashmagan kartalar" paneli bilan birga sahifa qanday skroll
+                 qilinsa ham ekranda qoladi. --}}
+            <div class="sticky top-0 z-40 bg-gray-100 pt-1 pb-1 -mx-1 px-1" style="box-shadow: 0 4px 6px -4px rgba(0,0,0,.15);">
+
             {{-- Doska tanlash + boshqaruv paneli — bitta ixcham qatorda --}}
             <div class="bg-white shadow-sm sm:rounded-lg mb-3">
                 <div class="p-2 flex flex-wrap items-center gap-1.5">
@@ -122,6 +127,8 @@
                     <div id="statChips" class="flex flex-wrap gap-1.5 text-[11px] ml-auto"></div>
                 </div>
             </div>
+
+            </div>{{-- /sticky top --}}
 
             {{-- Asosiy maydon: panjara + pastda joylashmagan kartalar (aSc uslubida) --}}
             <div id="mainArea" class="hidden">

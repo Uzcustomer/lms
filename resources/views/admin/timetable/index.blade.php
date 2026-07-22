@@ -549,6 +549,7 @@
         #grid td.tt-day { background: #f1f5f9; font-weight: 700; color: #334155; writing-mode: vertical-rl; transform: rotate(180deg);
             text-align: center; white-space: nowrap; position: sticky; left: 0; z-index: 4; }
         #grid td.tt-para { background: #f8fafc; font-weight: 600; color: #475569; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 42px; padding: 2px; }
+        #grid td.tt-para .tt-para-name { font-size: 10px; font-weight: 700; color: #334155; line-height: 1.1; white-space: nowrap; }
         #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 500; color: #94a3b8; line-height: 1.1; margin-top: 1px; }
         #grid thead th { position: sticky; top: 0; z-index: 5; }
         #grid th.tt-fac { background: #c7d2fe; color: #1e1b4b; font-weight: 800; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: .2px; }
@@ -1164,10 +1165,11 @@
                     curO.groups.push(gr.group);
                 });
 
-                // Para → boshlanish-tugash vaqti (sozlangan qo'ng'iroq jadvalidan)
+                // Para → nomi/qisqartma va boshlanish-tugash vaqti (sozlangan qo'ng'iroq jadvalidan).
+                // Panjaradagi p-chi para = jadvaldagi p-chi "pair" element (tartib bo'yicha).
                 const pairTime = {};
                 boardSchedule().filter(it => it.type === 'pair').forEach((it, i) => {
-                    pairTime[it.no || (i + 1)] = { start: it.start || '', end: it.end || '' };
+                    pairTime[i + 1] = { name: it.name || '', abbr: it.abbr || '', start: it.start || '', end: it.end || '' };
                 });
 
                 // Joylashgan kartalar indeksi: group|day|pair → karta (dars turi filtri + tanlangan hafta bo'yicha)
@@ -1245,7 +1247,8 @@
                         h += '<tr>';
                         if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
                         const pt = pairTime[p];
-                        h += '<td class="tt-para"><div>' + p + '</div>' +
+                        const paraLabel = pt ? (pt.name || pt.abbr || p) : p;
+                        h += '<td class="tt-para"><div class="tt-para-name">' + esc(paraLabel) + '</div>' +
                             (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
                         oqimCols.forEach((o, oi) => {
                             // Har katakka kun/para — drag-and-drop tashlash nishoni uchun

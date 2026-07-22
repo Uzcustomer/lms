@@ -130,13 +130,13 @@
                     <table id="grid" class="border-collapse text-[11px] w-full"></table>
                 </div>
 
-                {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel --}}
-                <div class="bg-white shadow-sm sm:rounded-lg mt-3">
+                {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel, doim ko'rinib turadi (sticky) --}}
+                <div class="sticky bottom-0 z-30 bg-white shadow-sm sm:rounded-lg mt-3" style="box-shadow: 0 -6px 12px -4px rgba(0,0,0,.15);">
                     <div class="px-3 py-1.5 border-b border-gray-100 flex items-center justify-between">
                         <span class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
                         <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                     </div>
-                    <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto" style="max-height: 150px;"></div>
+                    <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 150px;"></div>
                 </div>
             </div>
 
@@ -488,8 +488,9 @@
     </div>
 
     <style>
-        #grid th, #grid td { border: 1px solid #e2e8f0; }
-        #grid td.tt-cell { min-width: 96px; height: 40px; vertical-align: middle; text-align: center; cursor: default; padding: 1px; }
+        /* Jadval chiziqlari — qora, eniga va bo'yiga (barcha katak chegaralari) */
+        #grid th, #grid td { border: 1px solid #000; }
+        #grid td.tt-cell { min-width: 67px; height: 40px; vertical-align: middle; text-align: center; cursor: default; padding: 1px; }
         #grid td.tt-ok { background: #dcfce7; cursor: pointer; }
         #grid td.tt-bad { background: #fee2e2; }
         /* Drag-and-drop: sudralayotgan katak ustidan o'tganda */
@@ -497,20 +498,26 @@
         #grid td.drag-bad { outline: 3px solid #ef4444; outline-offset: -3px; }
         #grid [data-chip] { cursor: grab; }
         .pn-card { cursor: grab; }
-        /* Transpoze panjara: chapdagi kun/para sarlavhalari */
-        #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; }
-        #grid td.tt-day { background: #f1f5f9; font-weight: 700; color: #334155; writing-mode: vertical-rl; transform: rotate(180deg);
-            text-align: center; white-space: nowrap; position: sticky; left: 0; z-index: 4; }
-        #grid td.tt-para { background: #f8fafc; font-weight: 600; color: #475569; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 42px; padding: 2px; }
-        #grid td.tt-para .tt-para-name { font-size: 10px; font-weight: 700; color: #334155; line-height: 1.1; white-space: nowrap; }
-        #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 500; color: #94a3b8; line-height: 1.1; margin-top: 1px; }
+        /* Transpoze panjara: chapdagi kun/para sarlavhalari — qalin (jiringlagan) yozuv */
+        #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; font-weight: 800; }
+        #grid td.tt-day { background: #f1f5f9; font-weight: 900; color: #1e293b; writing-mode: vertical-rl; transform: rotate(180deg);
+            text-align: center; white-space: nowrap; position: sticky; left: 0; z-index: 4; border-bottom: 4px solid #000 !important; }
+        #grid td.tt-para { background: #f8fafc; font-weight: 700; color: #334155; text-align: center; position: sticky; left: 28px; z-index: 4; min-width: 42px; padding: 2px; }
+        #grid td.tt-para .tt-para-name { font-size: 10px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
+        #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 700; color: #64748b; line-height: 1.1; margin-top: 1px; }
         #grid thead th { position: sticky; top: 0; z-index: 5; }
-        #grid th.tt-fac { background: #c7d2fe; color: #1e1b4b; font-weight: 800; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: .2px; }
-        #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 700; text-align: center; }
-        #grid th.tt-grp { background: #eef1f5; color: #475569; font-weight: 600; white-space: nowrap; text-align: center; }
+        #grid th.tt-fac { background: #c7d2fe; color: #1e1b4b; font-weight: 900; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: .2px; }
+        #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 900; text-align: center; }
+        #grid th.tt-grp { background: #eef1f5; color: #1e293b; font-weight: 800; white-space: nowrap; text-align: center; }
         /* Oqimlar orasi — qo'sh chiziq; asos guruhlar (a/b) orasi — qalin chiziq */
-        #grid td.sep-oqim, #grid th.sep-oqim { border-left: 3px double #475569; }
-        #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #94a3b8; }
+        #grid td.sep-oqim, #grid th.sep-oqim { border-left: 3px double #000; }
+        #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #000; }
+        /* Para/kun ajratuvchi chiziqlar — 3 daraja:
+           1) sukut (1px qora) — bitta butun paraning ikki yarmi orasida (masalan 0.5↔1);
+           2) .tt-paraend (qalinroq) — ikki xil butun para orasida (masalan 1↔1.5);
+           3) .tt-dayend (eng qalin) — kundan-kunga o'tganda (masalan dushanba↔seshanba). */
+        #grid td.tt-paraend { border-bottom: 3px solid #000; }
+        #grid td.tt-dayend { border-bottom: 5px solid #000; }
         .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
         /* Ma'ruza — butun katak bitta sariq (chip'ning alohida foni yo'q); amaliy — fan rangi (inline) */
         .tt-chip.lec { background: transparent; border-left: none; color: #713f12; font-weight: 700; }
@@ -1199,13 +1206,19 @@
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gr) + '</th>'));
                 h += '</tr></thead><tbody>';
 
+                // Para ajratuvchi chiziq darajasi: shu qatorda TUGAYDIGAN katak uchun
+                // (endP = boshlanish parasi + rowspan - 1). Kun oxiri (endP===P) — eng
+                // qalin; juft endP — ikki butun para orasi (qalinroq); toq endP — bitta
+                // butun paraning ikki yarmi orasi (sukut, yupqa — qo'shimcha sinf kerak emas).
+                const rowEndCls = endP => endP === P ? ' tt-dayend' : (endP % 2 === 0 ? ' tt-paraend' : '');
+
                 for (let d = 1; d <= D; d++) {
                     for (let p = 1; p <= P; p++) {
                         h += '<tr>';
                         if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
                         const pt = pairTime[p];
                         const paraLabel = pt ? (pt.name || pt.abbr || p) : p;
-                        h += '<td class="tt-para"><div class="tt-para-name">' + esc(paraLabel) + '</div>' +
+                        h += '<td class="tt-para' + rowEndCls(p) + '"><div class="tt-para-name">' + esc(paraLabel) + '</div>' +
                             (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
                         oqimCols.forEach((o, oi) => {
                             // Har katakka kun/para — drag-and-drop tashlash nishoni uchun
@@ -1217,7 +1230,7 @@
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
                                     const bad = conflictsAt(selected, d, p).length > 0;
-                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + colBorder(oi, 0, o.groups) + '" colspan="' + o.groups.length + '"' + dp +
+                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + colBorder(oi, 0, o.groups) + rowEndCls(p) + '" colspan="' + o.groups.length + '"' + dp +
                                         (bad ? '' : ' data-place="' + d + '-' + p + '"') + '></td>';
                                     return;
                                 }
@@ -1247,7 +1260,7 @@
                                         if (cc) ids.push(cc.id);
                                     }
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: ketma-ket paralarda bir xil fan amaliyoti bo'lsa — bitta katak
@@ -1259,11 +1272,11 @@
                                         if (cc) ids.push(cc.id);
                                     }
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    h += '<td class="tt-cell' + bord + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
+                                    h += '<td class="tt-cell' + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
-                                    let cls = 'tt-cell' + bord, clickable = '';
+                                    let cls = 'tt-cell' + bord + rowEndCls(p), clickable = '';
                                     if (selected && selected.training_type === 'practice' && cardGroups(selected).includes(grp)) {
                                         if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
                                         else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }

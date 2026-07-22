@@ -794,7 +794,21 @@ class TimetableController extends Controller
         try {
             $reader = new \PhpOffice\PhpSpreadsheet\Reader\Html();
             $spreadsheet = $reader->load($tmpHtml);
-            $spreadsheet->getActiveSheet()->setTitle('Dars jadvali');
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Dars jadvali');
+
+            // Chegara chiziqlari — HTML <style> dagi border qoidasi o'quvchi
+            // tomonidan qo'llanmaydi, shuning uchun butun diapazonga qo'lda beramiz.
+            $dim = $sheet->calculateWorksheetDimension();
+            if ($dim && strpos($dim, ':') !== false) {
+                $sheet->getStyle($dim)->getBorders()->getAllBorders()
+                    ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+                    ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF888888'));
+                $sheet->getStyle($dim)->getAlignment()->setVertical(
+                    \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER
+                );
+            }
+
             $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
 
             return response()->streamDownload(function () use ($writer) {

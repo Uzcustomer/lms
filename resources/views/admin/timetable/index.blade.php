@@ -523,10 +523,10 @@
         #grid td.sep-oqim, #grid th.sep-oqim { border-left: 3px double #475569; }
         #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #94a3b8; }
         .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
-        /* Ma'ruza — sariq; amaliy — binafsha */
-        .tt-chip.lec { border-left: 3px solid #94a3b8; color: #1f2937; font-weight: 700; }
+        /* Ma'ruza — bir xil sariq; amaliy — fan rangi (inline) */
+        .tt-chip.lec { background: #fef08a; border-left: 3px solid #f59e0b; color: #713f12; font-weight: 700; }
         .tt-chip.prc { border-left: 3px dotted #94a3b8; color: #1f2937; font-weight: 500; }
-        #grid td.tt-lec { }               /* butun oqimga tegishli ma'ruza katagi — rang chip'da (fan bo'yicha) */
+        #grid td.tt-lec { background: #fef9c3; }   /* butun oqimga tegishli ma'ruza katagi — bir xil sariq */
         .tt-chip.sel { outline: 2px solid #ef4444; }
         .pn-card { border-radius: 6px; padding: 4px 6px; font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }

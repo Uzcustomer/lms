@@ -609,6 +609,9 @@
         .set-tab.active { background: #fff; color: #1e40af; font-weight: 600; }
         #stBellTable td { padding: 3px 6px; }
         #stBellTable tr.is-break td { background: #f0fdf4; color: #15803d; }
+        #stBellTable tbody tr { cursor: pointer; }
+        #stBellTable tr.bell-sel td { background: #dbeafe !important; box-shadow: inset 0 0 0 9999px rgba(59,130,246,.12); }
+        #stBellTable tr.bell-sel td:first-child { box-shadow: inset 3px 0 0 #2563eb; }
         .asc-mini { padding: 1px 5px; margin-left: 2px; font-size: 12px; border: 1px solid #cbd5e1;
             border-radius: 4px; background: #f8fafc; color: #475569; }
         .asc-mini:hover { background: #e2e8f0; }
@@ -1961,6 +1964,7 @@
             let bellDraft = [];       // tahrirlanayotgan qo'ng'iroq jadvali
             let dayDraft = [];        // tahrirlanayotgan kun nomlari
             let bellEditIdx = null;
+            let bellSel = null;       // belgilangan (highlight) qator indeksi — ▲/▼ bilan ko'chirish uchun
 
             const SETTINGS_URL = id => BASE + '/boards/' + id + '/settings';
 
@@ -2010,7 +2014,8 @@
                 bellDraft.forEach((it, i) => {
                     const isBreak = it.type === 'break';
                     const label = isBreak ? '<span class="text-green-600">tanaffus</span>' : (++pn);
-                    h += '<tr class="' + (isBreak ? 'is-break' : '') + '">' +
+                    const selCls = (i === bellSel) ? ' bell-sel' : '';
+                    h += '<tr class="' + (isBreak ? 'is-break' : '') + selCls + '" data-row="' + i + '">' +
                         '<td class="text-center">' + label + '</td>' +
                         '<td>' + esc(it.name || '') + '</td><td>' + esc(it.abbr || '') + '</td>' +
                         '<td>' + esc(it.start || '') + '</td><td>' + esc(it.end || '') + '</td>' +
@@ -2025,15 +2030,32 @@
                 h += '</tbody>';
                 $('stBellTable').innerHTML = h;
                 const T = $('stBellTable');
+                // Qatorni bosib belgilash (keyin ▲/▼ bilan ko'chirish uchun)
+                T.querySelectorAll('tr[data-row]').forEach(tr => tr.onclick = ev => {
+                    if (ev.target.closest('button')) return;   // tugma bosilsa — belgilamaymiz
+                    bellSel = (bellSel === +tr.dataset.row) ? null : +tr.dataset.row;
+                    renderBellTable();
+                });
                 T.querySelectorAll('[data-up]').forEach(b => b.onclick = () => moveBell(+b.dataset.up, -1));
                 T.querySelectorAll('[data-down]').forEach(b => b.onclick = () => moveBell(+b.dataset.down, 1));
                 T.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openBellEdit(+b.dataset.edit));
-                T.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { bellDraft.splice(+b.dataset.del, 1); renderBellTable(); });
+                T.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+                    const d = +b.dataset.del;
+                    bellDraft.splice(d, 1);
+                    if (bellSel === d) bellSel = null; else if (bellSel > d) bellSel--;
+                    renderBellTable();
+                });
+                // Belgilangan qatorni ko'rinishga suramiz
+                const selTr = T.querySelector('tr.bell-sel');
+                if (selTr) selTr.scrollIntoView({ block: 'nearest' });
             }
+            // ▲/▼ — qatorni ko'chiradi va o'sha qatorni belgilab (highlight) qoldiradi,
+            // shunda strelkani qayta-qayta bosib yuqoriga/pastga chiqarib borish mumkin.
             function moveBell(i, dir) {
                 const j = i + dir;
                 if (j < 0 || j >= bellDraft.length) return;
                 [bellDraft[i], bellDraft[j]] = [bellDraft[j], bellDraft[i]];
+                bellSel = j;   // ko'chgan qator belgilangan bo'lib qoladi
                 renderBellTable();
             }
             $('stAddPair').onclick = () => {

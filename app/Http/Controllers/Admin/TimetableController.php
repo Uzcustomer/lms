@@ -659,25 +659,40 @@ class TimetableController extends Controller
             $bestPen = INF;
             $bestRoom = null;
 
+            $need = $this->parasNeeded($c);
             for ($d = 1; $d <= $days; $d++) {
-                for ($p = 1; $p <= $pairs; $p++) {
-                    // Qattiq: guruh bandligi
-                    $gk = $c->specialty_name . '|' . $c->course . '|' . $d . '|' . $p;
-                    if (!empty($groupBusy[$gk]) && array_intersect($groups, $groupBusy[$gk])) {
+                for ($p = 1; $p <= $pairs - $need + 1; $p++) {
+                    // Qattiq: dars egallaydigan barcha paralar bo'sh bo'lishi kerak
+                    $freeAll = true;
+                    for ($i = 0; $i < $need; $i++) {
+                        $gk = $c->specialty_name . '|' . $c->course . '|' . $d . '|' . ($p + $i);
+                        if (!empty($groupBusy[$gk]) && array_intersect($groups, $groupBusy[$gk])) {
+                            $freeAll = false;
+                            break;
+                        }
+                        if ($c->teacher_id && !empty($teacherBusy[$c->teacher_id . '|' . $d . '|' . ($p + $i)])) {
+                            $freeAll = false;
+                            break;
+                        }
+                    }
+                    if (!$freeAll) {
                         continue;
                     }
-                    // Qattiq: o'qituvchi bandligi (biriktirilgan bo'lsa)
-                    if ($c->teacher_id && !empty($teacherBusy[$c->teacher_id . '|' . $d . '|' . $p])) {
-                        continue;
-                    }
-                    // Qattiq: auditoriya (sig'im yetarli + bo'sh)
+                    // Qattiq: auditoriya (sig'im yetarli + barcha paralarda bo'sh)
                     $room = null;
                     if ($assignRooms) {
                         foreach ($rooms as $r) {
                             if ((int) ($r->volume ?? 0) < (int) $c->students) {
                                 continue;
                             }
-                            if (!empty($roomBusy[$r->code . '|' . $d . '|' . $p])) {
+                            $roomFree = true;
+                            for ($i = 0; $i < $need; $i++) {
+                                if (!empty($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)])) {
+                                    $roomFree = false;
+                                    break;
+                                }
+                            }
+                            if (!$roomFree) {
                                 continue;
                             }
                             $room = $r;
@@ -704,6 +719,7 @@ class TimetableController extends Controller
             [$d, $p] = $best;
             $c->day = $d;
             $c->pair = $p;
+            $c->start_half = 0;   // avto-joylash para chegarasidan boshlaydi
             if ($assignRooms && $bestRoom) {
                 $c->auditorium_code = $bestRoom->code;
                 $c->auditorium_name = $bestRoom->name;
@@ -731,16 +747,29 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Katakni band deb belgilash (guruh/o'qituvchi/auditoriya xaritalarida). */
+    /** Dars egallaydigan butun paralar soni (avto-joylash uchun): ceil(len_half/2). */
+    private function parasNeeded(TimetableCard $c): int
+    {
+        return intdiv($c->lenHalf() + 1, 2);
+    }
+
+    /**
+     * Katakni band deb belgilash. Dars uzunligiga qarab ceil(len_half/2) ta
+     * ketma-ket parani band qiladi (avto-joylash konfliktsiz bo'lishi uchun).
+     */
     private function markBusy(array &$groupBusy, array &$teacherBusy, array &$roomBusy, TimetableCard $c): void
     {
-        $k = $c->specialty_name . '|' . $c->course . '|' . $c->day . '|' . $c->pair;
-        $groupBusy[$k] = array_merge($groupBusy[$k] ?? [], $c->occupiedGroups());
-        if ($c->teacher_id) {
-            $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $c->pair] = true;
-        }
-        if ($c->auditorium_code) {
-            $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $c->pair] = true;
+        $need = $this->parasNeeded($c);
+        for ($i = 0; $i < $need; $i++) {
+            $p = (int) $c->pair + $i;
+            $k = $c->specialty_name . '|' . $c->course . '|' . $c->day . '|' . $p;
+            $groupBusy[$k] = array_merge($groupBusy[$k] ?? [], $c->occupiedGroups());
+            if ($c->teacher_id) {
+                $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $p] = true;
+            }
+            if ($c->auditorium_code) {
+                $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $p] = true;
+            }
         }
     }
 
@@ -1110,10 +1139,14 @@ class TimetableController extends Controller
             'teacher_id'      => 'nullable|integer',
             'auditorium_code' => 'nullable|string|max:50',
             'len_half'        => 'nullable|integer|min:1|max:4',
+            'start_half'      => 'nullable|integer|min:0|max:1',
         ]);
 
         if (array_key_exists('len_half', $data) && $data['len_half']) {
             $card->len_half = (int) $data['len_half'];
+        }
+        if (array_key_exists('start_half', $data) && $data['start_half'] !== null && $card->day && $card->pair) {
+            $card->start_half = (int) $data['start_half'];
         }
         if (array_key_exists('teacher_id', $data)) {
             if ($data['teacher_id']) {

@@ -211,6 +211,25 @@
                                 <label class="block text-xs font-medium text-gray-600 mb-1">Auditoriya <span id="cmCap" class="text-gray-400"></span></label>
                                 <select id="cmAud" class="w-full rounded-md border-gray-300 text-sm"></select>
                             </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Dars uzunligi</label>
+                                    <select id="cmLen" class="w-full rounded-md border-gray-300 text-sm">
+                                        <option value="1">0.5 para (1 soat)</option>
+                                        <option value="2">1 para (2 soat)</option>
+                                        <option value="3">1.5 para (3 soat)</option>
+                                        <option value="4">2 para (4 soat)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Boshlanishi</label>
+                                    <select id="cmStartHalf" class="w-full rounded-md border-gray-300 text-sm">
+                                        <option value="0">Para boshidan</option>
+                                        <option value="1">Para o'rtasidan (yarmidan)</option>
+                                    </select>
+                                </div>
+                                <div id="cmTimeHint" class="col-span-2 text-[11px] text-indigo-600"></div>
+                            </div>
                             <div id="cmMsg" class="hidden text-sm rounded px-3 py-2"></div>
                         </div>
                         <div class="flex justify-between gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
@@ -1361,10 +1380,46 @@
                 // Hafta rejimida: "olib tashlash" shu haftada bekor qilish; override bo'lsa shablonga qaytarish
                 $('cmUnplace').textContent = curWeek ? '✖ Shu haftada bekor qilish' : '↩ Jadvaldan olish';
                 $('cmResetWeek').classList.toggle('hidden', !(curWeek && hasWeekOverride(c)));
+                // Dars uzunligi va boshlanish yarmi
+                $('cmLen').value = String(c.len_half || 2);
+                $('cmStartHalf').value = String(c.start_half || 0);
+                $('cmStartHalf').disabled = !(c.day && c.pair);
+                updateCmTimeHint();
                 $('cmMsg').classList.add('hidden');
                 $('cardModal').classList.remove('hidden');
                 await Promise.all([loadTeachers(''), loadAuds()]);
             }
+            // Modal: tanlangan uzunlik/boshlanish bo'yicha dars vaqti oralig'ini ko'rsatish
+            function updateCmTimeHint() {
+                const el = $('cmTimeHint');
+                if (!modalCard || !modalCard.day || !modalCard.pair) { el.textContent = 'Joylashtirilmagan — uzunlik saqlanadi.'; return; }
+                const sched = boardSchedule().filter(it => it.type === 'pair');
+                const len = +$('cmLen').value, sh = +$('cmStartHalf').value;
+                // Mutlaq yarim-slot: (pair-1)*2 + start_half; har para 2 yarimdan iborat
+                const startHalfIdx = (modalCard.pair - 1) * 2 + sh;
+                const halfTime = idx => {
+                    const p = sched[Math.floor(idx / 2)]; if (!p) return '';
+                    const s = p.start || '', e = p.end || '';
+                    if (idx % 2 === 0) return s;                       // para boshi
+                    return midTime(s, e);                              // para o'rtasi
+                };
+                const startT = halfTime(startHalfIdx);
+                const endT = (() => {
+                    const endIdx = startHalfIdx + len;                 // tugash yarim-sloti (kirmaydi)
+                    const p = sched[Math.floor((endIdx - 1) / 2)]; if (!p) return '';
+                    return (endIdx % 2 === 0) ? (p.end || '') : midTime(p.start || '', p.end || '');
+                })();
+                const label = { 1: '0.5 para', 2: '1 para', 3: '1.5 para', 4: '2 para' }[len] || len;
+                el.textContent = '⏱ ' + label + (startT && endT ? ' · ' + startT + '–' + endT : '');
+            }
+            // Ikki vaqt oralig'ining o'rtasi (HH:MM)
+            function midTime(s, e) {
+                const toMin = t => { const [h, m] = String(t).split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+                if (!s || !e) return '';
+                const m = Math.round((toMin(s) + toMin(e)) / 2);
+                return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+            }
+            $('cmLen').onchange = $('cmStartHalf').onchange = updateCmTimeHint;
             async function loadTeachers(search) {
                 const p = new URLSearchParams();
                 if (modalCard.kafedra_name && !search) p.set('kafedra', modalCard.kafedra_name.split(' ')[0]);
@@ -1394,11 +1449,15 @@
                     const j = await api(BASE + '/cards/' + modalCard.id + '/update', 'POST', {
                         teacher_id: $('cmTeacher').value || '',
                         auditorium_code: $('cmAud').value || '',
+                        len_half: $('cmLen').value,
+                        start_half: $('cmStartHalf').value,
                     });
                     modalCard.teacher_id = $('cmTeacher').value ? +$('cmTeacher').value : null;
                     modalCard.teacher_name = j.teacher_name;
                     modalCard.auditorium_code = j.auditorium_code;
                     modalCard.auditorium_name = j.auditorium_name;
+                    modalCard.len_half = +$('cmLen').value;
+                    if (modalCard.day && modalCard.pair) modalCard.start_half = +$('cmStartHalf').value;
                     $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                     renderAll();
                 } catch (e) {

@@ -934,7 +934,7 @@
             };
 
             // ===== Avtomatik (optimal) joylashtirish =====
-            $('autoBtn').onclick = async function () {
+            async function doAutoPlace() {
                 if (!board || !curSpec) return;
                 const whole = $('autoScope').checked;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
@@ -945,7 +945,7 @@
                     : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs')) + typeLbl;
                 if ($('autoReset').checked &&
                     !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
-                this.disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
+                $('autoBtn').disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
                 try {
                     const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0 };
                     if (whole) { /* butun doska — qamrov yubormaymiz */ }
@@ -957,9 +957,20 @@
                     $('autoMsg').textContent = 'Joylandi: ' + j.placed +
                         (j.unplaced ? (' · joy topilmadi: ' + j.unplaced) : '') +
                         (j.rooms_assigned ? (' · xona biriktirildi: ' + j.rooms_assigned) : '');
+                    // Hammasi allaqachon joylashgan va reset belgilanmagan — yangi
+                    // sozlama bo'yicha qayta taqsimlash uchun yo'l ko'rsatamiz.
+                    if (!$('autoReset').checked && !j.placed && !j.unplaced) {
+                        $('autoMsg').textContent = 'Hammasi joylashgan. Yangi sozlama bo\'yicha qayta joylash kerak.';
+                        if (confirm('Barcha kartalar allaqachon joylashgan.\nYangi sozlama (bir kunga / ketma-ket) bo\'yicha mavjud joylashuvlarni bo\'shatib QAYTA joylaymizmi?')) {
+                            $('autoReset').checked = true;
+                            $('autoBtn').disabled = false;
+                            return doAutoPlace();
+                        }
+                    }
                 } catch (e) { $('autoMsg').textContent = ''; alert('Xatolik: ' + e.message); }
-                this.disabled = false;
-            };
+                $('autoBtn').disabled = false;
+            }
+            $('autoBtn').onclick = doAutoPlace;
 
             // ===== Yordamchilar =====
             // Fakultet cheklovi: allFac — shu yo'nalish+kursдаги barcha

@@ -583,6 +583,11 @@ class TimetableController extends Controller
         $set = $board->settings ?? [];
         $sameDay = (bool) ($set['pair_same_day'] ?? false);
         $consecutive = (bool) ($set['pair_consecutive'] ?? false);
+        // Auditoriya sig'imi toleransi (%) — oqim xona sig'imidan biroz katta
+        // bo'lsa ham joylashtirishga ruxsat (mas. 120 o'rin — 125 oqim, 5%).
+        // Katta farq (mas. 80 xona — 120 oqim) baribir rad etiladi.
+        $roomTolPct = max(0, min(30, (int) ($set['room_tolerance_pct'] ?? 5)));
+        $minVolFor = fn(TimetableCard $c) => (int) ceil((int) $c->students * (100 - $roomTolPct) / 100);
 
         // Reset — tanlangan qamrovdagi mavjud joylashuvlarni bo'shatamiz.
         // Qamrov: yo'nalish+kurs (scopeSpec) → faqat o'sha; aks holda kurs
@@ -710,8 +715,8 @@ class TimetableController extends Controller
                     $pool = $poolFor($c);
                     if ($pool->isNotEmpty()) {
                         foreach ($pool as $r) {
-                            if ((int) ($r->volume ?? 0) < (int) $c->students) {
-                                continue;
+                            if ((int) ($r->volume ?? 0) < $minVolFor($c)) {
+                                continue; // sig'im yetmaydi (tolerans hisobga olingan)
                             }
                             $roomFree = true;
                             for ($i = 0; $i < $need; $i++) {

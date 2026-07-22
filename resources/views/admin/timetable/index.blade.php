@@ -364,6 +364,11 @@
                                             <input id="stConsec" type="checkbox" class="rounded border-gray-300"> Ketma-ket (yonma-yon) paralarga qo'yish
                                         </label>
                                         <p class="text-[11px] text-gray-400 mt-0.5">Masalan 4 soatlik dars — ikki para bir kunda, ketma-ket (2+2 alohida kunga bo'linmaydi).</p>
+                                        <label class="flex items-center gap-2 text-sm text-gray-600 mt-2">
+                                            Auditoriya sig'imi toleransi:
+                                            <input id="stRoomTol" type="number" min="0" max="30" class="w-16 rounded border-gray-300 text-sm"> %
+                                        </label>
+                                        <p class="text-[11px] text-gray-400 mt-0.5">Oqim xona sig'imidan shu %gача katta bo'lsa ham joylanadi (mas. 120 o'rinli xona — 125 oqim). Katta farq baribir rad etiladi.</p>
                                     </div>
                                 </div>
                                 <p class="col-span-2 text-xs text-gray-400">O'quv yili va semestr doska yaratilganda belgilangan — o'zgartirish uchun yangi doska yarating.</p>
@@ -2031,6 +2036,7 @@
                     $('stShowNum').checked = !!set.show_day_number;
                     $('stSameDay').checked = !!set.pair_same_day;
                     $('stConsec').checked = !!set.pair_consecutive;
+                    $('stRoomTol').value = (set.room_tolerance_pct != null ? set.room_tolerance_pct : 5);
                     bellDraft = (s.bell_schedule || []).map(x => ({ ...x }));
                     dayDraft = (s.day_names || []).slice();
                     renderBellTable(); renderDayNames();
@@ -2184,6 +2190,7 @@
                 fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
                 fd.append('settings[pair_same_day]', $('stSameDay').checked ? 1 : 0);
                 fd.append('settings[pair_consecutive]', $('stConsec').checked ? 1 : 0);
+                fd.append('settings[room_tolerance_pct]', $('stRoomTol').value || 5);
                 try {
                     const r = await fetch(SETTINGS_URL(board.id), { method: 'POST', headers: { 'Accept': 'application/json' }, body: fd });
                     const j = await r.json();

@@ -1566,8 +1566,11 @@
             }
 
             function buildExcelView() {
+                // Ekranда ko'rinaётган qamrov (bitta yo'nalish / barcha fakultet /
+                // barcha yo'nalish — allFac/allSpec) o'zini yuklaymiz.
+                const src = specCards();
                 // Dars turi filtri + tanlangan hafta Excel ko'rinishga ham qo'llanadi
-                const placed = cards.filter(c => effPlace(c) && typeVisible(c));
+                const placed = src.filter(c => effPlace(c) && typeVisible(c));
                 // Ustun tuzilishi rejimga qarab: guruh / o'qituvchi / auditoriya.
                 // headGroups: [{title, span, cols:[{key,label}]}]; idx: "colKey|day|pair" → karta(lar)
                 let headGroups = [], idx = {};
@@ -1575,7 +1578,7 @@
 
                 if (excelMode === 'group') {
                     const specMap = {};
-                    cards.forEach(c => {
+                    src.forEach(c => {
                         const sk = c.specialty_name + '|' + c.course;
                         (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, faculty: c.faculty_name || '', groups: new Set() });
                         cardGroups(c).forEach(g => specMap[sk].groups.add(g));
@@ -1624,8 +1627,11 @@
                     }
                 }
 
+                // Kunlar soni — faqat ko'rsatilaётган yo'nalishlar grid'idan (eng kattasi)
                 let D = board.days;
-                Object.values(grids).forEach(g => { D = Math.max(D, g.days); });
+                [...new Set(src.map(c => c.specialty_name + '|' + c.course))].forEach(k => {
+                    const g = grids[k]; if (g) D = Math.max(D, g.days);
+                });
                 const dayNames = boardDayNames();
                 const sched = boardSchedule().filter(it => it.print !== false || it.type === 'pair');
 

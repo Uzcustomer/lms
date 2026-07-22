@@ -116,6 +116,14 @@
                     </div>
                     <select id="weekSel" class="rounded-md border-gray-300 text-[11px] py-1"></select>
                     <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-500">Kesim:
+                        <select id="viewMode" class="rounded-md border-gray-300 text-[11px] py-1">
+                            <option value="group">Guruh</option>
+                            <option value="teacher">O'qituvchi</option>
+                            <option value="room">Auditoriya</option>
+                            <option value="subject">Fan</option>
+                        </select>
+                    </label>
 
                     <span class="h-6 w-px bg-gray-200"></span>
                     <button type="button" id="autoBtn" class="px-2.5 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⚡ Avtomatik joylash</button>
@@ -911,6 +919,11 @@
                 selected = null;
                 renderAll();
             };
+            $('viewMode').onchange = function () {
+                viewMode = this.value;
+                selected = null;
+                renderGrid();
+            };
             // Kartaning tanlangan haftadagi (yoki shablon) effektiv joylashuvi: {day,pair} yoki null
             function effPlace(c) {
                 if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
@@ -1011,6 +1024,7 @@
             // yo'nalish (ketma-ket).
             let allFac = false;
             let allSpec = false;
+            let viewMode = 'group';   // group | teacher | room | subject (jadval kesimi)
             const specCards = () => cards.filter(c => {
                 if (!curSpec) return false;
                 if (allSpec) return c.course === curSpec.course;
@@ -1191,7 +1205,75 @@
                 });
             }
 
+            // Jadval kesimi (faqat ko'rish): o'qituvchi / auditoriya / fan ustunlari
+            function renderGridCross(mode) {
+                const placed = visibleSpecCards().filter(c => effPlace(c));
+                const keyOf = c => mode === 'teacher' ? (c.teacher_name || '— (biriktirilmagan)')
+                    : mode === 'room' ? (c.auditorium_name || '— (xona yo\'q)')
+                    : c.subject_name;
+                const cols = [...new Set(placed.map(keyOf))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                let D = board.days;
+                Object.values(grids).forEach(gg => { D = Math.max(D, gg.days); });
+                const sched = boardSchedule().filter(it => it.type === 'pair');
+                const P = sched.length || board.pairs_per_day;
+                const dayNames = boardDayNames();
+                const pairTime = {};
+                sched.forEach((it, i) => { pairTime[it.no || (i + 1)] = it; });
+
+                const startIdx = {}, consumed = {};
+                placed.forEach(c => {
+                    const pl = effPlace(c);
+                    const k = keyOf(c) + '|' + pl.day + '|' + pl.pair;
+                    (startIdx[k] = startIdx[k] || []).push(c);
+                });
+
+                if (!cols.length) {
+                    $('grid').innerHTML = '<div class="p-4 text-sm text-gray-400">Bu kesimda joylashgan darslar yo\'q.</div>';
+                    activeCell = null; return;
+                }
+                const rowEndCls = p => p === P ? ' tt-dayend' : (p % 2 === 0 ? ' tt-paraend' : '');
+                let h = '<thead><tr><th class="tt-corner px-1 py-1">Kun</th><th class="tt-corner px-1 py-1" style="left:28px">Para</th>';
+                cols.forEach(c => h += '<th class="tt-grp px-2 py-1">' + esc(c) + '</th>');
+                h += '</tr></thead><tbody>';
+                for (let d = 1; d <= D; d++) {
+                    for (let p = 1; p <= P; p++) {
+                        h += '<tr>';
+                        if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
+                        const pt = pairTime[p];
+                        h += '<td class="tt-para' + rowEndCls(p) + '"><div class="tt-para-name">' + esc(pt ? (pt.name || pt.abbr || p) : p) + '</div>' +
+                            (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
+                        cols.forEach(col => {
+                            const key = col + '|' + d + '|' + p;
+                            if (consumed[key]) return;
+                            const list = startIdx[key] || [];
+                            if (!list.length) { h += '<td class="tt-cell' + rowEndCls(p) + '" data-day="' + d + '" data-pair="' + p + '"></td>'; return; }
+                            const vs = Math.max(...list.map(cardLen));
+                            for (let k = 1; k < vs; k++) consumed[col + '|' + d + '|' + (p + k)] = 1;
+                            const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
+                            const inner = list.map(c => {
+                                const extra = mode === 'teacher' ? [c.group_name || c.oqim_label, c.auditorium_name]
+                                    : mode === 'room' ? [c.group_name || c.oqim_label, c.teacher_name]
+                                    : [c.group_name || c.oqim_label, c.teacher_name];
+                                const sub = extra.filter(Boolean).join(' · ');
+                                const isLec = c.training_type === 'lecture';
+                                const st = isLec ? 'background:#fde68a;' : ('background-color:' + subjColor(c.subject_name).bg + ';');
+                                return '<div class="tt-chip ' + (isLec ? 'lec' : 'prc') + '" style="' + st + '">' + cardLabel(c, true) +
+                                    (sub ? '<div class="text-[9px] text-gray-600">' + esc(sub) + '</div>' : '') + '</div>';
+                            }).join('');
+                            // Bir katakda bir nechta (o'qituvchi/xona kesimida) — to'qnashuv
+                            const conflict = (list.length > 1 && mode !== 'subject') ? ' style="outline:2px solid #ef4444;outline-offset:-2px"' : '';
+                            h += '<td class="tt-cell' + rowEndCls(p + vs - 1) + '"' + rs + ' data-day="' + d + '" data-pair="' + p + '"' + conflict + '>' + inner + '</td>';
+                        });
+                        h += '</tr>';
+                    }
+                }
+                h += '</tbody>';
+                $('grid').innerHTML = h;
+                activeCell = null;
+            }
+
             function renderGrid() {
+                if (viewMode !== 'group') { renderGridCross(viewMode); return; }
                 const g = curGrid();
                 let D = g.days;
                 // Yarim-slot (qator) soni — doska qo'ng'iroq jadvalidagi "pair" elementlar

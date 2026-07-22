@@ -643,9 +643,10 @@
                 });
             }
             const subjColor = name => subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8' };
-            // Har fan — bitta doimiy rang (ham ma'ruza, ham amaliy). Fon va chap
-            // chiziq fan rangi bo'yicha; ma'ruza qalinroq matn bilan farqlanadi.
+            // Ma'ruza — bir xil sariq (class'dagi tt-lec/.lec fonida qoladi,
+            // inline rang bermaymiz). Amaliy — har fan o'z rangida.
             const subjStyle = c => {
+                if (c.training_type === 'lecture') return '';
                 const s = subjColor(c.subject_name);
                 return 'background-color:' + s.bg + ';border-left-color:' + s.border + ';';
             };
@@ -1527,14 +1528,14 @@
             $('excelClose').onclick = () => $('excelModal').classList.add('hidden');
             $('excelPrint').onclick = () => window.print();
             $('excelDownload').onclick = () => downloadExcelXls();
-            // Jadvalni Excel (.xls) fayl sifatida yuklab olish — joriy rejim/hafta/dars turi bo'yicha
-            function downloadExcelXls() {
+            // Jadvalni HAQIQIY .xlsx fayl sifatida yuklab olish (serverda PhpSpreadsheet
+            // orqali) — Excel "format kengaytmага mos emas" ogohlantirishi chiqmaydi.
+            // Xato bo'lsa — eski HTML .xls ga qaytamiz (ogohlantirish bilan bo'lса ham ishlaydi).
+            async function downloadExcelXls() {
                 const tableHtml = $('excelBody').innerHTML;
                 if (!tableHtml.includes('<table')) { alert('Yuklab olish uchun joylashgan darslar yo\'q.'); return; }
-                // Ekrandagi (#excelBody) stillar bilan aynan bir xil — yuklab
-                // olingan .xls fayl ekrandagidek ko'rinishi uchun. Amaliy
-                // kataklarning fan ranglari inline (hex) bo'lgani uchun Excel
-                // ularni saqlaydi; ma'ruza esa .ex-lec (bir xil sariq) class'ida.
+                // Kataklar ranglari inline (hex) — Excel/PhpSpreadsheet ularni saqlaydi;
+                // sarlavhalar esa <style> class'lari orqali.
                 const styles = 'table{border-collapse:collapse}td,th{border:1px solid #888;padding:2px 4px;font-size:11px;text-align:center;vertical-align:middle}' +
                     'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:800}' +
                     '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc;font-weight:600}' +
@@ -1543,10 +1544,26 @@
                 const html = '<html xmlns="http://www.w3.org/TR/REC-html40">' +
                     '<head><meta charset="utf-8"><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
                 const modeLabel = { group: 'guruh', teacher: 'oqituvchi', room: 'auditoriya' }[excelMode];
-                const fname = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') + '_' + modeLabel +
-                    (curWeek ? '_' + curWeek + '-hafta' : '') + '.xls';
-                dl('﻿' + html, fname, 'application/vnd.ms-excel');
-            };
+                const base = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') + '_' + modeLabel +
+                    (curWeek ? '_' + curWeek + '-hafta' : '');
+                try {
+                    const fd = new FormData();
+                    fd.append('_token', CSRF);
+                    fd.append('html', html);
+                    fd.append('filename', base);
+                    const r = await fetch(BASE + '/boards/' + board.id + '/excel-export', { method: 'POST', body: fd });
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    const blob = await r.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = base + '.xlsx';
+                    document.body.appendChild(a); a.click(); a.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 5000);
+                } catch (e) {
+                    // Zaxira: HTML .xls (Excel ogohlantirish berishi mumkin, lekin ochiladi)
+                    dl('﻿' + html, base + '.xls', 'application/vnd.ms-excel');
+                }
+            }
             document.querySelectorAll('.ex-mode').forEach(b => b.onclick = () => {
                 excelMode = b.dataset.mode;
                 document.querySelectorAll('.ex-mode').forEach(x => x.classList.toggle('active', x === b));
@@ -1645,12 +1662,14 @@
                     else if (excelMode === 'teacher') extra = [c.group_name || (c.oqim_label ? c.oqim_label : ''), c.auditorium_name];
                     else extra = [c.group_name || c.oqim_label, c.teacher_name];
                     const sub = extra.filter(Boolean).join(' · ');
-                    // Har fan — bitta rang (ham ma'ruza, ham amaliy). Ma'ruza to'liq, amaliy nuqtali chegara.
+                    // Ma'ruza — bir xil sariq; amaliy — har fan o'z rangida (nuqtali chegara).
+                    // Ranglar inline (hex) — Excelга eksport qilinganда ham saqlanadi.
                     const s = subjColor(c.subject_name);
-                    const st = 'background-color:' + s.bg + ';border-left:3px ' + (isLec ? 'solid' : 'dotted') + ' ' + s.border + ';';
+                    const st = isLec ? 'background-color:#fef9c3;'
+                        : 'background-color:' + s.bg + ';border-left:3px dotted ' + s.border + ';';
                     const cs = (span && span > 1) ? ' colspan="' + span + '"' : '';
                     const tag = '[' + (isLec ? 'M' : 'A') + '] ';
-                    return '<td class="ex-cell"' + cs + ' style="' + st + '">' +
+                    return '<td class="ex-cell ' + cls + '"' + cs + ' style="' + st + '">' +
                         '<div><b>' + tag + '</b>' + esc(c.subject_name) + '</div>' +
                         (sub ? '<div style="color:#64748b;font-size:9px">' + esc(sub) + '</div>' : '') + '</td>';
                 };

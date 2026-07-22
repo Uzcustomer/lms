@@ -770,6 +770,47 @@ class TimetableController extends Controller
     }
 
     /**
+     * Ekrandagi Excel jadvalini (HTML) haqiqiy .xlsx faylga aylantirib beradi.
+     * Shu bilan Excel "fayl formati kengaytmага mos emas" ogohlantirishi chiqmaydi.
+     * Kataklar ranglari inline (hex) — PhpSpreadsheet HTML o'quvchisi ularni saqlaydi;
+     * birlashtirilgan kataklar colspan/rowspan orqali merge bo'ladi.
+     */
+    public function excelExport(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'html'     => 'required|string',
+            'filename' => 'nullable|string|max:150',
+        ]);
+
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(120);
+
+        $base = preg_replace('/[^\w\-]+/u', '_', (string) ($data['filename'] ?? 'dars-jadvali')) ?: 'dars-jadvali';
+        $tmp = tempnam(sys_get_temp_dir(), 'ttx');
+        $tmpHtml = $tmp . '.html';
+        @rename($tmp, $tmpHtml);
+        file_put_contents($tmpHtml, $data['html']);
+
+        try {
+            $reader = new \PhpOffice\PhpSpreadsheet\Reader\Html();
+            $spreadsheet = $reader->load($tmpHtml);
+            $spreadsheet->getActiveSheet()->setTitle('Dars jadvali');
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+
+            return response()->streamDownload(function () use ($writer) {
+                $writer->save('php://output');
+            }, $base . '.xlsx', [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Timetable excel-export xatosi: ' . $e->getMessage());
+            return response()->json(['error' => 'Excel yaratishda xatolik: ' . $e->getMessage()], 500);
+        } finally {
+            @unlink($tmpHtml);
+        }
+    }
+
+    /**
      * Hafta bo'yicha dars istisnosi: shu haftada ko'chirish / bekor qilish / shablonga qaytarish.
      * Faqat tanlangan haftaga ta'sir qiladi — boshqa haftalar shablon bo'yicha qoladi.
      */

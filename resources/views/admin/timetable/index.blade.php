@@ -191,9 +191,9 @@
             </div>
 
             {{-- Kartochka rekvizitlari modali --}}
-            <div id="cardModal" class="hidden fixed inset-0 z-50 bg-black/40">
-                <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div id="cardModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="tt-modal-win bg-white rounded-lg shadow-xl w-full max-w-md">
                         <div class="flex items-center justify-between px-5 py-3 border-b">
                             <div>
                                 <div id="cmTitle" class="font-semibold text-gray-800 text-sm"></div>
@@ -228,9 +228,9 @@
             </div>
 
             {{-- ═══ aSc Timetables uslubidagi boshqaruv dialogi (Fanlar/Guruhlar/Auditoriyalar/O'qituvchilar) ═══ --}}
-            <div id="ascModal" class="hidden fixed inset-0 z-50 bg-black/40">
-                <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-5xl flex flex-col" style="max-height: 90vh;">
+            <div id="ascModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-5xl flex flex-col" style="max-height: 90vh;">
                         {{-- Sarlavha satri --}}
                         <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
                             <div class="flex items-center gap-2 text-sm font-semibold text-white">
@@ -264,9 +264,9 @@
             </div>
 
             {{-- Auditoriya tahrirlash mini-formasi --}}
-            <div id="audEditModal" class="hidden fixed inset-0 z-[60] bg-black/40">
-                <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div id="audEditModal" class="hidden tt-modal tt-modal-top">
+                <div class="tt-modal-body">
+                    <div class="tt-modal-win bg-white rounded-lg shadow-xl w-full max-w-md">
                         <div class="flex items-center justify-between px-5 py-3 border-b">
                             <div id="aeTitle" class="font-semibold text-gray-800 text-sm">Auditoriya</div>
                             <button type="button" id="aeClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
@@ -331,9 +331,9 @@
             </div>
 
             {{-- ═══ Umumiy sozlamalar (aSc "Установки" uslubida) ═══ --}}
-            <div id="setModal" class="hidden fixed inset-0 z-50 bg-black/40">
-                <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 92vh;">
+            <div id="setModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 92vh;">
                         <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
                             <div class="flex items-center gap-2 text-sm font-semibold text-white">⚙️ Umumiy sozlamalar</div>
                             <button type="button" id="setClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
@@ -417,9 +417,9 @@
             </div>
 
             {{-- Qo'ng'iroq qatorini tahrirlash mini-modali --}}
-            <div id="bellEditModal" class="hidden fixed inset-0 z-[60] bg-black/40">
-                <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+            <div id="bellEditModal" class="hidden tt-modal tt-modal-top">
+                <div class="tt-modal-body">
+                    <div class="tt-modal-win bg-white rounded-lg shadow-xl w-full max-w-sm">
                         <div class="flex items-center justify-between px-5 py-3 border-b">
                             <div id="beTitle" class="font-semibold text-gray-800 text-sm">Qatorni tahrirlash</div>
                             <button type="button" id="beClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
@@ -455,9 +455,9 @@
             </div>
 
             {{-- ═══ O'qituvchi biriktirish matritsasi ═══ --}}
-            <div id="assignModal" class="hidden fixed inset-0 z-50 bg-black/40">
-                <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col" style="max-height: 92vh;">
+            <div id="assignModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col" style="max-height: 92vh;">
                         <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
                             <div class="flex items-center gap-2 text-sm font-semibold text-white">🔗 O'qituvchi biriktirish</div>
                             <button type="button" id="asgClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
@@ -500,9 +500,9 @@
             </div>
 
             {{-- ═══ Tekshiruv (konflikt / oyna) hisoboti ═══ --}}
-            <div id="checkModal" class="hidden fixed inset-0 z-50 bg-black/40">
-                <div class="flex min-h-full items-center justify-center p-4">
-                    <div class="asc-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 90vh;">
+            <div id="checkModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 90vh;">
                         <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
                             <div class="flex items-center gap-2 text-sm font-semibold text-white">🔍 Jadval tekshiruvi</div>
                             <button type="button" id="chkClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
@@ -557,6 +557,16 @@
         .asc-tool:hover { background: linear-gradient(#fff,#e2e8f0); border-color: #94a3b8; }
         .asc-tool .asc-ic { font-size: 16px; }
         .asc-titlebar { background: linear-gradient(#3b6fb5,#2c5896); }
+        /* ── Modal oynalar (Tailwind kompilyatsiyasiga bog'liq bo'lmasin — inline) ── */
+        .tt-modal { position: fixed; inset: 0; z-index: 60; background: rgba(15,23,42,.55); overflow-y: auto; }
+        .tt-modal.hidden { display: none; }
+        .tt-modal.tt-modal-top { z-index: 70; }   /* boshqa modal ustidagi ichki dialog */
+        .tt-modal-body { min-height: 100%; display: flex; align-items: flex-start; justify-content: center;
+            padding: 3vh 14px; box-sizing: border-box; }
+        .tt-modal-win { width: 100%; max-width: min(1080px, 96vw); background: #eef2f7;
+            border-radius: 12px; box-shadow: 0 24px 70px rgba(2,6,23,.5); border: 1px solid #cbd5e1;
+            display: flex; flex-direction: column; max-height: 94vh; overflow: hidden; }
+        .tt-modal .asc-titlebar { box-shadow: 0 1px 0 rgba(255,255,255,.15) inset; }
         .asc-btn { padding: 6px 14px; font-size: 13px; background: linear-gradient(#fff,#e8edf3);
             border: 1px solid #b6c2d1; border-radius: 5px; color: #2c3e50; }
         .asc-btn:hover:not(:disabled) { background: linear-gradient(#fff,#dbe3ec); border-color: #8ea3ba; }

@@ -509,6 +509,11 @@
         #grid td.tt-cell { min-width: 96px; height: 40px; vertical-align: middle; text-align: center; cursor: default; padding: 1px; }
         #grid td.tt-ok { background: #dcfce7; cursor: pointer; }
         #grid td.tt-bad { background: #fee2e2; }
+        /* Drag-and-drop: sudralayotgan katak ustidan o'tganda */
+        #grid td.drag-ok { outline: 3px solid #16a34a; outline-offset: -3px; }
+        #grid td.drag-bad { outline: 3px solid #ef4444; outline-offset: -3px; }
+        #grid [data-chip] { cursor: grab; }
+        .pn-card { cursor: grab; }
         /* Transpoze panjara: chapdagi kun/para sarlavhalari */
         #grid th.tt-corner { background: #eef1f5; color: #475569; position: sticky; left: 0; z-index: 6; }
         #grid td.tt-day { background: #f1f5f9; font-weight: 700; color: #334155; writing-mode: vertical-rl; transform: rotate(180deg);
@@ -972,6 +977,36 @@
                 return errs;
             }
 
+            // ===== Joylash (bosish yoki drag-and-drop uchun umumiy) =====
+            async function placeCardAt(card, d, p) {
+                try {
+                    if (!curWeek) {
+                        await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p });
+                        card.day = d; card.pair = p;
+                    } else {
+                        await api(BASE + '/cards/' + card.id + '/week-override', 'POST',
+                            { week: curWeek, action: 'move', day: d, pair: p });
+                        overrides[card.id + '|' + curWeek] = { day: d, pair: p, cancelled: false };
+                    }
+                    selected = null;
+                    renderAll();
+                } catch (e) { alert('Konflikt: ' + e.message); }
+            }
+            // ===== Drag-and-drop holati =====
+            let dragCardId = null;
+            function startDrag(id, ev) {
+                dragCardId = id;
+                if (ev && ev.dataTransfer) {
+                    ev.dataTransfer.effectAllowed = 'move';
+                    try { ev.dataTransfer.setData('text/plain', String(id)); } catch (e) { /* ba'zi brauzerlar */ }
+                }
+            }
+            // Sudrash tugagach holatni tozalash (tashlanmagan bo'lsa ham)
+            document.addEventListener('dragend', () => {
+                dragCardId = null;
+                document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
+            });
+
             // ===== Render =====
             function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); }
 
@@ -1005,7 +1040,7 @@
                         esc(subj.length > 34 ? subj.slice(0, 34) + '…' : subj) + ' <span class="text-gray-400">(' + list.length + ')</span></summary>' +
                         list.map(c =>
                             '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (selected && selected.id === c.id ? ' sel' : '') +
-                            ' lang-' + (c.lang || 'uz') + '" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '">' +
+                            ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '">' +
                             cardLabel(c, true) +
                             '<div class="text-[10px] text-gray-500">' +
                             (c.training_type === 'lecture'
@@ -1016,10 +1051,13 @@
                         ).join('') + '</details>';
                 }).join('') || '<div class="text-xs text-gray-400 p-2">Hammasi joylashgan 🎉</div>';
 
-                document.querySelectorAll('.pn-card').forEach(el => el.onclick = () => {
-                    const c = cards.find(x => x.id === +el.dataset.id);
-                    selected = (selected && selected.id === c.id) ? null : c;
-                    renderPanel(); renderGrid();
+                document.querySelectorAll('.pn-card').forEach(el => {
+                    el.onclick = () => {
+                        const c = cards.find(x => x.id === +el.dataset.id);
+                        selected = (selected && selected.id === c.id) ? null : c;
+                        renderPanel(); renderGrid();
+                    };
+                    el.addEventListener('dragstart', ev => startDrag(+el.dataset.id, ev));
                 });
             }
 
@@ -1116,6 +1154,8 @@
                         h += '<td class="tt-para"><div>' + p + '</div>' +
                             (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
                         oqimCols.forEach((o, oi) => {
+                            // Har katakka kun/para — drag-and-drop tashlash nishoni uchun
+                            const dp = ' data-day="' + d + '" data-pair="' + p + '"';
                             // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan).
                             // allFac/allSpec rejimida faqat o'z fakulteti+yo'nalishi oqimi yonadi.
                             if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label
@@ -1123,7 +1163,7 @@
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
                                     const bad = conflictsAt(selected, d, p).length > 0;
-                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + colBorder(oi, 0, o.groups) + '" colspan="' + o.groups.length + '"' +
+                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + colBorder(oi, 0, o.groups) + '" colspan="' + o.groups.length + '"' + dp +
                                         (bad ? '' : ' data-place="' + d + '-' + p + '"') + '></td>';
                                     return;
                                 }
@@ -1140,10 +1180,10 @@
                                         const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
                                         if (c2 && c2.id === c.id) span++; else break;
                                     }
-                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '" style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '"' + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
                                     gi += span;
                                 } else if (c) {
-                                    h += '<td class="tt-cell' + bord + '" style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
+                                    h += '<td class="tt-cell' + bord + '"' + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
@@ -1152,7 +1192,7 @@
                                         if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
                                         else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
                                     }
-                                    h += '<td class="' + cls + '"' + clickable + '></td>';
+                                    h += '<td class="' + cls + '"' + dp + clickable + '></td>';
                                     gi++;
                                 }
                             }
@@ -1164,21 +1204,10 @@
                 $('grid').innerHTML = h;
 
                 // Yashil katakni bosish — joylash (shablon yoki tanlangan hafta)
-                document.querySelectorAll('[data-place]').forEach(td => td.onclick = async () => {
+                document.querySelectorAll('[data-place]').forEach(td => td.onclick = () => {
                     if (!selected) return;
                     const [d, p] = td.dataset.place.split('-').map(Number);
-                    try {
-                        if (!curWeek) {
-                            await api(BASE + '/cards/' + selected.id + '/place', 'POST', { day: d, pair: p });
-                            selected.day = d; selected.pair = p;
-                        } else {
-                            await api(BASE + '/cards/' + selected.id + '/week-override', 'POST',
-                                { week: curWeek, action: 'move', day: d, pair: p });
-                            overrides[selected.id + '|' + curWeek] = { day: d, pair: p, cancelled: false };
-                        }
-                        selected = null;
-                        renderAll();
-                    } catch (e) { alert('Konflikt: ' + e.message); }
+                    placeCardAt(selected, d, p);
                 });
 
                 // Joylashgan chipni bosish — tanlash + modal
@@ -1188,6 +1217,37 @@
                     selected = c;
                     openModal(c);
                     renderPanel(); renderGrid();
+                });
+
+                // ===== Drag-and-drop (aSc Timetables uslubida) =====
+                // Joylashgan chiplar ham sudraladi (ko'chirish uchun)
+                document.querySelectorAll('#grid [data-chip]').forEach(el => {
+                    el.setAttribute('draggable', 'true');
+                    el.addEventListener('dragstart', ev => {
+                        ev.stopPropagation();
+                        startDrag(+el.dataset.chip, ev);
+                    });
+                });
+                // Kataklarni tashlash nishoni qilamiz
+                document.querySelectorAll('#grid td[data-day]').forEach(td => {
+                    td.addEventListener('dragover', ev => {
+                        if (dragCardId == null) return;
+                        ev.preventDefault();
+                        ev.dataTransfer.dropEffect = 'move';
+                        const card = cards.find(x => x.id === dragCardId);
+                        const d = +td.dataset.day, p = +td.dataset.pair;
+                        td.classList.add(card && conflictsAt(card, d, p).length ? 'drag-bad' : 'drag-ok');
+                    });
+                    td.addEventListener('dragleave', () => td.classList.remove('drag-ok', 'drag-bad'));
+                    td.addEventListener('drop', ev => {
+                        ev.preventDefault();
+                        td.classList.remove('drag-ok', 'drag-bad');
+                        if (dragCardId == null) return;
+                        const card = cards.find(x => x.id === dragCardId);
+                        const d = +td.dataset.day, p = +td.dataset.pair;
+                        dragCardId = null;
+                        if (card) placeCardAt(card, d, p);
+                    });
                 });
             }
 

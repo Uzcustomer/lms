@@ -580,7 +580,7 @@
         #excelBody .ex-para { text-align: center; background: #f8fafc; font-weight: 600; }
         #excelBody .ex-time { text-align: center; background: #fbfcfe; color: #64748b; white-space: nowrap; }
         #excelBody .ex-cell { min-width: 92px; height: 30px; }
-        #excelBody .ex-lec { background: #eff6ff; }
+        #excelBody .ex-lec { background: #fef9c3; }
         #excelBody .ex-prc { background: #faf5ff; }
         @media print {
             body * { visibility: hidden; }
@@ -1534,12 +1534,12 @@
                 // Ekrandagi (#excelBody) stillar bilan aynan bir xil — yuklab
                 // olingan .xls fayl ekrandagidek ko'rinishi uchun. Amaliy
                 // kataklarning fan ranglari inline (hex) bo'lgani uchun Excel
-                // ularni saqlaydi; ma'ruza esa .ex-lec (sariq-havorang) class'ida.
+                // ularni saqlaydi; ma'ruza esa .ex-lec (bir xil sariq) class'ida.
                 const styles = 'table{border-collapse:collapse}td,th{border:1px solid #888;padding:2px 4px;font-size:11px;text-align:center;vertical-align:middle}' +
                     'th{background:#eef1f5}.ex-title{font-weight:700;font-size:14px;border:none}.ex-fac{background:#dbeafe;font-weight:800}' +
                     '.ex-spec{background:#eef2ff;font-weight:700}.ex-grp{background:#f8fafc;font-weight:600}' +
                     '.ex-day{background:#f1f5f9;font-weight:700}.ex-para{background:#f8fafc;font-weight:600}' +
-                    '.ex-time{background:#fbfcfe;color:#64748b}.ex-lec{background:#eff6ff}.ex-prc{background:#faf5ff}';
+                    '.ex-time{background:#fbfcfe;color:#64748b}.ex-lec{background:#fef9c3}.ex-prc{background:#faf5ff}';
                 const html = '<html xmlns="http://www.w3.org/TR/REC-html40">' +
                     '<head><meta charset="utf-8"><style>' + styles + '</style></head><body>' + tableHtml + '</body></html>';
                 const modeLabel = { group: 'guruh', teacher: 'oqituvchi', room: 'auditoriya' }[excelMode];

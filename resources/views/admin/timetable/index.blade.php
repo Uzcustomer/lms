@@ -375,6 +375,16 @@
                                     <label class="flex items-center gap-2 text-sm text-gray-600">
                                         <input id="stShowNum" type="checkbox" class="rounded border-gray-300"> Kun nomi o'rniga raqamini ko'rsatish
                                     </label>
+                                    <div class="mt-1 pt-2 border-t border-gray-100">
+                                        <div class="text-xs font-semibold text-gray-500 mb-1">Avtomatik joylash qoidalari (bir fanning haftalik paralari):</div>
+                                        <label class="flex items-center gap-2 text-sm text-gray-600">
+                                            <input id="stSameDay" type="checkbox" class="rounded border-gray-300"> Bitta fanning paralarini bir kunga qo'yish
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-600">
+                                            <input id="stConsec" type="checkbox" class="rounded border-gray-300"> Ketma-ket (yonma-yon) paralarga qo'yish
+                                        </label>
+                                        <p class="text-[11px] text-gray-400 mt-0.5">Masalan 4 soatlik dars — ikki para bir kunda, ketma-ket (2+2 alohida kunga bo'linmaydi).</p>
+                                    </div>
                                 </div>
                                 <p class="col-span-2 text-xs text-gray-400">O'quv yili va semestr doska yaratilganda belgilangan — o'zgartirish uchun yangi doska yarating.</p>
                             </div>
@@ -1818,6 +1828,8 @@
                     $('stDayOff').value = (set.days_off || []).join(', ');
                     $('stAllowZero').checked = !!set.allow_zero;
                     $('stShowNum').checked = !!set.show_day_number;
+                    $('stSameDay').checked = !!set.pair_same_day;
+                    $('stConsec').checked = !!set.pair_consecutive;
                     bellDraft = (s.bell_schedule || []).map(x => ({ ...x }));
                     dayDraft = (s.day_names || []).slice();
                     renderBellTable(); renderDayNames();
@@ -1949,6 +1961,8 @@
                 dayOff.forEach((d, i) => fd.append('settings[days_off][' + i + ']', d));
                 fd.append('settings[allow_zero]', $('stAllowZero').checked ? 1 : 0);
                 fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
+                fd.append('settings[pair_same_day]', $('stSameDay').checked ? 1 : 0);
+                fd.append('settings[pair_consecutive]', $('stConsec').checked ? 1 : 0);
                 try {
                     const r = await fetch(SETTINGS_URL(board.id), { method: 'POST', headers: { 'Accept': 'application/json' }, body: fd });
                     const j = await r.json();

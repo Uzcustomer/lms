@@ -124,6 +124,8 @@
                         <tr><td>Ona ish joyi</td><td>{{ $show($decode($d->ona_ish_joyi)) }}</td></tr>
                         <tr><td>Ona lavozimi</td><td>{{ $show($decode($d->ona_lavozimi)) }}</td></tr>
                         <tr><td>Doimiy manzil</td><td>{{ $show($decode($d->doimiy_manzil)) }}</td></tr>
+                        <tr><td>Kenglik</td><td>{{ $show($d->kenglik) }}</td></tr>
+                        <tr><td>Uzunlik</td><td>{{ $show($d->uzunlik) }}</td></tr>
                     </table>
                 </div>
             </div>

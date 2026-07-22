@@ -2,6 +2,7 @@
 <div class="mt-6 p-4 rounded-lg" style="background: linear-gradient(135deg, #fef3c7, #fffbeb); border: 1px solid #fbbf24;">
     <h4 class="font-semibold text-base mb-3 border-b pb-2" style="color: #92400e;">Fayllar</h4>
 
+    @if($studentFiles->count() === 0)
     <form action="{{ route('admin.students.files.upload', $student) }}" method="POST" enctype="multipart/form-data" class="mb-4">
         @csrf
         <div class="flex flex-col gap-3">
@@ -25,9 +26,10 @@
             </div>
         </div>
     </form>
+    @endif
 
     @if($studentFiles->count() > 0)
-    <div style="border-top:1px solid #fbbf24; padding-top:12px;">
+    <div @if($studentFiles->count() === 0) style="border-top:1px solid #fbbf24; padding-top:12px;" @endif>
         <p style="font-size:12px; font-weight:700; color:#92400e; margin-bottom:8px;">Yuklangan fayllar ({{ $studentFiles->count() }})</p>
         <div class="space-y-2">
             @foreach($studentFiles as $sFile)
@@ -44,7 +46,7 @@
                     <a href="{{ route('admin.students.files.download', [$student, $sFile]) }}"
                        style="padding:4px 10px; font-size:11px; font-weight:600; color:#fff; background:#3b82f6; border-radius:6px; text-decoration:none; transition:all 0.15s;"
                        onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-                        Yuklab olish
+                        Faylni ko'rish
                     </a>
                     <form action="{{ route('admin.students.files.delete', [$student, $sFile]) }}" method="POST"
                           onsubmit="return confirm('{{ addslashes($sFile->name) }} faylini o\'chirmoqchimisiz?')">

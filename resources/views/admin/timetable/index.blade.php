@@ -1005,14 +1005,21 @@
                     .localeCompare(b.faculty + '|' + b.specialty + '|' + b.oqim_label + b.group, undefined, { numeric: true }));
             }
 
-            // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha)
+            // Karta uzunligi yarim-slot birligida (1=0.5 para, 2=1 para ...). Sukut 2.
+            const cardLen = c => Math.max(1, parseInt(c.len_half) || 2);
+            // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha).
+            // `pair` — yarim-slot indeksi; dars cardLen(card) ta yarim-slotni egallaydi,
+            // shu oraliq [pair, pair+len) boshqa kartaning oralig'i bilan kesishsa — band.
             function conflictsAt(card, day, pair) {
                 const my = cardGroups(card);
                 const errs = [];
+                const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
                     if (o.id === card.id) return;
                     const pl = effPlace(o);
-                    if (!pl || pl.day !== day || pl.pair !== pair) return;
+                    if (!pl || pl.day !== day) return;
+                    const b0 = pl.pair, b1 = pl.pair + cardLen(o);   // [b0, b1)
+                    if (a0 >= b1 || b0 >= a1) return;   // yarim-slot oraliqlari kesishmasa — konflikt yo'q
                     if (o.specialty_name === card.specialty_name && o.course === card.course) {
                         const ov = cardGroups(o).filter(g => my.includes(g));
                         if (ov.length) errs.push('Guruh band: ' + ov.join(','));
@@ -1146,25 +1153,36 @@
                     pairTime[i + 1] = { name: it.name || '', abbr: it.abbr || '', start: it.start || '', end: it.end || '' };
                 });
 
-                // Joylashgan kartalar indeksi: group|day|pair → karta (dars turi filtri + tanlangan hafta bo'yicha)
+                // Joylashgan kartalar indeksi: group|day|pair → karta. `pair` — yarim-slot
+                // indeksi; dars cardLen(c) ta yarim-slotni egallaydi, shuning uchun karta
+                // qamragan HAR bir yarim-slotga yoziladi (band/konflikt/rowspan tekshiruvi uchun).
                 const placedIdx = {};
                 visibleSpecCards().forEach(c => {
                     const pl = effPlace(c);
-                    if (pl) cardGroups(c).forEach(gg => { placedIdx[gg + '|' + pl.day + '|' + pl.pair] = c; });
+                    if (!pl) return;
+                    const len = cardLen(c);
+                    cardGroups(c).forEach(gg => {
+                        for (let k = 0; k < len; k++) placedIdx[gg + '|' + pl.day + '|' + (pl.pair + k)] = c;
+                    });
                 });
 
-                // Vertikal birlashma: ketma-ket paralarда bir xil fan (bir guruh/oqim)
-                // bo'lsa — bitta katak (rowspan). vConsumed — yuqoridagi rowspan
-                // qamragan (chiqarilmaydigan) kataklar.
+                // Vertikal qamrov: karta o'zining cardLen(c) yarim-slotini to'ldiradi; qo'shimcha
+                // ravishda ketma-ket bir xil fan kartalari (masalan "para qo'shish" bilan)
+                // bitta katakka (rowspan) birlashtiriladi. vConsumed — yuqoridagi rowspan
+                // qamragan (chiqarilmaydigan) kataklar. vChain — jami yarim-slot uzunligi
+                // va tarkibidagi karta id'lari (badge uchun).
                 const vConsumed = {};
-                const vMerge = (grp, d, p, c) => {
-                    let s = 1;
+                const vChain = (grp, d, p, c) => {
+                    const ids = [];
+                    let span = 0, cur = p;
                     while (true) {
-                        const n = placedIdx[grp + '|' + d + '|' + (p + s)];
-                        if (n && n.training_type === c.training_type && n.subject_name === c.subject_name) s++;
-                        else break;
+                        const n = placedIdx[grp + '|' + d + '|' + cur];
+                        if (!n || n.training_type !== c.training_type || n.subject_name !== c.subject_name) break;
+                        ids.push(n.id);
+                        span += cardLen(n);
+                        cur += cardLen(n);
                     }
-                    return s;
+                    return { span: span || cardLen(c), ids: ids.length ? ids : [c.id] };
                 };
 
                 const chipHtml = (c, ids) => {
@@ -1259,28 +1277,22 @@
                                         const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
                                         if (c2 && c2.id === c.id) span++; else break;
                                     }
-                                    // Vertikal: ketma-ket paralarda bir xil fan ma'ruzasi bo'lsa birlashtiramiz
-                                    const vs = vMerge(o.groups[gi], d, p, c);
-                                    const ids = [];
-                                    for (let k = 0; k < vs; k++) {
-                                        for (let gg = gi; gg < gi + span; gg++) {
-                                            if (k > 0) vConsumed[o.groups[gg] + '|' + d + '|' + (p + k)] = 1;
-                                        }
-                                        const cc = placedIdx[o.groups[gi] + '|' + d + '|' + (p + k)];
-                                        if (cc) ids.push(cc.id);
-                                    }
+                                    // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
+                                    // ketma-ket bir xil fan ma'ruzalari ham birlashtiriladi.
+                                    const chain = vChain(o.groups[gi], d, p, c);
+                                    const vs = chain.span, ids = chain.ids;
+                                    for (let k = 1; k < vs; k++)
+                                        for (let gg = gi; gg < gi + span; gg++)
+                                            vConsumed[o.groups[gg] + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
                                     h += '<td class="tt-cell tt-lec' + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
                                     gi += span;
                                 } else if (c) {
-                                    // Vertikal: ketma-ket paralarda bir xil fan amaliyoti bo'lsa — bitta katak
-                                    const vs = vMerge(grp, d, p, c);
-                                    const ids = [c.id];
-                                    for (let k = 1; k < vs; k++) {
-                                        vConsumed[grp + '|' + d + '|' + (p + k)] = 1;
-                                        const cc = placedIdx[grp + '|' + d + '|' + (p + k)];
-                                        if (cc) ids.push(cc.id);
-                                    }
+                                    // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
+                                    // ketma-ket bir xil fan amaliyotlari ham bitta katakka birlashtiriladi.
+                                    const chain = vChain(grp, d, p, c);
+                                    const vs = chain.span, ids = chain.ids;
+                                    for (let k = 1; k < vs; k++) vConsumed[grp + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
                                     h += '<td class="tt-cell' + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
                                     gi++;

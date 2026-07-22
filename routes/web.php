@@ -870,6 +870,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards', [\App\Http\Controllers\Admin\TimetableController::class, 'storeBoard'])->name('boards.store');
                 Route::delete('/boards/{board}', [\App\Http\Controllers\Admin\TimetableController::class, 'destroyBoard'])->name('boards.destroy');
                 Route::post('/boards/{board}/generate', [\App\Http\Controllers\Admin\TimetableController::class, 'generateCards'])->name('boards.generate');
+                Route::post('/boards/{board}/refresh-names', [\App\Http\Controllers\Admin\TimetableController::class, 'refreshSubjectNames'])->name('boards.refresh-names');
                 Route::post('/boards/{board}/auto-place', [\App\Http\Controllers\Admin\TimetableController::class, 'autoPlace'])->name('boards.auto-place');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');

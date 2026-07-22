@@ -413,6 +413,9 @@
                                 <div class="flex items-center gap-2 mb-2">
                                     <button type="button" id="stAddPair" class="asc-btn primary">➕ Para qo'shish</button>
                                     <button type="button" id="stAddBreak" class="asc-btn">➕ Tanaffus qo'shish</button>
+                                    <span class="mx-1 h-6 w-px bg-gray-300"></span>
+                                    <button type="button" id="stMoveUp" class="asc-btn" title="Belgilangan qatorni yuqoriga ko'chirish" disabled>▲ Yuqoriga</button>
+                                    <button type="button" id="stMoveDown" class="asc-btn" title="Belgilangan qatorni pastga ko'chirish" disabled>▼ Pastga</button>
                                     <button type="button" id="stResetBells" class="asc-btn ml-auto">↺ Standart jadval</button>
                                 </div>
                                 <table class="w-full text-xs asc-table" id="stBellTable"></table>
@@ -2021,8 +2024,6 @@
                         '<td>' + esc(it.start || '') + '</td><td>' + esc(it.end || '') + '</td>' +
                         '<td class="text-center">' + (it.print === false ? '—' : 'Ha') + '</td>' +
                         '<td class="whitespace-nowrap text-right">' +
-                            '<button class="asc-mini" data-up="' + i + '" title="Yuqoriga">▲</button>' +
-                            '<button class="asc-mini" data-down="' + i + '" title="Pastga">▼</button>' +
                             '<button class="asc-mini" data-edit="' + i + '" title="Tahrirlash">✏️</button>' +
                             '<button class="asc-mini" data-del="' + i + '" title="O\'chirish">🗑</button>' +
                         '</td></tr>';
@@ -2030,14 +2031,12 @@
                 h += '</tbody>';
                 $('stBellTable').innerHTML = h;
                 const T = $('stBellTable');
-                // Qatorni bosib belgilash (keyin ▲/▼ bilan ko'chirish uchun)
+                // Qatorni bosib belgilash — umumiy ▲/▼ tugmalari shu belgilangan qatorni ko'chiradi
                 T.querySelectorAll('tr[data-row]').forEach(tr => tr.onclick = ev => {
                     if (ev.target.closest('button')) return;   // tugma bosilsa — belgilamaymiz
                     bellSel = (bellSel === +tr.dataset.row) ? null : +tr.dataset.row;
                     renderBellTable();
                 });
-                T.querySelectorAll('[data-up]').forEach(b => b.onclick = () => moveBell(+b.dataset.up, -1));
-                T.querySelectorAll('[data-down]').forEach(b => b.onclick = () => moveBell(+b.dataset.down, 1));
                 T.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openBellEdit(+b.dataset.edit));
                 T.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
                     const d = +b.dataset.del;
@@ -2048,16 +2047,22 @@
                 // Belgilangan qatorni ko'rinishga suramiz
                 const selTr = T.querySelector('tr.bell-sel');
                 if (selTr) selTr.scrollIntoView({ block: 'nearest' });
+                $('stMoveUp').disabled = !(bellSel !== null && bellSel > 0);
+                $('stMoveDown').disabled = !(bellSel !== null && bellSel < bellDraft.length - 1);
             }
-            // ▲/▼ — qatorni ko'chiradi va o'sha qatorni belgilab (highlight) qoldiradi,
-            // shunda strelkani qayta-qayta bosib yuqoriga/pastga chiqarib borish mumkin.
-            function moveBell(i, dir) {
-                const j = i + dir;
+            // Umumiy ▲/▼ tugmalari — belgilangan qatorni ko'chiradi va belgini
+            // shu qatorda saqlab qoladi, shunda qayta-qayta bosib yuqoriga/pastga
+            // chiqarib borish mumkin.
+            function moveBell(dir) {
+                if (bellSel === null) return;
+                const i = bellSel, j = i + dir;
                 if (j < 0 || j >= bellDraft.length) return;
                 [bellDraft[i], bellDraft[j]] = [bellDraft[j], bellDraft[i]];
-                bellSel = j;   // ko'chgan qator belgilangan bo'lib qoladi
+                bellSel = j;
                 renderBellTable();
             }
+            $('stMoveUp').onclick = () => moveBell(-1);
+            $('stMoveDown').onclick = () => moveBell(1);
             $('stAddPair').onclick = () => {
                 const pairs = bellDraft.filter(x => x.type === 'pair').length;
                 bellDraft.push({ type: 'pair', name: (pairs + 1) + '-para', abbr: ROMAN[pairs] || String(pairs + 1),

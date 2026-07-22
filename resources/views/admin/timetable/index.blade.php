@@ -524,9 +524,9 @@
         #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #94a3b8; }
         .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
         /* Ma'ruza — sariq; amaliy — binafsha */
-        .tt-chip.lec { background: #fef08a; border-left: 3px solid #f59e0b; color: #713f12; font-weight: 600; }
-        .tt-chip.prc { background: #f3e8ff; border-left: 3px solid #9333ea; }
-        #grid td.tt-lec { background: #fef9c3; }               /* butun oqimga tegishli ma'ruza katagi */
+        .tt-chip.lec { border-left: 3px solid #94a3b8; color: #1f2937; font-weight: 700; }
+        .tt-chip.prc { border-left: 3px dotted #94a3b8; color: #1f2937; font-weight: 500; }
+        #grid td.tt-lec { }               /* butun oqimga tegishli ma'ruza katagi — rang chip'da (fan bo'yicha) */
         .tt-chip.sel { outline: 2px solid #ef4444; }
         .pn-card { border-radius: 6px; padding: 4px 6px; font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
@@ -643,12 +643,12 @@
                 });
             }
             const subjColor = name => subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8' };
-            // Ma'ruza — hech qanday inline rang bermaymiz (sariq class'i qoladi,
-            // yozuvi ham qayta bo'yalmaydi). Amaliy — fan rangi (matn rangi
-            // o'zgarmaydi, faqat fon va chap chiziq).
-            const subjStyle = c => { if (c.training_type === 'lecture') return '';
+            // Har fan — bitta doimiy rang (ham ma'ruza, ham amaliy). Fon va chap
+            // chiziq fan rangi bo'yicha; ma'ruza qalinroq matn bilan farqlanadi.
+            const subjStyle = c => {
                 const s = subjColor(c.subject_name);
-                return 'background-color:' + s.bg + ';border-left-color:' + s.border + ';'; };
+                return 'background-color:' + s.bg + ';border-left-color:' + s.border + ';';
+            };
 
             async function api(url, method = 'GET', body = null) {
                 const opt = { method, headers: { 'Accept': 'application/json' } };
@@ -1139,10 +1139,10 @@
                                         const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
                                         if (c2 && c2.id === c.id) span++; else break;
                                     }
-                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '">' + chipHtml(c) + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + bord + '" colspan="' + span + '" style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
                                     gi += span;
                                 } else if (c) {
-                                    h += '<td class="tt-cell' + bord + '">' + chipHtml(c) + '</td>';
+                                    h += '<td class="tt-cell' + bord + '" style="' + subjStyle(c) + '">' + chipHtml(c) + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
@@ -1638,12 +1638,12 @@
                     else if (excelMode === 'teacher') extra = [c.group_name || (c.oqim_label ? c.oqim_label : ''), c.auditorium_name];
                     else extra = [c.group_name || c.oqim_label, c.teacher_name];
                     const sub = extra.filter(Boolean).join(' · ');
-                    // Ma'ruza — sariq class'ida qoladi (inline rang yo'q); amaliy — fan rangi.
+                    // Har fan — bitta rang (ham ma'ruza, ham amaliy). Ma'ruza to'liq, amaliy nuqtali chegara.
                     const s = subjColor(c.subject_name);
-                    const st = isLec ? '' : 'background-color:' + s.bg + ';border-left:3px solid ' + s.border + ';';
+                    const st = 'background-color:' + s.bg + ';border-left:3px ' + (isLec ? 'solid' : 'dotted') + ' ' + s.border + ';';
                     const cs = (span && span > 1) ? ' colspan="' + span + '"' : '';
                     const tag = '[' + (isLec ? 'M' : 'A') + '] ';
-                    return '<td class="ex-cell ' + cls + '"' + cs + ' style="' + st + '">' +
+                    return '<td class="ex-cell"' + cs + ' style="' + st + '">' +
                         '<div><b>' + tag + '</b>' + esc(c.subject_name) + '</div>' +
                         (sub ? '<div style="color:#64748b;font-size:9px">' + esc(sub) + '</div>' : '') + '</td>';
                 };

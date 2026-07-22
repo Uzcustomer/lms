@@ -6,27 +6,36 @@
     <div class="py-6">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
 
-            {{-- Doska tanlash / yaratish --}}
-            <div class="bg-white shadow-sm sm:rounded-lg mb-4">
-                <div class="p-4 flex flex-wrap items-end gap-3">
-                    <div class="min-w-[320px]">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Jadval doskasi</label>
-                        <select id="boardSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
-                            <option value="">— Tanlang yoki yangi yarating —</option>
-                            @foreach($boards as $b)
-                                <option value="{{ $b->id }}">{{ $b->name }} ({{ $b->cards_count }} karta)</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <button type="button" id="newBoardBtn" class="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">+ Yangi doska</button>
-                    <button type="button" id="genBtn" class="hidden px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700">⚙ Kartochkalarni yaratish</button>
-                    <button type="button" id="refreshNamesBtn" class="hidden px-3 py-2 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)">🔄 Fan nomlarini yangilash</button>
-                    <button type="button" id="delBoardBtn" class="hidden px-3 py-2 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100">O'chirish</button>
-                    <span id="boardMsg" class="text-sm"></span>
+            {{-- Doska tanlash + boshqaruv paneli — bitta ixcham qatorda --}}
+            <div class="bg-white shadow-sm sm:rounded-lg mb-3">
+                <div class="p-2 flex flex-wrap items-center gap-1.5">
+                    <select id="boardSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[220px] max-w-[300px]">
+                        <option value="">— Tanlang yoki yangi yarating —</option>
+                        @foreach($boards as $b)
+                            <option value="{{ $b->id }}">{{ $b->name }} ({{ $b->cards_count }} karta)</option>
+                        @endforeach
+                    </select>
+                    <button type="button" id="newBoardBtn" class="asc-tool">+ Yangi doska</button>
+                    <button type="button" id="genBtn" class="hidden asc-tool">⚙ Kartochkalar</button>
+                    <button type="button" id="refreshNamesBtn" class="hidden asc-tool" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)">🔄 Fan nomlari</button>
+                    <button type="button" id="delBoardBtn" class="hidden asc-tool" style="color:#dc2626">🗑 O'chirish</button>
+                    <span id="boardMsg" class="text-xs"></span>
+
+                    {{-- aSc Timetables uslubidagi boshqaruv tugmalari — doska yuklanganda ko'rinadi --}}
+                    <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
+                    <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool">⚙️ Sozlamalar</button>
+                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="subjects">📚 Fanlar</button>
+                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="groups">👥 Guruhlar</button>
+                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="auditoriums">🚪 Auditoriyalar</button>
+                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="teachers">🧑‍🏫 O'qituvchilar</button>
+                    <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool">🔗 Biriktirish</button>
+                    <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
+                    <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool">⬇ Excelga yuklash</button>
+                    <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool">🔍 Tekshiruv <span id="checkBadge" class="hidden ml-1 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold"></span></button>
                 </div>
 
                 {{-- Yangi doska formasi --}}
-                <div id="newBoardForm" class="hidden border-t border-gray-100 p-4 grid grid-cols-2 md:grid-cols-7 gap-3 items-end bg-gray-50">
+                <div id="newBoardForm" class="hidden border-t border-gray-100 p-3 grid grid-cols-2 md:grid-cols-7 gap-3 items-end bg-gray-50">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">O'quv yili</label>
                         <select id="nbYear" class="w-full rounded-md border-gray-300 text-sm">
@@ -73,120 +82,61 @@
                 </div>
             </div>
 
-            {{-- aSc Timetables uslubidagi boshqaruv paneli --}}
-            <div id="ascToolbar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-2">
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button" id="settingsBtn" class="asc-tool">
-                        <span class="asc-ic">⚙️</span> Sozlamalar
-                    </button>
-                    <span class="mx-1 h-6 w-px bg-gray-200"></span>
-                    <button type="button" class="asc-tool" data-dialog="subjects">
-                        <span class="asc-ic">📚</span> Fanlar
-                    </button>
-                    <button type="button" class="asc-tool" data-dialog="groups">
-                        <span class="asc-ic">👥</span> Guruhlar
-                    </button>
-                    <button type="button" class="asc-tool" data-dialog="auditoriums">
-                        <span class="asc-ic">🚪</span> Auditoriyalar
-                    </button>
-                    <button type="button" class="asc-tool" data-dialog="teachers">
-                        <span class="asc-ic">🧑‍🏫</span> O'qituvchilar
-                    </button>
-                    <button type="button" id="assignBtn" class="asc-tool">
-                        <span class="asc-ic">🔗</span> O'qituvchi biriktirish
-                    </button>
-                    <span class="mx-1 h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="excelViewBtn" class="asc-tool">
-                        <span class="asc-ic">⬇</span> Excelga yuklash
-                    </button>
-                    <button type="button" id="checkBtn" class="asc-tool">
-                        <span class="asc-ic">🔍</span> Tekshiruv <span id="checkBadge" class="hidden ml-1 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold"></span>
-                    </button>
-                </div>
-            </div>
-
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
-            <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-4 p-4">
-                <div class="flex flex-wrap items-end gap-3">
-                    <div class="min-w-[200px]">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Fakultet</label>
-                        <select id="facSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
-                    </div>
-                    <div class="min-w-[200px]">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Yo'nalish</label>
-                        <select id="dirSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
-                    </div>
-                    <div class="min-w-[90px]">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Kurs</label>
-                        <select id="courseSel" class="w-full rounded-md border-gray-300 shadow-sm text-sm"></select>
-                    </div>
-                    <label class="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap pb-1.5" title="Shu yo'nalish+kursdagi barcha fakultetlar ketma-ket ko'rsatiladi">
-                        <input type="checkbox" id="allFacChk" class="rounded border-gray-300">
-                        Barcha fakultetlar (ketma-ket)
+            <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-3 p-2" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <select id="facSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
+                    <select id="dirSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
+                    <select id="courseSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[60px]"></select>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-600 whitespace-nowrap" title="Shu yo'nalish+kursdagi barcha fakultetlar ketma-ket ko'rsatiladi">
+                        <input type="checkbox" id="allFacChk" class="rounded border-gray-300"> Barcha fak.
                     </label>
-                    <label class="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap pb-1.5" title="Shu kursdagi barcha fakultet va yo'nalishlar ketma-ket ko'rsatiladi">
-                        <input type="checkbox" id="allSpecChk" class="rounded border-gray-300">
-                        Barcha fakultet + yo'nalish (ketma-ket)
+                    <label class="flex items-center gap-1 text-[11px] text-gray-600 whitespace-nowrap" title="Shu kursdagi barcha fakultet va yo'nalishlar ketma-ket ko'rsatiladi">
+                        <input type="checkbox" id="allSpecChk" class="rounded border-gray-300"> Barcha fak.+yo'n.
                     </label>
-                    <div class="flex items-end gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2">
-                        <div>
-                            <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Kunlar</label>
-                            <input type="number" id="gsDays" min="1" max="7" class="w-16 rounded border-gray-300 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Kuniga para</label>
-                            <input type="number" id="gsPairs" min="1" max="10" class="w-16 rounded border-gray-300 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-medium text-indigo-600 mb-0.5">Hafta soni</label>
-                            <input type="number" id="gsWeeks" min="1" max="30" class="w-16 rounded border-gray-300 text-sm">
-                        </div>
-                        <button type="button" id="gsSave" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Saqlash</button>
-                        <span class="text-[10px] text-indigo-400 max-w-[160px] leading-tight">Faqat shu yo'nalish+kursga. Hafta soni o'zgarsa kartalar qayta yaratiladi.</span>
-                    </div>
-                    <div id="statChips" class="flex flex-wrap gap-2 text-xs"></div>
-                </div>
-                <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-500">Dars turi:</span>
-                        <div class="flex rounded-md overflow-hidden border border-gray-300 text-xs">
-                            <button type="button" class="tt-type active px-3 py-1" data-type="all">Hammasi</button>
-                            <button type="button" class="tt-type px-3 py-1 border-l border-gray-300" data-type="lecture">Ma'ruza</button>
-                            <button type="button" class="tt-type px-3 py-1 border-l border-gray-300" data-type="practice">Amaliy</button>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-500">Hafta:</span>
-                        <select id="weekSel" class="rounded-md border-gray-300 text-xs py-1"></select>
-                        <span id="weekHint" class="hidden text-[11px] text-amber-600 font-medium">individual</span>
-                    </div>
+
                     <span class="h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="autoBtn" class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⚡ Avtomatik joylash</button>
-                    <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska (barcha yo'nalishlar)</label>
-                    <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash (mavjudini bo'shatib)</label>
-                    <label class="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" id="autoRooms" class="rounded border-gray-300"> Auditoriya biriktirilsin (sig'im bo'yicha)</label>
-                    <span id="autoMsg" class="text-xs text-emerald-700 font-medium"></span>
-                </div>
-                <div class="mt-2 text-xs text-gray-400">
-                    Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin.
-                    <b>Avtomatik joylash</b> — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.
+                    <div class="flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-1" title="Faqat shu yo'nalish+kursga. Hafta soni o'zgarsa kartalar qayta yaratiladi.">
+                        <input type="number" id="gsDays" min="1" max="7" class="w-10 rounded border-gray-300 text-xs" title="Kunlar">
+                        <input type="number" id="gsPairs" min="1" max="10" class="w-10 rounded border-gray-300 text-xs" title="Kuniga para">
+                        <input type="number" id="gsWeeks" min="1" max="30" class="w-10 rounded border-gray-300 text-xs" title="Hafta soni">
+                        <button type="button" id="gsSave" class="asc-tool">Saqlash</button>
+                    </div>
+
+                    <span class="h-6 w-px bg-gray-200"></span>
+                    <div class="flex rounded-md overflow-hidden border border-gray-300 text-[11px]">
+                        <button type="button" class="tt-type active px-2 py-1" data-type="all">Hammasi</button>
+                        <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="lecture">Ma'ruza</button>
+                        <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="practice">Amaliy</button>
+                    </div>
+                    <select id="weekSel" class="rounded-md border-gray-300 text-[11px] py-1"></select>
+                    <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+
+                    <span class="h-6 w-px bg-gray-200"></span>
+                    <button type="button" id="autoBtn" class="px-2.5 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⚡ Avtomatik joylash</button>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Butun doska (barcha yo'nalishlar)"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska</label>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Qaytadan joylash (mavjudini bo'shatib)"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash</label>
+                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Auditoriya biriktirilsin (sig'im bo'yicha)"><input type="checkbox" id="autoRooms" class="rounded border-gray-300"> Auditoriya</label>
+                    <span id="autoMsg" class="text-[11px] text-emerald-700 font-medium"></span>
+
+                    <div id="statChips" class="flex flex-wrap gap-1.5 text-[11px] ml-auto"></div>
                 </div>
             </div>
 
-            {{-- Asosiy maydon: panel + grid --}}
-            <div id="mainArea" class="hidden flex gap-4 items-start">
-                {{-- Joylashtirilmagan kartochkalar --}}
-                <div class="w-72 shrink-0 bg-white shadow-sm sm:rounded-lg">
-                    <div class="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
-                        <span class="text-sm font-semibold text-gray-700">Joylashmagan kartalar</span>
+            {{-- Asosiy maydon: panjara + pastda joylashmagan kartalar (aSc uslubida) --}}
+            <div id="mainArea" class="hidden">
+                {{-- Panjara --}}
+                <div class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="max-height: calc(100vh - 300px);">
+                    <table id="grid" class="border-collapse text-[11px] w-full"></table>
+                </div>
+
+                {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel --}}
+                <div class="bg-white shadow-sm sm:rounded-lg mt-3">
+                    <div class="px-3 py-1.5 border-b border-gray-100 flex items-center justify-between">
+                        <span class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
                         <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                     </div>
-                    <div id="cardPanel" class="p-2 space-y-1 overflow-y-auto" style="max-height: calc(100vh - 260px);"></div>
-                </div>
-
-                {{-- Panjara --}}
-                <div class="flex-1 bg-white shadow-sm sm:rounded-lg overflow-auto" style="max-height: calc(100vh - 220px);">
-                    <table id="grid" class="border-collapse text-[11px] w-full"></table>
+                    <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto" style="max-height: 150px;"></div>
                 </div>
             </div>
 
@@ -569,7 +519,8 @@
         .tt-chip.sel { outline: 2px solid #ef4444; }
         .tt-merge-badge { display: inline-block; margin-left: 4px; padding: 0 4px; font-size: 8px; font-weight: 700;
             background: rgba(0,0,0,.12); border-radius: 6px; color: #334155; vertical-align: middle; }
-        .pn-card { border-radius: 6px; padding: 4px 6px; font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
+        .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
+            font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
         .pn-card.prc { background: #faf5ff; }
         .pn-card.sel { outline: 2px solid #f59e0b; }
@@ -764,11 +715,16 @@
                 this.disabled = false;
             };
 
+            // aSc uslubidagi boshqaruv tugmalari (doska tanlash qatorida) — bitta guruh sifatida ko'rsatish/yashirish
+            function toggleAscToolbar(show) {
+                document.querySelectorAll('[data-asc-toolbar]').forEach(el => el.classList.toggle('hidden', !show));
+            }
+
             function hideBoard() {
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
                 $('refreshNamesBtn').classList.add('hidden');
-                $('ascToolbar').classList.add('hidden');
+                toggleAscToolbar(false);
                 $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
             }
 
@@ -792,7 +748,7 @@
                 $('genBtn').classList.remove('hidden');
                 $('refreshNamesBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
-                $('ascToolbar').classList.remove('hidden');
+                toggleAscToolbar(true);
                 buildSpecList();
                 if (!cards.length) {
                     $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
@@ -1112,27 +1068,22 @@
                 return '<b>[' + t + ']</b> ' + esc(name);
             }
 
+            // Joylashmagan kartalar — pastda gorizontal panel (aSc uslubida): tekis
+            // ravishda ketma-ket chiqadi (fan bo'yicha saralangan, guruhlash chizig'i yo'q).
             function renderPanel() {
-                const un = visibleSpecCards().filter(c => !effPlace(c));
-                // Fan bo'yicha guruhlash
-                const bySubj = {};
-                un.forEach(c => { (bySubj[c.subject_name] = bySubj[c.subject_name] || []).push(c); });
-                $('cardPanel').innerHTML = Object.keys(bySubj).sort().map(subj => {
-                    const list = bySubj[subj];
-                    return '<details open><summary class="text-[11px] font-semibold text-gray-600 cursor-pointer py-0.5">' +
-                        esc(subj.length > 34 ? subj.slice(0, 34) + '…' : subj) + ' <span class="text-gray-400">(' + list.length + ')</span></summary>' +
-                        list.map(c =>
-                            '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (selected && selected.id === c.id ? ' sel' : '') +
-                            ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '">' +
-                            cardLabel(c, true) +
-                            '<div class="text-[10px] text-gray-500">' +
-                            (c.training_type === 'lecture'
-                                ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
-                                : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
-                            (c.teacher_name ? ' · 👤' : '') + (c.auditorium_name ? ' · 🚪' : '') +
-                            '</div></div>'
-                        ).join('') + '</details>';
-                }).join('') || '<div class="text-xs text-gray-400 p-2">Hammasi joylashgan 🎉</div>';
+                const un = visibleSpecCards().filter(c => !effPlace(c))
+                    .sort((a, b) => a.subject_name.localeCompare(b.subject_name, 'uz'));
+                $('cardPanel').innerHTML = un.map(c =>
+                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (selected && selected.id === c.id ? ' sel' : '') +
+                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name) + '">' +
+                    cardLabel(c, true) +
+                    '<div class="text-[9px] text-gray-500">' +
+                    (c.training_type === 'lecture'
+                        ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
+                        : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
+                    (c.teacher_name ? ' · 👤' : '') + (c.auditorium_name ? ' · 🚪' : '') +
+                    '</div></div>'
+                ).join('') || '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>';
 
                 document.querySelectorAll('.pn-card').forEach(el => {
                     el.onclick = () => {

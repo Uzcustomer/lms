@@ -215,7 +215,7 @@
             {{-- ═══ aSc Timetables uslubidagi boshqaruv dialogi (Fanlar/Guruhlar/Auditoriyalar/O'qituvchilar) ═══ --}}
             <div id="ascModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-5xl flex flex-col" style="max-height: 90vh;">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-7xl flex flex-col" style="max-height: 92vh;">
                         {{-- Sarlavha satri --}}
                         <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
                             <div class="flex items-center gap-2 text-sm font-semibold text-white">
@@ -224,34 +224,34 @@
                             <button type="button" id="ascClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
                         </div>
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
-                        <div class="flex gap-2 p-2 overflow-hidden" style="min-height: 420px;">
-                            <nav class="w-44 shrink-0 flex flex-col gap-1 rounded border border-gray-300 bg-white p-1.5" aria-label="Jadval ma'lumotlari">
-                                <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Boshqaruv</div>
+                        <div class="flex gap-3 p-4 overflow-hidden" style="min-height: 600px;">
+                            <nav class="w-60 shrink-0 flex flex-col gap-2 rounded-xl border border-blue-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-sm" aria-label="Jadval ma'lumotlari">
+                                <div class="px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Boshqaruv</div>
                                 <button type="button" class="asc-nav-btn active" data-asc-type="subjects" aria-selected="true">📚 <span>Darslar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="groups" aria-selected="false">👥 <span>Guruhlar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" aria-selected="false">🚪 <span>Auditoriyalar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="teachers" aria-selected="false">🧑‍🏫 <span>O'qituvchilar</span></button>
                             </nav>
-                            <div class="flex-1 flex gap-2 min-w-0">
-                                <div class="flex-1 flex flex-col bg-white border border-gray-300 rounded overflow-hidden min-w-0">
-                                    <div class="flex flex-wrap items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
-                                        <span id="ascListLabel" class="text-xs font-semibold text-gray-600">Darslar ro'yxati:</span>
-                                        <input id="ascSearch" placeholder="Qidirish..." class="ml-auto w-56 rounded border-gray-300 text-xs py-1">
-                                        <select id="ascFilter" class="hidden rounded border-gray-300 text-xs py-1"></select>
+                            <div id="ascPanel" class="flex-1 flex gap-3 min-w-0">
+                                <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden min-w-0 shadow-sm">
+                                    <div class="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50">
+                                        <span id="ascListLabel" class="text-sm font-bold text-slate-700">Darslar ro'yxati:</span>
+                                        <input id="ascSearch" placeholder="Qidirish..." class="ml-auto w-64 rounded-lg border-slate-300 text-sm py-2 shadow-sm">
+                                        <select id="ascFilter" class="hidden rounded-lg border-slate-300 text-sm py-2 shadow-sm"></select>
                                         <span id="ascCount" class="text-xs text-gray-400"></span>
                                     </div>
-                                    <div class="overflow-auto" style="max-height: 58vh;">
-                                        <table id="ascTable" class="w-full text-xs asc-table"></table>
+                                    <div class="overflow-auto" style="max-height: 64vh;">
+                                        <table id="ascTable" class="w-full text-sm asc-table"></table>
                                     </div>
                                 </div>
                                 {{-- Tanlangan bo'lim uchun amallar --}}
-                                <div id="ascButtons" class="w-40 shrink-0 flex flex-col gap-1.5"></div>
+                                <div id="ascButtons" class="w-48 shrink-0 flex flex-col gap-2"></div>
                             </div>
                         </div>
                         {{-- Pastki panel --}}
-                        <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
-                            <div id="ascFootMsg" class="text-xs text-gray-500"></div>
-                            <button type="button" id="ascCloseBtn" class="asc-btn">Yopish</button>
+                        <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+                            <div id="ascFootMsg" class="text-sm text-slate-500"></div>
+                            <button type="button" id="ascCloseBtn" class="asc-btn px-5 py-2">Yopish</button>
                         </div>
                     </div>
                 </div>
@@ -671,6 +671,40 @@
         .dark .asc-nav-btn.active {
             background: linear-gradient(135deg, #2563eb, #1d4ed8);
             color: #fff;
+        }
+
+        .asc-panel-enter {
+            animation: asc-panel-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        @keyframes asc-panel-enter {
+            from { opacity: 0.72; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .asc-nav-btn {
+            min-height: 54px;
+            padding: 12px 14px;
+            gap: 12px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            letter-spacing: 0.01em;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .asc-nav-btn::first-letter {
+            font-size: 1.35rem;
+        }
+        .asc-nav-btn:hover {
+            transform: translateX(2px);
+        }
+        .asc-nav-btn.active {
+            transform: translateX(3px);
+            box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+        }
+        @media (max-width: 760px) {
+            .asc-nav-btn {
+                min-height: 46px;
+                padding: 9px 10px;
+                font-size: 0.82rem;
+            }
         }
 
 </style>
@@ -1712,6 +1746,7 @@
             let ascType = null;       // joriy dialog turi
             let ascData = [];         // dialog ma'lumotlari (xom)
             let ascSelId = null;      // tanlangan qator id/kalit
+            const ascCache = {};      // tablar orasida qaytishda jadvalni qayta yuklamaslik uchun
 
             const dialogMeta = {
                 subjects:    { icon: '📚', title: 'Darslar',      listLabel: 'Darslar ro\'yxati:', filter: 'spec' },
@@ -1735,17 +1770,38 @@
 
             async function openDialog(type) {
                 if (!board) return;
-                ascType = type; ascSelId = null;
+
+                const modalIsOpen = !$('ascModal').classList.contains('hidden');
+                if (modalIsOpen && ascType === type) return;
+
+                ascType = type;
+                ascSelId = null;
                 updateAscNav(type);
+
                 const m = dialogMeta[type];
                 $('ascIcon').textContent = m.icon;
                 $('ascTitle').textContent = m.title;
                 $('ascListLabel').textContent = m.listLabel;
                 $('ascSearch').value = '';
+                $('ascFilter').value = '';
                 $('ascFootMsg').textContent = '';
-                $('ascModal').classList.remove('hidden');
-                $('ascTable').innerHTML = '<tbody><tr><td class="p-3 text-gray-400">Yuklanmoqda...</td></tr></tbody>';
+
+                if (!modalIsOpen) {
+                    $('ascModal').classList.remove('hidden');
+                    $('ascTable').innerHTML = '<tbody><tr><td class="p-5 text-slate-400">Yuklanmoqda...</td></tr></tbody>';
+                }
                 renderAscButtons();
+
+                if (ascCache[type]) {
+                    ascData = ascCache[type].data;
+                    $('ascFootMsg').textContent = ascCache[type].foot || '';
+                    buildAscFilter();
+                    renderAscTable();
+                    animateAscPanel();
+                    return;
+                }
+
+                $('ascFootMsg').textContent = 'Yuklanmoqda...';
                 try {
                     if (type === 'subjects') {
                         const j = await api(BASE + '/boards/' + board.id + '/subjects');
@@ -1759,9 +1815,24 @@
                     } else if (type === 'teachers') {
                         ascData = await api(TEACHERS_URL);
                     }
-                } catch (e) { ascData = []; $('ascFootMsg').textContent = 'Xatolik: ' + e.message; }
+                    if (ascType !== type) return;
+                    ascCache[type] = { data: ascData, foot: $('ascFootMsg').textContent };
+                } catch (e) {
+                    if (ascType !== type) return;
+                    ascData = [];
+                    $('ascFootMsg').textContent = 'Xatolik: ' + e.message;
+                }
                 buildAscFilter();
                 renderAscTable();
+                animateAscPanel();
+            }
+
+            function animateAscPanel() {
+                const panel = $('ascPanel');
+                if (!panel) return;
+                panel.classList.remove('asc-panel-enter');
+                void panel.offsetWidth;
+                panel.classList.add('asc-panel-enter');
             }
 
             function buildAscFilter() {

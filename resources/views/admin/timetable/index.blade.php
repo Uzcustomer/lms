@@ -215,7 +215,7 @@
             {{-- ═══ aSc Timetables uslubidagi boshqaruv dialogi (Fanlar/Guruhlar/Auditoriyalar/O'qituvchilar) ═══ --}}
             <div id="ascModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-7xl flex flex-col" style="max-height: 92vh;">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 200px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
                         {{-- Sarlavha satri --}}
                         <div class="asc-titlebar flex items-center justify-between px-5 py-3 rounded-t">
                             <div class="flex items-center gap-3 text-base font-semibold text-white">
@@ -700,6 +700,11 @@
             box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
         }
         @media (max-width: 760px) {
+            .asc-win {
+                width: calc(100vw - 24px) !important;
+                height: calc(100vh - 24px) !important;
+                max-height: calc(100vh - 24px) !important;
+            }
             .asc-nav-btn {
                 min-height: 46px;
                 padding: 9px 10px;

@@ -13,30 +13,30 @@
 
             {{-- Doska tanlash + boshqaruv paneli — bitta ixcham qatorda --}}
             <div class="bg-white shadow-sm sm:rounded-lg mb-2">
-                <div class="p-2 flex flex-wrap items-center gap-1.5">
+                <div class="toolbar-row p-2 flex flex-wrap items-center gap-1.5">
                     <select id="boardSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[220px] max-w-[300px]">
                         <option value="">— Tanlang yoki yangi yarating —</option>
                         @foreach($boards as $b)
                             <option value="{{ $b->id }}">{{ $b->name }} ({{ $b->cards_count }} karta)</option>
                         @endforeach
                     </select>
-                    <button type="button" id="newBoardBtn" class="asc-tool">+ Yangi doska</button>
-                    <button type="button" id="genBtn" class="hidden asc-tool">⚙ Kartochkalar</button>
-                    <button type="button" id="refreshNamesBtn" class="hidden asc-tool" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)">🔄 Fan nomlari</button>
-                    <button type="button" id="delBoardBtn" class="hidden asc-tool" style="color:#dc2626">🗑 O'chirish</button>
+                    <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5h16v12H4z"/><path d="M7 7.5V5h10v2.5M12 10v6M9 13h6"/></svg></span>Yangi doska</button>
+                    <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.5 14 5l2.5-.2.9 2.3 2.1 1.4-.7 2.4.7 2.4-2.1 1.4-.9 2.3L14 17l-2 1.5L10 17l-2.5.2-.9-2.3-2.1-1.4.7-2.4-.7-2.4 2.1-1.4.9-2.3L10 5z"/><circle cx="12" cy="11.5" r="2.5"/></svg></span>Kartochkalar</button>
+                    <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M19.1 12A7 7 0 0 0 6.8 7.2L5 9M4.9 12a7 7 0 0 0 12.3 4.8L19 15"/></svg></span>Fan nomlari</button>
+                    <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action" style="color:#dc2626"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>O'chirish</button>
                     <span id="boardMsg" class="text-xs"></span>
 
                     {{-- aSc Timetables uslubidagi boshqaruv tugmalari — doska yuklanganda ko'rinadi --}}
                     <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool">⚙️ Sozlamalar</button>
+                    <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 1.5 2.1 2.5.5 1.8-1.2 1.8 1.8-1.2 1.8.5 2.5L21 12l-2.1 1.5-.5 2.5 1.2 1.8-1.8 1.8-1.8-1.2-2.5.5L12 21l-1.5-2.1-2.5-.5-1.8 1.2-1.8-1.8 1.2-1.8-.5-2.5L3 12l2.1-1.5.5-2.5-1.2-1.8 1.8-1.8 1.8 1.2 2.5-.5z"/><circle cx="12" cy="12" r="2.5"/></svg></span>Sozlamalar</button>
                     <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool" data-dialog="subjects">
                         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4.5h10a2 2 0 0 1 2 2V19H7a2 2 0 0 0-2 2V4.5Z"/><path d="M7 21h12V6.5a2 2 0 0 0-2-2H7"/><path d="M9 8h5M9 12h5"/></svg>
                         Ma'lumotlar
                     </button>
-                    <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool">🔗 Biriktirish</button>
+                    <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 12a4 4 0 0 1 0-8h3v3H8a1 1 0 0 0 0 2h3v3zM16 12a4 4 0 0 0 0 8h-3v-3h3a1 1 0 0 0 0-2h-3v-3z"/><path d="M9 12h6"/></svg></span>Biriktirish</button>
                     <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool">⬇ Excelga yuklash</button>
-                    <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool">🔍 Tekshiruv <span id="checkBadge" class="hidden ml-1 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold"></span></button>
+                    <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></span>Excelga yuklash</button>
+                    <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg></span>Tekshiruv <span id="checkBadge" class="hidden ml-1 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold"></span></button>
                 </div>
 
                 {{-- Yangi doska formasi --}}
@@ -89,7 +89,7 @@
 
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
             <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-3 p-2" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
-                <div class="flex flex-wrap items-center gap-1.5">
+                <div class="toolbar-row flex flex-wrap items-center gap-1.5">
                     <select id="facSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
                     <select id="dirSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
                     <span class="text-[11px] text-gray-500">Kurs:</span>
@@ -106,7 +106,7 @@
                         <input type="number" id="gsDays" min="1" max="7" class="w-10 rounded border-gray-300 text-xs" title="Kunlar">
                         <input type="number" id="gsPairs" min="1" max="10" class="w-10 rounded border-gray-300 text-xs" title="Kuniga para">
                         <input type="number" id="gsWeeks" min="1" max="30" class="w-10 rounded border-gray-300 text-xs" title="Hafta soni">
-                        <button type="button" id="gsSave" class="asc-tool">Saqlash</button>
+                        <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 16h8"/></svg></span>Saqlash</button>
                     </div>
 
                     <span class="h-6 w-px bg-gray-200"></span>
@@ -127,12 +127,12 @@
                     </label>
 
                     <span class="h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="autoBtn" class="px-2.5 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700">⚡ Avtomatik joylash</button>
+                    <button type="button" id="autoBtn" class="toolbar-action px-2.5 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-8 12h6l-1 8 8-12h-6z"/></svg></span>Avtomatik joylash</button>
                     <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Butun doska (barcha yo'nalishlar)"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska</label>
                     <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Qaytadan joylash (mavjudini bo'shatib)"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash</label>
                     <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Auditoriya biriktirilsin (sig'im bo'yicha)"><input type="checkbox" id="autoRooms" class="rounded border-gray-300"> Auditoriya</label>
                     <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Ma'ruzalarga faqat ma'ruza xonalarini to'qnashuvsiz biriktirish"><input type="checkbox" id="autoLecRooms" class="rounded border-gray-300"> Ma'ruza xonasi</label>
-                    <button type="button" id="unplaceBtn" class="px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi">🗑 Bo'shatish</button>
+                    <button type="button" id="unplaceBtn" class="toolbar-action px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>Bo'shatish</button>
                     <span id="autoMsg" class="text-[11px] text-emerald-700 font-medium"></span>
 
                     <div id="statChips" class="flex flex-wrap gap-1.5 text-[11px] ml-auto"></div>
@@ -863,6 +863,13 @@
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
+        .toolbar-row { align-items: center; }
+        .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
+        .toolbar-icon { width: 15px; height: 15px; display: inline-flex; flex: 0 0 15px; align-items: center; justify-content: center; }
+        .toolbar-icon svg { width: 100%; height: 100%; }
+        #specBar .toolbar-row { row-gap: 8px; }
+        #specBar .toolbar-row > .h-6 { margin-inline: 2px; }
+        #autoBtn.toolbar-action { font-weight: 700; }
         .assign-modal-content { flex: 1 1 auto; }
         .assign-pane, .assign-teacher-pane { min-height: 0; }
         .assign-toolbar select, .assign-toolbar input:not([type="checkbox"]) { min-height: 34px; }

@@ -832,7 +832,7 @@
             cursor: grabbing;
             user-select: none;
         }
-        .asc-action-btn { display: flex; align-items: center; gap: 8px; }
+        .asc-btn.asc-action-btn { display: flex; align-items: center; gap: 5px; justify-content: flex-start; }
         .asc-action-icon { width: 16px; height: 16px; flex: 0 0 16px; display: inline-flex; }
         .asc-action-icon svg { width: 100%; height: 100%; }
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
@@ -873,7 +873,7 @@
                 let moved = false;
 
                 el.addEventListener('pointerdown', e => {
-                    if (e.button !== 0) return;
+                    if (e.button !== 0 || ascType === 'auditoriums') return;
                     startX = e.clientX;
                     startScroll = el.scrollLeft;
                     moved = false;
@@ -2073,11 +2073,18 @@
                 }
                 h += '</tbody>';
                 $('ascTable').innerHTML = h;
-                document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => tr.onclick = () => {
-                    ascSelId = tr.dataset.id || tr.dataset.idx;
-                    document.querySelectorAll('#ascTable tbody tr').forEach(x => x.classList.remove('sel'));
-                    tr.classList.add('sel');
-                    renderAscButtons();
+                document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => {
+                    tr.onclick = () => {
+                        ascSelId = tr.dataset.id || tr.dataset.idx;
+                        document.querySelectorAll('#ascTable tbody tr').forEach(x => x.classList.remove('sel'));
+                        tr.classList.add('sel');
+                        renderAscButtons();
+                    };
+                    tr.ondblclick = () => {
+                        if (ascType !== 'auditoriums') return;
+                        const row = ascData.find(x => String(x.id) === String(tr.dataset.id));
+                        if (row) openAudEdit(row);
+                    };
                 });
             }
             const rowTag = (i, id) => '<tr data-idx="' + i + '"' + (id != null ? ' data-id="' + id + '"' : '') + '>';

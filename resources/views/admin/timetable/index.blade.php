@@ -88,49 +88,56 @@
             </div>
 
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
-            <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-3 p-2" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
-                <div class="toolbar-row flex flex-wrap items-end gap-2">
-                    {{-- Ko'p tanlovli dropdown'lar: Fakultet → Yo'nalish → Kurs
-                         (checkboxlar tugma bosilganda ochiladigan menyudan chiqadi) --}}
-                    <div class="tt-dd"><button type="button" class="tt-dd-btn" id="facBtn" title="Fakultet(lar)ni tanlang"></button><div class="tt-dd-menu" id="facMenu"></div></div>
-                    <div class="tt-dd"><button type="button" class="tt-dd-btn" id="dirBtn" title="Yo'nalish(lar)ni tanlang"></button><div class="tt-dd-menu" id="dirMenu"></div></div>
-                    <div class="tt-dd"><button type="button" class="tt-dd-btn" id="crsBtn" title="Kurs(lar)ni tanlang"></button><div class="tt-dd-menu" id="crsMenu"></div></div>
+            <div id="specBar" class="hidden spec-toolbar shadow-sm sm:rounded-xl mb-3" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
+                <div class="spec-toolbar-main">
+                    {{-- Ko'p tanlovli dropdown'lar: Fakultet → Yo'nalish → Kurs --}}
+                    <div class="spec-control-group spec-scope-group">
+                        <div class="tt-dd"><button type="button" class="tt-dd-btn" id="facBtn" title="Fakultet(lar)ni tanlang"></button><div class="tt-dd-menu" id="facMenu"></div></div>
+                        <div class="tt-dd"><button type="button" class="tt-dd-btn" id="dirBtn" title="Yo'nalish(lar)ni tanlang"></button><div class="tt-dd-menu" id="dirMenu"></div></div>
+                        <div class="tt-dd"><button type="button" class="tt-dd-btn" id="crsBtn" title="Kurs(lar)ni tanlang"></button><div class="tt-dd-menu" id="crsMenu"></div></div>
+                    </div>
 
-                    <span class="h-6 w-px bg-gray-200"></span>
-                    <div class="flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-1" title="Faqat shu yo'nalish+kursga. Hafta soni o'zgarsa kartalar qayta yaratiladi.">
+                    <div class="spec-control-group spec-grid-group" title="Faqat shu yo'nalish+kursga. Hafta soni o'zgarsa kartalar qayta yaratiladi.">
+                        <span class="spec-group-label">Panjara</span>
                         <input type="number" id="gsDays" min="1" max="7" class="w-10 rounded border-gray-300 text-xs" title="Kunlar">
                         <input type="number" id="gsPairs" min="1" max="10" class="w-10 rounded border-gray-300 text-xs" title="Kuniga para">
                         <input type="number" id="gsWeeks" min="1" max="30" class="w-10 rounded border-gray-300 text-xs" title="Hafta soni">
                         <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 16h8"/></svg></span>Saqlash</button>
                     </div>
 
-                    <span class="h-6 w-px bg-gray-200"></span>
-                    <div class="flex rounded-md overflow-hidden border border-gray-300 text-[11px]">
-                        <button type="button" class="tt-type active px-2 py-1" data-type="all">Hammasi</button>
-                        <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="lecture">Ma'ruza</button>
-                        <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="practice">Amaliy</button>
+                    <div class="spec-control-group spec-view-group">
+                        <div class="spec-type-switch flex rounded-md overflow-hidden border border-gray-300 text-[11px]">
+                            <button type="button" class="tt-type active px-2 py-1" data-type="all">Hammasi</button>
+                            <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="lecture">Ma'ruza</button>
+                            <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="practice">Amaliy</button>
+                        </div>
+                        <select id="weekSel" class="rounded-md border-gray-300 text-[11px] py-1"></select>
+                        <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
+                        <label class="spec-view-label flex items-center gap-1 text-[11px] text-gray-500">Kesim:
+                            <select id="viewMode" class="rounded-md border-gray-300 text-[11px] py-1">
+                                <option value="group">Guruh</option>
+                                <option value="teacher">O'qituvchi</option>
+                                <option value="room">Auditoriya</option>
+                                <option value="subject">Fan</option>
+                            </select>
+                        </label>
                     </div>
-                    <select id="weekSel" class="rounded-md border-gray-300 text-[11px] py-1"></select>
-                    <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
-                    <label class="flex items-center gap-1 text-[11px] text-gray-500">Kesim:
-                        <select id="viewMode" class="rounded-md border-gray-300 text-[11px] py-1">
-                            <option value="group">Guruh</option>
-                            <option value="teacher">O'qituvchi</option>
-                            <option value="room">Auditoriya</option>
-                            <option value="subject">Fan</option>
-                        </select>
-                    </label>
 
-                    <span class="h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="autoBtn" class="toolbar-action px-2.5 py-1 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-700"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-8 12h6l-1 8 8-12h-6z"/></svg></span>Avtomatik joylash</button>
-                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Butun doska (barcha yo'nalishlar)"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska</label>
-                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Qaytadan joylash (mavjudini bo'shatib)"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash</label>
-                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Auditoriya biriktirilsin (sig'im bo'yicha)"><input type="checkbox" id="autoRooms" class="rounded border-gray-300"> Auditoriya</label>
-                    <label class="flex items-center gap-1 text-[11px] text-gray-600" title="Ma'ruzalarga faqat ma'ruza xonalarini to'qnashuvsiz biriktirish"><input type="checkbox" id="autoLecRooms" class="rounded border-gray-300"> Ma'ruza xonasi</label>
-                    <button type="button" id="unplaceBtn" class="toolbar-action px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>Bo'shatish</button>
-                    <span id="autoMsg" class="text-[11px] text-emerald-700 font-medium"></span>
+                    <div class="spec-primary-actions">
+                        <button type="button" id="autoBtn" class="toolbar-action spec-auto-btn px-3 py-2 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-8 12h6l-1 8 8-12h-6z"/></svg></span>Avtomatik joylash</button>
+                        <button type="button" id="unplaceBtn" class="toolbar-action spec-unplace-btn px-3 py-2 text-xs bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>Bo'shatish</button>
+                    </div>
+                </div>
 
-                    <div id="statChips" class="flex flex-wrap gap-1.5 text-[11px] ml-auto"></div>
+                <div class="spec-toolbar-bottom">
+                    <div class="spec-options">
+                        <label class="spec-option" title="Butun doska (barcha yo'nalishlar)"><input type="checkbox" id="autoScope" class="rounded border-gray-300"> Butun doska</label>
+                        <label class="spec-option" title="Qaytadan joylash (mavjudini bo'shatib)"><input type="checkbox" id="autoReset" class="rounded border-gray-300"> Qaytadan joylash</label>
+                        <label class="spec-option" title="Auditoriya biriktirilsin (sig'im bo'yicha)"><input type="checkbox" id="autoRooms" class="rounded border-gray-300"> Auditoriya</label>
+                        <label class="spec-option" title="Ma'ruzalarga faqat ma'ruza xonalarini to'qnashuvsiz biriktirish"><input type="checkbox" id="autoLecRooms" class="rounded border-gray-300"> Ma'ruza xonasi</label>
+                    </div>
+                    <span id="autoMsg" class="spec-auto-msg text-[11px] text-emerald-700 font-medium"></span>
+                    <div id="statChips" class="spec-stats flex flex-wrap gap-1.5 text-[11px]"></div>
                 </div>
             </div>
 
@@ -879,6 +886,83 @@
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
         .toolbar-row { align-items: flex-end; gap: 8px; }
+        .spec-toolbar {
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            background: linear-gradient(145deg, #ffffff, #f8fafc);
+        }
+        .spec-toolbar-main {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+        .spec-control-group {
+            min-height: 42px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15,23,42,.04);
+        }
+        .spec-scope-group { padding: 4px; }
+        .spec-grid-group { background: #f5f7ff; border-color: #dbe4ff; }
+        .spec-group-label {
+            padding-left: 3px;
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+        .spec-grid-group input { height: 32px; }
+        .spec-grid-group .asc-tool { min-height: 32px; }
+        .spec-view-group { flex: 1 1 420px; }
+        .spec-view-group #weekSel { min-width: 160px; }
+        .spec-view-label { margin-left: auto; white-space: nowrap; }
+        .spec-primary-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .spec-auto-btn, .spec-unplace-btn { min-height: 38px; font-weight: 700; white-space: nowrap; }
+        .spec-unplace-btn { border: 1px solid #fde7b2; }
+        .spec-toolbar-bottom {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 34px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e8edf3;
+        }
+        .spec-options { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .spec-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 999px;
+            background: #fff;
+            color: #475569;
+            font-size: 11px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .spec-option:hover { border-color: #93c5fd; background: #eff6ff; }
+        .spec-option input { width: 14px; height: 14px; margin: 0; }
+        .spec-auto-msg { min-width: 120px; }
+        .spec-stats { margin-left: auto; justify-content: flex-end; }
+        @media (max-width: 1200px) {
+            .spec-view-group { flex-basis: 100%; }
+            .spec-primary-actions { margin-left: 0; }
+        }
+
         .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
         .toolbar-icon { width: 15px; height: 15px; display: inline-flex; flex: 0 0 15px; align-items: center; justify-content: center; }
         .toolbar-icon svg { width: 100%; height: 100%; }

@@ -745,22 +745,29 @@
             height: 100%;
         }
         #ascTable.asc-auditorium-table {
-            width: max-content;
-            min-width: max-content;
-            table-layout: auto;
+            width: 730px;
+            min-width: 730px;
+            table-layout: fixed;
         }
         #ascTable.asc-auditorium-table th,
         #ascTable.asc-auditorium-table td {
-            width: auto;
             min-width: 0;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        #ascTable.asc-auditorium-table th:nth-child(1),
-        #ascTable.asc-auditorium-table td:nth-child(1) {
-            width: 1%;
-            padding-left: 0.55rem;
-            padding-right: 0.55rem;
-        }
+        #ascTable.asc-auditorium-table .tt-aud-code { width: 58px; }
+        #ascTable.asc-auditorium-table .tt-aud-name { width: 150px; }
+        #ascTable.asc-auditorium-table .tt-aud-volume { width: 70px; }
+        #ascTable.asc-auditorium-table .tt-aud-building { width: 190px; }
+        #ascTable.asc-auditorium-table .tt-aud-type { width: 165px; }
+        #ascTable.asc-auditorium-table .tt-aud-status { width: 97px; }
+        .asc-action-btn { display: flex; align-items: center; gap: 8px; }
+        .asc-action-icon { width: 16px; height: 16px; flex: 0 0 16px; display: inline-flex; }
+        .asc-action-icon svg { width: 100%; height: 100%; }
+        .asc-action-btn.primary .asc-action-icon { color: #fff; }
+        .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
+        .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
 
 </style>
 
@@ -1942,7 +1949,7 @@
                             '<td>' + esc(r.oqim_label || '—') + '</td><td>' + esc(LANG_LABEL[r.lang] || r.lang || '—') + '</td><td>' + r.students + '</td></tr>';
                     });
                 } else if (ascType === 'auditoriums') {
-                    h = '<thead><tr><th>Kod</th><th>Nomi</th><th>Sig\'im</th><th>Bino</th><th>Turi</th><th>Holat</th></tr></thead><tbody>';
+                    h = '<colgroup><col class="tt-aud-code"><col class="tt-aud-name"><col class="tt-aud-volume"><col class="tt-aud-building"><col class="tt-aud-type"><col class="tt-aud-status"></colgroup><thead><tr><th>Kod</th><th>Nomi</th><th>Sig\\'im</th><th>Bino</th><th>Turi</th><th>Holat</th></tr></thead><tbody>';
                     rows.forEach((r, i) => {
                         h += rowTag(i, r.id) + '<td class="font-semibold">' + esc(r.code) + '</td><td>' + esc(r.name) + '</td>' +
                             '<td>' + (r.volume || 0) + '</td><td>' + esc(r.building_name || '—') + '</td><td>' + esc(r.auditorium_type_name || '—') + '</td>' +
@@ -1967,17 +1974,27 @@
             const rowTag = (i, id) => '<tr data-idx="' + i + '"' + (id != null ? ' data-id="' + id + '"' : '') + '>';
             const fmt = v => { v = +v || 0; return Number.isInteger(v) ? v : v.toFixed(1); };
 
+            const actionIcons = {
+                plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+                edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 16.5-.8 4.3 4.3-.8L19 8.5a2.1 2.1 0 0 0-3-3L4 16.5Z"/><path d="m14.5 7.5 2 2"/></svg>',
+                trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg>',
+                import: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>',
+                template: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
+                export: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>',
+            };
+            const actionIcon = name => '<span class="asc-action-icon" aria-hidden="true">' + actionIcons[name] + '</span>';
+
             function renderAscButtons() {
                 const b = $('ascButtons');
                 const hasSel = ascSelId !== null;
                 if (ascType === 'auditoriums') {
                     b.innerHTML =
-                        '<button class="asc-btn primary block" id="aBtnNew">➕ Yangi</button>' +
-                        '<button class="asc-btn block" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>✏️ Tahrirlash</button>' +
-                        '<button class="asc-btn danger block" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>🗑 O\'chirish</button>' +
+                        '<button class="asc-btn primary block asc-action-btn" id="aBtnNew">' + actionIcon('plus') + 'Yangi</button>' +
+                        '<button class="asc-btn block asc-action-btn" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('edit') + 'Tahrirlash</button>' +
+                        '<button class="asc-btn danger block asc-action-btn" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('trash') + 'O\\'chirish</button>' +
                         '<div class="my-1 border-t border-gray-300"></div>' +
-                        '<button class="asc-btn block" id="aBtnImport">📥 Import (Excel)</button>' +
-                        '<button class="asc-btn block" id="aBtnTemplate">📄 Namuna shabloni</button>';
+                        '<button class="asc-btn block asc-action-btn" id="aBtnImport">' + actionIcon('import') + 'Import (Excel)</button>' +
+                        '<button class="asc-btn block asc-action-btn" id="aBtnTemplate">' + actionIcon('template') + 'Namuna shabloni</button>';
                     $('aBtnNew').onclick = () => openAudEdit(null);
                     $('aBtnEdit').onclick = () => hasSel && openAudEdit(ascData.find(x => String(x.id) === String(ascSelId)));
                     $('aBtnDel').onclick = () => hasSel && deleteAud();
@@ -1986,7 +2003,7 @@
                 } else {
                     // Faqat o'qish (manba HEMIS/o'quv reja) — eksport imkoniyati
                     b.innerHTML =
-                        '<button class="asc-btn block" id="aBtnCsv">📤 CSV ga eksport</button>' +
+                        '<button class="asc-btn block asc-action-btn" id="aBtnCsv">' + actionIcon('export') + 'CSV ga eksport</button>' +
                         '<div class="text-[11px] text-gray-500 leading-snug mt-1 px-1">' +
                         (ascType === 'subjects'
                             ? 'Fanlar ishchi o\'quv rejalardan olinadi. Soatlar reja tahririda o\'zgartiriladi.'

@@ -744,23 +744,54 @@
             width: 100%;
             height: 100%;
         }
+        .asc-action-btn {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-height: 42px;
+            padding: 9px 12px;
+            border-radius: 9px;
+            font-weight: 600;
+            text-align: left;
+            transition: transform 150ms ease, box-shadow 150ms ease;
+        }
+        .asc-action-btn:hover:not(:disabled) {
+            transform: translateX(2px);
+            box-shadow: 0 5px 12px rgba(15, 23, 42, 0.12);
+        }
+        .asc-action-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .asc-action-icon {
+            width: 1.2rem;
+            height: 1.2rem;
+            flex: 0 0 1.2rem;
+            display: inline-flex;
+        }
+        .asc-action-icon svg {
+            width: 100%;
+            height: 100%;
+        }
         #ascTable.asc-auditorium-table {
-            width: max-content;
-            min-width: max-content;
-            table-layout: auto;
+            width: 730px;
+            min-width: 730px;
+            table-layout: fixed;
         }
         #ascTable.asc-auditorium-table th,
         #ascTable.asc-auditorium-table td {
-            width: auto;
             min-width: 0;
+            max-width: 0;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        #ascTable.asc-auditorium-table th:nth-child(1),
-        #ascTable.asc-auditorium-table td:nth-child(1) {
-            width: 1%;
-            padding-left: 0.55rem;
-            padding-right: 0.55rem;
-        }
+        #ascTable.asc-auditorium-table .tt-aud-code { width: 58px; }
+        #ascTable.asc-auditorium-table .tt-aud-name { width: 150px; }
+        #ascTable.asc-auditorium-table .tt-aud-volume { width: 70px; }
+        #ascTable.asc-auditorium-table .tt-aud-building { width: 190px; }
+        #ascTable.asc-auditorium-table .tt-aud-type { width: 165px; }
+        #ascTable.asc-auditorium-table .tt-aud-status { width: 97px; }
 
 </style>
 
@@ -1803,6 +1834,15 @@
                 auditoriums: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2M11 21v-4h2v4"/></svg>',
                 teachers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 9 8-4 8 4-8 4-8-4Z"/><path d="M7 11.5V16c2 1.5 8 1.5 10 0v-4.5M20 9v5"/></svg>',
             };
+            const actionIcons = {
+                plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg>',
+                edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13.5 6.5 4 4M5 19l3.5-.8L18.5 8.2a2.1 2.1 0 0 0-3-3L5.5 15.2 5 19Z"/></svg>',
+                trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v5M14 11v5M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+                import: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>',
+                template: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
+                csv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+            };
+            const actionIcon = name => '<span class="asc-action-icon" aria-hidden="true">' + actionIcons[name] + '</span>';
 
             let ascType = null;       // joriy dialog turi
             let ascData = [];         // dialog ma'lumotlari (xom)
@@ -1942,7 +1982,8 @@
                             '<td>' + esc(r.oqim_label || '—') + '</td><td>' + esc(LANG_LABEL[r.lang] || r.lang || '—') + '</td><td>' + r.students + '</td></tr>';
                     });
                 } else if (ascType === 'auditoriums') {
-                    h = '<thead><tr><th>Kod</th><th>Nomi</th><th>Sig\'im</th><th>Bino</th><th>Turi</th><th>Holat</th></tr></thead><tbody>';
+                    h = '<colgroup><col class="tt-aud-code"><col class="tt-aud-name"><col class="tt-aud-volume"><col class="tt-aud-building"><col class="tt-aud-type"><col class="tt-aud-status"></colgroup>' +
+                        '<thead><tr><th>Kod</th><th>Nomi</th><th>Sig\\'im</th><th>Bino</th><th>Turi</th><th>Holat</th></tr></thead><tbody>';
                     rows.forEach((r, i) => {
                         h += rowTag(i, r.id) + '<td class="font-semibold">' + esc(r.code) + '</td><td>' + esc(r.name) + '</td>' +
                             '<td>' + (r.volume || 0) + '</td><td>' + esc(r.building_name || '—') + '</td><td>' + esc(r.auditorium_type_name || '—') + '</td>' +
@@ -1972,12 +2013,12 @@
                 const hasSel = ascSelId !== null;
                 if (ascType === 'auditoriums') {
                     b.innerHTML =
-                        '<button class="asc-btn primary block" id="aBtnNew">➕ Yangi</button>' +
-                        '<button class="asc-btn block" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>✏️ Tahrirlash</button>' +
-                        '<button class="asc-btn danger block" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>🗑 O\'chirish</button>' +
+                        '<button class="asc-btn primary block asc-action-btn" id="aBtnNew">' + actionIcon('plus') + '<span>Yangi</span></button>' +
+                        '<button class="asc-btn block asc-action-btn" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('edit') + '<span>Tahrirlash</span></button>' +
+                        '<button class="asc-btn danger block asc-action-btn" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('trash') + '<span>O\\'chirish</span></button>' +
                         '<div class="my-1 border-t border-gray-300"></div>' +
-                        '<button class="asc-btn block" id="aBtnImport">📥 Import (Excel)</button>' +
-                        '<button class="asc-btn block" id="aBtnTemplate">📄 Namuna shabloni</button>';
+                        '<button class="asc-btn block asc-action-btn" id="aBtnImport">' + actionIcon('import') + '<span>Import</span></button>' +
+                        '<button class="asc-btn block asc-action-btn" id="aBtnTemplate">' + actionIcon('template') + '<span>Shablon</span></button>';
                     $('aBtnNew').onclick = () => openAudEdit(null);
                     $('aBtnEdit').onclick = () => hasSel && openAudEdit(ascData.find(x => String(x.id) === String(ascSelId)));
                     $('aBtnDel').onclick = () => hasSel && deleteAud();
@@ -1986,7 +2027,7 @@
                 } else {
                     // Faqat o'qish (manba HEMIS/o'quv reja) — eksport imkoniyati
                     b.innerHTML =
-                        '<button class="asc-btn block" id="aBtnCsv">📤 CSV ga eksport</button>' +
+                        '<button class="asc-btn block asc-action-btn" id="aBtnCsv">' + actionIcon('csv') + '<span>CSV eksport</span></button>' +
                         '<div class="text-[11px] text-gray-500 leading-snug mt-1 px-1">' +
                         (ascType === 'subjects'
                             ? 'Fanlar ishchi o\'quv rejalardan olinadi. Soatlar reja tahririda o\'zgartiriladi.'

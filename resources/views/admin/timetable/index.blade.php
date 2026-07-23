@@ -880,7 +880,8 @@
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
         .assign-modal-content { flex: 1 1 auto; }
         .assign-pane, .assign-teacher-pane { min-height: 0; }
-        .assign-toolbar select, .assign-toolbar input { min-height: 34px; }
+        .assign-toolbar select, .assign-toolbar input:not([type="checkbox"]) { min-height: 34px; }
+        .assign-toolbar input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; margin: 0; }
         .assign-pane-title { letter-spacing: .01em; }
         .assign-unit-info { line-height: 1.45; }
         #asgTable tr { cursor: pointer; }
@@ -998,7 +999,7 @@
                 let moved = false;
 
                 el.addEventListener('pointerdown', e => {
-                    if (e.button !== 0 || ascType === 'auditoriums') return;
+                    if (e.button !== 0 || ascType === 'auditoriums' || e.target.closest?.('#asgTable tbody tr')) return;
                     startX = e.clientX;
                     startScroll = el.scrollLeft;
                     moved = false;

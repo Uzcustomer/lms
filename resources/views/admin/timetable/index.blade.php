@@ -746,27 +746,21 @@
         }
         #ascTable.asc-auditorium-table {
             width: max-content;
-            min-width: 100%;
+            min-width: max-content;
             table-layout: auto;
         }
         #ascTable.asc-auditorium-table th,
         #ascTable.asc-auditorium-table td {
-            width: max-content;
+            width: auto;
             min-width: 0;
             white-space: nowrap;
         }
         #ascTable.asc-auditorium-table th:nth-child(1),
-        #ascTable.asc-auditorium-table td:nth-child(1) { padding-left: 0.55rem; padding-right: 0.55rem; }
-        #ascTable.asc-auditorium-table th:nth-child(2),
-        #ascTable.asc-auditorium-table td:nth-child(2) { min-width: 9rem; }
-        #ascTable.asc-auditorium-table th:nth-child(3),
-        #ascTable.asc-auditorium-table td:nth-child(3) { min-width: 5rem; }
-        #ascTable.asc-auditorium-table th:nth-child(4),
-        #ascTable.asc-auditorium-table td:nth-child(4) { min-width: 15rem; }
-        #ascTable.asc-auditorium-table th:nth-child(5),
-        #ascTable.asc-auditorium-table td:nth-child(5) { min-width: 10rem; }
-        #ascTable.asc-auditorium-table th:nth-child(6),
-        #ascTable.asc-auditorium-table td:nth-child(6) { min-width: 6rem; }
+        #ascTable.asc-auditorium-table td:nth-child(1) {
+            width: 1%;
+            padding-left: 0.55rem;
+            padding-right: 0.55rem;
+        }
 
 </style>
 

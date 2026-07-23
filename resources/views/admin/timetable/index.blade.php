@@ -1714,7 +1714,7 @@
             let ascSelId = null;      // tanlangan qator id/kalit
 
             const dialogMeta = {
-                subjects:    { icon: '📚', title: 'Darslar',      listLabel: 'Darslar ro\\'yxati:', filter: 'spec' },
+                subjects:    { icon: '📚', title: 'Darslar',      listLabel: 'Darslar ro\'yxati:', filter: 'spec' },
                 groups:      { icon: '👥', title: 'Guruhlar',     listLabel: 'Guruhlar ro\'yxati:', filter: 'spec' },
                 auditoriums: { icon: '🚪', title: 'Auditoriyalar', listLabel: 'Auditoriyalar:',     filter: null   },
                 teachers:    { icon: '🧑‍🏫', title: "O'qituvchilar", listLabel: 'O\'qituvchilar:',   filter: null   },

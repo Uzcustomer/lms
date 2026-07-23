@@ -567,7 +567,7 @@ class TimetableController extends Controller
             'course'            => 'nullable|integer|min:1|max:7',
             // Ko'p tanlovli qamrov (dropdown checkboxlaridan) — fakultet/yo'nalish/kurs massivlari
             'faculty_names'     => 'nullable|array',
-            'faculty_names.*'   => 'string|max:255',
+            'faculty_names.*'   => 'nullable|string|max:255',
             'specialty_names'   => 'nullable|array',
             'specialty_names.*' => 'string|max:255',
             'courses'           => 'nullable|array',
@@ -804,7 +804,7 @@ class TimetableController extends Controller
             'specialty_name'    => 'nullable|string|max:255',
             'course'            => 'nullable|integer|min:1|max:7',
             'faculty_names'     => 'nullable|array',
-            'faculty_names.*'   => 'string|max:255',
+            'faculty_names.*'   => 'nullable|string|max:255',
             'specialty_names'   => 'nullable|array',
             'specialty_names.*' => 'string|max:255',
             'courses'           => 'nullable|array',

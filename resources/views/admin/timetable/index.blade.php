@@ -29,7 +29,10 @@
                     {{-- aSc Timetables uslubidagi boshqaruv tugmalari — doska yuklanganda ko'rinadi --}}
                     <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
                     <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool">⚙️ Sozlamalar</button>
-                    <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool" data-dialog="subjects">🗂 Ma'lumotlar</button>
+                    <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool" data-dialog="subjects">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4.5h10a2 2 0 0 1 2 2V19H7a2 2 0 0 0-2 2V4.5Z"/><path d="M7 21h12V6.5a2 2 0 0 0-2-2H7"/><path d="M9 8h5M9 12h5"/></svg>
+                        Ma'lumotlar
+                    </button>
                     <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool">🔗 Biriktirish</button>
                     <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
                     <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool">⬇ Excelga yuklash</button>
@@ -222,10 +225,10 @@
                         <div class="flex gap-3 p-4 overflow-hidden" style="min-height: 600px;">
                             <nav class="w-60 shrink-0 flex flex-col gap-2 rounded-xl border border-blue-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-sm" aria-label="Jadval ma'lumotlari">
                                 <div class="px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Boshqaruv</div>
-                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" aria-selected="true">📚 <span>Darslar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="groups" aria-selected="false">👥 <span>Guruhlar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" aria-selected="false">🚪 <span>Auditoriyalar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" aria-selected="false">🧑‍🏫 <span>O'qituvchilar</span></button>
+                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4.5h10a2 2 0 0 1 2 2V19H7a2 2 0 0 0-2 2V4.5Z"/><path d="M7 21h12V6.5a2 2 0 0 0-2-2H7"/><path d="M9 8h5M9 12h5"/></svg></span><span>Darslar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="groups" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3"/><path d="M16 5.5a3 3 0 0 1 0 5.8M17 15h1a3 3 0 0 1 3 3v2"/></svg></span><span>Guruhlar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2M11 21v-4h2v4"/></svg></span><span>Auditoriyalar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 9 8-4 8 4-8 4-8-4Z"/><path d="M7 11.5V16c2 1.5 8 1.5 10 0v-4.5M20 9v5"/></svg></span><span>O'qituvchilar</span></button>
                             </nav>
                             <div id="ascPanel" class="flex-1 flex gap-3 min-w-0">
                                 <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden min-w-0 shadow-sm">
@@ -742,6 +745,36 @@
         .asc-win {
             border: 1px solid rgba(148, 163, 184, 0.45);
             box-shadow: 0 28px 80px rgba(15, 23, 42, 0.35);
+        }
+
+        .asc-nav-icon {
+            width: 1.45rem;
+            height: 1.45rem;
+            flex: 0 0 1.45rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .asc-nav-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+        #ascTable.asc-auditorium-table {
+            width: max-content;
+            min-width: max-content;
+            table-layout: auto;
+        }
+        #ascTable.asc-auditorium-table th,
+        #ascTable.asc-auditorium-table td {
+            width: auto;
+            min-width: 0;
+            white-space: nowrap;
+        }
+        #ascTable.asc-auditorium-table th:nth-child(1),
+        #ascTable.asc-auditorium-table td:nth-child(1) {
+            width: 1%;
+            padding-left: 0.55rem;
+            padding-right: 0.55rem;
         }
 
 </style>
@@ -1814,6 +1847,12 @@
             const PAIR_TIMES = ['08:30-09:50','10:00-11:20','12:00-13:20','13:30-14:50','15:00-16:20','16:30-17:50','17:00-18:20'];
             const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X'];
             const LANG_LABEL = { uz: "o'zbek", rus: 'rus', ru: 'rus', ing: 'ingliz', en: 'ingliz' };
+            const managerIcons = {
+                subjects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4.5h10a2 2 0 0 1 2 2V19H7a2 2 0 0 0-2 2V4.5Z"/><path d="M7 21h12V6.5a2 2 0 0 0-2-2H7"/><path d="M9 8h5M9 12h5"/></svg>',
+                groups: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3"/><path d="M16 5.5a3 3 0 0 1 0 5.8M17 15h1a3 3 0 0 1 3 3v2"/></svg>',
+                auditoriums: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2M11 21v-4h2v4"/></svg>',
+                teachers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 9 8-4 8 4-8 4-8-4Z"/><path d="M7 11.5V16c2 1.5 8 1.5 10 0v-4.5M20 9v5"/></svg>',
+            };
 
             let ascType = null;       // joriy dialog turi
             let ascData = [];         // dialog ma'lumotlari (xom)
@@ -1821,10 +1860,10 @@
             const ascCache = {};      // tablar orasida qaytishda jadvalni qayta yuklamaslik uchun
 
             const dialogMeta = {
-                subjects:    { icon: '📚', title: 'Darslar',      listLabel: 'Darslar ro\'yxati:', filter: 'spec' },
-                groups:      { icon: '👥', title: 'Guruhlar',     listLabel: 'Guruhlar ro\'yxati:', filter: 'spec' },
-                auditoriums: { icon: '🚪', title: 'Auditoriyalar', listLabel: 'Auditoriyalar:',     filter: null   },
-                teachers:    { icon: '🧑‍🏫', title: "O'qituvchilar", listLabel: 'O\'qituvchilar:',   filter: null   },
+                subjects:    { icon: managerIcons.subjects, title: 'Darslar',      listLabel: 'Darslar ro\'yxati:', filter: 'spec' },
+                groups:      { icon: managerIcons.groups, title: 'Guruhlar',     listLabel: 'Guruhlar ro\'yxati:', filter: 'spec' },
+                auditoriums: { icon: managerIcons.auditoriums, title: 'Auditoriyalar', listLabel: 'Auditoriyalar:',     filter: null   },
+                teachers:    { icon: managerIcons.teachers, title: "O'qituvchilar", listLabel: 'O\'qituvchilar:',   filter: null   },
             };
 
             document.querySelectorAll('.asc-tool[data-dialog]').forEach(btn =>
@@ -1851,7 +1890,7 @@
                 updateAscNav(type);
 
                 const m = dialogMeta[type];
-                $('ascIcon').textContent = m.icon;
+                $('ascIcon').innerHTML = m.icon;
                 $('ascTitle').textContent = m.title;
                 $('ascListLabel').textContent = m.listLabel;
                 $('ascSearch').value = '';
@@ -1929,6 +1968,7 @@
             }
 
             function renderAscTable() {
+                $('ascTable').classList.toggle('asc-auditorium-table', ascType === 'auditoriums');
                 const rows = filteredAsc();
                 $('ascCount').textContent = rows.length + ' ta';
                 let h = '';

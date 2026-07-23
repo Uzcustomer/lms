@@ -883,6 +883,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Umumiy sozlamalar (qo'ng'iroqlar jadvali, kunlar)
                 Route::get('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'settings'])->name('settings');
                 Route::post('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSettings'])->name('settings.save');
+                // Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl)
+                Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
                 // aSc uslubidagi boshqaruv dialoglari
                 Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
                 Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');

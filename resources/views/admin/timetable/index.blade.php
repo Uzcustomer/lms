@@ -32,6 +32,7 @@
                         <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><i class="bi bi-plus-lg"></i></span>Yangi doska</button>
                         <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-window-stack"></i></span>Kartochkalar</button>
                         <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-mortarboard"></i></span>Fan nomlari</button>
+                        <button type="button" id="subjModeBtn" class="hidden asc-tool toolbar-action" title="Fan bo'yicha jadval rejimi: har hafta / hafta almashinuvi (1-3 kurs) / sikl (4-6 kurs)"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-arrow-repeat"></i></span>Fan rejimi</button>
                         <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-trash3"></i></span>O'chirish</button>
                         <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-gear"></i></span>Sozlamalar</button>
                         <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-file-earmark-text"></i></span>Ma'lumotlar</button>
@@ -176,6 +177,39 @@
                         <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                     </div>
                     <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
+                </div>
+            </div>
+
+            {{-- Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl) --}}
+            <div id="subjModeModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-4xl flex flex-col" style="max-height: 92vh;">
+                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
+                            <div class="flex items-center gap-2 text-sm font-semibold text-white">🔁 Fan rejimi — hafta almashinuvi / sikl</div>
+                            <button type="button" id="subjModeClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                        </div>
+                        <div class="bg-white border border-gray-300 mx-2 mb-2 rounded-b p-3 overflow-auto" style="max-height: 74vh;">
+                            <p class="text-[11px] text-gray-500 mb-2">
+                                Ko'rinayotgan tanlov (fakultet × yo'nalish × kurs) fanlari. Rejim:
+                                <b>Har hafta</b> — sukut; <b>Hafta almashinuvi</b> (1-3 kurs) — bir katakni
+                                bir necha fan navbat bilan bo'lishadi (bir xil <i>almashinuv guruhi</i>); soati
+                                (necha marta) tuganда fan chiqib ketadi. <b>Sikl</b> (4-6 kurs) — uzluksiz blok
+                                (sikl uzunligi haftada). O'zgarish avtomatik saqlanadi.
+                            </p>
+                            <table class="w-full text-xs border-collapse" id="subjModeTable">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-600">
+                                        <th class="border border-gray-200 px-2 py-1 text-left">Fan</th>
+                                        <th class="border border-gray-200 px-2 py-1 text-left" style="width:130px">Rejim</th>
+                                        <th class="border border-gray-200 px-2 py-1 text-left">Parametrlar</th>
+                                        <th class="border border-gray-200 px-2 py-1 text-center" style="width:44px"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="subjModeBody"></tbody>
+                            </table>
+                            <div id="subjModeEmpty" class="hidden text-sm text-gray-400 py-6 text-center">Bu tanlovда fan yo'q.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1344,6 +1378,7 @@
             let audCache = null;
             let modalCard = null;
             let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
+            let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_weeks}
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
 
             const $ = id => document.getElementById(id);
@@ -1515,6 +1550,9 @@
                 // Hafta bo'yicha istisnolar
                 overrides = {};
                 (j.overrides || []).forEach(o => { overrides[o.card_id + '|' + o.week] = { day: o.day, pair: o.pair, cancelled: o.cancelled }; });
+                // Fan rejimi (hafta almashinuvi / sikl): "spec|course|subject" => {mode, rotation_group, occurrences, cycle_weeks}
+                subjectSettings = {};
+                (j.subject_settings || []).forEach(s => { subjectSettings[subjModeKey(s.specialty_name, s.course, s.subject_name)] = s; });
                 // Eski kartaga ishora qiluvchi tanlovlarni bekor qilamiz (eski doskaga yozib
                 // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
                 selected = null; modalCard = null;
@@ -1523,6 +1561,7 @@
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('refreshNamesBtn').classList.remove('hidden');
+                $('subjModeBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
                 toggleAscToolbar(true);
                 buildSpecList();
@@ -1816,6 +1855,85 @@
             let typeFilter = 'all';
             const typeVisible = c => typeFilter === 'all' || c.training_type === typeFilter;
             const visibleSpecCards = () => specCards().filter(typeVisible);
+
+            // ===== Fan rejimi (hafta almashinuvi / sikl) =====
+            const subjModeKey = (spec, course, subj) => (spec || '') + '|' + course + '|' + (subj || '');
+            const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
+
+            // Ko'rinayotgan tanlovdagi noyob fanlar (yo'nalish + kurs + fan bo'yicha)
+            function subjModeList() {
+                const seen = {}, out = [];
+                specCards().forEach(c => {
+                    const k = subjModeKey(c.specialty_name, c.course, c.subject_name);
+                    if (!seen[k]) { seen[k] = 1; out.push({ key: k, specialty_name: c.specialty_name, course: c.course, subject_name: c.subject_name }); }
+                });
+                out.sort((a, b) => (a.course - b.course) || String(a.subject_name).localeCompare(b.subject_name, 'uz'));
+                return out;
+            }
+            function subjModeParamsHtml(s) {
+                const mode = s.mode || 'normal';
+                if (mode === 'alternate') {
+                    return '<span class="inline-flex items-center gap-1">Guruh: <input class="sm-grp rounded border-gray-300 text-xs px-1 py-0.5" style="width:90px" value="' + esc(s.rotation_group || '') + '" placeholder="mas. A"></span>' +
+                           '<span class="inline-flex items-center gap-1 ml-3">Marta (hafta): <input type="number" min="1" max="60" class="sm-occ rounded border-gray-300 text-xs px-1 py-0.5" style="width:60px" value="' + (s.occurrences != null ? s.occurrences : '') + '"></span>';
+                }
+                if (mode === 'cycle') {
+                    return '<span class="inline-flex items-center gap-1">Sikl uzunligi (hafta): <input type="number" min="1" max="40" class="sm-cyc rounded border-gray-300 text-xs px-1 py-0.5" style="width:60px" value="' + (s.cycle_weeks != null ? s.cycle_weeks : '') + '"></span>';
+                }
+                return '<span class="text-gray-400">—</span>';
+            }
+            function renderSubjModeTable() {
+                const list = subjModeList();
+                $('subjModeEmpty').classList.toggle('hidden', list.length > 0);
+                $('subjModeBody').innerHTML = list.map(it => {
+                    const s = subjectSettings[it.key] || { mode: 'normal' };
+                    const mode = s.mode || 'normal';
+                    const ctx = it.specialty_name + ' · ' + it.course + '-kurs';
+                    const opts = ['normal', 'alternate', 'cycle'].map(m =>
+                        '<option value="' + m + '"' + (m === mode ? ' selected' : '') + '>' + SUBJ_MODE_LABELS[m] + '</option>').join('');
+                    return '<tr data-k="' + esc(it.key) + '" data-spec="' + esc(it.specialty_name) + '" data-course="' + it.course + '" data-subj="' + esc(it.subject_name) + '">' +
+                        '<td class="border border-gray-200 px-2 py-1"><div class="font-medium text-gray-800">' + esc(it.subject_name) + '</div><div class="text-[10px] text-gray-400">' + esc(ctx) + '</div></td>' +
+                        '<td class="border border-gray-200 px-2 py-1"><select class="sm-mode rounded border-gray-300 text-xs w-full">' + opts + '</select></td>' +
+                        '<td class="border border-gray-200 px-2 py-1 sm-params">' + subjModeParamsHtml({ ...s, mode }) + '</td>' +
+                        '<td class="border border-gray-200 px-1 py-1 text-center sm-stat"></td></tr>';
+                }).join('');
+            }
+            async function saveSubjMode(tr) {
+                const spec = tr.dataset.spec, course = +tr.dataset.course, subj = tr.dataset.subj;
+                const mode = tr.querySelector('.sm-mode').value;
+                const body = { specialty_name: spec, course: course, subject_name: subj, mode: mode };
+                if (mode === 'alternate') {
+                    const grp = tr.querySelector('.sm-grp'); if (grp && grp.value.trim()) body.rotation_group = grp.value.trim();
+                    const occ = tr.querySelector('.sm-occ'); if (occ && occ.value) body.occurrences = +occ.value;
+                } else if (mode === 'cycle') {
+                    const cyc = tr.querySelector('.sm-cyc'); if (cyc && cyc.value) body.cycle_weeks = +cyc.value;
+                }
+                const stat = tr.querySelector('.sm-stat');
+                stat.textContent = '…'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-gray-400';
+                try {
+                    await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
+                    const k = subjModeKey(spec, course, subj);
+                    if (mode === 'normal') delete subjectSettings[k];
+                    else subjectSettings[k] = { specialty_name: spec, course: course, subject_name: subj, mode: mode,
+                        rotation_group: body.rotation_group ?? null, occurrences: body.occurrences ?? null, cycle_weeks: body.cycle_weeks ?? null };
+                    stat.textContent = '✓'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-emerald-600';
+                } catch (e) {
+                    stat.textContent = '✕'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-red-600';
+                    alert('Xatolik: ' + e.message);
+                }
+            }
+            $('subjModeBody').addEventListener('change', ev => {
+                const tr = ev.target.closest('tr'); if (!tr) return;
+                if (ev.target.classList.contains('sm-mode')) {
+                    const s = subjectSettings[tr.dataset.k] || {};
+                    tr.querySelector('.sm-params').innerHTML = subjModeParamsHtml({ ...s, mode: ev.target.value });
+                }
+                saveSubjMode(tr);
+            });
+            $('subjModeBtn').onclick = () => { if (!board) return; renderSubjModeTable(); $('subjModeModal').classList.remove('hidden'); };
+            $('subjModeClose').onclick = () => $('subjModeModal').classList.add('hidden');
+            $('subjModeModal').addEventListener('click', ev => {
+                if (ev.target === ev.currentTarget || ev.target.classList.contains('tt-modal-body')) $('subjModeModal').classList.add('hidden');
+            });
 
             function buildGroupRows() {
                 groupRows = [];

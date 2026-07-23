@@ -220,11 +220,16 @@
                 <div class="tt-modal-body">
                     <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 200px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
                         {{-- Sarlavha satri --}}
-                        <div class="asc-titlebar flex items-center justify-between px-5 py-3 rounded-t">
-                            <div class="flex items-center gap-3 text-base font-semibold text-white">
-                                <span id="ascIcon"></span><span id="ascTitle"></span>
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span id="ascIcon" class="asc-header-icon" aria-hidden="true"></span>
+                                <span id="ascTitle"></span>
                             </div>
-                            <button type="button" id="ascClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                            <button type="button" id="ascClose" class="asc-close-btn" aria-label="Yopish" title="Yopish">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M6 6l12 12M18 6 6 18"/>
+                                </svg>
+                            </button>
                         </div>
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
                         <div class="flex gap-3 p-4 overflow-hidden" style="min-height: 600px;">
@@ -243,7 +248,7 @@
                                         <select id="ascFilter" class="hidden rounded-lg border-slate-300 text-sm py-2 shadow-sm"></select>
                                         <span id="ascCount" class="text-xs text-gray-400"></span>
                                     </div>
-                                    <div class="overflow-auto" style="max-height: 64vh;">
+                                    <div class="overflow-auto asc-table-scroll" style="max-height: 64vh;" data-drag-scroll>
                                         <table id="ascTable" class="w-full text-sm asc-table"></table>
                                     </div>
                                 </div>
@@ -745,23 +750,88 @@
             height: 100%;
         }
         #ascTable.asc-auditorium-table {
-            width: 730px;
-            min-width: 730px;
-            table-layout: fixed;
+            width: 100%;
+            min-width: 100%;
+            table-layout: auto;
         }
         #ascTable.asc-auditorium-table th,
         #ascTable.asc-auditorium-table td {
             min-width: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            vertical-align: top;
         }
-        #ascTable.asc-auditorium-table .tt-aud-code { width: 58px; }
-        #ascTable.asc-auditorium-table .tt-aud-name { width: 150px; }
-        #ascTable.asc-auditorium-table .tt-aud-volume { width: 70px; }
-        #ascTable.asc-auditorium-table .tt-aud-building { width: 190px; }
-        #ascTable.asc-auditorium-table .tt-aud-type { width: 165px; }
-        #ascTable.asc-auditorium-table .tt-aud-status { width: 97px; }
+        #ascTable.asc-auditorium-table .tt-aud-code { width: 7%; }
+        #ascTable.asc-auditorium-table .tt-aud-name { width: 18%; }
+        #ascTable.asc-auditorium-table .tt-aud-volume { width: 8%; }
+        #ascTable.asc-auditorium-table .tt-aud-building { width: 35%; }
+        #ascTable.asc-auditorium-table .tt-aud-type { width: 22%; }
+        #ascTable.asc-auditorium-table .tt-aud-status { width: 10%; }
+        .asc-modal-header {
+            min-height: 58px;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(120deg, #1e4f91 0%, #2f6fba 55%, #3c82cc 100%);
+            border-bottom: 1px solid rgba(255,255,255,.22);
+        }
+        .asc-modal-header::after {
+            content: "";
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            right: 10%;
+            top: -220px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.09);
+            pointer-events: none;
+        }
+        .asc-header-main, .asc-close-btn { position: relative; z-index: 1; }
+        .asc-header-icon {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            filter: drop-shadow(0 3px 5px rgba(15,23,42,.3));
+        }
+        .asc-header-icon svg { width: 100%; height: 100%; }
+        .asc-close-btn {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,.3);
+            border-radius: 999px;
+            color: rgba(255,255,255,.9);
+            background: rgba(15,23,42,.14);
+            transition: background .18s ease, transform .18s ease, border-color .18s ease;
+        }
+        .asc-close-btn svg { width: 16px; height: 16px; }
+        .asc-close-btn:hover {
+            color: #fff;
+            background: rgba(220,38,38,.85);
+            border-color: rgba(255,255,255,.7);
+            transform: rotate(90deg);
+        }
+        .asc-close-btn:focus-visible {
+            outline: 3px solid rgba(191,219,254,.8);
+            outline-offset: 2px;
+        }
+        #ascCloseBtn {
+            transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+        }
+        #ascCloseBtn:hover { color: #1d4ed8; border-color: #60a5fa; transform: translateY(-1px); }
+        .asc-table-scroll {
+            cursor: grab;
+            overscroll-behavior: contain;
+            scrollbar-color: #94a3b8 #e2e8f0;
+        }
+        .asc-table-scroll.is-dragging {
+            cursor: grabbing;
+            user-select: none;
+        }
         .asc-action-btn { display: flex; align-items: center; gap: 8px; }
         .asc-action-icon { width: 16px; height: 16px; flex: 0 0 16px; display: inline-flex; }
         .asc-action-icon svg { width: 100%; height: 100%; }
@@ -795,6 +865,45 @@
 
             const $ = id => document.getElementById(id);
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+            // Jadvallarni sichqoncha bilan ushlab chap-o'ngga siljitish.
+            document.querySelectorAll('[data-drag-scroll]').forEach(el => {
+                let startX = 0;
+                let startScroll = 0;
+                let moved = false;
+
+                el.addEventListener('pointerdown', e => {
+                    if (e.button !== 0) return;
+                    startX = e.clientX;
+                    startScroll = el.scrollLeft;
+                    moved = false;
+                    el.classList.add('is-dragging');
+                    el.setPointerCapture?.(e.pointerId);
+                });
+                el.addEventListener('pointermove', e => {
+                    if (!el.classList.contains('is-dragging')) return;
+                    const dx = e.clientX - startX;
+                    if (Math.abs(dx) > 4) moved = true;
+                    el.scrollLeft = startScroll - dx;
+                    if (moved) e.preventDefault();
+                });
+                const stopDrag = () => {
+                    el.classList.remove('is-dragging');
+                    if (moved) {
+                        el.dataset.dragged = '1';
+                        setTimeout(() => { el.dataset.dragged = '0'; }, 0);
+                    }
+                };
+                el.addEventListener('pointerup', stopDrag);
+                el.addEventListener('pointercancel', stopDrag);
+                el.addEventListener('click', e => {
+                    if (el.dataset.dragged === '1') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        el.dataset.dragged = '0';
+                    }
+                }, true);
+            });
 
             // ===== Fan rangi (aSc Timetables uslubida) =====
             // FAQAT amaliy (praktik) darslar fan bo'yicha o'ziga xos rangda

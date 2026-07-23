@@ -217,8 +217,8 @@
                 <div class="tt-modal-body">
                     <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-7xl flex flex-col" style="max-height: 92vh;">
                         {{-- Sarlavha satri --}}
-                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
-                            <div class="flex items-center gap-2 text-sm font-semibold text-white">
+                        <div class="asc-titlebar flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="flex items-center gap-3 text-base font-semibold text-white">
                                 <span id="ascIcon"></span><span id="ascTitle"></span>
                             </div>
                             <button type="button" id="ascClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
@@ -705,6 +705,23 @@
                 padding: 9px 10px;
                 font-size: 0.82rem;
             }
+        }
+
+        #ascIcon {
+            font-size: 1.5rem;
+            line-height: 1;
+            filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.25));
+        }
+        #ascTitle {
+            font-size: 1.05rem;
+            letter-spacing: 0.01em;
+        }
+        #ascPanel {
+            transition: opacity 180ms ease, transform 180ms ease;
+        }
+        .asc-win {
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            box-shadow: 0 28px 80px rgba(15, 23, 42, 0.35);
         }
 
 </style>
@@ -1984,6 +2001,7 @@
                     await api(url, 'POST', body);
                     $('audEditModal').classList.add('hidden');
                     audCache = null;                       // rekvizit modalidagi kesh eskirdi
+                    ascCache.auditoriums = null;
                     ascData = await api(AUDS_URL); ascSelId = null;
                     renderAscTable(); renderAscButtons();
                 } catch (e) {
@@ -2002,6 +2020,7 @@
                     $('ascFootMsg').textContent = j.deactivated
                         ? 'Auditoriya jadvalda ishlatilgani uchun nofaol qilindi.' : 'O\'chirildi.';
                     audCache = null;
+                    ascCache.auditoriums = null;
                     ascData = await api(AUDS_URL); ascSelId = null;
                     renderAscTable(); renderAscButtons();
                 } catch (e) { alert('Xatolik: ' + e.message); }

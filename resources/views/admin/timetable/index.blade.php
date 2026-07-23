@@ -1142,12 +1142,18 @@
         .tt-toggle-icon svg { width: 100%; height: 100%; }
         .tt-toggle-chip:hover { border-color: #93c5fd; background: #eff6ff; }
         .tt-toggle-chip:has(input:checked) {
-            border-color: #6ee7b7;
-            background: #ecfdf5;
-            color: #047857;
-            box-shadow: 0 3px 10px rgba(5,150,105,.1);
+            border-color: #047857;
+            background: linear-gradient(135deg, #10b981, #047857);
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(5,150,105,.28);
+            transform: translateY(-1px);
         }
-        .tt-toggle-chip:has(input:checked) .tt-toggle-icon { color: #059669; }
+        .tt-toggle-chip:has(input:checked) .tt-toggle-icon { color: #fff; }
+        .tt-toggle-chip:has(input:checked):hover {
+            border-color: #065f46;
+            background: linear-gradient(135deg, #059669, #065f46);
+            color: #fff;
+        }
         .tt-auto-msg { min-width: 100px; }
         .tt-statistics {
             display: flex;

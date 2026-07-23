@@ -87,16 +87,11 @@
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
             <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-3 p-2" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
                 <div class="flex flex-wrap items-center gap-1.5">
-                    <select id="facSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
-                    <select id="dirSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[140px]"></select>
-                    <span class="text-[11px] text-gray-500">Kurs:</span>
-                    <span id="courseChecks" class="flex items-center gap-1.5 flex-wrap rounded-md border border-gray-300 px-2 py-1 bg-white"></span>
-                    <label class="flex items-center gap-1 text-[11px] text-gray-600 whitespace-nowrap" title="Shu yo'nalish+kursdagi barcha fakultetlar ketma-ket ko'rsatiladi">
-                        <input type="checkbox" id="allFacChk" class="rounded border-gray-300"> Barcha fak.
-                    </label>
-                    <label class="flex items-center gap-1 text-[11px] text-gray-600 whitespace-nowrap" title="Shu kursdagi barcha fakultet va yo'nalishlar ketma-ket ko'rsatiladi">
-                        <input type="checkbox" id="allSpecChk" class="rounded border-gray-300"> Barcha fak.+yo'n.
-                    </label>
+                    {{-- Ko'p tanlovli dropdown'lar: Fakultet → Yo'nalish → Kurs
+                         (checkboxlar tugma bosilganda ochiladigan menyudan chiqadi) --}}
+                    <div class="tt-dd"><button type="button" class="tt-dd-btn" id="facBtn" title="Fakultet(lar)ni tanlang"></button><div class="tt-dd-menu" id="facMenu"></div></div>
+                    <div class="tt-dd"><button type="button" class="tt-dd-btn" id="dirBtn" title="Yo'nalish(lar)ni tanlang"></button><div class="tt-dd-menu" id="dirMenu"></div></div>
+                    <div class="tt-dd"><button type="button" class="tt-dd-btn" id="crsBtn" title="Kurs(lar)ni tanlang"></button><div class="tt-dd-menu" id="crsMenu"></div></div>
 
                     <span class="h-6 w-px bg-gray-200"></span>
                     <div class="flex items-center gap-1 rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-1" title="Faqat shu yo'nalish+kursga. Hafta soni o'zgarsa kartalar qayta yaratiladi.">
@@ -574,6 +569,26 @@
         .asc-tool:hover { background: linear-gradient(#fff,#e2e8f0); border-color: #94a3b8; }
         .asc-tool .asc-ic { font-size: 16px; }
         .asc-titlebar { background: linear-gradient(#3b6fb5,#2c5896); }
+        /* ── Ko'p tanlovli dropdown (Fakultet / Yo'nalish / Kurs) — inline CSS ── */
+        .tt-dd { position: relative; display: inline-block; }
+        .tt-dd-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 260px; padding: 6px 10px;
+            font-size: 12px; line-height: 1.1; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+            color: #334155; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tt-dd-btn:hover { border-color: #94a3b8; }
+        .tt-dd-btn .tt-dd-ttl { color: #64748b; font-weight: 600; }
+        .tt-dd-btn .tt-dd-caret { margin-left: auto; color: #94a3b8; font-size: 10px; }
+        .tt-dd-menu { display: none; position: absolute; z-index: 70; top: calc(100% + 4px); left: 0; min-width: 180px;
+            max-width: 320px; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid #cbd5e1;
+            border-radius: 8px; box-shadow: 0 10px 24px rgba(15,23,42,.18); padding: 4px; }
+        .tt-dd-menu.open { display: block; }
+        .tt-dd-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px; color: #334155;
+            border-radius: 5px; cursor: pointer; white-space: nowrap; }
+        .tt-dd-item:hover { background: #eff6ff; }
+        .tt-dd-item input { flex: none; }
+        .tt-dd-tools { display: flex; gap: 6px; padding: 4px 6px 6px; border-bottom: 1px solid #eef1f5; margin-bottom: 4px; }
+        .tt-dd-tools button { font-size: 11px; color: #2563eb; background: none; border: none; cursor: pointer; padding: 2px 4px; }
+        .tt-dd-tools button:hover { text-decoration: underline; }
+        .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
         /* ── Modal oynalar (Tailwind kompilyatsiyasiga bog'liq bo'lmasin — inline) ── */
         .tt-modal { position: fixed; inset: 0; z-index: 60; background: rgba(15,23,42,.55); overflow-y: auto; }
         .tt-modal.hidden { display: none; }
@@ -745,7 +760,10 @@
             let grids = {};        // "specialty|course" => {days, pairs_per_day, weeks}
             let specList = [];     // [{key, specialty_name, course}]
             let curSpec = null;    // tanlangan {specialty_name, course} (asosiy/primary)
-            let selectedCourses = new Set();   // tanlangan kurslar (checkbox — bir nechta)
+            // Ko'p tanlovli qamrov (dropdown checkboxlari) — bir nechta fakultet/yo'nalish/kurs
+            let selectedFaculties = new Set();
+            let selectedDirs = new Set();
+            let selectedCourses = new Set();
             let groupRows = [];    // [{oqim_label, lang, group}]
             let selected = null;   // tanlangan karta (obyekt)
             let audCache = null;
@@ -881,7 +899,7 @@
                 // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
                 selected = null; modalCard = null;
                 $('cardModal').classList.add('hidden');
-                if (switching) curSpec = null;
+                if (switching) { curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear(); }
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('refreshNamesBtn').classList.remove('hidden');
@@ -916,96 +934,123 @@
                     (a.faculty + '|' + a.specialty_name + a.course).localeCompare(b.faculty + '|' + b.specialty_name + b.course, 'uz'));
             }
 
-            // ===== Kaskadli tanlov: Fakultet → Yo'nalish → Kurs =====
+            // ===== Ko'p tanlovli tanlov: Fakultet → Yo'nalish → Kurs (dropdown) =====
+            // Uch o'lcham ham checkbox dropdown'idan tanlanadi (bir nechtasini
+            // birga ko'rsatish mumkin). selectedFaculties/selectedDirs/selectedCourses
+            // to'plamlari ko'rinishni (specCards) va avtomatik joylash qamrovini boshqaradi.
             const facLabel = f => f || '— (fakultetsiz)';
             const facultiesList = () => [...new Set(specList.map(s => s.faculty))].sort((a, b) => a.localeCompare(b, 'uz'));
-            // allFac — barcha fakultetlar (bir yo'nalish); allSpec — barcha
-            // fakultet + barcha yo'nalish (shu kursda). Ro'yxatlar shunga qarab
-            // fakultet/yo'nalishга bog'lanmaydi.
-            const facMatch = (s, fac) => allFac || allSpec || s.faculty === fac;
-            const dirsOf = fac => [...new Set(specList.filter(s => facMatch(s, fac)).map(s => s.specialty_name))]
+            // Tanlangan fakultet(lar)ga tegishli yo'nalishlar; fakultet(lar)+yo'nalish(lar)ga tegishli kurslar.
+            const availDirs = () => [...new Set(specList.filter(s => selectedFaculties.has(s.faculty)).map(s => s.specialty_name))]
                 .sort((a, b) => a.localeCompare(b, 'uz'));
-            const coursesOf = (fac, dir) => [...new Set(specList
-                .filter(s => allSpec || (facMatch(s, fac) && s.specialty_name === dir)).map(s => s.course))].sort((a, b) => a - b);
+            const availCourses = () => [...new Set(specList
+                .filter(s => selectedFaculties.has(s.faculty) && selectedDirs.has(s.specialty_name)).map(s => s.course))]
+                .sort((a, b) => a - b);
 
-            // curSpec ni (fac, dir, course) bo'yicha aniqlaymiz. course berilmasa
-            // shu yo'nalishning birinchi kursi olinadi.
-            function setCurSpec(fac, dir, course) {
-                const match = s => facMatch(s, fac) && (allSpec || s.specialty_name === dir);
-                let found = specList.find(s => match(s) && s.course === course);
-                if (!found) found = specList.find(match);
-                if (found) curSpec = found;
-                return found;
+            // Asosiy (primary) curSpec — panjara sozlamalari paneli va sozlama saqlash uchun.
+            function setPrimarySpec() {
+                const fac = [...selectedFaculties].sort((a, b) => a.localeCompare(b, 'uz'))[0];
+                const dir = [...selectedDirs].sort((a, b) => a.localeCompare(b, 'uz'))[0];
+                const crs = [...selectedCourses].sort((a, b) => a - b)[0];
+                curSpec = specList.find(s => s.faculty === fac && s.specialty_name === dir && s.course === crs)
+                    || specList.find(s => s.faculty === fac && s.specialty_name === dir)
+                    || specList.find(s => s.faculty === fac)
+                    || specList[0] || null;
             }
-            // Uch selektorni curSpec holatiga qarab (yoki birinchi mavjudga) to'ldiradi.
-            function fillSpecControls() {
+            // Tanlovlarni mavjud variantlarga moslaymiz (kamida bittasi tanlangan bo'ladi).
+            // seed=true bo'lsa — curSpec (yoki birinchi variant)dan boshlab to'ldiramiz.
+            function reconcileSelection(seed) {
                 const facs = facultiesList();
-                const curFac = (curSpec && facs.includes(curSpec.faculty)) ? curSpec.faculty : (facs[0] ?? '');
-                $('facSel').innerHTML = facs.map(f => '<option value="' + esc(f) + '">' + esc(facLabel(f)) + '</option>').join('');
-                $('facSel').value = curFac;
-                fillDirControls(curFac);
-            }
-            function fillDirControls(fac) {
-                const dirs = dirsOf(fac);
-                const curDir = (curSpec && (allFac || curSpec.faculty === fac) && dirs.includes(curSpec.specialty_name)) ? curSpec.specialty_name : (dirs[0] ?? '');
-                $('dirSel').innerHTML = dirs.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
-                $('dirSel').value = curDir;
-                fillCourseControls(fac, curDir);
-            }
-            function fillCourseControls(fac, dir) {
-                const courses = coursesOf(fac, dir);
-                // Avvalgi tanlangan kurslardan mavjudlarini saqlaymiz; bo'lmasa primary/birinchi
-                let sel = new Set([...selectedCourses].filter(c => courses.includes(c)));
-                if (!sel.size) {
-                    const primary = (curSpec && courses.includes(curSpec.course)) ? curSpec.course : (courses[0] ?? null);
-                    if (primary != null) sel = new Set([primary]);
-                }
-                selectedCourses = sel;
-                $('courseChecks').innerHTML = courses.map(c =>
-                    '<label class="flex items-center gap-0.5 text-xs text-gray-700 cursor-pointer"><input type="checkbox" class="course-chk rounded border-gray-300" value="' + c + '"' +
-                    (sel.has(c) ? ' checked' : '') + '>' + c + '</label>').join('') || '<span class="text-xs text-gray-400">—</span>';
-                const primary = [...sel].sort((a, b) => a - b)[0] ?? (courses[0] ?? null);
-                setCurSpec(fac, dir, primary);
-            }
-            // Kurs checkboxlari — bir nechta kursni tanlash
-            $('courseChecks').addEventListener('change', ev => {
-                if (!ev.target.classList || !ev.target.classList.contains('course-chk')) return;
-                const c = +ev.target.value;
-                if (ev.target.checked) selectedCourses.add(c); else selectedCourses.delete(c);
-                if (!selectedCourses.size) { selectedCourses.add(c); ev.target.checked = true; } // kamida bitta
-                const primary = [...selectedCourses].sort((a, b) => a - b)[0];
-                setCurSpec($('facSel').value, $('dirSel').value, primary);
-                selected = null; fillGridInputs(); renderAll();
-            });
+                if (seed) selectedFaculties = new Set(curSpec && facs.includes(curSpec.faculty) ? [curSpec.faculty] : (facs.length ? [facs[0]] : []));
+                selectedFaculties = new Set([...selectedFaculties].filter(f => facs.includes(f)));
+                if (!selectedFaculties.size && facs.length) selectedFaculties.add(facs[0]);
 
-            $('facSel').onchange = function () {
-                fillDirControls(this.value);   // yo'nalish + kurs + curSpec yangilanadi
+                const dirs = availDirs();
+                if (seed) selectedDirs = new Set(curSpec && dirs.includes(curSpec.specialty_name) ? [curSpec.specialty_name] : (dirs.length ? [dirs[0]] : []));
+                selectedDirs = new Set([...selectedDirs].filter(d => dirs.includes(d)));
+                if (!selectedDirs.size && dirs.length) selectedDirs.add(dirs[0]);
+
+                const courses = availCourses();
+                if (seed) selectedCourses = new Set(curSpec && courses.includes(curSpec.course) ? [curSpec.course] : (courses.length ? [courses[0]] : []));
+                selectedCourses = new Set([...selectedCourses].filter(c => courses.includes(c)));
+                if (!selectedCourses.size && courses.length) selectedCourses.add(courses[0]);
+
+                setPrimarySpec();
+            }
+
+            // Bitta dropdown'ni chizadi: menyu ichiga checkboxlar + tugma yozuvi (xulosa).
+            function renderDD(id, title, items) {
+                const menu = $(id + 'Menu');
+                const chosen = items.filter(it => it.checked);
+                const tools = items.length > 1
+                    ? '<div class="tt-dd-tools"><button type="button" data-dd-all="' + id + '">Barchasi</button>' +
+                      '<button type="button" data-dd-one="' + id + '">Faqat asosiy</button></div>' : '';
+                menu.innerHTML = tools + (items.map(it =>
+                    '<label class="tt-dd-item"><input type="checkbox" value="' + esc(it.v) + '"' + (it.checked ? ' checked' : '') + '>' +
+                    esc(it.label) + '</label>').join('') || '<div class="tt-dd-empty">—</div>');
+                let sum;
+                if (!items.length) sum = '—';
+                else if (chosen.length === items.length && items.length > 1) sum = 'Barchasi (' + items.length + ')';
+                else if (chosen.length <= 1) sum = chosen.length ? chosen[0].label : '—';
+                else sum = chosen.length + ' ta tanlandi';
+                $(id + 'Btn').innerHTML = '<span class="tt-dd-ttl">' + title + ':</span> ' +
+                    '<span class="tt-dd-sum">' + esc(sum) + '</span> <span class="tt-dd-caret">▾</span>';
+            }
+            // Uchala dropdown'ni joriy tanlov holatiga qarab qayta chizadi.
+            function fillSelectors() {
+                renderDD('fac', 'Fakultet', facultiesList().map(f => ({ v: f, label: facLabel(f), checked: selectedFaculties.has(f) })));
+                renderDD('dir', 'Yo\'nalish', availDirs().map(d => ({ v: d, label: d, checked: selectedDirs.has(d) })));
+                renderDD('crs', 'Kurs', availCourses().map(c => ({ v: c, label: c + '-kurs', checked: selectedCourses.has(c) })));
+            }
+            // Boshlang'ich to'ldirish (loadBoard'dan). Tanlov bo'sh bo'lsa (yangi doska)
+            // curSpec'dan urug'lantiramiz; aks holda mavjud tanlovni saqlab, mavjud
+            // variantlarga moslaymiz (avtomatik joylash/bo'shatishdan keyingi qayta yuklashda
+            // ko'p tanlov yo'qolib qolmasin).
+            function fillSpecControls() {
+                const empty = !selectedFaculties.size && !selectedDirs.size && !selectedCourses.size;
+                reconcileSelection(empty);
+                fillSelectors();
+            }
+
+            // Checkbox o'zgarganda: tegishli to'plamni yangilaymiz, tanlovni moslaymiz, qayta chizamiz.
+            function onDDChange(which, target) {
+                const set = which === 'fac' ? selectedFaculties : which === 'dir' ? selectedDirs : selectedCourses;
+                const val = which === 'crs' ? +target.value : target.value;
+                if (target.checked) set.add(val); else set.delete(val);
+                if (!set.size) { set.add(val); target.checked = true; }   // kamida bitta
+                reconcileSelection(false);
+                fillSelectors();
                 selected = null; fillGridInputs(); renderAll();
-            };
-            $('dirSel').onchange = function () {
-                fillCourseControls($('facSel').value, this.value);
-                selected = null; fillGridInputs(); renderAll();
-            };
-            $('allFacChk').onchange = function () {
-                allFac = this.checked;
-                // Ketma-ket rejimda fakultet selektori ta'sir qilmaydi; yo'nalish/kurs
-                // ro'yxatlari barcha fakultetlar bo'yicha qayta to'ldiriladi.
-                $('facSel').disabled = allFac || allSpec;
-                selected = null;
-                fillDirControls($('facSel').value);
-                fillGridInputs(); renderAll();
-            };
-            $('allSpecChk').onchange = function () {
-                allSpec = this.checked;
-                // Barcha fakultet + yo'nalish: fakultet/yo'nalish selektorlari va
-                // "Barcha fakultetlar" checkbox'i o'chiriladi; faqat kurs qoladi.
-                $('facSel').disabled = allSpec || allFac;
-                $('dirSel').disabled = allSpec;
-                $('allFacChk').disabled = allSpec;
-                selected = null;
-                fillDirControls($('facSel').value);
-                fillGridInputs(); renderAll();
-            };
+            }
+            [['fac', 'facMenu'], ['dir', 'dirMenu'], ['crs', 'crsMenu']].forEach(([which, menuId]) => {
+                $(menuId).addEventListener('change', ev => {
+                    if (ev.target && ev.target.matches('input[type=checkbox]')) onDDChange(which, ev.target);
+                });
+                // "Barchasi" / "Faqat asosiy" tugmalari
+                $(menuId).addEventListener('click', ev => {
+                    const set = which === 'fac' ? selectedFaculties : which === 'dir' ? selectedDirs : selectedCourses;
+                    const items = which === 'fac' ? facultiesList() : which === 'dir' ? availDirs() : availCourses();
+                    if (ev.target.dataset.ddAll !== undefined && ev.target.dataset.ddAll) {
+                        items.forEach(v => set.add(v));
+                    } else if (ev.target.dataset.ddOne !== undefined && ev.target.dataset.ddOne) {
+                        const keep = [...set].sort((a, b) => which === 'crs' ? a - b : String(a).localeCompare(String(b), 'uz'))[0];
+                        set.clear(); if (keep != null) set.add(keep);
+                    } else { return; }
+                    reconcileSelection(false);
+                    fillSelectors();
+                    selected = null; fillGridInputs(); renderAll();
+                });
+            });
+            // Tugmani bosish — menyuni ochish/yopish; tashqariga bosilsa yopiladi.
+            document.addEventListener('click', ev => {
+                const btn = ev.target.closest('.tt-dd-btn');
+                const insideMenu = ev.target.closest('.tt-dd-menu');
+                document.querySelectorAll('.tt-dd').forEach(dd => {
+                    const menu = dd.querySelector('.tt-dd-menu');
+                    if (btn && dd.contains(btn)) menu.classList.toggle('open');
+                    else if (menu !== insideMenu) menu.classList.remove('open');
+                });
+            });
 
             // ===== Panjara sozlamasi (yo'nalish+kurs bo'yicha) =====
             function curGrid() {
@@ -1069,25 +1114,36 @@
                 this.disabled = false;
             };
 
+            // Ko'rinayotgan tanlov qamrovi — backendga yuboriladigan massivlar
+            // (tanlangan fakultet/yo'nalish/kurs). "Butun doska" da qamrov yuborilmaydi.
+            function scopeBody() {
+                return {
+                    faculty_names: [...selectedFaculties],
+                    specialty_names: [...selectedDirs],
+                    courses: [...selectedCourses].sort((a, b) => a - b),
+                };
+            }
+            function scopeLabelText() {
+                const fl = selectedFaculties.size > 1 ? (selectedFaculties.size + ' fakultet') : facLabel([...selectedFaculties][0]);
+                const dl = selectedDirs.size > 1 ? (selectedDirs.size + ' yo\'nalish') : ([...selectedDirs][0] || '—');
+                const cl = [...selectedCourses].sort((a, b) => a - b).join(',') + '-kurs';
+                return fl + ' · ' + dl + ' · ' + cl;
+            }
+
             // ===== Avtomatik (optimal) joylashtirish =====
             async function doAutoPlace() {
                 if (!board || !curSpec) return;
                 const whole = $('autoScope').checked;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
-                // Qamrov: butun doska / shu kursning barcha yo'nalishlari (allSpec) /
-                // shu yo'nalish+kurs (barcha fakultetlar bilan yoki bittasi).
-                const scopeLabel = (whole ? 'Butun doska'
-                    : allSpec ? ('Barcha yo\'nalishlar · ' + curSpec.course + '-kurs')
-                    : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs')) + typeLbl;
+                // Qamrov: butun doska / ko'rinayotgan tanlov (fakultet×yo'nalish×kurs).
+                const scopeLabel = (whole ? 'Butun doska' : scopeLabelText()) + typeLbl;
                 if ($('autoReset').checked &&
                     !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
                 $('autoBtn').disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
                 try {
                     const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0,
                         lecture_rooms: $('autoLecRooms').checked ? 1 : 0 };
-                    if (whole) { /* butun doska — qamrov yubormaymiz */ }
-                    else if (allSpec) { body.course = curSpec.course; }
-                    else { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
+                    if (!whole) Object.assign(body, scopeBody());
                     if (typeFilter !== 'all') body.training_type = typeFilter;
                     const j = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
                     await loadBoard(board.id);
@@ -1113,16 +1169,12 @@
             $('unplaceBtn').onclick = async function () {
                 if (!board || !curSpec) return;
                 const whole = $('autoScope').checked;
-                const scopeLabel = whole ? 'Butun doska'
-                    : allSpec ? ('Barcha yo\'nalishlar · ' + curSpec.course + '-kurs')
-                    : (curSpec.specialty_name + ' · ' + curSpec.course + '-kurs');
+                const scopeLabel = whole ? 'Butun doska' : scopeLabelText();
                 if (!confirm(scopeLabel + ' bo\'yicha barcha joylashuvlar bo\'shatilib, kartochkalar panelga qaytariladi. Davom etamizmi?')) return;
                 this.disabled = true; $('autoMsg').textContent = 'Bo\'shatilmoqda...';
                 try {
                     const body = {};
-                    if (whole) { /* butun doska */ }
-                    else if (allSpec) { body.course = curSpec.course; }
-                    else { body.specialty_name = curSpec.specialty_name; body.course = curSpec.course; }
+                    if (!whole) Object.assign(body, scopeBody());
                     if (typeFilter !== 'all') body.training_type = typeFilter;
                     const j = await api(BASE + '/boards/' + board.id + '/unplace', 'POST', body);
                     await loadBoard(board.id);
@@ -1132,20 +1184,13 @@
             };
 
             // ===== Yordamchilar =====
-            // Fakultet cheklovi: allFac — shu yo'nalish+kursдаги barcha
-            // fakultetlar; allSpec — shu kursдаги barcha fakultet + barcha
-            // yo'nalish (ketma-ket).
-            let allFac = false;
-            let allSpec = false;
             let viewMode = 'group';   // group | teacher | room | subject (jadval kesimi)
-            // Kurs mosligi — tanlangan kurslar (checkbox); bo'sh bo'lsa primary curSpec.course
-            const inCourses = c => selectedCourses.size ? selectedCourses.has(c.course) : (curSpec && c.course === curSpec.course);
-            const specCards = () => cards.filter(c => {
-                if (!curSpec || !inCourses(c)) return false;
-                if (allSpec) return true;
-                if (c.specialty_name !== curSpec.specialty_name) return false;
-                return allFac || (c.faculty_name || '') === curSpec.faculty;
-            });
+            // Ko'rinadigan kartalar — tanlangan fakultet(lar) × yo'nalish(lar) × kurs(lar) kesishmasi.
+            const multiSpec = () => selectedDirs.size > 1;
+            const specCards = () => cards.filter(c =>
+                selectedFaculties.has(c.faculty_name || '') &&
+                selectedDirs.has(c.specialty_name) &&
+                selectedCourses.has(c.course));
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
             // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
             let typeFilter = 'all';
@@ -1394,13 +1439,11 @@
                 // soni (bir "pair" = bir yarim-slot). Yo'nalish bo'yicha faqat kun soni farq
                 // qilishi mumkin, para soni butun doska uchun bir xil.
                 let P = boardSchedule().filter(it => it.type === 'pair').length || g.pairs_per_day;
-                // allSpec — turli yo'nalishlarning kun soni har xil bo'lishi mumkin; eng
-                // kattasini olamiz (barcha kunlar sig'sin).
-                if (allSpec) {
-                    [...new Set(specCards().map(c => c.specialty_name + '|' + c.course))].forEach(k => {
-                        const gg = grids[k]; if (gg) { D = Math.max(D, gg.days); }
-                    });
-                }
+                // Ko'rinayotgan yo'nalish/kurslarning kun soni har xil bo'lishi mumkin;
+                // eng kattasini olamiz (barcha kunlar sig'sin).
+                [...new Set(specCards().map(c => c.specialty_name + '|' + c.course))].forEach(k => {
+                    const gg = grids[k]; if (gg) { D = Math.max(D, gg.days); }
+                });
                 const dayNames = boardDayNames();
 
                 // Ustunlar: guruhlar oqim bo'yicha guruhlangan (groupRows tartibida)
@@ -1503,8 +1546,9 @@
                     h += '</tr><tr>';
                 }
                 const multiCourse = selectedCourses.size > 1;
+                const showSpec = multiSpec();
                 oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
-                    esc((allSpec && o.specialty ? o.specialty + ' · ' : '') + (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—')) + '</th>');
+                    esc((showSpec && o.specialty ? o.specialty + ' · ' : '') + (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—')) + '</th>');
                 h += '</tr><tr>';
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gr) + '</th>'));
                 h += '</tr></thead><tbody>';
@@ -1527,7 +1571,7 @@
                             // Har katakka kun/para — drag-and-drop tashlash nishoni uchun
                             const dp = ' data-day="' + d + '" data-pair="' + p + '"';
                             // Tanlangan ma'ruza — butun oqimga bitta birlashtirilgan nishon (colspan).
-                            // allFac/allSpec rejimida faqat o'z fakulteti+yo'nalishi oqimi yonadi.
+                            // Ko'p tanlovda faqat o'z fakulteti+yo'nalishi oqimi yonadi.
                             if (selected && selected.training_type === 'lecture' && (selected.oqim_label || '') === o.label
                                 && (selected.faculty_name || '') === o.faculty && (selected.specialty_name || '') === o.specialty
                                 && selected.course === o.course) {
@@ -2151,8 +2195,8 @@
             }
 
             function buildExcelView() {
-                // Ekranда ko'rinaётган qamrov (bitta yo'nalish / barcha fakultet /
-                // barcha yo'nalish — allFac/allSpec) o'zini yuklaymiz.
+                // Ekranда ko'rinaётган qamrov (tanlangan fakultet × yo'nalish × kurs)
+                // o'zini yuklaymiz.
                 const src = specCards();
                 // Dars turi filtri + tanlangan hafta Excel ko'rinishga ham qo'llanadi
                 const placed = src.filter(c => effPlace(c) && typeVisible(c));

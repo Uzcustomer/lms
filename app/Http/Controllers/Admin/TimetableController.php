@@ -563,15 +563,28 @@ class TimetableController extends Controller
     public function autoPlace(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([
-            'specialty_name' => 'nullable|string|max:255',
-            'course'         => 'nullable|integer|min:1|max:7',
+            'specialty_name'    => 'nullable|string|max:255',
+            'course'            => 'nullable|integer|min:1|max:7',
+            // Ko'p tanlovli qamrov (dropdown checkboxlaridan) — fakultet/yo'nalish/kurs massivlari
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
             'reset'          => 'nullable|boolean',
             'assign_rooms'   => 'nullable|boolean',
             'lecture_rooms'  => 'nullable|boolean',
             'training_type'  => 'nullable|in:lecture,practice',
         ]);
-        $scopeSpec = $data['specialty_name'] ?? null;
-        $scopeCourse = isset($data['course']) ? (int) $data['course'] : null;
+        // Qamrov to'plamlari: fakultet / yo'nalish / kurs (massiv yoki eski yakka param)
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
+            if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
+            if ($specSet !== null && !isset($specSet[(string) $c->specialty_name])) return false;
+            if ($courseSet !== null && !isset($courseSet[(int) $c->course])) return false;
+            return true;
+        };
         $scopeType = $data['training_type'] ?? null;   // faqat ma'ruza yoki faqat amaliy
         $reset = (bool) ($data['reset'] ?? false);
         $assignRooms = (bool) ($data['assign_rooms'] ?? false);
@@ -590,16 +603,11 @@ class TimetableController extends Controller
         $minVolFor = fn(TimetableCard $c) => (int) ceil((int) $c->students * (100 - $roomTolPct) / 100);
 
         // Reset — tanlangan qamrovdagi mavjud joylashuvlarni bo'shatamiz.
-        // Qamrov: yo'nalish+kurs (scopeSpec) → faqat o'sha; aks holda kurs
-        // berilsa (scopeSpec=null, scopeCourse!=null) → shu kursning barcha
-        // yo'nalishlari; ikkalasi ham null → butun doska.
+        // Qamrov: tanlangan fakultet/yo'nalish/kurs to'plamlari bo'yicha; hech
+        // biri berilmasa — butun doska.
         if ($reset) {
             $q = TimetableCard::where('board_id', $board->id);
-            if ($scopeSpec !== null) {
-                $q->where('specialty_name', $scopeSpec)->where('course', $scopeCourse);
-            } elseif ($scopeCourse !== null) {
-                $q->where('course', $scopeCourse);
-            }
+            $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
             if ($scopeType !== null) {
                 $q->where('training_type', $scopeType);
             }
@@ -651,19 +659,14 @@ class TimetableController extends Controller
         };
 
         // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar
-        $toPlace = $all->filter(function ($c) use ($scopeSpec, $scopeCourse, $scopeType) {
+        $toPlace = $all->filter(function ($c) use ($scopeType, $inScope) {
             if ($c->day && $c->pair) {
                 return false;
             }
             if ($scopeType !== null && $c->training_type !== $scopeType) {
                 return false;
             }
-            if ($scopeSpec !== null) {
-                return $c->specialty_name === $scopeSpec && (int) $c->course === $scopeCourse;
-            }
-            // Yo'nalish berilmagan: kurs berilsa — shu kursning barcha
-            // yo'nalishlari; aks holda butun doska.
-            return $scopeCourse === null || (int) $c->course === $scopeCourse;
+            return $inScope($c);
         });
 
         // Tartib: eng ko'p cheklovli avval — ma'ruza (ko'p guruh band qiladi),
@@ -798,18 +801,21 @@ class TimetableController extends Controller
     public function unplaceAll(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([
-            'specialty_name' => 'nullable|string|max:255',
-            'course'         => 'nullable|integer|min:1|max:7',
+            'specialty_name'    => 'nullable|string|max:255',
+            'course'            => 'nullable|integer|min:1|max:7',
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
             'training_type'  => 'nullable|in:lecture,practice',
         ]);
 
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $q = TimetableCard::where('board_id', $board->id)
             ->where(function ($w) { $w->whereNotNull('day')->orWhereNotNull('pair'); });
-        if (!empty($data['specialty_name'])) {
-            $q->where('specialty_name', $data['specialty_name'])->where('course', $data['course']);
-        } elseif (isset($data['course'])) {
-            $q->where('course', (int) $data['course']);
-        }
+        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
         if (!empty($data['training_type'])) {
             $q->where('training_type', $data['training_type']);
         }
@@ -818,6 +824,56 @@ class TimetableController extends Controller
         $q->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
 
         return response()->json(['ok' => true, 'unplaced' => $count]);
+    }
+
+    /**
+     * Qamrov to'plamlarini so'rov ma'lumotidan tuzadi: fakultet/yo'nalish/kurs
+     * massivlari (dropdown checkboxlaridan). Massivlar berilmasa eski yakka
+     * specialty_name/course parametrlari bilan moslashadi. Qaytadi:
+     * [facSet|null, specSet|null, courseSet|null] — har biri array_flip xarita
+     * (yoki cheklovsizlik uchun null).
+     */
+    private function scopeSets(array $data): array
+    {
+        $facs = $data['faculty_names'] ?? null;
+        $specs = $data['specialty_names'] ?? null;
+        $courses = isset($data['courses']) ? array_map('intval', (array) $data['courses']) : null;
+
+        // Massivlar yo'q — eski yakka parametrlarga qaytamiz
+        if ($facs === null && $specs === null && $courses === null) {
+            if (!empty($data['specialty_name'])) {
+                $specs = [$data['specialty_name']];
+                $courses = isset($data['course']) ? [(int) $data['course']] : null;
+            } elseif (isset($data['course'])) {
+                $courses = [(int) $data['course']];
+            }
+        }
+
+        return [
+            $facs !== null ? array_flip(array_map('strval', $facs)) : null,
+            $specs !== null ? array_flip(array_map('strval', $specs)) : null,
+            $courses !== null ? array_flip($courses) : null,
+        ];
+    }
+
+    /** Qamrov to'plamlarini SQL so'roviga qo'llaydi (whereIn). */
+    private function applyScopeToQuery($q, ?array $facSet, ?array $specSet, ?array $courseSet): void
+    {
+        if ($specSet !== null) {
+            $q->whereIn('specialty_name', array_keys($specSet));
+        }
+        if ($courseSet !== null) {
+            $q->whereIn('course', array_keys($courseSet));
+        }
+        if ($facSet !== null) {
+            $vals = array_keys($facSet);
+            $q->where(function ($w) use ($vals) {
+                $w->whereIn('faculty_name', $vals);
+                if (in_array('', $vals, true)) {
+                    $w->orWhereNull('faculty_name');
+                }
+            });
+        }
     }
 
     /**

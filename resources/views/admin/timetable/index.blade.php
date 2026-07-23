@@ -11,35 +11,31 @@
             {{-- Yuqori boshqaruv qatorlari (flex-shrink-0 — doim ko'rinadi) --}}
             <div style="flex: 0 0 auto;">
 
-            {{-- Doska tanlash + boshqaruv paneli — bitta ixcham qatorda --}}
-            <div class="tt-topbar-card bg-white shadow-sm sm:rounded-xl mb-3">
-                <div class="toolbar-row top-toolbar flex items-center">
-                    <div class="board-select-shell">
-                        <span class="board-select-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M6 20V8h12v12M4 8l8-5 8 5M9 11v2M12 11v2M15 11v2"/></svg></span>
-                        <select id="boardSel" class="rounded-lg border-gray-300 shadow-sm text-xs">
+            {{-- Doska tanlash + boshqaruv paneli --}}
+            <div class="tt-control-panel tt-top-panel mb-3">
+                <div class="tt-top-toolbar">
+                    <div class="tt-board-select">
+                        <span class="tt-board-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M6 20V8h12v12M4 8l8-5 8 5M9 11v2M12 11v2M15 11v2"/></svg></span>
+                        <select id="boardSel">
                             <option value="">— Tanlang yoki yangi yarating —</option>
                             @foreach($boards as $b)
                                 <option value="{{ $b->id }}">{{ $b->name }} ({{ $b->cards_count }} karta)</option>
                             @endforeach
                         </select>
                     </div>
-                    <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5h16v12H4z"/><path d="M7 7.5V5h10v2.5M12 10v6M9 13h6"/></svg></span>Yangi doska</button>
-                    <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.5 14 5l2.5-.2.9 2.3 2.1 1.4-.7 2.4.7 2.4-2.1 1.4-.9 2.3L14 17l-2 1.5L10 17l-2.5.2-.9-2.3-2.1-1.4.7-2.4-.7-2.4 2.1-1.4.9-2.3L10 5z"/><circle cx="12" cy="11.5" r="2.5"/></svg></span>Kartochkalar</button>
-                    <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M19.1 12A7 7 0 0 0 6.8 7.2L5 9M4.9 12a7 7 0 0 0 12.3 4.8L19 15"/></svg></span>Fan nomlari</button>
-                    <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action" style="color:#dc2626"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>O'chirish</button>
-                    <span id="boardMsg" class="text-xs"></span>
 
-                    {{-- aSc Timetables uslubidagi boshqaruv tugmalari — doska yuklanganda ko'rinadi --}}
-                    <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 1.5 2.1 2.5.5 1.8-1.2 1.8 1.8-1.2 1.8.5 2.5L21 12l-2.1 1.5-.5 2.5 1.2 1.8-1.8 1.8-1.8-1.2-2.5.5L12 21l-1.5-2.1-2.5-.5-1.8 1.2-1.8-1.8 1.2-1.8-.5-2.5L3 12l2.1-1.5.5-2.5-1.2-1.8 1.8-1.8 1.8 1.2 2.5-.5z"/><circle cx="12" cy="12" r="2.5"/></svg></span>Sozlamalar</button>
-                    <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects">
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 4.5h10a2 2 0 0 1 2 2V19H7a2 2 0 0 0-2 2V4.5Z"/><path d="M7 21h12V6.5a2 2 0 0 0-2-2H7"/><path d="M9 8h5M9 12h5"/></svg>
-                        Ma'lumotlar
-                    </button>
-                    <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 12a4 4 0 0 1 0-8h3v3H8a1 1 0 0 0 0 2h3v3zM16 12a4 4 0 0 0 0 8h-3v-3h3a1 1 0 0 0 0-2h-3v-3z"/><path d="M9 12h6"/></svg></span>Biriktirish</button>
-                    <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
-                    <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></span>Excelga yuklash</button>
-                    <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg></span>Tekshiruv <span id="checkBadge" class="hidden ml-1 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold"></span></button>
+                    <div class="tt-toolbar-actions">
+                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></span>Yangi doska</button>
+                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="12" height="10" rx="1.5"/><path d="M8 9h12v10H8z"/></svg></span>Kartochkalar</button>
+                        <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 9 8-4 8 4-8 4-8-4Z"/><path d="M7 11.5V16c2 1.5 8 1.5 10 0v-4.5"/></svg></span>Fan nomlari</button>
+                        <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>O'chirish</button>
+                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 1.5 2.1 2.5.5 1.8-1.2 1.8 1.8-1.2 1.8.5 2.5L21 12l-2.1 1.5-.5 2.5 1.2 1.8-1.8 1.8-1.8-1.2-2.5.5L12 21l-1.5-2.1-2.5-.5-1.8 1.2-1.8-1.8 1.2-1.8-.5-2.5L3 12l2.1-1.5.5-2.5-1.2-1.8 1.8-1.8 1.8 1.2 2.5-.5z"/><circle cx="12" cy="12" r="2.5"/></svg></span>Sozlamalar</button>
+                        <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg></span>Ma'lumotlar</button>
+                        <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 12a4 4 0 0 1 0-8h3v3H8a1 1 0 0 0 0 2h3v3zM16 12a4 4 0 0 0 0 8h-3v-3h3a1 1 0 0 0 0-2h-3v-3z"/><path d="M9 12h6"/></svg></span>Biriktirish</button>
+                        <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></span>Excelga yuklash</button>
+                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
+                        <span id="boardMsg" class="text-xs"></span>
+                    </div>
                 </div>
 
                 {{-- Yangi doska formasi --}}
@@ -91,56 +87,71 @@
             </div>
 
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
-            <div id="specBar" class="hidden spec-toolbar shadow-sm sm:rounded-xl mb-3" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
-                <div class="spec-toolbar-main">
-                    {{-- Ko'p tanlovli dropdown'lar: Fakultet → Yo'nalish → Kurs --}}
-                    <div class="spec-control-group spec-scope-group">
+            <div id="specBar" class="hidden tt-control-panel tt-work-panel mb-3" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
+                <div class="tt-filters-row">
+                    <div class="tt-field">
+                        <label>Fakultet</label>
                         <div class="tt-dd"><button type="button" class="tt-dd-btn" id="facBtn" title="Fakultet(lar)ni tanlang"></button><div class="tt-dd-menu" id="facMenu"></div></div>
+                    </div>
+                    <div class="tt-field">
+                        <label>Yo'nalish</label>
                         <div class="tt-dd"><button type="button" class="tt-dd-btn" id="dirBtn" title="Yo'nalish(lar)ni tanlang"></button><div class="tt-dd-menu" id="dirMenu"></div></div>
+                    </div>
+                    <div class="tt-field tt-course-field">
+                        <label>Kurs</label>
                         <div class="tt-dd"><button type="button" class="tt-dd-btn" id="crsBtn" title="Kurs(lar)ni tanlang"></button><div class="tt-dd-menu" id="crsMenu"></div></div>
                     </div>
 
-                    <div class="spec-control-group spec-grid-group" title="Faqat shu yo'nalish+kursga. Hafta soni o'zgarsa kartalar qayta yaratiladi.">
-                        <span class="spec-group-label">Panjara</span>
-                        <input type="number" id="gsDays" min="1" max="7" class="w-10 rounded border-gray-300 text-xs" title="Kunlar">
-                        <input type="number" id="gsPairs" min="1" max="10" class="w-10 rounded border-gray-300 text-xs" title="Kuniga para">
-                        <input type="number" id="gsWeeks" min="1" max="30" class="w-10 rounded border-gray-300 text-xs" title="Hafta soni">
+                    <div class="tt-grid-field">
+                        <div class="tt-field">
+                            <label>Panjara</label>
+                            <div class="tt-grid-inputs">
+                                <input type="number" id="gsDays" min="1" max="7" title="Kunlar">
+                                <input type="number" id="gsPairs" min="1" max="10" title="Kuniga para">
+                                <input type="number" id="gsWeeks" min="1" max="30" title="Hafta soni">
+                            </div>
+                        </div>
                         <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 16h8"/></svg></span>Saqlash</button>
                     </div>
 
-                    <div class="spec-control-group spec-view-group">
-                        <div class="spec-type-switch flex rounded-md overflow-hidden border border-gray-300 text-[11px]">
-                            <button type="button" class="tt-type active px-2 py-1" data-type="all">Hammasi</button>
-                            <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="lecture">Ma'ruza</button>
-                            <button type="button" class="tt-type px-2 py-1 border-l border-gray-300" data-type="practice">Amaliy</button>
+                    <div class="tt-field">
+                        <label>Dars turi</label>
+                        <div class="tt-lesson-tabs">
+                            <button type="button" class="tt-type active" data-type="all">Hammasi</button>
+                            <button type="button" class="tt-type" data-type="lecture">Ma'ruza</button>
+                            <button type="button" class="tt-type" data-type="practice">Amaliy</button>
                         </div>
-                        <select id="weekSel" class="rounded-md border-gray-300 text-[11px] py-1"></select>
+                    </div>
+                    <div class="tt-field tt-week-field">
+                        <label>Hafta</label>
+                        <select id="weekSel"></select>
                         <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
-                        <label class="spec-view-label flex items-center gap-1 text-[11px] text-gray-500">Kesim:
-                            <select id="viewMode" class="rounded-md border-gray-300 text-[11px] py-1">
-                                <option value="group">Guruh</option>
-                                <option value="teacher">O'qituvchi</option>
-                                <option value="room">Auditoriya</option>
-                                <option value="subject">Fan</option>
-                            </select>
-                        </label>
+                    </div>
+                    <div class="tt-field tt-view-field">
+                        <label>Kesim</label>
+                        <select id="viewMode">
+                            <option value="group">Guruh</option>
+                            <option value="teacher">O'qituvchi</option>
+                            <option value="room">Auditoriya</option>
+                            <option value="subject">Fan</option>
+                        </select>
                     </div>
 
-                    <div class="spec-primary-actions">
-                        <button type="button" id="autoBtn" class="toolbar-action spec-auto-btn px-3 py-2 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-8 12h6l-1 8 8-12h-6z"/></svg></span>Avtomatik joylash</button>
-                        <button type="button" id="unplaceBtn" class="toolbar-action spec-unplace-btn px-3 py-2 text-xs bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>Bo'shatish</button>
+                    <div class="tt-main-actions">
+                        <button type="button" id="autoBtn" class="toolbar-action tt-success-btn"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-8 12h6l-1 8 8-12h-6z"/></svg></span>Avtomatik joylash</button>
+                        <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg></span>Bo'shatish</button>
                     </div>
                 </div>
 
-                <div class="spec-toolbar-bottom">
-                    <div class="spec-options">
-                        <label class="spec-option" title="Butun doska (barcha yo'nalishlar)"><input type="checkbox" id="autoScope"><span class="spec-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span>Butun doska</label>
-                        <label class="spec-option" title="Qaytadan joylash (mavjudini bo'shatib)"><input type="checkbox" id="autoReset"><span class="spec-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 0-2 4.9"/></svg></span>Qaytadan joylash</label>
-                        <label class="spec-option" title="Auditoriya biriktirilsin (sig'im bo'yicha)"><input type="checkbox" id="autoRooms"><span class="spec-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 20V9h14v11M4 9l8-5 8 5M8 12v4M12 12v4M16 12v4"/></svg></span>Auditoriya</label>
-                        <label class="spec-option" title="Ma'ruzalarga faqat ma'ruza xonalarini to'qnashuvsiz biriktirish"><input type="checkbox" id="autoLecRooms"><span class="spec-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v12H4z"/><path d="M2 20h20M8 9h8M8 13h5"/></svg></span>Ma'ruza xonasi</label>
+                <div class="tt-bottom-row">
+                    <div class="tt-toggle-group">
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoScope"><span class="tt-toggle-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span>Butun doska</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoReset"><span class="tt-toggle-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 0-2 4.9"/></svg></span>Qaytadan joylash</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms"><span class="tt-toggle-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 20V9h14v11M4 9l8-5 8 5M8 12v4M12 12v4M16 12v4"/></svg></span>Auditoriya</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms"><span class="tt-toggle-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v12H4z"/><path d="M2 20h20M8 9h8M8 13h5"/></svg></span>Ma'ruza xonasi</label>
                     </div>
-                    <span id="autoMsg" class="spec-auto-msg text-[11px] text-emerald-700 font-medium"></span>
-                    <div id="statChips" class="spec-stats flex flex-wrap gap-1.5 text-[11px]"></div>
+                    <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
+                    <div id="statChips" class="tt-statistics"></div>
                 </div>
             </div>
 
@@ -889,207 +900,302 @@
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
         .toolbar-row { align-items: flex-end; gap: 8px; }
-        .tt-topbar-card, .spec-toolbar {
-            border: 1px solid #e6ebf2;
-            background: rgba(255,255,255,.98);
-            box-shadow: 0 6px 20px rgba(15,23,42,.06);
+        .tt-control-panel {
+            overflow: visible;
+            border: 1px solid rgba(219,228,240,.94);
+            border-radius: 15px;
+            background: rgba(255,255,255,.96);
+            box-shadow: 0 8px 25px rgba(15,23,42,.06), 0 2px 7px rgba(15,23,42,.04);
         }
-        .top-toolbar {
-            min-height: 70px;
-            padding: 12px 14px;
+        .tt-top-toolbar {
+            display: flex;
+            align-items: center;
             gap: 10px;
-            flex-wrap: nowrap;
-            overflow-x: auto;
-            scrollbar-width: thin;
+            width: 100%;
+            padding: 14px;
         }
-        .top-toolbar > [data-asc-toolbar].h-6 { display: none !important; }
-        .board-select-shell {
+        .tt-board-select {
             position: relative;
-            flex: 1 1 360px;
-            min-width: 310px;
-            max-width: 410px;
+            flex: 1 1 350px;
+            min-width: 280px;
+            max-width: 430px;
         }
-        .board-select-icon {
+        .tt-board-icon {
             position: absolute;
             left: 13px;
             top: 50%;
+            z-index: 2;
             width: 16px;
             height: 16px;
-            color: #64748b;
+            color: #2563eb;
             transform: translateY(-50%);
-            z-index: 2;
             pointer-events: none;
         }
-        .board-select-icon svg { width: 100%; height: 100%; }
-        .board-select-shell #boardSel {
+        .tt-board-icon svg { width: 100%; height: 100%; }
+        .tt-board-select select {
             width: 100%;
-            min-height: 42px;
-            padding-left: 38px;
-            padding-right: 34px;
-            border-color: #dbe3ed;
-            background-color: #fff;
-            color: #334155;
+            height: 42px;
+            padding: 0 36px 0 38px;
+            border: 1px solid #dbe4f0;
+            border-radius: 9px;
+            outline: none;
+            background: #fff;
+            color: #172033;
+            font-size: 12px;
+            cursor: pointer;
         }
-        .top-toolbar .asc-tool {
+        .tt-toolbar-actions {
+            display: flex;
+            flex: 2 1 850px;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 9px;
+        }
+        .tt-toolbar-actions .asc-tool, .tt-grid-field .asc-tool {
             min-height: 42px;
             padding: 0 14px;
-            border-color: #dbe3ed;
-            border-radius: 8px;
+            border: 1px solid #dbe4f0;
+            border-radius: 9px;
             background: linear-gradient(180deg,#fff,#f8fafc);
             color: #334155;
-            box-shadow: 0 2px 5px rgba(15,23,42,.04);
+            font-weight: 600;
+            box-shadow: none;
+            transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
         }
-        .top-toolbar .asc-tool:hover {
-            border-color: #b8c6d8;
+        .tt-toolbar-actions .asc-tool:hover, .tt-grid-field .asc-tool:hover {
+            border-color: #b9c8dd;
             background: #f8fafc;
+            box-shadow: 0 5px 14px rgba(15,23,42,.08);
             transform: translateY(-1px);
         }
-        #delBoardBtn { border-color: #fecaca !important; background: #fff7f7 !important; }
-        #checkBtn { position: relative; font-weight: 700; color: #1e3a5f; }
+        .tt-icon-success { color: #059669; }
+        .tt-danger-btn {
+            min-height: 42px;
+            padding: 0 14px;
+            border: 1px solid #fecaca !important;
+            border-radius: 9px;
+            background: linear-gradient(180deg,#fff,#fef2f2) !important;
+            color: #dc2626 !important;
+            font-weight: 600;
+        }
+        .tt-check-btn {
+            position: relative;
+            border-color: #bfdbfe !important;
+            background: linear-gradient(180deg,#fff,#eff6ff) !important;
+            color: #1d4ed8 !important;
+        }
         #checkBadge {
             position: absolute;
-            top: -9px;
-            right: -8px;
-            min-width: 25px;
-            height: 20px;
+            top: -10px;
+            right: -9px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            margin: 0;
+            min-width: 26px;
+            height: 24px;
+            padding: 0 6px;
             border: 2px solid #fff;
             border-radius: 999px;
-            box-shadow: 0 2px 6px rgba(220,38,38,.25);
+            background: #dc2626;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 800;
+            box-shadow: 0 3px 8px rgba(220,38,38,.25);
         }
         #checkBadge.hidden { display: none; }
 
-        .spec-toolbar {
+        .tt-work-panel { padding: 0; }
+        .tt-filters-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
             padding: 14px;
-            border-radius: 12px;
+            flex-wrap: wrap;
         }
-        .spec-toolbar-main {
+        .tt-field {
             display: flex;
-            flex-wrap: nowrap;
-            align-items: center;
-            gap: 10px;
-            min-width: 0;
+            flex-direction: column;
+            gap: 5px;
         }
-        .spec-control-group {
-            min-height: 42px;
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            padding: 0;
-            border: 0;
-            border-radius: 0;
-            background: transparent;
-            box-shadow: none;
-        }
-        .spec-scope-group { flex: 0 0 auto; gap: 8px; }
-        .spec-grid-group {
-            flex: 0 0 auto;
-            padding-left: 10px;
-            border-left: 1px solid #e2e8f0;
-            background: transparent;
-        }
-        .spec-group-label {
+        .tt-field > label {
             color: #64748b;
-            font-size: 9px;
+            font-size: 10px;
             font-weight: 700;
+            letter-spacing: .3px;
             text-transform: uppercase;
-            letter-spacing: .05em;
         }
-        .spec-grid-group input {
-            width: 29px;
-            height: 36px;
-            padding: 3px;
-            border-color: #dbe3ed;
-            text-align: center;
+        .tt-field .tt-dd-btn, .tt-field > select {
+            min-width: 145px;
+            height: 42px;
+            border: 1px solid #dbe4f0;
+            border-radius: 9px;
+            background: #fff;
+            color: #172033;
+            font-size: 12px;
         }
-        .spec-grid-group .asc-tool { min-height: 36px; padding-inline: 11px; }
-        .spec-view-group { flex: 1 1 auto; min-width: 410px; }
-        .spec-view-group #weekSel { min-width: 160px; height: 38px; }
-        .spec-view-label { margin-left: auto; white-space: nowrap; }
-        .spec-view-label #viewMode { height: 38px; min-width: 84px; }
-        .spec-type-switch { height: 38px; }
-        .spec-type-switch .tt-type { padding-inline: 12px; }
-        .spec-primary-actions {
+        .tt-course-field .tt-dd-btn { min-width: 104px; }
+        .tt-field .tt-dd-btn:hover, .tt-field > select:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 3px rgba(37,99,235,.08);
+        }
+        .tt-grid-field {
             display: flex;
-            align-items: center;
+            align-items: flex-end;
             gap: 8px;
-            margin-left: auto;
-            flex: 0 0 auto;
         }
-        .spec-auto-btn, .spec-unplace-btn {
-            min-height: 40px;
-            padding-inline: 14px;
+        .tt-grid-inputs { display: flex; gap: 5px; }
+        .tt-grid-inputs input {
+            width: 38px;
+            height: 42px;
+            padding: 3px;
+            border: 1px solid #dbe4f0;
+            border-radius: 7px;
+            outline: none;
+            text-align: center;
+            font-size: 12px;
             font-weight: 700;
-            white-space: nowrap;
-            box-shadow: 0 3px 8px rgba(15,118,110,.12);
         }
-        .spec-unplace-btn {
-            border: 1px solid #fecaca;
-            background: #fff7f7;
-            color: #dc2626;
-            box-shadow: none;
+        .tt-grid-inputs input:focus {
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(37,99,235,.1);
         }
-        .spec-toolbar-bottom {
+        .tt-lesson-tabs {
+            display: inline-flex;
+            min-height: 42px;
+            overflow: hidden;
+            border: 1px solid #dbe4f0;
+            border-radius: 9px;
+            background: #fff;
+        }
+        .tt-lesson-tabs .tt-type {
+            min-width: 66px;
+            padding: 0 12px;
+            border: 0;
+            border-right: 1px solid #edf2f7;
+            background: transparent;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .tt-lesson-tabs .tt-type:last-child { border-right: 0; }
+        .tt-lesson-tabs .tt-type.active {
+            background: linear-gradient(135deg,#10b981,#059669);
+            color: #fff;
+        }
+        .tt-week-field select { min-width: 170px; }
+        .tt-view-field select { min-width: 100px; }
+        .tt-main-actions {
+            display: flex;
+            align-items: flex-end;
+            gap: 9px;
+            margin-left: auto;
+        }
+        .tt-success-btn {
+            min-height: 42px;
+            padding: 0 15px;
+            border: 1px solid #059669;
+            border-radius: 9px;
+            background: linear-gradient(135deg,#10b981,#059669);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 6px 15px rgba(5,150,105,.2);
+        }
+        .tt-bottom-row {
             display: flex;
             align-items: center;
             gap: 10px;
-            min-height: 46px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #edf1f5;
+            min-height: 64px;
+            padding: 12px 14px;
+            border-top: 1px solid #edf2f7;
+            border-radius: 0 0 15px 15px;
+            background: linear-gradient(90deg,rgba(248,250,252,.72),rgba(255,255,255,.94));
+            flex-wrap: wrap;
         }
-        .spec-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .spec-option {
+        .tt-toggle-group { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .tt-toggle-chip {
             position: relative;
             display: inline-flex;
             align-items: center;
-            gap: 7px;
-            min-height: 36px;
-            padding: 6px 12px;
-            border: 1px solid #e2e8f0;
+            gap: 8px;
+            min-height: 38px;
+            padding: 0 13px;
+            border: 1px solid #dbe4f0;
             border-radius: 999px;
             background: #fff;
             color: #475569;
-            font-size: 11px;
-            font-weight: 500;
-            white-space: nowrap;
+            font-size: 12px;
+            font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 2px 6px rgba(15,23,42,.04);
-            transition: border-color .15s ease, background .15s ease, color .15s ease;
+            user-select: none;
+            transition: .2s ease;
         }
-        .spec-option:hover { border-color: #93c5fd; background: #f8fbff; color: #1d4ed8; }
-        .spec-option input {
+        .tt-toggle-chip input {
             position: absolute;
             width: 1px;
             height: 1px;
             opacity: 0;
             pointer-events: none;
         }
-        .spec-option-icon { width: 16px; height: 16px; display: inline-flex; color: #64748b; }
-        .spec-option-icon svg { width: 100%; height: 100%; }
-        .spec-option:has(input:checked) {
-            border-color: #86efac;
+        .tt-toggle-icon { display: inline-flex; width: 16px; height: 16px; color: #2563eb; }
+        .tt-toggle-icon svg { width: 100%; height: 100%; }
+        .tt-toggle-chip:hover { border-color: #93c5fd; background: #eff6ff; }
+        .tt-toggle-chip:has(input:checked) {
+            border-color: #6ee7b7;
             background: #ecfdf5;
             color: #047857;
+            box-shadow: 0 3px 10px rgba(5,150,105,.1);
         }
-        .spec-option:has(input:checked) .spec-option-icon { color: #059669; }
-        .spec-auto-msg { min-width: 100px; }
-        .spec-stats { margin-left: auto; justify-content: flex-end; }
+        .tt-toggle-chip:has(input:checked) .tt-toggle-icon { color: #059669; }
+        .tt-auto-msg { min-width: 100px; }
+        .tt-statistics {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-left: auto;
+        }
+        .tt-statistics > span {
+            display: inline-flex;
+            align-items: center;
+            min-height: 38px;
+            padding: 0 15px;
+            border: 1px solid #dbe4f0;
+            border-radius: 9px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .tt-statistics > span:first-child {
+            border-color: #d1fae5;
+            background: linear-gradient(135deg,#f0fdf4,#ecfdf5);
+            color: #047857;
+        }
+        .tt-statistics > span:last-child {
+            border-color: #dbeafe;
+            background: linear-gradient(135deg,#eff6ff,#f8fbff);
+        }
+        .tt-statistics b { margin-left: 4px; color: #1d4ed8; font-size: 13px; }
+        .tt-statistics > span:first-child b { color: #047857; }
+
         @media (max-width: 1450px) {
-            .spec-toolbar-main { flex-wrap: wrap; }
-            .spec-view-group { min-width: 380px; }
-            .spec-primary-actions { margin-left: 0; }
+            .tt-top-toolbar { align-items: flex-start; flex-wrap: wrap; }
+            .tt-toolbar-actions { justify-content: flex-start; }
+            .tt-main-actions { margin-left: 0; }
         }
-        @media (max-width: 800px) {
-            .top-toolbar { flex-wrap: wrap; overflow: visible; }
-            .board-select-shell { max-width: none; flex-basis: 100%; }
-            .spec-view-group { min-width: 100%; flex-wrap: wrap; }
-            .spec-view-label { margin-left: 0; }
-            .spec-toolbar-bottom { align-items: flex-start; flex-wrap: wrap; }
-            .spec-stats { margin-left: 0; }
+        @media (max-width: 900px) {
+            .tt-board-select, .tt-toolbar-actions { flex-basis: 100%; max-width: none; }
+            .tt-toolbar-actions .asc-tool { flex: 1 1 145px; }
+            .tt-filters-row { align-items: stretch; }
+            .tt-field, .tt-field .tt-dd, .tt-field .tt-dd-btn, .tt-field > select { width: 100%; }
+            .tt-grid-field { width: 100%; flex-wrap: wrap; }
+            .tt-grid-inputs { flex: 1; }
+            .tt-grid-inputs input { flex: 1; width: auto; }
+            .tt-main-actions { width: 100%; }
+            .tt-main-actions > button { flex: 1; }
+            .tt-statistics { width: 100%; margin-left: 0; }
+            .tt-statistics > span { flex: 1; justify-content: center; }
         }
 
         .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }

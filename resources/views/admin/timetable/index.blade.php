@@ -462,43 +462,56 @@
             {{-- ═══ O'qituvchi biriktirish matritsasi ═══ --}}
             <div id="assignModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col" style="max-height: 92vh;">
-                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
-                            <div class="flex items-center gap-2 text-sm font-semibold text-white">🔗 O'qituvchi biriktirish</div>
-                            <button type="button" id="asgClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 200px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <path d="M7.5 10.5a4 4 0 0 1 5.7-5.7l1.1 1.1-5.7 5.7-1.1-1.1Z"/>
+                                        <path d="m11.2 12.8 5.7-5.7 1.1 1.1a4 4 0 0 1-5.7 5.7l-1.1-1.1Z"/>
+                                        <path d="m8.5 15.5-3 3M15.5 8.5l3-3"/>
+                                    </svg>
+                                </span>
+                                <span id="asgTitle">O'qituvchi biriktirish</span>
+                            </div>
+                            <button type="button" id="asgClose" class="asc-close-btn" aria-label="Yopish" title="Yopish">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M6 6l12 12M18 6 6 18"/>
+                                </svg>
+                            </button>
                         </div>
-                        <div class="flex gap-2 p-2 overflow-hidden" style="min-height: 400px;">
+                        <div class="assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
                             {{-- Chap: dars birliklari --}}
-                            <div class="flex-1 flex flex-col bg-white border border-gray-300 rounded overflow-hidden">
-                                <div class="flex items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
-                                    <span class="text-xs font-semibold text-gray-600">Dars birliklari:</span>
-                                    <select id="asgFilter" class="rounded border-gray-300 text-xs py-1"></select>
-                                    <label class="flex items-center gap-1 text-xs text-gray-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-gray-300"> faqat biriktirilmagan</label>
-                                    <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-44 rounded border-gray-300 text-xs py-1">
-                                    <span id="asgCount" class="text-xs text-gray-400"></span>
+                            <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
+                                    <span class="text-sm font-semibold text-slate-700">Dars birliklari</span>
+                                    <select id="asgFilter" class="rounded-md border-slate-300 text-xs py-1.5"></select>
+                                    <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
+                                    <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
+                                    <span id="asgCount" class="text-xs text-slate-400"></span>
                                 </div>
-                                <div class="overflow-auto" style="max-height: 64vh;">
+                                <div class="overflow-auto asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
                                     <table id="asgTable" class="w-full text-xs asc-table"></table>
                                 </div>
                             </div>
                             {{-- O'ng: o'qituvchi tanlash --}}
-                            <div class="w-72 shrink-0 flex flex-col bg-white border border-gray-300 rounded overflow-hidden">
-                                <div class="px-2 py-1.5 border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600">O'qituvchi</div>
-                                <div class="p-2 space-y-2 flex-1 flex flex-col overflow-hidden">
-                                    <div id="asgUnitInfo" class="text-xs text-gray-500 min-h-[32px]">← Chapdan dars birligini tanlang</div>
-                                    <input id="asgTeacherSearch" placeholder="Qidirish..." class="w-full rounded-md border-gray-300 text-xs" disabled>
-                                    <label class="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" id="asgKafedraOnly" class="rounded border-gray-300" checked> shu kafedra bo'yicha</label>
-                                    <select id="asgTeacher" size="10" class="w-full rounded-md border-gray-300 text-xs flex-1" disabled></select>
-                                    <div class="flex gap-1">
+                            <div class="assign-teacher-pane w-80 shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                <div class="assign-pane-title px-4 py-3 border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">O'qituvchi</div>
+                                <div class="p-4 space-y-3 flex-1 flex flex-col overflow-hidden">
+                                    <div id="asgUnitInfo" class="assign-unit-info text-xs text-slate-500 min-h-[42px] rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2">Chapdan dars birligini tanlang</div>
+                                    <input id="asgTeacherSearch" placeholder="Qidirish..." class="w-full rounded-md border-slate-300 text-sm" disabled>
+                                    <label class="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" id="asgKafedraOnly" class="rounded border-slate-300" checked> shu kafedra bo'yicha</label>
+                                    <select id="asgTeacher" size="10" class="w-full rounded-md border-slate-300 text-sm flex-1" disabled></select>
+                                    <div class="flex gap-2 pt-1">
                                         <button type="button" id="asgApply" class="asc-btn primary flex-1" disabled>Biriktirish</button>
                                         <button type="button" id="asgClear" class="asc-btn" disabled title="Biriktirishni olib tashlash">✖</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
-                            <div id="asgMsg" class="text-xs text-gray-500"></div>
-                            <button type="button" id="asgCloseBtn" class="asc-btn">Yopish</button>
+                        <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+                            <div id="asgMsg" class="text-sm text-slate-500"></div>
+                            <button type="button" id="asgCloseBtn" class="asc-btn px-5 py-2">Yopish</button>
                         </div>
                     </div>
                 </div>
@@ -865,6 +878,15 @@
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
+        .assign-modal-content { flex: 1 1 auto; }
+        .assign-pane, .assign-teacher-pane { min-height: 0; }
+        .assign-toolbar select, .assign-toolbar input { min-height: 34px; }
+        .assign-pane-title { letter-spacing: .01em; }
+        .assign-unit-info { line-height: 1.45; }
+        #asgTable tr { cursor: pointer; }
+        #asgTable tr:hover td { background: #eff6ff; }
+        #asgTable tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }
+        #asgTeacher:disabled { background: #f8fafc; }
         .check-report-body {
             margin: 12px;
             padding: 12px;

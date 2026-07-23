@@ -29,10 +29,7 @@
                     {{-- aSc Timetables uslubidagi boshqaruv tugmalari — doska yuklanganda ko'rinadi --}}
                     <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
                     <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool">⚙️ Sozlamalar</button>
-                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="subjects">📚 Fanlar</button>
-                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="groups">👥 Guruhlar</button>
-                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="auditoriums">🚪 Auditoriyalar</button>
-                    <button type="button" data-asc-toolbar class="hidden asc-tool" data-dialog="teachers">🧑‍🏫 O'qituvchilar</button>
+                    <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool" data-dialog="subjects">🗂 Ma'lumotlar</button>
                     <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool">🔗 Biriktirish</button>
                     <span data-asc-toolbar class="hidden mx-1 h-6 w-px bg-gray-200"></span>
                     <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool">⬇ Excelga yuklash</button>
@@ -226,21 +223,30 @@
                             </div>
                             <button type="button" id="ascClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
                         </div>
-                        {{-- Tana: chapda ro'yxat, o'ngda tugmalar --}}
-                        <div class="flex gap-2 p-2 overflow-hidden" style="min-height: 340px;">
-                            <div class="flex-1 flex flex-col bg-white border border-gray-300 rounded overflow-hidden">
-                                <div class="flex items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
-                                    <span id="ascListLabel" class="text-xs font-semibold text-gray-600">Ro'yxat:</span>
-                                    <input id="ascSearch" placeholder="Qidirish..." class="ml-auto w-56 rounded border-gray-300 text-xs py-1">
-                                    <select id="ascFilter" class="hidden rounded border-gray-300 text-xs py-1"></select>
-                                    <span id="ascCount" class="text-xs text-gray-400"></span>
+                        {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
+                        <div class="flex gap-2 p-2 overflow-hidden" style="min-height: 420px;">
+                            <nav class="w-44 shrink-0 flex flex-col gap-1 rounded border border-gray-300 bg-white p-1.5" aria-label="Jadval ma'lumotlari">
+                                <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Boshqaruv</div>
+                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" aria-selected="true">📚 <span>Darslar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="groups" aria-selected="false">👥 <span>Guruhlar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" aria-selected="false">🚪 <span>Auditoriyalar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" aria-selected="false">🧑‍🏫 <span>O'qituvchilar</span></button>
+                            </nav>
+                            <div class="flex-1 flex gap-2 min-w-0">
+                                <div class="flex-1 flex flex-col bg-white border border-gray-300 rounded overflow-hidden min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-gray-50">
+                                        <span id="ascListLabel" class="text-xs font-semibold text-gray-600">Darslar ro'yxati:</span>
+                                        <input id="ascSearch" placeholder="Qidirish..." class="ml-auto w-56 rounded border-gray-300 text-xs py-1">
+                                        <select id="ascFilter" class="hidden rounded border-gray-300 text-xs py-1"></select>
+                                        <span id="ascCount" class="text-xs text-gray-400"></span>
+                                    </div>
+                                    <div class="overflow-auto" style="max-height: 58vh;">
+                                        <table id="ascTable" class="w-full text-xs asc-table"></table>
+                                    </div>
                                 </div>
-                                <div class="overflow-auto" style="max-height: 58vh;">
-                                    <table id="ascTable" class="w-full text-xs asc-table"></table>
-                                </div>
+                                {{-- Tanlangan bo'lim uchun amallar --}}
+                                <div id="ascButtons" class="w-40 shrink-0 flex flex-col gap-1.5"></div>
                             </div>
-                            {{-- O'ng tugmalar ustuni --}}
-                            <div id="ascButtons" class="w-40 shrink-0 flex flex-col gap-1.5"></div>
                         </div>
                         {{-- Pastki panel --}}
                         <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
@@ -627,7 +633,47 @@
             #excelBody, #excelBody * { visibility: visible; }
             #excelBody { position: absolute; left: 0; top: 0; }
         }
-    </style>
+            .asc-nav-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 9px 10px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: #475569;
+            background: #fff;
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-align: left;
+            transition: all 0.15s ease;
+        }
+        .asc-nav-btn:hover {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border-color: #bfdbfe;
+        }
+        .asc-nav-btn.active {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+            border-color: #1d4ed8;
+            box-shadow: 0 2px 7px rgba(37, 99, 235, 0.25);
+        }
+        .dark .asc-nav-btn {
+            color: #cbd5e1;
+            background: #1e293b;
+        }
+        .dark .asc-nav-btn:hover {
+            background: #1e3a8a;
+            color: #dbeafe;
+            border-color: #3b82f6;
+        }
+        .dark .asc-nav-btn.active {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #fff;
+        }
+
+</style>
 
     <script>
         (function () {
@@ -1668,7 +1714,7 @@
             let ascSelId = null;      // tanlangan qator id/kalit
 
             const dialogMeta = {
-                subjects:    { icon: '📚', title: 'Fanlar',       listLabel: 'Fanlar ro\'yxati:',  filter: 'spec' },
+                subjects:    { icon: '📚', title: 'Darslar',      listLabel: 'Darslar ro\'yxati:', filter: 'spec' },
                 groups:      { icon: '👥', title: 'Guruhlar',     listLabel: 'Guruhlar ro\'yxati:', filter: 'spec' },
                 auditoriums: { icon: '🚪', title: 'Auditoriyalar', listLabel: 'Auditoriyalar:',     filter: null   },
                 teachers:    { icon: '🧑‍🏫', title: "O'qituvchilar", listLabel: 'O\'qituvchilar:',   filter: null   },
@@ -1676,10 +1722,21 @@
 
             document.querySelectorAll('.asc-tool[data-dialog]').forEach(btn =>
                 btn.onclick = () => openDialog(btn.dataset.dialog));
+            document.querySelectorAll('.asc-nav-btn').forEach(btn =>
+                btn.onclick = () => openDialog(btn.dataset.ascType));
+
+            function updateAscNav(type) {
+                document.querySelectorAll('.asc-nav-btn').forEach(btn => {
+                    const active = btn.dataset.ascType === type;
+                    btn.classList.toggle('active', active);
+                    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+            }
 
             async function openDialog(type) {
                 if (!board) return;
                 ascType = type; ascSelId = null;
+                updateAscNav(type);
                 const m = dialogMeta[type];
                 $('ascIcon').textContent = m.icon;
                 $('ascTitle').textContent = m.title;

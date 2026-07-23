@@ -13,7 +13,7 @@
 
             {{-- Doska tanlash + boshqaruv paneli — bitta ixcham qatorda --}}
             <div class="bg-white shadow-sm sm:rounded-lg mb-2">
-                <div class="toolbar-row p-2 flex flex-wrap items-center gap-1.5">
+                <div class="toolbar-row p-2 flex flex-wrap items-end gap-2">
                     <select id="boardSel" class="rounded-md border-gray-300 shadow-sm text-xs py-1.5 min-w-[220px] max-w-[300px]">
                         <option value="">— Tanlang yoki yangi yarating —</option>
                         @foreach($boards as $b)
@@ -89,7 +89,7 @@
 
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
             <div id="specBar" class="hidden bg-white shadow-sm sm:rounded-lg mb-3 p-2" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
-                <div class="flex flex-wrap items-center gap-1.5">
+                <div class="toolbar-row flex flex-wrap items-end gap-2">
                     {{-- Ko'p tanlovli dropdown'lar: Fakultet → Yo'nalish → Kurs
                          (checkboxlar tugma bosilganda ochiladigan menyudan chiqadi) --}}
                     <div class="tt-dd"><button type="button" class="tt-dd-btn" id="facBtn" title="Fakultet(lar)ni tanlang"></button><div class="tt-dd-menu" id="facMenu"></div></div>
@@ -878,7 +878,7 @@
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
-        .toolbar-row { align-items: center; }
+        .toolbar-row { align-items: flex-end; gap: 8px; }
         .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
         .toolbar-icon { width: 15px; height: 15px; display: inline-flex; flex: 0 0 15px; align-items: center; justify-content: center; }
         .toolbar-icon svg { width: 100%; height: 100%; }

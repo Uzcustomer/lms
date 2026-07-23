@@ -1949,7 +1949,7 @@
                             '<td>' + esc(r.oqim_label || '—') + '</td><td>' + esc(LANG_LABEL[r.lang] || r.lang || '—') + '</td><td>' + r.students + '</td></tr>';
                     });
                 } else if (ascType === 'auditoriums') {
-                    h = '<colgroup><col class="tt-aud-code"><col class="tt-aud-name"><col class="tt-aud-volume"><col class="tt-aud-building"><col class="tt-aud-type"><col class="tt-aud-status"></colgroup><thead><tr><th>Kod</th><th>Nomi</th><th>Sig\\'im</th><th>Bino</th><th>Turi</th><th>Holat</th></tr></thead><tbody>';
+                    h = '<colgroup><col class="tt-aud-code"><col class="tt-aud-name"><col class="tt-aud-volume"><col class="tt-aud-building"><col class="tt-aud-type"><col class="tt-aud-status"></colgroup><thead><tr><th>Kod</th><th>Nomi</th><th>Sig\'im</th><th>Bino</th><th>Turi</th><th>Holat</th></tr></thead><tbody>';
                     rows.forEach((r, i) => {
                         h += rowTag(i, r.id) + '<td class="font-semibold">' + esc(r.code) + '</td><td>' + esc(r.name) + '</td>' +
                             '<td>' + (r.volume || 0) + '</td><td>' + esc(r.building_name || '—') + '</td><td>' + esc(r.auditorium_type_name || '—') + '</td>' +
@@ -1991,7 +1991,7 @@
                     b.innerHTML =
                         '<button class="asc-btn primary block asc-action-btn" id="aBtnNew">' + actionIcon('plus') + 'Yangi</button>' +
                         '<button class="asc-btn block asc-action-btn" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('edit') + 'Tahrirlash</button>' +
-                        '<button class="asc-btn danger block asc-action-btn" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('trash') + 'O\\'chirish</button>' +
+                        '<button class="asc-btn danger block asc-action-btn" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('trash') + 'O\'chirish</button>' +
                         '<div class="my-1 border-t border-gray-300"></div>' +
                         '<button class="asc-btn block asc-action-btn" id="aBtnImport">' + actionIcon('import') + 'Import (Excel)</button>' +
                         '<button class="asc-btn block asc-action-btn" id="aBtnTemplate">' + actionIcon('template') + 'Namuna shabloni</button>';

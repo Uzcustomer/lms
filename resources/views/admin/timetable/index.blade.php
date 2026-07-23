@@ -817,7 +817,13 @@
                 if (body) {
                     const fd = new FormData();
                     fd.append('_token', CSRF);
-                    Object.entries(body).forEach(([k, v]) => { if (v !== undefined && v !== null) fd.append(k, v); });
+                    Object.entries(body).forEach(([k, v]) => {
+                        if (v === undefined || v === null) return;
+                        // Massivlarni PHP uslubida (key[]=...) yuboramiz — aks holda
+                        // vergul bilan qo'shilib bitta satr bo'lib qoladi (nullable|array 422).
+                        if (Array.isArray(v)) v.forEach(x => fd.append(k + '[]', x));
+                        else fd.append(k, v);
+                    });
                     opt.body = fd;
                 }
                 const r = await fetch(url, opt);

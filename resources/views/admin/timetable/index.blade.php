@@ -508,11 +508,23 @@
             <div id="checkModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
                     <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 90vh;">
-                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
-                            <div class="flex items-center gap-2 text-sm font-semibold text-white">🔍 Jadval tekshiruvi</div>
-                            <button type="button" id="chkClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <circle cx="10.8" cy="10.8" r="6.3"/>
+                                        <path d="m16 16 4.5 4.5M10.8 8.2v5.2M10.8 15.8v.1"/>
+                                    </svg>
+                                </span>
+                                <span id="chkTitle">Jadval tekshiruvi</span>
+                            </div>
+                            <button type="button" id="chkClose" class="asc-close-btn" aria-label="Yopish" title="Yopish">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M6 6l12 12M18 6 6 18"/>
+                                </svg>
+                            </button>
                         </div>
-                        <div id="chkBody" class="bg-white border border-gray-300 mx-2 my-2 rounded p-3 overflow-auto" style="max-height: 76vh;"></div>
+                        <div id="chkBody" class="check-report-body overflow-auto" style="max-height: 76vh;"></div>
                     </div>
                 </div>
             </div>
@@ -853,6 +865,79 @@
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
+        .check-report-body {
+            margin: 12px;
+            padding: 12px;
+            border: 1px solid #dbe4ef;
+            border-radius: 14px;
+            background: linear-gradient(145deg, #f8fafc, #eef4fa);
+            scrollbar-color: #94a3b8 #e2e8f0;
+        }
+        .check-section {
+            overflow: hidden;
+            margin-bottom: 10px;
+            border: 1px solid #dbe4ef;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 3px 10px rgba(15,23,42,.05);
+        }
+        .check-section:last-child { margin-bottom: 0; }
+        .check-section-head {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-height: 42px;
+            padding: 9px 12px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .check-section.is-danger .check-section-head {
+            color: #b42318;
+            background: linear-gradient(90deg, #fff1f2, #fff8f8);
+            border-bottom: 1px solid #ffe0e3;
+        }
+        .check-section.is-ok .check-section-head {
+            color: #047857;
+            background: linear-gradient(90deg, #ecfdf5, #f7fffb);
+            border-bottom: 1px solid #d1fae5;
+        }
+        .check-section-icon {
+            width: 25px;
+            height: 25px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 25px;
+            font-size: 16px;
+            border-radius: 8px;
+            background: rgba(255,255,255,.75);
+        }
+        .check-section-title { letter-spacing: .01em; }
+        .check-section-count {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .check-section-body {
+            display: grid;
+            gap: 5px;
+            padding: 11px 14px 12px 46px;
+            color: #475569;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .check-section-body > div {
+            padding: 5px 8px;
+            border-radius: 6px;
+            background: #f8fafc;
+        }
+        .check-section-empty {
+            padding: 10px 14px 11px 46px;
+            color: #64748b;
+            font-size: 12px;
+        }
+
 
 </style>
 
@@ -2929,10 +3014,14 @@
             function renderCheck() {
                 const d = computeDiagnostics();
                 const sec = (icon, title, count, ok, body) =>
-                    '<div class="mb-3 border border-gray-200 rounded">' +
-                    '<div class="px-3 py-2 font-semibold text-sm flex items-center gap-2 ' + (count ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700') + '">' +
-                    icon + ' ' + title + ' <span class="ml-auto text-xs font-bold">' + (count ? count + ' ta' : '✓ ' + ok) + '</span></div>' +
-                    (count ? '<div class="px-3 py-2 text-xs text-gray-700 space-y-1">' + body + '</div>' : '') + '</div>';
+                    '<section class="check-section ' + (count ? 'is-danger' : 'is-ok') + '">' +
+                    '<div class="check-section-head">' +
+                    '<span class="check-section-icon" aria-hidden="true">' + icon + '</span>' +
+                    '<span class="check-section-title">' + title + '</span>' +
+                    '<span class="check-section-count">' + (count ? count + ' ta' : '✓ ' + ok) + '</span>' +
+                    '</div>' +
+                    (count ? '<div class="check-section-body">' + body + '</div>' : '<div class="check-section-empty">' + ok + '</div>') +
+                    '</section>';
 
                 let h = '';
                 // Joylashmagan

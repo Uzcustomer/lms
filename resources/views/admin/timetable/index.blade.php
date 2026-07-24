@@ -19,7 +19,7 @@
             <div class="tt-control-panel tt-top-panel mb-1">
                 <div class="tt-top-toolbar">
                     <div class="tt-board-select">
-                        <span class="tt-board-icon" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>
+                        <span class="tt-board-icon" aria-hidden="true"><img src="{{ asset('image/Reja_calend.png') }}" alt="" aria-hidden="true"></span>
                         <select id="boardSel">
                             <option value="">— Tanlang yoki yangi yarating —</option>
                             @foreach($boards as $b)
@@ -115,7 +115,7 @@
                                 <input type="number" id="gsWeeks" min="1" max="30" title="Hafta soni">
                             </div>
                         </div>
-                        <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/03_save_floppy.png') }}" alt="" aria-hidden="true"></span>Saqlash</button>
+                        <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/saqlash.png') }}" alt="" aria-hidden="true"></span>Saqlash</button>
                     </div>
 
                     <div class="tt-field">
@@ -143,7 +143,7 @@
                     </div>
 
                     <div class="tt-main-actions">
-                        <button type="button" id="autoBtn" class="toolbar-action tt-success-btn"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/10_students_verified.png') }}" alt="" aria-hidden="true"></span>Avtomatik joylash</button>
+                        <button type="button" id="autoBtn" class="toolbar-action tt-success-btn"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/Avtomatik yuklash.png') }}" alt="" aria-hidden="true"></span>Avtomatik joylash</button>
                         <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>Bo'shatish</button>
                     </div>
                 </div>
@@ -2923,7 +2923,7 @@
 
             const actionIcons = {
                 plus: '01_new_document.png',
-                edit: '03_save_floppy.png',
+                edit: 'tahrirlash.png',
                 trash: '11_delete.png',
                 import: '02_open_folder.png',
                 template: '05_print_preview.png',

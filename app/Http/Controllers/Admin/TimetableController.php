@@ -568,7 +568,7 @@ class TimetableController extends Controller
             'course'            => 'nullable|integer|min:1|max:7',
             // Ko'p tanlovli qamrov (dropdown checkboxlaridan) — fakultet/yo'nalish/kurs massivlari
             'faculty_names'     => 'nullable|array',
-            'faculty_names.*'   => 'string|max:255',
+            'faculty_names.*'   => 'nullable|string|max:255',
             'specialty_names'   => 'nullable|array',
             'specialty_names.*' => 'string|max:255',
             'courses'           => 'nullable|array',
@@ -805,7 +805,7 @@ class TimetableController extends Controller
             'specialty_name'    => 'nullable|string|max:255',
             'course'            => 'nullable|integer|min:1|max:7',
             'faculty_names'     => 'nullable|array',
-            'faculty_names.*'   => 'string|max:255',
+            'faculty_names.*'   => 'nullable|string|max:255',
             'specialty_names'   => 'nullable|array',
             'specialty_names.*' => 'string|max:255',
             'courses'           => 'nullable|array',
@@ -1022,57 +1022,61 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Doskaning fan rejimi sozlamalari frontend uchun. */
+    /** Doskaning fan-rejim sozlamalari (hafta almashinuvi / sikl) — frontend uchun. */
     private function subjectSettingsFor(TimetableBoard $board): array
     {
         if (!Schema::hasTable('timetable_subject_settings')) {
             return [];
         }
-
         return TimetableSubjectSetting::where('board_id', $board->id)
             ->get(['specialty_name', 'course', 'subject_name', 'mode', 'rotation_group', 'occurrences', 'cycle_weeks'])
-            ->map(fn ($s) => [
+            ->map(fn($s) => [
                 'specialty_name' => $s->specialty_name,
-                'course' => (int) $s->course,
-                'subject_name' => $s->subject_name,
-                'mode' => $s->mode,
+                'course'         => (int) $s->course,
+                'subject_name'   => $s->subject_name,
+                'mode'           => $s->mode,
                 'rotation_group' => $s->rotation_group,
-                'occurrences' => $s->occurrences !== null ? (int) $s->occurrences : null,
-                'cycle_weeks' => $s->cycle_weeks !== null ? (int) $s->cycle_weeks : null,
+                'occurrences'    => $s->occurrences !== null ? (int) $s->occurrences : null,
+                'cycle_weeks'    => $s->cycle_weeks !== null ? (int) $s->cycle_weeks : null,
             ])->all();
     }
 
-    /** Fan rejimini saqlash; normal rejimda ortiqcha yozuv olib tashlanadi. */
+    /**
+     * Fan bo'yicha jadval rejimini saqlash (hafta almashinuvi / sikl).
+     * normal rejim (barcha yordamchi maydonlar bo'sh) — yozuv o'chiriladi.
+     */
     public function saveSubjectSetting(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([
             'specialty_name' => 'required|string|max:255',
-            'course' => 'required|integer|min:1|max:7',
-            'subject_name' => 'required|string|max:255',
-            'mode' => 'required|in:normal,alternate,cycle',
+            'course'         => 'required|integer|min:1|max:7',
+            'subject_name'   => 'required|string|max:255',
+            'mode'           => 'required|in:normal,alternate,cycle',
             'rotation_group' => 'nullable|string|max:255',
-            'occurrences' => 'nullable|integer|min:1|max:60',
-            'cycle_weeks' => 'nullable|integer|min:1|max:40',
+            'occurrences'    => 'nullable|integer|min:1|max:60',
+            'cycle_weeks'    => 'nullable|integer|min:1|max:40',
         ]);
 
         $key = [
-            'board_id' => $board->id,
+            'board_id'       => $board->id,
             'specialty_name' => $data['specialty_name'],
-            'course' => (int) $data['course'],
-            'subject_name' => $data['subject_name'],
+            'course'         => (int) $data['course'],
+            'subject_name'   => $data['subject_name'],
         ];
 
+        // normal — sozlama shart emas, mavjud yozuvni o'chiramiz
         if ($data['mode'] === 'normal') {
             TimetableSubjectSetting::where($key)->delete();
             return response()->json(['ok' => true, 'mode' => 'normal']);
         }
 
-        TimetableSubjectSetting::updateOrCreate($key, [
-            'mode' => $data['mode'],
+        $values = [
+            'mode'           => $data['mode'],
             'rotation_group' => $data['mode'] === 'alternate' ? ($data['rotation_group'] ?? null) : null,
-            'occurrences' => $data['mode'] === 'alternate' ? ($data['occurrences'] ?? null) : null,
-            'cycle_weeks' => $data['mode'] === 'cycle' ? ($data['cycle_weeks'] ?? null) : null,
-        ]);
+            'occurrences'    => $data['mode'] === 'alternate' ? ($data['occurrences'] ?? null) : null,
+            'cycle_weeks'    => $data['mode'] === 'cycle' ? ($data['cycle_weeks'] ?? null) : null,
+        ];
+        TimetableSubjectSetting::updateOrCreate($key, $values);
 
         return response()->json(['ok' => true, 'mode' => $data['mode']]);
     }

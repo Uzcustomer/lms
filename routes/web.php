@@ -885,6 +885,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSettings'])->name('settings.save');
                 // Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl)
                 Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
+                // Sikl (4-6 kurs) kalendar rejasi
+                Route::post('/boards/{board}/cycle-plan', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlan'])->name('cycle-plan');
                 // aSc uslubidagi boshqaruv dialoglari
                 Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
                 Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');

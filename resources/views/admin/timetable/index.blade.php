@@ -1023,15 +1023,15 @@
         .tt-top-toolbar {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 0;
             width: 100%;
             padding: 14px;
         }
         .tt-board-select {
             position: relative;
-            flex: 1 1 350px;
-            min-width: 280px;
-            max-width: 430px;
+            flex: 0 1 360px;
+            min-width: 250px;
+            max-width: 360px;
         }
         .tt-board-icon {
             position: absolute;
@@ -1064,11 +1064,11 @@
             align-items: center;
             justify-content: flex-end;
             flex-wrap: wrap;
-            gap: 9px;
+            gap: 6px;
         }
         .tt-toolbar-actions .asc-tool, .tt-grid-field .asc-tool {
             min-height: 42px;
-            padding: 0 14px;
+            padding: 0 10px;
             border: 1px solid #dbe4f0;
             border-radius: 9px;
             background: linear-gradient(180deg,#fff,#f8fafc);

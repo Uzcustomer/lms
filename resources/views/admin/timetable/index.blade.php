@@ -19,7 +19,7 @@
             <div class="tt-control-panel tt-top-panel mb-1">
                 <div class="tt-top-toolbar">
                     <div class="tt-board-select">
-                        <span class="tt-board-icon" aria-hidden="true"><img src="{{ asset('image/Reja_calend.png') }}" alt="" aria-hidden="true"></span>
+                        <span class="tt-board-icon" aria-hidden="true"><img src="{{ asset('image/tahrirlash.png') }}" alt="" aria-hidden="true"></span>
                         <select id="boardSel">
                             <option value="">— Tanlang yoki yangi yarating —</option>
                             @foreach($boards as $b)

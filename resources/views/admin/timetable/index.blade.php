@@ -19,7 +19,7 @@
             <div class="tt-control-panel tt-top-panel mb-1">
                 <div class="tt-top-toolbar">
                     <div class="tt-board-select">
-                        <span class="tt-board-icon" aria-hidden="true"><i class="bi bi-pencil-square" aria-hidden="true"></i></span>
+                        <span class="tt-board-icon" aria-hidden="true"><img src="{{ asset('image/tahrirlash.png') }}" alt="" aria-hidden="true"></span>
                         <select id="boardSel">
                             <option value="">— Tanlang yoki yangi yarating —</option>
                             @foreach($boards as $b)
@@ -29,16 +29,16 @@
                     </div>
 
                     <div class="tt-toolbar-actions">
-                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><i class="bi bi-kanban" aria-hidden="true"></i></span>Yangi doska</button>
-                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i></span>Kartochkalar</button>
-                        <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-book" aria-hidden="true"></i></span>Fan nomlari</button>
-                        <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-trash3" aria-hidden="true"></i></span>O'chirish</button>
-                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-gear" aria-hidden="true"></i></span>Sozlamalar</button>
-                        <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-book" aria-hidden="true"></i></span>Ma'lumotlar</button>
+                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
+                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
+                        <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
+                        <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
+                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
+                        <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
 
-                        <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i></span>Excelga yuklash</button>
-                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-search" aria-hidden="true"></i></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
-                        <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-paperclip" aria-hidden="true"></i></span>Biriktirish</button>
+                        <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
+                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
+                        <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
                         <span id="boardMsg" class="text-xs"></span>
                     </div>
                 </div>
@@ -116,7 +116,7 @@
                                 <input type="number" id="gsWeeks" min="1" max="30" title="Hafta soni">
                             </div>
                         </div>
-                        <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-save" aria-hidden="true"></i></span>Saqlash</button>
+                        <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/saqlash.png') }}" alt="" aria-hidden="true"></span>Saqlash</button>
                     </div>
 
                     <div class="tt-field">
@@ -144,17 +144,17 @@
                     </div>
 
                     <div class="tt-main-actions">
-                        <button type="button" id="autoBtn" class="toolbar-action tt-success-btn"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-magic" aria-hidden="true"></i></span>Avtomatik joylash</button>
-                        <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-trash3" aria-hidden="true"></i></span>Bo'shatish</button>
+                        <button type="button" id="autoBtn" class="toolbar-action tt-success-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/Avtomatik yuklash.png') }}" alt="" aria-hidden="true"></span>Avtomatik joylash</button>
+                        <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>Bo'shatish</button>
                     </div>
                 </div>
 
                 <div class="tt-bottom-row">
                     <div class="tt-toggle-group">
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoScope"><span class="tt-toggle-icon" aria-hidden="true"><i class="bi bi-people" aria-hidden="true"></i></span>Butun doska</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoReset"><span class="tt-toggle-icon" aria-hidden="true"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>Qaytadan joylash</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms"><span class="tt-toggle-icon" aria-hidden="true"><i class="bi bi-building" aria-hidden="true"></i></span>Auditoriya</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms"><span class="tt-toggle-icon" aria-hidden="true"><i class="bi bi-easel" aria-hidden="true"></i></span>Ma'ruza xonasi</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoScope"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span>Butun doska</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoReset"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/06_qaytadan_joylash.png') }}" alt="" aria-hidden="true"></span>Qaytadan joylash</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/07_building.png') }}" alt="" aria-hidden="true"></span>Auditoriya</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/08_maruza_xonasi.png') }}" alt="" aria-hidden="true"></span>Ma'ruza xonasi</label>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -275,10 +275,10 @@
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
                         <div class="flex gap-3 p-4 overflow-visible" style="min-height: 600px;">
                             <nav class="asc-data-nav w-20 shrink-0 self-start h-fit flex flex-col items-center gap-2 rounded-xl bg-white p-2" style="height: fit-content; align-self: flex-start;" aria-label="Jadval ma'lumotlari">
-                                                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" data-tooltip="Darslar" aria-label="Darslar" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-book" aria-hidden="true"></i></span><span>Darslar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="groups" data-tooltip="Guruhlar" aria-label="Guruhlar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-people" aria-hidden="true"></i></span><span>Guruhlar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" data-tooltip="Auditoriyalar" aria-label="Auditoriyalar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-door-open" aria-hidden="true"></i></span><span>Auditoriyalar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" data-tooltip="O'qituvchilar" aria-label="O'qituvchilar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-mortarboard" aria-hidden="true"></i></span><span>O'qituvchilar</span></button>
+                                                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" data-tooltip="Darslar" aria-label="Darslar" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span><span>Darslar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="groups" data-tooltip="Guruhlar" aria-label="Guruhlar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span><span>Guruhlar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" data-tooltip="Auditoriyalar" aria-label="Auditoriyalar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true"></span><span>Auditoriyalar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" data-tooltip="O'qituvchilar" aria-label="O'qituvchilar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img src="{{ asset('image/09_teachers_cap.png') }}" alt="" aria-hidden="true"></span><span>O'qituvchilar</span></button>
                             </nav>
                             <div id="ascPanel" class="flex-1 flex gap-3 min-w-0">
                                 <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden min-w-0 shadow-sm">
@@ -2245,7 +2245,7 @@
                     (c.training_type === 'lecture'
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
-                    (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
+                    (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <img src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true">' : '') +
                     '</div></div>'
                 ).join('') || '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>';
 
@@ -3431,8 +3431,8 @@
                         '<td>' + esc(it.start || '') + '</td><td>' + esc(it.end || '') + '</td>' +
                         '<td class="text-center">' + (it.print === false ? '—' : 'Ha') + '</td>' +
                         '<td class="whitespace-nowrap text-right">' +
-                            '<button class="asc-mini" data-edit="' + i + '" title="Tahrirlash"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>' +
-                            '<button class="asc-mini" data-del="' + i + '" title="O\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>' +
+                            '<button class="asc-mini" data-edit="' + i + '" title="Tahrirlash"><img src="{{ asset('image/tahrirlash.png') }}" alt="" aria-hidden="true"></button>' +
+                            '<button class="asc-mini" data-del="' + i + '" title="O\'chirish"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></button>' +
                         '</td></tr>';
                 });
                 h += '</tbody>';

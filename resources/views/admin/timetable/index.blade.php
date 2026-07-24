@@ -3,6 +3,10 @@
 @endpush
 
 <x-app-layout>
+@php
+    $timetableAssignmentOnly = auth()->user()->hasAnyRole(['oquv_bolimi', 'oquv_bolimi_boshligi']);
+@endphp
+
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dars jadvali tuzish</h2>
     </x-slot>
@@ -1459,6 +1463,7 @@
             const TEACHERS_URL = @json(route('admin.timetable.teachers'));
             const AUDS_URL = @json(route('admin.timetable.auditoriums'));
             const CSRF = @json(csrf_token());
+            const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
             let board = null;      // {id, days, pairs_per_day, ...}
@@ -1486,6 +1491,25 @@
 
             const $ = id => document.getElementById(id);
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+            function applyTimetableAccess() {
+                if (!TIMETABLE_ASSIGNMENT_ONLY) return;
+
+                const disabledIds = [
+                    'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn',
+                    'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn',
+                    'autoBtn', 'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
+                    'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
+                ];
+                disabledIds.forEach(id => {
+                    const el = $(id);
+                    if (!el) return;
+                    el.disabled = true;
+                    el.title = 'Bu amal faqat jadval administratoriga ochiq';
+                });
+            }
+
+            applyTimetableAccess();
 
             // Jadvallarni sichqoncha bilan ushlab chap-o'ngga siljitish.
             document.querySelectorAll('[data-drag-scroll]').forEach(el => {

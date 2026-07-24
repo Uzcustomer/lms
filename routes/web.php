@@ -874,7 +874,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/auto-place', [\App\Http\Controllers\Admin\TimetableController::class, 'autoPlace'])->name('boards.auto-place');
                 Route::post('/boards/{board}/unplace', [\App\Http\Controllers\Admin\TimetableController::class, 'unplaceAll'])->name('boards.unplace');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
-                Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::post('/boards/{board}/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'saveGrid'])->name('boards.grid');
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
@@ -884,6 +883,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Umumiy sozlamalar (qo'ng'iroqlar jadvali, kunlar)
                 Route::get('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'settings'])->name('settings');
                 Route::post('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSettings'])->name('settings.save');
+                // Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl)
+                Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
                 // aSc uslubidagi boshqaruv dialoglari
                 Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
                 Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');

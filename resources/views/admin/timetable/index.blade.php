@@ -266,7 +266,7 @@
                         </div>
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
                         <div class="flex gap-3 p-4 overflow-visible" style="min-height: 600px;">
-                            <nav class="w-20 shrink-0 flex flex-col items-center gap-2 rounded-xl border border-blue-100 bg-gradient-to-b from-slate-50 to-white p-2 shadow-sm" aria-label="Jadval ma'lumotlari">
+                            <nav class="w-20 shrink-0 self-start h-fit flex flex-col items-center gap-2 rounded-xl border border-blue-100 bg-white p-2 shadow-sm" aria-label="Jadval ma'lumotlari">
                                                                 <button type="button" class="asc-nav-btn active" data-asc-type="subjects" data-tooltip="Darslar" aria-label="Darslar" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span><span>Darslar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="groups" data-tooltip="Guruhlar" aria-label="Guruhlar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span><span>Guruhlar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" data-tooltip="Auditoriyalar" aria-label="Auditoriyalar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true"></span><span>Auditoriyalar</span></button>
@@ -290,7 +290,7 @@
                         {{-- Pastki panel --}}
                         <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
                             <div id="ascFootMsg" class="text-sm text-slate-500"></div>
-                            <button type="button" id="ascCloseBtn" class="asc-btn px-5 py-2">Yopish</button>
+                            <button type="button" id="ascCloseBtn" class="asc-btn primary px-5 py-2">Yopish</button>
                         </div>
                     </div>
                 </div>
@@ -711,10 +711,10 @@
         .asc-column-filter-row select { width: 100%; min-width: 0; height: 27px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #475569; font-size: 10px; font-weight: 400; }
         .asc-column-filter-row input:focus,
         .asc-column-filter-row select:focus { border-color: #60a5fa; outline: 2px solid rgba(96,165,250,.18); }
-        .asc-subj-mode-cell { min-width: 260px; white-space: normal !important; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
-        .asc-subj-mode { width: 55%; min-width: 120px; flex: 0 0 55%; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; }
+        .asc-subj-mode-cell { min-width: 0; white-space: nowrap !important; display: table-cell; vertical-align: middle; }
+        .asc-subj-mode { display: inline-block; vertical-align: middle; width: 55%; min-width: 120px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; }
         .asc-subj-mode option { text-align: left; }
-        .asc-subj-mode-cell .asc-subj-params { flex: 1 1 auto; min-width: 0; margin-top: 0; flex-wrap: nowrap; }
+        .asc-subj-mode-cell .asc-subj-params { display: inline-flex; vertical-align: middle; width: calc(45% - 8px); min-width: 0; margin-top: 0; flex-wrap: nowrap; }
         .asc-subj-params { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 5px; color: #64748b; font-size: 10px; }
         .asc-subj-param { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
         .asc-subj-param input { width: 58px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; }
@@ -762,9 +762,9 @@
             align-items: center;
             justify-content: center;
             gap: 0;
-            width: 64px;
-            min-height: 64px;
-            padding: 10px;
+            width: 70px;
+            min-height: 70px;
+            padding: 8px;
             border: 1px solid transparent;
             border-radius: 6px;
             color: #475569;
@@ -775,7 +775,8 @@
             transition: all 0.15s ease;
         }
         .asc-nav-btn > span:not(.asc-nav-icon) { display: none; }
-        .asc-nav-btn .asc-nav-icon { width: 40px; height: 40px; flex: 0 0 40px; }
+        .asc-nav-btn .asc-nav-icon { width: 54px; height: 54px; flex: 0 0 54px; }
+        .asc-nav-btn { background: transparent; box-shadow: none; }
         .asc-nav-btn:hover::after {
             content: attr(data-tooltip);
             position: absolute;
@@ -980,16 +981,16 @@
         }
         .asc-subject-table-scroll { cursor: default; overflow-x: hidden; }
         .asc-subject-table-scroll.is-dragging { cursor: default; }
-        .asc-subject-table { width: 100%; table-layout: fixed; }
+        #ascTable.asc-subject-table { width: 100%; min-width: 100%; table-layout: fixed; }
         .asc-subject-table th, .asc-subject-table td { white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
         .asc-subject-table th:nth-child(1), .asc-subject-table td:nth-child(1) { width: 18%; }
         .asc-subject-table th:nth-child(2), .asc-subject-table td:nth-child(2) { width: 14%; }
-        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 24%; }
+        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 30%; }
         .asc-subject-table th:nth-child(4), .asc-subject-table td:nth-child(4),
         .asc-subject-table th:nth-child(5), .asc-subject-table td:nth-child(5),
         .asc-subject-table th:nth-child(6), .asc-subject-table td:nth-child(6),
         .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 4%; }
-        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 28%; }
+        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 22%; }
         .asc-table-scroll.is-dragging {
             cursor: grabbing;
             user-select: none;

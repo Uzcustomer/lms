@@ -1007,6 +1007,9 @@
         .asc-subject-table th:nth-child(6), .asc-subject-table td:nth-child(6),
         .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 4%; }
         .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 29%; }
+        .asc-subject-path { line-height: 1.2; }
+        .asc-subject-faculty { color: #334155; font-size: 11px; font-weight: 600; line-height: 1.25; }
+        .asc-subject-specialty { color: #64748b; font-size: 10px; line-height: 1.25; }
         .asc-table-scroll.is-dragging {
             cursor: grabbing;
             user-select: none;
@@ -2877,7 +2880,7 @@
                 $('ascCount').textContent = rows.length + ' ta';
                 let h = '';
                 if (ascType === 'subjects') {
-                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th><th>Fan rejimi</th></tr>' +
+                    h = '<thead><tr><th>Fan</th><th>Fakultet · yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th><th>Fan rejimi</th></tr>' +
                         '<tr class="asc-column-filter-row">' +
                         '<th>' + subjectFilterControl('subject', 'Fan...') + '</th>' +
                         '<th>' + subjectFilterControl('course', 'Kurs', 'select') + '</th>' +
@@ -2890,15 +2893,16 @@
                         '</tr></thead><tbody>';
                     let lastSpec = null;
                     rows.forEach((r, i) => {
-                        const sk = r.specialty_name + '·' + r.course;
+                        const faculty = r.faculty_name || 'Fakultet ko\'rsatilmagan';
+                        const sk = (r.faculty_name || '') + '·' + r.specialty_name + '·' + r.course;
                         if (sk !== lastSpec) {
-                            h += '<tr class="asc-row-head"><td colspan="8">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</td></tr>';
+                            h += '<tr class="asc-row-head"><td colspan="8"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td></tr>';
                             lastSpec = sk;
                         }
                         const setting = subjectSettings[subjModeKey(r.specialty_name, r.course, r.subject_name)] || { mode: 'normal' };
                         const modeOptions = Object.entries(SUBJ_MODE_LABELS).map(([value, label]) =>
                             '<option value="' + value + '"' + (setting.mode === value ? ' selected' : '') + '>' + label + '</option>').join('');
-                        h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td>' + esc(r.specialty_name) + ' · ' + r.course + '</td>' +
+                        h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td class="asc-subject-path"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td>' +
                             '<td>' + esc(r.kafedra_name || '—') + '</td><td>' + fmt(r.lecture) + '</td><td>' + fmt(r.practice + r.laboratory + r.seminar) +
                             '</td><td>' + r.lec_pairs + '</td><td>' + r.prc_pairs + '</td>' +
                             '<td class="asc-subj-mode-cell"><select class="asc-subj-mode">' + modeOptions + '</select><div class="asc-subj-params">' +

@@ -275,9 +275,10 @@
                             </nav>
                             <div id="ascPanel" class="flex-1 flex gap-3 min-w-0">
                                 <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden min-w-0 shadow-sm">
-                                    <div class="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50">
+                                    <div class="asc-list-toolbar flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50">
                                         <span id="ascListLabel" class="text-sm font-bold text-slate-700">Darslar ro'yxati:</span>
-                                        <input id="ascSearch" placeholder="Qidirish..." class="ml-auto w-64 rounded-lg border-slate-300 text-sm py-2 shadow-sm">
+                                        <div id="ascButtons" class="flex items-center flex-wrap gap-2 ml-auto"></div>
+                                        <input id="ascSearch" placeholder="Qidirish..." class="w-64 rounded-lg border-slate-300 text-sm py-2 shadow-sm">
                                         <select id="ascFilter" class="hidden rounded-lg border-slate-300 text-sm py-2 shadow-sm"></select>
                                         <span id="ascCount" class="text-xs text-gray-400"></span>
                                     </div>
@@ -285,8 +286,6 @@
                                         <table id="ascTable" class="w-full text-sm asc-table"></table>
                                     </div>
                                 </div>
-                                {{-- Tanlangan bo'lim uchun amallar --}}
-                                <div id="ascButtons" class="w-48 shrink-0 flex flex-col gap-2"></div>
                             </div>
                         </div>
                         {{-- Pastki panel --}}
@@ -700,6 +699,13 @@
         .asc-table tr.sel td { background: #dbeafe; }
         .asc-table tr:hover td { background: #f1f5f9; }
         .asc-table tr.sel:hover td { background: #cfe0fb; }
+        .asc-list-toolbar { min-height: 58px; }
+        #ascButtons .asc-action-btn { white-space: nowrap; min-height: 34px; padding: 5px 10px; }
+        .asc-column-filter-row th { position: sticky; top: 29px; z-index: 2; padding: 3px 5px; background: #f8fafc; }
+        .asc-column-filter-row input,
+        .asc-column-filter-row select { width: 100%; min-width: 0; height: 27px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #475569; font-size: 10px; font-weight: 400; }
+        .asc-column-filter-row input:focus,
+        .asc-column-filter-row select:focus { border-color: #60a5fa; outline: 2px solid rgba(96,165,250,.18); }
         .asc-subj-mode-cell { min-width: 260px; white-space: normal !important; }
         .asc-subj-mode { width: 100%; min-width: 190px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
         .asc-subj-params { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 5px; color: #64748b; font-size: 10px; }
@@ -2559,6 +2565,7 @@
             let ascType = null;       // joriy dialog turi
             let ascData = [];         // dialog ma'lumotlari (xom)
             let ascSelId = null;      // tanlangan qator id/kalit
+            let ascColumnFilters = {};
             const ascCache = {};      // tablar orasida qaytishda jadvalni qayta yuklamaslik uchun
 
             const dialogMeta = {
@@ -2589,6 +2596,7 @@
 
                 ascType = type;
                 ascSelId = null;
+                ascColumnFilters = {};
                 updateAscNav(type);
 
                 const m = dialogMeta[type];
@@ -2664,9 +2672,41 @@
                 const fv = $('ascFilter').value;
                 return ascData.filter(r => {
                     if (fv && (r.specialty_name + ' · ' + r.course + '-kurs') !== fv) return false;
-                    if (!q) return true;
-                    return JSON.stringify(r).toLowerCase().includes(q);
+                    if (q && !JSON.stringify(r).toLowerCase().includes(q)) return false;
+                    if (ascType !== 'subjects') return true;
+
+                    const f = ascColumnFilters;
+                    const mode = (subjectSettings[subjModeKey(r.specialty_name, r.course, r.subject_name)] || { mode: 'normal' }).mode || 'normal';
+                    const values = {
+                        subject: r.subject_name,
+                        course: r.specialty_name + ' · ' + r.course + '-kurs',
+                        department: r.kafedra_name || '',
+                        lecture: r.lecture,
+                        practice: (+r.practice || 0) + (+r.laboratory || 0) + (+r.seminar || 0),
+                        lecture_pairs: r.lec_pairs,
+                        practice_pairs: r.prc_pairs,
+                        mode: SUBJ_MODE_LABELS[mode] || mode,
+                    };
+                    return Object.entries(f).every(([key, value]) => {
+                        if (!value) return true;
+                        return String(values[key] ?? '').toLowerCase().includes(String(value).toLowerCase());
+                    });
                 });
+            }
+
+            function subjectFilterControl(key, placeholder, type = 'text') {
+                const value = ascColumnFilters[key] || '';
+                if (type === 'select') {
+                    const optionValues = key === 'mode'
+                        ? Object.entries(SUBJ_MODE_LABELS).map(([mode, label]) => [mode, label])
+                        : [...new Set(ascData.map(r => r.course))]
+                            .sort((a, b) => (+a || 0) - (+b || 0))
+                            .map(course => [course, course + '-kurs']);
+                    const options = optionValues
+                        .map(([optionValue, label]) => '<option value="' + esc(optionValue) + '"' + (String(value) === String(optionValue) ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
+                    return '<select class="asc-column-filter" data-filter-key="' + key + '"><option value="">Barchasi</option>' + options + '</select>';
+                }
+                return '<input class="asc-column-filter" data-filter-key="' + key + '" type="' + type + '" value="' + esc(value) + '" placeholder="' + placeholder + '">';
             }
 
             function renderAscTable() {
@@ -2676,7 +2716,17 @@
                 $('ascCount').textContent = rows.length + ' ta';
                 let h = '';
                 if (ascType === 'subjects') {
-                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th><th>Fan rejimi</th></tr></thead><tbody>';
+                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th><th>Fan rejimi</th></tr>' +
+                        '<tr class="asc-column-filter-row">' +
+                        '<th>' + subjectFilterControl('subject', 'Fan...') + '</th>' +
+                        '<th>' + subjectFilterControl('course', 'Kurs', 'select') + '</th>' +
+                        '<th>' + subjectFilterControl('department', 'Kafedra...') + '</th>' +
+                        '<th>' + subjectFilterControl('lecture', 'Soat', 'number') + '</th>' +
+                        '<th>' + subjectFilterControl('practice', 'Soat', 'number') + '</th>' +
+                        '<th>' + subjectFilterControl('lecture_pairs', 'M', 'number') + '</th>' +
+                        '<th>' + subjectFilterControl('practice_pairs', 'A', 'number') + '</th>' +
+                        '<th>' + subjectFilterControl('mode', 'Rejim...', 'select') + '</th>' +
+                        '</tr></thead><tbody>';
                     let lastSpec = null;
                     rows.forEach((r, i) => {
                         const sk = r.specialty_name + '·' + r.course;
@@ -2715,6 +2765,16 @@
                 }
                 h += '</tbody>';
                 $('ascTable').innerHTML = h;
+                $('ascTable').oninput = ev => {
+                    if (!ev.target.classList.contains('asc-column-filter')) return;
+                    ascColumnFilters[ev.target.dataset.filterKey] = ev.target.value;
+                    renderAscTable();
+                };
+                $('ascTable').onchange = ev => {
+                    if (!ev.target.classList.contains('asc-column-filter')) return;
+                    ascColumnFilters[ev.target.dataset.filterKey] = ev.target.value;
+                    renderAscTable();
+                };
                 document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => {
                     if (ascType === 'subjects') {
                         const row = rows[+tr.dataset.idx];
@@ -2766,9 +2826,9 @@
                 const hasSel = ascSelId !== null;
                 if (ascType === 'auditoriums') {
                     b.innerHTML =
-                        '<button class="asc-btn primary block asc-action-btn" id="aBtnNew">' + actionIcon('plus') + 'Yangi</button>' +
-                        '<button class="asc-btn block asc-action-btn" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('edit') + 'Tahrirlash</button>' +
-                        '<button class="asc-btn danger block asc-action-btn" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('trash') + 'O\'chirish</button>' +
+                        '<button class="asc-btn primary asc-action-btn" id="aBtnNew">' + actionIcon('plus') + 'Yangi</button>' +
+                        '<button class="asc-btn asc-action-btn" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('edit') + 'Tahrirlash</button>' +
+                        '<button class="asc-btn danger asc-action-btn" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('trash') + 'O\'chirish</button>' +
                         '<div class="my-1 border-t border-gray-300"></div>' +
                         '<button class="asc-btn block asc-action-btn" id="aBtnImport">' + actionIcon('import') + 'Import (Excel)</button>' +
                         '<button class="asc-btn block asc-action-btn" id="aBtnTemplate">' + actionIcon('template') + 'Namuna shabloni</button>';

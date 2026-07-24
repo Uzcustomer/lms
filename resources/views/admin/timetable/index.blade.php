@@ -1449,7 +1449,10 @@
             let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
             let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
             const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
-            const subjModeKey = (spec, course, subject) => (spec || '') + '|' + course + '|' + (subject || '');
+            // Fan-rejim kaliti — katta-kichik harf/bo'shliqqa befarq (reja nomi
+            // "Davolash ishi", karta nomi "davolash ishi" bo'lishi mumkin).
+            const subjModeKey = (spec, course, subject) =>
+                String(spec || '').trim().toLowerCase() + '|' + course + '|' + String(subject || '').trim().toLowerCase();
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
 
             const $ = id => document.getElementById(id);
@@ -1628,7 +1631,13 @@
                 // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
                 selected = null; modalCard = null;
                 $('cardModal').classList.add('hidden');
-                if (switching) { curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear(); }
+                if (switching) {
+                    curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear();
+                    // Sikl sanasi doskaga xos — almashganda tozalaymiz (boshqa doska
+                    // sanasini uning ustiga yozib yubormaslik uchun).
+                    if ($('cycleStart')) $('cycleStart').value = '';
+                    cyclePlanData = null;
+                }
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('refreshNamesBtn').classList.remove('hidden');

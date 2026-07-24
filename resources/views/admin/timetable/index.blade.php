@@ -32,7 +32,6 @@
                         <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><i class="bi bi-plus-lg"></i></span>Yangi doska</button>
                         <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-window-stack"></i></span>Kartochkalar</button>
                         <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-mortarboard"></i></span>Fan nomlari</button>
-                        <button type="button" id="subjModeBtn" class="hidden asc-tool toolbar-action" title="Fan bo'yicha jadval rejimi: har hafta / hafta almashinuvi (1-3 kurs) / sikl (4-6 kurs)"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-arrow-repeat"></i></span>Fan rejimi</button>
                         <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-trash3"></i></span>O'chirish</button>
                         <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-gear"></i></span>Sozlamalar</button>
                         <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-file-earmark-text"></i></span>Ma'lumotlar</button>
@@ -192,39 +191,6 @@
                 </div>
             </div>
 
-            {{-- Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl) --}}
-            <div id="subjModeModal" class="hidden tt-modal">
-                <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-4xl flex flex-col" style="max-height: 92vh;">
-                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
-                            <div class="flex items-center gap-2 text-sm font-semibold text-white">🔁 Fan rejimi — hafta almashinuvi / sikl</div>
-                            <button type="button" id="subjModeClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
-                        </div>
-                        <div class="bg-white border border-gray-300 mx-2 mb-2 rounded-b p-3 overflow-auto" style="max-height: 74vh;">
-                            <p class="text-[11px] text-gray-500 mb-2">
-                                Ko'rinayotgan tanlov (fakultet × yo'nalish × kurs) fanlari. Rejim:
-                                <b>Har hafta</b> — sukut; <b>Hafta almashinuvi</b> (1-3 kurs) — bir katakni
-                                bir necha fan navbat bilan bo'lishadi (bir xil <i>almashinuv guruhi</i>); soati
-                                (necha marta) tuganда fan chiqib ketadi. <b>Sikl</b> (4-6 kurs) — uzluksiz blok
-                                (sikl uzunligi haftada). O'zgarish avtomatik saqlanadi.
-                            </p>
-                            <table class="w-full text-xs border-collapse" id="subjModeTable">
-                                <thead>
-                                    <tr class="bg-gray-50 text-gray-600">
-                                        <th class="border border-gray-200 px-2 py-1 text-left">Fan</th>
-                                        <th class="border border-gray-200 px-2 py-1 text-left" style="width:130px">Rejim</th>
-                                        <th class="border border-gray-200 px-2 py-1 text-left">Parametrlar</th>
-                                        <th class="border border-gray-200 px-2 py-1 text-center" style="width:44px"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="subjModeBody"></tbody>
-                            </table>
-                            <div id="subjModeEmpty" class="hidden text-sm text-gray-400 py-6 text-center">Bu tanlovда fan yo'q.</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {{-- Kartochka rekvizitlari modali --}}
             <div id="cardModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
@@ -315,7 +281,7 @@
                                         <select id="ascFilter" class="hidden rounded-lg border-slate-300 text-sm py-2 shadow-sm"></select>
                                         <span id="ascCount" class="text-xs text-gray-400"></span>
                                     </div>
-                                    <div class="overflow-auto asc-table-scroll" style="max-height: 64vh;" data-drag-scroll>
+                                    <div class="overflow-y-auto overflow-x-hidden asc-table-scroll asc-subject-table-scroll" style="max-height: 64vh;">
                                         <table id="ascTable" class="w-full text-sm asc-table"></table>
                                     </div>
                                 </div>
@@ -734,6 +700,13 @@
         .asc-table tr.sel td { background: #dbeafe; }
         .asc-table tr:hover td { background: #f1f5f9; }
         .asc-table tr.sel:hover td { background: #cfe0fb; }
+        .asc-subj-mode-cell { min-width: 260px; white-space: normal !important; }
+        .asc-subj-mode { width: 100%; min-width: 190px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
+        .asc-subj-params { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 5px; color: #64748b; font-size: 10px; }
+        .asc-subj-param { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .asc-subj-param input { width: 58px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; }
+        .asc-subj-param:first-child input { width: 68px; }
+        .asc-subj-status { display: inline-block; margin-left: 5px; font-size: 11px; font-weight: 700; }
         .asc-row-head td { background: #f8fafc; font-weight: 700; color: #1e40af; }
         .set-tab { padding: 6px 14px; font-size: 13px; border: 1px solid #cbd5e1; border-bottom: none;
             border-radius: 6px 6px 0 0; background: #e2e8f0; color: #475569; }
@@ -968,6 +941,18 @@
             overscroll-behavior: contain;
             scrollbar-color: #94a3b8 #e2e8f0;
         }
+        .asc-subject-table-scroll { cursor: default; overflow-x: hidden; }
+        .asc-subject-table-scroll.is-dragging { cursor: default; }
+        .asc-subject-table { width: 100%; table-layout: fixed; }
+        .asc-subject-table th, .asc-subject-table td { white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
+        .asc-subject-table th:nth-child(1), .asc-subject-table td:nth-child(1) { width: 20%; }
+        .asc-subject-table th:nth-child(2), .asc-subject-table td:nth-child(2) { width: 15%; }
+        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 29%; }
+        .asc-subject-table th:nth-child(4), .asc-subject-table td:nth-child(4),
+        .asc-subject-table th:nth-child(5), .asc-subject-table td:nth-child(5),
+        .asc-subject-table th:nth-child(6), .asc-subject-table td:nth-child(6),
+        .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 5%; }
+        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 16%; }
         .asc-table-scroll.is-dragging {
             cursor: grabbing;
             user-select: none;
@@ -1604,7 +1589,6 @@
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('refreshNamesBtn').classList.remove('hidden');
-                $('subjModeBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
                 toggleAscToolbar(true);
                 buildSpecList();
@@ -1899,133 +1883,47 @@
             const typeVisible = c => typeFilter === 'all' || c.training_type === typeFilter;
             const visibleSpecCards = () => specCards().filter(typeVisible);
 
-            // ===== Fan rejimi (hafta almashinuvi / sikl) =====
-            const subjModeKey = (spec, course, subj) => (spec || '') + '|' + course + '|' + (subj || '');
-            const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
-
-            // Ko'rinayotgan tanlovdagi noyob fanlar (yo'nalish + kurs + fan bo'yicha)
-            function subjModeList() {
-                const seen = {}, out = [];
-                specCards().forEach(c => {
-                    const k = subjModeKey(c.specialty_name, c.course, c.subject_name);
-                    if (!seen[k]) { seen[k] = 1; out.push({ key: k, specialty_name: c.specialty_name, course: c.course, subject_name: c.subject_name }); }
-                });
-                out.sort((a, b) => (a.course - b.course) || String(a.subject_name).localeCompare(b.subject_name, 'uz'));
-                return out;
-            }
-            function subjModeParamsHtml(s) {
-                const mode = s.mode || 'normal';
+            // Fan rejimi Darslar jadvalidagi har bir qator ichida boshqariladi.
+            function subjectModeParamsHtml(setting) {
+                const mode = setting.mode || 'normal';
                 if (mode === 'alternate') {
-                    return '<span class="inline-flex items-center gap-1">Guruh: <input class="sm-grp rounded border-gray-300 text-xs px-1 py-0.5" style="width:90px" value="' + esc(s.rotation_group || '') + '" placeholder="mas. A"></span>' +
-                           '<span class="inline-flex items-center gap-1 ml-3">Marta (hafta): <input type="number" min="1" max="60" class="sm-occ rounded border-gray-300 text-xs px-1 py-0.5" style="width:60px" value="' + (s.occurrences != null ? s.occurrences : '') + '"></span>';
+                    return '<span class="asc-subj-param">Guruh <input class="asc-subj-group" maxlength="40" value="' + esc(setting.rotation_group || '') + '" placeholder="A"></span>' +
+                        '<span class="asc-subj-param">Hafta <input type="number" class="asc-subj-occ" min="1" max="60" value="' + (setting.occurrences ?? '') + '" placeholder="—"></span>';
                 }
                 if (mode === 'cycle') {
-                    return '<span class="inline-flex items-center gap-1">Sikl uzunligi (kun): <input type="number" min="1" max="120" class="sm-cyc rounded border-gray-300 text-xs px-1 py-0.5" style="width:60px" value="' + (s.cycle_days != null ? s.cycle_days : '') + '"></span>';
+                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="40" value="' + (setting.cycle_weeks ?? '') + '" placeholder="hafta"></span>';
                 }
-                return '<span class="text-gray-400">—</span>';
+                return '<span class="text-slate-400">—</span>';
             }
-            function renderSubjModeTable() {
-                const list = subjModeList();
-                $('subjModeEmpty').classList.toggle('hidden', list.length > 0);
-                $('subjModeBody').innerHTML = list.map(it => {
-                    const s = subjectSettings[it.key] || { mode: 'normal' };
-                    const mode = s.mode || 'normal';
-                    const ctx = it.specialty_name + ' · ' + it.course + '-kurs';
-                    const opts = ['normal', 'alternate', 'cycle'].map(m =>
-                        '<option value="' + m + '"' + (m === mode ? ' selected' : '') + '>' + SUBJ_MODE_LABELS[m] + '</option>').join('');
-                    return '<tr data-k="' + esc(it.key) + '" data-spec="' + esc(it.specialty_name) + '" data-course="' + it.course + '" data-subj="' + esc(it.subject_name) + '">' +
-                        '<td class="border border-gray-200 px-2 py-1"><div class="font-medium text-gray-800">' + esc(it.subject_name) + '</div><div class="text-[10px] text-gray-400">' + esc(ctx) + '</div></td>' +
-                        '<td class="border border-gray-200 px-2 py-1"><select class="sm-mode rounded border-gray-300 text-xs w-full">' + opts + '</select></td>' +
-                        '<td class="border border-gray-200 px-2 py-1 sm-params">' + subjModeParamsHtml({ ...s, mode }) + '</td>' +
-                        '<td class="border border-gray-200 px-1 py-1 text-center sm-stat"></td></tr>';
-                }).join('');
-            }
-            async function saveSubjMode(tr) {
-                const spec = tr.dataset.spec, course = +tr.dataset.course, subj = tr.dataset.subj;
-                const mode = tr.querySelector('.sm-mode').value;
-                const body = { specialty_name: spec, course: course, subject_name: subj, mode: mode };
+
+            async function saveSubjectModeRow(tr, row) {
+                const mode = tr.querySelector('.asc-subj-mode').value;
+                const body = { specialty_name: row.specialty_name, course: +row.course, subject_name: row.subject_name, mode };
                 if (mode === 'alternate') {
-                    const grp = tr.querySelector('.sm-grp'); if (grp && grp.value.trim()) body.rotation_group = grp.value.trim();
-                    const occ = tr.querySelector('.sm-occ'); if (occ && occ.value) body.occurrences = +occ.value;
+                    const group = tr.querySelector('.asc-subj-group');
+                    const occurrences = tr.querySelector('.asc-subj-occ');
+                    if (group && group.value.trim()) body.rotation_group = group.value.trim();
+                    if (occurrences && occurrences.value) body.occurrences = +occurrences.value;
                 } else if (mode === 'cycle') {
-                    const cyc = tr.querySelector('.sm-cyc'); if (cyc && cyc.value) body.cycle_days = +cyc.value;
+                    const cycle = tr.querySelector('.asc-subj-cycle');
+                    if (cycle && cycle.value) body.cycle_weeks = +cycle.value;
                 }
-                const stat = tr.querySelector('.sm-stat');
-                stat.textContent = '…'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-gray-400';
+                const status = tr.querySelector('.asc-subj-status');
+                status.textContent = '…';
+                status.className = 'asc-subj-status text-slate-400';
                 try {
                     await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
-                    const k = subjModeKey(spec, course, subj);
-                    if (mode === 'normal') delete subjectSettings[k];
-                    else subjectSettings[k] = { specialty_name: spec, course: course, subject_name: subj, mode: mode,
-                        rotation_group: body.rotation_group ?? null, occurrences: body.occurrences ?? null, cycle_days: body.cycle_days ?? null };
-                    stat.textContent = '✓'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-emerald-600';
+                    const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
+                    if (mode === 'normal') delete subjectSettings[key];
+                    else subjectSettings[key] = { ...body };
+                    status.textContent = '✓';
+                    status.className = 'asc-subj-status text-emerald-600';
                 } catch (e) {
-                    stat.textContent = '✕'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-red-600';
+                    status.textContent = '✕';
+                    status.className = 'asc-subj-status text-red-600';
                     alert('Xatolik: ' + e.message);
                 }
             }
-            $('subjModeBody').addEventListener('change', ev => {
-                const tr = ev.target.closest('tr'); if (!tr) return;
-                if (ev.target.classList.contains('sm-mode')) {
-                    const s = subjectSettings[tr.dataset.k] || {};
-                    tr.querySelector('.sm-params').innerHTML = subjModeParamsHtml({ ...s, mode: ev.target.value });
-                }
-                saveSubjMode(tr);
-            });
-            $('subjModeBtn').onclick = () => { if (!board) return; renderSubjModeTable(); $('subjModeModal').classList.remove('hidden'); };
-            $('subjModeClose').onclick = () => $('subjModeModal').classList.add('hidden');
-            $('subjModeModal').addEventListener('click', ev => {
-                if (ev.target === ev.currentTarget || ev.target.classList.contains('tt-modal-body')) $('subjModeModal').classList.add('hidden');
-            });
-
-            // ===== Sikl (4-6 kurs) kalendar ko'rinishi =====
-            let cyclePlanData = null;
-            async function loadCyclePlan() {
-                if (!board) return;
-                const body = scopeBody();
-                if ($('cycleStart').value) body.start_date = $('cycleStart').value;
-                $('cycleMsg').textContent = 'Yuklanmoqda...';
-                try {
-                    const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
-                    cyclePlanData = j;
-                    if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
-                    renderCyclePlan(j);
-                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' guruh · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
-                        (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '');
-                } catch (e) {
-                    $('cycleMsg').textContent = '';
-                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-3 text-sm text-red-600">Xatolik: ' + esc(e.message) + '</td></tr></tbody>';
-                }
-            }
-            function renderCyclePlan(j) {
-                const dates = j.dates || [], rows = j.rows || [];
-                if (!rows.length) {
-                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki guruh topilmadi. "Fan rejimi" oynasida 4-6 kurs fanlarini <b>Sikl</b> qilib, sikl uzunligini (kun) kiriting, so\'ng shu yerni Yangilang.</td></tr></tbody>';
-                    return;
-                }
-                let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
-                dates.forEach(d => h += '<th class="cyc-dcol' + (d.dow >= 6 ? ' cyc-wend' : '') + '">' + esc(d.d) + '</th>');
-                h += '</tr></thead><tbody>';
-                rows.forEach(r => {
-                    const sub = (r.subgroups && r.subgroups.length) ? r.subgroups.join(', ') : '';
-                    h += '<tr><td class="cyc-gcol"><div class="font-semibold text-gray-800">' + esc(r.group) + '</div>' +
-                        (sub ? '<div class="text-[9px] text-gray-400">' + esc(sub) + '</div>' : '') + '</td>';
-                    let col = 0;
-                    (r.blocks || []).forEach(b => {
-                        while (col < b.from) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
-                        const c = subjColor(b.subject);
-                        h += '<td class="cyc-cell cyc-block" colspan="' + (b.to - b.from + 1) + '" style="background:' + c.bg + ';border-color:' + c.border + ';" title="' + esc(b.subject) + ' — ' + b.days + ' kun">' +
-                            '<span class="cyc-lbl">' + esc(b.subject) + ' <b>' + b.days + '</b></span></td>';
-                        col = b.to + 1;
-                    });
-                    while (col < dates.length) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
-                    h += '</tr>';
-                });
-                h += '</tbody>';
-                $('cycleGrid').innerHTML = h;
-            }
-            $('cycleRefresh').onclick = loadCyclePlan;
-            $('cycleStart').onchange = loadCyclePlan;
 
             function buildGroupRows() {
                 groupRows = [];
@@ -2765,21 +2663,27 @@
 
             function renderAscTable() {
                 $('ascTable').classList.toggle('asc-auditorium-table', ascType === 'auditoriums');
+                $('ascTable').classList.toggle('asc-subject-table', ascType === 'subjects');
                 const rows = filteredAsc();
                 $('ascCount').textContent = rows.length + ' ta';
                 let h = '';
                 if (ascType === 'subjects') {
-                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th></tr></thead><tbody>';
+                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th><th>Fan rejimi</th></tr></thead><tbody>';
                     let lastSpec = null;
                     rows.forEach((r, i) => {
                         const sk = r.specialty_name + '·' + r.course;
                         if (sk !== lastSpec) {
-                            h += '<tr class="asc-row-head"><td colspan="7">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</td></tr>';
+                            h += '<tr class="asc-row-head"><td colspan="8">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</td></tr>';
                             lastSpec = sk;
                         }
+                        const setting = subjectSettings[subjModeKey(r.specialty_name, r.course, r.subject_name)] || { mode: 'normal' };
+                        const modeOptions = Object.entries(SUBJ_MODE_LABELS).map(([value, label]) =>
+                            '<option value="' + value + '"' + (setting.mode === value ? ' selected' : '') + '>' + label + '</option>').join('');
                         h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td>' + esc(r.specialty_name) + ' · ' + r.course + '</td>' +
                             '<td>' + esc(r.kafedra_name || '—') + '</td><td>' + fmt(r.lecture) + '</td><td>' + fmt(r.practice + r.laboratory + r.seminar) +
-                            '</td><td>' + r.lec_pairs + '</td><td>' + r.prc_pairs + '</td></tr>';
+                            '</td><td>' + r.lec_pairs + '</td><td>' + r.prc_pairs + '</td>' +
+                            '<td class="asc-subj-mode-cell"><select class="asc-subj-mode">' + modeOptions + '</select><div class="asc-subj-params">' +
+                            subjectModeParamsHtml(setting) + '</div><span class="asc-subj-status" aria-live="polite"></span></td></tr>';
                     });
                 } else if (ascType === 'groups') {
                     h = '<thead><tr><th>Guruh</th><th>Yo\'nalish · kurs</th><th>Oqim</th><th>Til</th><th>Talaba</th></tr></thead><tbody>';
@@ -2804,6 +2708,25 @@
                 h += '</tbody>';
                 $('ascTable').innerHTML = h;
                 document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => {
+                    if (ascType === 'subjects') {
+                        const row = rows[+tr.dataset.idx];
+                        const modeSelect = tr.querySelector('.asc-subj-mode');
+                        const refreshParams = () => {
+                            const current = subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
+                            tr.querySelector('.asc-subj-params').innerHTML = subjectModeParamsHtml({ ...current, mode: modeSelect.value });
+                        };
+                        modeSelect.onchange = async () => {
+                            refreshParams();
+                            await saveSubjectModeRow(tr, row);
+                        };
+                        tr.addEventListener('change', ev => {
+                            if (ev.target.classList.contains('asc-subj-group') ||
+                                ev.target.classList.contains('asc-subj-occ') ||
+                                ev.target.classList.contains('asc-subj-cycle')) {
+                                saveSubjectModeRow(tr, row);
+                            }
+                        });
+                    }
                     tr.onclick = () => {
                         ascSelId = tr.dataset.id || tr.dataset.idx;
                         document.querySelectorAll('#ascTable tbody tr').forEach(x => x.classList.remove('sel'));

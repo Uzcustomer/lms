@@ -992,14 +992,14 @@
         .asc-subject-table-scroll.is-dragging { cursor: default; }
         #ascTable.asc-subject-table { width: 100%; min-width: 100%; table-layout: fixed; }
         .asc-subject-table th, .asc-subject-table td { white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
-        .asc-subject-table th:nth-child(1), .asc-subject-table td:nth-child(1) { width: 18%; }
+        .asc-subject-table th:nth-child(1), .asc-subject-table td:nth-child(1) { width: 17%; }
         .asc-subject-table th:nth-child(2), .asc-subject-table td:nth-child(2) { width: 10%; }
-        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 30%; }
+        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 24%; }
         .asc-subject-table th:nth-child(4), .asc-subject-table td:nth-child(4),
         .asc-subject-table th:nth-child(5), .asc-subject-table td:nth-child(5),
         .asc-subject-table th:nth-child(6), .asc-subject-table td:nth-child(6),
         .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 4%; }
-        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 22%; }
+        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 29%; }
         .asc-table-scroll.is-dragging {
             cursor: grabbing;
             user-select: none;

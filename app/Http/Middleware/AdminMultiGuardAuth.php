@@ -96,6 +96,6 @@ class AdminMultiGuardAuth
 
         // Autentifikatsiya yo'q - login sahifasiga
         Log::channel('daily')->warning("🛡️ MIDDLEWARE [{$url}]: ❌ Hech qanday guard aktiv emas, admin.login ga redirect");
-        return redirect()->route('admin.login');
+        return redirect('/');
     }
 }

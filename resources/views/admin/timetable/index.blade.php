@@ -266,12 +266,12 @@
                         </div>
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
                         <div class="flex gap-3 p-4 overflow-hidden" style="min-height: 600px;">
-                            <nav class="w-60 shrink-0 flex flex-col gap-2 rounded-xl border border-blue-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-sm" aria-label="Jadval ma'lumotlari">
+                            <nav class="w-20 shrink-0 flex flex-col items-center gap-2 rounded-xl border border-blue-100 bg-gradient-to-b from-slate-50 to-white p-2 shadow-sm" aria-label="Jadval ma'lumotlari">
                                 <div class="px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Boshqaruv</div>
-                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span><span>Darslar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="groups" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span><span>Guruhlar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true"></span><span>Auditoriyalar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/09_teachers_cap.png') }}" alt="" aria-hidden="true"></span><span>O'qituvchilar</span></button>
+                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" data-tooltip="Darslar" aria-label="Darslar" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span><span>Darslar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="groups" data-tooltip="Guruhlar" aria-label="Guruhlar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span><span>Guruhlar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" data-tooltip="Auditoriyalar" aria-label="Auditoriyalar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true"></span><span>Auditoriyalar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" data-tooltip="O'qituvchilar" aria-label="O'qituvchilar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/09_teachers_cap.png') }}" alt="" aria-hidden="true"></span><span>O'qituvchilar</span></button>
                             </nav>
                             <div id="ascPanel" class="flex-1 flex gap-3 min-w-0">
                                 <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden min-w-0 shadow-sm">
@@ -699,7 +699,13 @@
         .asc-table tr.sel td { background: #dbeafe; }
         .asc-table tr:hover td { background: #f1f5f9; }
         .asc-table tr.sel:hover td { background: #cfe0fb; }
-        .asc-list-toolbar { min-height: 58px; }
+        .asc-list-toolbar { min-height: 58px; align-items: center; }
+        #ascButtons { flex: 0 1 auto; min-width: 0; }
+        #ascButtons .asc-action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 36px; width: auto; white-space: nowrap; }
+        #ascButtons .asc-action-btn.block { display: inline-flex; width: auto; }
+        #ascButtons .my-1.border-t { display: none; }
+        #ascSearch { flex: 1 1 220px; width: 220px; max-width: 280px; height: 36px; }
+        #ascFilter { height: 36px; }
         #ascButtons .asc-action-btn { white-space: nowrap; min-height: 34px; padding: 5px 10px; }
         .asc-column-filter-row th { position: sticky; top: 29px; z-index: 2; padding: 3px 5px; background: #f8fafc; }
         .asc-column-filter-row input,
@@ -749,11 +755,14 @@
             #excelBody { position: absolute; left: 0; top: 0; }
         }
             .asc-nav-btn {
+            position: relative;
             display: flex;
             align-items: center;
-            gap: 8px;
-            width: 100%;
-            padding: 9px 10px;
+            justify-content: center;
+            gap: 0;
+            width: 64px;
+            min-height: 64px;
+            padding: 10px;
             border: 1px solid transparent;
             border-radius: 6px;
             color: #475569;
@@ -762,6 +771,25 @@
             font-weight: 600;
             text-align: left;
             transition: all 0.15s ease;
+        }
+        .asc-nav-btn > span:not(.asc-nav-icon) { display: none; }
+        .asc-nav-btn .asc-nav-icon { width: 40px; height: 40px; flex: 0 0 40px; }
+        .asc-nav-btn:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 8px);
+            top: 50%;
+            z-index: 20;
+            transform: translateY(-50%);
+            padding: 7px 10px;
+            border-radius: 6px;
+            background: #0f172a;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 8px 20px rgba(15,23,42,.22);
+            pointer-events: none;
         }
         .asc-nav-btn:hover {
             background: #eff6ff;
@@ -2885,8 +2913,8 @@
                         '<button class="asc-btn asc-action-btn" id="aBtnEdit"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('edit') + 'Tahrirlash</button>' +
                         '<button class="asc-btn danger asc-action-btn" id="aBtnDel"' + (hasSel ? '' : ' disabled') + '>' + actionIcon('trash') + 'O\'chirish</button>' +
                         '<div class="my-1 border-t border-gray-300"></div>' +
-                        '<button class="asc-btn block asc-action-btn" id="aBtnImport">' + actionIcon('import') + 'Import (Excel)</button>' +
-                        '<button class="asc-btn block asc-action-btn" id="aBtnTemplate">' + actionIcon('template') + 'Namuna shabloni</button>';
+                        '<button class="asc-btn asc-action-btn" id="aBtnImport">' + actionIcon('import') + 'Import (Excel)</button>' +
+                        '<button class="asc-btn asc-action-btn" id="aBtnTemplate">' + actionIcon('template') + 'Namuna shabloni</button>';
                     $('aBtnNew').onclick = () => openAudEdit(null);
                     $('aBtnEdit').onclick = () => hasSel && openAudEdit(ascData.find(x => String(x.id) === String(ascSelId)));
                     $('aBtnDel').onclick = () => hasSel && deleteAud();
@@ -2895,13 +2923,7 @@
                 } else {
                     // Faqat o'qish (manba HEMIS/o'quv reja) — eksport imkoniyati
                     b.innerHTML =
-                        '<button class="asc-btn block asc-action-btn" id="aBtnCsv">' + actionIcon('export') + 'CSV ga eksport</button>' +
-                        '<div class="text-[11px] text-gray-500 leading-snug mt-1 px-1">' +
-                        (ascType === 'subjects'
-                            ? 'Fanlar ishchi o\'quv rejalardan olinadi. Soatlar reja tahririda o\'zgartiriladi.'
-                            : ascType === 'groups'
-                            ? 'Guruhlar tasdiqlangan oqim tuzilishidan olinadi.'
-                            : 'O\'qituvchilar HEMIS sinxronizatsiyasidan olinadi.') + '</div>';
+                        '<button class="asc-btn asc-action-btn" id="aBtnCsv" title="CSV ga eksport">' + actionIcon('export') + 'CSV ga eksport</button>';
                     $('aBtnCsv').onclick = exportAscCsv;
                 }
             }

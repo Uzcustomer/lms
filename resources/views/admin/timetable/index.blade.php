@@ -1005,9 +1005,9 @@
             user-select: none;
         }
         .asc-btn.asc-action-btn { display: flex; align-items: center; gap: 5px; justify-content: flex-start; }
-        .asc-action-icon { width: 19px; height: 19px; flex: 0 0 19px; display: inline-flex; }
+        .asc-action-icon { width: 25px; height: 25px; flex: 0 0 25px; display: inline-flex; }
         .asc-action-icon svg { width: 100%; height: 100%; }
-        .asc-action-icon .bi { font-size: 18px; line-height: 1; }
+        .asc-action-icon .bi { font-size: 25px; line-height: 1; }
         .asc-action-icon img { width: 100%; height: 100%; object-fit: contain; }
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
@@ -1038,14 +1038,14 @@
             left: 13px;
             top: 50%;
             z-index: 2;
-            width: 16px;
-            height: 16px;
+            width: 25px;
+            height:  25px;
             color: #2563eb;
             transform: translateY(-50%);
             pointer-events: none;
         }
         .tt-board-icon svg { width: 100%; height: 100%; }
-        .tt-board-icon .bi { font-size: 16px; line-height: 1; }
+        .tt-board-icon .bi { font-size: 25px; line-height: 1; }
             .tt-board-icon img {
                 width: 100%;
                 height: 100%;
@@ -1102,7 +1102,7 @@
         #gsSave .toolbar-icon { color: #2563eb; }
         #autoBtn .toolbar-icon { color: #fff; }
         #unplaceBtn .toolbar-icon { color: #dc2626; }
-        .tt-toggle-icon { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+        .tt-toggle-icon { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
         #autoScope + .tt-toggle-icon { color: #2563eb; }
         #autoReset + .tt-toggle-icon { color: #7c3aed; }
         #autoRooms + .tt-toggle-icon { color: #0891b2; }
@@ -1277,9 +1277,9 @@
             opacity: 0;
             pointer-events: none;
         }
-        .tt-toggle-icon { display: inline-flex; width: 16px; height: 16px; color: #2563eb; }
+        .tt-toggle-icon { display: inline-flex; width: 18px; height: 18px; color: #2563eb; }
         .tt-toggle-icon svg { width: 100%; height: 100%; }
-        .tt-toggle-icon .bi { font-size: 16px; line-height: 1; }
+        .tt-toggle-icon .bi { font-size: 18px; line-height: 1; }
         .tt-toggle-chip:hover { border-color: #93c5fd; background: #eff6ff; }
         .tt-toggle-chip:has(input:checked) {
             border-color: #047857;
@@ -1345,9 +1345,9 @@
         }
 
         .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
-        .toolbar-icon { width: 19px; height: 19px; display: inline-flex; flex: 0 0 19px; align-items: center; justify-content: center; }
+        .toolbar-icon { width: 25px; height: 25px; display: inline-flex; flex: 0 0 25px; align-items: center; justify-content: center; }
         .toolbar-icon svg { width: 100%; height: 100%; }
-        .toolbar-icon .bi { font-size: 18px; line-height: 1; }
+        .toolbar-icon .bi { font-size: 25px; line-height: 1; }
         .toolbar-icon img, .tt-toggle-icon img { width: 100%; height: 100%; object-fit: contain; }
         .tt-custom-icon { width: 100%; height: 100%; object-fit: contain; }
         #specBar .toolbar-row { row-gap: 8px; }

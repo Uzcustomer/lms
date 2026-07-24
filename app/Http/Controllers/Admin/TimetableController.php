@@ -12,6 +12,7 @@ use App\Models\TimetableCardOverride;
 use App\Models\TimetableGridSetting;
 use App\Models\TimetableSubjectSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -1029,7 +1030,7 @@ class TimetableController extends Controller
             return [];
         }
         return TimetableSubjectSetting::where('board_id', $board->id)
-            ->get(['specialty_name', 'course', 'subject_name', 'mode', 'rotation_group', 'occurrences', 'cycle_weeks'])
+            ->get(['specialty_name', 'course', 'subject_name', 'mode', 'rotation_group', 'occurrences', 'cycle_days'])
             ->map(fn($s) => [
                 'specialty_name' => $s->specialty_name,
                 'course'         => (int) $s->course,
@@ -1037,7 +1038,7 @@ class TimetableController extends Controller
                 'mode'           => $s->mode,
                 'rotation_group' => $s->rotation_group,
                 'occurrences'    => $s->occurrences !== null ? (int) $s->occurrences : null,
-                'cycle_weeks'    => $s->cycle_weeks !== null ? (int) $s->cycle_weeks : null,
+                'cycle_days'     => $s->cycle_days !== null ? (int) $s->cycle_days : null,
             ])->all();
     }
 
@@ -1054,7 +1055,7 @@ class TimetableController extends Controller
             'mode'           => 'required|in:normal,alternate,cycle',
             'rotation_group' => 'nullable|string|max:255',
             'occurrences'    => 'nullable|integer|min:1|max:60',
-            'cycle_weeks'    => 'nullable|integer|min:1|max:40',
+            'cycle_days'     => 'nullable|integer|min:1|max:120',
         ]);
 
         $key = [
@@ -1074,11 +1075,161 @@ class TimetableController extends Controller
             'mode'           => $data['mode'],
             'rotation_group' => $data['mode'] === 'alternate' ? ($data['rotation_group'] ?? null) : null,
             'occurrences'    => $data['mode'] === 'alternate' ? ($data['occurrences'] ?? null) : null,
-            'cycle_weeks'    => $data['mode'] === 'cycle' ? ($data['cycle_weeks'] ?? null) : null,
+            'cycle_days'     => $data['mode'] === 'cycle' ? ($data['cycle_days'] ?? null) : null,
         ];
         TimetableSubjectSetting::updateOrCreate($key, $values);
 
         return response()->json(['ok' => true, 'mode' => $data['mode']]);
+    }
+
+    /** Guruhcha nomidan asosiy guruh (oxirgi kichik harf — a/b/c — olib tashlanadi). */
+    private function baseGroup(string $gn): string
+    {
+        // "p22-02a" → "p22-02", "d1/23 10a" → "d1/23 10" (raqamdan keyingi bitta harf)
+        return preg_replace('/([0-9])\s*[a-z]$/iu', '$1', trim($gn));
+    }
+
+    /**
+     * Sikl (4-6 kurs) kalendar rejasi: sana × guruh, har guruh o'z sikl fanlarini
+     * ketma-ket blok qilib o'taydi (guruhlar surilib — rotatsiya). Birlik: o'quv kuni.
+     * Bu — birinchi versiya: bloklar ketma-ket, guruh indeksi bo'yicha aylantiriladi.
+     */
+    public function cyclePlan(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'start_date'        => 'nullable|date',
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+        ]);
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
+            if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
+            if ($specSet !== null && !isset($specSet[(string) $c->specialty_name])) return false;
+            if ($courseSet !== null && !isset($courseSet[(int) $c->course])) return false;
+            return true;
+        };
+
+        // Semestr boshlanish sanasi (so'rovdan / sozlamadan / o'quv yilidan)
+        $set = $board->settings ?? [];
+        $start = $data['start_date'] ?? ($set['semester_start'] ?? null);
+        if (!$start) {
+            $yearStart = (int) preg_replace('/\D.*$/', '', (string) $board->academic_year);
+            if ($yearStart < 2000) {
+                $yearStart = (int) date('Y');
+            }
+            $start = $board->semester_parity === 'bahorgi'
+                ? sprintf('%04d-02-01', $yearStart + 1)
+                : sprintf('%04d-09-01', $yearStart);
+        }
+        $startC = Carbon::parse($start)->startOfDay();
+        if (($set['semester_start'] ?? null) !== $startC->toDateString()) {
+            $set['semester_start'] = $startC->toDateString();
+            $board->update(['settings' => $set]);
+        }
+
+        // O'quv kunlari kalendari: haftasiga board->days ta ish kuni (Dush=1..),
+        // yakshanba (va board->days dan keyingi kunlar) o'tkazib yuboriladi.
+        $D = max(1, (int) $board->days);
+        $W = max(1, (int) $board->weeks);
+        $dates = [];
+        $cur = $startC->copy();
+        $guard = 0;
+        while (count($dates) < $W * $D && $guard < $W * 7 + 30) {
+            if ((int) $cur->dayOfWeekIso <= $D) {
+                $dates[] = $cur->copy();
+            }
+            $cur->addDay();
+            $guard++;
+        }
+        $totalDays = count($dates);
+
+        // Sikl fanlari: (spec|course|subject) => cycle_days
+        $cycleKey = [];
+        if (Schema::hasTable('timetable_subject_settings')) {
+            $q = TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle');
+            if ($specSet !== null) $q->whereIn('specialty_name', array_keys($specSet));
+            if ($courseSet !== null) $q->whereIn('course', array_keys($courseSet));
+            foreach ($q->get() as $s) {
+                $cycleKey[$s->specialty_name . '|' . (int) $s->course . '|' . $s->subject_name] = max(1, (int) ($s->cycle_days ?? 1));
+            }
+        }
+
+        // Guruhlar (asosiy guruh bo'yicha) va ularning sikl fanlari — kartalardan
+        $byGroup = [];
+        if (!empty($cycleKey)) {
+            foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
+                if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)) {
+                    continue;
+                }
+                $ck = $c->specialty_name . '|' . (int) $c->course . '|' . $c->subject_name;
+                if (!isset($cycleKey[$ck])) {
+                    continue;
+                }
+                $base = $this->baseGroup($c->group_name);
+                if (!isset($byGroup[$base])) {
+                    $byGroup[$base] = ['name' => $base, 'subs' => [], 'members' => [],
+                        'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
+                }
+                $byGroup[$base]['subs'][$c->subject_name] = $cycleKey[$ck];
+                $byGroup[$base]['members'][$c->group_name] = true;
+            }
+        }
+
+        // Fanlar global tartibi (nomi bo'yicha) — rotatsiya uchun
+        $allSubs = [];
+        foreach ($byGroup as $g) {
+            foreach ($g['subs'] as $sn => $dd) {
+                $allSubs[$sn] = $dd;
+            }
+        }
+        ksort($allSubs);
+        $subOrder = array_keys($allSubs);
+
+        $groups = array_values($byGroup);
+        usort($groups, fn($a, $b) => strnatcmp($a['name'], $b['name']));
+
+        $rows = [];
+        foreach ($groups as $gi => $g) {
+            // Shu guruh fanlari, global tartibda, guruh indeksi bo'yicha aylantirilgan
+            $order = array_merge(array_slice($subOrder, $gi % max(1, count($subOrder))),
+                                 array_slice($subOrder, 0, $gi % max(1, count($subOrder))));
+            $blocks = [];
+            $idx = 0;
+            foreach ($order as $sn) {
+                if (!isset($g['subs'][$sn])) {
+                    continue;
+                }
+                if ($idx >= $totalDays) {
+                    break;
+                }
+                $days = max(1, (int) $g['subs'][$sn]);
+                $to = min($idx + $days - 1, $totalDays - 1);
+                $blocks[] = ['subject' => $sn, 'from' => $idx, 'to' => $to, 'days' => $to - $idx + 1];
+                $idx = $to + 1;
+            }
+            $members = array_keys($g['members']);
+            sort($members, SORT_NATURAL);
+            $rows[] = [
+                'group'     => $g['name'],
+                'subgroups' => $members,
+                'faculty'   => $g['faculty'],
+                'specialty' => $g['specialty'],
+                'course'    => $g['course'],
+                'blocks'    => $blocks,
+            ];
+        }
+
+        return response()->json([
+            'start_date' => $startC->toDateString(),
+            'total_days' => $totalDays,
+            'dates'      => array_map(fn($d) => ['d' => $d->format('d.m'), 'iso' => $d->toDateString(), 'dow' => (int) $d->dayOfWeekIso], $dates),
+            'subjects'   => array_map(fn($sn) => ['name' => $sn, 'days' => $allSubs[$sn]], $subOrder),
+            'rows'       => $rows,
+        ]);
     }
 
     /**

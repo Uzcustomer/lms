@@ -12,13 +12,14 @@ class TimetableSubjectSetting extends Model
 {
     protected $fillable = [
         'board_id', 'specialty_name', 'course', 'subject_name',
-        'mode', 'rotation_group', 'occurrences', 'cycle_weeks', 'note',
+        'mode', 'rotation_group', 'occurrences', 'cycle_weeks', 'cycle_days', 'note',
     ];
 
     protected $casts = [
         'course'      => 'integer',
         'occurrences' => 'integer',
         'cycle_weeks' => 'integer',
+        'cycle_days'  => 'integer',
     ];
 
     public const MODES = ['normal', 'alternate', 'cycle'];

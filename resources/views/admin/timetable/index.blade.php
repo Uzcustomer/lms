@@ -139,6 +139,7 @@
                             <option value="teacher">O'qituvchi</option>
                             <option value="room">Auditoriya</option>
                             <option value="subject">Fan</option>
+                            <option value="cycle">Sikl (4-6 kurs)</option>
                         </select>
                     </div>
 
@@ -166,8 +167,19 @@
                  faqat shu ichida skroll) + pastda joylashmagan kartalar --}}
             <div id="mainArea" class="hidden" style="flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0;">
                 {{-- Panjara --}}
-                <div class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="flex: 1 1 auto; min-height: 0; max-width: 100%;">
+                <div id="gridWrap" class="bg-white shadow-sm sm:rounded-lg overflow-auto" style="flex: 1 1 auto; min-height: 0; max-width: 100%;">
                     <table id="grid" class="border-collapse text-[11px]"></table>
+                </div>
+                {{-- Sikl (4-6 kurs) kalendar ko'rinishi — sana × guruh bloklari --}}
+                <div id="cycleArea" class="hidden bg-white shadow-sm sm:rounded-lg overflow-auto" style="flex: 1 1 auto; min-height: 0; max-width: 100%;">
+                    <div class="flex flex-wrap items-center gap-3 px-3 py-2 border-b border-gray-100 sticky top-0 bg-white z-10">
+                        <span class="text-xs font-semibold text-gray-700">Sikl jadvali (4-6 kurs)</span>
+                        <label class="text-[11px] text-gray-500 flex items-center gap-1">Semestr boshlanishi:
+                            <input type="date" id="cycleStart" class="rounded border-gray-300 text-xs py-0.5"></label>
+                        <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <span id="cycleMsg" class="text-[11px] text-gray-500"></span>
+                    </div>
+                    <div id="cycleGridWrap" class="overflow-auto"><table id="cycleGrid" class="border-collapse text-[11px]"></table></div>
                 </div>
 
                 {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel (flex-shrink-0 — doim ko'rinadi) --}}
@@ -683,6 +695,18 @@
         .tt-dd-tools button { font-size: 11px; color: #2563eb; background: none; border: none; cursor: pointer; padding: 2px 4px; }
         .tt-dd-tools button:hover { text-decoration: underline; }
         .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
+        /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
+        #cycleGrid { border-collapse: collapse; }
+        #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
+        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; background: #eff6ff; min-width: 96px; max-width: 130px;
+            padding: 2px 6px; text-align: left; font-size: 10px; line-height: 1.15; }
+        #cycleGrid thead .cyc-gcol { background: #dbeafe; }
+        #cycleGrid .cyc-dcol { width: 24px; min-width: 24px; font-size: 9px; writing-mode: vertical-rl; text-orientation: mixed;
+            padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
+        #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
+        #cycleGrid .cyc-wend { background: #eef2f7; }
+        #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
+        #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
         /* ── Modal oynalar (Tailwind kompilyatsiyasiga bog'liq bo'lmasin — inline) ── */
         .tt-modal { position: fixed; inset: 0; z-index: 60; background: rgba(15,23,42,.55); overflow-y: auto; }
         .tt-modal.hidden { display: none; }
@@ -1397,7 +1421,7 @@
             let audCache = null;
             let modalCard = null;
             let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
-            let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_weeks}
+            let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
 
             const $ = id => document.getElementById(id);
@@ -1569,7 +1593,7 @@
                 // Hafta bo'yicha istisnolar
                 overrides = {};
                 (j.overrides || []).forEach(o => { overrides[o.card_id + '|' + o.week] = { day: o.day, pair: o.pair, cancelled: o.cancelled }; });
-                // Fan rejimi (hafta almashinuvi / sikl): "spec|course|subject" => {mode, rotation_group, occurrences, cycle_weeks}
+                // Fan rejimi (hafta almashinuvi / sikl): "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
                 subjectSettings = {};
                 (j.subject_settings || []).forEach(s => { subjectSettings[subjModeKey(s.specialty_name, s.course, s.subject_name)] = s; });
                 // Eski kartaga ishora qiluvchi tanlovlarni bekor qilamiz (eski doskaga yozib
@@ -1896,7 +1920,7 @@
                            '<span class="inline-flex items-center gap-1 ml-3">Marta (hafta): <input type="number" min="1" max="60" class="sm-occ rounded border-gray-300 text-xs px-1 py-0.5" style="width:60px" value="' + (s.occurrences != null ? s.occurrences : '') + '"></span>';
                 }
                 if (mode === 'cycle') {
-                    return '<span class="inline-flex items-center gap-1">Sikl uzunligi (hafta): <input type="number" min="1" max="40" class="sm-cyc rounded border-gray-300 text-xs px-1 py-0.5" style="width:60px" value="' + (s.cycle_weeks != null ? s.cycle_weeks : '') + '"></span>';
+                    return '<span class="inline-flex items-center gap-1">Sikl uzunligi (kun): <input type="number" min="1" max="120" class="sm-cyc rounded border-gray-300 text-xs px-1 py-0.5" style="width:60px" value="' + (s.cycle_days != null ? s.cycle_days : '') + '"></span>';
                 }
                 return '<span class="text-gray-400">—</span>';
             }
@@ -1924,7 +1948,7 @@
                     const grp = tr.querySelector('.sm-grp'); if (grp && grp.value.trim()) body.rotation_group = grp.value.trim();
                     const occ = tr.querySelector('.sm-occ'); if (occ && occ.value) body.occurrences = +occ.value;
                 } else if (mode === 'cycle') {
-                    const cyc = tr.querySelector('.sm-cyc'); if (cyc && cyc.value) body.cycle_weeks = +cyc.value;
+                    const cyc = tr.querySelector('.sm-cyc'); if (cyc && cyc.value) body.cycle_days = +cyc.value;
                 }
                 const stat = tr.querySelector('.sm-stat');
                 stat.textContent = '…'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-gray-400';
@@ -1933,7 +1957,7 @@
                     const k = subjModeKey(spec, course, subj);
                     if (mode === 'normal') delete subjectSettings[k];
                     else subjectSettings[k] = { specialty_name: spec, course: course, subject_name: subj, mode: mode,
-                        rotation_group: body.rotation_group ?? null, occurrences: body.occurrences ?? null, cycle_weeks: body.cycle_weeks ?? null };
+                        rotation_group: body.rotation_group ?? null, occurrences: body.occurrences ?? null, cycle_days: body.cycle_days ?? null };
                     stat.textContent = '✓'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-emerald-600';
                 } catch (e) {
                     stat.textContent = '✕'; stat.className = 'border border-gray-200 px-1 py-1 text-center sm-stat text-red-600';
@@ -1953,6 +1977,55 @@
             $('subjModeModal').addEventListener('click', ev => {
                 if (ev.target === ev.currentTarget || ev.target.classList.contains('tt-modal-body')) $('subjModeModal').classList.add('hidden');
             });
+
+            // ===== Sikl (4-6 kurs) kalendar ko'rinishi =====
+            let cyclePlanData = null;
+            async function loadCyclePlan() {
+                if (!board) return;
+                const body = scopeBody();
+                if ($('cycleStart').value) body.start_date = $('cycleStart').value;
+                $('cycleMsg').textContent = 'Yuklanmoqda...';
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
+                    cyclePlanData = j;
+                    if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
+                    renderCyclePlan(j);
+                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' guruh · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
+                        (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '');
+                } catch (e) {
+                    $('cycleMsg').textContent = '';
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-3 text-sm text-red-600">Xatolik: ' + esc(e.message) + '</td></tr></tbody>';
+                }
+            }
+            function renderCyclePlan(j) {
+                const dates = j.dates || [], rows = j.rows || [];
+                if (!rows.length) {
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki guruh topilmadi. "Fan rejimi" oynasida 4-6 kurs fanlarini <b>Sikl</b> qilib, sikl uzunligini (kun) kiriting, so\'ng shu yerni Yangilang.</td></tr></tbody>';
+                    return;
+                }
+                let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
+                dates.forEach(d => h += '<th class="cyc-dcol' + (d.dow >= 6 ? ' cyc-wend' : '') + '">' + esc(d.d) + '</th>');
+                h += '</tr></thead><tbody>';
+                rows.forEach(r => {
+                    const sub = (r.subgroups && r.subgroups.length) ? r.subgroups.join(', ') : '';
+                    h += '<tr><td class="cyc-gcol"><div class="font-semibold text-gray-800">' + esc(r.group) + '</div>' +
+                        (sub ? '<div class="text-[9px] text-gray-400">' + esc(sub) + '</div>' : '') + '</td>';
+                    let col = 0;
+                    (r.blocks || []).forEach(b => {
+                        while (col < b.from) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
+                        const c = subjColor(b.subject);
+                        h += '<td class="cyc-cell cyc-block" colspan="' + (b.to - b.from + 1) + '" style="background:' + c.bg + ';border-color:' + c.border + ';" title="' + esc(b.subject) + ' — ' + b.days + ' kun">' +
+                            '<span class="cyc-lbl">' + esc(b.subject) + ' <b>' + b.days + '</b></span></td>';
+                        col = b.to + 1;
+                    });
+                    while (col < dates.length) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
+                    h += '</tr>';
+                });
+                h += '</tbody>';
+                $('cycleGrid').innerHTML = h;
+            }
+            $('cycleRefresh').onclick = loadCyclePlan;
+            $('cycleStart').onchange = loadCyclePlan;
 
             function buildGroupRows() {
                 groupRows = [];
@@ -2189,6 +2262,11 @@
             }
 
             function renderGrid() {
+                // Sikl ko'rinishi — alohida kalendar (sana × guruh)
+                const cycleView = viewMode === 'cycle';
+                $('gridWrap').classList.toggle('hidden', cycleView);
+                $('cycleArea').classList.toggle('hidden', !cycleView);
+                if (cycleView) { loadCyclePlan(); return; }
                 if (viewMode !== 'group') { renderGridCross(viewMode); return; }
                 const g = curGrid();
                 let D = g.days;

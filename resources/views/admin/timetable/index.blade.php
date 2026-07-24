@@ -1039,7 +1039,7 @@
             top: 50%;
             z-index: 2;
             width: 25px;
-            height:  25px;
+            height: 25px;
             color: #2563eb;
             transform: translateY(-50%);
             pointer-events: none;

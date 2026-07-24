@@ -3842,7 +3842,17 @@
 
             // URLdan doska ochish
             const urlBoard = new URLSearchParams(location.search).get('board');
-            if (urlBoard) loadBoard(urlBoard);
+            if (urlBoard) {
+                if (timetableAssignmentOnly) {
+                    // O'quv bo'limi uchun faqat doska ID'si yetarli:
+                    // to'liq doska ma'lumotlari endpointi ularga yopiq.
+                    board = { id: urlBoard };
+                    $('boardSel').value = String(urlBoard);
+                    toggleAscToolbar(true);
+                } else {
+                    loadBoard(urlBoard);
+                }
+            }
         })();
     </script>
 </x-app-layout>

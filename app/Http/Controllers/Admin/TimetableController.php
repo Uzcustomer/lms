@@ -1058,16 +1058,20 @@ class TimetableController extends Controller
             'cycle_days'     => 'nullable|integer|min:1|max:120',
         ]);
 
-        $key = [
-            'board_id'       => $board->id,
-            'specialty_name' => $data['specialty_name'],
-            'course'         => (int) $data['course'],
-            'subject_name'   => $data['subject_name'],
-        ];
+        // Mavjud yozuvni katta-kichik harfga befarq topamiz — reja (mc) nomi
+        // "Davolash ishi", karta/snapshot nomi "davolash ishi" bo'lishi mumkin;
+        // dublikat yaratmaslik uchun mavjudini yangilaymiz.
+        $existing = TimetableSubjectSetting::where('board_id', $board->id)
+            ->where('course', (int) $data['course'])
+            ->whereRaw('LOWER(TRIM(specialty_name)) = ?', [mb_strtolower(trim($data['specialty_name']))])
+            ->whereRaw('LOWER(TRIM(subject_name)) = ?', [mb_strtolower(trim($data['subject_name']))])
+            ->first();
 
         // normal — sozlama shart emas, mavjud yozuvni o'chiramiz
         if ($data['mode'] === 'normal') {
-            TimetableSubjectSetting::where($key)->delete();
+            if ($existing) {
+                $existing->delete();
+            }
             return response()->json(['ok' => true, 'mode' => 'normal']);
         }
 
@@ -1077,7 +1081,16 @@ class TimetableController extends Controller
             'occurrences'    => $data['mode'] === 'alternate' ? ($data['occurrences'] ?? null) : null,
             'cycle_days'     => $data['mode'] === 'cycle' ? ($data['cycle_days'] ?? null) : null,
         ];
-        TimetableSubjectSetting::updateOrCreate($key, $values);
+        if ($existing) {
+            $existing->update($values);
+        } else {
+            TimetableSubjectSetting::create(array_merge([
+                'board_id'       => $board->id,
+                'specialty_name' => $data['specialty_name'],
+                'course'         => (int) $data['course'],
+                'subject_name'   => $data['subject_name'],
+            ], $values));
+        }
 
         return response()->json(['ok' => true, 'mode' => $data['mode']]);
     }
@@ -1147,14 +1160,18 @@ class TimetableController extends Controller
         }
         $totalDays = count($dates);
 
-        // Sikl fanlari: (spec|course|subject) => cycle_days
+        // Nomlarni normallashtiramiz — reja (mc) va karta/snapshot nomlari katta-kichik
+        // harf/bo'shliqda farq qilishi mumkin (mas. "Davolash ishi" ↔ "davolash ishi").
+        $normKey = fn($spec, $course, $subj) =>
+            mb_strtolower(trim((string) $spec)) . '|' . (int) $course . '|' . mb_strtolower(trim((string) $subj));
+
+        // Sikl fanlari: normalized(spec|course|subject) => cycle_days
+        // Barcha sikl sozlamalarini (doska bo'yicha) olamiz — qamrovni kartalar
+        // (inScope) o'zi cheklaydi, shu sabab bu yerda scope filtri shart emas.
         $cycleKey = [];
         if (Schema::hasTable('timetable_subject_settings')) {
-            $q = TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle');
-            if ($specSet !== null) $q->whereIn('specialty_name', array_keys($specSet));
-            if ($courseSet !== null) $q->whereIn('course', array_keys($courseSet));
-            foreach ($q->get() as $s) {
-                $cycleKey[$s->specialty_name . '|' . (int) $s->course . '|' . $s->subject_name] = max(1, (int) ($s->cycle_days ?? 1));
+            foreach (TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')->get() as $s) {
+                $cycleKey[$normKey($s->specialty_name, $s->course, $s->subject_name)] = max(1, (int) ($s->cycle_days ?? 1));
             }
         }
 
@@ -1165,7 +1182,7 @@ class TimetableController extends Controller
                 if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)) {
                     continue;
                 }
-                $ck = $c->specialty_name . '|' . (int) $c->course . '|' . $c->subject_name;
+                $ck = $normKey($c->specialty_name, $c->course, $c->subject_name);
                 if (!isset($cycleKey[$ck])) {
                     continue;
                 }

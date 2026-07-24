@@ -1407,6 +1407,8 @@
             let modalCard = null;
             let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
             let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
+            const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
+            const subjModeKey = (spec, course, subject) => (spec || '') + '|' + course + '|' + (subject || '');
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
 
             const $ = id => document.getElementById(id);

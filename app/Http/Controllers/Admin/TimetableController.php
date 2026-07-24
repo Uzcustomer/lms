@@ -1714,18 +1714,11 @@ class TimetableController extends Controller
             $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
             $lec = (float) $r->lecture;
             $prc = (float) $r->practice + (float) $r->laboratory + (float) $r->seminar;
-            $planName = collect(explode('|||', (string) ($r->plan_names ?? '')))
-                ->filter()->first();
-            // Reja nomidan faqat boshidagi yo'nalish/fakultet nomini olamiz:
-            // "2-Davolash ishi_2023-2024 — ishchi..." -> "2-Davolash ishi".
-            $facultyName = $planName
-                ? trim(preg_split('/[_—]/u', $planName, 2)[0] ?? '')
-                : null;
-
             $out[] = [
                 'specialty_name' => $r->specialty_name,
                 'course'         => $course,
-                'faculty_name'    => $facultyName ?: null,
+                'faculty_name'    => collect(explode('|||', (string) ($r->plan_names ?? '')))
+                    ->filter()->first(),
                 'semester'       => (int) $r->semester,
                 'subject_name'   => $r->subject_name,
                 'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),

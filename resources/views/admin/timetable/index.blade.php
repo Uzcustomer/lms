@@ -633,6 +633,7 @@
         .tt-chip.sel { outline: 2px solid #ef4444; }
         .tt-merge-badge { display: inline-block; margin-left: 4px; padding: 0 4px; font-size: 8px; font-weight: 700;
             background: rgba(0,0,0,.12); border-radius: 6px; color: #334155; vertical-align: middle; }
+        .tt-weeks { font-size: 9px; font-weight: 700; color: #1d4ed8; white-space: nowrap; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
             font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
@@ -2420,11 +2421,15 @@
                     const merged = ids && ids.length > 1;
                     const mids = merged ? ' data-merge-ids="' + ids.join(',') + '"' : '';
                     const badge = merged ? '<span class="tt-merge-badge">' + ids.length + ' para</span>' : '';
+                    // Ma'ruza necha hafta davom etadi: "(N hafta)" (reja ma'ruza soati/2)
+                    const wks = (c.training_type === 'lecture' && c.weeks)
+                        ? ' <span class="tt-weeks">(' + c.weeks + ' hafta)</span>' : '';
+                    const wkTitle = (c.training_type === 'lecture' && c.weeks) ? ' · ' + c.weeks + ' hafta' : '';
                     return '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
-                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '')) + '">' +
-                        cardLabel(c, true) + badge +
+                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '') + wkTitle) + '">' +
+                        cardLabel(c, true) + wks + badge +
                         (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
                         (c.auditorium_name ? '<div class="text-[9px] text-gray-500">' + esc(c.auditorium_name) + '</div>' : '') +
                         '</div>';

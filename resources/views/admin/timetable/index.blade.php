@@ -19,7 +19,7 @@
             <div class="tt-control-panel tt-top-panel mb-1">
                 <div class="tt-top-toolbar">
                     <div class="tt-board-select">
-                        <span class="tt-board-icon" aria-hidden="true"><i class="bi bi-building"></i></span>
+                        <span class="tt-board-icon" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>
                         <select id="boardSel">
                             <option value="">— Tanlang yoki yangi yarating —</option>
                             @foreach($boards as $b)
@@ -29,15 +29,15 @@
                     </div>
 
                     <div class="tt-toolbar-actions">
-                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img class="" src="{{ asset('image/01_new_document.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
-                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/02_open_folder.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
+                        <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img class="" src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
+                        <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
                         <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
                         <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
-                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/03_save_floppy.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
+                        <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
                         <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
-                        <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/09_teachers_cap.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
+                        <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
                         <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
-                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/10_students_verified.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
+                        <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
                         <span id="boardMsg" class="text-xs"></span>
                     </div>
                 </div>
@@ -151,9 +151,9 @@
                 <div class="tt-bottom-row">
                     <div class="tt-toggle-group">
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoScope"><span class="tt-toggle-icon" aria-hidden="true"><img class="" src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span>Butun doska</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoReset"><span class="tt-toggle-icon" aria-hidden="true"><img class="" src="{{ asset('image/02_open_folder.png') }}" alt="" aria-hidden="true"></span>Qaytadan joylash</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms"><span class="tt-toggle-icon" aria-hidden="true"><img class="" src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true"></span>Auditoriya</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms"><span class="tt-toggle-icon" aria-hidden="true"><img class="" src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Ma'ruza xonasi</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoReset"><span class="tt-toggle-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_qaytadan_joylash.png') }}" alt="" aria-hidden="true"></span>Qaytadan joylash</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms"><span class="tt-toggle-icon" aria-hidden="true"><img class="" src="{{ asset('image/07_building.png') }}" alt="" aria-hidden="true"></span>Auditoriya</label>
+                        <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms"><span class="tt-toggle-icon" aria-hidden="true"><img class="" src="{{ asset('image/08_maruza_xonasi.png') }}" alt="" aria-hidden="true"></span>Ma'ruza xonasi</label>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -1046,6 +1046,11 @@
         }
         .tt-board-icon svg { width: 100%; height: 100%; }
         .tt-board-icon .bi { font-size: 16px; line-height: 1; }
+            .tt-board-icon img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+            }
         .tt-board-select select {
             width: 100%;
             height: 42px;

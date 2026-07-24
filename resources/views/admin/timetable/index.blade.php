@@ -676,6 +676,13 @@
         .asc-table tr.sel td { background: #dbeafe; }
         .asc-table tr:hover td { background: #f1f5f9; }
         .asc-table tr.sel:hover td { background: #cfe0fb; }
+        .asc-subj-mode-cell { min-width: 260px; white-space: normal !important; }
+        .asc-subj-mode { width: 100%; min-width: 190px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
+        .asc-subj-params { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 5px; color: #64748b; font-size: 10px; }
+        .asc-subj-param { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .asc-subj-param input { width: 58px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; }
+        .asc-subj-param:first-child input { width: 68px; }
+        .asc-subj-status { display: inline-block; margin-left: 5px; font-size: 11px; font-weight: 700; }
         .asc-row-head td { background: #f8fafc; font-weight: 700; color: #1e40af; }
         .set-tab { padding: 6px 14px; font-size: 13px; border: 1px solid #cbd5e1; border-bottom: none;
             border-radius: 6px 6px 0 0; background: #e2e8f0; color: #475569; }
@@ -1363,6 +1370,9 @@
             let audCache = null;
             let modalCard = null;
             let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
+            let subjectSettings = {}; // "yo'nalish|kurs|fan" => rejim sozlamasi
+            const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
+            const subjModeKey = (spec, course, subject) => (spec || '') + '|' + course + '|' + (subject || '');
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
 
             const $ = id => document.getElementById(id);
@@ -1534,6 +1544,10 @@
                 // Hafta bo'yicha istisnolar
                 overrides = {};
                 (j.overrides || []).forEach(o => { overrides[o.card_id + '|' + o.week] = { day: o.day, pair: o.pair, cancelled: o.cancelled }; });
+                subjectSettings = {};
+                (j.subject_settings || []).forEach(setting => {
+                    subjectSettings[subjModeKey(setting.specialty_name, setting.course, setting.subject_name)] = setting;
+                });
                 // Eski kartaga ishora qiluvchi tanlovlarni bekor qilamiz (eski doskaga yozib
                 // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
                 selected = null; modalCard = null;
@@ -2567,23 +2581,77 @@
                 });
             }
 
+            function subjectModeParamsHtml(setting) {
+                const mode = setting.mode || 'normal';
+                if (mode === 'alternate') {
+                    return '<span class="asc-subj-param">Guruh <input class="asc-subj-group" maxlength="40" value="' + esc(setting.rotation_group || '') + '" placeholder="A"></span>' +
+                        '<span class="asc-subj-param">Hafta <input type="number" class="asc-subj-occ" min="1" max="60" value="' + (setting.occurrences ?? '') + '" placeholder="—"></span>';
+                }
+                if (mode === 'cycle') {
+                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="40" value="' + (setting.cycle_weeks ?? '') + '" placeholder="hafta"></span>';
+                }
+                return '<span class="text-slate-400">—</span>';
+            }
+
+            async function saveSubjectModeRow(tr, row) {
+                const mode = tr.querySelector('.asc-subj-mode').value;
+                const body = {
+                    specialty_name: row.specialty_name,
+                    course: +row.course,
+                    subject_name: row.subject_name,
+                    mode: mode
+                };
+                if (mode === 'alternate') {
+                    const group = tr.querySelector('.asc-subj-group');
+                    const occurrences = tr.querySelector('.asc-subj-occ');
+                    if (group && group.value.trim()) body.rotation_group = group.value.trim();
+                    if (occurrences && occurrences.value) body.occurrences = +occurrences.value;
+                } else if (mode === 'cycle') {
+                    const cycle = tr.querySelector('.asc-subj-cycle');
+                    if (cycle && cycle.value) body.cycle_weeks = +cycle.value;
+                }
+                const status = tr.querySelector('.asc-subj-status');
+                status.textContent = '…';
+                status.className = 'asc-subj-status text-slate-400';
+                try {
+                    await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
+                    const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
+                    if (mode === 'normal') {
+                        delete subjectSettings[key];
+                    } else {
+                        subjectSettings[key] = { ...body };
+                    }
+                    status.textContent = '✓';
+                    status.className = 'asc-subj-status text-emerald-600';
+                } catch (e) {
+                    status.textContent = '✕';
+                    status.className = 'asc-subj-status text-red-600';
+                    alert('Xatolik: ' + e.message);
+                }
+            }
+
             function renderAscTable() {
                 $('ascTable').classList.toggle('asc-auditorium-table', ascType === 'auditoriums');
                 const rows = filteredAsc();
                 $('ascCount').textContent = rows.length + ' ta';
                 let h = '';
                 if (ascType === 'subjects') {
-                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th></tr></thead><tbody>';
+                    h = '<thead><tr><th>Fan</th><th>Yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th><th>Fan rejimi</th></tr></thead><tbody>';
                     let lastSpec = null;
                     rows.forEach((r, i) => {
                         const sk = r.specialty_name + '·' + r.course;
                         if (sk !== lastSpec) {
-                            h += '<tr class="asc-row-head"><td colspan="7">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</td></tr>';
+                            h += '<tr class="asc-row-head"><td colspan="8">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</td></tr>';
                             lastSpec = sk;
                         }
+                        const setting = subjectSettings[subjModeKey(r.specialty_name, r.course, r.subject_name)] || { mode: 'normal' };
+                        const modeOptions = Object.entries(SUBJ_MODE_LABELS).map(([value, label]) =>
+                            '<option value="' + value + '"' + (setting.mode === value ? ' selected' : '') + '>' + label + '</option>').join('');
                         h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td>' + esc(r.specialty_name) + ' · ' + r.course + '</td>' +
                             '<td>' + esc(r.kafedra_name || '—') + '</td><td>' + fmt(r.lecture) + '</td><td>' + fmt(r.practice + r.laboratory + r.seminar) +
-                            '</td><td>' + r.lec_pairs + '</td><td>' + r.prc_pairs + '</td></tr>';
+                            '</td><td>' + r.lec_pairs + '</td><td>' + r.prc_pairs + '</td>' +
+                            '<td class="asc-subj-mode-cell"><select class="asc-subj-mode">' + modeOptions + '</select><div class="asc-subj-params">' +
+                            subjectModeParamsHtml(setting) + '</div><span class="asc-subj-status" aria-live="polite"></span></td></tr>';
                     });
                 } else if (ascType === 'groups') {
                     h = '<thead><tr><th>Guruh</th><th>Yo\'nalish · kurs</th><th>Oqim</th><th>Til</th><th>Talaba</th></tr></thead><tbody>';
@@ -2608,6 +2676,25 @@
                 h += '</tbody>';
                 $('ascTable').innerHTML = h;
                 document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => {
+                    if (ascType === 'subjects') {
+                        const row = rows[+tr.dataset.idx];
+                        const modeSelect = tr.querySelector('.asc-subj-mode');
+                        const refreshParams = () => {
+                            const current = subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
+                            tr.querySelector('.asc-subj-params').innerHTML = subjectModeParamsHtml({ ...current, mode: modeSelect.value });
+                        };
+                        modeSelect.onchange = async () => {
+                            refreshParams();
+                            await saveSubjectModeRow(tr, row);
+                        };
+                        tr.addEventListener('change', ev => {
+                            if (ev.target.classList.contains('asc-subj-group') ||
+                                ev.target.classList.contains('asc-subj-occ') ||
+                                ev.target.classList.contains('asc-subj-cycle')) {
+                                saveSubjectModeRow(tr, row);
+                            }
+                        });
+                    }
                     tr.onclick = () => {
                         ascSelId = tr.dataset.id || tr.dataset.idx;
                         document.querySelectorAll('#ascTable tbody tr').forEach(x => x.classList.remove('sel'));

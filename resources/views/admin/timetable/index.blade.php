@@ -1005,9 +1005,9 @@
             user-select: none;
         }
         .asc-btn.asc-action-btn { display: flex; align-items: center; gap: 5px; justify-content: flex-start; }
-        .asc-action-icon { width: 16px; height: 16px; flex: 0 0 16px; display: inline-flex; }
+        .asc-action-icon { width: 19px; height: 19px; flex: 0 0 19px; display: inline-flex; }
         .asc-action-icon svg { width: 100%; height: 100%; }
-        .asc-action-icon .bi { font-size: 16px; line-height: 1; }
+        .asc-action-icon .bi { font-size: 18px; line-height: 1; }
         .asc-action-icon img { width: 100%; height: 100%; object-fit: contain; }
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
@@ -1097,6 +1097,7 @@
         #gsSave .toolbar-icon { color: #2563eb; }
         #autoBtn .toolbar-icon { color: #fff; }
         #unplaceBtn .toolbar-icon { color: #dc2626; }
+        .tt-toggle-icon { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
         #autoScope + .tt-toggle-icon { color: #2563eb; }
         #autoReset + .tt-toggle-icon { color: #7c3aed; }
         #autoRooms + .tt-toggle-icon { color: #0891b2; }
@@ -1339,9 +1340,9 @@
         }
 
         .toolbar-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
-        .toolbar-icon { width: 15px; height: 15px; display: inline-flex; flex: 0 0 15px; align-items: center; justify-content: center; }
+        .toolbar-icon { width: 19px; height: 19px; display: inline-flex; flex: 0 0 19px; align-items: center; justify-content: center; }
         .toolbar-icon svg { width: 100%; height: 100%; }
-        .toolbar-icon .bi { font-size: 15px; line-height: 1; }
+        .toolbar-icon .bi { font-size: 18px; line-height: 1; }
         .toolbar-icon img, .tt-toggle-icon img { width: 100%; height: 100%; object-fit: contain; }
         .tt-custom-icon { width: 100%; height: 100%; object-fit: contain; }
         #specBar .toolbar-row { row-gap: 8px; }

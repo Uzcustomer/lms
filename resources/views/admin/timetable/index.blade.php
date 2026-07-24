@@ -1903,7 +1903,7 @@
                         '<span class="asc-subj-param">Hafta <input type="number" class="asc-subj-occ" min="1" max="60" value="' + (setting.occurrences ?? '') + '" placeholder="—"></span>';
                 }
                 if (mode === 'cycle') {
-                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="40" value="' + (setting.cycle_weeks ?? '') + '" placeholder="hafta"></span>';
+                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="120" value="' + (setting.cycle_days ?? '') + '" placeholder="kun"></span>';
                 }
                 return '<span class="text-slate-400">—</span>';
             }
@@ -1918,7 +1918,7 @@
                     if (occurrences && occurrences.value) body.occurrences = +occurrences.value;
                 } else if (mode === 'cycle') {
                     const cycle = tr.querySelector('.asc-subj-cycle');
-                    if (cycle && cycle.value) body.cycle_weeks = +cycle.value;
+                    if (cycle && cycle.value) body.cycle_days = +cycle.value;
                 }
                 const status = tr.querySelector('.asc-subj-status');
                 status.textContent = '…';
@@ -1936,6 +1936,55 @@
                     alert('Xatolik: ' + e.message);
                 }
             }
+
+            // ===== Sikl (4-6 kurs) kalendar ko'rinishi =====
+            let cyclePlanData = null;
+            async function loadCyclePlan() {
+                if (!board) return;
+                const body = scopeBody();
+                if ($('cycleStart').value) body.start_date = $('cycleStart').value;
+                $('cycleMsg').textContent = 'Yuklanmoqda...';
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
+                    cyclePlanData = j;
+                    if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
+                    renderCyclePlan(j);
+                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' guruh · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
+                        (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '');
+                } catch (e) {
+                    $('cycleMsg').textContent = '';
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-3 text-sm text-red-600">Xatolik: ' + esc(e.message) + '</td></tr></tbody>';
+                }
+            }
+            function renderCyclePlan(j) {
+                const dates = j.dates || [], rows = j.rows || [];
+                if (!rows.length) {
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki guruh topilmadi. Fan sozlamasida 4-6 kurs fanlarini <b>Sikl</b> qilib, sikl uzunligini (kun) kiriting, so\'ng shu yerni Yangilang.</td></tr></tbody>';
+                    return;
+                }
+                let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
+                dates.forEach(d => h += '<th class="cyc-dcol' + (d.dow >= 6 ? ' cyc-wend' : '') + '">' + esc(d.d) + '</th>');
+                h += '</tr></thead><tbody>';
+                rows.forEach(r => {
+                    const sub = (r.subgroups && r.subgroups.length) ? r.subgroups.join(', ') : '';
+                    h += '<tr><td class="cyc-gcol"><div class="font-semibold text-gray-800">' + esc(r.group) + '</div>' +
+                        (sub ? '<div class="text-[9px] text-gray-400">' + esc(sub) + '</div>' : '') + '</td>';
+                    let col = 0;
+                    (r.blocks || []).forEach(b => {
+                        while (col < b.from) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
+                        const c = subjColor(b.subject);
+                        h += '<td class="cyc-cell cyc-block" colspan="' + (b.to - b.from + 1) + '" style="background:' + c.bg + ';border-color:' + c.border + ';" title="' + esc(b.subject) + ' — ' + b.days + ' kun">' +
+                            '<span class="cyc-lbl">' + esc(b.subject) + ' <b>' + b.days + '</b></span></td>';
+                        col = b.to + 1;
+                    });
+                    while (col < dates.length) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
+                    h += '</tr>';
+                });
+                h += '</tbody>';
+                $('cycleGrid').innerHTML = h;
+            }
+            if ($('cycleRefresh')) $('cycleRefresh').onclick = loadCyclePlan;
+            if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
 
             function buildGroupRows() {
                 groupRows = [];

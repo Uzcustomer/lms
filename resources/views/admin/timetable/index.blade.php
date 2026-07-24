@@ -741,6 +741,7 @@
         .asc-mini { padding: 1px 5px; margin-left: 2px; font-size: 12px; border: 1px solid #cbd5e1;
             border-radius: 4px; background: #f8fafc; color: #475569; }
         .asc-mini:hover { background: #e2e8f0; }
+        .asc-mini img { width: 18px; height: 18px; object-fit: contain; display: block; }
         .ex-mode { background: #fff; color: #475569; }
         .ex-mode.active { background: #2c5896; color: #fff; font-weight: 600; }
         .tt-type { background: #fff; color: #475569; }

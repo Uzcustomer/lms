@@ -2285,6 +2285,21 @@
                 $('cycleArea').classList.toggle('hidden', !cycleView);
                 if (cycleView) { loadCyclePlan(); return; }
                 if (viewMode !== 'group') { renderGridCross(viewMode); return; }
+                // Bu tanlovda haftalik fan qolmagan bo'lsa-yu, sikl fanlari bo'lsa —
+                // "fanlar yo'qolmadi", ular sikl kalendarida. Yo'naltiruvchi xabar.
+                if (!groupRows.length) {
+                    const hasCycleHere = cards.some(c => selectedFaculties.has(c.faculty_name || '') &&
+                        selectedDirs.has(c.specialty_name) && selectedCourses.has(c.course) && isCycleCard(c));
+                    if (hasCycleHere) {
+                        $('grid').innerHTML = '<tbody><tr><td class="p-6 text-sm text-gray-600 text-center">' +
+                            'Bu tanlovdagi fanlar <b>sikl (blok)</b> rejimida belgilangan — ular haftalik panjarada emas, ' +
+                            '<b>sikl kalendarida</b> ketma-ket kunli blok bo\'lib turadi.<br>' +
+                            'Yuqoridagi <b>Kesim</b> ro\'yxatidan <b>“Sikl (4-6 kurs)”</b> ni tanlang.' +
+                            '</td></tr></tbody>';
+                        activeCell = null;
+                        return;
+                    }
+                }
                 const g = curGrid();
                 let D = g.days;
                 // Yarim-slot (qator) soni — doska qo'ng'iroq jadvalidagi "pair" elementlar

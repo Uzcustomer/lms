@@ -2,6 +2,11 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 @endpush
 
+@php
+    $timetableActiveRole = session('active_role', auth()->user()?->getRoleNames()->first());
+    $timetableAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dars jadvali tuzish</h2>
@@ -29,15 +34,20 @@
                     </div>
 
                     <div class="tt-toolbar-actions">
+@if(!$timetableAssignmentOnly)
                         <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img class="" src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
                         <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
                         <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
                         <button type="button" id="delBoardBtn" class="hidden asc-tool toolbar-action tt-danger-btn"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>O'chirish</button>
+                        @endif
+@if(!$timetableAssignmentOnly)
                         <button type="button" id="settingsBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Sozlamalar</button>
                         <button type="button" id="managerBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" data-dialog="subjects"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Ma'lumotlar</button>
-                        <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
+
                         <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
                         <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
+                        @endif
+                        <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img class="" src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
                         <span id="boardMsg" class="text-xs"></span>
                     </div>
                 </div>
@@ -1456,6 +1466,7 @@
             const TEACHERS_URL = @json(route('admin.timetable.teachers'));
             const AUDS_URL = @json(route('admin.timetable.auditoriums'));
             const CSRF = @json(csrf_token());
+            const timetableAssignmentOnly = @json($timetableAssignmentOnly);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
             let board = null;      // {id, days, pairs_per_day, ...}
@@ -1596,7 +1607,18 @@
                 } catch (e) { alert('Xatolik: ' + e.message); this.disabled = false; }
             };
             $('boardSel').onchange = function () {
-                if (this.value) loadBoard(this.value); else hideBoard();
+                if (!this.value) {
+                    hideBoard();
+                    return;
+                }
+                if (timetableAssignmentOnly) {
+                    // Assignment-only rolega doska ma'lumotlarini yuklash shart emas:
+                    // u faqat biriktirish endpointlaridan foydalanadi.
+                    board = { id: this.value };
+                    toggleAscToolbar(true);
+                    return;
+                }
+                loadBoard(this.value);
             };
             $('delBoardBtn').onclick = async () => {
                 if (!board || !confirm('Doska va barcha kartochkalari o\'chirilsinmi?')) return;
@@ -1629,7 +1651,10 @@
 
             // aSc uslubidagi boshqaruv tugmalari (doska tanlash qatorida) — bitta guruh sifatida ko'rsatish/yashirish
             function toggleAscToolbar(show) {
-                document.querySelectorAll('[data-asc-toolbar]').forEach(el => el.classList.toggle('hidden', !show));
+                document.querySelectorAll('[data-asc-toolbar]').forEach(el => {
+                    const restricted = timetableAssignmentOnly && el.id !== 'assignBtn';
+                    el.classList.toggle('hidden', !show || restricted);
+                });
             }
 
             function hideBoard() {

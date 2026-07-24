@@ -1,3 +1,7 @@
+@push('styles')
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+@endpush
+
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dars jadvali tuzish</h2>
@@ -242,19 +246,17 @@
                                 <span id="ascTitle"></span>
                             </div>
                             <button type="button" id="ascClose" class="asc-close-btn" aria-label="Yopish" title="Yopish">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path d="M6 6l12 12M18 6 6 18"/>
-                                </svg>
+                                <i class="bi bi-x-lg" aria-hidden="true"></i>
                             </button>
                         </div>
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
                         <div class="flex gap-3 p-4 overflow-hidden" style="min-height: 600px;">
                             <nav class="w-60 shrink-0 flex flex-col gap-2 rounded-xl border border-blue-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-sm" aria-label="Jadval ma'lumotlari">
                                 <div class="px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Boshqaruv</div>
-                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4.5h10a2 2 0 0 1 2 2V19H7a2 2 0 0 0-2 2V4.5Z"/><path d="M7 21h12V6.5a2 2 0 0 0-2-2H7"/><path d="M9 8h5M9 12h5"/></svg></span><span>Darslar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="groups" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3"/><path d="M16 5.5a3 3 0 0 1 0 5.8M17 15h1a3 3 0 0 1 3 3v2"/></svg></span><span>Guruhlar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2M11 21v-4h2v4"/></svg></span><span>Auditoriyalar</span></button>
-                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 9 8-4 8 4-8 4-8-4Z"/><path d="M7 11.5V16c2 1.5 8 1.5 10 0v-4.5M20 9v5"/></svg></span><span>O'qituvchilar</span></button>
+                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-journal-text"></i></span><span>Darslar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="groups" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-people"></i></span><span>Guruhlar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-buildings"></i></span><span>Auditoriyalar</span></button>
+                                <button type="button" class="asc-nav-btn" data-asc-type="teachers" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><i class="bi bi-mortarboard"></i></span><span>O'qituvchilar</span></button>
                             </nav>
                             <div id="ascPanel" class="flex-1 flex gap-3 min-w-0">
                                 <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden min-w-0 shadow-sm">
@@ -810,6 +812,18 @@
             width: 100%;
             height: 100%;
         }
+        .asc-nav-icon .bi {
+            font-size: 1.25rem;
+            line-height: 1;
+        }
+        .asc-header-icon .bi {
+            font-size: 1.6rem;
+            line-height: 1;
+        }
+        .asc-close-btn .bi {
+            font-size: 1rem;
+            line-height: 1;
+        }
         #ascTable.asc-auditorium-table {
             width: 100%;
             min-width: 100%;
@@ -896,6 +910,7 @@
         .asc-btn.asc-action-btn { display: flex; align-items: center; gap: 5px; justify-content: flex-start; }
         .asc-action-icon { width: 16px; height: 16px; flex: 0 0 16px; display: inline-flex; }
         .asc-action-icon svg { width: 100%; height: 100%; }
+        .asc-action-icon .bi { font-size: 16px; line-height: 1; }
         .asc-action-btn.primary .asc-action-icon { color: #fff; }
         .asc-action-btn.danger .asc-action-icon { color: #b91c1c; }
         .asc-action-btn:disabled .asc-action-icon { color: #94a3b8; }
@@ -2404,10 +2419,10 @@
             const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX','X'];
             const LANG_LABEL = { uz: "o'zbek", rus: 'rus', ru: 'rus', ing: 'ingliz', en: 'ingliz' };
             const managerIcons = {
-                subjects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4.5h10a2 2 0 0 1 2 2V19H7a2 2 0 0 0-2 2V4.5Z"/><path d="M7 21h12V6.5a2 2 0 0 0-2-2H7"/><path d="M9 8h5M9 12h5"/></svg>',
-                groups: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3"/><path d="M16 5.5a3 3 0 0 1 0 5.8M17 15h1a3 3 0 0 1 3 3v2"/></svg>',
-                auditoriums: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16"/><path d="M2 21h20M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2M11 21v-4h2v4"/></svg>',
-                teachers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 9 8-4 8 4-8 4-8-4Z"/><path d="M7 11.5V16c2 1.5 8 1.5 10 0v-4.5M20 9v5"/></svg>',
+                subjects: '<i class="bi bi-journal-text"></i>',
+                groups: '<i class="bi bi-people"></i>',
+                auditoriums: '<i class="bi bi-buildings"></i>',
+                teachers: '<i class="bi bi-mortarboard"></i>',
             };
 
             let ascType = null;       // joriy dialog turi
@@ -2581,14 +2596,14 @@
             const fmt = v => { v = +v || 0; return Number.isInteger(v) ? v : v.toFixed(1); };
 
             const actionIcons = {
-                plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
-                edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 16.5-.8 4.3 4.3-.8L19 8.5a2.1 2.1 0 0 0-3-3L4 16.5Z"/><path d="m14.5 7.5 2 2"/></svg>',
-                trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6.5 7l1 13h9l1-13M9 7V4h6v3"/></svg>',
-                import: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>',
-                template: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
-                export: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>',
+                plus: 'bi-plus-lg',
+                edit: 'bi-pencil-square',
+                trash: 'bi-trash3',
+                import: 'bi-file-earmark-arrow-up',
+                template: 'bi-file-earmark-spreadsheet',
+                export: 'bi-download',
             };
-            const actionIcon = name => '<span class="asc-action-icon" aria-hidden="true">' + actionIcons[name] + '</span>';
+            const actionIcon = name => '<span class="asc-action-icon" aria-hidden="true"><i class="bi ' + actionIcons[name] + '"></i></span>';
 
             function renderAscButtons() {
                 const b = $('ascButtons');

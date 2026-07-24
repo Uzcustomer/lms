@@ -4,7 +4,13 @@
 
 <x-app-layout>
 @php
-    $timetableAssignmentOnly = auth()->user()->hasAnyRole(['oquv_bolimi', 'oquv_bolimi_boshligi']);
+    $timetableUser = auth()->user();
+    $timetableRoles = $timetableUser->getRoleNames()->toArray();
+    $timetableActiveRole = session('active_role', $timetableRoles[0] ?? '');
+    if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
+        $timetableActiveRole = $timetableRoles[0];
+    }
+    $timetableAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
 
     <x-slot name="header">

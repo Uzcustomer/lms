@@ -1404,9 +1404,7 @@
             let audCache = null;
             let modalCard = null;
             let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
-            let subjectSettings = {}; // "yo'nalish|kurs|fan" => rejim sozlamasi
-            const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
-            const subjModeKey = (spec, course, subject) => (spec || '') + '|' + course + '|' + (subject || '');
+            let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_weeks}
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
 
             const $ = id => document.getElementById(id);
@@ -1578,10 +1576,9 @@
                 // Hafta bo'yicha istisnolar
                 overrides = {};
                 (j.overrides || []).forEach(o => { overrides[o.card_id + '|' + o.week] = { day: o.day, pair: o.pair, cancelled: o.cancelled }; });
+                // Fan rejimi (hafta almashinuvi / sikl): "spec|course|subject" => {mode, rotation_group, occurrences, cycle_weeks}
                 subjectSettings = {};
-                (j.subject_settings || []).forEach(setting => {
-                    subjectSettings[subjModeKey(setting.specialty_name, setting.course, setting.subject_name)] = setting;
-                });
+                (j.subject_settings || []).forEach(s => { subjectSettings[subjModeKey(s.specialty_name, s.course, s.subject_name)] = s; });
                 // Eski kartaga ishora qiluvchi tanlovlarni bekor qilamiz (eski doskaga yozib
                 // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
                 selected = null; modalCard = null;
@@ -1590,6 +1587,7 @@
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('refreshNamesBtn').classList.remove('hidden');
+                $('subjModeBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
                 toggleAscToolbar(true);
                 buildSpecList();
@@ -1883,6 +1881,48 @@
             let typeFilter = 'all';
             const typeVisible = c => typeFilter === 'all' || c.training_type === typeFilter;
             const visibleSpecCards = () => specCards().filter(typeVisible);
+
+            // Fan rejimi Darslar jadvalidagi har bir qator ichida boshqariladi.
+            function subjectModeParamsHtml(setting) {
+                const mode = setting.mode || 'normal';
+                if (mode === 'alternate') {
+                    return '<span class="asc-subj-param">Guruh <input class="asc-subj-group" maxlength="40" value="' + esc(setting.rotation_group || '') + '" placeholder="A"></span>' +
+                        '<span class="asc-subj-param">Hafta <input type="number" class="asc-subj-occ" min="1" max="60" value="' + (setting.occurrences ?? '') + '" placeholder="—"></span>';
+                }
+                if (mode === 'cycle') {
+                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="40" value="' + (setting.cycle_weeks ?? '') + '" placeholder="hafta"></span>';
+                }
+                return '<span class="text-slate-400">—</span>';
+            }
+
+            async function saveSubjectModeRow(tr, row) {
+                const mode = tr.querySelector('.asc-subj-mode').value;
+                const body = { specialty_name: row.specialty_name, course: +row.course, subject_name: row.subject_name, mode };
+                if (mode === 'alternate') {
+                    const group = tr.querySelector('.asc-subj-group');
+                    const occurrences = tr.querySelector('.asc-subj-occ');
+                    if (group && group.value.trim()) body.rotation_group = group.value.trim();
+                    if (occurrences && occurrences.value) body.occurrences = +occurrences.value;
+                } else if (mode === 'cycle') {
+                    const cycle = tr.querySelector('.asc-subj-cycle');
+                    if (cycle && cycle.value) body.cycle_weeks = +cycle.value;
+                }
+                const status = tr.querySelector('.asc-subj-status');
+                status.textContent = '…';
+                status.className = 'asc-subj-status text-slate-400';
+                try {
+                    await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
+                    const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
+                    if (mode === 'normal') delete subjectSettings[key];
+                    else subjectSettings[key] = { ...body };
+                    status.textContent = '✓';
+                    status.className = 'asc-subj-status text-emerald-600';
+                } catch (e) {
+                    status.textContent = '✕';
+                    status.className = 'asc-subj-status text-red-600';
+                    alert('Xatolik: ' + e.message);
+                }
+            }
 
             function buildGroupRows() {
                 groupRows = [];
@@ -2613,55 +2653,6 @@
                     if (!q) return true;
                     return JSON.stringify(r).toLowerCase().includes(q);
                 });
-            }
-
-            function subjectModeParamsHtml(setting) {
-                const mode = setting.mode || 'normal';
-                if (mode === 'alternate') {
-                    return '<span class="asc-subj-param">Guruh <input class="asc-subj-group" maxlength="40" value="' + esc(setting.rotation_group || '') + '" placeholder="A"></span>' +
-                        '<span class="asc-subj-param">Hafta <input type="number" class="asc-subj-occ" min="1" max="60" value="' + (setting.occurrences ?? '') + '" placeholder="—"></span>';
-                }
-                if (mode === 'cycle') {
-                    return '<span class="asc-subj-param">Sikl <input type="number" class="asc-subj-cycle" min="1" max="40" value="' + (setting.cycle_weeks ?? '') + '" placeholder="hafta"></span>';
-                }
-                return '<span class="text-slate-400">—</span>';
-            }
-
-            async function saveSubjectModeRow(tr, row) {
-                const mode = tr.querySelector('.asc-subj-mode').value;
-                const body = {
-                    specialty_name: row.specialty_name,
-                    course: +row.course,
-                    subject_name: row.subject_name,
-                    mode: mode
-                };
-                if (mode === 'alternate') {
-                    const group = tr.querySelector('.asc-subj-group');
-                    const occurrences = tr.querySelector('.asc-subj-occ');
-                    if (group && group.value.trim()) body.rotation_group = group.value.trim();
-                    if (occurrences && occurrences.value) body.occurrences = +occurrences.value;
-                } else if (mode === 'cycle') {
-                    const cycle = tr.querySelector('.asc-subj-cycle');
-                    if (cycle && cycle.value) body.cycle_weeks = +cycle.value;
-                }
-                const status = tr.querySelector('.asc-subj-status');
-                status.textContent = '…';
-                status.className = 'asc-subj-status text-slate-400';
-                try {
-                    await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
-                    const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
-                    if (mode === 'normal') {
-                        delete subjectSettings[key];
-                    } else {
-                        subjectSettings[key] = { ...body };
-                    }
-                    status.textContent = '✓';
-                    status.className = 'asc-subj-status text-emerald-600';
-                } catch (e) {
-                    status.textContent = '✕';
-                    status.className = 'asc-subj-status text-red-600';
-                    alert('Xatolik: ' + e.message);
-                }
             }
 
             function renderAscTable() {

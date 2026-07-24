@@ -182,13 +182,16 @@
             {{-- Kartochka rekvizitlari modali --}}
             <div id="cardModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="tt-modal-win bg-white rounded-lg shadow-xl w-full max-w-md">
-                        <div class="flex items-center justify-between px-5 py-3 border-b">
-                            <div>
-                                <div id="cmTitle" class="font-semibold text-gray-800 text-sm"></div>
-                                <div id="cmSub" class="text-xs text-gray-500"></div>
+                    <div class="tt-modal-win asc-small-modal bg-white rounded-xl shadow-xl w-full max-w-md">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-card-text"></i></span>
+                                <div>
+                                    <div id="cmTitle"></div>
+                                    <div id="cmSub" class="text-xs text-white/70"></div>
+                                </div>
                             </div>
-                            <button type="button" id="cmClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                            <button type="button" id="cmClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
                         </div>
                         <div class="px-5 py-4 space-y-3">
                             <div>
@@ -223,8 +226,8 @@
                         </div>
                         <div class="flex justify-between gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
                             <div class="flex gap-2">
-                                <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100">↩ Jadvaldan olish</button>
-                                <button type="button" id="cmResetWeek" class="hidden px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100">↺ Shablonga qaytarish</button>
+                                <button type="button" id="cmUnplace" class="px-3 py-1.5 text-sm bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100"><i class="bi bi-arrow-90deg-left" aria-hidden="true"></i> Jadvaldan olish</button>
+                                <button type="button" id="cmResetWeek" class="hidden px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-md hover:bg-sky-100"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Shablonga qaytarish</button>
                             </div>
                             <div class="flex gap-2">
                                 <button type="button" id="cmCancel" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md text-gray-700">Yopish</button>
@@ -286,10 +289,13 @@
             {{-- Auditoriya tahrirlash mini-formasi --}}
             <div id="audEditModal" class="hidden tt-modal tt-modal-top">
                 <div class="tt-modal-body">
-                    <div class="tt-modal-win bg-white rounded-lg shadow-xl w-full max-w-md">
-                        <div class="flex items-center justify-between px-5 py-3 border-b">
-                            <div id="aeTitle" class="font-semibold text-gray-800 text-sm">Auditoriya</div>
-                            <button type="button" id="aeClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                    <div class="tt-modal-win asc-small-modal bg-white rounded-xl shadow-xl w-full max-w-md">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-building"></i></span>
+                                <span id="aeTitle">Auditoriya</span>
+                            </div>
+                            <button type="button" id="aeClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
                         </div>
                         <div class="px-5 py-4 grid grid-cols-2 gap-3">
                             <div>
@@ -329,20 +335,23 @@
             <input type="file" id="audImportFile" accept=".xlsx,.xls,.csv" class="hidden">
 
             {{-- ═══ Excel ko'rinishidagi jadval (kunlar/paralar qatorda, guruhlar ustunda) ═══ --}}
-            <div id="excelModal" class="hidden fixed inset-0 z-50 bg-black/50">
-                <div class="flex min-h-full items-start justify-center p-3">
-                    <div class="bg-white rounded shadow-2xl w-full max-w-[1500px] flex flex-col" style="max-height: 94vh;">
-                        <div class="flex items-center justify-between px-4 py-2 border-b bg-gray-50 rounded-t">
-                            <div class="font-semibold text-gray-800 text-sm">📊 Dars jadvali — Excel ko'rinish</div>
+            <div id="excelModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="tt-modal-win asc-small-modal bg-white rounded-xl shadow-2xl w-full max-w-[1500px]" style="max-height: 94vh;">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-file-earmark-spreadsheet"></i></span>
+                                <span>Dars jadvali — Excel ko'rinish</span>
+                            </div>
                             <div class="flex items-center gap-2">
                                 <div class="flex rounded-md overflow-hidden border border-gray-300 text-xs">
                                     <button type="button" class="ex-mode active px-2.5 py-1" data-mode="group">Guruh bo'yicha</button>
                                     <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="teacher">O'qituvchi bo'yicha</button>
                                     <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="room">Auditoriya bo'yicha</button>
                                 </div>
-                                <button type="button" id="excelDownload" class="asc-btn">⬇ Excelga yuklab olish</button>
-                                <button type="button" id="excelPrint" class="asc-btn">🖨 Chop / PDF</button>
-                                <button type="button" id="excelClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none px-1">&times;</button>
+                                <button type="button" id="excelDownload" class="asc-btn"><i class="bi bi-download" aria-hidden="true"></i> Excelga yuklab olish</button>
+                                <button type="button" id="excelPrint" class="asc-btn"><i class="bi bi-printer" aria-hidden="true"></i> Chop / PDF</button>
+                                <button type="button" id="excelClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
                             </div>
                         </div>
                         <div id="excelBody" class="overflow-auto p-3" style="max-height: 86vh;"></div>
@@ -354,9 +363,12 @@
             <div id="setModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
                     <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 92vh;">
-                        <div class="asc-titlebar flex items-center justify-between px-3 py-1.5 rounded-t">
-                            <div class="flex items-center gap-2 text-sm font-semibold text-white">⚙️ Umumiy sozlamalar</div>
-                            <button type="button" id="setClose" class="text-white/80 hover:text-white text-xl leading-none px-1">&times;</button>
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-gear"></i></span>
+                                <span>Umumiy sozlamalar</span>
+                            </div>
+                            <button type="button" id="setClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
                         </div>
                         {{-- Tablar --}}
                         <div class="flex gap-1 px-2 pt-2 bg-[#f0f0f0]">
@@ -417,12 +429,12 @@
                             {{-- Qo'ng'iroqlar --}}
                             <div id="setBells" class="set-pane hidden">
                                 <div class="flex items-center gap-2 mb-2">
-                                    <button type="button" id="stAddPair" class="asc-btn primary">➕ Para qo'shish</button>
-                                    <button type="button" id="stAddBreak" class="asc-btn">➕ Tanaffus qo'shish</button>
+                                    <button type="button" id="stAddPair" class="asc-btn primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Para qo'shish</button>
+                                    <button type="button" id="stAddBreak" class="asc-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> Tanaffus qo'shish</button>
                                     <span class="mx-1 h-6 w-px bg-gray-300"></span>
-                                    <button type="button" id="stMoveUp" class="asc-btn" title="Belgilangan qatorni yuqoriga ko'chirish" disabled>▲ Yuqoriga</button>
-                                    <button type="button" id="stMoveDown" class="asc-btn" title="Belgilangan qatorni pastga ko'chirish" disabled>▼ Pastga</button>
-                                    <button type="button" id="stResetBells" class="asc-btn ml-auto">↺ Standart jadval</button>
+                                    <button type="button" id="stMoveUp" class="asc-btn" title="Belgilangan qatorni yuqoriga ko'chirish" disabled><i class="bi bi-chevron-up" aria-hidden="true"></i> Yuqoriga</button>
+                                    <button type="button" id="stMoveDown" class="asc-btn" title="Belgilangan qatorni pastga ko'chirish" disabled><i class="bi bi-chevron-down" aria-hidden="true"></i> Pastga</button>
+                                    <button type="button" id="stResetBells" class="asc-btn ml-auto"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Standart jadval</button>
                                 </div>
                                 <table class="w-full text-xs asc-table" id="stBellTable"></table>
                                 <p class="text-xs text-gray-400 mt-2">Juftliklar (para) tartib bilan raqamlanadi va panjaradagi para sonini belgilaydi. Tanaffuslar faqat chop/Excel ko'rinishida ko'rinadi. Vaqt formati <b>SS:DD</b> (masalan 08:30).</p>
@@ -447,10 +459,13 @@
             {{-- Qo'ng'iroq qatorini tahrirlash mini-modali --}}
             <div id="bellEditModal" class="hidden tt-modal tt-modal-top">
                 <div class="tt-modal-body">
-                    <div class="tt-modal-win bg-white rounded-lg shadow-xl w-full max-w-sm">
-                        <div class="flex items-center justify-between px-5 py-3 border-b">
-                            <div id="beTitle" class="font-semibold text-gray-800 text-sm">Qatorni tahrirlash</div>
-                            <button type="button" id="beClose" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                    <div class="tt-modal-win asc-small-modal bg-white rounded-xl shadow-xl w-full max-w-sm">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-clock-history"></i></span>
+                                <span id="beTitle">Qatorni tahrirlash</span>
+                            </div>
+                            <button type="button" id="beClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
                         </div>
                         <div class="px-5 py-4 grid grid-cols-2 gap-3">
                             <div class="col-span-2">
@@ -489,18 +504,12 @@
                         <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
                             <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
                                 <span class="asc-header-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                        <path d="M7.5 10.5a4 4 0 0 1 5.7-5.7l1.1 1.1-5.7 5.7-1.1-1.1Z"/>
-                                        <path d="m11.2 12.8 5.7-5.7 1.1 1.1a4 4 0 0 1-5.7 5.7l-1.1-1.1Z"/>
-                                        <path d="m8.5 15.5-3 3M15.5 8.5l3-3"/>
-                                    </svg>
+                                    <i class="bi bi-person-plus"></i>
                                 </span>
                                 <span id="asgTitle">O'qituvchi biriktirish</span>
                             </div>
                             <button type="button" id="asgClose" class="asc-close-btn" aria-label="Yopish" title="Yopish">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path d="M6 6l12 12M18 6 6 18"/>
-                                </svg>
+                                <i class="bi bi-x-lg"></i>
                             </button>
                         </div>
                         <div class="assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
@@ -527,7 +536,7 @@
                                     <select id="asgTeacher" size="10" class="w-full rounded-md border-slate-300 text-sm flex-1" disabled></select>
                                     <div class="flex gap-2 pt-1">
                                         <button type="button" id="asgApply" class="asc-btn primary flex-1" disabled>Biriktirish</button>
-                                        <button type="button" id="asgClear" class="asc-btn" disabled title="Biriktirishni olib tashlash">✖</button>
+                                        <button type="button" id="asgClear" class="asc-btn" disabled title="Biriktirishni olib tashlash"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                                     </div>
                                 </div>
                             </div>
@@ -547,17 +556,12 @@
                         <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
                             <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
                                 <span class="asc-header-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                        <circle cx="10.8" cy="10.8" r="6.3"/>
-                                        <path d="m16 16 4.5 4.5M10.8 8.2v5.2M10.8 15.8v.1"/>
-                                    </svg>
+                                    <i class="bi bi-search"></i>
                                 </span>
                                 <span id="chkTitle">Jadval tekshiruvi</span>
                             </div>
                             <button type="button" id="chkClose" class="asc-close-btn" aria-label="Yopish" title="Yopish">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <path d="M6 6l12 12M18 6 6 18"/>
-                                </svg>
+                                <i class="bi bi-x-lg"></i>
                             </button>
                         </div>
                         <div id="chkBody" class="check-report-body overflow-auto" style="max-height: 76vh;"></div>
@@ -655,6 +659,9 @@
             border-radius: 12px; box-shadow: 0 28px 80px rgba(2,6,23,.55); border: 1px solid #cbd5e1;
             display: flex; flex-direction: column; max-height: 95vh; overflow: hidden; }
         .tt-modal .asc-titlebar { box-shadow: 0 1px 0 rgba(255,255,255,.15) inset; }
+        .tt-modal-win.asc-small-modal { border-radius: 12px; overflow: hidden; }
+        .asc-small-modal .modal-panel { background: #fff; }
+        .asc-small-modal .modal-footer { border-top: 1px solid #e2e8f0; background: #f8fafc; }
         .asc-btn { padding: 6px 14px; font-size: 13px; background: linear-gradient(#fff,#e8edf3);
             border: 1px solid #b6c2d1; border-radius: 5px; color: #2c3e50; }
         .asc-btn:hover:not(:disabled) { background: linear-gradient(#fff,#dbe3ec); border-color: #8ea3ba; }
@@ -1963,7 +1970,7 @@
                     (c.training_type === 'lecture'
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
-                    (c.teacher_name ? ' · 👤' : '') + (c.auditorium_name ? ' · 🚪' : '') +
+                    (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
                     '</div></div>'
                 ).join('') || '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>';
 
@@ -3047,8 +3054,8 @@
                         '<td>' + esc(it.start || '') + '</td><td>' + esc(it.end || '') + '</td>' +
                         '<td class="text-center">' + (it.print === false ? '—' : 'Ha') + '</td>' +
                         '<td class="whitespace-nowrap text-right">' +
-                            '<button class="asc-mini" data-edit="' + i + '" title="Tahrirlash">✏️</button>' +
-                            '<button class="asc-mini" data-del="' + i + '" title="O\'chirish">🗑</button>' +
+                            '<button class="asc-mini" data-edit="' + i + '" title="Tahrirlash"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>' +
+                            '<button class="asc-mini" data-del="' + i + '" title="O\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>' +
                         '</td></tr>';
                 });
                 h += '</tbody>';
@@ -3398,20 +3405,20 @@
 
                 let h = '';
                 // Joylashmagan
-                h += sec('📌', 'Joylashmagan darslar', d.totalUnplaced, 'hammasi joyida',
+                h += sec('<i class="bi bi-pin-angle-fill"></i>', 'Joylashmagan darslar', d.totalUnplaced, 'hammasi joyida',
                     Object.entries(d.unplacedBySpec).map(([k, v]) => '<div>' + esc(k) + ' — <b>' + v + '</b> karta</div>').join(''));
                 // O'qituvchi konflikti
-                h += sec('🧑‍🏫', "O'qituvchi to'qnashuvlari", d.teacherConf.length, 'to\'qnashuv yo\'q',
+                h += sec('<i class="bi bi-person-workspace"></i>', "O'qituvchi to'qnashuvlari", d.teacherConf.length, 'to\'qnashuv yo\'q',
                     d.teacherConf.map(c => '<div>' + esc(d.dayName(c.d)) + ', ' + c.p + '-para — <b>' + esc(c.name || '') + '</b>: ' + esc(c.subs.join(' / ')) + '</div>').join(''));
                 // Auditoriya konflikti
-                h += sec('🚪', 'Auditoriya to\'qnashuvlari', d.roomConf.length, 'to\'qnashuv yo\'q',
+                h += sec('<i class="bi bi-door-open"></i>', 'Auditoriya to\'qnashuvlari', d.roomConf.length, 'to\'qnashuv yo\'q',
                     d.roomConf.map(c => '<div>' + esc(d.dayName(c.d)) + ', ' + c.p + '-para — <b>' + esc(c.name || '') + '</b>: ' + esc(c.subs.join(' / ')) + '</div>').join(''));
                 // Oynalar
-                h += sec('🕳', 'Guruh oynalari (bo\'sh para)', d.gaps.length, 'oyna yo\'q',
+                h += sec('<i class="bi bi-layout-three-columns"></i>', 'Guruh oynalari (bo\'sh para)', d.gaps.length, 'oyna yo\'q',
                     d.gaps.slice(0, 40).map(g => '<div>' + esc(g.group) + ' · ' + esc(d.dayName(g.day)) + ' — <b>' + g.holes + '</b> oyna (paralar: ' + g.pairs.join(',') + ')</div>').join('') +
                     (d.gaps.length > 40 ? '<div class="text-gray-400">... yana ' + (d.gaps.length - 40) + '</div>' : ''));
                 // O'qituvchisiz
-                h += sec('❓', 'O\'qituvchisi biriktirilmagan birliklar', d.noTeacher.length, 'hammasiga biriktirilgan',
+                h += sec('<i class="bi bi-person-question"></i>', 'O\'qituvchisi biriktirilmagan birliklar', d.noTeacher.length, 'hammasiga biriktirilgan',
                     d.noTeacher.slice(0, 40).map(u => '<div>' + esc(u.spec) + ' · ' + u.course + '-kurs — ' + esc(u.sub) + '</div>').join('') +
                     (d.noTeacher.length > 40 ? '<div class="text-gray-400">... yana ' + (d.noTeacher.length - 40) + '</div>' : ''));
 

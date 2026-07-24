@@ -176,6 +176,69 @@ class TimetableController extends Controller
     }
 
     /**
+     * "Rejada fani bor, lekin guruh proyeksiyasi yo'q" yo'nalish+kurslar.
+     * Karta faqat reja fani VA tasdiqlangan guruh snapshoti birga bo'lganda
+     * yaratiladi; shuning uchun rejada bor, lekin snapshotda guruhi yo'q bo'lgan
+     * yo'nalish+kurslar doskada umuman chiqmaydi (masalan yangi qabul 1-kurs
+     * proyeksiyasi tasdiqlanmagan). Diagnostika shu holatlarni ko'rsatadi.
+     *
+     * @return array<int,array{specialty_name:string,course:int}>
+     */
+    private function missingGroupSpecs(TimetableBoard $board): array
+    {
+        // 1) Ishchi rejada shu doska yili + semestr paritetiga mos fani bor
+        //    yo'nalish+kurslar (subjects() bilan bir xil filtr).
+        $start = (int) substr($board->academic_year, 0, 4);
+        $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
+        $curr = DB::table('manual_curriculum_subjects as s')
+            ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
+            ->where('mc.type', 'ishchi')
+            ->whereNotNull('s.semester')
+            ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->groupBy('mc.specialty_name', 'mc.level_code')
+            ->selectRaw('mc.specialty_name, mc.level_code')
+            ->get();
+        $currSet = [];   // "specKey|course" => ko'rinadigan yo'nalish nomi
+        foreach ($curr as $r) {
+            $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
+            $currSet[$this->specKey($r->specialty_name) . '|' . $course] = $r->specialty_name;
+        }
+
+        // 2) Guruh snapshotida (kamida bitta guruhli oqim) bor yo'nalish+kurslar.
+        $covered = [];
+        foreach ($this->boardSnapshots($board) as $snap) {
+            foreach ($snap->data ?? [] as $bl) {
+                $specName = trim(explode('|', $bl['merge_key'] ?? '')[1] ?? '') ?: ($bl['title'] ?? '');
+                $sk = $this->specKey($specName);
+                foreach ($bl['courses'] ?? [] as $co) {
+                    $lvl = (int) ($co['level_code'] ?? 0);
+                    $course = $lvl >= 11 ? $lvl - 10 : $lvl;
+                    foreach ($co['oqims'] ?? [] as $oq) {
+                        foreach ($oq['rows'] ?? [] as $rw) {
+                            if (trim((string) ($rw['name'] ?? '')) !== '') {
+                                $covered[$sk . '|' . $course] = true;
+                                break 2;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3) Rejada bor, lekin guruhi yo'q — farqi.
+        $out = [];
+        foreach ($currSet as $key => $specName) {
+            if (empty($covered[$key])) {
+                $course = (int) substr($key, strrpos($key, '|') + 1);
+                $out[] = ['specialty_name' => $specName, 'course' => $course];
+            }
+        }
+        usort($out, fn($a, $b) => [$a['specialty_name'], $a['course']] <=> [$b['specialty_name'], $b['course']]);
+        return $out;
+    }
+
+    /**
      * Kartochka qatorlarini yig'ish. $filterSpecKey/$filterCourse berilsa — faqat
      * o'sha yo'nalish+kurs. Haftalik para har yo'nalish+kurs uchun alohida
      * sozlanadigan hafta soniga qarab hisoblanadi. $specsFound — topilgan
@@ -1051,6 +1114,8 @@ class TimetableController extends Controller
             'grids' => $grids,
             'overrides' => $overrides,
             'subject_settings' => $this->subjectSettingsFor($board),
+            // Rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
+            'missing_groups' => $this->missingGroupSpecs($board),
         ]);
     }
 

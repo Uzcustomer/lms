@@ -265,10 +265,9 @@
                             </button>
                         </div>
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
-                        <div class="flex gap-3 p-4 overflow-hidden" style="min-height: 600px;">
+                        <div class="flex gap-3 p-4 overflow-visible" style="min-height: 600px;">
                             <nav class="w-20 shrink-0 flex flex-col items-center gap-2 rounded-xl border border-blue-100 bg-gradient-to-b from-slate-50 to-white p-2 shadow-sm" aria-label="Jadval ma'lumotlari">
-                                <div class="px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Boshqaruv</div>
-                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" data-tooltip="Darslar" aria-label="Darslar" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span><span>Darslar</span></button>
+                                                                <button type="button" class="asc-nav-btn active" data-asc-type="subjects" data-tooltip="Darslar" aria-label="Darslar" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span><span>Darslar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="groups" data-tooltip="Guruhlar" aria-label="Guruhlar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span><span>Guruhlar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" data-tooltip="Auditoriyalar" aria-label="Auditoriyalar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true"></span><span>Auditoriyalar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="teachers" data-tooltip="O'qituvchilar" aria-label="O'qituvchilar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/09_teachers_cap.png') }}" alt="" aria-hidden="true"></span><span>O'qituvchilar</span></button>
@@ -713,7 +712,8 @@
         .asc-column-filter-row input:focus,
         .asc-column-filter-row select:focus { border-color: #60a5fa; outline: 2px solid rgba(96,165,250,.18); }
         .asc-subj-mode-cell { min-width: 260px; white-space: normal !important; }
-        .asc-subj-mode { width: 100%; min-width: 190px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
+        .asc-subj-mode { width: 50%; min-width: 95px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: right; text-align-last: right; }
+        .asc-subj-mode option { text-align: right; }
         .asc-subj-params { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 5px; color: #64748b; font-size: 10px; }
         .asc-subj-param { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
         .asc-subj-param input { width: 58px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; }
@@ -756,6 +756,7 @@
         }
             .asc-nav-btn {
             position: relative;
+            z-index: 50;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -779,7 +780,7 @@
             position: absolute;
             left: calc(100% + 8px);
             top: 50%;
-            z-index: 20;
+            z-index: 9999;
             transform: translateY(-50%);
             padding: 7px 10px;
             border-radius: 6px;

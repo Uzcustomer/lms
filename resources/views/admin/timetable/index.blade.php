@@ -1562,7 +1562,8 @@
             };
 
             async function api(url, method = 'GET', body = null) {
-                const opt = { method, headers: { 'Accept': 'application/json' } };
+                // Doska ma'lumoti tez o'zgaradi — brauzer eski GET javobini keshdan bermasin.
+                const opt = { method, cache: 'no-store', headers: { 'Accept': 'application/json' } };
                 if (body) {
                     const fd = new FormData();
                     fd.append('_token', CSRF);
@@ -1642,7 +1643,9 @@
             async function loadBoard(id) {
                 // Boshqa doskaga o'tayotgan bo'lsak — eski doskaga oid holatni tozalaymiz
                 const switching = !board || String(board.id) !== String(id);
-                const j = await api(BASE + '/boards/' + id + '/data');
+                // URLga noyob parametr — har qanday kesh (brauzer/proxy) eski kartalarni
+                // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
+                const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; cards = j.cards;
                 missingGroups = j.missing_groups || [];
                 buildSubjectColors();

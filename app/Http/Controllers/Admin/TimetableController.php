@@ -1116,7 +1116,12 @@ class TimetableController extends Controller
             'subject_settings' => $this->subjectSettingsFor($board),
             // Rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             'missing_groups' => $this->missingGroupSpecs($board),
-        ]);
+        ])
+            // Doska ma'lumoti tez-tez o'zgaradi (kartalar qayta yaratiladi, joylashadi).
+            // Brauzer eski GET javobini keshdan bermasin — aks holda yangi kartalar
+            // (masalan yangi kurs) ekranda ko'rinmay qoladi.
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache');
     }
 
     /** Doskaning fan-rejim sozlamalari (hafta almashinuvi / sikl) — frontend uchun. */

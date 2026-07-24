@@ -175,8 +175,15 @@
                         <span class="text-xs font-semibold text-gray-700">Sikl jadvali (4-6 kurs)</span>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1">Semestr boshlanishi:
                             <input type="date" id="cycleStart" class="rounded border-gray-300 text-xs py-0.5"></label>
+                        <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Bayram/dam olish kunlari — sikl bloklari bu kunlarga tushmaydi">Bayram:
+                            <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
+                        <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
                         <span id="cycleMsg" class="text-[11px] text-gray-500"></span>
+                    </div>
+                    <div id="cycleHolBar" class="hidden flex flex-wrap items-center gap-1.5 px-3 py-1.5 border-b border-gray-100 bg-amber-50">
+                        <span class="text-[11px] text-amber-700 font-medium">Bayram kunlari:</span>
+                        <span id="cycleHolList" class="flex flex-wrap items-center gap-1"></span>
                     </div>
                     <div id="cycleGridWrap" class="overflow-auto"><table id="cycleGrid" class="border-collapse text-[11px]"></table></div>
                 </div>
@@ -1648,10 +1655,11 @@
                 $('cardModal').classList.add('hidden');
                 if (switching) {
                     curSpec = null; selectedFaculties.clear(); selectedDirs.clear(); selectedCourses.clear();
-                    // Sikl sanasi doskaga xos — almashganda tozalaymiz (boshqa doska
-                    // sanasini uning ustiga yozib yubormaslik uchun).
+                    // Sikl sanasi/bayramlari doskaga xos — almashganda tozalaymiz (boshqa
+                    // doska qiymatini uning ustiga yozib yubormaslik uchun).
                     if ($('cycleStart')) $('cycleStart').value = '';
-                    cyclePlanData = null;
+                    cyclePlanData = null; cycleHolidays = [];
+                    if ($('cycleHolBar')) $('cycleHolBar').classList.add('hidden');
                 }
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
@@ -1997,18 +2005,31 @@
 
             // ===== Sikl (4-6 kurs) kalendar ko'rinishi =====
             let cyclePlanData = null;
+            let cycleHolidays = [];   // bayram kunlari (Y-m-d)
+            // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
+            function renderHolChips() {
+                $('cycleHolBar').classList.toggle('hidden', !cycleHolidays.length);
+                $('cycleHolList').innerHTML = cycleHolidays.map(d =>
+                    '<span class="inline-flex items-center gap-1 bg-white border border-amber-300 rounded px-1.5 py-0.5 text-[10px] text-amber-800">' +
+                    esc(d.split('-').reverse().join('.')) +
+                    '<button type="button" class="cyc-hol-x text-amber-500 hover:text-red-600 font-bold" data-d="' + esc(d) + '">×</button></span>').join('');
+            }
             async function loadCyclePlan() {
                 if (!board) return;
                 const body = scopeBody();
                 if ($('cycleStart').value) body.start_date = $('cycleStart').value;
+                body.holidays = cycleHolidays;
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
                     cyclePlanData = j;
                     if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
+                    cycleHolidays = j.holidays || [];   // server — yagona manba (saqlangandan keyin)
+                    renderHolChips();
                     renderCyclePlan(j);
                     $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' guruh · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
-                        (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '');
+                        (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
+                        (cycleHolidays.length ? (' · ' + cycleHolidays.length + ' bayram') : '');
                 } catch (e) {
                     $('cycleMsg').textContent = '';
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-3 text-sm text-red-600">Xatolik: ' + esc(e.message) + '</td></tr></tbody>';
@@ -2043,6 +2064,22 @@
             }
             if ($('cycleRefresh')) $('cycleRefresh').onclick = loadCyclePlan;
             if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
+            // Bayram qo'shish
+            if ($('cycleHolAddBtn')) $('cycleHolAddBtn').onclick = () => {
+                const d = $('cycleHolAdd').value;
+                if (!d || cycleHolidays.includes(d)) return;
+                cycleHolidays = [...cycleHolidays, d].sort();
+                $('cycleHolAdd').value = '';
+                renderHolChips();
+                loadCyclePlan();
+            };
+            // Bayramni olib tashlash (chipdagi ×)
+            if ($('cycleHolList')) $('cycleHolList').addEventListener('click', ev => {
+                if (!ev.target.classList.contains('cyc-hol-x')) return;
+                cycleHolidays = cycleHolidays.filter(d => d !== ev.target.dataset.d);
+                renderHolChips();
+                loadCyclePlan();
+            });
 
             function buildGroupRows() {
                 groupRows = [];

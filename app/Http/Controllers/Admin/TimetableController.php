@@ -1142,6 +1142,8 @@ class TimetableController extends Controller
     {
         $data = $request->validate([
             'start_date'        => 'nullable|date',
+            'holidays'          => 'nullable|array',
+            'holidays.*'        => 'nullable|date',
             'faculty_names'     => 'nullable|array',
             'faculty_names.*'   => 'nullable|string|max:255',
             'specialty_names'   => 'nullable|array',
@@ -1170,20 +1172,38 @@ class TimetableController extends Controller
                 : sprintf('%04d-09-01', $yearStart);
         }
         $startC = Carbon::parse($start)->startOfDay();
-        if (($set['semester_start'] ?? null) !== $startC->toDateString()) {
+
+        // Bayram (dam olish) kunlari — so'rovdan yoki sozlamadan. Y-m-d ga keltiramiz.
+        $holInput = $data['holidays'] ?? ($set['holidays'] ?? []);
+        $holSet = [];
+        foreach ((array) $holInput as $hd) {
+            $hd = trim((string) $hd);
+            if ($hd === '') {
+                continue;
+            }
+            try {
+                $holSet[Carbon::parse($hd)->toDateString()] = true;
+            } catch (\Exception $e) { /* noto'g'ri sana — e'tibor bermaymiz */ }
+        }
+        $holidays = array_keys($holSet);
+        sort($holidays);
+
+        // Semestr sanasi va bayramlarni sozlamaga saqlaymiz (keyingi safar eslab qolish uchun)
+        if (($set['semester_start'] ?? null) !== $startC->toDateString() || ($set['holidays'] ?? []) !== $holidays) {
             $set['semester_start'] = $startC->toDateString();
+            $set['holidays'] = $holidays;
             $board->update(['settings' => $set]);
         }
 
         // O'quv kunlari kalendari: haftasiga board->days ta ish kuni (Dush=1..),
-        // yakshanba (va board->days dan keyingi kunlar) o'tkazib yuboriladi.
+        // yakshanba (va board->days dan keyingi kunlar) hamda bayram kunlari o'tkaziladi.
         $D = max(1, (int) $board->days);
         $W = max(1, (int) $board->weeks);
         $dates = [];
         $cur = $startC->copy();
         $guard = 0;
-        while (count($dates) < $W * $D && $guard < $W * 7 + 30) {
-            if ((int) $cur->dayOfWeekIso <= $D) {
+        while (count($dates) < $W * $D && $guard < $W * 7 + count($holSet) * 2 + 60) {
+            if ((int) $cur->dayOfWeekIso <= $D && !isset($holSet[$cur->toDateString()])) {
                 $dates[] = $cur->copy();
             }
             $cur->addDay();
@@ -1273,6 +1293,7 @@ class TimetableController extends Controller
 
         return response()->json([
             'start_date' => $startC->toDateString(),
+            'holidays'   => $holidays,
             'total_days' => $totalDays,
             'dates'      => array_map(fn($d) => ['d' => $d->format('d.m'), 'iso' => $d->toDateString(), 'dow' => (int) $d->dayOfWeekIso], $dates),
             'subjects'   => array_map(fn($sn) => ['name' => $sn, 'days' => $allSubs[$sn]], $subOrder),

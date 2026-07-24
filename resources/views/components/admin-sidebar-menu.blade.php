@@ -838,7 +838,9 @@
             </svg>
             O'quv reja to'g'riligi
         </a>
+        @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
         <a href="{{ route('admin.timetable.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.timetable.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

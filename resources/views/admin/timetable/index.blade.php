@@ -16,7 +16,7 @@
             <div style="flex: 0 0 auto;">
 
             {{-- Doska tanlash + boshqaruv paneli --}}
-            <div class="tt-control-panel tt-top-panel mb-3">
+            <div class="tt-control-panel tt-top-panel mb-1">
                 <div class="tt-top-toolbar">
                     <div class="tt-board-select">
                         <span class="tt-board-icon" aria-hidden="true"><i class="bi bi-building"></i></span>
@@ -959,7 +959,7 @@
         .tt-control-panel {
             overflow: visible;
             border: 1px solid rgba(219,228,240,.94);
-            border-radius: 15px;
+            border-radius: 5px;
             background: rgba(255,255,255,.96);
             box-shadow: 0 8px 25px rgba(15,23,42,.06), 0 2px 7px rgba(15,23,42,.04);
         }
@@ -1027,6 +1027,25 @@
             transform: translateY(-1px);
         }
         .tt-icon-success { color: #059669; }
+        /* Toolbar ikonlari amal turini rang bilan tez ajratib turadi. */
+        #newBoardBtn .toolbar-icon { color: #059669; }
+        #genBtn .toolbar-icon { color: #7c3aed; }
+        #refreshNamesBtn .toolbar-icon { color: #d97706; }
+        #delBoardBtn .toolbar-icon { color: #dc2626; }
+        #settingsBtn .toolbar-icon { color: #475569; }
+        #managerBtn .toolbar-icon { color: #2563eb; }
+        #assignBtn .toolbar-icon { color: #db2777; }
+        #excelViewBtn .toolbar-icon { color: #0f766e; }
+        #checkBtn .toolbar-icon { color: #1d4ed8; }
+        #gsSave .toolbar-icon { color: #2563eb; }
+        #autoBtn .toolbar-icon { color: #fff; }
+        #unplaceBtn .toolbar-icon { color: #dc2626; }
+        #autoScope + .tt-toggle-icon { color: #2563eb; }
+        #autoReset + .tt-toggle-icon { color: #7c3aed; }
+        #autoRooms + .tt-toggle-icon { color: #0891b2; }
+        #autoLecRooms + .tt-toggle-icon { color: #d97706; }
+        .tt-control-panel .toolbar-icon .bi,
+        .tt-control-panel .tt-toggle-icon .bi { line-height: 1; }
         .tt-danger-btn {
             min-height: 42px;
             padding: 0 14px;

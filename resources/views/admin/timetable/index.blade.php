@@ -2765,16 +2765,22 @@
                 }
                 h += '</tbody>';
                 $('ascTable').innerHTML = h;
-                $('ascTable').oninput = ev => {
+                const applyColumnFilter = ev => {
                     if (!ev.target.classList.contains('asc-column-filter')) return;
-                    ascColumnFilters[ev.target.dataset.filterKey] = ev.target.value;
+                    const key = ev.target.dataset.filterKey;
+                    const cursor = typeof ev.target.selectionStart === 'number' ? ev.target.selectionStart : null;
+                    ascColumnFilters[key] = ev.target.value;
                     renderAscTable();
+                    const next = $('ascTable').querySelector('[data-filter-key="' + key + '"]');
+                    if (next) {
+                        next.focus();
+                        if (cursor !== null && typeof next.setSelectionRange === 'function') {
+                            next.setSelectionRange(cursor, cursor);
+                        }
+                    }
                 };
-                $('ascTable').onchange = ev => {
-                    if (!ev.target.classList.contains('asc-column-filter')) return;
-                    ascColumnFilters[ev.target.dataset.filterKey] = ev.target.value;
-                    renderAscTable();
-                };
+                $('ascTable').oninput = applyColumnFilter;
+                $('ascTable').onchange = applyColumnFilter;
                 document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => {
                     if (ascType === 'subjects') {
                         const row = rows[+tr.dataset.idx];

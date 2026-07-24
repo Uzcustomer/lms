@@ -1698,27 +1698,16 @@ class TimetableController extends Controller
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.semester', 's.subject_name')
             ->selectRaw("mc.specialty_name, mc.level_code, s.semester, s.subject_name,
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice,
-                MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar")
+                MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar,
+                GROUP_CONCAT(DISTINCT mc.name SEPARATOR '|||') as plan_names")
             ->orderBy('mc.specialty_name')->orderBy('mc.level_code')->orderBy('s.subject_name')
             ->get();
 
         [$kafMap, $overrides] = $this->buildKafedraMap();
         $weeks = max(1, (int) $board->weeks);
 
-        // Fanlar jadvalida fakultetni ko'rsatish uchun shu doskadagi
-        // kartochkalarning fakultet snapshotidan foydalanamiz.
-        $facultyBySubject = [];
-        if (Schema::hasColumn('timetable_cards', 'faculty_name')) {
-            $facultyBySubject = TimetableCard::query()
-                ->where('board_id', $board->id)
-                ->whereNotNull('faculty_name')
-                ->get(['specialty_name', 'course', 'subject_name', 'faculty_name'])
-                ->mapWithKeys(function ($card) {
-                    $key = $card->specialty_name . '|' . $card->course . '|' . $card->subject_name;
-                    return [$key => $card->faculty_name];
-                })
-                ->all();
-        }
+        // Fakultet/reja nomi subjects() javobida bevosita manual_curricula.name
+        // dan olinadi — O'quv reja to'g'riligi jadvalidagi manba bilan bir xil.
 
         $out = [];
         foreach ($rows as $r) {
@@ -1728,7 +1717,8 @@ class TimetableController extends Controller
             $out[] = [
                 'specialty_name' => $r->specialty_name,
                 'course'         => $course,
-                'faculty_name'    => $facultyBySubject[$r->specialty_name . '|' . $course . '|' . $r->subject_name] ?? null,
+                'faculty_name'    => collect(explode('|||', (string) ($r->plan_names ?? '')))
+                    ->filter()->first(),
                 'semester'       => (int) $r->semester,
                 'subject_name'   => $r->subject_name,
                 'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),

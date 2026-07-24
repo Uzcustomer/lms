@@ -266,7 +266,7 @@
                         </div>
                         {{-- aSc uslubidagi chap navigatsiya + ishchi panel --}}
                         <div class="flex gap-3 p-4 overflow-visible" style="min-height: 600px;">
-                            <nav class="w-20 shrink-0 self-start h-fit flex flex-col items-center gap-2 rounded-xl border border-blue-100 bg-white p-2 shadow-sm" aria-label="Jadval ma'lumotlari">
+                            <nav class="asc-data-nav w-20 shrink-0 self-start h-fit flex flex-col items-center gap-2 rounded-xl bg-white p-2" style="height: fit-content; align-self: flex-start;" aria-label="Jadval ma'lumotlari">
                                                                 <button type="button" class="asc-nav-btn active" data-asc-type="subjects" data-tooltip="Darslar" aria-label="Darslar" aria-selected="true"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span><span>Darslar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="groups" data-tooltip="Guruhlar" aria-label="Guruhlar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span><span>Guruhlar</span></button>
                                 <button type="button" class="asc-nav-btn" data-asc-type="auditoriums" data-tooltip="Auditoriyalar" aria-label="Auditoriyalar" aria-selected="false"><span class="asc-nav-icon" aria-hidden="true"><img class="" src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true"></span><span>Auditoriyalar</span></button>
@@ -765,18 +765,23 @@
             width: 70px;
             min-height: 70px;
             padding: 8px;
-            border: 1px solid transparent;
-            border-radius: 6px;
+            border: 0;
+            border-radius: 10px;
             color: #475569;
             background: #fff;
             font-size: 0.78rem;
             font-weight: 600;
             text-align: left;
-            transition: all 0.15s ease;
+            transition: transform 0.22s cubic-bezier(.2,.8,.2,1), background-color 0.22s ease, color 0.22s ease, box-shadow 0.22s ease;
+            outline: none;
         }
         .asc-nav-btn > span:not(.asc-nav-icon) { display: none; }
         .asc-nav-btn .asc-nav-icon { width: 54px; height: 54px; flex: 0 0 54px; }
         .asc-nav-btn { background: transparent; box-shadow: none; }
+        .asc-nav-btn:focus,
+        .asc-nav-btn:focus-visible { outline: none; border: 0; }
+        .asc-nav-btn.active:focus,
+        .asc-nav-btn.active:focus-visible { border: 2px solid #2563eb; }
         .asc-nav-btn:hover::after {
             content: attr(data-tooltip);
             position: absolute;
@@ -795,14 +800,18 @@
             pointer-events: none;
         }
         .asc-nav-btn:hover {
-            background: #eff6ff;
+            z-index: 60;
+            transform: scale(1.08);
+            background: transparent;
             color: #1d4ed8;
             border-color: #bfdbfe;
         }
         .asc-nav-btn.active {
             background: linear-gradient(135deg, #2563eb, #1d4ed8);
             color: #fff;
-            border-color: #1d4ed8;
+            border: 2px solid #2563eb;
+            border-color: #2563eb;
+            outline: none;
             box-shadow: 0 2px 7px rgba(37, 99, 235, 0.25);
         }
         .dark .asc-nav-btn {

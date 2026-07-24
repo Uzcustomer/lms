@@ -14,7 +14,13 @@ class TimetableAssignmentAccess
     {
         $user = $request->user();
 
-        if ($user && $user->hasAnyRole(['oquv_bolimi', 'oquv_bolimi_boshligi'])) {
+        $userRoles = $user ? $user->getRoleNames()->toArray() : [];
+        $activeRole = session('active_role', $userRoles[0] ?? '');
+        if (!in_array($activeRole, $userRoles, true) && $userRoles) {
+            $activeRole = $userRoles[0];
+        }
+
+        if ($user && in_array($activeRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true)) {
             $allowed = [
                 'admin.timetable.index',
                 'admin.timetable.boards.data',

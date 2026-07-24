@@ -711,9 +711,10 @@
         .asc-column-filter-row select { width: 100%; min-width: 0; height: 27px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #475569; font-size: 10px; font-weight: 400; }
         .asc-column-filter-row input:focus,
         .asc-column-filter-row select:focus { border-color: #60a5fa; outline: 2px solid rgba(96,165,250,.18); }
-        .asc-subj-mode-cell { min-width: 260px; white-space: normal !important; }
-        .asc-subj-mode { width: 50%; min-width: 95px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: right; text-align-last: right; }
-        .asc-subj-mode option { text-align: right; }
+        .asc-subj-mode-cell { min-width: 260px; white-space: normal !important; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+        .asc-subj-mode { width: 55%; min-width: 120px; flex: 0 0 55%; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; }
+        .asc-subj-mode option { text-align: left; }
+        .asc-subj-mode-cell .asc-subj-params { flex: 1 1 auto; min-width: 0; margin-top: 0; flex-wrap: nowrap; }
         .asc-subj-params { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 5px; color: #64748b; font-size: 10px; }
         .asc-subj-param { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
         .asc-subj-param input { width: 58px; padding: 2px 4px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; }

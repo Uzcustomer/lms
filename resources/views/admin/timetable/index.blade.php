@@ -988,8 +988,8 @@
         .asc-subject-table th:nth-child(4), .asc-subject-table td:nth-child(4),
         .asc-subject-table th:nth-child(5), .asc-subject-table td:nth-child(5),
         .asc-subject-table th:nth-child(6), .asc-subject-table td:nth-child(6),
-        .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 5%; }
-        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 24%; }
+        .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 4%; }
+        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 28%; }
         .asc-table-scroll.is-dragging {
             cursor: grabbing;
             user-select: none;

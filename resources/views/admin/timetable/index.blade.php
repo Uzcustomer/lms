@@ -349,8 +349,8 @@
                                     <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="teacher">O'qituvchi bo'yicha</button>
                                     <button type="button" class="ex-mode px-2.5 py-1 border-l border-gray-300" data-mode="room">Auditoriya bo'yicha</button>
                                 </div>
-                                <button type="button" id="excelDownload" class="asc-btn">⬇ Excelga yuklab olish</button>
-                                <button type="button" id="excelPrint" class="asc-btn">🖨 Chop / PDF</button>
+                                <button type="button" id="excelDownload" class="asc-btn"><i class="bi bi-download" aria-hidden="true"></i> Excelga yuklab olish</button>
+                                <button type="button" id="excelPrint" class="asc-btn"><i class="bi bi-printer" aria-hidden="true"></i> Chop / PDF</button>
                                 <button type="button" id="excelClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
                             </div>
                         </div>
@@ -432,8 +432,8 @@
                                     <button type="button" id="stAddPair" class="asc-btn primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Para qo'shish</button>
                                     <button type="button" id="stAddBreak" class="asc-btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> Tanaffus qo'shish</button>
                                     <span class="mx-1 h-6 w-px bg-gray-300"></span>
-                                    <button type="button" id="stMoveUp" class="asc-btn" title="Belgilangan qatorni yuqoriga ko'chirish" disabled>▲ Yuqoriga</button>
-                                    <button type="button" id="stMoveDown" class="asc-btn" title="Belgilangan qatorni pastga ko'chirish" disabled>▼ Pastga</button>
+                                    <button type="button" id="stMoveUp" class="asc-btn" title="Belgilangan qatorni yuqoriga ko'chirish" disabled><i class="bi bi-chevron-up" aria-hidden="true"></i> Yuqoriga</button>
+                                    <button type="button" id="stMoveDown" class="asc-btn" title="Belgilangan qatorni pastga ko'chirish" disabled><i class="bi bi-chevron-down" aria-hidden="true"></i> Pastga</button>
                                     <button type="button" id="stResetBells" class="asc-btn ml-auto"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Standart jadval</button>
                                 </div>
                                 <table class="w-full text-xs asc-table" id="stBellTable"></table>

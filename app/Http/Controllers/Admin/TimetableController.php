@@ -1705,6 +1705,21 @@ class TimetableController extends Controller
         [$kafMap, $overrides] = $this->buildKafedraMap();
         $weeks = max(1, (int) $board->weeks);
 
+        // Fanlar jadvalida fakultetni ko'rsatish uchun shu doskadagi
+        // kartochkalarning fakultet snapshotidan foydalanamiz.
+        $facultyBySubject = [];
+        if (Schema::hasColumn('timetable_cards', 'faculty_name')) {
+            $facultyBySubject = TimetableCard::query()
+                ->where('board_id', $board->id)
+                ->whereNotNull('faculty_name')
+                ->get(['specialty_name', 'course', 'subject_name', 'faculty_name'])
+                ->mapWithKeys(function ($card) {
+                    $key = $card->specialty_name . '|' . $card->course . '|' . $card->subject_name;
+                    return [$key => $card->faculty_name];
+                })
+                ->all();
+        }
+
         $out = [];
         foreach ($rows as $r) {
             $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
@@ -1713,6 +1728,7 @@ class TimetableController extends Controller
             $out[] = [
                 'specialty_name' => $r->specialty_name,
                 'course'         => $course,
+                'faculty_name'    => $facultyBySubject[$r->specialty_name . '|' . $course . '|' . $r->subject_name] ?? null,
                 'semester'       => (int) $r->semester,
                 'subject_name'   => $r->subject_name,
                 'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),

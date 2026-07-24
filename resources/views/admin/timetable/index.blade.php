@@ -1940,10 +1940,13 @@
             let viewMode = 'group';   // group | teacher | room | subject (jadval kesimi)
             // Ko'rinadigan kartalar — tanlangan fakultet(lar) × yo'nalish(lar) × kurs(lar) kesishmasi.
             const multiSpec = () => selectedDirs.size > 1;
+            // Sikl rejimidagi fan — haftalik panjaraga tushmaydi (faqat sikl kalendarida).
+            const isCycleCard = c => (subjectSettings[subjModeKey(c.specialty_name, c.course, c.subject_name)] || {}).mode === 'cycle';
             const specCards = () => cards.filter(c =>
                 selectedFaculties.has(c.faculty_name || '') &&
                 selectedDirs.has(c.specialty_name) &&
-                selectedCourses.has(c.course));
+                selectedCourses.has(c.course) &&
+                !isCycleCard(c));
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
             // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
             let typeFilter = 'all';

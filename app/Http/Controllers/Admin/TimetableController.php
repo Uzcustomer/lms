@@ -630,6 +630,33 @@ class TimetableController extends Controller
 
         $all = TimetableCard::where('board_id', $board->id)->get();
 
+        // Sikl (4-6 kurs) fanlari HAFTALIK panjaraga tushmaydi — ular sikl
+        // kalendarida ketma-ket kunli blok bo'lib turadi (bir guruh N kun bir
+        // fan). Shu sababli sikl fanlarini panjaradan bo'shatamiz va avtomatik
+        // joylashda o'tkazib yuboramiz (aks holda para-para sochilib ketadi).
+        $cycleSubjKeys = [];
+        if (Schema::hasTable('timetable_subject_settings')) {
+            foreach (TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')->get() as $s) {
+                $cycleSubjKeys[mb_strtolower(trim((string) $s->specialty_name)) . '|' . (int) $s->course . '|' . mb_strtolower(trim((string) $s->subject_name))] = true;
+            }
+        }
+        $isCycle = fn(TimetableCard $c) => isset($cycleSubjKeys[
+            mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower(trim((string) $c->subject_name))
+        ]);
+        if (!empty($cycleSubjKeys)) {
+            $cycleIds = $all->filter(fn($c) => $isCycle($c) && ($c->day || $c->pair) && $inScope($c))->pluck('id');
+            if ($cycleIds->isNotEmpty()) {
+                TimetableCard::whereIn('id', $cycleIds)
+                    ->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
+                foreach ($all as $c) {
+                    if ($isCycle($c)) {
+                        $c->day = null;
+                        $c->pair = null;
+                    }
+                }
+            }
+        }
+
         // Band kataklar — joylashgan (fiks) kartalardan
         $groupBusy = [];   // "spec|course|day|pair" => [group,...]
         $teacherBusy = []; // "teacher_id|day|pair" => true
@@ -660,9 +687,13 @@ class TimetableController extends Controller
             return $assignRooms ? $rooms : collect();
         };
 
-        // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar
-        $toPlace = $all->filter(function ($c) use ($scopeType, $inScope) {
+        // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar.
+        // Sikl fanlari o'tkazib yuboriladi (ular panjaraga tushmaydi).
+        $toPlace = $all->filter(function ($c) use ($scopeType, $inScope, $isCycle) {
             if ($c->day && $c->pair) {
+                return false;
+            }
+            if ($isCycle($c)) {
                 return false;
             }
             if ($scopeType !== null && $c->training_type !== $scopeType) {

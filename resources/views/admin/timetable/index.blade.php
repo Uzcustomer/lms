@@ -1469,6 +1469,7 @@
             let audCache = null;
             let modalCard = null;
             let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
+            let missingGroups = []; // rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
             const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
             // Fan-rejim kaliti — katta-kichik harf/bo'shliqqa befarq (reja nomi
@@ -1640,6 +1641,7 @@
                 const switching = !board || String(board.id) !== String(id);
                 const j = await api(BASE + '/boards/' + id + '/data');
                 board = j.board; cards = j.cards;
+                missingGroups = j.missing_groups || [];
                 buildSubjectColors();
                 grids = {};
                 (j.grids || []).forEach(g => { grids[g.specialty_name + '|' + g.course] = g; });
@@ -3741,8 +3743,8 @@
                 const noTeacher = Object.values(unitTeacher).filter(u => !u.has);
 
                 const totalUnplaced = Object.values(unplacedBySpec).reduce((a, b) => a + b, 0);
-                const issues = teacherConf.length + roomConf.length + gaps.length;
-                return { unplacedBySpec, totalUnplaced, teacherConf, roomConf, gaps, noTeacher, issues, dayName };
+                const issues = teacherConf.length + roomConf.length + gaps.length + missingGroups.length;
+                return { unplacedBySpec, totalUnplaced, teacherConf, roomConf, gaps, noTeacher, missingGroups, issues, dayName };
             }
 
             function updateCheckBadge() {
@@ -3769,6 +3771,12 @@
                     '</section>';
 
                 let h = '';
+                // Rejada fani bor, lekin guruh proyeksiyasi yo'q — doskada umuman chiqmaydi
+                if (d.missingGroups.length) {
+                    h += sec('<i class="bi bi-people-fill"></i>', "Guruh proyeksiyasi topilmagan (rejada bor, doskada yo'q)", d.missingGroups.length, '',
+                        '<div class="mb-1 text-gray-500">Bu yo\'nalish+kurslarda ishchi rejada fan bor, lekin tasdiqlangan guruh (oqim) proyeksiyasi yo\'q — shuning uchun kartochkalar yaratilmaydi va KURS ro\'yxatida ko\'rinmaydi. Yechim: shu yo\'nalish+kurs uchun guruh proyeksiyasini yaratib tasdiqlang, so\'ng doskani qayta yarating.</div>' +
+                        d.missingGroups.map(m => '<div>• <b>' + esc(m.specialty_name) + '</b> · ' + m.course + '-kurs</div>').join(''));
+                }
                 // Joylashmagan
                 h += sec('<i class="bi bi-pin-angle-fill"></i>', 'Joylashmagan darslar', d.totalUnplaced, 'hammasi joyida',
                     Object.entries(d.unplacedBySpec).map(([k, v]) => '<div>' + esc(k) + ' — <b>' + v + '</b> karta</div>').join(''));

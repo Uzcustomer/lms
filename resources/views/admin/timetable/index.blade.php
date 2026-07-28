@@ -2372,7 +2372,7 @@
                          return;
                      }
                      const room = roomMeta[c] || { code: '', name: c, volume: null };
-                     const roomNumber = room.name || room.code || c;
+                     const roomNumber = String(room.name || room.code || c).replace(/^№\s*/u, '');
                      const capacity = room.volume !== null && room.volume !== undefined && room.volume !== ''
                          ? ' <span class="tt-room-vol">(' + esc(String(room.volume)) + ' ta)</span>' : '';
                      h += '<th class="tt-grp tt-room-head px-2 py-1">№ ' + esc(roomNumber) + capacity + '</th>';
@@ -2518,7 +2518,7 @@
                         ? ' <span class="tt-weeks">(' + c.weeks + ' hafta)</span>' : '';
                     const wkTitle = (c.training_type === 'lecture' && c.weeks) ? ' · ' + c.weeks + ' hafta' : '';
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
-                    const roomNo = c.auditorium_name || c.auditorium_code || '';
+                    const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
                     const roomTxt = roomNo
                         ? '<div class="tt-room">№ ' + esc(roomNo) +
                           (c.auditorium_volume ? ' <span class="tt-room-vol">(' + c.auditorium_volume + ' ta)</span>' : '') + '</div>'

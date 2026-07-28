@@ -2149,7 +2149,8 @@
                 groupRows = [];
                 flowStudents = {};
                 const seen = {};
-                const flowGroupSeen = {};\n                const groupFlowStudents = {};
+                const flowGroupSeen = {};
+                const groupFlowStudents = {};
                 specCards().forEach(c => {
                     const flowKey = (c.faculty_name || '') + '|' + (c.specialty_name || '') + '|' + c.course + '|' + (c.oqim_label || '');
                     if (c.training_type === 'lecture') {

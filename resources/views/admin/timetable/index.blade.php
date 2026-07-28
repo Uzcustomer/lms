@@ -2372,12 +2372,10 @@
                          return;
                      }
                      const room = roomMeta[c] || { code: '', name: c, volume: null };
-                     const roomCode = room.code || c;
+                     const roomNumber = room.name || room.code || c;
                      const capacity = room.volume !== null && room.volume !== undefined && room.volume !== ''
                          ? ' <span class="tt-room-vol">(' + esc(String(room.volume)) + ' ta)</span>' : '';
-                     const roomName = room.name && room.name !== roomCode
-                         ? '<span class="tt-room-name">' + esc(room.name) + '</span>' : '';
-                     h += '<th class="tt-grp tt-room-head px-2 py-1">' + esc(roomCode) + capacity + roomName + '</th>';
+                     h += '<th class="tt-grp tt-room-head px-2 py-1">№ ' + esc(roomNumber) + capacity + '</th>';
                  });
                 h += '</tr></thead><tbody>';
                 for (let d = 1; d <= D; d++) {
@@ -2520,10 +2518,10 @@
                         ? ' <span class="tt-weeks">(' + c.weeks + ' hafta)</span>' : '';
                     const wkTitle = (c.training_type === 'lecture' && c.weeks) ? ' · ' + c.weeks + ' hafta' : '';
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
-                    const roomNo = c.auditorium_code || c.auditorium_name || '';
+                    const roomNo = c.auditorium_name || c.auditorium_code || '';
                     const roomTxt = roomNo
-                        ? '<div class="tt-room">🚪 ' + esc(roomNo) +
-                          (c.auditorium_volume ? ' <span class="tt-room-vol">(' + c.auditorium_volume + ')</span>' : '') + '</div>'
+                        ? '<div class="tt-room">№ ' + esc(roomNo) +
+                          (c.auditorium_volume ? ' <span class="tt-room-vol">(' + c.auditorium_volume + ' ta)</span>' : '') + '</div>'
                         : '';
                     const roomTitle = c.auditorium_name
                         ? ' · ' + c.auditorium_name + (c.auditorium_volume ? ' (sig\'im ' + c.auditorium_volume + ')' : '') : '';

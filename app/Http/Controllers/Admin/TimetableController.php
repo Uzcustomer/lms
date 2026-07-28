@@ -1669,6 +1669,16 @@ class TimetableController extends Controller
             ->where('specialty_name', $specialty)->where('course', $course)
             ->when($faculty !== null, fn($q) => $q->where('faculty_name', $faculty))
             ->first();
+
+        // Eski fakultetsiz yozuvlar yangi fakultet kesimiga o'tguncha fallback bo'lib turadi.
+        if (!$gs && $faculty !== null) {
+            $gs = TimetableGridSetting::where('board_id', $board->id)
+                ->whereNull('faculty_name')
+                ->where('specialty_name', $specialty)
+                ->where('course', $course)
+                ->first();
+        }
+
         return [
             'days'  => $gs->days ?? $board->days,
             // Yarim-slot soni doska qo'ng'iroq jadvalidan (yo'nalish bo'yicha bir xil)

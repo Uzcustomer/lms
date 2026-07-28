@@ -887,6 +887,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
                 // Sikl (4-6 kurs) kalendar rejasi
                 Route::post('/boards/{board}/cycle-plan', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlan'])->name('cycle-plan');
+                // Qoidalar (aSc "Взаимосвязи" uslubida)
+                Route::get('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'rules'])->name('rules');
+                Route::post('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'saveRule'])->name('rules.save');
+                Route::post('/boards/{board}/rules/{rule}/state', [\App\Http\Controllers\Admin\TimetableController::class, 'updateRuleState'])->name('rules.state');
+                Route::delete('/boards/{board}/rules/{rule}', [\App\Http\Controllers\Admin\TimetableController::class, 'deleteRule'])->name('rules.delete');
                 // aSc uslubidagi boshqaruv dialoglari
                 Route::get('/boards/{board}/subjects', [\App\Http\Controllers\Admin\TimetableController::class, 'subjects'])->name('subjects');
                 Route::get('/boards/{board}/groups', [\App\Http\Controllers\Admin\TimetableController::class, 'groups'])->name('groups');

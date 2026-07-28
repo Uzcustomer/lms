@@ -761,13 +761,13 @@
         .grid-setting-filter { min-width: 190px; height: 34px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; background: #fff; font-size: 12px; }
         .grid-setting-table-wrap { overflow-x: auto; border: 1px solid #dbe3ec; border-radius: 8px; background: #fff; }
         .grid-setting-table { width: 100%; min-width: 1100px; border-collapse: collapse; font-size: 11px; }
-        .grid-setting-table th, .grid-setting-table td { border: 1px solid #e2e8f0; padding: 6px; vertical-align: top; }
-        .grid-setting-table th { background: #eef2f7; color: #475569; font-weight: 700; text-align: left; white-space: nowrap; }
-        .grid-setting-table td.grid-setting-name { min-width: 150px; max-width: 220px; color: #334155; }
+        .grid-setting-table th, .grid-setting-table td { border: 1px solid #e2e8f0; padding: 6px; vertical-align: middle; }
+        .grid-setting-table th { background: #eef2f7; color: #475569; font-weight: 700; text-align: center; white-space: nowrap; }
+        .grid-setting-table td.grid-setting-name { min-width: 150px; max-width: 220px; color: #334155; text-align: left; vertical-align: middle; }
         .grid-setting-table td.grid-setting-name span { display: block; font-size: 11px; line-height: 1.25; word-break: break-word; }
         .grid-setting-table td.grid-setting-empty { text-align: center; color: #94a3b8; vertical-align: middle; }
-        .grid-setting-cell { min-width: 145px; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; align-items: end; }
-        .grid-setting-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+        .grid-setting-cell { min-width: 145px; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; align-items: center; }
+        .grid-setting-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; align-items: center; }
         .grid-setting-values label { color: #64748b; font-size: 9px; cursor: help; }
         .grid-setting-values input { display: block; width: 100%; margin-top: 2px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; font-size: 11px; background: #fff; }
         .grid-setting-save { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 27px; border: 1px solid #2563eb; border-radius: 5px; background: #2563eb; color: #fff; }

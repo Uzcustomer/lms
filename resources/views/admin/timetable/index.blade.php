@@ -117,18 +117,6 @@
                         <div class="tt-dd"><button type="button" class="tt-dd-btn" id="crsBtn" title="Kurs(lar)ni tanlang"></button><div class="tt-dd-menu" id="crsMenu"></div></div>
                     </div>
 
-                    <div class="tt-grid-field">
-                        <div class="tt-field">
-                            <label>Panjara</label>
-                            <div class="tt-grid-inputs">
-                                <input type="number" id="gsDays" min="1" max="7" title="Kunlar">
-                                <input type="number" id="gsPairs" min="1" max="10" title="Kuniga para">
-                                <input type="number" id="gsWeeks" min="1" max="30" title="Hafta soni">
-                            </div>
-                        </div>
-                        <button type="button" id="gsSave" class="asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/saqlash.png') }}" alt="" aria-hidden="true"></span>Saqlash</button>
-                    </div>
-
                     <div class="tt-field">
                         <label>Dars turi</label>
                         <div class="tt-lesson-tabs">
@@ -390,7 +378,7 @@
             {{-- ═══ Umumiy sozlamalar (aSc "Установки" uslubida) ═══ --}}
             <div id="setModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col" style="max-height: 92vh;">
+                    <div class="asc-win tt-modal-win tt-settings-modal bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col">
                         <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
                             <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
                                 <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-gear"></i></span>
@@ -405,7 +393,7 @@
                             <button type="button" class="set-tab" data-tab="days">Kunlar</button>
                             <button type="button" class="set-tab" data-tab="grid">Dars kunlari va paralar</button>
                         </div>
-                        <div class="bg-white border border-gray-300 mx-2 mb-2 rounded-b p-4 overflow-auto" style="max-height: 66vh;">
+                        <div class="set-content bg-white border border-gray-300 mx-2 mb-2 rounded-b p-4 overflow-y-auto">
                             {{-- Asosiy --}}
                             <div id="setBasic" class="set-pane grid grid-cols-2 gap-4">
                                 <div class="col-span-2">
@@ -723,6 +711,9 @@
         .tt-modal-win { width: 100%; max-width: min(1200px, 96vw); background: #eef2f7;
             border-radius: 12px; box-shadow: 0 28px 80px rgba(2,6,23,.55); border: 1px solid #cbd5e1;
             display: flex; flex-direction: column; max-height: 95vh; overflow: hidden; }
+        .tt-settings-modal { height: 82vh; max-height: 82vh; }
+        .tt-settings-modal .set-content { flex: 1 1 auto; min-height: 0; max-height: none !important; }
+        @media (max-width: 640px) { .tt-settings-modal { height: 88vh; max-height: 88vh; } }
         .tt-modal .asc-titlebar { box-shadow: 0 1px 0 rgba(255,255,255,.15) inset; }
         .tt-modal-win.asc-small-modal { border-radius: 12px; overflow: hidden; }
         .asc-small-modal .modal-panel { background: #fff; }
@@ -1905,8 +1896,7 @@
                 return g || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
             }
             function fillGridInputs() {
-                const g = curGrid();
-                $('gsDays').value = g.days; $('gsPairs').value = g.pairs_per_day; $('gsWeeks').value = g.weeks;
+                // Panjara qiymatlari endi Sozlamalar modalidan boshqariladi.
                 fillWeekSel();
             }
 
@@ -1938,28 +1928,7 @@
             }
             // Karta shu haftada shablondan farq qiladimi (individual)?
             const hasWeekOverride = c => curWeek && !!overrides[c.id + '|' + curWeek];
-            $('gsSave').onclick = async function () {
-                if (!curSpec) return;
-                this.disabled = true;
-                const weeksBefore = curGrid().weeks;
-                try {
-                    const j = await api(BASE + '/boards/' + board.id + '/grid', 'POST', {
-                        faculty_name: curSpec.faculty || '', specialty_name: curSpec.specialty_name, course: curSpec.course,
-                        days: $('gsDays').value, pairs_per_day: $('gsPairs').value, weeks: $('gsWeeks').value,
-                    });
-                    if (j.regenerated || +$('gsWeeks').value !== +weeksBefore) {
-                        await loadBoard(board.id);   // kartalar qayta yaratildi — to'liq yangilash
-                    } else {
-                        grids[gridKey(curSpec.faculty, curSpec.specialty_name, curSpec.course)] = {
-                            faculty_name: curSpec.faculty || '', specialty_name: curSpec.specialty_name, course: curSpec.course,
-                            days: +$('gsDays').value, pairs_per_day: +$('gsPairs').value, weeks: +$('gsWeeks').value,
-                        };
-                        // Doskadan kelgan bo'shatilgan joylashuvlarni yangilash uchun qayta yuklaymiz
-                        await loadBoard(board.id);
-                    }
-                } catch (e) { alert('Xatolik: ' + e.message); }
-                this.disabled = false;
-            };
+            // Panjara saqlash endi Sozlamalar modalidagi har bir kurs katagida bajariladi.
 
             // Ko'rinayotgan tanlov qamrovi — backendga yuboriladigan massivlar
             // (tanlangan fakultet/yo'nalish/kurs). "Butun doska" da qamrov yuborilmaydi.

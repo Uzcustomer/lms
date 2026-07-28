@@ -13,6 +13,13 @@ use Illuminate\Support\Collection;
  * Ishchi rejada nom boshqacha bo'lsa, Excel'dagi "Namunaviy rejadagi nomi"
  * ustuni (reference_name) orqali aniq bog'lanadi. Bir fan bir nechta
  * semestrda o'tilsa, soat va kreditlari jamlab solishtiriladi.
+ *
+ * TANLOV FANLARI alohida qoida bo'yicha solishtiriladi: namunaviy rejada
+ * blok ostida bir nechta muqobil fan turadi ("2.03 Hayot faoliyati xavfsizligi
+ * YOKI Bioetika"), ishchi rejada esa ulardan faqat bittasi — aniq tanlangani —
+ * bo'ladi. Bunday bloklar fan emas, BLOK kesimida solishtiriladi
+ * (@see choiceGroups), shunda tanlanmagan muqobillar "Ishchi rejada yo'q"
+ * bo'lib xato ogohlantirish bermaydi va jami soat/kredit oshib ketmaydi.
  */
 class CurriculumComparisonService
 {
@@ -23,6 +30,7 @@ class CurriculumComparisonService
     public const STATUS_HOURS_CREDIT = 'Soat va kredit farqi';
     public const STATUS_MISSING_IN_WORKING = "Ishchi rejada yo'q";
     public const STATUS_MISSING_IN_REFERENCE = "Namunaviy rejada yo'q";
+    public const STATUS_CHOICE_DIFF = 'Tanlov farqi';
 
     public function compare(ManualCurriculum $reference, ManualCurriculum $working, array $hemisNames = []): array
     {
@@ -71,10 +79,25 @@ class CurriculumComparisonService
                     $coveredNames[$this->normalize((string) $s->subject_name)] = true;
                 }
             }
-            $refSubjects = $refSubjects->filter(function ($s) use ($coveredNames, $workNames) {
-                $key = $this->normalize((string) $s->subject_name);
-                return isset($coveredNames[$key]) || isset($workNames[$key]);
-            })->values();
+            $keep = fn($s) => isset($coveredNames[$this->normalize((string) $s->subject_name)])
+                || isset($workNames[$this->normalize((string) $s->subject_name)]);
+
+            // Tanlov blokining bir muqobili qamrovga tushsa — blokdagi qolgan
+            // muqobillar ham saqlanadi, aks holda blok yakka fanga aylanib
+            // qolib, tanlanmagani "Ishchi rejada yo'q" bo'lib ko'rinardi.
+            // Faqat tanlov bloklariga tegishli: majburiy fanlar bloki
+            // qamrovdan tashqari semestrlarni qaytarib olib kelmasligi kerak.
+            $keptBlocks = [];
+            foreach ($refSubjects as $s) {
+                $block = trim((string) $s->block);
+                if ($block !== '' && $this->looksLikeChoiceBlock($block) && $keep($s)) {
+                    $keptBlocks[$block] = true;
+                }
+            }
+
+            $refSubjects = $refSubjects->filter(
+                fn($s) => $keep($s) || isset($keptBlocks[trim((string) $s->block)])
+            )->values();
         }
 
         $result = $this->run($refSubjects, $workSubjects, $hemisNames);
@@ -99,8 +122,30 @@ class CurriculumComparisonService
         $refGroups = $this->groupSubjects($refSubjects, false);
         $workGroups = $this->groupSubjects($workSubjects, true);
 
+        // Tanlov bloklari: har bir blok bitta qator bo'lib chiqadi, muqobillari
+        // esa shu qator ichida sanaladi. Blokka tegishli fan kalitlari alohida
+        // qator sifatida chiqmasligi uchun oldindan xaritaga olinadi.
+        $choices = $this->choiceGroups($refGroups);
+        $choiceOf = [];
+        foreach ($choices as $block => $choice) {
+            foreach ($choice['keys'] as $key) {
+                $choiceOf[$key] = $block;
+            }
+        }
+        $emitted = [];
+
         $rows = [];
         foreach ($refGroups as $key => $ref) {
+            $block = $choiceOf[$key] ?? null;
+            if ($block !== null) {
+                // Blok qatori faqat bir marta — birinchi muqobil uchraganda
+                if (isset($emitted[$block])) {
+                    continue;
+                }
+                $emitted[$block] = true;
+                $rows[] = $this->buildChoiceRow($choices[$block], $refGroups, $workGroups, $hemisMap);
+                continue;
+            }
             $work = $workGroups[$key] ?? null;
             unset($workGroups[$key]);
             $rows[] = $this->buildRow($ref, $work, $hemisMap);
@@ -299,6 +344,8 @@ class CurriculumComparisonService
 
         return [
             'block' => $ref['block'] ?? $work['block'] ?? null,
+            'choice' => false,
+            'choice_alts' => [],
             'hemis_name' => $hemisName,
             'ref_name' => $refName,
             'work_name' => $workName,
@@ -319,6 +366,246 @@ class CurriculumComparisonService
             'status' => $status,
             'note' => implode('; ', array_unique($notes)),
         ];
+    }
+
+    /**
+     * Namunaviy rejadagi TANLOV bloklarini aniqlaydi.
+     *
+     * Tanlov bloki ikki ko'rinishda keladi:
+     *  1) muqobillar blok sarlavhasining o'zida sanaladi —
+     *     "2.03 Hayot faoliyati xavfsizligi YOKI Bioetika";
+     *  2) sarlavha umumiy, muqobillar esa uning ostidagi alohida fan qatorlari —
+     *     "2.05 Harbiy tibbiy tayyorgarlik" ostida ikkita fan.
+     *
+     * Ikkinchi holat faqat ichki kodli bloklar uchun ("2.05" kabi, "2.00" emas)
+     * qo'llanadi: "1.00 MAJBURIY FANLAR" ostidagi o'nlab fan tanlov emas, ular
+     * hammasi o'tiladi.
+     *
+     * @param  array<string, array>  $refGroups  groupSubjects() natijasi
+     * @return array<string, array{label:string, code:?string, alts:array<string,string>, keys:string[]}>
+     */
+    private function choiceGroups(array $refGroups): array
+    {
+        $byBlock = [];
+        foreach ($refGroups as $key => $group) {
+            $block = trim((string) ($group['block'] ?? ''));
+            if ($block !== '') {
+                $byBlock[$block][] = $key;
+            }
+        }
+
+        $choices = [];
+        foreach ($byBlock as $block => $keys) {
+            $labelAlts = $this->splitChoiceLabel($block);
+            $isSubBlock = (bool) preg_match('/^\s*\d+\.(?!0+\b)\d+/u', $block);
+            if ($labelAlts === [] && !($isSubBlock && count($keys) > 1)) {
+                continue; // tanlov bloki emas
+            }
+
+            // Muqobillar: sarlavhadagi nomlar + blok ostidagi fan qatorlari.
+            // Kalit — normalizatsiya qilingan nom (groupSubjects bilan bir xil).
+            $alts = [];
+            foreach ($labelAlts as $name) {
+                $alts[$this->normalize($name)] = $name;
+            }
+            foreach ($keys as $key) {
+                $alts[$key] = $refGroups[$key]['name'];
+            }
+            if (count($alts) < 2) {
+                continue; // muqobili yo'q — oddiy fan
+            }
+
+            $choices[$block] = [
+                'label' => $block,
+                'code'  => $this->blockCode($block),
+                'alts'  => $alts,
+                'keys'  => $keys,
+            ];
+        }
+
+        return $choices;
+    }
+
+    /**
+     * Tanlov bloki uchun bitta solishtirma qatori.
+     *
+     * Ishchi rejadagi fan avval muqobil NOMLARI bo'yicha, topilmasa blok kodi
+     * bo'yicha moslanadi. Norma soat/kredit aynan tanlangan muqobilnikidan
+     * olinadi — shu bois tanlanmagan muqobillar na farq, na jamiga qo'shiladi.
+     *
+     * @param  array<string, array>  $refGroups
+     * @param  array<string, array>  $workGroups  moslangan fanlar chiqarib tashlanadi
+     */
+    private function buildChoiceRow(array $choice, array $refGroups, array &$workGroups, array $hemisMap): array
+    {
+        // 1) Muqobil nomlari bo'yicha moslash
+        $matched = [];
+        foreach (array_keys($choice['alts']) as $altKey) {
+            if (isset($workGroups[$altKey])) {
+                $matched[$altKey] = $workGroups[$altKey];
+                unset($workGroups[$altKey]);
+            }
+        }
+
+        // 2) Nom bo'yicha topilmasa — ishchi rejadagi blok kodi/sarlavhasi
+        //    bo'yicha. Bunda tanlangan fan namunaviy muqobillar ro'yxatida yo'q.
+        $outside = false;
+        if ($matched === []) {
+            foreach ($workGroups as $wKey => $wGroup) {
+                if (!$this->sameBlock($choice, (string) ($wGroup['block'] ?? ''))) {
+                    continue;
+                }
+                $matched[$wKey] = $wGroup;
+                unset($workGroups[$wKey]);
+                $outside = true;
+            }
+        }
+
+        // Norma: tanlangan muqobil(lar)ning namunaviy qatori. Tanlangani
+        // namunaviyda alohida qator bilan kelmasa (nomi faqat blok sarlavhasida
+        // bo'lsa) — blokdagi soat/kreditli birinchi muqobil norma bo'ladi.
+        $normKeys = array_values(array_filter(array_keys($matched), fn($k) => isset($refGroups[$k])));
+        if ($normKeys === []) {
+            $normKeys = [$this->representativeAlt($choice, $refGroups)];
+        }
+
+        $ref = $this->mergeGroups(array_map(fn($k) => $refGroups[$k], $normKeys), $choice['label']);
+        $work = $this->mergeGroups(array_values($matched), $choice['label']);
+
+        $row = $this->buildRow($ref, $work, $hemisMap);
+        $row['choice'] = true;
+        $row['choice_alts'] = array_values($choice['alts']);
+
+        // Blok kodi bo'yicha moslangan, ammo namunaviy ro'yxatda yo'q fan —
+        // soat/kredit farqi bo'lmasa ham alohida holat sifatida belgilanadi.
+        if ($outside && in_array($row['status'], [self::STATUS_OK, self::STATUS_NAME], true)) {
+            $row['status'] = self::STATUS_CHOICE_DIFF;
+        }
+
+        $notes = ['Tanlov bloki: ' . implode(' / ', $row['choice_alts'])];
+        if ($work === null) {
+            $notes[] = "ishchi rejada birorta muqobil tanlanmagan";
+        } else {
+            $notes[] = "ishchida tanlangan: {$work['name']}";
+        }
+        if ($outside) {
+            $notes[] = "tanlangan fan namunaviy muqobillar ro'yxatida yo'q";
+        }
+        if ($row['note'] !== '') {
+            $notes[] = $row['note'];
+        }
+        $row['note'] = implode('; ', $notes);
+
+        return $row;
+    }
+
+    /**
+     * Blok sarlavhasidan muqobil fan nomlarini ajratish. Sarlavhada "YOKI"
+     * bo'lmasa — bo'sh massiv (bu oddiy blok sarlavhasi).
+     *
+     * @return string[]
+     */
+    private function splitChoiceLabel(string $block): array
+    {
+        // Boshidagi tartib kodini ("2.03", "2.03." va h.k.) olib tashlaymiz
+        $text = preg_replace('/^\s*\d+(?:\.\d+)*[\s.)\-–]*/u', '', trim($block));
+        $parts = preg_split('/\s+(?:yoki|yohud|yoxud)\s+/iu', $text);
+        if (count($parts) < 2) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', $parts), fn($p) => $p !== ''));
+    }
+
+    /**
+     * Blok sarlavhasi tanlov blokiga o'xshaydimi: "YOKI" ajratuvchisi bor yoki
+     * ichki kodli ("2.03" kabi, "2.00" emas). choiceGroups() dan farqli — bu
+     * yerda muqobillar soni tekshirilmaydi, chunki filtrlashdan OLDIN chaqiriladi.
+     */
+    private function looksLikeChoiceBlock(string $block): bool
+    {
+        return $this->splitChoiceLabel($block) !== []
+            || (bool) preg_match('/^\s*\d+\.(?!0+\b)\d+/u', $block);
+    }
+
+    /** Blok sarlavhasi boshidagi tartib kodi ("2.03"), bo'lmasa null. */
+    private function blockCode(string $block): ?string
+    {
+        return preg_match('/^\s*(\d+(?:\.\d+)+)/u', $block, $m) ? $m[1] : null;
+    }
+
+    /** Ishchi rejadagi blok shu tanlov blokiga tegishlimi (kod yoki sarlavha bo'yicha). */
+    private function sameBlock(array $choice, string $workBlock): bool
+    {
+        if (trim($workBlock) === '') {
+            return false;
+        }
+        if ($choice['code'] !== null && $this->blockCode($workBlock) === $choice['code']) {
+            return true;
+        }
+
+        return $this->normalize($workBlock) === $this->normalize($choice['label']);
+    }
+
+    /**
+     * Tanlangani aniqlanmagan blok uchun norma manbai: soat/krediti bor birinchi
+     * muqobil, bunday muqobil bo'lmasa — blokdagi birinchi fan.
+     */
+    private function representativeAlt(array $choice, array $refGroups): string
+    {
+        foreach ($choice['keys'] as $key) {
+            $group = $refGroups[$key] ?? null;
+            if ($group && (($group['hours'] ?? null) !== null || ($group['credit'] ?? null) !== null)) {
+                return $key;
+            }
+        }
+
+        return $choice['keys'][0];
+    }
+
+    /**
+     * Bir nechta fan guruhini bitta qatorga jamlash (tanlov blokida bir necha
+     * muqobil bir vaqtda topilgan holat uchun). Bo'sh ro'yxatda null.
+     *
+     * @param  array<int, array>  $groups
+     */
+    private function mergeGroups(array $groups, string $block): ?array
+    {
+        if ($groups === []) {
+            return null;
+        }
+
+        $merged = [
+            'name' => '',
+            'block' => $block,
+            'hours' => null,
+            'credit' => null,
+            'kurslar' => [],
+            'semestrlar' => [],
+            'notes' => [],
+        ];
+        $names = [];
+        foreach ($groups as $group) {
+            $names[] = $group['name'];
+            if (($group['hours'] ?? null) !== null) {
+                $merged['hours'] = round(($merged['hours'] ?? 0) + (float) $group['hours'], 2);
+            }
+            if (($group['credit'] ?? null) !== null) {
+                $merged['credit'] = round(($merged['credit'] ?? 0) + (float) $group['credit'], 2);
+            }
+            $merged['kurslar'] = array_merge($merged['kurslar'], $group['kurslar'] ?? []);
+            $merged['semestrlar'] = array_merge($merged['semestrlar'], $group['semestrlar'] ?? []);
+            $merged['notes'] = array_merge($merged['notes'], $group['notes'] ?? []);
+        }
+
+        $merged['name'] = implode(' / ', array_unique($names));
+        $merged['kurslar'] = array_values(array_unique($merged['kurslar']));
+        $merged['semestrlar'] = array_values(array_unique($merged['semestrlar']));
+        $merged['notes'] = array_values(array_unique($merged['notes']));
+        sort($merged['kurslar']);
+        sort($merged['semestrlar']);
+
+        return $merged;
     }
 
     private function groupSubjects(Collection $subjects, bool $useReferenceName): array

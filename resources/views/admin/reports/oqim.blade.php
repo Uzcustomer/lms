@@ -932,7 +932,7 @@
         var histViewId = null;
         function exportHistory() {
             var p = new URLSearchParams();
-            if (histViewId) { p.set('id', histViewId); }
+            if (histViewId) { p.set('id', histViewId); p.set('format', 'xlsx'); }
             else { if ($('#hist-kind').val()) p.set('kind', $('#hist-kind').val()); if ($('#hist-year').val()) p.set('academic_year', $('#hist-year').val()); }
             window.location = HISTORY_EXPORT_URL + '?' + p.toString();
         }

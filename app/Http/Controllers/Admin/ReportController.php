@@ -11377,7 +11377,7 @@ class ReportController extends Controller
             if ($dekanFacultyId && (int) $v->faculty_id !== (int) $dekanFacultyId) {
                 abort(403);
             }
-            if ($request->get('format') === 'xlsx') {
+            if ($request->get('format') === 'table_xlsx') {
                 $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                 $sheet = $spreadsheet->getActiveSheet();
                 $sheet->setTitle('Oqimlar');

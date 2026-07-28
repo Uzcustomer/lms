@@ -437,7 +437,7 @@
                             <label class="form-label">Chet tili sertifikati</label>
                             <select class="form-select" id="qw_sertifikat_turi" name="sertifikat_turi">
                                 <option value="mavjud_emas" {{ $sel('sertifikat_turi', 'mavjud_emas') }}>Mavjud emas</option>
-                                @foreach(['Milliy sertifikat','IELTS','TOEFL','DELF','DALF','Goethe-sertifikat','TOPIK','TORFL','JLPT','CEFR'] as $v)
+                                @foreach(['IELTS','TOEFL','DELF','DALF','Goethe-sertifikat','TOPIK','TORFL','JLPT','CEFR'] as $v)
                                     <option {{ $sel('sertifikat_turi', $v) }}>{{ $v }}</option>
                                 @endforeach
                             </select>

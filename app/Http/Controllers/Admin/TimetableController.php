@@ -298,7 +298,13 @@ class TimetableController extends Controller
      * (yo'nalish, kurs) larni yig'adi (grid sozlamalarini yaratish uchun).
      * Snapshot topilmasa null qaytaradi.
      */
-    private function assembleRows(TimetableBoard $board, ?string $filterSpecKey, ?int $filterCourse, array &$specsFound): ?array
+    private function assembleRows(
+        TimetableBoard $board,
+        ?string $filterSpecKey,
+        ?int $filterCourse,
+        array &$specsFound,
+        ?string $filterFaculty = null
+    ): ?array
     {
         $byFaculty = $this->boardSnapshots($board);
         if (empty($byFaculty)) {
@@ -332,7 +338,9 @@ class TimetableController extends Controller
 
         // Har yo'nalish+kurs uchun hafta soni (alohida sozlama yoki doska sukut qiymati)
         $gset = TimetableGridSetting::where('board_id', $board->id)->get()
-            ->mapWithKeys(fn($g) => [$this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks])
+            ->mapWithKeys(fn($g) => [
+                ($g->faculty_name ?? '') . '|' . $this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks,
+            ])
             ->all();
 
         // Fakultet id → nomi (snapshot fakultet kontekstidan kartaga yozish uchun)
@@ -360,15 +368,23 @@ class TimetableController extends Controller
                 foreach ($bl['courses'] ?? [] as $co) {
                     $lvl = (int) ($co['level_code'] ?? 0);
                     $course = $lvl >= 11 ? $lvl - 10 : $lvl;
-                    if ($filterSpecKey !== null && ($sk !== $filterSpecKey || $course !== $filterCourse)) {
+                    if ($filterSpecKey !== null && ($sk !== $filterSpecKey || $course !== $filterCourse
+                        || ($filterFaculty !== null && $blockFac !== $filterFaculty))) {
                         continue;
                     }
                     $subs = $subjBySpec[$sk][$course] ?? null;
                     if (!$subs) {
                         continue;
                     }
-                    $specsFound[$sk . '|' . $course] = ['name' => $specName, 'course' => $course];
-                    $weeks = $gset[$sk . '|' . $course] ?? (int) $board->weeks;
+                    $scopeKey = $blockFac . '|' . $sk . '|' . $course;
+                    $specsFound[$scopeKey] = [
+                        'faculty' => $blockFac,
+                        'name' => $specName,
+                        'course' => $course,
+                    ];
+                    $weeks = $gset[$scopeKey]
+                        ?? $gset['|' . $sk . '|' . $course]
+                        ?? (int) $board->weeks;
                     foreach ($co['oqims'] ?? [] as $oq) {
                         $groupNames = array_values(array_filter(array_map(
                             fn($r) => trim((string) ($r['name'] ?? '')), $oq['rows'] ?? []
@@ -441,7 +457,8 @@ class TimetableController extends Controller
     {
         foreach ($specsFound as $info) {
             TimetableGridSetting::firstOrCreate(
-                ['board_id' => $board->id, 'specialty_name' => $info['name'], 'course' => $info['course']],
+                ['board_id' => $board->id, 'faculty_name' => $info['faculty'] ?? null,
+                 'specialty_name' => $info['name'], 'course' => $info['course']],
                 ['days' => $board->days, 'pairs_per_day' => $board->pairs_per_day, 'weeks' => $board->weeks]
             );
         }
@@ -618,6 +635,7 @@ class TimetableController extends Controller
     {
         $data = $request->validate([
             'specialty_name' => 'required|string|max:255',
+            'faculty_name'   => 'nullable|string|max:255',
             'course'         => 'required|integer|min:1|max:7',
             'days'           => 'required|integer|min:1|max:7',
             'pairs_per_day'  => 'required|integer|min:1|max:10',
@@ -626,6 +644,7 @@ class TimetableController extends Controller
 
         $gs = TimetableGridSetting::firstOrNew([
             'board_id' => $board->id,
+            'faculty_name' => $data['faculty_name'] ?? null,
             'specialty_name' => $data['specialty_name'],
             'course' => $data['course'],
         ]);
@@ -643,6 +662,7 @@ class TimetableController extends Controller
         TimetableCard::where('board_id', $board->id)
             ->where('specialty_name', $data['specialty_name'])
             ->where('course', $data['course'])
+            ->when(!empty($data['faculty_name']), fn($q) => $q->where('faculty_name', $data['faculty_name']))
             ->where(function ($q) use ($data, $boardPairs) {
                 $q->where('day', '>', $data['days'])->orWhere('pair', '>', $boardPairs);
             })
@@ -651,11 +671,13 @@ class TimetableController extends Controller
         // Hafta soni o'zgargan bo'lsa — shu yo'nalishning kartochkalari qayta yaratiladi
         if ($weeksChanged) {
             $sf = [];
-            $rows = $this->stripUnsupportedColumns($this->assembleRows($board, $this->specKey($data['specialty_name']), (int) $data['course'], $sf) ?? []);
+            $rows = $this->stripUnsupportedColumns($this->assembleRows($board, $this->specKey($data['specialty_name']), (int) $data['course'], $sf, $data['faculty_name'] ?? null) ?? []);
             DB::transaction(function () use ($board, $data, $rows) {
                 TimetableCard::where('board_id', $board->id)
                     ->where('specialty_name', $data['specialty_name'])
-                    ->where('course', $data['course'])->delete();
+                    ->where('course', $data['course'])
+                    ->when(!empty($data['faculty_name']), fn($q) => $q->where('faculty_name', $data['faculty_name']))
+                    ->delete();
                 foreach (array_chunk($rows ?? [], 500) as $chunk) {
                     TimetableCard::insert($chunk);
                 }
@@ -737,13 +759,15 @@ class TimetableController extends Controller
 
         // Panjara o'lchamlari (yo'nalish+kurs bo'yicha)
         $gridSettings = TimetableGridSetting::where('board_id', $board->id)->get()
-            ->keyBy(fn($g) => $g->specialty_name . '|' . $g->course);
+            ->keyBy(fn($g) => ($g->faculty_name ?? '') . '|' . $g->specialty_name . '|' . $g->course);
         // Yarim-slot (grid qatori) soni butun doska bo'yicha qo'ng'iroq jadvalidan
         // olinadi (bir "pair" = bir yarim-slot); yo'nalish bo'yicha faqat kun soni
         // (days) farq qilishi mumkin.
         $boardPairs = $board->pairCount();
-        $dimsFor = function ($spec, $course) use ($gridSettings, $board, $boardPairs) {
-            $g = $gridSettings[$spec . '|' . $course] ?? null;
+        $dimsFor = function ($faculty, $spec, $course) use ($gridSettings, $board, $boardPairs) {
+            $g = $gridSettings[($faculty ?? '') . '|' . $spec . '|' . $course]
+                ?? $gridSettings['|' . $spec . '|' . $course]
+                ?? null;
             return [(int) ($g->days ?? $board->days), $boardPairs];
         };
 
@@ -839,7 +863,7 @@ class TimetableController extends Controller
         $touched = [];
 
         foreach ($toPlace as $c) {
-            [$days, $pairs] = $dimsFor($c->specialty_name, (int) $c->course);
+            [$days, $pairs] = $dimsFor($c->faculty_name, $c->specialty_name, (int) $c->course);
             $groups = $c->occupiedGroups();
             $best = null;
             $bestPen = INF;
@@ -1202,7 +1226,7 @@ class TimetableController extends Controller
         ]);
 
         $grids = TimetableGridSetting::where('board_id', $board->id)
-            ->get(['specialty_name', 'course', 'days', 'pairs_per_day', 'weeks']);
+            ->get(['faculty_name', 'specialty_name', 'course', 'days', 'pairs_per_day', 'weeks']);
 
         // Hafta bo'yicha istisnolar (individual haftalar) — migratsiya kechiksa bo'sh
         $overrides = collect();
@@ -1639,10 +1663,12 @@ class TimetableController extends Controller
     }
 
     /** Yo'nalish+kurs uchun panjara o'lchami (alohida sozlama yoki doska sukuti). */
-    private function gridFor(TimetableBoard $board, string $specialty, int $course): array
+    private function gridFor(TimetableBoard $board, ?string $faculty, string $specialty, int $course): array
     {
         $gs = TimetableGridSetting::where('board_id', $board->id)
-            ->where('specialty_name', $specialty)->where('course', $course)->first();
+            ->where('specialty_name', $specialty)->where('course', $course)
+            ->when($faculty !== null, fn($q) => $q->where('faculty_name', $faculty))
+            ->first();
         return [
             'days'  => $gs->days ?? $board->days,
             // Yarim-slot soni doska qo'ng'iroq jadvalidan (yo'nalish bo'yicha bir xil)
@@ -1654,7 +1680,7 @@ class TimetableController extends Controller
     public function placeCard(Request $request, TimetableCard $card)
     {
         $board = $card->board;
-        $grid = $this->gridFor($board, $card->specialty_name, (int) $card->course);
+        $grid = $this->gridFor($board, $card->faculty_name, $card->specialty_name, (int) $card->course);
         $data = $request->validate([
             'day'        => 'nullable|integer|min:1|max:' . $grid['days'],
             'pair'       => 'nullable|integer|min:1|max:' . $grid['pairs'],

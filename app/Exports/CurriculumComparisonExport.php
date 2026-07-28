@@ -20,6 +20,7 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
         CurriculumComparisonService::STATUS_HOURS_CREDIT => 'FFC7CE',
         CurriculumComparisonService::STATUS_MISSING_IN_WORKING => 'FF9999',
         CurriculumComparisonService::STATUS_MISSING_IN_REFERENCE => 'D9D2E9',
+        CurriculumComparisonService::STATUS_CHOICE_DIFF => 'FCD5B4',
     ];
 
     public function __construct(

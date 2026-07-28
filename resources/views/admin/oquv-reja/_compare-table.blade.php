@@ -8,6 +8,7 @@
         \App\Services\CurriculumComparisonService::STATUS_HOURS_CREDIT => 'bg-red-100 text-red-800',
         \App\Services\CurriculumComparisonService::STATUS_MISSING_IN_WORKING => 'bg-red-200 text-red-900',
         \App\Services\CurriculumComparisonService::STATUS_MISSING_IN_REFERENCE => 'bg-purple-100 text-purple-800',
+        \App\Services\CurriculumComparisonService::STATUS_CHOICE_DIFF => 'bg-orange-100 text-orange-800',
     ];
     $fmt = fn($v) => $v === null ? '—' : rtrim(rtrim(number_format((float) $v, 2, '.', ' '), '0'), '.');
     $fmtDiff = function ($v) {
@@ -19,7 +20,7 @@
 @endphp
 
 {{-- Holatlar statistikasi --}}
-<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
     @foreach($statusClasses as $status => $class)
         <div class="bg-white shadow-sm rounded-lg p-3">
             <div class="text-xs text-gray-500">{{ $status }}</div>
@@ -66,6 +67,11 @@
                     </td>
                     <td class="px-3 py-2 {{ $row['ref_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
                         {{ $row['ref_name'] ?? '—' }}
+                        @if(!empty($row['choice']))
+                            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 align-middle"
+                                  title="Tanlov bloki — muqobillar: {{ implode(' / ', $row['choice_alts']) }}">tanlov</span>
+                            <div class="text-xs text-gray-400">{{ implode(' / ', $row['choice_alts']) }}</div>
+                        @endif
                     </td>
                     <td class="px-3 py-2 {{ $row['work_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
                         {{ $row['work_name'] ?? '—' }}

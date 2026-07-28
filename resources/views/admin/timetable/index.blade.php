@@ -2520,8 +2520,7 @@
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
                     const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
                     const roomTxt = roomNo
-                        ? '<div class="tt-room">№ ' + esc(roomNo) +
-                           + '</div>'
+                        ? '<div class="tt-room">№ ' + esc(roomNo) + '</div>'
                         : '';
                     const roomTitle = c.auditorium_name
                         ? ' · ' + c.auditorium_name + (c.auditorium_volume ? ' (sig\'im ' + c.auditorium_volume + ')' : '') : '';

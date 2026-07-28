@@ -2001,6 +2001,11 @@
                 selectedCourses.has(c.course) &&
                 !isCycleCard(c));
             const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
+            // Guruh identifikatori. Guruh NOMI fakultetlar bo'ylab takrorlanishi mumkin
+            // (mas. 1-kurs "1K-01a (o'z)" ham 1-son, ham 2-son davolashda bor), shuning
+            // uchun panjara/konflikt kaliti nom emas — fakultet+yo'nalish+kurs+nom.
+            const gkey = (c, g) => (c.faculty_name || '') + '¦' + (c.specialty_name || '') + '¦' + c.course + '¦' + g;
+            const cardGKeys = c => cardGroups(c).map(g => gkey(c, g));
             // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
             let typeFilter = 'all';
             const typeVisible = c => typeFilter === 'all' || c.training_type === typeFilter;
@@ -2131,7 +2136,8 @@
                 const seen = {};
                 specCards().forEach(c => {
                     cardGroups(c).forEach(g => {
-                        if (!seen[g]) { seen[g] = 1; groupRows.push({ oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: c.course }); }
+                        const k = gkey(c, g);
+                        if (!seen[k]) { seen[k] = 1; groupRows.push({ key: k, oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: c.course }); }
                     });
                 });
                 // Fakultet → yo'nalish → kurs → oqim → guruh: bir blok ketma-ket tursin.
@@ -2145,7 +2151,7 @@
             // `pair` — yarim-slot indeksi; dars cardLen(card) ta yarim-slotni egallaydi,
             // shu oraliq [pair, pair+len) boshqa kartaning oralig'i bilan kesishsa — band.
             function conflictsAt(card, day, pair) {
-                const my = cardGroups(card);
+                const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
                 const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
@@ -2154,10 +2160,10 @@
                     if (!pl || pl.day !== day) return;
                     const b0 = pl.pair, b1 = pl.pair + cardLen(o);   // [b0, b1)
                     if (a0 >= b1 || b0 >= a1) return;   // yarim-slot oraliqlari kesishmasa — konflikt yo'q
-                    if (o.specialty_name === card.specialty_name && o.course === card.course) {
-                        const ov = cardGroups(o).filter(g => my.includes(g));
-                        if (ov.length) errs.push('Guruh band: ' + ov.join(','));
-                    }
+                    // Guruh bandligi kalit bo'yicha: bir xil nomli, lekin turli
+                    // fakultetdagi guruhlar bir-biriga to'sqinlik qilmasin.
+                    const ov = cardGKeys(o).filter(k => my.includes(k));
+                    if (ov.length) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
                     if (card.auditorium_code && o.auditorium_code === card.auditorium_code) errs.push('Auditoriya band: ' + o.auditorium_name);
                 });
@@ -2408,8 +2414,12 @@
                     if (!curO || curO.label !== lab || curO.faculty !== fac || curO.specialty !== spec || curO.course !== crs) {
                         curO = { label: lab, faculty: fac, specialty: spec, course: crs, groups: [] }; oqimCols.push(curO);
                     }
-                    curO.groups.push(gr.group);
+                    // Ustunlar guruh KALITI bo'yicha (nom takrorlanishi mumkin)
+                    curO.groups.push(gr.key);
                 });
+                // Kalit → ko'rinadigan guruh nomi (sarlavha va asos-guruh chegarasi uchun)
+                const gName = {};
+                groupRows.forEach(gr => { gName[gr.key] = gr.group; });
 
                 // Para → nomi/qisqartma va boshlanish-tugash vaqti (sozlangan qo'ng'iroq jadvalidan).
                 // Panjaradagi p-chi para = jadvaldagi p-chi "pair" element (tartib bo'yicha).
@@ -2427,7 +2437,7 @@
                     if (!pl) return;
                     const len = cardLen(c);
                     cardGroups(c).forEach(gg => {
-                        for (let k = 0; k < len; k++) placedIdx[gg + '|' + pl.day + '|' + (pl.pair + k)] = c;
+                        for (let k = 0; k < len; k++) placedIdx[gkey(c, gg) + '|' + pl.day + '|' + (pl.pair + k)] = c;
                     });
                 });
 
@@ -2480,15 +2490,16 @@
                 // (masalan "1K-01a (o'z)" → "1K-01"). Bir asos guruh = a va b pastki guruhlari.
                 const baseKey = gn => String(gn).replace(/\s*\([^)]*\)\s*$/, '').replace(/[a-z]$/i, '');
                 // Ustun chap chegara sinfi: oqim boshi (qo'sh chiziq) yoki asos guruh boshi (qalin chiziq)
+                // groups — guruh KALITLARI; asos-guruh solishtiruvi ko'rinadigan nom bo'yicha
                 const colBorder = (oqimIdx, gi, groups) => {
                     if (gi === 0) return oqimIdx > 0 ? ' sep-oqim' : '';
-                    return baseKey(groups[gi]) !== baseKey(groups[gi - 1]) ? ' sep-base' : '';
+                    return baseKey(gName[groups[gi]] || '') !== baseKey(gName[groups[gi - 1]] || '') ? ' sep-base' : '';
                 };
 
                 // Fakultet sarlavhasi (Excel dars jadvali kabi): guruh → fakultet xaritasidan
                 // qo'shni bir xil fakultet ustunlari bitta blokka birlashtiriladi.
                 const facOf = {};
-                groupRows.forEach(gr => { facOf[gr.group] = gr.faculty || ''; });
+                groupRows.forEach(gr => { facOf[gr.key] = gr.faculty || ''; });
                 const facRuns = [];
                 oqimCols.forEach(o => o.groups.forEach(gr => {
                     const f = facOf[gr] || '';
@@ -2511,7 +2522,7 @@
                 oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
                     esc((showSpec && o.specialty ? o.specialty + ' · ' : '') + (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—')) + '</th>');
                 h += '</tr><tr>';
-                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gr) + '</th>'));
+                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') + '</th>'));
                 h += '</tr></thead><tbody>';
 
                 // Para ajratuvchi chiziq darajasi: shu qatorda TUGAYDIGAN katak uchun
@@ -2586,7 +2597,7 @@
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
                                     let cls = 'tt-cell' + bord + rowEndCls(p), clickable = '';
-                                    if (selected && selected.training_type === 'practice' && cardGroups(selected).includes(grp)) {
+                                    if (selected && selected.training_type === 'practice' && cardGKeys(selected).includes(grp)) {
                                         if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
                                         else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }
                                     }
@@ -3281,18 +3292,20 @@
                 if (excelMode === 'group') {
                     const specMap = {};
                     src.forEach(c => {
-                        const sk = c.specialty_name + '|' + c.course;
-                        (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, faculty: c.faculty_name || '', groups: new Set() });
-                        cardGroups(c).forEach(g => specMap[sk].groups.add(g));
+                        // Fakultet ham kalitga kiradi — bir xil yo'nalish+kurs turli
+                        // fakultetlarda bo'lsa, guruhlari aralashib ketmasin.
+                        const sk = (c.faculty_name || '') + '|' + c.specialty_name + '|' + c.course;
+                        (specMap[sk] = specMap[sk] || { name: c.specialty_name, course: c.course, faculty: c.faculty_name || '', groups: new Map() });
+                        cardGroups(c).forEach(g => specMap[sk].groups.set(gkey(c, g), g));
                     });
                     // Ustunlar fakultet bo'yicha guruhlanadi — bir fakultet
                     // ustunlari ketma-ket (davomida) kelib, tepasida fakultet
                     // super-sarlavhasi ustma-ust turadi.
                     Object.values(specMap)
-                        .map(s => ({ ...s, groups: [...s.groups].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) }))
+                        .map(s => ({ ...s, groups: [...s.groups.entries()].sort((a, b) => a[1].localeCompare(b[1], undefined, { numeric: true })) }))
                         .sort((a, b) => (a.faculty + '|' + a.name + a.course).localeCompare(b.faculty + '|' + b.name + b.course, 'uz'))
-                        .forEach(s => headGroups.push({ title: s.name + ' · ' + s.course + '-kurs', cols: s.groups.map(g => ({ key: g, label: g })) }));
-                    placed.forEach(c => { const pl = effPlace(c); cardGroups(c).forEach(g => push(g, pl.day, pl.pair, c)); });
+                        .forEach(s => headGroups.push({ title: s.name + ' · ' + s.course + '-kurs', cols: s.groups.map(([k, g]) => ({ key: k, label: g })) }));
+                    placed.forEach(c => { const pl = effPlace(c); cardGroups(c).forEach(g => push(gkey(c, g), pl.day, pl.pair, c)); });
                 } else if (excelMode === 'teacher') {
                     const names = [...new Set(placed.filter(c => c.teacher_name).map(c => c.teacher_name))]
                         .sort((a, b) => a.localeCompare(b));
@@ -3318,7 +3331,7 @@
                 let facHead = null;
                 if (excelMode === 'group') {
                     const gFac = {};
-                    cards.forEach(c => cardGroups(c).forEach(g => { if (!(g in gFac)) gFac[g] = c.faculty_name || ''; }));
+                    cards.forEach(c => cardGroups(c).forEach(g => { const k = gkey(c, g); if (!(k in gFac)) gFac[k] = c.faculty_name || ''; }));
                     if (cols.some(col => gFac[col.key])) {
                         facHead = [];
                         cols.forEach(col => {
@@ -3783,11 +3796,14 @@
                 // 4) Guruh oynalari (oyna): guruh × kun ichida bo'sh paralar
                 const gday = {};   // group|day => Set(pairs)
                 placed.forEach(c => cardGroups(c).forEach(g => {
-                    const k = g + '|' + c.day; (gday[k] = gday[k] || new Set()).add(c.pair);
+                    // Guruh kaliti bo'yicha — turli fakultetdagi bir xil nomli
+                    // guruhlar bitta qatorga qo'shilib, soxta "oyna" bermasin.
+                    const k = gkey(c, g) + '||' + c.day; (gday[k] = gday[k] || new Set()).add(c.pair);
                 }));
                 const gaps = [];
                 Object.entries(gday).forEach(([k, set]) => {
-                    const [g, d] = k.split('|');
+                    const [gk, d] = k.split('||');
+                    const g = gk.split('¦').pop();          // ko'rinadigan guruh nomi
                     const arr = [...set].sort((a, b) => a - b);
                     const hole = (arr[arr.length - 1] - arr[0] + 1) - arr.length;
                     if (hole > 0) gaps.push({ group: g, day: +d, holes: hole, pairs: arr });

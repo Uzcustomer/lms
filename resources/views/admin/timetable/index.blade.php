@@ -474,12 +474,23 @@
                                 <div id="stDayNames" class="grid grid-cols-2 gap-2"></div>
                             </div>
                             <div id="setGrid" class="set-pane hidden">
-                                <div class="flex items-center justify-between gap-3 mb-3">
+                                <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
                                     <div>
-                                        <div class="text-sm font-semibold text-slate-700">Fakultet, yo'nalish va kurs bo'yicha panjara</div>
-                                        <p class="text-xs text-slate-500">Har bir qator uchun kun, para va hafta sonini alohida saqlang.</p>
+                                        <div class="text-sm font-semibold text-slate-700">Dars kunlari va paralar</div>
+                                        <p class="text-xs text-slate-500">Fakultet va yo'nalishni tanlang, kurslar bo'yicha alohida saqlang.</p>
                                     </div>
-                                    <span class="text-xs text-slate-400">O'zgarishlar shu doskaga saqlanadi</span>
+                                    <div class="flex flex-wrap items-end gap-2">
+                                        <label class="text-xs text-slate-500">Fakultet
+                                            <select id="stGridFacultyFilter" class="grid-setting-filter">
+                                                <option value="">Barcha fakultetlar</option>
+                                            </select>
+                                        </label>
+                                        <label class="text-xs text-slate-500">Yo'nalish
+                                            <select id="stGridSpecialtyFilter" class="grid-setting-filter">
+                                                <option value="">Barcha yo'nalishlar</option>
+                                            </select>
+                                        </label>
+                                    </div>
                                 </div>
                                 <div id="stGridRows" class="space-y-2"></div>
                             </div>
@@ -756,9 +767,22 @@
         .set-tab { padding: 6px 14px; font-size: 13px; border: 1px solid #cbd5e1; border-bottom: none;
             border-radius: 6px 6px 0 0; background: #e2e8f0; color: #475569; }
         .set-tab.active { background: #fff; color: #1e40af; font-weight: 600; }
-        .grid-setting-row { display: grid; grid-template-columns: minmax(240px, 1fr) 90px 120px 90px auto minmax(90px, 1fr); align-items: end; gap: 8px; }
-        .grid-setting-input { display: block; width: 100%; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 12px; background: #fff; }
-        @media (max-width: 900px) { .grid-setting-row { grid-template-columns: 1fr 1fr; } .grid-setting-row > :first-child { grid-column: 1 / -1; } }
+        .grid-setting-filter { min-width: 190px; height: 34px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; background: #fff; font-size: 12px; }
+        .grid-setting-table-wrap { overflow-x: auto; border: 1px solid #dbe3ec; border-radius: 8px; background: #fff; }
+        .grid-setting-table { width: 100%; min-width: 1100px; border-collapse: collapse; font-size: 11px; }
+        .grid-setting-table th, .grid-setting-table td { border: 1px solid #e2e8f0; padding: 6px; vertical-align: top; }
+        .grid-setting-table th { background: #eef2f7; color: #475569; font-weight: 700; text-align: left; white-space: nowrap; }
+        .grid-setting-table td.grid-setting-name { min-width: 150px; max-width: 220px; color: #334155; }
+        .grid-setting-table td.grid-setting-name span { display: block; font-size: 11px; line-height: 1.25; word-break: break-word; }
+        .grid-setting-table td.grid-setting-empty { text-align: center; color: #94a3b8; vertical-align: middle; }
+        .grid-setting-cell { min-width: 125px; position: relative; }
+        .grid-setting-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+        .grid-setting-values label { color: #64748b; font-size: 9px; }
+        .grid-setting-values input { display: block; width: 100%; margin-top: 2px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; font-size: 11px; background: #fff; }
+        .grid-setting-save { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 27px; margin-top: 5px; border: 1px solid #2563eb; border-radius: 5px; background: #2563eb; color: #fff; }
+        .grid-setting-save:hover { background: #1d4ed8; }
+        .grid-setting-save:disabled { opacity: .55; cursor: wait; }
+        .grid-setting-status { margin-left: 5px; color: #059669; font-size: 10px; }
         #stBellTable td { padding: 3px 6px; }
         #stBellTable tr.is-break td { background: #f0fdf4; color: #15803d; }
         #stBellTable tbody tr { cursor: pointer; }
@@ -3493,7 +3517,11 @@
                 $('setBells').classList.toggle('hidden', name !== 'bells');
                 $('setDays').classList.toggle('hidden', name !== 'days');
                 $('setGrid').classList.toggle('hidden', name !== 'grid');
+                $('setSave').classList.toggle('hidden', name === 'grid');
             }
+            let gridFacultyFilter = '';
+            let gridSpecialtyFilter = '';
+
             function renderGridSettings() {
                 const seen = new Map();
                 (cards || []).forEach(card => {
@@ -3510,32 +3538,87 @@
                         .localeCompare(b.faculty + '|' + b.specialty + '|' + b.course, 'uz')
                 );
 
-                if (!gridSettingRows.length) {
-                    $('stGridRows').innerHTML = '<div class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">Bu doskada hali kartochkalar yaratilmagan.</div>';
+                const facultyValues = [...new Set(gridSettingRows.map(row => row.faculty))].sort((a, b) => a.localeCompare(b, 'uz'));
+                const specialtyValues = [...new Set(gridSettingRows
+                    .filter(row => !gridFacultyFilter || row.faculty === gridFacultyFilter)
+                    .map(row => row.specialty))].sort((a, b) => a.localeCompare(b, 'uz'));
+
+                $('stGridFacultyFilter').innerHTML =
+                    '<option value="">Barcha fakultetlar</option>' +
+                    facultyValues.map(value => '<option value="' + esc(value) + '">' + esc(value || 'Fakultet ko\'rsatilmagan') + '</option>').join('');
+                $('stGridSpecialtyFilter').innerHTML =
+                    '<option value="">Barcha yo\'nalishlar</option>' +
+                    specialtyValues.map(value => '<option value="' + esc(value) + '">' + esc(value) + '</option>').join('');
+                if (facultyValues.includes(gridFacultyFilter)) $('stGridFacultyFilter').value = gridFacultyFilter;
+                else gridFacultyFilter = '', $('stGridFacultyFilter').value = '';
+                if (specialtyValues.includes(gridSpecialtyFilter)) $('stGridSpecialtyFilter').value = gridSpecialtyFilter;
+                else gridSpecialtyFilter = '', $('stGridSpecialtyFilter').value = '';
+
+                const filtered = gridSettingRows.filter(row =>
+                    (!gridFacultyFilter || row.faculty === gridFacultyFilter) &&
+                    (!gridSpecialtyFilter || row.specialty === gridSpecialtyFilter)
+                );
+                const groups = new Map();
+                filtered.forEach((row, index) => {
+                    const key = row.faculty + '|' + row.specialty;
+                    if (!groups.has(key)) groups.set(key, { faculty: row.faculty, specialty: row.specialty, courses: new Map() });
+                    const originalIndex = gridSettingRows.findIndex(item =>
+                        gridKey(item.faculty, item.specialty, item.course) === gridKey(row.faculty, row.specialty, row.course)
+                    );
+                    groups.get(key).courses.set(row.course, { row, index: originalIndex });
+                });
+
+                if (!groups.size) {
+                    $('stGridRows').innerHTML = '<div class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">Mos keladigan yo\'nalish topilmadi.</div>';
                     return;
                 }
 
-                $('stGridRows').innerHTML = gridSettingRows.map((row, i) => {
-                    const g = grids[gridKey(row.faculty, row.specialty, row.course)]
-                        || grids[gridKey('', row.specialty, row.course)]
-                        || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
-                    return '<div class="grid-setting-row rounded-lg border border-slate-200 bg-slate-50 p-3" data-grid-row="' + i + '">' +
-                        '<div class="min-w-0">' +
-                            '<div class="text-sm font-semibold text-slate-700">' + esc(row.faculty || 'Fakultet ko\'rsatilmagan') + '</div>' +
-                            '<div class="text-xs text-slate-500">' + esc(row.specialty) + ' · ' + row.course + '-kurs</div>' +
-                        '</div>' +
-                        '<label class="text-xs text-slate-500">Kunlar<input data-grid-field="days" type="number" min="1" max="7" value="' + (+g.days || board.days) + '" class="grid-setting-input"></label>' +
-                        '<label class="text-xs text-slate-500">Kuniga para<input data-grid-field="pairs_per_day" type="number" min="1" max="10" value="' + (+g.pairs_per_day || board.pairs_per_day) + '" class="grid-setting-input"></label>' +
-                        '<label class="text-xs text-slate-500">Hafta<input data-grid-field="weeks" type="number" min="1" max="30" value="' + (+g.weeks || board.weeks) + '" class="grid-setting-input"></label>' +
-                        '<button type="button" class="asc-btn primary grid-setting-save" data-grid-save="' + i + '"><i class="bi bi-save" aria-hidden="true"></i> Saqlash</button>' +
-                        '<span class="grid-setting-status text-xs text-emerald-600"></span>' +
-                    '</div>';
-                }).join('');
+                let html = '<div class="grid-setting-table-wrap"><table class="grid-setting-table"><thead><tr>' +
+                    '<th>Fakultet</th><th>Yo\'nalish</th>';
+                for (let course = 1; course <= 6; course++) html += '<th>' + course + '-kurs</th>';
+                html += '</tr></thead><tbody>';
 
+                groups.forEach(group => {
+                    html += '<tr><td class="grid-setting-name"><b>' + esc(group.faculty || 'Fakultet ko\'rsatilmagan') + '</b></td>' +
+                        '<td class="grid-setting-name"><span>' + esc(group.specialty) + '</span></td>';
+                    for (let course = 1; course <= 6; course++) {
+                        const item = group.courses.get(course);
+                        if (!item) {
+                            html += '<td class="grid-setting-empty">—</td>';
+                            continue;
+                        }
+                        const row = item.row;
+                        const g = grids[gridKey(row.faculty, row.specialty, row.course)]
+                            || grids[gridKey('', row.specialty, row.course)]
+                            || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
+                        html += '<td><div class="grid-setting-cell" data-grid-row="' + item.index + '">' +
+                            '<div class="grid-setting-values">' +
+                                '<label>K<input data-grid-field="days" type="number" min="1" max="7" value="' + (+g.days || board.days) + '"></label>' +
+                                '<label>P<input data-grid-field="pairs_per_day" type="number" min="1" max="10" value="' + (+g.pairs_per_day || board.pairs_per_day) + '"></label>' +
+                                '<label>H<input data-grid-field="weeks" type="number" min="1" max="30" value="' + (+g.weeks || board.weeks) + '"></label>' +
+                            '</div>' +
+                            '<button type="button" class="grid-setting-save" data-grid-save="' + item.index + '" title="Saqlash"><i class="bi bi-save2" aria-hidden="true"></i></button>' +
+                            '<span class="grid-setting-status"></span>' +
+                        '</div></td>';
+                    }
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+                $('stGridRows').innerHTML = html;
                 $('stGridRows').querySelectorAll('[data-grid-save]').forEach(btn => {
                     btn.onclick = () => saveGridSettingRow(+btn.dataset.gridSave, btn);
                 });
             }
+
+            $('stGridFacultyFilter').onchange = function () {
+                gridFacultyFilter = this.value;
+                gridSpecialtyFilter = '';
+                renderGridSettings();
+            };
+            $('stGridSpecialtyFilter').onchange = function () {
+                gridSpecialtyFilter = this.value;
+                renderGridSettings();
+            };
 
             async function saveGridSettingRow(index, btn) {
                 const row = gridSettingRows[index];

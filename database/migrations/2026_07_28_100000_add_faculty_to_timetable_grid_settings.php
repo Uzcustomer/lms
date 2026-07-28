@@ -13,6 +13,12 @@ return new class extends Migration {
             });
         }
 
+        // Eski unique index board_id foreign key uchun yagona index bo'lib turgan
+        // bo'lishi mumkin. Avval alohida index yaratib olamiz.
+        Schema::table('timetable_grid_settings', function (Blueprint $table) {
+            $table->index('board_id', 'ttgs_board_id_index');
+        });
+
         Schema::table('timetable_grid_settings', function (Blueprint $table) {
             $table->dropUnique('ttgs_unique');
             $table->unique(
@@ -27,6 +33,7 @@ return new class extends Migration {
         Schema::table('timetable_grid_settings', function (Blueprint $table) {
             $table->dropUnique('ttgs_unique_faculty');
             $table->unique(['board_id', 'specialty_name', 'course'], 'ttgs_unique');
+            $table->dropIndex('ttgs_board_id_index');
         });
 
         if (Schema::hasColumn('timetable_grid_settings', 'faculty_name')) {

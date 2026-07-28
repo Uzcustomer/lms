@@ -287,6 +287,7 @@
                 </select>
                 <input id="hist-year" placeholder="O'quv yili (masalan 2026-2027)" style="border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:13px;width:200px;">
                 <button type="button" onclick="loadHistory()" style="background:#2b5ea7;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;">Filtrlash</button>
+                <button type="button" id="hist-table-export" onclick="exportHistoryTable()" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;">▦ Jadval Excel</button>
                 <button type="button" id="hist-export" onclick="exportHistory()" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Excel</button>
                 <span id="hist-back" style="display:none;margin-left:auto;"><button type="button" onclick="historyList()" style="background:#e2e8f0;border:none;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;">← Ro'yxatga qaytish</button></span>
             </div>
@@ -932,8 +933,18 @@
         var histViewId = null;
         function exportHistory() {
             var p = new URLSearchParams();
-            if (histViewId) { p.set('id', histViewId); p.set('format', 'xlsx'); }
+            if (histViewId) { p.set('id', histViewId); }
             else { if ($('#hist-kind').val()) p.set('kind', $('#hist-kind').val()); if ($('#hist-year').val()) p.set('academic_year', $('#hist-year').val()); }
+            window.location = HISTORY_EXPORT_URL + '?' + p.toString();
+        }
+        function exportHistoryTable() {
+            if (!histViewId) {
+                alert('Avval tarixdagi versiyani Ko\'rish orqali oching.');
+                return;
+            }
+            var p = new URLSearchParams();
+            p.set('id', histViewId);
+            p.set('format', 'table_xlsx');
             window.location = HISTORY_EXPORT_URL + '?' + p.toString();
         }
         function openHistory() { $('#history-overlay').css('display', 'block'); loadHistory(); }

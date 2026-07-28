@@ -644,6 +644,8 @@
         .tt-merge-badge { display: inline-block; margin-left: 4px; padding: 0 4px; font-size: 8px; font-weight: 700;
             background: rgba(0,0,0,.12); border-radius: 6px; color: #334155; vertical-align: middle; }
         .tt-weeks { font-size: 9px; font-weight: 700; color: #1d4ed8; white-space: nowrap; }
+        .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
+        .tt-room-vol { font-weight: 600; color: #92400e; opacity: .85; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
             font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
@@ -2456,13 +2458,21 @@
                     const wks = (c.training_type === 'lecture' && c.weeks)
                         ? ' <span class="tt-weeks">(' + c.weeks + ' hafta)</span>' : '';
                     const wkTitle = (c.training_type === 'lecture' && c.weeks) ? ' · ' + c.weeks + ' hafta' : '';
+                    // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
+                    const roomNo = c.auditorium_code || c.auditorium_name || '';
+                    const roomTxt = roomNo
+                        ? '<div class="tt-room">🚪 ' + esc(roomNo) +
+                          (c.auditorium_volume ? ' <span class="tt-room-vol">(' + c.auditorium_volume + ')</span>' : '') + '</div>'
+                        : '';
+                    const roomTitle = c.auditorium_name
+                        ? ' · ' + c.auditorium_name + (c.auditorium_volume ? ' (sig\'im ' + c.auditorium_volume + ')' : '') : '';
                     return '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
-                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + (c.auditorium_name ? ' · ' + c.auditorium_name : '') + wkTitle) + '">' +
+                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle) + '">' +
                         cardLabel(c, true) + wks + badge +
                         (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
-                        (c.auditorium_name ? '<div class="text-[9px] text-gray-500">' + esc(c.auditorium_name) + '</div>' : '') +
+                        roomTxt +
                         '</div>';
                 };
 

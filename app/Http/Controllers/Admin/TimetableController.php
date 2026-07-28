@@ -201,19 +201,16 @@ class TimetableController extends Controller
     }
 
     /**
-     * Ma'ruza necha hafta davom etadi: jami ma'ruza paralari (soat/2) haftalik
-     * kartalar soniga bo'linadi. Masalan 8 soat ma'ruza = 4 para = 4 hafta.
-     * Haftalik karta soni semestr uzunligiga sig'may qolganda (ko'p soat) bir
-     * haftada bir nechta bo'ladi, shuning uchun natija semestr haftasidan oshmaydi.
+     * Ma'ruza necha hafta davom etadi. Ma'ruza oqimga haftada BIR marta o'tiladi
+     * (bo'linmaydi), shuning uchun hafta soni = jami paralar = soat / 2.
+     * Masalan 8 soat ma'ruza = 4 para = 4 hafta; 30 soat = 15 hafta.
      */
-    private function lectureWeeks(float $hours, int $weeks): int
+    private function lectureWeeks(float $hours): int
     {
         if ($hours <= 0) {
             return 0;
         }
-        $totalParas = max(1, (int) round($hours / 2));                       // 1 para = 2 soat
-        $perWeek = max(1, (int) round($hours / max(1, $weeks) / 2));         // haftalik kartalar soni
-        return max(1, (int) round($totalParas / $perWeek));
+        return max(1, (int) round($hours / 2));   // 1 para = 2 soat = 1 hafta
     }
 
     /**
@@ -367,7 +364,10 @@ class TimetableController extends Controller
                         $oqTotal = (int) ($oq['total'] ?? 0);
                         foreach ($subs as $s) {
                             $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name);
-                            for ($i = 0; $i < $paras($s->lecture, $weeks); $i++) {
+                            // Ma'ruza — bitta oqimga BITTA karta (haftada bir marta o'tiladi,
+                            // bo'lib yuborilmaydi). Fan necha hafta davom etishi soatdan
+                            // hisoblanadi (1 para = 2 soat = 1 hafta) va kartada ko'rsatiladi.
+                            if ((float) $s->lecture > 0) {
                                 $rows[] = [
                                     'board_id' => $board->id,
                                     'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
@@ -1100,12 +1100,10 @@ class TimetableController extends Controller
     public function data(TimetableBoard $board)
     {
         // Ma'ruza necha hafta davom etishini reja soatlaridan hisoblaymiz (karta
-        // qayta yaratmasdan). specKey|course|normSubject => ma'ruza soati;
-        // yo'nalish+kurs bo'yicha semestr haftasi (grid sozlamasi yoki doska sukut).
+        // qayta yaratmasdan): specKey|course|normSubject => ma'ruza soati.
         $lecHours = $this->lectureHoursMap($board);
-        $gweeks = TimetableGridSetting::where('board_id', $board->id)->get()
-            ->mapWithKeys(fn($g) => [$this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks])->all();
-        $boardWeeks = max(1, (int) $board->weeks);
+        // Auditoriya sig'imi (kod => hajm) — kartada "xona (sig'im)" ko'rsatish uchun.
+        $roomVol = Auditorium::pluck('volume', 'code')->all();
 
         $cards = TimetableCard::where('board_id', $board->id)->get()->map(fn($c) => [
             'id' => $c->id,
@@ -1124,6 +1122,8 @@ class TimetableController extends Controller
             'teacher_name' => $c->teacher_name,
             'auditorium_code' => $c->auditorium_code,
             'auditorium_name' => $c->auditorium_name,
+            // Biriktirilgan auditoriya sig'imi (kartada "xona (sig'im)" uchun)
+            'auditorium_volume' => $c->auditorium_code ? ($roomVol[$c->auditorium_code] ?? null) : null,
             'day' => $c->day,
             'pair' => $c->pair,
             'start_half' => (int) ($c->start_half ?? 0),
@@ -1131,8 +1131,7 @@ class TimetableController extends Controller
             // Ma'ruza necha hafta davom etadi (faqat ma'ruza kartalarida)
             'weeks' => $c->training_type === 'lecture'
                 ? $this->lectureWeeks(
-                    $lecHours[$this->specKey($c->specialty_name) . '|' . $c->course . '|' . $this->normSubject((string) $c->subject_name)] ?? 0,
-                    $gweeks[$this->specKey($c->specialty_name) . '|' . $c->course] ?? $boardWeeks
+                    $lecHours[$this->specKey($c->specialty_name) . '|' . $c->course . '|' . $this->normSubject((string) $c->subject_name)] ?? 0
                 )
                 : null,
         ]);

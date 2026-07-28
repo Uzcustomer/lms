@@ -390,7 +390,7 @@
             {{-- ═══ Umumiy sozlamalar (aSc "Установки" uslubida) ═══ --}}
             <div id="setModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-3xl flex flex-col" style="max-height: 92vh;">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col" style="max-height: 92vh;">
                         <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
                             <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
                                 <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-gear"></i></span>
@@ -403,6 +403,7 @@
                             <button type="button" class="set-tab active" data-tab="basic">Asosiy ma'lumotlar</button>
                             <button type="button" class="set-tab" data-tab="bells">Qo'ng'iroqlar (juftliklar vaqti)</button>
                             <button type="button" class="set-tab" data-tab="days">Kunlar</button>
+                            <button type="button" class="set-tab" data-tab="grid">Dars kunlari va paralar</button>
                         </div>
                         <div class="bg-white border border-gray-300 mx-2 mb-2 rounded-b p-4 overflow-auto" style="max-height: 66vh;">
                             {{-- Asosiy --}}
@@ -471,6 +472,16 @@
                             <div id="setDays" class="set-pane hidden">
                                 <p class="text-xs text-gray-500 mb-2">Kun nomlarini o'zgartirishingiz mumkin (chop etishda ishlatiladi).</p>
                                 <div id="stDayNames" class="grid grid-cols-2 gap-2"></div>
+                            </div>
+                            <div id="setGrid" class="set-pane hidden">
+                                <div class="flex items-center justify-between gap-3 mb-3">
+                                    <div>
+                                        <div class="text-sm font-semibold text-slate-700">Fakultet, yo'nalish va kurs bo'yicha panjara</div>
+                                        <p class="text-xs text-slate-500">Har bir qator uchun kun, para va hafta sonini alohida saqlang.</p>
+                                    </div>
+                                    <span class="text-xs text-slate-400">O'zgarishlar shu doskaga saqlanadi</span>
+                                </div>
+                                <div id="stGridRows" class="space-y-2"></div>
                             </div>
                         </div>
                         <div class="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
@@ -745,6 +756,9 @@
         .set-tab { padding: 6px 14px; font-size: 13px; border: 1px solid #cbd5e1; border-bottom: none;
             border-radius: 6px 6px 0 0; background: #e2e8f0; color: #475569; }
         .set-tab.active { background: #fff; color: #1e40af; font-weight: 600; }
+        .grid-setting-row { display: grid; grid-template-columns: minmax(240px, 1fr) 90px 120px 90px auto minmax(90px, 1fr); align-items: end; gap: 8px; }
+        .grid-setting-input { display: block; width: 100%; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; font-size: 12px; background: #fff; }
+        @media (max-width: 900px) { .grid-setting-row { grid-template-columns: 1fr 1fr; } .grid-setting-row > :first-child { grid-column: 1 / -1; } }
         #stBellTable td { padding: 3px 6px; }
         #stBellTable tr.is-break td { background: #f0fdf4; color: #15803d; }
         #stBellTable tbody tr { cursor: pointer; }
@@ -1476,7 +1490,7 @@
 
             let board = null;      // {id, days, pairs_per_day, ...}
             let cards = [];        // barcha kartochkalar
-            let grids = {};        // "specialty|course" => {days, pairs_per_day, weeks}
+            let grids = {};        // "faculty|specialty|course" => {days, pairs_per_day, weeks}
             let specList = [];     // [{key, specialty_name, course}]
             let curSpec = null;    // tanlangan {specialty_name, course} (asosiy/primary)
             // Ko'p tanlovli qamrov (dropdown checkboxlari) — bir nechta fakultet/yo'nalish/kurs
@@ -1493,6 +1507,8 @@
             const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
             // Fan-rejim kaliti — katta-kichik harf/bo'shliqqa befarq (reja nomi
             // "Davolash ishi", karta nomi "davolash ishi" bo'lishi mumkin).
+            const gridKey = (faculty, spec, course) =>
+                String(faculty || '').trim() + '|' + String(spec || '').trim() + '|' + course;
             const subjModeKey = (spec, course, subject) =>
                 String(spec || '').trim().toLowerCase() + '|' + course + '|' + String(subject || '').trim().toLowerCase();
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
@@ -1687,7 +1703,7 @@
                 missingGroups = j.missing_groups || [];
                 buildSubjectColors();
                 grids = {};
-                (j.grids || []).forEach(g => { grids[g.specialty_name + '|' + g.course] = g; });
+                (j.grids || []).forEach(g => { grids[gridKey(g.faculty_name, g.specialty_name, g.course)] = g; });
                 // Hafta bo'yicha istisnolar
                 overrides = {};
                 (j.overrides || []).forEach(o => { overrides[o.card_id + '|' + o.week] = { day: o.day, pair: o.pair, cancelled: o.cancelled }; });
@@ -1860,7 +1876,8 @@
 
             // ===== Panjara sozlamasi (yo'nalish+kurs bo'yicha) =====
             function curGrid() {
-                const g = curSpec && grids[curSpec.specialty_name + '|' + curSpec.course];
+                const g = curSpec && (grids[gridKey(curSpec.faculty, curSpec.specialty_name, curSpec.course)]
+                    || grids[gridKey('', curSpec.specialty_name, curSpec.course)]);
                 return g || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
             }
             function fillGridInputs() {
@@ -1903,14 +1920,14 @@
                 const weeksBefore = curGrid().weeks;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/grid', 'POST', {
-                        specialty_name: curSpec.specialty_name, course: curSpec.course,
+                        faculty_name: curSpec.faculty || '', specialty_name: curSpec.specialty_name, course: curSpec.course,
                         days: $('gsDays').value, pairs_per_day: $('gsPairs').value, weeks: $('gsWeeks').value,
                     });
                     if (j.regenerated || +$('gsWeeks').value !== +weeksBefore) {
                         await loadBoard(board.id);   // kartalar qayta yaratildi — to'liq yangilash
                     } else {
-                        grids[curSpec.specialty_name + '|' + curSpec.course] = {
-                            specialty_name: curSpec.specialty_name, course: curSpec.course,
+                        grids[gridKey(curSpec.faculty, curSpec.specialty_name, curSpec.course)] = {
+                            faculty_name: curSpec.faculty || '', specialty_name: curSpec.specialty_name, course: curSpec.course,
                             days: +$('gsDays').value, pairs_per_day: +$('gsPairs').value, weeks: +$('gsWeeks').value,
                         };
                         // Doskadan kelgan bo'shatilgan joylashuvlarni yangilash uchun qayta yuklaymiz
@@ -3438,6 +3455,7 @@
             // ══════════════════════════════════════════════════════════════
             let bellDraft = [];       // tahrirlanayotgan qo'ng'iroq jadvali
             let dayDraft = [];        // tahrirlanayotgan kun nomlari
+            let gridSettingRows = []; // modalda ko'rsatiladigan fakultet/yo'nalish/kurs qatorlari
             let bellEditIdx = null;
             let bellSel = null;       // belgilangan (highlight) qator indeksi — ▲/▼ bilan ko'chirish uchun
 
@@ -3454,6 +3472,7 @@
                     $('stYear').value = s.academic_year || '';
                     $('stDays').value = s.days;
                     $('stPairs').value = s.pairs_per_day;
+                    renderGridSettings();
                     const set = s.settings || {};
                     $('stDayOff').value = (set.days_off || []).join(', ');
                     $('stAllowZero').checked = !!set.allow_zero;
@@ -3473,7 +3492,77 @@
                 $('setBasic').classList.toggle('hidden', name !== 'basic');
                 $('setBells').classList.toggle('hidden', name !== 'bells');
                 $('setDays').classList.toggle('hidden', name !== 'days');
+                $('setGrid').classList.toggle('hidden', name !== 'grid');
             }
+            function renderGridSettings() {
+                const seen = new Map();
+                (cards || []).forEach(card => {
+                    const row = {
+                        faculty: card.faculty_name || '',
+                        specialty: card.specialty_name || '',
+                        course: +card.course || 0,
+                    };
+                    const key = gridKey(row.faculty, row.specialty, row.course);
+                    if (!seen.has(key)) seen.set(key, row);
+                });
+                gridSettingRows = [...seen.values()].sort((a, b) =>
+                    (a.faculty + '|' + a.specialty + '|' + a.course)
+                        .localeCompare(b.faculty + '|' + b.specialty + '|' + b.course, 'uz')
+                );
+
+                if (!gridSettingRows.length) {
+                    $('stGridRows').innerHTML = '<div class="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">Bu doskada hali kartochkalar yaratilmagan.</div>';
+                    return;
+                }
+
+                $('stGridRows').innerHTML = gridSettingRows.map((row, i) => {
+                    const g = grids[gridKey(row.faculty, row.specialty, row.course)]
+                        || grids[gridKey('', row.specialty, row.course)]
+                        || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
+                    return '<div class="grid-setting-row rounded-lg border border-slate-200 bg-slate-50 p-3" data-grid-row="' + i + '">' +
+                        '<div class="min-w-0">' +
+                            '<div class="text-sm font-semibold text-slate-700">' + esc(row.faculty || 'Fakultet ko\'rsatilmagan') + '</div>' +
+                            '<div class="text-xs text-slate-500">' + esc(row.specialty) + ' · ' + row.course + '-kurs</div>' +
+                        '</div>' +
+                        '<label class="text-xs text-slate-500">Kunlar<input data-grid-field="days" type="number" min="1" max="7" value="' + (+g.days || board.days) + '" class="grid-setting-input"></label>' +
+                        '<label class="text-xs text-slate-500">Kuniga para<input data-grid-field="pairs_per_day" type="number" min="1" max="10" value="' + (+g.pairs_per_day || board.pairs_per_day) + '" class="grid-setting-input"></label>' +
+                        '<label class="text-xs text-slate-500">Hafta<input data-grid-field="weeks" type="number" min="1" max="30" value="' + (+g.weeks || board.weeks) + '" class="grid-setting-input"></label>' +
+                        '<button type="button" class="asc-btn primary grid-setting-save" data-grid-save="' + i + '"><i class="bi bi-save" aria-hidden="true"></i> Saqlash</button>' +
+                        '<span class="grid-setting-status text-xs text-emerald-600"></span>' +
+                    '</div>';
+                }).join('');
+
+                $('stGridRows').querySelectorAll('[data-grid-save]').forEach(btn => {
+                    btn.onclick = () => saveGridSettingRow(+btn.dataset.gridSave, btn);
+                });
+            }
+
+            async function saveGridSettingRow(index, btn) {
+                const row = gridSettingRows[index];
+                const wrap = btn.closest('[data-grid-row]');
+                if (!row || !wrap || !board) return;
+                const value = name => wrap.querySelector('[data-grid-field="' + name + '"]').value;
+                const status = wrap.querySelector('.grid-setting-status');
+                btn.disabled = true;
+                status.textContent = 'Saqlanmoqda...';
+                try {
+                    await api(BASE + '/boards/' + board.id + '/grid', 'POST', {
+                        faculty_name: row.faculty,
+                        specialty_name: row.specialty,
+                        course: row.course,
+                        days: value('days'),
+                        pairs_per_day: value('pairs_per_day'),
+                        weeks: value('weeks'),
+                    });
+                    await loadBoard(board.id);
+                    renderGridSettings();
+                    $('setMsg').textContent = 'Panjara sozlamasi saqlandi.';
+                } catch (e) {
+                    status.textContent = 'Xatolik: ' + e.message;
+                    btn.disabled = false;
+                }
+            }
+
             $('setClose').onclick = $('setCancel').onclick = () => $('setModal').classList.add('hidden');
 
             // Kun soni o'zgarsa — kun nomlari maydonini moslash

@@ -350,13 +350,7 @@ class TimetableController extends Controller
 
         $now = now();
         $rows = [];
-        $paras = function ($hours, $weeks) {
-            $h = (float) $hours;
-            if ($h <= 0) {
-                return 0;
-            }
-            return max(1, (int) round($h / max(1, $weeks) / 2)); // 1 para = 2 akademik soat
-        };
+        // Paralar soni endi weeklyPlan() da hisoblanadi (haftalik yuk chegarasi bilan)
 
         foreach ($byFaculty as $fk => $snap) {
             $facName = $facMap[(int) $fk] ?? ($facMap[$fk] ?? null);
@@ -396,9 +390,15 @@ class TimetableController extends Controller
                         $oqTotal = (int) ($oq['total'] ?? 0);
                         foreach ($subs as $s) {
                             $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name);
-                            // Ma'ruza — bitta oqimga BITTA karta (haftada bir marta o'tiladi,
-                            // bo'lib yuborilmaydi). Fan necha hafta davom etishi soatdan
-                            // hisoblanadi (1 para = 2 soat = 1 hafta) va kartada ko'rsatiladi.
+                            $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
+                            // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
+                            // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
+                            // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat
+                            // ma'ruzasiz haftalarda o'tiladi (kartada weeks bilan belgilanadi).
+                            $wp = $this->weeklyPlan((float) $s->lecture, $prcHours, $weeks);
+
+                            // Ma'ruza — bitta oqimga BITTA karta; necha hafta o'tilishi
+                            // ma'ruza soatidan (1 para = 2 soat = 1 hafta).
                             if ((float) $s->lecture > 0) {
                                 $rows[] = [
                                     'board_id' => $board->id,
@@ -408,17 +408,27 @@ class TimetableController extends Controller
                                     'group_name' => null, 'group_names' => json_encode($groupNames),
                                     'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
                                     'students' => $oqTotal,
+                                    'weeks' => max(1, (int) $wp['lecture_weeks']),
                                     'created_at' => $now, 'updated_at' => $now,
                                 ];
                             }
-                            $pw = $paras((float) $s->practice + (float) $s->laboratory + (float) $s->seminar, $weeks);
-                            if ($pw > 0) {
+
+                            // Amaliy paralar: ma'ruzali haftada nechta, ma'ruzasiz haftada
+                            // nechta (1 para = 2 soat). Farqi — "qo'shimcha" kartalar.
+                            // Paralar taqsimoti weeklyPlan() da hisoblanadi (yagona manba)
+                            $baseParas     = (int) $wp['practice_paras_base'];
+                            $extraParas    = (int) $wp['practice_paras_extra'];
+                            $extraWeeksFor = (int) $wp['practice_extra_weeks'];
+
+                            if ($baseParas + $extraParas > 0) {
                                 foreach ($oq['rows'] ?? [] as $gr) {
                                     $gn = trim((string) ($gr['name'] ?? ''));
                                     if ($gn === '') {
                                         continue;
                                     }
-                                    for ($i = 0; $i < $pw; $i++) {
+                                    $mk = function (int $cardWeeks) use (
+                                        &$rows, $board, $specName, $course, $blockFac, $oq, $s, $kaf, $gn, $gr, $now
+                                    ) {
                                         $rows[] = [
                                             'board_id' => $board->id,
                                             'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
@@ -427,8 +437,17 @@ class TimetableController extends Controller
                                             'group_name' => $gn, 'group_names' => null,
                                             'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
                                             'students' => (int) ($gr['count'] ?? 0),
+                                            'weeks' => max(1, $cardWeeks),
                                             'created_at' => $now, 'updated_at' => $now,
                                         ];
+                                    };
+                                    // Har hafta o'tiladigan amaliy paralar
+                                    for ($i = 0; $i < $baseParas; $i++) {
+                                        $mk($weeks);
+                                    }
+                                    // Faqat ma'ruzasiz (yoki soatga yetadigan) haftalarda o'tiladiganlari
+                                    for ($i = 0; $i < $extraParas && $extraWeeksFor > 0; $i++) {
+                                        $mk($extraWeeksFor);
                                     }
                                 }
                             }
@@ -444,11 +463,22 @@ class TimetableController extends Controller
     /** Migratsiya kechiksa — timetable_cards da hali yo'q ustunlarni insert qatorlaridan olib tashlash. */
     private function stripUnsupportedColumns(array $rows): array
     {
-        if (empty($rows) || Schema::hasColumn('timetable_cards', 'faculty_name')) {
+        if (empty($rows)) {
             return $rows;
         }
-        return array_map(function ($r) {
-            unset($r['faculty_name']);
+        $drop = [];
+        foreach (['faculty_name', 'weeks'] as $col) {
+            if (!Schema::hasColumn('timetable_cards', $col)) {
+                $drop[] = $col;
+            }
+        }
+        if (!$drop) {
+            return $rows;
+        }
+        return array_map(function ($r) use ($drop) {
+            foreach ($drop as $col) {
+                unset($r[$col]);
+            }
             return $r;
         }, $rows);
     }
@@ -1274,12 +1304,16 @@ class TimetableController extends Controller
             'pair' => $c->pair,
             'start_half' => (int) ($c->start_half ?? 0),
             'len_half' => $c->lenHalf(),
-            // Ma'ruza necha hafta davom etadi (faqat ma'ruza kartalarida)
-            'weeks' => $c->training_type === 'lecture'
-                ? $this->lectureWeeks(
-                    $lecHours[$this->specKey($c->specialty_name) . '|' . $c->course . '|' . $this->normSubject((string) $c->subject_name)] ?? 0
-                )
-                : null,
+            // Karta necha hafta o'tiladi. Yangi kartalarda ustunda saqlanadi
+            // (amaliy kartalarda ham — ma'ruzali haftada paralar kamayadi).
+            // Eski kartalarda ustun bo'sh — avvalgidek ma'ruza soatidan hisoblanadi.
+            'weeks' => $c->weeks !== null
+                ? (int) $c->weeks
+                : ($c->training_type === 'lecture'
+                    ? $this->lectureWeeks(
+                        $lecHours[$this->specKey($c->specialty_name) . '|' . $c->course . '|' . $this->normSubject((string) $c->subject_name)] ?? 0
+                    )
+                    : null),
         ]);
 
         $grids = TimetableGridSetting::where('board_id', $board->id)
@@ -1540,6 +1574,9 @@ class TimetableController extends Controller
             'lecture_weeks' => 0, 'plain_weeks' => $weeks,
             'practice_in_lecture_week' => 0, 'practice_in_plain_week' => 0,
             'extra_weeks' => 0,
+            'practice_paras_base' => 0, 'practice_paras_extra' => 0,
+            'practice_extra_weeks' => 0, 'practice_hours_scheduled' => 0,
+            'practice_shortfall' => 0,
             'lecture_check' => 0.0, 'practice_check' => 0.0, 'exact' => true,
         ];
         if ($total <= 0) {
@@ -1568,6 +1605,26 @@ class TimetableController extends Controller
         $allocated = $lecWeeks * $prcInLec + $plainWeeks * $prcInPlain;
         $extraWeeks = max(0, $prcInt - $allocated);
 
+        // ── Amaliy paralarga aylantirish (1 para = 2 soat) ─────────────────
+        // Har hafta o'tiladigan paralar + faqat ma'ruzasiz haftada o'tiladiganlari.
+        // Kartochka yaratish AYNAN shu qiymatlarni ishlatadi (yagona manba).
+        $parasLec   = intdiv($prcInLec, 2);
+        $parasPlain = intdiv($prcInPlain, 2);
+        $basePara   = $lecWeeks > 0 ? min($parasLec, $parasPlain) : $parasPlain;
+        $extraPara  = max(0, $parasPlain - $basePara);
+        $extraParaWeeks = $plainWeeks;
+        if ($prcInt <= 0) {
+            $basePara = $extraPara = 0;
+            $extraParaWeeks = 0;
+        } elseif ($basePara + $extraPara === 0) {
+            // Har haftaga 1 para ham chiqmaydi — bitta kartani kamroq haftada o'tamiz
+            $basePara = 0;
+            $extraPara = 1;
+            $extraParaWeeks = max(1, (int) round($prcInt / 2));
+        }
+        // Kartalar amalda beradigan amaliy soat (1 para = 2 soat)
+        $prcScheduled = ($basePara * $weeks + $extraPara * $extraParaWeeks) * 2;
+
         $lecCheck = $lecWeeks * 2;
         $prcCheck = $allocated + $extraWeeks;
 
@@ -1580,6 +1637,13 @@ class TimetableController extends Controller
             'practice_in_plain_week'   => $prcInPlain,
             // Nechta haftaga qoldiq sifatida +1 soat qo'shilgan
             'extra_weeks'              => $extraWeeks,
+            // Amaliy paralar taqsimoti (kartochka yaratish shu qiymatlarni ishlatadi)
+            'practice_paras_base'       => $basePara,        // har hafta o'tiladi
+            'practice_paras_extra'      => $extraPara,       // faqat quyidagi haftalarda
+            'practice_extra_weeks'      => $extraParaWeeks,
+            'practice_hours_scheduled'  => $prcScheduled,    // kartalar amalda beradigan soat
+            // Haftalik chegarani buzmaslik uchun joylanmay qolgan amaliy soat
+            'practice_shortfall'        => max(0, $prcInt - $prcScheduled),
             'lecture_check'            => round($lecCheck, 2),
             'practice_check'           => round($prcCheck, 2),
             // Aniqlik KO'RSATILAYOTGAN taqsimot bo'yicha baholanadi: ma'ruza soati

@@ -2836,10 +2836,13 @@
                     const merged = ids && ids.length > 1;
                     const mids = merged ? ' data-merge-ids="' + ids.join(',') + '"' : '';
                     const badge = merged ? '<span class="tt-merge-badge">' + ids.length + ' para</span>' : '';
-                    // Ma'ruza necha hafta davom etadi: "(N hafta)" (reja ma'ruza soati/2)
-                    const wks = (c.training_type === 'lecture' && c.weeks)
-                        ? ' <span class="tt-weeks">(' + c.weeks + ' hafta)</span>' : '';
-                    const wkTitle = (c.training_type === 'lecture' && c.weeks) ? ' · ' + c.weeks + ' hafta' : '';
+                    // Karta necha hafta o'tiladi: "(N hafta)". Ma'ruzada doim, amaliyda
+                    // esa faqat semestrning hamma haftasida bo'lmasa (ma'ruzali haftada
+                    // amaliy paralar kamayadi — "qo'shimcha" para kamroq haftada bo'ladi).
+                    const fullWeeks = curGrid().weeks;
+                    const showWks = c.weeks && (c.training_type === 'lecture' || c.weeks < fullWeeks);
+                    const wks = showWks ? ' <span class="tt-weeks">(' + c.weeks + ' hafta)</span>' : '';
+                    const wkTitle = showWks ? ' · ' + c.weeks + ' hafta' : '';
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
                     const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
                     const roomTxt = roomNo
@@ -3332,8 +3335,13 @@
                 if (w.extra_weeks > 0) {
                     parts.push('<div class="text-slate-500">+1 s qo\'shimcha: <b>' + w.extra_weeks + '</b> hafta</div>');
                 }
-                const warn = w.exact ? ''
+                let warn = w.exact ? ''
                     : '<div class="text-[10px] text-amber-600" title="Reja soati bu hafta soniga aniq sig\'madi">⚠ reja soatiga sig\'madi</div>';
+                // Haftalik chegarani buzmaslik uchun joylanmay qolgan amaliy soat
+                if (w.practice_shortfall > 0) {
+                    warn += '<div class="text-[10px] text-amber-600" title="Haftalik yuk chegarasidan oshmaslik uchun bu soat kartochkaga joylanmadi. Hafta sonini yoki reja soatini ko\'rib chiqing.">'
+                        + '⚠ ' + hrs(w.practice_shortfall) + ' s amaliy joylanmadi</div>';
+                }
                 return '<div class="text-[11px] leading-tight">' + (parts.join('') || '—') + warn + '</div>';
             }
 

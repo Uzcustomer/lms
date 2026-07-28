@@ -921,6 +921,56 @@ class TimetableController extends Controller
             $placed++;
         }
 
+        // 2-bosqich: ALLAQACHON joylashgan, lekin xonasiz kartalarga xona biriktirish
+        // (joylashuvni o'zgartirmasdan). Aks holda hamma karta joylashgan bo'lsa,
+        // "Auditoriya"/"Ma'ruza xonasi" belgilansa ham hech narsa biriktirilmasdi —
+        // chunki yuqoridagi sikl faqat joylashmagan kartalar bo'yicha yuradi.
+        if ($assignRooms || $lectureRooms) {
+            $needRoom = $all->filter(function ($c) use ($scopeType, $inScope, $isCycle) {
+                if (!$c->day || !$c->pair || $c->auditorium_code) {
+                    return false;
+                }
+                if ($isCycle($c)) {
+                    return false;
+                }
+                if ($scopeType !== null && $c->training_type !== $scopeType) {
+                    return false;
+                }
+                return $inScope($c);
+            })->sortByDesc(fn($c) => (int) $c->students);   // kattalari avval — zich joylash
+
+            foreach ($needRoom as $c) {
+                $pool = $poolFor($c);
+                if ($pool->isEmpty()) {
+                    continue;
+                }
+                $need = $this->parasNeeded($c);
+                foreach ($pool as $r) {
+                    if ((int) ($r->volume ?? 0) < $minVolFor($c)) {
+                        continue;
+                    }
+                    $free = true;
+                    for ($i = 0; $i < $need; $i++) {
+                        if (!empty($roomBusy[$r->code . '|' . $c->day . '|' . ((int) $c->pair + $i)])) {
+                            $free = false;
+                            break;
+                        }
+                    }
+                    if (!$free) {
+                        continue;
+                    }
+                    $c->auditorium_code = $r->code;
+                    $c->auditorium_name = $r->name;
+                    for ($i = 0; $i < $need; $i++) {
+                        $roomBusy[$r->code . '|' . $c->day . '|' . ((int) $c->pair + $i)] = true;
+                    }
+                    $roomsAssigned++;
+                    $touched[] = $c;
+                    break;
+                }
+            }
+        }
+
         DB::transaction(function () use ($touched) {
             foreach ($touched as $c) {
                 $c->save();

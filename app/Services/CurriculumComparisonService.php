@@ -818,6 +818,13 @@ class CurriculumComparisonService
     public function normalize(string $value): string
     {
         $value = mb_strtolower(trim($value));
+
+        // Apostroflarni alohida olib tashlaymiz: o'zbek lotin yozuvidagi "ʻ"
+        // (U+02BB) va "ʼ" (U+02BC) Unicode'da HARF toifasiga (Lm) kiradi, ya'ni
+        // quyidagi \p{L} filtri ularni saqlab qolardi. Natijada "Oʻzbek" bilan
+        // "O'zbek" har xil fan deb hisoblanardi.
+        $value = str_replace(["'", '‘', '’', 'ʻ', 'ʼ', '`', '´', '′'], '', $value);
+
         return preg_replace('/[^\p{L}\p{N}]+/u', '', $value);
     }
 }

@@ -176,6 +176,21 @@ class TimetableController extends Controller
     }
 
     /**
+     * Guruh bandligi qamrovi kaliti: fakultet + yo'nalish + kurs.
+     *
+     * Guruh NOMI fakultetlar bo'ylab takrorlanishi mumkin — masalan 1-kurs
+     * guruhlari avtomatik nomlanadi ("1K-01a (o'z)") va ayni nom ham 1-son, ham
+     * 2-son davolashda uchraydi (2-kursdan boshlab nomlar "d1/…", "d2/…" prefiksli
+     * bo'lgani uchun noyob). Shuning uchun guruh bandligi faqat nom bo'yicha emas,
+     * shu qamrov ichida tekshiriladi — aks holda bir fakultetning darsi ikkinchisining
+     * guruhini "band" qilib qo'yadi.
+     */
+    private function groupScopeKey(TimetableCard $c): string
+    {
+        return ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . (int) $c->course;
+    }
+
+    /**
      * Fan ma'ruza soatlari xaritasi: "specKey|course|normSubject" => ma'ruza soati.
      * Ma'ruza necha hafta davom etishini hisoblash uchun (1 para = 2 soat = 1 hafta).
      */
@@ -836,7 +851,7 @@ class TimetableController extends Controller
                     // Qattiq: dars egallaydigan barcha paralar bo'sh bo'lishi kerak
                     $freeAll = true;
                     for ($i = 0; $i < $need; $i++) {
-                        $gk = $c->specialty_name . '|' . $c->course . '|' . $d . '|' . ($p + $i);
+                        $gk = $this->groupScopeKey($c) . '|' . $d . '|' . ($p + $i);
                         if (!empty($groupBusy[$gk]) && array_intersect($groups, $groupBusy[$gk])) {
                             $freeAll = false;
                             break;
@@ -1022,7 +1037,7 @@ class TimetableController extends Controller
         $need = $this->parasNeeded($c);
         for ($i = 0; $i < $need; $i++) {
             $p = (int) $c->pair + $i;
-            $k = $c->specialty_name . '|' . $c->course . '|' . $c->day . '|' . $p;
+            $k = $this->groupScopeKey($c) . '|' . $c->day . '|' . $p;
             $groupBusy[$k] = array_merge($groupBusy[$k] ?? [], $c->occupiedGroups());
             if ($c->teacher_id) {
                 $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $p] = true;
@@ -1047,7 +1062,7 @@ class TimetableController extends Controller
      */
     private function slotPenalty(TimetableCard $c, array $groups, int $d, int $p, int $pairs, array $groupBusy, array $subjDay, bool $sameDay = false, bool $consecutive = false, array $subjSlots = []): float
     {
-        $spc = $c->specialty_name . '|' . $c->course;
+        $spc = $this->groupScopeKey($c);
         $pen = ($p - 1) * 0.2; // ertalabki paralarga yengil ustunlik
         foreach ($groups as $g) {
             $used = [$p => true];
@@ -1557,7 +1572,7 @@ class TimetableController extends Controller
             if (!$this->halfOverlap($myRange, $this->rangeFor($o, (int) $op, $osh))) {
                 continue;
             }
-            if ($o->specialty_name === $card->specialty_name && (int) $o->course === (int) $card->course) {
+            if ($this->groupScopeKey($o) === $this->groupScopeKey($card)) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
                 if (!empty($overlap)) {
                     $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';
@@ -1644,7 +1659,7 @@ class TimetableController extends Controller
                 continue;
             }
             // Guruh konflikti — bir yo'nalish+kurs ichida
-            if ($o->specialty_name === $card->specialty_name && (int) $o->course === (int) $card->course) {
+            if ($this->groupScopeKey($o) === $this->groupScopeKey($card)) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
                 if (!empty($overlap)) {
                     $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';

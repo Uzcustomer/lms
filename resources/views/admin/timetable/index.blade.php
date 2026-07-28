@@ -656,7 +656,7 @@
             background: rgba(0,0,0,.12); border-radius: 6px; color: #334155; vertical-align: middle; }
         .tt-weeks { font-size: 9px; font-weight: 700; color: #1d4ed8; white-space: nowrap; }
         .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
-        .tt-room-vol { font-weight: 600; color: #92400e; opacity: .85; }
+        .tt-room-vol { font-weight: 800; color: #16a34a; opacity: 1; }\n        #grid th.tt-room-head .tt-room-name { display:block; font-size:10px; font-weight:500; color:#64748b; margin-top:2px; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
             font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
@@ -2357,7 +2357,28 @@
                 }
                 const rowEndCls = p => p === P ? ' tt-dayend' : (p % 2 === 0 ? ' tt-paraend' : '');
                 let h = '<thead><tr><th class="tt-corner px-1 py-1">Kun</th><th class="tt-corner px-1 py-1" style="left:28px">Para</th>';
-                cols.forEach(c => h += '<th class="tt-grp px-2 py-1">' + esc(c) + '</th>');
+                const roomMeta = {};
+                 if (mode === 'room') placed.forEach(card => {
+                     const roomKey = keyOf(card);
+                     if (!roomMeta[roomKey]) roomMeta[roomKey] = {
+                         code: card.auditorium_code || '',
+                         name: card.auditorium_name || roomKey,
+                         volume: card.auditorium_volume
+                     };
+                 });
+                 cols.forEach(c => {
+                     if (mode !== 'room') {
+                         h += '<th class="tt-grp px-2 py-1">' + esc(c) + '</th>';
+                         return;
+                     }
+                     const room = roomMeta[c] || { code: '', name: c, volume: null };
+                     const roomCode = room.code || c;
+                     const capacity = room.volume !== null && room.volume !== undefined && room.volume !== ''
+                         ? ' <span class="tt-room-vol">(' + esc(String(room.volume)) + ' ta)</span>' : '';
+                     const roomName = room.name && room.name !== roomCode
+                         ? '<span class="tt-room-name">' + esc(room.name) + '</span>' : '';
+                     h += '<th class="tt-grp tt-room-head px-2 py-1">' + esc(roomCode) + capacity + roomName + '</th>';
+                 });
                 h += '</tr></thead><tbody>';
                 for (let d = 1; d <= D; d++) {
                     for (let p = 1; p <= P; p++) {

@@ -2521,7 +2521,7 @@
                     const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
                     const roomTxt = roomNo
                         ? '<div class="tt-room">№ ' + esc(roomNo) +
-                          (c.auditorium_volume !== null && c.auditorium_volume !== undefined && c.auditorium_volume !== '' ? ' <span class="tt-room-vol">(' + esc(String(c.auditorium_volume)) + ' ta)</span>' : '') + '</div>'
+                           + '</div>'
                         : '';
                     const roomTitle = c.auditorium_name
                         ? ' · ' + c.auditorium_name + (c.auditorium_volume ? ' (sig\'im ' + c.auditorium_volume + ')' : '') : '';

@@ -2553,10 +2553,16 @@
                                 const bord = colBorder(oi, gi, o.groups);
                                 const c = placedIdx[grp + '|' + d + '|' + p];
                                 if (c && c.training_type === 'lecture') {
+                                    // Gorizontal birlashma: bir xil karta yoki AYNAN SHU fanning
+                                    // ma'ruzasi bo'lsa — bitta katak. Bir oqimdagi guruhlar
+                                    // (fakultetlararo qo'shilganlari ham) alohida kartada
+                                    // bo'lishi mumkin, lekin dars bitta — bo'linib ko'rinmasin.
                                     let span = 1;
                                     while (gi + span < o.groups.length) {
                                         const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
-                                        if (c2 && c2.id === c.id) span++; else break;
+                                        if (c2 && (c2.id === c.id ||
+                                            (c2.training_type === 'lecture' && c2.subject_name === c.subject_name))) span++;
+                                        else break;
                                     }
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
                                     // ketma-ket bir xil fan ma'ruzalari ham birlashtiriladi.

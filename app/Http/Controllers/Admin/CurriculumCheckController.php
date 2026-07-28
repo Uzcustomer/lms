@@ -9,6 +9,7 @@ use App\Imports\ManualCurriculumImport;
 use App\Models\ContingentProjection;
 use App\Models\Curriculum;
 use App\Models\ManualCurriculum;
+use App\Models\ManualCurriculumChoiceGroup;
 use App\Models\ManualCurriculumComparison;
 use App\Models\ManualCurriculumSubject;
 use App\Models\Semester;
@@ -1970,7 +1971,8 @@ class CurriculumCheckController extends Controller
     public function compare(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
+        $comparison = $service->compare($reference, $working,
+            $this->hemisSubjectNames($reference, $working), $this->manualChoices($reference));
 
         // "Solishtirish" bosilganda juftlik tarixга saqlanadi (takror saqlanmaydi).
         ManualCurriculumComparison::firstOrCreate(
@@ -1994,7 +1996,8 @@ class CurriculumCheckController extends Controller
         }
 
         $comparison = $service->compareGroup($reference, $workings,
-            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)));
+            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)),
+            $this->manualChoices($reference));
 
         // Rejaning barcha semestrlaridan hali yuklanmaganlari
         $missingSemesters = $this->missingSemesters($reference, $comparison['covered_semesters'] ?? []);
@@ -2009,7 +2012,8 @@ class CurriculumCheckController extends Controller
         abort_if($workings->isEmpty(), 404);
 
         $comparison = $service->compareGroup($reference, $workings,
-            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)));
+            $this->hemisSubjectNamesForIds($this->groupHemisIds($reference, $workings)),
+            $this->manualChoices($reference));
 
         $title = "{$reference->name} <-> barcha ishchi rejalar (jamlangan) solishtirma";
         $fileName = 'oquv-reja-jamlangan-solishtirma-' . now()->format('Y-m-d_His') . '.xlsx';
@@ -2092,12 +2096,139 @@ class CurriculumCheckController extends Controller
     public function compareExport(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
+        $comparison = $service->compare($reference, $working,
+            $this->hemisSubjectNames($reference, $working), $this->manualChoices($reference));
 
         $title = "{$reference->name} <-> {$working->name} solishtirma";
         $fileName = 'oquv-reja-solishtirma-' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(new CurriculumComparisonExport($title, $comparison), $fileName);
+    }
+
+    /**
+     * Rejaga qo'lda kiritilgan tanlov guruhlari (solishtirishga uzatiladigan shakl).
+     * Bo'sh bo'lsa — servis avtomatik aniqlashga qaytadi.
+     */
+    private function manualChoices(ManualCurriculum $reference): array
+    {
+        if (!$reference->curricula_hemis_id) {
+            return [];
+        }
+
+        return ManualCurriculumChoiceGroup::where('curricula_hemis_id', $reference->curricula_hemis_id)
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($g) => [
+                'label'      => $g->label,
+                'ref_names'  => $g->ref_names ?: [],
+                'work_names' => $g->work_names ?: [],
+                'norm_name'  => $g->norm_name,
+            ])
+            ->all();
+    }
+
+    /**
+     * Tanlov guruhlari muharriri uchun ma'lumot: saqlangan guruhlar, namunaviy va
+     * ishchi rejalardagi fan nomlari hamda avtomatik aniqlangan takliflar.
+     *
+     * Takliflar faqat boshlang'ich to'ldirish uchun — saqlanmaguncha
+     * solishtirishga ta'sir qilmaydi.
+     */
+    public function choiceGroups(Request $request, CurriculumComparisonService $service)
+    {
+        [$reference, $workings] = $this->resolveGroup($request);
+        abort_unless($reference->curricula_hemis_id, 404, "Reja HEMIS o'quv rejasiga bog'lanmagan.");
+
+        $refSubjects = $reference->subjects()->orderBy('id')->get();
+
+        // Ishchi fanlar: takrorlanmas nomlar, qaysi semestrlarda uchrashi bilan
+        $workSubjects = [];
+        foreach ($workings as $working) {
+            foreach ($working->subjects()->orderBy('id')->get() as $s) {
+                $name = trim((string) $s->subject_name);
+                if ($name === '') {
+                    continue;
+                }
+                $key = $service->normalize($name);
+                $workSubjects[$key] ??= ['name' => $name, 'block' => $s->block, 'semestrlar' => []];
+                if ($s->semester && !in_array((int) $s->semester, $workSubjects[$key]['semestrlar'], true)) {
+                    $workSubjects[$key]['semestrlar'][] = (int) $s->semester;
+                }
+            }
+        }
+        foreach ($workSubjects as &$w) {
+            sort($w['semestrlar']);
+        }
+        unset($w);
+
+        $saved = ManualCurriculumChoiceGroup::where('curricula_hemis_id', $reference->curricula_hemis_id)
+            ->orderBy('id')->get();
+
+        return response()->json([
+            'reference_id' => $reference->id,
+            'groups' => $saved->map(fn ($g) => [
+                'id'         => $g->id,
+                'label'      => $g->label,
+                'ref_names'  => $g->ref_names ?: [],
+                'work_names' => $g->work_names ?: [],
+                'norm_name'  => $g->norm_name,
+                'note'       => $g->note,
+            ])->values(),
+            'ref_subjects' => $refSubjects->map(fn ($s) => [
+                'name'     => trim((string) $s->subject_name),
+                'block'    => $s->block,
+                'hours'    => $s->total_hours !== null ? (float) $s->total_hours : null,
+                'credit'   => $s->credit !== null ? (float) $s->credit : null,
+                'semester' => $s->semester ? (int) $s->semester : null,
+            ])->unique('name')->values(),
+            'work_subjects' => collect($workSubjects)->values(),
+            'suggestions' => $service->suggestChoiceGroups($refSubjects),
+        ]);
+    }
+
+    /**
+     * Tanlov guruhlarini saqlash: yuborilgan ro'yxat reja bo'yicha mavjudlarini
+     * BUTUNLAY almashtiradi (muharrir har doim to'liq ro'yxat yuboradi).
+     */
+    public function saveChoiceGroups(Request $request)
+    {
+        $data = $request->validate([
+            'reference_id'        => 'required|exists:manual_curricula,id',
+            'groups'              => 'present|array',
+            'groups.*.label'      => 'nullable|string|max:255',
+            'groups.*.ref_names'  => 'required|array|min:1',
+            'groups.*.ref_names.*' => 'string|max:255',
+            'groups.*.work_names' => 'present|array',
+            'groups.*.work_names.*' => 'string|max:255',
+            'groups.*.norm_name'  => 'nullable|string|max:255',
+            'groups.*.note'       => 'nullable|string|max:255',
+        ]);
+
+        $reference = ManualCurriculum::findOrFail($data['reference_id']);
+        abort_unless($reference->type === 'namunaviy', 404);
+        abort_unless($reference->curricula_hemis_id, 422, "Reja HEMIS o'quv rejasiga bog'lanmagan.");
+
+        DB::transaction(function () use ($data, $reference) {
+            ManualCurriculumChoiceGroup::where('curricula_hemis_id', $reference->curricula_hemis_id)->delete();
+
+            foreach ($data['groups'] as $group) {
+                $refNames = array_values(array_filter(array_map('trim', $group['ref_names'])));
+                if ($refNames === []) {
+                    continue;
+                }
+                ManualCurriculumChoiceGroup::create([
+                    'curricula_hemis_id' => $reference->curricula_hemis_id,
+                    'label'      => trim((string) ($group['label'] ?? '')) ?: implode(' / ', $refNames),
+                    'ref_names'  => $refNames,
+                    'work_names' => array_values(array_filter(array_map('trim', $group['work_names'] ?? []))),
+                    'norm_name'  => trim((string) ($group['norm_name'] ?? '')) ?: null,
+                    'note'       => trim((string) ($group['note'] ?? '')) ?: null,
+                    'created_by' => Auth::id(),
+                ]);
+            }
+        });
+
+        return response()->json(['saved' => count($data['groups'])]);
     }
 
     /**

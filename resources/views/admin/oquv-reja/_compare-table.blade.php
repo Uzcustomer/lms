@@ -68,8 +68,11 @@
                     <td class="px-3 py-2 {{ $row['ref_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
                         {{ $row['ref_name'] ?? '—' }}
                         @if(!empty($row['choice']))
-                            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 align-middle"
-                                  title="Tanlov bloki — muqobillar: {{ implode(' / ', $row['choice_alts']) }}">tanlov</span>
+                            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium align-middle
+                                         {{ !empty($row['choice_manual']) ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800' }}"
+                                  title="{{ !empty($row['choice_manual']) ? "Qo'lda belgilangan tanlov guruhi" : 'Avtomatik topilgan tanlov bloki' }} — muqobillar: {{ implode(' / ', $row['choice_alts']) }}">
+                                {{ !empty($row['choice_manual']) ? "tanlov (qo'lda)" : 'tanlov' }}
+                            </span>
                             <div class="text-xs text-gray-400">{{ implode(' / ', $row['choice_alts']) }}</div>
                         @endif
                     </td>

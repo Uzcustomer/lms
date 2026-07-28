@@ -84,6 +84,8 @@
                 @endif
             </div>
 
+            @include('admin.oquv-reja._choice-groups', ['reference' => $reference])
+
             @include('admin.oquv-reja._compare-table', ['comparison' => $comparison])
 
         </div>

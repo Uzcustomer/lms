@@ -148,6 +148,88 @@ test('ro\'yxatdan tashqari fan blok kodi bo\'yicha moslanadi va "Tanlov farqi" b
     expect($row['note'])->toContain("namunaviy muqobillar ro'yxatida yo'q");
 });
 
+test('qo\'lda guruh ishchidagi birlashgan "A / B" qatorini bog\'laydi', function () {
+    $service = new CurriculumComparisonService();
+
+    // Namunaviyda blok ostida bitta muqobil qatori bor, ikkinchisi faqat
+    // sarlavhada; ishchida esa ikkalasi bitta qatorda birlashtirilgan.
+    $refGroups = [
+        $service->normalize("O'zbek/rus tili") => subjectGroup(
+            "O'zbek/rus tili", "2.02 O'zbek/rus tili YOKI Tibbiyotda xorijiy til", 90, 3
+        ),
+    ];
+    $manual = [[
+        'label' => '2.02 Chet tili',
+        'ref_names' => ["O'zbek/rus tili", 'Tibbiyotda xorijiy til'],
+        'work_names' => ["O'zbek/rus tili / Tibbiyotda xorijiy til"],
+        'norm_name' => null,
+    ]];
+
+    $groups = callService($service, 'manualChoiceGroups', [$manual, $refGroups]);
+    expect(array_keys($groups))->toBe(['manual-0']);
+    expect($groups['manual-0']['manual'])->toBeTrue();
+
+    $workGroups = [
+        $service->normalize("O'zbek/rus tili / Tibbiyotda xorijiy til") => subjectGroup(
+            "O'zbek/rus tili / Tibbiyotda xorijiy til", 'tanlov', 90, 3
+        ),
+        $service->normalize('Anatomiya') => subjectGroup('Anatomiya', 'majburiy', 210, 7),
+    ];
+
+    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method->setAccessible(true);
+    $row = $method->invokeArgs($service, [$groups['manual-0'], $refGroups, &$workGroups, []]);
+
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
+    expect($row['ref_hours'])->toBe(90.0);
+    expect($row['work_hours'])->toBe(90.0);
+    expect($row['choice_manual'])->toBeTrue();
+    // Faqat guruhga tegishli fan iste'mol qilinadi, qolgani jadvalda qoladi
+    expect(array_keys($workGroups))->toBe([$service->normalize('Anatomiya')]);
+});
+
+test('qo\'lda guruhda norm_name normani belgilaydi', function () {
+    $service = new CurriculumComparisonService();
+
+    $refGroups = [
+        $service->normalize('Harbiy tibbiy tayyorgarlik')
+            => subjectGroup('Harbiy tibbiy tayyorgarlik', '2.05', 360, 12),
+        $service->normalize('Klinik laboratoriya tashhisoti')
+            => subjectGroup('Klinik laboratoriya tashhisoti', '2.05', 60, 2),
+    ];
+    $groups = callService($service, 'manualChoiceGroups', [[[
+        'label' => '2.05',
+        'ref_names' => ['Harbiy tibbiy tayyorgarlik', 'Klinik laboratoriya tashhisoti'],
+        'work_names' => ['Harbiy tibbiy tayyorgarlik / Klinik laboratoriya tashhisoti'],
+        'norm_name' => 'Klinik laboratoriya tashhisoti',
+    ]], $refGroups]);
+
+    $workGroups = [
+        $service->normalize('Harbiy tibbiy tayyorgarlik / Klinik laboratoriya tashhisoti')
+            => subjectGroup('Harbiy tibbiy tayyorgarlik / Klinik laboratoriya tashhisoti', 'tanlov', 60, 2),
+    ];
+
+    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method->setAccessible(true);
+    $row = $method->invokeArgs($service, [$groups['manual-0'], $refGroups, &$workGroups, []]);
+
+    expect($row['ref_hours'])->toBe(60.0);   // 360 emas — norma qo'lda ko'rsatilgan
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
+});
+
+test('namunaviyda muqobili topilmagan qo\'lda guruh o\'tkazib yuboriladi', function () {
+    $service = new CurriculumComparisonService();
+
+    $groups = callService($service, 'manualChoiceGroups', [[[
+        'label' => 'x',
+        'ref_names' => ["Rejada yo'q fan"],
+        'work_names' => [],
+        'norm_name' => null,
+    ]], referenceGroups($service)]);
+
+    expect($groups)->toBe([]);
+});
+
 test('soat va kredit farqi tanlov farqidan ustun turadi', function () {
     $service = new CurriculumComparisonService();
     $refGroups = referenceGroups($service);

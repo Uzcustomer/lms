@@ -916,6 +916,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/compare/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareExport'])->name('compare-export');
                 Route::get('/compare-group', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareGroup'])->name('compare-group');
                 Route::get('/compare-group/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareGroupExport'])->name('compare-group-export');
+                Route::get('/choice-groups', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'choiceGroups'])->name('choice-groups');
+                Route::post('/choice-groups', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'saveChoiceGroups'])->name('choice-groups.save');
                 Route::get('/batch-view', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'batchView'])->name('batch-view');
                 Route::post('/store-bulk', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeBulk'])->name('store-bulk');
                 Route::get('/planned-sources', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'plannedSources'])->name('planned-sources');

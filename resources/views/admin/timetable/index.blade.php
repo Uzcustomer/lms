@@ -48,6 +48,7 @@
 
                         <button type="button" id="excelViewBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/05_print_preview.png') }}" alt="" aria-hidden="true"></span>Excelga yuklash</button>
                         <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
+                        <button type="button" id="rulesBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" title="Jadval qoidalari (bir kunda bo'lmasin, ketma-ket kelsin va h.k.)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Qoidalar <span id="rulesBadge" class="hidden"></span></button>
                         <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
                         <span id="boardMsg" class="text-xs"></span>
                     </div>
@@ -536,6 +537,115 @@
             </div>
 
             {{-- ═══ O'qituvchi biriktirish matritsasi ═══ --}}
+            {{-- Qoidalar ro'yxati (aSc "Связь между уроками" uslubida) --}}
+            <div id="rulesModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full flex flex-col" style="width: min(1100px, 96vw); max-width: none; height: min(640px, 88vh);">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-diagram-3"></i></span>
+                                <span>Qoidalar — darslar orasidagi bog'liqlik</span>
+                            </div>
+                            <button type="button" id="rulesClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="flex-1 overflow-auto p-3" style="min-height:0;">
+                            <table class="w-full text-xs border-collapse tt-rules-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:34px">№</th>
+                                        <th style="width:44px">Faol</th>
+                                        <th>Fanlar</th>
+                                        <th>Qamrov</th>
+                                        <th>Tavsif</th>
+                                        <th style="width:90px">Og'irlik</th>
+                                        <th>Izoh</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rulesBody"></tbody>
+                            </table>
+                            <div id="rulesEmpty" class="hidden text-sm text-gray-400 py-10 text-center">
+                                Qoidalar yo'q. Pastdagi <b>+ Qo'shish</b> tugmasi bilan qoida qo'shing.
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
+                            <button type="button" id="ruleAddBtn" class="asc-tool text-xs">+ Qo'shish</button>
+                            <button type="button" id="ruleEditBtn" class="asc-tool text-xs">Tahrirlash</button>
+                            <button type="button" id="ruleDelBtn" class="asc-tool text-xs tt-danger-btn">O'chirish</button>
+                            <span class="h-5 w-px bg-gray-300 mx-1"></span>
+                            <button type="button" id="ruleToggleBtn" class="asc-tool text-xs">Faol / nofaol</button>
+                            <button type="button" id="ruleUpBtn" class="asc-tool text-xs" title="Yuqoriga">↑</button>
+                            <button type="button" id="ruleDownBtn" class="asc-tool text-xs" title="Pastga">↓</button>
+                            <span id="rulesMsg" class="text-[11px] text-gray-500 ml-1"></span>
+                            <button type="button" id="rulesOkBtn" class="asc-tool text-xs ml-auto">OK</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Yangi/tahrir qoida — shart tanlash (aSc "Новая взаимосвязь") --}}
+            <div id="ruleEditModal" class="hidden tt-modal tt-modal-top">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full flex flex-col" style="width: min(1000px, 96vw); max-width: none; height: min(620px, 90vh);">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-node-plus"></i></span>
+                                <span id="ruleEditTitle">Yangi qoida</span>
+                            </div>
+                            <button type="button" id="ruleEditClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="flex-1 overflow-hidden p-3" style="min-height:0;">
+                            <div class="flex gap-3 h-full" style="min-height:0;">
+                                {{-- Chap ustun: fanlar + qamrov + og'irlik --}}
+                                <div class="flex flex-col gap-3" style="width:330px; min-height:0;">
+                                    <div class="bg-white border border-gray-300 rounded p-2 flex flex-col" style="min-height:0; flex:1 1 50%;">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-xs font-bold text-blue-700">1. Fanlar</span>
+                                            <label class="text-[11px] text-gray-600 flex items-center gap-1">
+                                                <input type="checkbox" id="ruleAllSubjects" class="rounded border-gray-300"> Barchasi
+                                            </label>
+                                        </div>
+                                        <input id="ruleSubjSearch" placeholder="Fan qidirish..." class="w-full rounded border-gray-300 text-xs mb-1 py-1">
+                                        <div id="ruleSubjList" class="flex-1 overflow-auto border border-gray-200 rounded p-1" style="min-height:0;"></div>
+                                    </div>
+                                    <div class="bg-white border border-gray-300 rounded p-2 flex flex-col" style="min-height:0; flex:1 1 40%;">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-xs font-bold text-blue-700">2. Yo'nalish · kurs</span>
+                                            <label class="text-[11px] text-gray-600 flex items-center gap-1">
+                                                <input type="checkbox" id="ruleAllScopes" class="rounded border-gray-300"> Barchasi
+                                            </label>
+                                        </div>
+                                        <div id="ruleScopeList" class="flex-1 overflow-auto border border-gray-200 rounded p-1" style="min-height:0;"></div>
+                                    </div>
+                                    <div class="bg-white border border-gray-300 rounded p-2">
+                                        <label class="block text-[11px] text-gray-600 mb-1">Qoida og'irligi</label>
+                                        <select id="ruleWeight" class="w-full rounded border-gray-300 text-xs mb-2">
+                                            <option value="majburiy">Majburiy (buzilmasin)</option>
+                                            <option value="normal" selected>Normal</option>
+                                            <option value="yengil">Yengil (imkon qadar)</option>
+                                        </select>
+                                        <label class="block text-[11px] text-gray-600 mb-1">Izoh</label>
+                                        <input id="ruleNote" class="w-full rounded border-gray-300 text-xs" placeholder="ixtiyoriy">
+                                    </div>
+                                </div>
+                                {{-- O'ng ustun: shartlar ro'yxati --}}
+                                <div class="flex-1 bg-white border border-gray-300 rounded p-2 flex flex-col" style="min-height:0;">
+                                    <span class="text-xs font-bold text-blue-700 mb-1">3. Shart</span>
+                                    <div id="ruleCondList" class="flex-1 overflow-auto pr-1" style="min-height:0;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 px-3 py-2 border-t border-gray-300 bg-[#f0f0f0] rounded-b">
+                            <label class="text-[11px] text-gray-600 flex items-center gap-1">
+                                <input type="checkbox" id="ruleActive" class="rounded border-gray-300" checked> Faol
+                            </label>
+                            <span id="ruleEditMsg" class="text-[11px] text-red-600 ml-2"></span>
+                            <button type="button" id="ruleCancelBtn" class="asc-tool text-xs ml-auto">Bekor qilish</button>
+                            <button type="button" id="ruleSaveBtn" class="asc-tool text-xs tt-success-btn">Saqlash</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="assignModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
                     <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 200px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
@@ -703,6 +813,26 @@
         #cycleGrid .cyc-wend { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
+        /* ── Qoidalar (aSc "Взаимосвязи") ── */
+        .tt-rules-table th { background: #e8eef7; border: 1px solid #c7d2e0; padding: 4px 6px; text-align: left;
+            font-weight: 700; color: #1e3a5f; position: sticky; top: 0; z-index: 1; }
+        .tt-rules-table td { border: 1px solid #dbe3ec; padding: 3px 6px; background: #fff; vertical-align: top; }
+        .tt-rules-table tr.sel td { background: #dbeafe; }
+        .tt-rules-table tr { cursor: pointer; }
+        .tt-rules-table tr.off td { color: #9ca3af; font-style: italic; }
+        .tt-rule-w { display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 10px; font-weight: 700; }
+        .tt-rule-w.majburiy { background: #fee2e2; color: #991b1b; }
+        .tt-rule-w.normal   { background: #e0e7ff; color: #3730a3; }
+        .tt-rule-w.yengil   { background: #f1f5f9; color: #475569; }
+        .tt-cond-item { display: block; padding: 5px 7px; border-radius: 5px; font-size: 12px; color: #1f2937; cursor: pointer; }
+        .tt-cond-item:hover { background: #eff6ff; }
+        .tt-cond-item.sel { background: #dbeafe; outline: 1px solid #93c5fd; }
+        .tt-cond-item input { margin-right: 6px; }
+        .tt-pick-item { display: flex; align-items: center; gap: 6px; padding: 2px 4px; font-size: 11px;
+            color: #334155; border-radius: 4px; cursor: pointer; }
+        .tt-pick-item:hover { background: #f1f5f9; }
+        #rulesBadge:not(.hidden) { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 4px;
+            background: #2563eb; color: #fff; border-radius: 8px; font-size: 10px; font-weight: 700; text-align: center; }
         /* ── Modal oynalar (Tailwind kompilyatsiyasiga bog'liq bo'lmasin — inline) ── */
         .tt-modal { position: fixed; inset: 0; z-index: 60; background: rgba(15,23,42,.55); overflow-y: auto; }
         .tt-modal.hidden { display: none; }
@@ -1757,6 +1887,8 @@
                 fillSpecControls();
                 fillGridInputs();
                 renderAll();
+                // Qoidalar sonini (badge) fonda yangilaymiz — doska yuklanishini kutdirmaydi
+                loadRules().catch(() => {});
             }
 
             function buildSpecList() {
@@ -2144,6 +2276,189 @@
                 renderHolChips();
                 loadCyclePlan();
             });
+
+            // ===== Qoidalar (aSc "Взаимосвязи" uslubida) =====
+            let rulesData = [];        // [{id, condition, description, subjects, scopes, weight, active, note}]
+            let ruleConditions = {};   // {kod: tavsif}
+            let ruleSelId = null;      // ro'yxatda tanlangan qoida id
+            let ruleEditing = null;    // tahrirlanayotgan qoida (yoki null = yangi)
+
+            const WEIGHT_LABEL = { majburiy: 'Majburiy', normal: 'Normal', yengil: 'Yengil' };
+
+            async function loadRules() {
+                if (!board) return;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/rules');
+                    rulesData = j.rules || [];
+                    ruleConditions = j.conditions || {};
+                    renderRulesTable();
+                    updateRulesBadge();
+                } catch (e) {
+                    $('rulesBody').innerHTML = '';
+                    $('rulesMsg').textContent = 'Xatolik: ' + e.message;
+                }
+            }
+            function updateRulesBadge() {
+                const n = rulesData.filter(r => r.active).length;
+                const b = $('rulesBadge');
+                if (!b) return;
+                b.textContent = n || '';
+                b.classList.toggle('hidden', !n);
+            }
+            const ruleSubjLabel = r => (r.subjects && r.subjects.length)
+                ? (r.subjects.length > 2 ? (r.subjects.length + ' ta fan') : r.subjects.join(', '))
+                : 'Barcha fanlar';
+            const ruleScopeLabel = r => (r.scopes && r.scopes.length)
+                ? (r.scopes.length > 2 ? (r.scopes.length + ' ta yo\'nalish·kurs') : r.scopes.join('; '))
+                : 'Barchasi';
+
+            function renderRulesTable() {
+                $('rulesEmpty').classList.toggle('hidden', rulesData.length > 0);
+                $('rulesBody').innerHTML = rulesData.map((r, i) =>
+                    '<tr data-id="' + r.id + '" class="' + (r.id === ruleSelId ? 'sel ' : '') + (r.active ? '' : 'off') + '">' +
+                    '<td>' + (i + 1) + '</td>' +
+                    '<td style="text-align:center">' + (r.active ? '✔' : '✕') + '</td>' +
+                    '<td>' + esc(ruleSubjLabel(r)) + '</td>' +
+                    '<td>' + esc(ruleScopeLabel(r)) + '</td>' +
+                    '<td>' + esc(r.description || r.condition) + '</td>' +
+                    '<td><span class="tt-rule-w ' + esc(r.weight) + '">' + esc(WEIGHT_LABEL[r.weight] || r.weight) + '</span></td>' +
+                    '<td>' + esc(r.note || '') + '</td></tr>').join('');
+                $('rulesBody').querySelectorAll('tr').forEach(tr => {
+                    tr.onclick = () => { ruleSelId = +tr.dataset.id; renderRulesTable(); };
+                    tr.ondblclick = () => { ruleSelId = +tr.dataset.id; openRuleEditor(rulesData.find(x => x.id === ruleSelId)); };
+                });
+            }
+
+            // --- Qoidalar oynasi
+            if ($('rulesBtn')) $('rulesBtn').onclick = () => {
+                if (!board) return;
+                $('rulesMsg').textContent = '';
+                $('rulesModal').classList.remove('hidden');
+                loadRules();
+            };
+            const closeRules = () => $('rulesModal').classList.add('hidden');
+            if ($('rulesClose')) $('rulesClose').onclick = closeRules;
+            if ($('rulesOkBtn')) $('rulesOkBtn').onclick = closeRules;
+
+            // --- Qoida muharriri (shart tanlash oynasi)
+            function openRuleEditor(rule) {
+                ruleEditing = rule || null;
+                $('ruleEditTitle').textContent = rule ? 'Qoidani tahrirlash' : 'Yangi qoida';
+                $('ruleEditMsg').textContent = '';
+                $('ruleWeight').value = rule ? rule.weight : 'normal';
+                $('ruleNote').value = rule ? (rule.note || '') : '';
+                $('ruleActive').checked = rule ? !!rule.active : true;
+                $('ruleSubjSearch').value = '';
+
+                // Shartlar ro'yxati (radio)
+                const cur = rule ? rule.condition : '';
+                $('ruleCondList').innerHTML = Object.entries(ruleConditions).map(([code, label]) =>
+                    '<label class="tt-cond-item' + (code === cur ? ' sel' : '') + '">' +
+                    '<input type="radio" name="ruleCond" value="' + esc(code) + '"' + (code === cur ? ' checked' : '') + '>' +
+                    esc(label) + '</label>').join('');
+                $('ruleCondList').querySelectorAll('input[name=ruleCond]').forEach(inp => {
+                    inp.onchange = () => $('ruleCondList').querySelectorAll('.tt-cond-item')
+                        .forEach(el => el.classList.toggle('sel', el.contains(inp) && inp.checked));
+                });
+
+                // Fanlar va qamrov ro'yxatlari — doskadagi kartalardan
+                const subs = [...new Set(cards.map(c => c.subject_name))].sort((a, b) => a.localeCompare(b, 'uz'));
+                const scopes = [...new Set(cards.map(c => c.specialty_name + ' · ' + c.course))].sort((a, b) => a.localeCompare(b, 'uz'));
+                const selSubs = new Set(rule ? rule.subjects : []);
+                const selScopes = new Set(rule ? rule.scopes : []);
+                $('ruleAllSubjects').checked = !selSubs.size;
+                $('ruleAllScopes').checked = !selScopes.size;
+                $('ruleSubjList').innerHTML = subs.map(s =>
+                    '<label class="tt-pick-item"><input type="checkbox" class="rule-subj" value="' + esc(s) + '"' +
+                    (selSubs.has(s) ? ' checked' : '') + '>' + esc(s) + '</label>').join('') ||
+                    '<div class="text-[11px] text-gray-400 p-1">Fan yo\'q</div>';
+                $('ruleScopeList').innerHTML = scopes.map(s =>
+                    '<label class="tt-pick-item"><input type="checkbox" class="rule-scope" value="' + esc(s) + '"' +
+                    (selScopes.has(s) ? ' checked' : '') + '>' + esc(s) + '</label>').join('') ||
+                    '<div class="text-[11px] text-gray-400 p-1">Yo\'nalish yo\'q</div>';
+
+                $('ruleEditModal').classList.remove('hidden');
+            }
+            // "Barchasi" belgilansa — alohida tanlovlar tozalanadi
+            if ($('ruleAllSubjects')) $('ruleAllSubjects').onchange = function () {
+                if (this.checked) $('ruleSubjList').querySelectorAll('.rule-subj').forEach(c => c.checked = false);
+            };
+            if ($('ruleAllScopes')) $('ruleAllScopes').onchange = function () {
+                if (this.checked) $('ruleScopeList').querySelectorAll('.rule-scope').forEach(c => c.checked = false);
+            };
+            // Alohida fan belgilansa — "Barchasi" olib tashlanadi
+            if ($('ruleSubjList')) $('ruleSubjList').addEventListener('change', ev => {
+                if (ev.target.classList.contains('rule-subj') && ev.target.checked) $('ruleAllSubjects').checked = false;
+            });
+            if ($('ruleScopeList')) $('ruleScopeList').addEventListener('change', ev => {
+                if (ev.target.classList.contains('rule-scope') && ev.target.checked) $('ruleAllScopes').checked = false;
+            });
+            // Fan qidirish
+            if ($('ruleSubjSearch')) $('ruleSubjSearch').oninput = function () {
+                const q = this.value.toLowerCase().trim();
+                $('ruleSubjList').querySelectorAll('.tt-pick-item').forEach(el =>
+                    el.style.display = (!q || el.textContent.toLowerCase().includes(q)) ? '' : 'none');
+            };
+
+            const closeRuleEditor = () => $('ruleEditModal').classList.add('hidden');
+            if ($('ruleEditClose')) $('ruleEditClose').onclick = closeRuleEditor;
+            if ($('ruleCancelBtn')) $('ruleCancelBtn').onclick = closeRuleEditor;
+
+            if ($('ruleSaveBtn')) $('ruleSaveBtn').onclick = async function () {
+                const cond = $('ruleCondList').querySelector('input[name=ruleCond]:checked');
+                if (!cond) { $('ruleEditMsg').textContent = 'Shartni tanlang.'; return; }
+                const body = {
+                    condition: cond.value,
+                    weight: $('ruleWeight').value,
+                    active: $('ruleActive').checked ? 1 : 0,
+                    note: $('ruleNote').value.trim(),
+                    subjects: $('ruleAllSubjects').checked ? []
+                        : [...$('ruleSubjList').querySelectorAll('.rule-subj:checked')].map(c => c.value),
+                    scopes: $('ruleAllScopes').checked ? []
+                        : [...$('ruleScopeList').querySelectorAll('.rule-scope:checked')].map(c => c.value),
+                };
+                if (ruleEditing) body.id = ruleEditing.id;
+                this.disabled = true;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/rules', 'POST', body);
+                    closeRuleEditor();
+                    await loadRules();
+                } catch (e) { $('ruleEditMsg').textContent = 'Xatolik: ' + e.message; }
+                this.disabled = false;
+            };
+
+            // --- Ro'yxat tugmalari
+            const selRule = () => rulesData.find(r => r.id === ruleSelId);
+            if ($('ruleAddBtn')) $('ruleAddBtn').onclick = () => openRuleEditor(null);
+            if ($('ruleEditBtn')) $('ruleEditBtn').onclick = () => {
+                const r = selRule();
+                if (!r) { $('rulesMsg').textContent = 'Avval qoidani tanlang.'; return; }
+                openRuleEditor(r);
+            };
+            if ($('ruleDelBtn')) $('ruleDelBtn').onclick = async () => {
+                const r = selRule();
+                if (!r) { $('rulesMsg').textContent = 'Avval qoidani tanlang.'; return; }
+                if (!confirm('Qoida o\'chirilsinmi?\n\n' + (r.description || r.condition))) return;
+                try {
+                    // POST + _method spoofing — fayldagi boshqa o'chirishlar bilan bir xil uslub
+                    await api(BASE + '/boards/' + board.id + '/rules/' + r.id, 'POST', { _method: 'DELETE' });
+                    ruleSelId = null;
+                    await loadRules();
+                    $('rulesMsg').textContent = 'O\'chirildi';
+                } catch (e) { $('rulesMsg').textContent = 'Xatolik: ' + e.message; }
+            };
+            async function ruleState(bodyExtra) {
+                const r = selRule();
+                if (!r) { $('rulesMsg').textContent = 'Avval qoidani tanlang.'; return; }
+                try {
+                    await api(BASE + '/boards/' + board.id + '/rules/' + r.id + '/state', 'POST', bodyExtra(r));
+                    await loadRules();
+                    $('rulesMsg').textContent = '';
+                } catch (e) { $('rulesMsg').textContent = 'Xatolik: ' + e.message; }
+            }
+            if ($('ruleToggleBtn')) $('ruleToggleBtn').onclick = () => ruleState(r => ({ active: r.active ? 0 : 1 }));
+            if ($('ruleUpBtn')) $('ruleUpBtn').onclick = () => ruleState(() => ({ move: 'up' }));
+            if ($('ruleDownBtn')) $('ruleDownBtn').onclick = () => ruleState(() => ({ move: 'down' }));
 
             function buildGroupRows() {
                 groupRows = [];

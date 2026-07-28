@@ -10,6 +10,7 @@ use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
 use App\Models\TimetableCardOverride;
 use App\Models\TimetableGridSetting;
+use App\Models\TimetableRule;
 use App\Models\TimetableSubjectSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -1394,6 +1395,122 @@ class TimetableController extends Controller
         }
 
         return response()->json(['ok' => true, 'mode' => $data['mode']]);
+    }
+
+    // ===================== QOIDALAR (aSc "Взаимосвязи") =====================
+
+    /** Qoidalar ro'yxati + mavjud shartlar lug'ati (dialog uchun). */
+    public function rules(TimetableBoard $board)
+    {
+        $rules = Schema::hasTable('timetable_rules')
+            ? TimetableRule::where('board_id', $board->id)
+                ->orderBy('position')->orderBy('id')->get()
+                ->map(fn(TimetableRule $r) => $this->ruleToArray($r))->all()
+            : [];
+
+        return response()->json([
+            'rules'      => $rules,
+            'conditions' => TimetableRule::CONDITIONS,
+            'weights'    => TimetableRule::WEIGHTS,
+        ]);
+    }
+
+    private function ruleToArray(TimetableRule $r): array
+    {
+        return [
+            'id'          => $r->id,
+            'condition'   => $r->condition,
+            'description' => $r->describe(),
+            'subjects'    => $r->subjects ?: [],
+            'scopes'      => $r->scopes ?: [],
+            'params'      => $r->params ?: [],
+            'weight'      => $r->weight,
+            'active'      => (bool) $r->active,
+            'position'    => (int) $r->position,
+            'note'        => $r->note,
+        ];
+    }
+
+    /** Qoida yaratish yoki tahrirlash. */
+    public function saveRule(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'id'          => 'nullable|integer',
+            'condition'   => 'required|string|max:60',
+            'subjects'    => 'nullable|array',
+            'subjects.*'  => 'string|max:255',
+            'scopes'      => 'nullable|array',
+            'scopes.*'    => 'string|max:255',
+            'params'      => 'nullable|array',
+            'weight'      => 'nullable|string|max:20',
+            'active'      => 'nullable|boolean',
+            'note'        => 'nullable|string|max:255',
+        ]);
+
+        if (!array_key_exists($data['condition'], TimetableRule::CONDITIONS)) {
+            return response()->json(['error' => "Noma'lum shart: " . $data['condition']], 422);
+        }
+        $weight = in_array($data['weight'] ?? '', TimetableRule::WEIGHTS, true) ? $data['weight'] : 'normal';
+
+        $values = [
+            'condition' => $data['condition'],
+            'subjects'  => array_values($data['subjects'] ?? []),
+            'scopes'    => array_values($data['scopes'] ?? []),
+            'params'    => $data['params'] ?? [],
+            'weight'    => $weight,
+            'active'    => (bool) ($data['active'] ?? true),
+            'note'      => $data['note'] ?? null,
+        ];
+
+        if (!empty($data['id'])) {
+            $rule = TimetableRule::where('board_id', $board->id)->findOrFail($data['id']);
+            $rule->update($values);
+        } else {
+            $values['board_id'] = $board->id;
+            $values['position'] = (int) TimetableRule::where('board_id', $board->id)->max('position') + 1;
+            $rule = TimetableRule::create($values);
+        }
+
+        return response()->json(['ok' => true, 'rule' => $this->ruleToArray($rule->fresh())]);
+    }
+
+    /** Qoidani o'chirish. */
+    public function deleteRule(TimetableBoard $board, TimetableRule $rule)
+    {
+        abort_unless((int) $rule->board_id === (int) $board->id, 404);
+        $rule->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Qoidani yoqish/o'chirish yoki ro'yxatda ko'chirish (yuqoriga/pastga). */
+    public function updateRuleState(Request $request, TimetableBoard $board, TimetableRule $rule)
+    {
+        abort_unless((int) $rule->board_id === (int) $board->id, 404);
+        $data = $request->validate([
+            'active' => 'nullable|boolean',
+            'move'   => 'nullable|in:up,down',
+        ]);
+
+        if (array_key_exists('active', $data) && $data['active'] !== null) {
+            $rule->update(['active' => (bool) $data['active']]);
+        }
+
+        if (!empty($data['move'])) {
+            $dir = $data['move'] === 'up' ? 'up' : 'down';
+            $neighbour = TimetableRule::where('board_id', $board->id)
+                ->when($dir === 'up',
+                    fn($q) => $q->where('position', '<', $rule->position)->orderByDesc('position'),
+                    fn($q) => $q->where('position', '>', $rule->position)->orderBy('position'))
+                ->first();
+            if ($neighbour) {
+                $mine = $rule->position;
+                $rule->update(['position' => $neighbour->position]);
+                $neighbour->update(['position' => $mine]);
+            }
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     /** Guruhcha nomidan asosiy guruh (oxirgi kichik harf — a/b/c — olib tashlanadi). */

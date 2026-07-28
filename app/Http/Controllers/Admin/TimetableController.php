@@ -720,6 +720,12 @@ class TimetableController extends Controller
             'lecture_rooms'  => 'nullable|boolean',
             'training_type'  => 'nullable|in:lecture,practice',
         ]);
+        // Katta doskada (minglab kartochka) joylash uzoq davom etadi — PHP ning
+        // sukut vaqt/xotira chegarasi tugab "Server Error" (500) qaytardi.
+        // Bu admin amali uchun chegarani ko'taramiz.
+        @set_time_limit(0);
+        @ini_set('memory_limit', '1024M');
+
         // Qamrov to'plamlari: fakultet / yo'nalish / kurs (massiv yoki eski yakka param)
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
@@ -869,18 +875,41 @@ class TimetableController extends Controller
             $bestPen = INF;
             $bestRoom = null;
 
+            // Karta bo'yicha o'zgarmas qiymatlarni ichki halqadan tashqariga chiqaramiz
+            // (katta doskalarda bu qayta-qayta hisoblanib, sezilarli sekinlashtirardi).
+            $scopeKey = $this->groupScopeKey($c);
+            $teacherId = $c->teacher_id;
+            $minVol = $minVolFor($c);
+            $pool = $poolFor($c);
+            // Xona kerakmi (havza bo'sh bo'lmasa — kerak). Sig'imi yetmaydiganlarni
+            // bir marta chiqarib tashlaymiz (har katakda qayta tekshirmaslik uchun).
+            // MUHIM: havza bo'sh bo'lmasa-yu sig'adigani bo'lmasa — karta joylanmaydi
+            // (xonasiz qo'yib yubormaymiz), shuning uchun $roomRequired alohida bayroq.
+            $roomRequired = $pool->isNotEmpty();
+            $poolArr = $roomRequired
+                ? array_values(array_filter($pool->all(), fn($r) => (int) ($r->volume ?? 0) >= $minVol))
+                : [];
+            if ($roomRequired && !$poolArr) {
+                $unplaced++;   // sig'imi yetadigan xona umuman yo'q
+                continue;
+            }
             $need = $this->parasNeeded($c);
             for ($d = 1; $d <= $days; $d++) {
                 for ($p = 1; $p <= $pairs - $need + 1; $p++) {
                     // Qattiq: dars egallaydigan barcha paralar bo'sh bo'lishi kerak
                     $freeAll = true;
                     for ($i = 0; $i < $need; $i++) {
-                        $gk = $this->groupScopeKey($c) . '|' . $d . '|' . ($p + $i);
-                        if (!empty($groupBusy[$gk]) && array_intersect($groups, $groupBusy[$gk])) {
-                            $freeAll = false;
-                            break;
+                        $gk = $scopeKey . '|' . $d . '|' . ($p + $i);
+                        if (!empty($groupBusy[$gk])) {
+                            $busyMap = $groupBusy[$gk];
+                            foreach ($groups as $g) {
+                                if (isset($busyMap[$g])) {
+                                    $freeAll = false;
+                                    break 2;
+                                }
+                            }
                         }
-                        if ($c->teacher_id && !empty($teacherBusy[$c->teacher_id . '|' . $d . '|' . ($p + $i)])) {
+                        if ($teacherId && !empty($teacherBusy[$teacherId . '|' . $d . '|' . ($p + $i)])) {
                             $freeAll = false;
                             break;
                         }
@@ -891,12 +920,8 @@ class TimetableController extends Controller
                     // Qattiq: auditoriya (sig'im yetarli + barcha paralarda bo'sh) —
                     // kartaga mos havzadan (ma'ruza → ma'ruza xonalari), to'qnashuvsiz.
                     $room = null;
-                    $pool = $poolFor($c);
-                    if ($pool->isNotEmpty()) {
-                        foreach ($pool as $r) {
-                            if ((int) ($r->volume ?? 0) < $minVolFor($c)) {
-                                continue; // sig'im yetmaydi (tolerans hisobga olingan)
-                            }
+                    if ($roomRequired) {
+                        foreach ($poolArr as $r) {   // havza allaqachon sig'im bo'yicha filtrlangan
                             $roomFree = true;
                             for ($i = 0; $i < $need; $i++) {
                                 if (!empty($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)])) {
@@ -995,9 +1020,29 @@ class TimetableController extends Controller
             }
         }
 
-        DB::transaction(function () use ($touched) {
-            foreach ($touched as $c) {
-                $c->save();
+        // Yozish: har karta uchun alohida save() minglab UPDATE so'rovi bo'lib juda
+        // sekin edi (katta doskada joylashning o'zidan ham uzoqroq). Bir xil
+        // (kun, para, xona) qiymatli kartalarni guruhlab, whereIn bilan yozamiz.
+        $batches = [];
+        foreach ($touched as $c) {
+            $k = $c->day . '|' . $c->pair . '|' . (int) $c->start_half . '|'
+                . ($c->auditorium_code ?? '') . '|' . ($c->auditorium_name ?? '');
+            if (!isset($batches[$k])) {
+                $batches[$k] = ['vals' => [
+                    'day'             => $c->day,
+                    'pair'            => $c->pair,
+                    'start_half'      => (int) $c->start_half,
+                    'auditorium_code' => $c->auditorium_code,
+                    'auditorium_name' => $c->auditorium_name,
+                ], 'ids' => []];
+            }
+            $batches[$k]['ids'][] = $c->id;
+        }
+        DB::transaction(function () use ($batches) {
+            foreach ($batches as $b) {
+                foreach (array_chunk($b['ids'], 1000) as $chunk) {
+                    TimetableCard::whereIn('id', $chunk)->update($b['vals']);
+                }
             }
         });
 
@@ -1105,14 +1150,21 @@ class TimetableController extends Controller
     /**
      * Katakni band deb belgilash. Dars uzunligiga qarab len_half ta ketma-ket
      * yarim-slotni band qiladi (avto-joylash konfliktsiz bo'lishi uchun).
+     *
+     * $groupBusy — "scope|day|pair" => [guruh_nomi => true] (ro'yxat emas, XARITA:
+     * katta doskalarda in_array/array_intersect O(n) qidiruvi juda qimmat edi).
      */
     private function markBusy(array &$groupBusy, array &$teacherBusy, array &$roomBusy, TimetableCard $c): void
     {
         $need = $this->parasNeeded($c);
+        $scope = $this->groupScopeKey($c);
+        $groups = $c->occupiedGroups();
         for ($i = 0; $i < $need; $i++) {
             $p = (int) $c->pair + $i;
-            $k = $this->groupScopeKey($c) . '|' . $c->day . '|' . $p;
-            $groupBusy[$k] = array_merge($groupBusy[$k] ?? [], $c->occupiedGroups());
+            $k = $scope . '|' . $c->day . '|' . $p;
+            foreach ($groups as $g) {
+                $groupBusy[$k][$g] = true;
+            }
             if ($c->teacher_id) {
                 $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $p] = true;
             }
@@ -1138,14 +1190,18 @@ class TimetableController extends Controller
     {
         $spc = $this->groupScopeKey($c);
         $pen = ($p - 1) * 0.2; // ertalabki paralarga yengil ustunlik
+        // Kun bo'yicha band xaritalarni bir marta olamiz (har guruh uchun qayta
+        // qidirmaslik uchun) — $groupBusy: "scope|day|pair" => [guruh => true].
+        $dayBusy = [];
+        for ($pp = 1; $pp <= $pairs; $pp++) {
+            if ($pp !== $p) {
+                $dayBusy[$pp] = $groupBusy[$spc . '|' . $d . '|' . $pp] ?? null;
+            }
+        }
         foreach ($groups as $g) {
             $used = [$p => true];
-            for ($pp = 1; $pp <= $pairs; $pp++) {
-                if ($pp === $p) {
-                    continue;
-                }
-                $busy = $groupBusy[$spc . '|' . $d . '|' . $pp] ?? [];
-                if (in_array($g, $busy, true)) {
+            foreach ($dayBusy as $pp => $busy) {
+                if ($busy !== null && isset($busy[$g])) {
                     $used[$pp] = true;
                 }
             }

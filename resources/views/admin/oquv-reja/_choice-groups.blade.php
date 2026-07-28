@@ -72,20 +72,54 @@
         statusEl.textContent = text;
     }
 
-    // Ko'p tanlovli select: tanlanganlar values massivida
-    function multiSelect(options, selected, dataAttr, index, size) {
-        const chosen = new Set(selected.map((s) => s.toLowerCase()));
-        const opts = options.map((o) => {
-            const label = o.hint ? `${o.name} — ${o.hint}` : o.name;
-            const sel = chosen.has(o.name.toLowerCase()) ? ' selected' : '';
-            return `<option value="${esc(o.name)}"${sel}>${esc(label)}</option>`;
-        }).join('');
-        // Saqlangan, ammo ro'yxatda yo'q nomlar ham ko'rinishi kerak
-        const known = new Set(options.map((o) => o.name.toLowerCase()));
-        const extra = selected.filter((s) => !known.has(s.toLowerCase()))
-            .map((s) => `<option value="${esc(s)}" selected>${esc(s)} (rejada topilmadi)</option>`).join('');
-        return `<select multiple size="${size}" data-field="${dataAttr}" data-index="${index}"
-                        class="w-full border-gray-300 rounded-md text-sm">${opts}${extra}</select>`;
+    // Qidiruv uchun kalit: kichik harf, apostrof va ortiqcha bo'shliqlarsiz.
+    // Shunda "o'zbek" ham, "ozbek" ham bir xil topadi.
+    const searchKey = (s) => String(s ?? '').toLowerCase()
+        .replace(/['‘’ʻʼ`´′]/g, '').replace(/\s+/g, ' ').trim();
+
+    /**
+     * Qidiruvli belgilash ro'yxati: <select multiple> o'rniga (Ctrl bilan
+     * tanlash uzun ro'yxatda deyarli imkonsiz edi). Tanlanganlar tepada chip
+     * ko'rinishida turadi, ro'yxat esa qidiruv bo'yicha filtrlanadi.
+     */
+    function pickList(options, selected, field, index) {
+        const chosen = new Set(selected.map(searchKey));
+        const known = new Set(options.map((o) => searchKey(o.name)));
+
+        // Saqlangan, ammo rejada topilmagan nomlar ham ro'yxatda ko'rinsin
+        const extras = selected.filter((s) => !known.has(searchKey(s)))
+            .map((s) => ({name: s, hint: 'rejada topilmadi', missing: true}));
+
+        const rows = extras.concat(options).map((o) => `
+            <label class="flex items-start gap-2 px-2 py-1 text-sm hover:bg-blue-50 cursor-pointer cg-opt"
+                   data-text="${esc(searchKey(o.name + ' ' + (o.hint || '')))}">
+                <input type="checkbox" value="${esc(o.name)}" data-field="${field}" data-index="${index}"
+                       class="mt-0.5 rounded border-gray-300"${chosen.has(searchKey(o.name)) ? ' checked' : ''}>
+                <span class="${o.missing ? 'text-red-600' : 'text-gray-700'}">${esc(o.name)}</span>
+                ${o.hint ? `<span class="text-gray-400 text-xs ml-auto whitespace-nowrap">${esc(o.hint)}</span>` : ''}
+            </label>`).join('');
+
+        return `
+            <div data-chips="${field}-${index}" class="mb-1">${chipsHtml(selected, field, index)}</div>
+            <input type="text" class="cg-search w-full border-gray-300 rounded-md text-sm mb-1"
+                   data-target="${field}-${index}" placeholder="Qidirish...">
+            <div class="border border-gray-200 rounded-md max-h-48 overflow-y-auto divide-y divide-gray-50"
+                 data-options="${field}-${index}">${rows}</div>
+            <p class="text-xs text-gray-400 mt-1" data-empty="${field}-${index}" hidden>Topilmadi</p>`;
+    }
+
+    /** Tanlanganlar ro'yxati — uzun ro'yxatda pastga tushib ketmasligi uchun tepada. */
+    function chipsHtml(selected, field, index) {
+        if (!selected.length) {
+            return '<span class="text-xs text-gray-400">Tanlanmagan</span>';
+        }
+        return selected.map((s) => `
+            <span class="inline-flex items-center gap-1 mr-1 mb-1 px-2 py-0.5 rounded text-xs
+                         bg-blue-50 text-blue-800 border border-blue-100">
+                ${esc(s)}
+                <button type="button" class="text-blue-400 hover:text-red-600"
+                        data-unpick="${esc(s)}" data-field="${field}" data-index="${index}">&times;</button>
+            </span>`).join('');
     }
 
     function render() {
@@ -117,34 +151,47 @@
                 <div class="grid md:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">
-                            Namunaviy rejadagi muqobillar (Ctrl bilan bir nechta)
+                            Namunaviy rejadagi muqobillar
                         </label>
-                        ${multiSelect(refOpts, g.ref_names || [], 'ref_names', i, 6)}
+                        ${pickList(refOpts, g.ref_names || [], 'ref_names', i)}
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">
                             Ishchi rejadagi mos fan(lar)
                         </label>
-                        ${multiSelect(workOpts, g.work_names || [], 'work_names', i, 6)}
+                        ${pickList(workOpts, g.work_names || [], 'work_names', i)}
                     </div>
                 </div>
                 <div class="mt-2">
                     <label class="block text-xs font-medium text-gray-600 mb-1">
                         Norma soat/kredit qaysi muqobildan olinsin
                     </label>
-                    <select data-field="norm_name" data-index="${i}"
-                            class="w-full md:w-1/2 border-gray-300 rounded-md text-sm">
-                        <option value="">— birinchi soatli muqobil —</option>
-                        ${(g.ref_names || []).map((n) => {
-                            const s = refSubjects.find((r) => r.name.toLowerCase() === n.toLowerCase());
-                            const hint = s && s.hours != null ? ` (${s.hours} soat)` : '';
-                            const sel = (g.norm_name || '').toLowerCase() === n.toLowerCase() ? ' selected' : '';
-                            return `<option value="${esc(n)}"${sel}>${esc(n)}${esc(hint)}</option>`;
-                        }).join('')}
-                    </select>
+                    <div data-norm="${i}" class="md:w-1/2">${normHtml(g, i)}</div>
                 </div>
             </div>
         `).join('');
+    }
+
+    /** Norma tanlash selecti — muqobillar o'zgarganda alohida yangilanadi. */
+    function normHtml(g, i) {
+        const opts = (g.ref_names || []).map((n) => {
+            const s = refSubjects.find((r) => searchKey(r.name) === searchKey(n));
+            const hint = s && s.hours != null ? ` (${s.hours} soat)` : '';
+            const sel = searchKey(g.norm_name || '') === searchKey(n) ? ' selected' : '';
+            return `<option value="${esc(n)}"${sel}>${esc(n)}${esc(hint)}</option>`;
+        }).join('');
+        return `<select data-field="norm_name" data-index="${i}"
+                        class="w-full border-gray-300 rounded-md text-sm">
+                    <option value="">— birinchi soatli muqobil —</option>${opts}
+                </select>`;
+    }
+
+    /** Guruhning chip va norma qismlarini butun panelni qayta chizmasdan yangilash. */
+    function refreshGroup(i, field) {
+        const chips = list.querySelector(`[data-chips="${field}-${i}"]`);
+        if (chips) chips.innerHTML = chipsHtml(groups[i][field] || [], field, i);
+        const norm = list.querySelector(`[data-norm="${i}"]`);
+        if (norm && field === 'ref_names') norm.innerHTML = normHtml(groups[i], i);
     }
 
     // Tahrirlar to'g'ridan-to'g'ri groups massiviga yoziladi
@@ -154,15 +201,55 @@
         const field = el.dataset.field;
         if (Number.isNaN(i) || !field) return;
 
-        if (el.multiple) {
-            groups[i][field] = Array.from(el.selectedOptions).map((o) => o.value);
-            if (field === 'ref_names') render(); // norma ro'yxati yangilanadi
+        if (el.type === 'checkbox') {
+            const current = groups[i][field] || [];
+            groups[i][field] = el.checked
+                ? current.concat([el.value])
+                : current.filter((n) => searchKey(n) !== searchKey(el.value));
+            // Norma tanlangan muqobil olib tashlansa — normani bo'shatamiz
+            if (field === 'ref_names' && groups[i].norm_name
+                && !groups[i].ref_names.some((n) => searchKey(n) === searchKey(groups[i].norm_name))) {
+                groups[i].norm_name = '';
+            }
+            refreshGroup(i, field);
         } else {
             groups[i][field] = el.value;
         }
     });
 
+    // Qidiruv: ro'yxatni joyida filtrlaydi (qayta chizilmaydi — fokus saqlanadi)
+    list.addEventListener('input', function (e) {
+        const target = e.target.dataset.target;
+        if (!target) return;
+        const box = list.querySelector(`[data-options="${target}"]`);
+        if (!box) return;
+
+        const q = searchKey(e.target.value);
+        let shown = 0;
+        box.querySelectorAll('.cg-opt').forEach((row) => {
+            const hit = !q || row.dataset.text.includes(q);
+            row.hidden = !hit;
+            if (hit) shown++;
+        });
+        const empty = list.querySelector(`[data-empty="${target}"]`);
+        if (empty) empty.hidden = shown > 0;
+    });
+
     list.addEventListener('click', function (e) {
+        // Chipdagi × — tanlovni bekor qilish
+        const unpick = e.target.dataset.unpick;
+        if (unpick !== undefined) {
+            const i = parseInt(e.target.dataset.index, 10);
+            const field = e.target.dataset.field;
+            groups[i][field] = (groups[i][field] || []).filter((n) => searchKey(n) !== searchKey(unpick));
+            const box = list.querySelector(`[data-options="${field}-${i}"]`);
+            box?.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+                if (searchKey(cb.value) === searchKey(unpick)) cb.checked = false;
+            });
+            refreshGroup(i, field);
+            return;
+        }
+
         const idx = e.target.dataset.remove;
         if (idx === undefined) return;
         groups.splice(parseInt(idx, 10), 1);

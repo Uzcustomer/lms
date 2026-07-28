@@ -1958,7 +1958,8 @@
                         (j.rooms_assigned ? (' · xona biriktirildi: ' + j.rooms_assigned) : '');
                     // Hammasi allaqachon joylashgan va reset belgilanmagan — yangi
                     // sozlama bo'yicha qayta taqsimlash uchun yo'l ko'rsatamiz.
-                    if (!$('autoReset').checked && !j.placed && !j.unplaced) {
+                    // Xona biriktirilgan bo'lsa — ish bajarildi, qayta joylash so'ralmaydi
+                    if (!$('autoReset').checked && !j.placed && !j.unplaced && !j.rooms_assigned) {
                         $('autoMsg').textContent = 'Hammasi joylashgan. Yangi sozlama bo\'yicha qayta joylash kerak.';
                         if (confirm('Barcha kartalar allaqachon joylashgan.\nYangi sozlama (bir kunga / ketma-ket) bo\'yicha mavjud joylashuvlarni bo\'shatib QAYTA joylaymizmi?')) {
                             $('autoReset').checked = true;

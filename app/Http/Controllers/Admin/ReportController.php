@@ -11377,6 +11377,92 @@ class ReportController extends Controller
             if ($dekanFacultyId && (int) $v->faculty_id !== (int) $dekanFacultyId) {
                 abort(403);
             }
+            if ($request->get('format') === 'xlsx') {
+                $spreadsheet = new \\PhpOffice\\PhpSpreadsheet\\Spreadsheet();
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->setTitle('Oqimlar');
+                $sheet->mergeCells('A1:F1');
+                $sheet->setCellValue('A1', ($v->kind === 'plan' ? 'REJA' : 'REAL') . ' · ' . ($v->academic_year ?: '') . ' · ' . ($v->faculty_name ?: 'Barcha fakultetlar'));
+                $sheet->mergeCells('A2:F2');
+                $sheet->setCellValue('A2', 'Tasdiqlangan: ' . optional($v->approved_at)->format('d.m.Y H:i'));
+                $headers = ['Fakultet / yo\'nalish', 'Kurs', 'Oqim', 'Til', 'Guruh', 'Talaba'];
+                $sheet->fromArray($headers, null, 'A4');
+                $headerStyle = [
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                    'fill' => ['fillType' => \\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2B5EA7']],
+                    'alignment' => ['horizontal' => \\PhpOffice\\PhpSpreadsheet\\Style\\Alignment::HORIZONTAL_CENTER],
+                ];
+                $sheet->getStyle('A1:F1')->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
+                    'fill' => ['fillType' => \\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1A3268']],
+                ]);
+                $sheet->getStyle('A2:F2')->applyFromArray([
+                    'font' => ['italic' => true, 'color' => ['rgb' => '475569']],
+                    'fill' => ['fillType' => \\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E8EDF5']],
+                ]);
+                $sheet->getStyle('A4:F4')->applyFromArray($headerStyle);
+                $rowNum = 5;
+                $flowColors = ['DBEAFE', 'DCFCE7', 'FEF3C7', 'FCE7F3', 'EDE9FE', 'FDE2E2'];
+                $flowIndex = 0;
+                foreach ($v->data ?? [] as $block) {
+                    $sheet->mergeCells("A{$rowNum}:F{$rowNum}");
+                    $sheet->setCellValue("A{$rowNum}", $block['title'] ?? '');
+                    $sheet->getStyle("A{$rowNum}:F{$rowNum}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => '1E3A5F']],
+                        'fill' => ['fillType' => \\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+                    ]);
+                    $rowNum++;
+                    foreach ($block['courses'] ?? [] as $course) {
+                        $courseStart = $rowNum;
+                        $sheet->mergeCells("A{$rowNum}:F{$rowNum}");
+                        $sheet->setCellValue("A{$rowNum}", $course['level_name'] ?? '');
+                        $sheet->getStyle("A{$rowNum}:F{$rowNum}")->applyFromArray([
+                            'font' => ['bold' => true, 'color' => ['rgb' => '1E40AF']],
+                            'fill' => ['fillType' => \\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EFF6FF']],
+                        ]);
+                        $rowNum++;
+                        foreach ($course['oqims'] ?? [] as $flow) {
+                            $color = $flowColors[$flowIndex++ % count($flowColors)];
+                            $flowStart = $rowNum;
+                            foreach ($flow['rows'] ?? [] as $group) {
+                                $sheet->fromArray([
+                                    $block['title'] ?? '',
+                                    $course['level_name'] ?? '',
+                                    $flow['label'] ?? '',
+                                    $flow['lang'] ?? '',
+                                    $group['name'] ?? '',
+                                    $group['count'] ?? 0,
+                                ], null, "A{$rowNum}");
+                                $rowNum++;
+                            }
+                            if ($rowNum > $flowStart) {
+                                $sheet->getStyle("C{$flowStart}:F" . ($rowNum - 1))->applyFromArray([
+                                    'fill' => ['fillType' => \\PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
+                                ]);
+                            }
+                        }
+                    }
+                }
+                $lastRow = max(4, $rowNum - 1);
+                $sheet->getStyle("A4:F{$lastRow}")->applyFromArray([
+                    'borders' => ['allBorders' => ['borderStyle' => \\PhpOffice\\PhpSpreadsheet\\Style\\Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
+                    'alignment' => ['vertical' => \\PhpOffice\\PhpSpreadsheet\\Style\\Alignment::VERTICAL_CENTER],
+                ]);
+                foreach (['A' => 34, 'B' => 16, 'C' => 18, 'D' => 12, 'E' => 26, 'F' => 12] as $column => $width) {
+                    $sheet->getColumnDimension($column)->setWidth($width);
+                }
+                $sheet->freezePane('A5');
+                $sheet->setAutoFilter("A4:F{$lastRow}");
+                $fileName = 'oqim-' . ($v->kind === 'plan' ? 'reja' : 'real') . '-' . ($v->academic_year ?: '') . '-' . $v->id . '.xlsx';
+                $temp = tempnam(sys_get_temp_dir(), 'oqim_history_');
+                $writer = new \\PhpOffice\\PhpSpreadsheet\\Writer\\Xlsx($spreadsheet);
+                $writer->save($temp);
+                $spreadsheet->disconnectWorksheets();
+                return response()->download($temp, $fileName, [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ])->deleteFileAfterSend(true);
+            }
+
             $fname = 'oqim-' . ($v->kind === 'plan' ? 'reja' : 'real') . '-' . ($v->academic_year ?: '') . '-' . $v->id . '.csv';
             $headers = ['Fakultet/Yo\'nalish', 'Kurs', 'Oqim', 'Til', 'Guruh', 'Talaba'];
             return response()->streamDownload(function () use ($v, $headers) {

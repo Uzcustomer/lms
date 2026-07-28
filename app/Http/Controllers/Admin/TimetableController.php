@@ -1513,6 +1513,57 @@ class TimetableController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Haftalik yuk taqsimoti (tibbiyot universiteti mantig'i).
+     *
+     * Jami soat (ma'ruza + amaliy) semestr haftalariga teng bo'linadi — bu
+     * haftalik yuk chegarasi. Ma'ruza doim 2 soat (1 para), shuning uchun
+     * ma'ruzali haftalar soni = ma'ruza_soat / 2. Ma'ruzali haftada amaliyga
+     * (haftalik_yuk - 2) soat, ma'ruzasiz haftada esa to'liq haftalik_yuk
+     * soat beriladi. Natijada reja soatlari aniq to'ldiriladi.
+     *
+     * Misol: 12 s ma'ruza + 78 s amaliy = 90 s / 15 hafta = 6 s/hafta.
+     * Ma'ruza 12/2 = 6 ta haftada (2 s ma'ruza + 4 s amaliy), qolgan 9 haftada
+     * 6 s amaliy → amaliy jami 6*4 + 9*6 = 78 s (rejaga mos).
+     */
+    private function weeklyPlan(float $lec, float $prc, int $weeks): array
+    {
+        $weeks = max(1, $weeks);
+        $total = $lec + $prc;
+        if ($total <= 0) {
+            return [
+                'total_hours' => 0, 'per_week_hours' => 0.0,
+                'lecture_weeks' => 0, 'plain_weeks' => $weeks,
+                'practice_in_lecture_week' => 0.0, 'practice_in_plain_week' => 0.0,
+                'lecture_check' => 0.0, 'practice_check' => 0.0, 'exact' => true,
+            ];
+        }
+
+        $perWeek = $total / $weeks;                       // haftalik soat byudjeti
+        $lecWeeks = min((int) round($lec / 2), $weeks);   // ma'ruza 2 soatdan
+        $plainWeeks = $weeks - $lecWeeks;
+
+        // Ma'ruzali haftada amaliy manfiy bo'lib qolmasin (ma'ruza yuki katta bo'lsa)
+        $prcInLec = max(0.0, $perWeek - 2);
+        $prcInPlain = $perWeek;
+
+        $lecCheck = $lecWeeks * 2;
+        $prcCheck = $lecWeeks * $prcInLec + $plainWeeks * $prcInPlain;
+
+        return [
+            'total_hours'              => round($total, 2),
+            'per_week_hours'           => round($perWeek, 2),
+            'lecture_weeks'            => $lecWeeks,
+            'plain_weeks'              => $plainWeeks,
+            'practice_in_lecture_week' => round($prcInLec, 2),
+            'practice_in_plain_week'   => round($prcInPlain, 2),
+            'lecture_check'            => round($lecCheck, 2),
+            'practice_check'           => round($prcCheck, 2),
+            // Hisob reja soatlariga aniq tushdimi (yaxlitlash farqisiz)
+            'exact'                    => abs($lecCheck - $lec) < 0.01 && abs($prcCheck - $prc) < 0.01,
+        ];
+    }
+
     /** Guruhcha nomidan asosiy guruh (oxirgi kichik harf — a/b/c — olib tashlanadi). */
     private function baseGroup(string $gn): string
     {
@@ -2060,9 +2111,13 @@ class TimetableController extends Controller
                 'practice'       => (float) $r->practice,
                 'laboratory'     => (float) $r->laboratory,
                 'seminar'        => (float) $r->seminar,
-                // Haftalik para (1 para = 2 akademik soat)
+                // Haftalik para (1 para = 2 akademik soat) — eski, sodda ko'rsatkich
                 'lec_pairs'      => $lec > 0 ? max(1, (int) round($lec / $weeks / 2)) : 0,
                 'prc_pairs'      => $prc > 0 ? max(1, (int) round($prc / $weeks / 2)) : 0,
+                // Haftalik yuk taqsimoti (tibbiyot uslubi): jami soat / hafta =
+                // haftalik yuk; ma'ruza 2 soatdan, ma'ruzali haftada amaliy shunga
+                // kamayadi, ma'ruzasiz haftada to'liq yuk amaliyga beriladi.
+                'week_plan'      => $this->weeklyPlan($lec, $prc, $weeks),
             ];
         }
 

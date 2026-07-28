@@ -3295,8 +3295,7 @@
                         department: r.kafedra_name || '',
                         lecture: r.lecture,
                         practice: (+r.practice || 0) + (+r.laboratory || 0) + (+r.seminar || 0),
-                        lecture_pairs: r.lec_pairs,
-                        practice_pairs: r.prc_pairs,
+                        week_load: (r.week_plan ? r.week_plan.per_week_hours : ''),
                         mode: SUBJ_MODE_LABELS[mode] || mode,
                     };
                     return Object.entries(f).every(([key, value]) => {
@@ -3304,6 +3303,35 @@
                         return String(values[key] ?? '').toLowerCase().includes(String(value).toLowerCase());
                     });
                 });
+            }
+
+            // Soatni chiroyli ko'rsatish: 6 → "6", 4.5 → "4,5"
+            const hrs = v => {
+                const n = +v || 0;
+                return (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',')).replace(/,0$/, '');
+            };
+            // "Hafta yuki" ustuni — jami soat / semestr haftalari
+            function weekLoadHtml(r) {
+                const w = r.week_plan;
+                if (!w || !w.total_hours) return '<span class="text-slate-400">—</span>';
+                return '<b>' + hrs(w.per_week_hours) + '</b> s'
+                    + '<div class="text-[10px] text-slate-400">' + hrs(w.total_hours) + ' s jami</div>';
+            }
+            // "Haftalik taqsimot" ustuni — ma'ruzali / ma'ruzasiz haftalar
+            function weekSplitHtml(r) {
+                const w = r.week_plan;
+                if (!w || !w.total_hours) return '<span class="text-slate-400">—</span>';
+                const parts = [];
+                if (w.lecture_weeks > 0) {
+                    parts.push('<div><b>' + w.lecture_weeks + '</b> hafta: 2 s ma\'ruza'
+                        + (w.practice_in_lecture_week > 0 ? ' + ' + hrs(w.practice_in_lecture_week) + ' s amaliy' : '') + '</div>');
+                }
+                if (w.plain_weeks > 0 && w.practice_in_plain_week > 0) {
+                    parts.push('<div><b>' + w.plain_weeks + '</b> hafta: ' + hrs(w.practice_in_plain_week) + ' s amaliy</div>');
+                }
+                const warn = w.exact ? ''
+                    : '<div class="text-[10px] text-amber-600" title="Hisob reja soatlariga aniq tushmadi (yaxlitlash)">⚠ yaxlitlash farqi</div>';
+                return '<div class="text-[11px] leading-tight">' + (parts.join('') || '—') + warn + '</div>';
             }
 
             function subjectFilterControl(key, placeholder, type = 'text') {
@@ -3328,15 +3356,18 @@
                 $('ascCount').textContent = rows.length + ' ta';
                 let h = '';
                 if (ascType === 'subjects') {
-                    h = '<thead><tr><th>Fan</th><th>Fakultet · yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th><th>M/hafta</th><th>A/hafta</th><th>Fan rejimi</th></tr>' +
+                    h = '<thead><tr><th>Fan</th><th>Fakultet · yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th>' +
+                        '<th title="Jami soat / semestr haftalari — haftada shundan oshmasligi kerak">Hafta yuki</th>' +
+                        '<th title="Ma\'ruza 2 soatdan. Ma\'ruzali haftada amaliy shunga kamayadi, ma\'ruzasiz haftada to\'liq yuk amaliyga beriladi.">Haftalik taqsimot</th>' +
+                        '<th>Fan rejimi</th></tr>' +
                         '<tr class="asc-column-filter-row">' +
                         '<th>' + subjectFilterControl('subject', 'Fan...') + '</th>' +
                         '<th>' + subjectFilterControl('course', 'Kurs', 'select') + '</th>' +
                         '<th>' + subjectFilterControl('department', 'Kafedra...') + '</th>' +
                         '<th>' + subjectFilterControl('lecture', 'Soat', 'number') + '</th>' +
                         '<th>' + subjectFilterControl('practice', 'Soat', 'number') + '</th>' +
-                        '<th>' + subjectFilterControl('lecture_pairs', 'M', 'number') + '</th>' +
-                        '<th>' + subjectFilterControl('practice_pairs', 'A', 'number') + '</th>' +
+                        '<th>' + subjectFilterControl('week_load', 'Soat', 'number') + '</th>' +
+                        '<th></th>' +
                         '<th>' + subjectFilterControl('mode', 'Rejim...', 'select') + '</th>' +
                         '</tr></thead><tbody>';
                     let lastSpec = null;
@@ -3352,7 +3383,7 @@
                             '<option value="' + value + '"' + (setting.mode === value ? ' selected' : '') + '>' + label + '</option>').join('');
                         h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td class="asc-subject-path"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td>' +
                             '<td>' + esc(r.kafedra_name || '—') + '</td><td>' + fmt(r.lecture) + '</td><td>' + fmt(r.practice + r.laboratory + r.seminar) +
-                            '</td><td>' + r.lec_pairs + '</td><td>' + r.prc_pairs + '</td>' +
+                            '</td><td>' + weekLoadHtml(r) + '</td><td>' + weekSplitHtml(r) + '</td>' +
                             '<td class="asc-subj-mode-cell"><select class="asc-subj-mode">' + modeOptions + '</select><div class="asc-subj-params">' +
                             subjectModeParamsHtml(setting) + '</div><span class="asc-subj-status" aria-live="polite"></span></td></tr>';
                     });
@@ -3472,8 +3503,20 @@
             function exportAscCsv() {
                 const rows = filteredAsc();
                 if (!rows.length) return;
-                const cols = Object.keys(rows[0]);
-                const csv = [cols.join(',')].concat(rows.map(r =>
+                // Ichma-ich obyektlarni (mas. week_plan) alohida ustunlarga yoyamiz —
+                // aks holda CSV da "[object Object]" bo'lib chiqadi.
+                const flat = r => {
+                    const o = {};
+                    Object.entries(r).forEach(([k, v]) => {
+                        if (v && typeof v === 'object' && !Array.isArray(v)) {
+                            Object.entries(v).forEach(([k2, v2]) => { o[k + '_' + k2] = v2; });
+                        } else { o[k] = v; }
+                    });
+                    return o;
+                };
+                const flatRows = rows.map(flat);
+                const cols = [...new Set(flatRows.flatMap(r => Object.keys(r)))];
+                const csv = [cols.join(',')].concat(flatRows.map(r =>
                     cols.map(c => '"' + String(r[c] ?? '').replace(/"/g, '""') + '"').join(','))).join('\n');
                 dl('﻿' + csv, ascType + '.csv', 'text/csv');
             }

@@ -2149,7 +2149,7 @@
                 groupRows = [];
                 flowStudents = {};
                 const seen = {};
-                const flowGroupSeen = {};
+                const flowGroupSeen = {};\n                const groupFlowStudents = {};
                 specCards().forEach(c => {
                     const flowKey = (c.faculty_name || '') + '|' + (c.specialty_name || '') + '|' + c.course + '|' + (c.oqim_label || '');
                     if (c.training_type === 'lecture') {
@@ -2165,10 +2165,17 @@
                             const groupFlowKey = flowKey + '|' + g;
                             if (!flowGroupSeen[groupFlowKey]) {
                                 flowGroupSeen[groupFlowKey] = 1;
-                                flowStudents[flowKey] = (flowStudents[flowKey] || 0) + (+c.students || 0);
+                                groupFlowStudents[flowKey] = (groupFlowStudents[flowKey] || 0) + (+c.students || 0);
                             }
                         }
                     });
+                });
+                // Ma'ruza oqimi mavjud bo'lsa uning jami olinadi; aks holda
+                // amaliy kartalardan har bir guruh talabasini faqat bir marta qo'shamiz.
+                Object.keys(groupFlowStudents).forEach(flowKey => {
+                    if (!Object.prototype.hasOwnProperty.call(flowStudents, flowKey)) {
+                        flowStudents[flowKey] = groupFlowStudents[flowKey];
+                    }
                 });
                 // Fakultet → yo'nalish → kurs → oqim → guruh: bir blok ketma-ket tursin.
                 const sk = x => x.faculty + '|' + x.specialty + '|' + x.course + '|' + x.oqim_label + x.group;

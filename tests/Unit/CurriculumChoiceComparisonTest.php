@@ -217,6 +217,19 @@ test('qo\'lda guruhda norm_name normani belgilaydi', function () {
     expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
 });
 
+test('normalize apostrof variantlarini bir xil deb qabul qiladi', function () {
+    $service = new CurriculumComparisonService();
+
+    // saveChoiceGroups() norma muqobillar ro'yxatida borligini shu normalizatsiya
+    // orqali tekshiradi — apostrof turi farq qilsa ham norma yo'qolmasligi kerak
+    $expected = $service->normalize("O'zbek/rus tili");
+    expect($service->normalize("O‘zbek/rus tili"))->toBe($expected);
+    expect($service->normalize("Oʻzbek/rus tili"))->toBe($expected);
+    expect($service->normalize("  O'ZBEK / RUS  TILI "))->toBe($expected);
+
+    expect($service->normalize('Bioetika'))->not->toBe($expected);
+});
+
 test('namunaviyda muqobili topilmagan qo\'lda guruh o\'tkazib yuboriladi', function () {
     $service = new CurriculumComparisonService();
 

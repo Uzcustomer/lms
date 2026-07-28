@@ -186,12 +186,31 @@
                 </select>`;
     }
 
+    /**
+     * Norma sifatida tanlangan muqobil ro'yxatdan chiqarilgan bo'lsa — normani
+     * bo'shatadi. Aks holda select sukut qiymatini ko'rsatib turgani holda
+     * groups[i].norm_name da guruhga aloqasi qolmagan fan nomi saqlanib qolar
+     * va solishtirishda soat/kredit o'sha fandan olinardi.
+     */
+    function dropStaleNorm(g) {
+        if (g.norm_name && !(g.ref_names || []).some((n) => searchKey(n) === searchKey(g.norm_name))) {
+            g.norm_name = '';
+        }
+        return g;
+    }
+
     /** Guruhning chip va norma qismlarini butun panelni qayta chizmasdan yangilash. */
     function refreshGroup(i, field) {
         const chips = list.querySelector(`[data-chips="${field}-${i}"]`);
         if (chips) chips.innerHTML = chipsHtml(groups[i][field] || [], field, i);
+        if (field !== 'ref_names') return;
+
+        // Muqobillar o'zgardi — norma yaroqliligini shu yerda tekshiramiz,
+        // shunda katakcha ham, chipdagi ×, ham kelajakdagi boshqa yo'llar
+        // bir xil ishlaydi.
+        dropStaleNorm(groups[i]);
         const norm = list.querySelector(`[data-norm="${i}"]`);
-        if (norm && field === 'ref_names') norm.innerHTML = normHtml(groups[i], i);
+        if (norm) norm.innerHTML = normHtml(groups[i], i);
     }
 
     // Tahrirlar to'g'ridan-to'g'ri groups massiviga yoziladi
@@ -206,11 +225,6 @@
             groups[i][field] = el.checked
                 ? current.concat([el.value])
                 : current.filter((n) => searchKey(n) !== searchKey(el.value));
-            // Norma tanlangan muqobil olib tashlansa — normani bo'shatamiz
-            if (field === 'ref_names' && groups[i].norm_name
-                && !groups[i].ref_names.some((n) => searchKey(n) === searchKey(groups[i].norm_name))) {
-                groups[i].norm_name = '';
-            }
             refreshGroup(i, field);
         } else {
             groups[i][field] = el.value;
@@ -280,6 +294,7 @@
     });
 
     document.getElementById('cg-save').addEventListener('click', async function () {
+        groups.forEach(dropStaleNorm); // yuborishdan oldin oxirgi tekshiruv
         const invalid = groups.findIndex((g) => !(g.ref_names || []).length);
         if (invalid >= 0) {
             setStatus(`${invalid + 1}-guruhda namunaviy muqobil tanlanmagan`, 'text-red-600');

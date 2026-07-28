@@ -2190,7 +2190,7 @@ class CurriculumCheckController extends Controller
      * Tanlov guruhlarini saqlash: yuborilgan ro'yxat reja bo'yicha mavjudlarini
      * BUTUNLAY almashtiradi (muharrir har doim to'liq ro'yxat yuboradi).
      */
-    public function saveChoiceGroups(Request $request)
+    public function saveChoiceGroups(Request $request, CurriculumComparisonService $service)
     {
         $data = $request->validate([
             'reference_id'        => 'required|exists:manual_curricula,id',
@@ -2208,7 +2208,7 @@ class CurriculumCheckController extends Controller
         abort_unless($reference->type === 'namunaviy', 404);
         abort_unless($reference->curricula_hemis_id, 422, "Reja HEMIS o'quv rejasiga bog'lanmagan.");
 
-        DB::transaction(function () use ($data, $reference) {
+        DB::transaction(function () use ($data, $reference, $service) {
             ManualCurriculumChoiceGroup::where('curricula_hemis_id', $reference->curricula_hemis_id)->delete();
 
             foreach ($data['groups'] as $group) {
@@ -2216,12 +2216,23 @@ class CurriculumCheckController extends Controller
                 if ($refNames === []) {
                     continue;
                 }
+
+                // Norma faqat guruhning o'z muqobillaridan bo'lishi mumkin.
+                // Aks holda solishtirishda soat/kredit guruhga aloqasi bo'lmagan
+                // fandan olinib ketardi (muqobil ro'yxatdan chiqarilgan, norma
+                // esa eski nomga ishora qilib qolgan holat).
+                $norm = trim((string) ($group['norm_name'] ?? ''));
+                if ($norm !== '' && !in_array($service->normalize($norm),
+                        array_map(fn ($n) => $service->normalize($n), $refNames), true)) {
+                    $norm = '';
+                }
+
                 ManualCurriculumChoiceGroup::create([
                     'curricula_hemis_id' => $reference->curricula_hemis_id,
                     'label'      => trim((string) ($group['label'] ?? '')) ?: implode(' / ', $refNames),
                     'ref_names'  => $refNames,
                     'work_names' => array_values(array_filter(array_map('trim', $group['work_names'] ?? []))),
-                    'norm_name'  => trim((string) ($group['norm_name'] ?? '')) ?: null,
+                    'norm_name'  => $norm ?: null,
                     'note'       => trim((string) ($group['note'] ?? '')) ?: null,
                     'created_by' => Auth::id(),
                 ]);

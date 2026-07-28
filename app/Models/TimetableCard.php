@@ -11,6 +11,8 @@ class TimetableCard extends Model
         'training_type', 'group_name', 'group_names', 'subject_name',
         'kafedra_name', 'students', 'teacher_id', 'teacher_name',
         'auditorium_code', 'auditorium_name', 'day', 'pair', 'start_half', 'len_half',
+        // Karta necha haftada o'tiladi (ma'ruzali haftada amaliy paralar kamayadi)
+        'weeks',
     ];
 
     protected $casts = [

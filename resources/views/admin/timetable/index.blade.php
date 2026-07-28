@@ -633,6 +633,7 @@
         #grid thead th { position: sticky; top: 0; z-index: 5; }
         #grid th.tt-fac { background: #c7d2fe; color: #1e1b4b; font-weight: 900; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: .2px; }
         #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 900; text-align: center; font-size: 11px; }
+        #grid th.tt-oqim .tt-oqim-count { color: #16a34a; font-size: 10px; font-weight: 800; margin-top: 2px; }
         /* Guruh sarlavhasi — o'ralib chiqadi (ustunni kengaytirmaydi), ustun ingichka bo'ladi */
         #grid th.tt-grp { background: #eef1f5; color: #1e293b; font-weight: 800; white-space: normal; word-break: break-word;
             text-align: center; font-size: 9px; line-height: 1.05; width: 52px; min-width: 52px; max-width: 52px; padding: 2px 1px; }
@@ -1514,6 +1515,7 @@
             let selectedDirs = new Set();
             let selectedCourses = new Set();
             let groupRows = [];    // [{oqim_label, lang, group}]
+            let flowStudents = {}; // fakultet|yo'nalish|kurs|oqim => talabalar soni
             let selected = null;   // tanlangan karta (obyekt)
             let audCache = null;
             let modalCard = null;
@@ -2145,11 +2147,27 @@
 
             function buildGroupRows() {
                 groupRows = [];
+                flowStudents = {};
                 const seen = {};
+                const flowGroupSeen = {};
                 specCards().forEach(c => {
+                    const flowKey = (c.faculty_name || '') + '|' + (c.specialty_name || '') + '|' + c.course + '|' + (c.oqim_label || '');
+                    if (c.training_type === 'lecture') {
+                        flowStudents[flowKey] = Math.max(flowStudents[flowKey] || 0, +c.students || 0);
+                    }
                     cardGroups(c).forEach(g => {
                         const k = gkey(c, g);
-                        if (!seen[k]) { seen[k] = 1; groupRows.push({ key: k, oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: c.course }); }
+                        if (!seen[k]) {
+                            seen[k] = 1;
+                            groupRows.push({ key: k, oqim_label: c.oqim_label || '', lang: c.lang || 'uz', group: g, faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: c.course });
+                        }
+                        if (c.training_type !== 'lecture') {
+                            const groupFlowKey = flowKey + '|' + g;
+                            if (!flowGroupSeen[groupFlowKey]) {
+                                flowGroupSeen[groupFlowKey] = 1;
+                                flowStudents[flowKey] = (flowStudents[flowKey] || 0) + (+c.students || 0);
+                            }
+                        }
                     });
                 });
                 // Fakultet → yo'nalish → kurs → oqim → guruh: bir blok ketma-ket tursin.
@@ -2531,8 +2549,16 @@
                 }
                 const multiCourse = selectedCourses.size > 1;
                 const showSpec = multiSpec();
-                oqimCols.forEach((o, oi) => h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
-                    esc((showSpec && o.specialty ? o.specialty + ' · ' : '') + (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—')) + '</th>');
+                oqimCols.forEach((o, oi) => {
+                    const flowKey = (o.faculty || '') + '|' + (o.specialty || '') + '|' + o.course + '|' + (o.label || '');
+                    const studentCount = flowStudents[flowKey];
+                    const title = (showSpec && o.specialty ? o.specialty + ' · ' : '') +
+                        (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—');
+                    h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
+                        '<div>' + esc(title) + '</div>' +
+                        (studentCount ? '<div class="tt-oqim-count">' + studentCount + ' ta</div>' : '') +
+                    '</th>';
+                });
                 h += '</tr><tr>';
                 oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') + '</th>'));
                 h += '</tr></thead><tbody>';

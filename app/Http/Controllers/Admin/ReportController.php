@@ -11378,7 +11378,7 @@ class ReportController extends Controller
                 abort(403);
             }
             if ($request->get('format') === 'xlsx') {
-                $spreadsheet = new \PhpOffice\\PhpSpreadsheet\\Spreadsheet();
+                $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                 $sheet = $spreadsheet->getActiveSheet();
                 $sheet->setTitle('Oqimlar');
                 $sheet->mergeCells('A1:F1');
@@ -11389,16 +11389,16 @@ class ReportController extends Controller
                 $sheet->fromArray($headers, null, 'A4');
                 $headerStyle = [
                     'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-                    'fill' => ['fillType' => \PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2B5EA7']],
-                    'alignment' => ['horizontal' => \PhpOffice\\PhpSpreadsheet\\Style\\Alignment::HORIZONTAL_CENTER],
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2B5EA7']],
+                    'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
                 ];
                 $sheet->getStyle('A1:F1')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
-                    'fill' => ['fillType' => \PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1A3268']],
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1A3268']],
                 ]);
                 $sheet->getStyle('A2:F2')->applyFromArray([
                     'font' => ['italic' => true, 'color' => ['rgb' => '475569']],
-                    'fill' => ['fillType' => \PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E8EDF5']],
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E8EDF5']],
                 ]);
                 $sheet->getStyle('A4:F4')->applyFromArray($headerStyle);
                 $rowNum = 5;
@@ -11409,7 +11409,7 @@ class ReportController extends Controller
                     $sheet->setCellValue("A{$rowNum}", $block['title'] ?? '');
                     $sheet->getStyle("A{$rowNum}:F{$rowNum}")->applyFromArray([
                         'font' => ['bold' => true, 'color' => ['rgb' => '1E3A5F']],
-                        'fill' => ['fillType' => \PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+                        'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
                     ]);
                     $rowNum++;
                     foreach ($block['courses'] ?? [] as $course) {
@@ -11418,7 +11418,7 @@ class ReportController extends Controller
                         $sheet->setCellValue("A{$rowNum}", $course['level_name'] ?? '');
                         $sheet->getStyle("A{$rowNum}:F{$rowNum}")->applyFromArray([
                             'font' => ['bold' => true, 'color' => ['rgb' => '1E40AF']],
-                            'fill' => ['fillType' => \PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EFF6FF']],
+                            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EFF6FF']],
                         ]);
                         $rowNum++;
                         foreach ($course['oqims'] ?? [] as $flow) {
@@ -11437,7 +11437,7 @@ class ReportController extends Controller
                             }
                             if ($rowNum > $flowStart) {
                                 $sheet->getStyle("C{$flowStart}:F" . ($rowNum - 1))->applyFromArray([
-                                    'fill' => ['fillType' => \PhpOffice\\PhpSpreadsheet\\Style\\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
+                                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                                 ]);
                             }
                         }
@@ -11445,8 +11445,8 @@ class ReportController extends Controller
                 }
                 $lastRow = max(4, $rowNum - 1);
                 $sheet->getStyle("A4:F{$lastRow}")->applyFromArray([
-                    'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\\PhpSpreadsheet\\Style\\Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
-                    'alignment' => ['vertical' => \PhpOffice\\PhpSpreadsheet\\Style\\Alignment::VERTICAL_CENTER],
+                    'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
+                    'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
                 ]);
                 foreach (['A' => 34, 'B' => 16, 'C' => 18, 'D' => 12, 'E' => 26, 'F' => 12] as $column => $width) {
                     $sheet->getColumnDimension($column)->setWidth($width);
@@ -11455,7 +11455,7 @@ class ReportController extends Controller
                 $sheet->setAutoFilter("A4:F{$lastRow}");
                 $fileName = 'oqim-' . ($v->kind === 'plan' ? 'reja' : 'real') . '-' . ($v->academic_year ?: '') . '-' . $v->id . '.xlsx';
                 $temp = tempnam(sys_get_temp_dir(), 'oqim_history_');
-                $writer = new \PhpOffice\\PhpSpreadsheet\\Writer\\Xlsx($spreadsheet);
+                $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                 $writer->save($temp);
                 $spreadsheet->disconnectWorksheets();
                 return response()->download($temp, $fileName, [

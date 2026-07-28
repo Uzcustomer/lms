@@ -378,7 +378,7 @@
             {{-- ═══ Umumiy sozlamalar (aSc "Установки" uslubida) ═══ --}}
             <div id="setModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win tt-settings-modal bg-[#f0f0f0] rounded shadow-2xl w-full max-w-6xl flex flex-col">
+                    <div class="asc-win tt-modal-win tt-settings-modal bg-[#f0f0f0] rounded shadow-2xl w-full flex flex-col">
                         <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
                             <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
                                 <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-gear"></i></span>
@@ -711,9 +711,9 @@
         .tt-modal-win { width: 100%; max-width: min(1200px, 96vw); background: #eef2f7;
             border-radius: 12px; box-shadow: 0 28px 80px rgba(2,6,23,.55); border: 1px solid #cbd5e1;
             display: flex; flex-direction: column; max-height: 95vh; overflow: hidden; }
-        .tt-settings-modal { height: 82vh; max-height: 82vh; }
+        .tt-settings-modal { width: 94vw; max-width: 1400px; height: 82vh; max-height: 82vh; }
         .tt-settings-modal .set-content { flex: 1 1 auto; min-height: 0; max-height: none !important; }
-        @media (max-width: 640px) { .tt-settings-modal { height: 88vh; max-height: 88vh; } }
+        @media (max-width: 640px) { .tt-settings-modal { width: 96vw; height: 88vh; max-height: 88vh; } }
         .tt-modal .asc-titlebar { box-shadow: 0 1px 0 rgba(255,255,255,.15) inset; }
         .tt-modal-win.asc-small-modal { border-radius: 12px; overflow: hidden; }
         .asc-small-modal .modal-panel { background: #fff; }
@@ -766,14 +766,15 @@
         .grid-setting-table td.grid-setting-name { min-width: 150px; max-width: 220px; color: #334155; }
         .grid-setting-table td.grid-setting-name span { display: block; font-size: 11px; line-height: 1.25; word-break: break-word; }
         .grid-setting-table td.grid-setting-empty { text-align: center; color: #94a3b8; vertical-align: middle; }
-        .grid-setting-cell { min-width: 125px; position: relative; }
+        .grid-setting-cell { min-width: 145px; position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; align-items: end; }
         .grid-setting-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
-        .grid-setting-values label { color: #64748b; font-size: 9px; }
+        .grid-setting-values label { color: #64748b; font-size: 9px; cursor: help; }
         .grid-setting-values input { display: block; width: 100%; margin-top: 2px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; font-size: 11px; background: #fff; }
-        .grid-setting-save { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 27px; margin-top: 5px; border: 1px solid #2563eb; border-radius: 5px; background: #2563eb; color: #fff; }
+        .grid-setting-save { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 27px; border: 1px solid #2563eb; border-radius: 5px; background: #2563eb; color: #fff; }
+        .grid-setting-save img { width: 18px; height: 18px; object-fit: contain; }
         .grid-setting-save:hover { background: #1d4ed8; }
         .grid-setting-save:disabled { opacity: .55; cursor: wait; }
-        .grid-setting-status { margin-left: 5px; color: #059669; font-size: 10px; }
+        .grid-setting-status { grid-column: 1 / -1; margin-left: 5px; color: #059669; font-size: 10px; }
         #stBellTable td { padding: 3px 6px; }
         #stBellTable tr.is-break td { background: #f0fdf4; color: #15803d; }
         #stBellTable tbody tr { cursor: pointer; }
@@ -3562,11 +3563,11 @@
                             || { days: board.days, pairs_per_day: board.pairs_per_day, weeks: board.weeks };
                         html += '<td><div class="grid-setting-cell" data-grid-row="' + item.index + '">' +
                             '<div class="grid-setting-values">' +
-                                '<label>K<input data-grid-field="days" type="number" min="1" max="7" value="' + (+g.days || board.days) + '"></label>' +
-                                '<label>P<input data-grid-field="pairs_per_day" type="number" min="1" max="10" value="' + (+g.pairs_per_day || board.pairs_per_day) + '"></label>' +
-                                '<label>H<input data-grid-field="weeks" type="number" min="1" max="30" value="' + (+g.weeks || board.weeks) + '"></label>' +
+                                '<label title="Kunlar soni">K<input data-grid-field="days" type="number" min="1" max="7" value="' + (+g.days || board.days) + '"></label>' +
+                                '<label title="Kuniga paralar soni">P<input data-grid-field="pairs_per_day" type="number" min="1" max="10" value="' + (+g.pairs_per_day || board.pairs_per_day) + '"></label>' +
+                                '<label title="Hafta soni">H<input data-grid-field="weeks" type="number" min="1" max="30" value="' + (+g.weeks || board.weeks) + '"></label>' +
                             '</div>' +
-                            '<button type="button" class="grid-setting-save" data-grid-save="' + item.index + '" title="Saqlash"><i class="bi bi-save2" aria-hidden="true"></i></button>' +
+                            '<button type="button" class="grid-setting-save" data-grid-save="' + item.index + '" title="Saqlash"><img src="' + ICON_BASE + '/saqlash.png" alt="" aria-hidden="true"></button>' +
                             '<span class="grid-setting-status"></span>' +
                         '</div></td>';
                     }

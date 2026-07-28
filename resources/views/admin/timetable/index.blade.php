@@ -3329,8 +3329,11 @@
                 if (w.plain_weeks > 0 && w.practice_in_plain_week > 0) {
                     parts.push('<div><b>' + w.plain_weeks + '</b> hafta: ' + hrs(w.practice_in_plain_week) + ' s amaliy</div>');
                 }
+                if (w.extra_weeks > 0) {
+                    parts.push('<div class="text-slate-500">+1 s qo\'shimcha: <b>' + w.extra_weeks + '</b> hafta</div>');
+                }
                 const warn = w.exact ? ''
-                    : '<div class="text-[10px] text-amber-600" title="Hisob reja soatlariga aniq tushmadi (yaxlitlash)">⚠ yaxlitlash farqi</div>';
+                    : '<div class="text-[10px] text-amber-600" title="Reja soati bu hafta soniga aniq sig\'madi">⚠ reja soatiga sig\'madi</div>';
                 return '<div class="text-[11px] leading-tight">' + (parts.join('') || '—') + warn + '</div>';
             }
 

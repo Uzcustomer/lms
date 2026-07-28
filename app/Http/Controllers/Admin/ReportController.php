@@ -11378,7 +11378,7 @@ class ReportController extends Controller
                 abort(403);
             }
             if ($request->get('format') === 'table_xlsx') {
-                $spreadsheet = new \\PhpOffice\\PhpSpreadsheet\\Spreadsheet();
+                $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                 $sheet = $spreadsheet->getActiveSheet();
                 $sheet->setTitle('Joriy holat');
                 $header = [
@@ -11389,7 +11389,7 @@ class ReportController extends Controller
                 $spreadsheet->setActiveSheetIndex(0);
                 $fileName = 'oqim-jadval-' . ($v->academic_year ?: '') . '-' . $v->id . '.xlsx';
                 $temp = tempnam(sys_get_temp_dir(), 'oqim_table_');
-                $writer = new \\PhpOffice\\PhpSpreadsheet\\Writer\\Xlsx($spreadsheet);
+                $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                 $writer->save($temp);
                 $spreadsheet->disconnectWorksheets();
                 return response()->download($temp, $fileName, [

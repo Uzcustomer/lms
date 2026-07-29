@@ -20,10 +20,15 @@ class Auditorium extends Model
         'building_name',
         'auditorium_type_code',
         'auditorium_type_name',
+        'department_hemis_id',
+        'department_name',
+        'created_by_teacher_id',
     ];
 
     protected $casts = [
         'active' => 'boolean',
         'volume' => 'integer',
+        'department_hemis_id' => 'integer',
+        'created_by_teacher_id' => 'integer',
     ];
 }

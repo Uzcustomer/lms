@@ -41,6 +41,12 @@ class EnglishGroupApplicationController extends Controller
             $query->where('english_level', $request->english_level);
         }
 
+        foreach (['faculty_name', 'specialty_name', 'course_name'] as $filter) {
+            if ($request->filled($filter)) {
+                $query->where($filter, $request->input($filter));
+            }
+        }
+
         $applications = $query->paginate(20)->withQueryString();
 
         $stats = [
@@ -56,7 +62,20 @@ class EnglishGroupApplicationController extends Controller
             'mukammal' => 'Mukammal',
         ];
 
-        return view('admin.english-group-applications.index', compact('applications', 'stats', 'englishLevels'));
+        $filterOptions = [];
+        foreach (['faculty_name' => 'faculties', 'specialty_name' => 'specialties', 'course_name' => 'courses'] as $column => $key) {
+            $filterOptions[$key] = InglizGuruhAriza::query()
+                ->whereNotNull($column)
+                ->where($column, '!=', '')
+                ->select($column)
+                ->distinct()
+                ->orderBy($column)
+                ->pluck($column);
+        }
+
+        return view('admin.english-group-applications.index', compact(
+            'applications', 'stats', 'englishLevels', 'filterOptions'
+        ));
     }
 
     public function approve(int $id)

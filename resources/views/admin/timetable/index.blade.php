@@ -4525,8 +4525,8 @@
                 const rows = filteredAsgAudRooms();
                 $('asgAudCount').textContent = rows.length + ' ta';
                 let h = '<colgroup>' +
-                    '<col style="width:18%"><col style="width:27%"><col style="width:10%">' +
-                    '<col style="width:16%"><col style="width:16%"><col style="width:23%">' +
+                    '<col style="width:16%"><col style="width:24%"><col style="width:9%">' +
+                    '<col style="width:15%"><col style="width:16%"><col style="width:20%">' +
                     '</colgroup><thead><tr>' +
                     '<th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th>' +
                     '<th>Turi</th><th>Holat</th><th>O\'qituvchi</th>' +

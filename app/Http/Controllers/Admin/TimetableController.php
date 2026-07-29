@@ -1644,8 +1644,9 @@ class TimetableController extends Controller
             'subjects.*'  => 'string|max:255',
             'scopes'      => 'nullable|array',
             'scopes.*'    => 'string|max:255',
-            'params'      => 'nullable|array',
-            'weight'      => 'nullable|string|max:20',
+            'params'                 => 'nullable|array',
+            'params.distribution'    => 'nullable|in:spread,odd,even',
+            'weight'                 => 'nullable|string|max:20',
             'active'      => 'nullable|boolean',
             'note'        => 'nullable|string|max:255',
         ]);
@@ -1653,13 +1654,22 @@ class TimetableController extends Controller
         if (!array_key_exists($data['condition'], TimetableRule::CONDITIONS)) {
             return response()->json(['error' => "Noma'lum shart: " . $data['condition']], 422);
         }
+
+        $distribution = $data['params']['distribution'] ?? null;
+        if ($data['condition'] === 'lecture_week_distribution'
+            && !in_array($distribution, ['spread', 'odd', 'even'], true)) {
+            return response()->json(['error' => "Ma'ruza haftalarini taqsimlash turini tanlang."], 422);
+        }
+
         $weight = in_array($data['weight'] ?? '', TimetableRule::WEIGHTS, true) ? $data['weight'] : 'normal';
 
         $values = [
             'condition' => $data['condition'],
             'subjects'  => array_values($data['subjects'] ?? []),
             'scopes'    => array_values($data['scopes'] ?? []),
-            'params'    => $data['params'] ?? [],
+            'params'    => $data['condition'] === 'lecture_week_distribution'
+                ? ['distribution' => $distribution]
+                : ($data['params'] ?? []),
             'weight'    => $weight,
             'active'    => (bool) ($data['active'] ?? true),
             'note'      => $data['note'] ?? null,
@@ -1842,15 +1852,32 @@ class TimetableController extends Controller
         return array_values(array_unique($out));
     }
 
+    /** Toq/juft/teng qoida bo'yicha faol ma'ruza haftalari. */
+    private function lectureWeeksForMode(int $total, int $count, string $mode): array
+    {
+        if (!in_array($mode, ['odd', 'even'], true)) {
+            return $this->spreadWeeks($total, $count);
+        }
+
+        $parity = $mode === 'odd' ? 1 : 0;
+        $candidates = array_values(array_filter(
+            range(1, max(1, $total)),
+            fn($week) => $week % 2 === $parity
+        ));
+
+        // Tanlangan parityda yetarli hafta bo'lmasa reja soatini yo'qotmaymiz:
+        // xavfsiz zaxira sifatida teng taqsimlash ishlaydi.
+        return $count <= count($candidates)
+            ? array_slice($candidates, 0, max(0, $count))
+            : $this->spreadWeeks($total, $count);
+    }
+
     /**
      * Kartochkalar qaysi haftalarda o'tilishini belgilaydi (timetable_card_overrides
-     * dagi "cancelled" orqali). Karta `weeks` ustunida NECHTA haftada o'tilishi
-     * yozilgan; bu yerda esa QAYSI haftalar ekani aniqlanadi.
-     *
-     * Eng muhimi: ma'ruza va uni almashtiruvchi "qo'shimcha" amaliy karta
-     * BIR-BIRINI TO'LDIRADI — ma'ruza bo'lgan haftada qo'shimcha amaliy bo'lmaydi
-     * va aksincha. Shu bilan haftalik yuk chegarada qoladi (mas. 6 soat), aks holda
-     * ikkalasi bir haftaga tushib 8 soat bo'lib ketardi.
+     * dagi "cancelled" orqali). "Ma'ruza haftalarini taqsimlash" qoidasi barcha
+     * fanlarga umumiy yoki fan/yo'nalish-kurs kesimida berilishi mumkin.
+     * Fan/qamrovga xos qoida umumiy qoidadan ustun; bir xil aniqlikda ro'yxatda
+     * yuqoriroq turgan qoida olinadi.
      */
     private function assignCardWeeks(TimetableBoard $board): void
     {
@@ -1863,6 +1890,51 @@ class TimetableController extends Controller
                 ($g->faculty_name ?? '') . '|' . $this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks,
             ])->all();
         $boardWeeks = max(1, (int) $board->weeks);
+        $totalFor = function ($c) use ($gset, $boardWeeks): int {
+            $sk = $this->specKey($c->specialty_name);
+            return max(1, (int) ($gset[($c->faculty_name ?? '') . '|' . $sk . '|' . $c->course]
+                ?? $gset['|' . $sk . '|' . $c->course] ?? $boardWeeks));
+        };
+        $subjectKey = fn($c) => $this->specKey($c->specialty_name) . '|' . (int) $c->course
+            . '|' . $this->normSubject((string) $c->subject_name);
+
+        $distributionRules = Schema::hasTable('timetable_rules')
+            ? TimetableRule::where('board_id', $board->id)
+                ->where('active', true)
+                ->where('condition', 'lecture_week_distribution')
+                ->orderBy('position')->orderBy('id')->get()
+            : collect();
+        $distributionFor = function ($c) use ($distributionRules): string {
+            $scopeLabel = $c->specialty_name . ' · ' . (int) $c->course;
+            $bestMode = 'spread';
+            $bestScore = -1;
+            $bestPosition = PHP_INT_MAX;
+
+            foreach ($distributionRules as $rule) {
+                $subjects = $rule->subjects ?: [];
+                $scopes = $rule->scopes ?: [];
+                if ($subjects && !in_array($c->subject_name, $subjects, true)) {
+                    continue;
+                }
+                if ($scopes && !in_array($scopeLabel, $scopes, true)) {
+                    continue;
+                }
+
+                $score = ($subjects ? 2 : 0) + ($scopes ? 1 : 0);
+                $position = (int) $rule->position;
+                if ($score < $bestScore || ($score === $bestScore && $position >= $bestPosition)) {
+                    continue;
+                }
+
+                $params = $rule->params ?: [];
+                $mode = $params['distribution'] ?? 'spread';
+                $bestMode = in_array($mode, ['spread', 'odd', 'even'], true) ? $mode : 'spread';
+                $bestScore = $score;
+                $bestPosition = $position;
+            }
+
+            return $bestMode;
+        };
 
         $cards = TimetableCard::where('board_id', $board->id)
             ->whereNotNull('weeks')
@@ -1871,44 +1943,67 @@ class TimetableController extends Controller
             return;
         }
 
-        // Fan bo'yicha ma'ruza haftalari (qo'shimcha amaliy shuning TESKARISIDA bo'ladi)
-        $lecWeeksBySubj = [];
+        // Fan bo'yicha eng katta ma'ruza kartasi vakil bo'ladi. Uning tanlangan
+        // haftalari shu fanni almashtiruvchi qo'shimcha amaliyga teskari qo'llanadi.
+        $lectureCardsBySubject = [];
         foreach ($cards as $c) {
             if ($c->training_type !== 'lecture') {
                 continue;
             }
-            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
-            $lecWeeksBySubj[$k] = max((int) ($lecWeeksBySubj[$k] ?? 0), (int) $c->weeks);
+            $key = $subjectKey($c);
+            if (!isset($lectureCardsBySubject[$key])
+                || (int) $c->weeks > (int) $lectureCardsBySubject[$key]->weeks) {
+                $lectureCardsBySubject[$key] = $c;
+            }
+        }
+
+        $lectureWeeksBySubject = [];
+        $lectureActiveBySubject = [];
+        foreach ($lectureCardsBySubject as $key => $lectureCard) {
+            $count = (int) $lectureCard->weeks;
+            $lectureWeeksBySubject[$key] = $count;
+            $lectureActiveBySubject[$key] = $this->lectureWeeksForMode(
+                $totalFor($lectureCard),
+                $count,
+                $distributionFor($lectureCard)
+            );
         }
 
         $now = now();
         $ins = [];
         foreach ($cards as $c) {
-            $sk = $this->specKey($c->specialty_name);
-            $total = max(1, (int) ($gset[($c->faculty_name ?? '') . '|' . $sk . '|' . $c->course]
-                ?? $gset['|' . $sk . '|' . $c->course] ?? $boardWeeks));
+            $total = $totalFor($c);
             $cw = (int) $c->weeks;
             if ($cw >= $total) {
                 continue;   // har hafta o'tiladi — istisno kerak emas
             }
 
-            $k = $sk . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
-            $lw = (int) ($lecWeeksBySubj[$k] ?? 0);
+            $key = $subjectKey($c);
+            $lectureCount = (int) ($lectureWeeksBySubject[$key] ?? 0);
+            $lectureActive = $lectureActiveBySubject[$key]
+                ?? $this->spreadWeeks($total, $lectureCount);
 
             if ($c->training_type === 'lecture') {
-                $active = $this->spreadWeeks($total, $cw);
-            } elseif ($lw > 0 && $cw === $total - $lw) {
-                // Ma'ruzani almashtiruvchi qo'shimcha amaliy — ma'ruzasiz haftalar
-                $active = array_values(array_diff(range(1, $total), $this->spreadWeeks($total, $lw)));
+                $active = $lectureActive;
+            } elseif ($lectureCount > 0 && $cw === $total - $lectureCount) {
+                // Ma'ruzani almashtiruvchi qo'shimcha amaliy — ma'ruzasiz haftalar.
+                $active = array_values(array_diff(range(1, $total), $lectureActive));
             } else {
                 $active = $this->spreadWeeks($total, $cw);
             }
 
             $activeSet = array_flip($active);
-            for ($w = 1; $w <= $total; $w++) {
-                if (!isset($activeSet[$w])) {
-                    $ins[] = ['card_id' => $c->id, 'week' => $w, 'day' => null, 'pair' => null,
-                              'cancelled' => true, 'created_at' => $now, 'updated_at' => $now];
+            for ($week = 1; $week <= $total; $week++) {
+                if (!isset($activeSet[$week])) {
+                    $ins[] = [
+                        'card_id' => $c->id,
+                        'week' => $week,
+                        'day' => null,
+                        'pair' => null,
+                        'cancelled' => true,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
                 }
             }
         }

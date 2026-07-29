@@ -1590,10 +1590,20 @@
         .assign-toolbar input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; margin: 0; }
         .assign-pane-title { letter-spacing: .01em; }
         .assign-unit-info { line-height: 1.45; }
-        .asg-tabs { min-height: 48px; }
-         .asg-tab-button { display:inline-flex; align-items:center; gap:7px; padding:10px 16px; border:0; border-bottom:3px solid transparent; background:transparent; color:#64748b; font-size:12px; font-weight:700; cursor:pointer; transition:all .18s ease; }
-         .asg-tab-button:hover { color:#2563eb; background:#eff6ff; }
-         .asg-tab-button.active { color:#1d4ed8; border-bottom-color:#2563eb; background:#eff6ff; }
+        .asg-tabs { min-height: 58px; padding: 10px 16px 0; gap: 8px; background: #fff; border-bottom: 1px solid #dbe4ef; }
+         .asg-tab-button {
+             display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px;
+             border: 1px solid #dbe4ef; border-bottom: 0; border-radius: 10px 10px 0 0;
+             background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 800;
+             cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
+         }
+         .asg-tab-button i { font-size: 15px; }
+         .asg-tab-button:hover { color: #1d4ed8; background: #eff6ff; transform: translateY(-1px); }
+         .asg-tab-button:focus { outline: none; }
+         .asg-tab-button.active {
+             color: #fff; border-color: #2563eb; background: linear-gradient(135deg, #2563eb, #1d4ed8);
+             box-shadow: 0 -2px 10px rgba(37, 99, 235, .18);
+         }
          #asgAuditoriumsPanel { min-height:0; }
          #asgAudTable tr { cursor: pointer; }
          #asgAudTable tr:hover td { background: #eff6ff; }
@@ -4439,8 +4449,18 @@
                 if (!board) return;
                 $('asgAudTable').innerHTML = '<tbody><tr><td class="p-3 text-gray-400">Yuklanmoqda...</td></tr></tbody>';
                 try {
-                    const j = await api(BASE + '/boards/' + board.id + '/auditorium-teachers');
-                    asgAudRooms = j.auditoriums || [];
+                    // Xonalar ma'lumotlar modalidagi Auditoriyalar tabida
+                    // ishlatiladigan ayni endpointdan olinadi; assignmentlar ustiga birlashtiriladi.
+                    const [rooms, assignments] = await Promise.all([
+                        api(AUDS_URL),
+                        api(BASE + '/boards/' + board.id + '/auditorium-teachers'),
+                    ]);
+                    const assignmentById = Object.fromEntries(
+                        (assignments.auditoriums || []).map(room => [String(room.id), room])
+                    );
+                    asgAudRooms = (rooms || [])
+                        .filter(room => room.active !== false)
+                        .map(room => ({ ...room, ...(assignmentById[String(room.id)] || {}) }));
                     if (!asgAudDepartmentsLoaded) {
                         const departments = await api(TEACHER_DEPARTMENTS_URL);
                         $('asgAudDepartment').innerHTML = '<option value="">— barcha kafedralar —</option>' +

@@ -4660,7 +4660,7 @@
                 setAsgAudControls(!!asgAudSel);
                 if (!asgAudSel) return;
                 $('asgAudInfo').innerHTML = '<b>' + esc(asgAudSel.name || asgAudSel.code) + '</b><br>' + esc(asgAudSel.building_name || 'Bino ko\'rsatilmagan') + ' · ' + (asgAudSel.volume || 0) + ' o\'rin';
-                $('asgAudGeneral').checked = !!asgAudSel.is_general || !asgAudSel.teacher_id;
+                $('asgAudGeneral').checked = !!asgAudSel.is_general;
                 applyAsgAudGeneralState();
                 await loadAsgAudTeachers('');
                 if (asgAudSel.teacher_id) $('asgAudTeacher').value = String(asgAudSel.teacher_id);

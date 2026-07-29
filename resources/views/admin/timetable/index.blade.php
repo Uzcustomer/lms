@@ -129,6 +129,8 @@
                     <div class="tt-field tt-week-field">
                         <label>Hafta</label>
                         <select id="weekSel"></select>
+                        <button type="button" id="compactWeekBtn" class="hidden tt-compact-btn"
+                            title="Shu haftada o'tilmaydigan ma'ruzalar bo'shatgan vaqtga darslarni tepaga suradi (guruh/o'qituvchi/auditoriya band bo'lmasa)">⬆ Bo'sh vaqtga surish</button>
                         <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
                     </div>
                     <div class="tt-field tt-view-field">
@@ -1454,6 +1456,10 @@
             color: #fff;
         }
         .tt-week-field select { min-width: 170px; }
+        .tt-compact-btn { margin-top: 4px; padding: 3px 8px; font-size: 11px; font-weight: 600;
+            color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; cursor: pointer; }
+        .tt-compact-btn:hover { background: #dbeafe; }
+        .tt-compact-btn:disabled { opacity: .6; cursor: default; }
         .tt-view-field select { min-width: 100px; }
         .tt-main-actions {
             display: flex;
@@ -2111,11 +2117,36 @@
                 for (let i = 1; i <= w; i++) opts += '<option value="' + i + '">' + i + '-hafta</option>';
                 $('weekSel').innerHTML = opts;
                 $('weekSel').value = String(curWeek);
+                toggleCompactBtn();
+            }
+            // "Bo'sh vaqtga surish" faqat aniq hafta tanlanganda ma'noga ega
+            function toggleCompactBtn() {
+                const b = $('compactWeekBtn');
+                if (b) b.classList.toggle('hidden', !curWeek);
             }
             $('weekSel').onchange = function () {
                 curWeek = +this.value || 0;
                 selected = null;
+                toggleCompactBtn();
                 renderAll();
+            };
+            // Tanlangan haftani tepaga zichlash: o'tilmaydigan ma'ruzalar bo'shatgan
+            // vaqtga darslarni suradi (faqat shu haftaga istisno yoziladi).
+            $('compactWeekBtn').onclick = async function () {
+                if (!board || !curWeek) return;
+                if (!confirm(curWeek + '-hafta uchun darslar kun boshiga suriladi (guruh/o\'qituvchi/auditoriya band bo\'lmasa). Shablon o\'zgarmaydi. Davom etamizmi?')) return;
+                this.disabled = true;
+                const prev = this.textContent;
+                this.textContent = 'Surilmoqda...';
+                try {
+                    const body = Object.assign({ week: curWeek }, scopeBody());
+                    if (typeFilter !== 'all') body.training_type = typeFilter;
+                    const j = await api(BASE + '/boards/' + board.id + '/compact-week', 'POST', body);
+                    await loadBoard(board.id);
+                    $('autoMsg').textContent = (j.moved || 0) + ' ta dars tepaga surildi';
+                } catch (e) { alert('Xatolik: ' + e.message); }
+                this.disabled = false;
+                this.textContent = prev;
             };
             $('viewMode').onchange = function () {
                 viewMode = this.value;

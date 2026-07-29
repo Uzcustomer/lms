@@ -1,10 +1,28 @@
 <x-app-layout>
     <div class="p-4 sm:ml-64">
         <div class="mt-14">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Ingliz guruhga o'tish arizalari</h1>
                     <p class="text-sm text-gray-500 mt-1">Talabalar yuborgan arizalarni ko'rish, saralash va ko'rib chiqish oynasi</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="{{ route('admin.english-group-applications.export') }}"
+                       class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                       title="Barcha arizalarni Excel fayliga yuklash">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/>
+                        </svg>
+                        Excel yuklash
+                    </a>
+                    <a href="{{ route('admin.english-group-applications.documents-zip') }}"
+                       class="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
+                       title="Sertifikati bor arizachilar hujjatlarini ZIP qilib yuklash">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9ZM8 9h8M8 12h8M8 15h5"/>
+                        </svg>
+                        Hujjatlarni yuklash
+                    </a>
                 </div>
             </div>
 

@@ -164,7 +164,7 @@ class EnglishGroupApplicationController extends Controller
             $fill = match ($application->status) {
                 'approved' => 'DCFCE7',
                 'rejected' => 'FEE2E2',
-                default => 'FEF3C7',
+                default => 'FFFFFF',
             };
             $sheet->getStyle("A{$row}:P{$row}")->applyFromArray([
                 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $fill]],
@@ -238,6 +238,86 @@ class EnglishGroupApplicationController extends Controller
 
             $zip->addFile(Storage::path($application->certificate_pdf_path), $fileName);
         }
+
+        $levels = [
+            'boshlangich' => "Boshlang'ich",
+            'orta' => "O'rta",
+            'mukammal' => 'Mukammal',
+        ];
+        $statuses = [
+            'pending' => 'Kutilmoqda',
+            'approved' => 'Qabul qilingan',
+            'rejected' => 'Rad etilgan',
+        ];
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sertifikatli arizalar');
+        $headers = [
+            'ID', 'F.I.Sh.', 'HEMIS ID', 'Telefon', 'Fakultet', 'Yo\'nalish',
+            'Kurs', 'Semestr', 'Guruh', 'Ingliz tili darajasi', 'Holat',
+            'Rad etish sababi', 'Admin izohi', 'Sertifikat fayli', 'Ariza sanasi', 'Ko\'rib chiqilgan sana',
+        ];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:P1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2563EB']],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'wrapText' => true,
+            ],
+        ]);
+        $sheet->getRowDimension(1)->setRowHeight(30);
+
+        $row = 2;
+        foreach ($applications as $application) {
+            $sheet->fromArray([
+                $application->id,
+                $application->full_name,
+                $application->student_hemis_id ?: '',
+                $application->phone_number ?: '',
+                $application->faculty_name ?: '',
+                $application->specialty_name ?: '',
+                $application->course_name ?: '',
+                $application->semester_name ?: '',
+                $application->group_name ?: '',
+                $levels[$application->english_level] ?? ($application->english_level ?: ''),
+                $statuses[$application->status] ?? $application->status,
+                $application->rejection_reason_label ?: '',
+                $application->admin_note ?: '',
+                basename($application->certificate_pdf_path),
+                optional($application->created_at)->format('d.m.Y H:i'),
+                optional($application->reviewed_at)->format('d.m.Y H:i'),
+            ], null, "A{$row}");
+            $row++;
+        }
+
+        $lastRow = max(1, $row - 1);
+        $sheet->getStyle("A1:P{$lastRow}")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['rgb' => 'CBD5E1'],
+                ],
+            ],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ]);
+        foreach ([
+            'A' => 8, 'B' => 28, 'C' => 16, 'D' => 16, 'E' => 24, 'F' => 28,
+            'G' => 16, 'H' => 16, 'I' => 18, 'J' => 20, 'K' => 18, 'L' => 22,
+            'M' => 32, 'N' => 24, 'O' => 20, 'P' => 20,
+        ] as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter("A1:P{$lastRow}");
+
+        $excelTemp = tempnam(sys_get_temp_dir(), 'english_certificates_excel_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($excelTemp);
+        $spreadsheet->disconnectWorksheets();
+        $zip->addFile($excelTemp, 'sertifikatli-arizachilar.xlsx');
 
         $zip->close();
         $fileName = 'ingliz-guruh-sertifikatlari-' . now()->format('Y-m-d_H-i') . '.zip';

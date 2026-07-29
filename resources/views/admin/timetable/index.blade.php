@@ -2214,11 +2214,12 @@
                     await loadBoard(board.id);
                     $('autoMsg').textContent = 'Joylandi: ' + j.placed +
                         (j.unplaced ? (' · joy topilmadi: ' + j.unplaced) : '') +
-                        (j.rooms_assigned ? (' · xona biriktirildi: ' + j.rooms_assigned) : '');
+                        (j.rooms_assigned ? (' · xona biriktirildi: ' + j.rooms_assigned) : '') +
+                        (j.compacted ? (' · haftalarda tepaga surildi: ' + j.compacted) : '');
                     // Hammasi allaqachon joylashgan va reset belgilanmagan — yangi
                     // sozlama bo'yicha qayta taqsimlash uchun yo'l ko'rsatamiz.
                     // Xona biriktirilgan bo'lsa — ish bajarildi, qayta joylash so'ralmaydi
-                    if (!$('autoReset').checked && !j.placed && !j.unplaced && !j.rooms_assigned) {
+                    if (!$('autoReset').checked && !j.placed && !j.unplaced && !j.rooms_assigned && !j.compacted) {
                         $('autoMsg').textContent = 'Hammasi joylashgan. Yangi sozlama bo\'yicha qayta joylash kerak.';
                         if (confirm('Barcha kartalar allaqachon joylashgan.\nYangi sozlama (bir kunga / ketma-ket) bo\'yicha mavjud joylashuvlarni bo\'shatib QAYTA joylaymizmi?')) {
                             $('autoReset').checked = true;

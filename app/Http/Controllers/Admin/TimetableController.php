@@ -580,6 +580,11 @@ class TimetableController extends Controller
             $this->ensureGridSettings($board, $specsFound);
         });
 
+        // Qaysi kartochka qaysi HAFTADA o'tilishini belgilaymiz (hafta bo'yicha
+        // istisnolar). Ma'ruza va uni almashtiruvchi "qo'shimcha" amaliy karta
+        // bir-birini to'ldiradi: ma'ruza bor haftada amaliy yo'q va aksincha.
+        $this->assignCardWeeks($board);
+
         // Fakultet nomini to'ldiramiz (snapshot bloklaridagi department_name →
         // oqim guruhlari orqali). Generatsiya blockFac'ni yozadi; bu esa
         // eski/qo'lda holatlar uchun himoya (faqat NULL qatorlar).
@@ -1715,6 +1720,105 @@ class TimetableController extends Controller
                 && abs($prcCheck - $prc) < 0.01
                 && abs($prcInt - $prc) < 0.01,
         ];
+    }
+
+    /**
+     * N ta haftani M ta semestr haftasiga TENG taqsimlaydi (1..M).
+     * Masalan 6 ta ma'ruza 15 haftaga: 1, 3, 6, 8, 11, 13.
+     */
+    private function spreadWeeks(int $total, int $count): array
+    {
+        if ($count <= 0 || $total <= 0) {
+            return [];
+        }
+        if ($count >= $total) {
+            return range(1, $total);
+        }
+        $out = [];
+        for ($i = 0; $i < $count; $i++) {
+            $out[] = (int) floor($i * $total / $count) + 1;
+        }
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * Kartochkalar qaysi haftalarda o'tilishini belgilaydi (timetable_card_overrides
+     * dagi "cancelled" orqali). Karta `weeks` ustunida NECHTA haftada o'tilishi
+     * yozilgan; bu yerda esa QAYSI haftalar ekani aniqlanadi.
+     *
+     * Eng muhimi: ma'ruza va uni almashtiruvchi "qo'shimcha" amaliy karta
+     * BIR-BIRINI TO'LDIRADI — ma'ruza bo'lgan haftada qo'shimcha amaliy bo'lmaydi
+     * va aksincha. Shu bilan haftalik yuk chegarada qoladi (mas. 6 soat), aks holda
+     * ikkalasi bir haftaga tushib 8 soat bo'lib ketardi.
+     */
+    private function assignCardWeeks(TimetableBoard $board): void
+    {
+        if (!Schema::hasTable('timetable_card_overrides') || !Schema::hasColumn('timetable_cards', 'weeks')) {
+            return;
+        }
+
+        $gset = TimetableGridSetting::where('board_id', $board->id)->get()
+            ->mapWithKeys(fn($g) => [
+                ($g->faculty_name ?? '') . '|' . $this->specKey($g->specialty_name) . '|' . $g->course => (int) $g->weeks,
+            ])->all();
+        $boardWeeks = max(1, (int) $board->weeks);
+
+        $cards = TimetableCard::where('board_id', $board->id)
+            ->whereNotNull('weeks')
+            ->get(['id', 'faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'weeks']);
+        if ($cards->isEmpty()) {
+            return;
+        }
+
+        // Fan bo'yicha ma'ruza haftalari (qo'shimcha amaliy shuning TESKARISIDA bo'ladi)
+        $lecWeeksBySubj = [];
+        foreach ($cards as $c) {
+            if ($c->training_type !== 'lecture') {
+                continue;
+            }
+            $k = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+            $lecWeeksBySubj[$k] = max((int) ($lecWeeksBySubj[$k] ?? 0), (int) $c->weeks);
+        }
+
+        $now = now();
+        $ins = [];
+        foreach ($cards as $c) {
+            $sk = $this->specKey($c->specialty_name);
+            $total = max(1, (int) ($gset[($c->faculty_name ?? '') . '|' . $sk . '|' . $c->course]
+                ?? $gset['|' . $sk . '|' . $c->course] ?? $boardWeeks));
+            $cw = (int) $c->weeks;
+            if ($cw >= $total) {
+                continue;   // har hafta o'tiladi — istisno kerak emas
+            }
+
+            $k = $sk . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+            $lw = (int) ($lecWeeksBySubj[$k] ?? 0);
+
+            if ($c->training_type === 'lecture') {
+                $active = $this->spreadWeeks($total, $cw);
+            } elseif ($lw > 0 && $cw === $total - $lw) {
+                // Ma'ruzani almashtiruvchi qo'shimcha amaliy — ma'ruzasiz haftalar
+                $active = array_values(array_diff(range(1, $total), $this->spreadWeeks($total, $lw)));
+            } else {
+                $active = $this->spreadWeeks($total, $cw);
+            }
+
+            $activeSet = array_flip($active);
+            for ($w = 1; $w <= $total; $w++) {
+                if (!isset($activeSet[$w])) {
+                    $ins[] = ['card_id' => $c->id, 'week' => $w, 'day' => null, 'pair' => null,
+                              'cancelled' => true, 'created_at' => $now, 'updated_at' => $now];
+                }
+            }
+        }
+
+        if ($ins) {
+            DB::transaction(function () use ($ins) {
+                foreach (array_chunk($ins, 1000) as $chunk) {
+                    DB::table('timetable_card_overrides')->insert($chunk);
+                }
+            });
+        }
     }
 
     /**

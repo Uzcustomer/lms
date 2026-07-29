@@ -408,6 +408,11 @@ class TimetableController extends Controller
                                     'group_name' => null, 'group_names' => json_encode($groupNames),
                                     'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
                                     'students' => $oqTotal,
+                                    // Ma'ruza — 2 soat (1 para). MUHIM: ustunlar to'plami
+                                    // amaliy qatorlar bilan bir xil bo'lishi shart, aks holda
+                                    // ommaviy insert() ustunlarni birinchi qatordan olib,
+                                    // qolganlarida mos kelmay SQL xatosi beradi.
+                                    'len_half' => 2,
                                     'weeks' => max(1, (int) $wp['lecture_weeks']),
                                     'created_at' => $now, 'updated_at' => $now,
                                 ];
@@ -462,7 +467,12 @@ class TimetableController extends Controller
         return $rows;
     }
 
-    /** Migratsiya kechiksa — timetable_cards da hali yo'q ustunlarni insert qatorlaridan olib tashlash. */
+    /**
+     * Migratsiya kechiksa — timetable_cards da hali yo'q ustunlarni insert
+     * qatorlaridan olib tashlash. Shu bilan birga BARCHA qatorlarni bir xil
+     * ustun to'plamiga keltiradi: ommaviy insert() ustunlarni birinchi qatordan
+     * oladi, qolgan qatorlarda kalitlar farq qilsa SQL xatosi beradi.
+     */
     private function stripUnsupportedColumns(array $rows): array
     {
         if (empty($rows)) {
@@ -474,14 +484,27 @@ class TimetableController extends Controller
                 $drop[] = $col;
             }
         }
-        if (!$drop) {
-            return $rows;
-        }
-        return array_map(function ($r) use ($drop) {
-            foreach ($drop as $col) {
-                unset($r[$col]);
+
+        // Barcha qatorlarda uchraydigan ustunlar birlashmasi (tartibi barqaror)
+        $cols = [];
+        foreach ($rows as $r) {
+            foreach ($r as $k => $_) {
+                if (!isset($cols[$k])) {
+                    $cols[$k] = true;
+                }
             }
-            return $r;
+        }
+        foreach ($drop as $col) {
+            unset($cols[$col]);
+        }
+        $cols = array_keys($cols);
+
+        return array_map(function ($r) use ($cols) {
+            $out = [];
+            foreach ($cols as $c) {
+                $out[$c] = $r[$c] ?? null;   // yetishmagan ustun — NULL
+            }
+            return $out;
         }, $rows);
     }
 

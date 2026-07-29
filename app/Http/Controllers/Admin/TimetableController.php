@@ -1224,11 +1224,32 @@ class TimetableController extends Controller
             }
         });
 
+        // Haftalarni avtomatik zichlash: ba'zi ma'ruzalar har haftada o'tilmaydi
+        // (o'sha haftada bekor qilingan) — ular bo'shatgan vaqtga amaliy suriladi,
+        // shunda dars kun boshidan boshlanadi. Faqat bekor qilingan darsi BOR
+        // haftalar qayta hisoblanadi (qolgan haftalar shablonday qoladi, ortiqcha
+        // istisno yozilmaydi).
+        $compacted = 0;
+        $totalWeeks = max(1, (int) $board->weeks);
+        $allCards = TimetableCard::where('board_id', $board->id)->get()->keyBy('id');
+        $ovrByWeek = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $board->id))
+            ->get()->groupBy('week');
+        for ($w = 1; $w <= $totalWeeks; $w++) {
+            $weekOvr = ($ovrByWeek[$w] ?? collect())->keyBy('card_id');
+            if (!$weekOvr->contains(fn($o) => (bool) $o->cancelled)) {
+                continue;   // bu haftada o'tilmaydigan dars yo'q — surish shart emas
+            }
+            $moves = $this->compactWeekMoves($board, $allCards, $weekOvr, $inScope, $scopeType);
+            $this->saveWeekMoves($moves, $w);
+            $compacted += count($moves);
+        }
+
         return response()->json([
             'ok' => true,
             'placed' => $placed,
             'unplaced' => $unplaced,
             'rooms_assigned' => $roomsAssigned,
+            'compacted' => $compacted,
         ]);
     }
 
@@ -2189,10 +2210,29 @@ class TimetableController extends Controller
             return true;
         };
 
-        $pairs = $board->pairCount();
         $all = TimetableCard::where('board_id', $board->id)->get()->keyBy('id');
         $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $board->id))
             ->where('week', $week)->get()->keyBy('card_id');
+
+        $moves = $this->compactWeekMoves($board, $all, $ovr, $inScope, $data['training_type'] ?? null);
+        $this->saveWeekMoves($moves, $week);
+
+        return response()->json(['ok' => true, 'moved' => count($moves)]);
+    }
+
+    /**
+     * Bir haftani tepaga zichlash uchun ko'chirishlar ro'yxati (DBga yozmaydi).
+     * Har karta o'z kunidagi eng erta bo'sh yarim-slotga suriladi; guruh
+     * (fakultet+yo'nalish+kurs qamrovida), o'qituvchi va auditoriya bandligi
+     * hisobga olinadi — qamrovdan tashqaridagi darslar ham band sanaladi.
+     *
+     * @param  \Illuminate\Support\Collection  $all  board kartalari (id bo'yicha)
+     * @param  \Illuminate\Support\Collection  $ovr  shu haftaning istisnolari (card_id bo'yicha)
+     * @return array<int,array{card_id:int,day:int,pair:int}>
+     */
+    private function compactWeekMoves(TimetableBoard $board, $all, $ovr, callable $inScope, ?string $trainingType): array
+    {
+        $pairs = $board->pairCount();
 
         // Shu haftadagi effektiv joylashuv (bekor qilinganlar tushib qoladi)
         $eff = [];
@@ -2214,7 +2254,7 @@ class TimetableController extends Controller
             $eff[$c->id] = [(int) $d, (int) $p];
         }
 
-        // Bandlik xaritalari — shu haftadagi BARCHA darslardan (qamrovdan tashqarisi ham)
+        // Bandlik xaritalari — shu haftadagi BARCHA darslardan
         $gBusy = [];
         $tBusy = [];
         $rBusy = [];
@@ -2248,15 +2288,14 @@ class TimetableController extends Controller
             if (!$inScope($c)) {
                 continue;
             }
-            if (!empty($data['training_type']) && $c->training_type !== $data['training_type']) {
+            if ($trainingType && $c->training_type !== $trainingType) {
                 continue;
             }
             $cands[] = [$c, $d, $p];
         }
         usort($cands, fn($a, $b) => [$a[1], $a[2]] <=> [$b[1], $b[2]]);
 
-        $moved = 0;
-        $touched = [];
+        $moves = [];
         foreach ($cands as [$c, $d, $p]) {
             $len = $this->parasNeeded($c);
             $scope = $this->groupScopeKey($c);
@@ -2286,21 +2325,27 @@ class TimetableController extends Controller
             }
             $mark($c, $d, $best, true);
             if ($best !== $p) {
-                $touched[] = ['card_id' => $c->id, 'day' => $d, 'pair' => $best];
-                $moved++;
+                $moves[] = ['card_id' => (int) $c->id, 'day' => $d, 'pair' => $best];
             }
         }
 
-        DB::transaction(function () use ($touched, $week) {
-            foreach ($touched as $t) {
+        return $moves;
+    }
+
+    /** Hafta ko'chirishlarini istisno (override) sifatida saqlash. */
+    private function saveWeekMoves(array $moves, int $week): void
+    {
+        if (empty($moves)) {
+            return;
+        }
+        DB::transaction(function () use ($moves, $week) {
+            foreach ($moves as $m) {
                 TimetableCardOverride::updateOrCreate(
-                    ['card_id' => $t['card_id'], 'week' => $week],
-                    ['day' => $t['day'], 'pair' => $t['pair'], 'cancelled' => false]
+                    ['card_id' => $m['card_id'], 'week' => $week],
+                    ['day' => $m['day'], 'pair' => $m['pair'], 'cancelled' => false]
                 );
             }
         });
-
-        return response()->json(['ok' => true, 'moved' => $moved]);
     }
 
     public function weekOverride(Request $request, TimetableCard $card)

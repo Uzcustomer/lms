@@ -4639,10 +4639,16 @@
                     const teacher = general
                         ? '<span class="text-slate-400">Barcha o\'qituvchilar</span>'
                         : (hasTeacher ? '<span class="aud-teacher">' + esc(room.teacher_name || '—') + '</span>' : '<span class="text-slate-400">Tanlanmagan</span>');
+                    const unassignButton = room.assignment_id
+                        ? '<button type="button" data-asg-aud-unassign="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700 hover:bg-amber-100" title="Biriktirishni bekor qilish"><i class="bi bi-x-circle" aria-hidden="true"></i></button>'
+                        : '';
+                    const deleteButton = room.can_delete
+                        ? '<button type="button" data-asg-aud-delete="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-600 hover:bg-red-100" title="Auditoriyani o\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>'
+                        : '';
                     const action = showActions
-                        ? '<td class="text-center">' + (room.can_delete
-                            ? '<button type="button" data-asg-aud-delete="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-600 hover:bg-red-100" title="Auditoriyani o\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>'
-                            : '<span class="text-slate-300">—</span>') + '</td>'
+                        ? '<td class="text-center"><span class="inline-flex items-center justify-center gap-1">' +
+                            (unassignButton || deleteButton ? unassignButton + deleteButton : '<span class="text-slate-300">—</span>') +
+                          '</span></td>'
                         : '';
 
                     h += '<tr data-i="' + i + '"' + (asgAudSel && asgAudSel.id === room.id ? ' class="sel"' : '') + '>' +
@@ -4660,6 +4666,34 @@
                     $('asgAudTable').querySelectorAll('tbody tr').forEach(row => row.classList.remove('sel'));
                     tr.classList.add('sel');
                     selectAsgAudRoom(asgAudSel.id);
+                });
+                $('asgAudTable').querySelectorAll('[data-asg-aud-unassign]').forEach(button => {
+                    button.onclick = async event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        const room = asgAudRooms.find(item => +item.id === +button.dataset.asgAudUnassign);
+                        if (!room || !confirm('«' + (room.name || room.code) + '» auditoriyasidagi biriktirishni bekor qilasizmi?')) return;
+
+                        button.disabled = true;
+                        try {
+                            const result = await api(BASE + '/boards/' + board.id + '/auditorium-teachers/' + room.id, 'DELETE', {});
+                            room.assignment_id = null;
+                            room.teacher_id = null;
+                            room.teacher_name = null;
+                            room.is_general = false;
+                            if (asgAudSel && +asgAudSel.id === +room.id) {
+                                $('asgAudGeneral').checked = false;
+                                $('asgAudTeacher').value = '';
+                                applyAsgAudGeneralState();
+                            }
+                            $('asgMsg').textContent = result.message || 'Biriktirish bekor qilindi';
+                            renderAsgAudTable();
+                        } catch (e) {
+                            $('asgMsg').textContent = 'Xatolik: ' + e.message;
+                            button.disabled = false;
+                        }
+                    };
                 });
                 $('asgAudTable').querySelectorAll('[data-asg-aud-delete]').forEach(button => {
                     button.onclick = async event => {
@@ -4752,6 +4786,7 @@
                     const j = await api(BASE + '/boards/' + board.id + '/assign-auditorium-teacher', 'POST', {
                         auditorium_id: asgAudSel.id, teacher_id: teacherId || '', is_general: isGeneral ? 1 : 0,
                     });
+                    asgAudSel.assignment_id = j.assignment_id;
                     asgAudSel.teacher_id = j.teacher_id;
                     asgAudSel.teacher_name = j.teacher_name;
                     asgAudSel.is_general = !!j.is_general;

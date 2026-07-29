@@ -2635,23 +2635,36 @@ class TimetableController extends Controller
     public function teachers(Request $request)
     {
         $q = Teacher::query()->whereNotNull('full_name');
-        if ($request->filled('kafedra')) {
+
+        if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $context = $this->departmentHeadContext($request);
+            $q->where('department_hemis_id', $context['department_hemis_id']);
+        } elseif ($request->filled('kafedra')) {
             $q->where('department', 'like', '%' . $request->kafedra . '%');
         }
+
         if ($request->filled('search')) {
             $q->where('full_name', 'like', '%' . $request->search . '%');
         }
+
         return response()->json(
-            $q->orderBy('full_name')->limit(100)->get(['id', 'full_name', 'short_name', 'department', 'lavozim'])
+            $q->orderBy('full_name')
+                ->limit(100)
+                ->get(['id', 'full_name', 'short_name', 'department', 'department_hemis_id', 'lavozim'])
         );
     }
 
     /** O'qituvchilar kafedralari (auditoriya biriktirish filtri uchun). */
-    public function teacherDepartments()
+    public function teacherDepartments(Request $request)
     {
+        if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $context = $this->departmentHeadContext($request);
+            return response()->json([$context['department_name']]);
+        }
+
         // Katalogdagi disabled kafedralar ham ko'rinsin. Teacher jadvalidagi
         // eski/nomi o'zgargan qiymatlar esa backward compatibility uchun qo'shiladi.
-        $directoryDepartments = \App\Models\Department::query()
+        $directoryDepartments = Department::query()
             ->where('name', 'like', '%kafedra%')
             ->where('structure_type_code', '!=', 11)
             ->pluck('name');
@@ -2938,6 +2951,15 @@ class TimetableController extends Controller
 
         if (!$isGeneral && !$teacher) {
             return response()->json(['error' => "Umumiy bo'lmagan xona uchun o'qituvchi tanlang."], 422);
+        }
+
+        if (!$isGeneral && $this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $context = $this->departmentHeadContext($request);
+            if ((int) $teacher->department_hemis_id !== (int) $context['department_hemis_id']) {
+                return response()->json([
+                    'error' => "Faqat o'z kafedrangizdagi o'qituvchini biriktira olasiz.",
+                ], 422);
+            }
         }
 
         $assignment = AuditoriumTeacher::updateOrCreate(

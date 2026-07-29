@@ -929,7 +929,7 @@ class TimetableController extends Controller
         $rooms = ($assignRooms || $lectureRooms)
             ? Auditorium::where('active', true)->orderBy('volume')->get(['id', 'code', 'name', 'volume', 'auditorium_type_name'])
             : collect();
-        $roomTeacherMap = $this->auditoriumTeacherMapForBoard((int) $board->id);
+        $roomTeacherMap = $this->auditoriumTeacherMap();
         // Ma'ruza xonalari havzasi — tipida "ma'ruza" bo'lganlar (topilmasa — hammasi)
         $lecRooms = collect();
         if ($lectureRooms) {
@@ -2633,15 +2633,14 @@ class TimetableController extends Controller
         return array_unique($errors);
     }
 
-    /** Tanlangan doskadagi auditoriya-o'qituvchi cheklovlari. */
-    private function auditoriumTeacherMapForBoard(int $boardId): array
+    /** Barcha doskalarga umumiy auditoriya-o'qituvchi cheklovlari. */
+    private function auditoriumTeacherMap(): array
     {
         if (!Schema::hasTable('auditorium_teacher')) {
             return [];
         }
 
-        return AuditoriumTeacher::where('board_id', $boardId)
-            ->get(['auditorium_id', 'teacher_id', 'is_general'])
+        return AuditoriumTeacher::get(['auditorium_id', 'teacher_id', 'is_general'])
             ->mapWithKeys(fn ($assignment) => [
                 (string) $assignment->auditorium_id => [
                     'teacher_id' => $assignment->teacher_id,
@@ -2693,7 +2692,7 @@ class TimetableController extends Controller
             if ($data['auditorium_code']) {
                 $a = Auditorium::where('code', $data['auditorium_code'])->first();
                 if ($a) {
-                    $roomMap = $this->auditoriumTeacherMapForBoard((int) $card->board_id);
+                    $roomMap = $this->auditoriumTeacherMap();
                     if (!$this->auditoriumAllowedForCard($a, $card, $roomMap)) {
                         return response()->json([
                             'error' => 'Bu auditoriya tanlangan o\'qituvchiga biriktirilmagan.',
@@ -2989,11 +2988,11 @@ class TimetableController extends Controller
         );
     }
 
-    /** Tanlangan doska uchun auditoriya-o'qituvchi biriktirmalari. */
+    /** Barcha doskalarga umumiy auditoriya-o'qituvchi biriktirmalari. */
     public function auditoriumTeacherAssignments(TimetableBoard $board)
     {
         $assignments = Schema::hasTable('auditorium_teacher')
-            ? AuditoriumTeacher::with('teacher')->where('board_id', $board->id)->get()->keyBy('auditorium_id')
+            ? AuditoriumTeacher::with('teacher')->get()->keyBy('auditorium_id')
             : collect();
 
         $auditoriums = Auditorium::where('active', true)
@@ -3022,7 +3021,7 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Auditoriyani tanlangan doskada o'qituvchiga yoki umumiy holatga biriktirish. */
+    /** Auditoriyani barcha doskalar uchun o'qituvchiga yoki umumiy holatga biriktirish. */
     public function assignAuditoriumTeacher(Request $request, TimetableBoard $board)
     {
         if (!Schema::hasTable('auditorium_teacher')) {
@@ -3058,7 +3057,7 @@ class TimetableController extends Controller
         }
 
         $assignment = AuditoriumTeacher::updateOrCreate(
-            ['board_id' => $board->id, 'auditorium_id' => $auditorium->id],
+            ['auditorium_id' => $auditorium->id],
             [
                 'teacher_id' => $teacher?->id,
                 'is_general' => $isGeneral,
@@ -3075,16 +3074,14 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Tanlangan doskada auditoriyaga berilgan biriktirishni bekor qilish. */
+    /** Auditoriyaga berilgan umumiy biriktirishni bekor qilish. */
     public function unassignAuditoriumTeacher(TimetableBoard $board, Auditorium $auditorium)
     {
         if (!Schema::hasTable('auditorium_teacher')) {
             return response()->json(['error' => 'auditorium_teacher jadvali mavjud emas. Migratsiyani ishga tushiring.'], 503);
         }
 
-        AuditoriumTeacher::where('board_id', $board->id)
-            ->where('auditorium_id', $auditorium->id)
-            ->delete();
+        AuditoriumTeacher::where('auditorium_id', $auditorium->id)->delete();
 
         return response()->json([
             'ok' => true,

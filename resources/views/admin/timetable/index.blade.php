@@ -680,12 +680,12 @@
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgCount" class="text-xs text-slate-400"></span>
                                 </div>
-                                <div class="overflow-auto asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
+                                <div class="overflow-y-auto overflow-x-hidden asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
                                     <table id="asgTable" class="w-full text-xs asc-table"></table>
                                 </div>
                             </div>
                             {{-- O'ng: o'qituvchi tanlash --}}
-                            <div class="assign-teacher-pane w-80 shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="assign-teacher-pane w-64 shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-pane-title px-4 py-3 border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">O'qituvchi</div>
                                 <div class="p-4 space-y-3 flex-1 flex flex-col overflow-hidden">
                                     <div id="asgUnitInfo" class="assign-unit-info text-xs text-slate-500 min-h-[42px] rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2">Chapdan dars birligini tanlang</div>
@@ -710,7 +710,7 @@
                                     <table id="asgAudTable" class="w-full text-xs asc-table"></table>
                                 </div>
                             </div>
-                            <div class="assign-teacher-pane w-80 shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                            <div class="assign-teacher-pane w-64 shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-pane-title px-4 py-3 border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">Auditoriya uchun o'qituvchi</div>
                                 <div class="p-4 space-y-3 flex-1 flex flex-col overflow-hidden">
                                     <div id="asgAudInfo" class="assign-unit-info text-xs text-slate-500 min-h-[42px] rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2">Chapdan auditoriyani tanlang</div>
@@ -1611,6 +1611,15 @@
              box-shadow: 0 -2px 10px rgba(37, 99, 235, .18);
          }
          #asgAuditoriumsPanel { min-height:0; }
+         #asgAuditoriumsPanel .assign-pane { min-width: 0; }
+         #asgAuditoriumsPanel .asc-table-scroll { overflow-x: hidden; }
+         #asgAudTable { width: 100%; table-layout: fixed; }
+         #asgAudTable th, #asgAudTable td {
+             white-space: normal;
+             overflow-wrap: anywhere;
+             word-break: break-word;
+             padding: 6px 7px;
+         }
          #asgAudTable tr { cursor: pointer; }
          #asgAudTable tr:hover td { background: #eff6ff; }
          #asgAudTable tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }

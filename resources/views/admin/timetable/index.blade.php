@@ -295,6 +295,13 @@
                             </div>
                         </div>
                         {{-- Pastki panel --}}
+                        <div id="asgAuditoriumsPanel" class="hidden flex-1 items-center justify-center p-8 bg-slate-50" data-asg-panel="auditoriums">
+                            <div class="max-w-md rounded-xl border border-dashed border-slate-300 bg-white px-8 py-10 text-center shadow-sm">
+                                <i class="bi bi-door-open text-3xl text-blue-600" aria-hidden="true"></i>
+                                <h3 class="mt-3 text-base font-semibold text-slate-700">Auditoriyalarni biriktirish</h3>
+                                <p class="mt-2 text-sm text-slate-500">Auditoriya biriktirish boshqaruvi shu tab ichida ishlaydi.</p>
+                            </div>
+                        </div>
                         <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
                             <div id="ascFootMsg" class="text-sm text-slate-500"></div>
                             <button type="button" id="ascCloseBtn" class="asc-btn primary px-5 py-2">Yopish</button>
@@ -660,7 +667,15 @@
                                 <i class="bi bi-x-lg"></i>
                             </button>
                         </div>
-                        <div class="assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
+                        <div class="asg-tabs flex items-center gap-1 px-4 pt-3 border-b border-slate-200 bg-white">
+                            <button type="button" class="asg-tab-button active" data-asg-tab="teachers">
+                                <i class="bi bi-person-plus" aria-hidden="true"></i> Fanlarni biriktirish
+                            </button>
+                            <button type="button" class="asg-tab-button" data-asg-tab="auditoriums">
+                                <i class="bi bi-door-open" aria-hidden="true"></i> Auditoriyalarni biriktirish
+                            </button>
+                        </div>
+                        <div id="asgTeachersPanel" data-asg-panel="teachers" class="assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
                             {{-- Chap: dars birliklari --}}
                             <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
@@ -1556,7 +1571,12 @@
         .assign-toolbar input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; margin: 0; }
         .assign-pane-title { letter-spacing: .01em; }
         .assign-unit-info { line-height: 1.45; }
-        #asgTable tr { cursor: pointer; }
+        .asg-tabs { min-height: 48px; }
+         .asg-tab-button { display:inline-flex; align-items:center; gap:7px; padding:10px 16px; border:0; border-bottom:3px solid transparent; background:transparent; color:#64748b; font-size:12px; font-weight:700; cursor:pointer; transition:all .18s ease; }
+         .asg-tab-button:hover { color:#2563eb; background:#eff6ff; }
+         .asg-tab-button.active { color:#1d4ed8; border-bottom-color:#2563eb; background:#eff6ff; }
+         #asgAuditoriumsPanel { min-height:0; }
+         #asgTable tr { cursor: pointer; }
         #asgTable tr:hover td { background: #eff6ff; }
         #asgTable tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }
         #asgTeacher:disabled { background: #f8fafc; }
@@ -4232,10 +4252,24 @@
             let asgUnits = [];        // dars birliklari
             let asgSel = null;        // tanlangan birlik
             let asgTeacherTimer = null;
+             function setAsgTab(tab) {
+                 document.querySelectorAll('[data-asg-tab]').forEach(btn => {
+                     btn.classList.toggle('active', btn.dataset.asgTab === tab);
+                 });
+                 document.querySelectorAll('[data-asg-panel]').forEach(panel => {
+                     const active = panel.dataset.asgPanel === tab;
+                     panel.classList.toggle('hidden', !active);
+                     if (panel.dataset.asgPanel === 'auditoriums') panel.classList.toggle('flex', active);
+                 });
+             }
+             document.querySelectorAll('[data-asg-tab]').forEach(btn => {
+                 btn.onclick = () => setAsgTab(btn.dataset.asgTab);
+             });
 
             $('assignBtn').onclick = async () => {
                 if (!board) return;
                 asgSel = null; setAsgTeacherPanel(null);
+                 setAsgTab('teachers');
                 $('assignModal').classList.remove('hidden');
                 $('asgMsg').textContent = '';
                 $('asgTable').innerHTML = '<tbody><tr><td class="p-3 text-gray-400">Yuklanmoqda...</td></tr></tbody>';

@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 class TimetableAssignmentAccess
 {
     /**
-     * O'quv bo'limi faqat doskani ko'rib, o'qituvchi biriktirishi mumkin.
+     * Cheklangan rollar doskani ko'rib, faqat o'ziga berilgan biriktirish amallarini bajaradi.
      */
     public function handle(Request $request, Closure $next)
     {
@@ -20,14 +20,34 @@ class TimetableAssignmentAccess
             $activeRole = $userRoles[0];
         }
 
-        if ($user && in_array($activeRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true)) {
+        $teacherAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi'];
+        $auditoriumAssignmentRoles = ['kafedra_mudiri'];
+        $assignmentRoles = array_merge($teacherAssignmentRoles, $auditoriumAssignmentRoles);
+
+        if ($user && in_array($activeRole, $assignmentRoles, true)) {
             $allowed = [
                 'admin.timetable.index',
                 'admin.timetable.boards.data',
-                'admin.timetable.teachers',
-                'admin.timetable.teacher-units',
-                'admin.timetable.assign-teacher',
             ];
+
+            if (in_array($activeRole, $teacherAssignmentRoles, true)) {
+                $allowed = array_merge($allowed, [
+                    'admin.timetable.teachers',
+                    'admin.timetable.teacher-units',
+                    'admin.timetable.assign-teacher',
+                ]);
+            }
+
+            if (in_array($activeRole, $auditoriumAssignmentRoles, true)) {
+                $allowed = array_merge($allowed, [
+                    'admin.timetable.teachers',
+                    'admin.timetable.teachers.departments',
+                    'admin.timetable.auditorium-teachers',
+                    'admin.timetable.assign-auditorium-teacher',
+                    'admin.timetable.auditoriums',
+                    'admin.timetable.auditoriums.store',
+                ]);
+            }
 
             if (!$request->routeIs($allowed)) {
                 abort(403, 'Bu amal uchun ruxsat berilmagan.');

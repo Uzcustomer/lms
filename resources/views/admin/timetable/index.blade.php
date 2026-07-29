@@ -4554,8 +4554,15 @@
                         .map(room => ({ ...room, ...(assignmentById[String(room.id)] || {}) }));
                     if (!asgAudDepartmentsLoaded) {
                         const departments = await api(TEACHER_DEPARTMENTS_URL);
-                        $('asgAudDepartment').innerHTML = '<option value="">— barcha kafedralar —</option>' +
-                            departments.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+                        const departmentOptions = departments
+                            .map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>')
+                            .join('');
+                        $('asgAudDepartment').innerHTML = TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY
+                            ? departmentOptions
+                            : '<option value="">— barcha kafedralar —</option>' + departmentOptions;
+                        if (TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY && departments.length) {
+                            $('asgAudDepartment').value = departments[0];
+                        }
                         asgAudDepartmentsLoaded = true;
                     }
                     renderAsgAudTable();
@@ -4693,7 +4700,7 @@
                 const general = $('asgAudGeneral').checked;
                 $('asgAudTeacher').disabled = !asgAudSel || general;
                 $('asgAudTeacherSearch').disabled = !asgAudSel || general;
-                $('asgAudDepartment').disabled = !asgAudSel || general;
+                $('asgAudDepartment').disabled = !asgAudSel || general || TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY;
             }
 
             async function selectAsgAudRoom(roomId) {

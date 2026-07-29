@@ -47,7 +47,7 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
             $data[] = [
                 $i + 1,
                 $row['block'],
-                $row['hemis_name'] ?? ($row['ref_name'] ?? $row['work_name']),
+                $this->hemisCell($row),
                 $this->nameCell($row['ref_name'], $row['ref_parts'] ?? []),
                 $this->nameCell($row['work_name'], $row['work_parts'] ?? []),
                 $row['ref_hours'],
@@ -70,6 +70,25 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
             '', '', '', ''];
 
         return $data;
+    }
+
+    /**
+     * HEMIS ustuni. Birikkan guruhda HEMIS'da fanlar alohida turadi — ular
+     * qo'shib yuborilmasdan, har biri o'z qatorida yoziladi.
+     */
+    private function hemisCell(array $row): ?string
+    {
+        if (($row['hemis_name'] ?? null) !== null) {
+            return $row['hemis_name'];
+        }
+        if (!empty($row['hemis_parts'])) {
+            return implode("\n", array_map(
+                fn ($p) => $p['hemis'] ?? ($p['name'] . " (HEMIS'da topilmadi)"),
+                $row['hemis_parts']
+            ));
+        }
+
+        return $row['ref_name'] ?? $row['work_name'];
     }
 
     /**

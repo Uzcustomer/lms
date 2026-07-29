@@ -347,11 +347,65 @@ test('HEMIS nomi birikkan guruhda qism-qism qidiriladi', function () {
 
     $row = groupRow($service, mergedSubjectGroup($service), $refGroups, $work, $hemis);
 
-    // Butun "A / B" nomi HEMIS'da yo'q, ammo qismlari bor — "topilmadi" emas
-    expect($row['hemis_name'])->toBe('Ichki kasalliklar / Endokrinologiya');
+    // Butun "A / B" nomi HEMIS'da yo'q, ammo qismlari bor — "topilmadi" emas.
+    // HEMIS yozuvlari qo'shib yuborilmaydi: har biri o'z holicha qaytariladi,
+    // aks holda bazada mavjud bo'lmagan nom to'qib chiqarilardi.
+    expect($row['hemis_name'])->toBeNull();
+    expect(array_column($row['hemis_parts'], 'hemis'))
+        ->toBe(['Ichki kasalliklar', 'Endokrinologiya']);
     expect($row['ref_matches_hemis'])->toBeNull();  // birikkan nom ayblanmaydi
     expect($row['work_matches_hemis'])->toBeTrue();
     expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
+});
+
+test('HEMIS\'da yaxlit turgan fan aynan bazadagidek ko\'rsatiladi', function () {
+    $service = new CurriculumComparisonService();
+
+    // HEMIS'da "Xirurgik kasalliklar. Urologiya" bitta yozuv (nuqta bilan),
+    // ishchi rejada esa ikkita alohida fan.
+    $refGroups = [
+        $service->normalize('Xirurgik kasalliklar. Urologiya')
+            => subjectGroup('Xirurgik kasalliklar. Urologiya', 'MAJBURIY FANLAR', 180, 6, [5]),
+    ];
+    $group = callService($service, 'manualGroups', [
+        [[
+            'label' => 'Xirurgik kasalliklar. Urologiya',
+            'ref_names' => ['Xirurgik kasalliklar. Urologiya'],
+            'work_names' => ['Xirurgik kasalliklar', 'Urologiya'],
+            'norm_name' => null,
+        ]],
+        $refGroups,
+    ])['manual-0'];
+    $work = [
+        $service->normalize('Xirurgik kasalliklar')
+            => subjectGroup('Xirurgik kasalliklar', 'majburiy', 120, 4, [5]),
+        $service->normalize('Urologiya') => subjectGroup('Urologiya', 'majburiy', 60, 2, [6]),
+    ];
+
+    $row = groupRow($service, $group, $refGroups, $work, [
+        $service->normalize('Xirurgik kasalliklar. Urologiya') => 'Xirurgik kasalliklar. Urologiya',
+    ]);
+
+    expect($row['hemis_name'])->toBe('Xirurgik kasalliklar. Urologiya');
+    expect($row['hemis_parts'])->toBe([]);   // qismlarga bo'lishga hojat yo'q
+    // Yasama "A / B" satri HEMIS bilan solishtirilmaydi — noo'rin nom farqi bermaydi
+    expect($row['work_matches_hemis'])->toBeNull();
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
+    expect($row['note'])->toContain("HEMIS'da yaxlit yozilgan");
+});
+
+test('namunaviy nomi HEMIS\'da yo\'q bo\'lsa ishchi nomi bo\'yicha qidiriladi', function () {
+    $service = new CurriculumComparisonService();
+
+    $row = callService($service, 'buildRow', [
+        subjectGroup('Eski nom', 'MAJBURIY FANLAR', 60, 2),
+        subjectGroup('Yangi nom', 'majburiy', 60, 2),
+        [$service->normalize('Yangi nom') => 'Yangi nom'],
+    ]);
+
+    expect($row['hemis_name'])->toBe('Yangi nom');
+    expect($row['ref_matches_hemis'])->toBeFalse();
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_NAME);
 });
 
 test('HEMIS kamchiligi qo\'lda guruhda ham "To\'g\'ri" ostida yashirilmaydi', function () {

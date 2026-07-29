@@ -327,26 +327,58 @@ class CurriculumComparisonService
         $lookupKey = $this->normalize((string) ($refName ?? $workName ?? ''));
         $hemisName = $hemisMap[$lookupKey] ?? null;
 
-        $refMatchesHemis = ($hemisName !== null && $refName !== null)
+        // Namunaviy nomi HEMIS'da bo'lmasa, ishchi nomi bo'yicha ham qaraymiz:
+        // HEMIS ishchi rejani aks ettiradi, ikkovi har xil yozilishi mumkin.
+        if ($hemisName === null && $refName !== null && $workName !== null) {
+            $hemisName = $hemisMap[$this->normalize($workName)] ?? null;
+        }
+
+        // Birikkan guruhda "A / B" nomi — bizning yasama satrimiz, HEMIS'da
+        // bunday yozuv yo'q. Uni HEMIS nomi bilan solishtirish ma'nosiz, shu
+        // bois tomon "farq qiladi" deb ayblanmaydi (null).
+        $refSplit = count($ref['parts'] ?? []) > 1;
+        $workSplit = count($work['parts'] ?? []) > 1;
+
+        $refMatchesHemis = ($hemisName !== null && $refName !== null && !$refSplit)
             ? ($this->collapse($refName) === $hemisName) : null;
-        $workMatchesHemis = ($hemisName !== null && $workName !== null)
+        $workMatchesHemis = ($hemisName !== null && $workName !== null && !$workSplit)
             ? ($this->collapse($workName) === $hemisName) : null;
 
-        // Birikkan fan guruhi: butun nom ("Ichki kasalliklar / Endokrinologiya")
-        // HEMIS'da bo'lmasligi tabiiy, chunki HEMIS'da fanlar alohida turadi.
-        // Bunday holda tarkibiy fanlar bittalab qidiriladi — shunda "HEMIS'da
-        // topilmadi" degan noto'g'ri xulosa chiqmaydi.
-        $missingInHemis = [];
-        if ($hemisName === null && $hemisMap !== []) {
-            $parts = array_column($work['parts'] ?? $ref['parts'] ?? [], 'name');
-            if (count($parts) > 1) {
-                [$hemisName, $missingInHemis] = $this->resolveHemisParts($parts, $hemisMap);
-                // Namunaviydagi birikkan nom HEMIS'da bo'lmasligi kamchilik emas,
-                // shu bois faqat ishchi tomon tekshiriladi.
-                $refMatchesHemis = null;
-                $workMatchesHemis = $hemisName !== null ? ($missingInHemis === []) : null;
-            }
+        // HEMIS'da fan yaxlit turgan, rejada esa bo'lingan holat — kamchilik
+        // emas, ammo bilib turish uchun izohda qayd etiladi.
+        if ($hemisName !== null && ($refSplit || $workSplit)) {
+            $notes[] = "HEMIS'da yaxlit yozilgan: {$hemisName}";
         }
+
+        // Butun nom HEMIS'da topilmasa — tarkibiy fanlar bittalab qidiriladi
+        // (HEMIS'da fanlar alohida turgan holat).
+        //
+        // MUHIM: topilgan nomlar BIRLASHTIRILMAYDI. Ilgari ular " / " bilan
+        // qo'shilib bitta qator qilib ko'rsatilardi va HEMIS'da umuman
+        // mavjud bo'lmagan nom ("Xirurgik kasalliklar / Urologiya") HEMIS
+        // nomi sifatida chiqardi. Endi har bir HEMIS yozuvi o'z holicha,
+        // alohida qator bo'lib ko'rsatiladi.
+        $missingInHemis = [];
+        $hemisParts = [];
+        if ($hemisName === null && $hemisMap !== [] && ($workSplit || $refSplit)) {
+            $parts = array_column($workSplit ? $work['parts'] : $ref['parts'], 'name');
+            foreach ($parts as $part) {
+                $found = $hemisMap[$this->normalize((string) $part)] ?? null;
+                $hemisParts[] = ['name' => trim((string) $part), 'hemis' => $found];
+                if ($found === null) {
+                    $missingInHemis[] = trim((string) $part);
+                }
+            }
+            // Birortasi ham topilmasa — qism-qism yechim ishlamadi
+            if (count($missingInHemis) === count($parts)) {
+                $hemisParts = [];
+                $missingInHemis = [];
+            }
+            $workMatchesHemis = $hemisParts !== [] && $workSplit ? ($missingInHemis === []) : null;
+        }
+
+        // HEMIS'da fan aniqlandimi — butun nom bo'yicha yoki tarkibiy fanlar bo'yicha
+        $hemisFound = $hemisName !== null || $hemisParts !== [];
 
         // HEMIS nomlari umuman yuklangan bo'lsa — tekshiruv faol.
         $hemisAvailable = !empty($hemisMap);
@@ -364,7 +396,7 @@ class CurriculumComparisonService
             //  - HEMIS nomlari umuman yuklanmagan bo'lsa: eski mantiq — namunaviy
             //    va ishchi bir-biridan farq qilsa.
             $nameDiffers = $hemisAvailable
-                ? ($hemisName === null || $refMatchesHemis === false || $workMatchesHemis === false)
+                ? (!$hemisFound || $refMatchesHemis === false || $workMatchesHemis === false)
                 : ($this->collapse($ref['name']) !== $this->collapse($work['name']));
             $status = match (true) {
                 $hoursDiff && $creditDiff => self::STATUS_HOURS_CREDIT,
@@ -385,7 +417,7 @@ class CurriculumComparisonService
         if ($workMatchesHemis === false) {
             $notes[] = "Ishchi nomi HEMIS nomidan farq qiladi";
         }
-        if ($hemisName === null && ($refName !== null || $workName !== null)) {
+        if (!$hemisFound && ($refName !== null || $workName !== null)) {
             $notes[] = "HEMIS bazasida fan topilmadi";
         }
         if ($missingInHemis !== []) {
@@ -413,6 +445,7 @@ class CurriculumComparisonService
             'ref_parts' => $ref['parts'] ?? [],
             'work_parts' => $work['parts'] ?? [],
             'hemis_name' => $hemisName,
+            'hemis_parts' => $hemisParts,
             'ref_name' => $refName,
             'work_name' => $workName,
             'ref_matches_hemis' => $refMatchesHemis,
@@ -810,31 +843,6 @@ class CurriculumComparisonService
         sort($merged['semestrlar']);
 
         return $merged;
-    }
-
-    /**
-     * Birikkan guruh tarkibidagi fanlarni HEMIS bazasidan bittalab qidiradi.
-     *
-     * @param  string[]  $names
-     * @return array{0: ?string, 1: string[]}  [topilganlar birlashtirilgan nomi, topilmaganlar]
-     */
-    private function resolveHemisParts(array $names, array $hemisMap): array
-    {
-        $found = [];
-        $missing = [];
-        foreach ($names as $name) {
-            $key = $this->normalize((string) $name);
-            if ($key === '') {
-                continue;
-            }
-            if (isset($hemisMap[$key])) {
-                $found[] = $hemisMap[$key];
-            } else {
-                $missing[] = trim((string) $name);
-            }
-        }
-
-        return [$found !== [] ? implode(' / ', array_unique($found)) : null, $missing];
     }
 
     private function groupSubjects(Collection $subjects, bool $useReferenceName): array

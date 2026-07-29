@@ -325,6 +325,23 @@
     .ega-stats > a div:last-child {
         color: #102a56 !important;
     }
+    .ega-filter form {
+        display: flex !important;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 12px;
+    }
+    .ega-filter form > div {
+        min-width: 170px;
+        flex: 1 1 180px;
+    }
+    .ega-filter form > div:first-child {
+        flex: 2 1 320px;
+    }
+    .ega-filter form > div:last-child {
+        flex: 0 0 100%;
+        min-width: 100%;
+    }
     .ega-filter {
         border-color: #d8e2ef !important;
         border-radius: 14px !important;

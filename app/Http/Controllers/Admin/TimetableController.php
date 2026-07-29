@@ -2626,6 +2626,7 @@ class TimetableController extends Controller
                     'volume' => (int) $auditorium->volume,
                     'auditorium_type_name' => $auditorium->auditorium_type_name,
                     'building_name' => $auditorium->building_name,
+                    'assignment_id' => $assignment?->id,
                     'teacher_id' => $assignment?->teacher_id,
                     'teacher_name' => $teacher?->short_name ?: $teacher?->full_name,
                     'is_general' => (bool) ($assignment?->is_general ?? false),

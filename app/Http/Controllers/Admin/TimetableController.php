@@ -1645,7 +1645,7 @@ class TimetableController extends Controller
             'scopes'      => 'nullable|array',
             'scopes.*'    => 'string|max:255',
             'params'                 => 'nullable|array',
-            'params.distribution'    => 'nullable|in:spread,odd,even',
+            'params.distribution'    => 'nullable|in:auto,spread,odd,even',
             'weight'                 => 'nullable|string|max:20',
             'active'      => 'nullable|boolean',
             'note'        => 'nullable|string|max:255',
@@ -1657,7 +1657,7 @@ class TimetableController extends Controller
 
         $distribution = $data['params']['distribution'] ?? null;
         if ($data['condition'] === 'lecture_week_distribution'
-            && !in_array($distribution, ['spread', 'odd', 'even'], true)) {
+            && !in_array($distribution, ['auto', 'spread', 'odd', 'even'], true)) {
             return response()->json(['error' => "Ma'ruza haftalarini taqsimlash turini tanlang."], 422);
         }
 
@@ -1852,23 +1852,44 @@ class TimetableController extends Controller
         return array_values(array_unique($out));
     }
 
-    /** Toq/juft/teng qoida bo'yicha faol ma'ruza haftalari. */
-    private function lectureWeeksForMode(int $total, int $count, string $mode): array
-    {
+    /** Toq/juft/teng/avtomatik qoida bo'yicha faol ma'ruza haftalari. */
+    private function lectureWeeksForMode(
+        int $total,
+        int $count,
+        string $mode,
+        string $automaticParity = 'odd'
+    ): array {
+        if ($count <= 0 || $total <= 0) {
+            return [];
+        }
+        $count = min($count, $total);
+
+        if ($mode === 'auto') {
+            // Semestrning yarmidan kam ma'ruza bo'lsa fanlar navbat bilan
+            // toq/juft haftalarga ajratiladi. Yarim yoki ko'p bo'lsa 1..N.
+            if ($count * 2 < $total) {
+                $mode = in_array($automaticParity, ['odd', 'even'], true)
+                    ? $automaticParity
+                    : 'odd';
+            } else {
+                return range(1, $count);
+            }
+        }
+
         if (!in_array($mode, ['odd', 'even'], true)) {
             return $this->spreadWeeks($total, $count);
         }
 
         $parity = $mode === 'odd' ? 1 : 0;
         $candidates = array_values(array_filter(
-            range(1, max(1, $total)),
+            range(1, $total),
             fn($week) => $week % 2 === $parity
         ));
 
         // Tanlangan parityda yetarli hafta bo'lmasa reja soatini yo'qotmaymiz:
         // xavfsiz zaxira sifatida teng taqsimlash ishlaydi.
         return $count <= count($candidates)
-            ? array_slice($candidates, 0, max(0, $count))
+            ? array_slice($candidates, 0, $count)
             : $this->spreadWeeks($total, $count);
     }
 
@@ -1906,7 +1927,7 @@ class TimetableController extends Controller
             : collect();
         $distributionFor = function ($c) use ($distributionRules): string {
             $scopeLabel = $c->specialty_name . ' · ' . (int) $c->course;
-            $bestMode = 'spread';
+            $bestMode = 'auto';
             $bestScore = -1;
             $bestPosition = PHP_INT_MAX;
 
@@ -1927,8 +1948,8 @@ class TimetableController extends Controller
                 }
 
                 $params = $rule->params ?: [];
-                $mode = $params['distribution'] ?? 'spread';
-                $bestMode = in_array($mode, ['spread', 'odd', 'even'], true) ? $mode : 'spread';
+                $mode = $params['distribution'] ?? 'auto';
+                $bestMode = in_array($mode, ['auto', 'spread', 'odd', 'even'], true) ? $mode : 'auto';
                 $bestScore = $score;
                 $bestPosition = $position;
             }
@@ -1957,6 +1978,22 @@ class TimetableController extends Controller
             }
         }
 
+        // Faqat avtomatik va semestr yarmidan kam ma'ruza qilinadigan fanlar
+        // barqaror tartibda navbat bilan toq/juftga beriladi.
+        $automaticCandidates = [];
+        foreach ($lectureCardsBySubject as $key => $lectureCard) {
+            $total = $totalFor($lectureCard);
+            if ($distributionFor($lectureCard) === 'auto'
+                && (int) $lectureCard->weeks * 2 < $total) {
+                $automaticCandidates[] = $key;
+            }
+        }
+        sort($automaticCandidates, SORT_NATURAL | SORT_FLAG_CASE);
+        $automaticParityBySubject = [];
+        foreach ($automaticCandidates as $index => $key) {
+            $automaticParityBySubject[$key] = $index % 2 === 0 ? 'odd' : 'even';
+        }
+
         $lectureWeeksBySubject = [];
         $lectureActiveBySubject = [];
         foreach ($lectureCardsBySubject as $key => $lectureCard) {
@@ -1965,7 +2002,8 @@ class TimetableController extends Controller
             $lectureActiveBySubject[$key] = $this->lectureWeeksForMode(
                 $totalFor($lectureCard),
                 $count,
-                $distributionFor($lectureCard)
+                $distributionFor($lectureCard),
+                $automaticParityBySubject[$key] ?? 'odd'
             );
         }
 

@@ -639,13 +639,15 @@
                                     <div id="ruleLectureWeekOptions" class="hidden mt-2 rounded border border-amber-200 bg-amber-50 p-3">
                                         <label class="block text-xs font-bold text-amber-800 mb-1">Ma'ruza haftalari</label>
                                         <select id="ruleLectureWeekMode" class="w-full rounded border-amber-300 bg-white text-xs">
+                                            <option value="auto">Avtomatik (kam: toq/juft, ko'p: ketma-ket)</option>
                                             <option value="spread">Teng taqsimlash</option>
                                             <option value="odd">Toq haftalar (1, 3, 5, ...)</option>
                                             <option value="even">Juft haftalar (2, 4, 6, ...)</option>
                                         </select>
                                         <div class="mt-2 text-[11px] leading-4 text-amber-700">
+                                            Avtomatikda ma'ruzalar semestr haftalarining yarmidan kam bo'lsa, fanlar navbat bilan
+                                            toq va juft haftalarga beriladi; yarim yoki ko'p bo'lsa 1-haftadan ketma-ket joylashadi.
                                             Fan tanlanmasa — barcha fanlarga umumiy qoida. Fan tanlansa — shu fan uchun istisno.
-                                            Tanlangan toq/juft haftalar yetmasa, reja soati yo'qolmasligi uchun teng taqsimlash ishlaydi.
                                             Qo'llash uchun kartochkalarni qayta yarating.
                                         </div>
                                     </div>
@@ -2535,7 +2537,7 @@
                 $('ruleActive').checked = rule ? !!rule.active : true;
                 $('ruleSubjSearch').value = '';
                 $('ruleLectureWeekMode').value = rule && rule.params && rule.params.distribution
-                    ? rule.params.distribution : 'spread';
+                    ? rule.params.distribution : 'auto';
 
                 // Shartlar ro'yxati (radio)
                 const cur = rule ? rule.condition : '';

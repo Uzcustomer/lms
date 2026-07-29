@@ -46,6 +46,7 @@ class TimetableAssignmentAccess
                     'admin.timetable.assign-auditorium-teacher',
                     'admin.timetable.auditoriums',
                     'admin.timetable.auditoriums.store',
+                    'admin.timetable.auditoriums.destroy',
                 ]);
             }
 

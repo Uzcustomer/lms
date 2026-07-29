@@ -2603,13 +2603,24 @@ class TimetableController extends Controller
     /** O'qituvchilar kafedralari (auditoriya biriktirish filtri uchun). */
     public function teacherDepartments()
     {
+        // Katalogdagi disabled kafedralar ham ko'rinsin. Teacher jadvalidagi
+        // eski/nomi o'zgargan qiymatlar esa backward compatibility uchun qo'shiladi.
+        $directoryDepartments = \App\Models\Department::query()
+            ->where('name', 'like', '%kafedra%')
+            ->where('structure_type_code', '!=', 11)
+            ->pluck('name');
+
+        $teacherDepartments = Teacher::whereNotNull('department')
+            ->where('department', '<>', '')
+            ->pluck('department');
+
         return response()->json(
-            Teacher::whereNotNull('department')
-                ->where('department', '<>', '')
-                ->select('department')
-                ->distinct()
-                ->orderBy('department')
-                ->pluck('department')
+            $directoryDepartments
+                ->merge($teacherDepartments)
+                ->filter(fn ($name) => trim((string) $name) !== '')
+                ->map(fn ($name) => trim((string) $name))
+                ->unique()
+                ->sort()
                 ->values()
         );
     }

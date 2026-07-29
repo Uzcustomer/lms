@@ -636,6 +636,19 @@
                                 <div class="flex-1 bg-white border border-gray-300 rounded p-2 flex flex-col" style="min-height:0;">
                                     <span class="text-xs font-bold text-blue-700 mb-1">3. Shart</span>
                                     <div id="ruleCondList" class="flex-1 overflow-auto pr-1" style="min-height:0;"></div>
+                                    <div id="ruleLectureWeekOptions" class="hidden mt-2 rounded border border-amber-200 bg-amber-50 p-3">
+                                        <label class="block text-xs font-bold text-amber-800 mb-1">Ma'ruza haftalari</label>
+                                        <select id="ruleLectureWeekMode" class="w-full rounded border-amber-300 bg-white text-xs">
+                                            <option value="spread">Teng taqsimlash</option>
+                                            <option value="odd">Toq haftalar (1, 3, 5, ...)</option>
+                                            <option value="even">Juft haftalar (2, 4, 6, ...)</option>
+                                        </select>
+                                        <div class="mt-2 text-[11px] leading-4 text-amber-700">
+                                            Fan tanlanmasa — barcha fanlarga umumiy qoida. Fan tanlansa — shu fan uchun istisno.
+                                            Tanlangan toq/juft haftalar yetmasa, reja soati yo'qolmasligi uchun teng taqsimlash ishlaydi.
+                                            Qo'llash uchun kartochkalarni qayta yarating.
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2452,6 +2465,10 @@
             let ruleEditing = null;    // tahrirlanayotgan qoida (yoki null = yangi)
 
             const WEIGHT_LABEL = { majburiy: 'Majburiy', normal: 'Normal', yengil: 'Yengil' };
+            function toggleRuleParams(condition) {
+                const panel = $('ruleLectureWeekOptions');
+                if (panel) panel.classList.toggle('hidden', condition !== 'lecture_week_distribution');
+            }
 
             async function loadRules() {
                 if (!board) return;
@@ -2517,6 +2534,8 @@
                 $('ruleNote').value = rule ? (rule.note || '') : '';
                 $('ruleActive').checked = rule ? !!rule.active : true;
                 $('ruleSubjSearch').value = '';
+                $('ruleLectureWeekMode').value = rule && rule.params && rule.params.distribution
+                    ? rule.params.distribution : 'spread';
 
                 // Shartlar ro'yxati (radio)
                 const cur = rule ? rule.condition : '';
@@ -2525,9 +2544,13 @@
                     '<input type="radio" name="ruleCond" value="' + esc(code) + '"' + (code === cur ? ' checked' : '') + '>' +
                     esc(label) + '</label>').join('');
                 $('ruleCondList').querySelectorAll('input[name=ruleCond]').forEach(inp => {
-                    inp.onchange = () => $('ruleCondList').querySelectorAll('.tt-cond-item')
-                        .forEach(el => el.classList.toggle('sel', el.contains(inp) && inp.checked));
+                    inp.onchange = () => {
+                        $('ruleCondList').querySelectorAll('.tt-cond-item')
+                            .forEach(el => el.classList.toggle('sel', el.contains(inp) && inp.checked));
+                        toggleRuleParams(inp.value);
+                    };
                 });
+                toggleRuleParams(cur);
 
                 // Fanlar va qamrov ro'yxatlari — doskadagi kartalardan
                 const subs = [...new Set(cards.map(c => c.subject_name))].sort((a, b) => a.localeCompare(b, 'uz'));
@@ -2585,12 +2608,18 @@
                     scopes: $('ruleAllScopes').checked ? []
                         : [...$('ruleScopeList').querySelectorAll('.rule-scope:checked')].map(c => c.value),
                 };
+                if (cond.value === 'lecture_week_distribution') {
+                    body.params = { distribution: $('ruleLectureWeekMode').value };
+                }
                 if (ruleEditing) body.id = ruleEditing.id;
                 this.disabled = true;
                 try {
                     await api(BASE + '/boards/' + board.id + '/rules', 'POST', body);
                     closeRuleEditor();
                     await loadRules();
+                    if (cond.value === 'lecture_week_distribution') {
+                        $('rulesMsg').textContent = 'Qoida saqlandi. Qo'llash uchun Kartochkalarni qayta yarating.';
+                    }
                 } catch (e) { $('ruleEditMsg').textContent = 'Xatolik: ' + e.message; }
                 this.disabled = false;
             };

@@ -1,7 +1,7 @@
 <x-app-layout>
-    <div class="p-4 sm:ml-64">
+    <div class="ega-page p-4 sm:ml-64">
         <div class="mt-14">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="ega-hero flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Ingliz guruhga o'tish arizalari</h1>
                     <p class="text-sm text-gray-500 mt-1">Talabalar yuborgan arizalarni ko'rish, saralash va ko'rib chiqish oynasi</p>
@@ -38,7 +38,7 @@
                 </div>
             @endif
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div class="ega-stats grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <a href="{{ route('admin.english-group-applications.index') }}"
                    class="block rounded-xl border-2 p-4 transition hover:shadow-md {{ request('status') === 'all' ? 'border-sky-500 bg-sky-50' : 'border-sky-200 bg-white hover:border-sky-300' }}">
                     <div class="text-xs uppercase font-semibold text-sky-600">Jami</div>
@@ -61,7 +61,7 @@
                 </a>
             </div>
 
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
+            <div class="ega-filter bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
                 <form method="GET" action="{{ route('admin.english-group-applications.index') }}" class="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div class="md:col-span-2">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
@@ -93,7 +93,7 @@
                 </form>
             </div>
 
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="ega-table-card bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
@@ -245,4 +245,139 @@
             </div>
         </div>
     </div>
+<style>
+    .ega-page {
+        min-height: calc(100vh - 72px);
+        background: #eef3f9;
+        color: #172b4d;
+    }
+    .ega-hero {
+        padding: 22px 24px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #102a56 0%, #1e5da8 72%, #3181c8 100%);
+        box-shadow: 0 12px 28px rgba(16, 42, 86, .18);
+        color: #fff;
+    }
+    .ega-hero h1,
+    .ega-hero p {
+        color: #fff !important;
+    }
+    .ega-hero p {
+        opacity: .78;
+    }
+    .ega-hero a {
+        border-radius: 9px !important;
+        box-shadow: 0 5px 12px rgba(0, 0, 0, .14);
+    }
+    .ega-hero a:hover {
+        transform: translateY(-1px);
+    }
+    .ega-stats > a {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #d8e2ef !important;
+        border-radius: 14px !important;
+        background: #fff !important;
+        box-shadow: 0 5px 16px rgba(31, 61, 100, .07);
+        transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .ega-stats > a:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(31, 61, 100, .12);
+    }
+    .ega-stats > a::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        background: #1d63b6;
+    }
+    .ega-stats > a:nth-child(2)::before { background: #f59e0b; }
+    .ega-stats > a:nth-child(3)::before { background: #10b981; }
+    .ega-stats > a:nth-child(4)::before { background: #ef4444; }
+    .ega-stats > a div:last-child {
+        color: #102a56 !important;
+    }
+    .ega-filter {
+        border-color: #d8e2ef !important;
+        border-radius: 14px !important;
+        box-shadow: 0 5px 16px rgba(31, 61, 100, .06) !important;
+    }
+    .ega-filter label {
+        color: #385579 !important;
+        letter-spacing: .04em;
+    }
+    .ega-filter input,
+    .ega-filter select {
+        border-color: #b9c9dc !important;
+        border-radius: 9px !important;
+        color: #233d60;
+        background: #fbfdff;
+    }
+    .ega-filter button {
+        border-radius: 9px !important;
+        background: #1d63b6 !important;
+    }
+    .ega-filter a {
+        border-radius: 9px !important;
+    }
+    .ega-table-card {
+        border-color: #d8e2ef !important;
+        border-radius: 14px !important;
+        box-shadow: 0 7px 20px rgba(31, 61, 100, .07) !important;
+    }
+    .ega-table-card table {
+        color: #294361;
+    }
+    .ega-table-card thead {
+        background: #e8eff7 !important;
+        color: #385579 !important;
+    }
+    .ega-table-card thead th {
+        padding-top: 13px !important;
+        padding-bottom: 13px !important;
+        font-size: 10px !important;
+        letter-spacing: .06em;
+    }
+    .ega-table-card tbody tr {
+        border-color: #e2eaf3 !important;
+        transition: background .16s ease;
+    }
+    .ega-table-card tbody tr:hover {
+        background: #f4f8fc !important;
+    }
+    .ega-table-card tbody td {
+        padding-top: 15px !important;
+        padding-bottom: 15px !important;
+    }
+    .ega-table-card tbody td:first-child > div:first-child {
+        color: #123d72 !important;
+    }
+    .ega-table-card tbody td a {
+        color: #1769b0;
+    }
+    .ega-table-card form button,
+    .ega-table-card td > div > form button {
+        border-radius: 8px !important;
+    }
+    .ega-table-card > div:last-child {
+        background: #f5f8fc !important;
+        border-color: #d8e2ef !important;
+    }
+    @media (max-width: 767px) {
+        .ega-page {
+            padding: 12px !important;
+        }
+        .ega-hero {
+            padding: 18px;
+        }
+        .ega-hero > div:last-child {
+            width: 100%;
+        }
+        .ega-hero > div:last-child a {
+            flex: 1;
+            justify-content: center;
+        }
+    }
+</style>
 </x-app-layout>

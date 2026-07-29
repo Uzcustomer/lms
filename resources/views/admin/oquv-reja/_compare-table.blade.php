@@ -18,6 +18,33 @@
         return ($v > 0 ? '+' : '-') . $s;
     };
 
+    // Guruh yorlig'i BIRLASHTIRILGAN tomonda turadi: qaysi ustunda bir nechta
+    // fan bitta qatorga qo'shilgan bo'lsa, yorliq o'sha yerda. Shunda jadvalga
+    // qarab qaysi qator birlashtirilganini darrov ko'rish mumkin. Hech bir tomon
+    // birlashmagan bo'lsa (oddiy qo'lda bog'lash) — yorliq ishchi tomonda.
+    $groupBadge = function ($row, string $side) {
+        if (empty($row['group'])) {
+            return '';
+        }
+        $refMerged = count($row['ref_parts'] ?? []) > 1;
+        $workMerged = count($row['work_parts'] ?? []) > 1;
+        $merged = $side === 'ref' ? $refMerged : $workMerged;
+
+        $show = $merged || ($side === 'work' && !$refMerged && !$workMerged);
+        if (!$show) {
+            return '';
+        }
+
+        $manual = !empty($row['group_manual']);
+        $text = ($manual ? "qo'lda " : '') . ($merged ? 'birlashtirildi' : "bog'landi");
+        $class = $manual ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
+        $title = ($manual ? "Qo'lda tuzilgan" : 'Avtomatik topilgan') . ' fan guruhi: '
+            . ($row['group_label'] ?? '');
+
+        return '<span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium align-middle '
+            . $class . '" title="' . e($title) . '">' . e($text) . '</span>';
+    };
+
     // Birikkan qatorda soat/kredit avval fan kesimida, tagida umumiysi
     // ko'rsatiladi — qaysi fanlar birlashtirilgani raqamlardan ko'rinib tursin.
     $breakdown = function ($parts, $key, $total) use ($fmt) {
@@ -94,13 +121,7 @@
                     </td>
                     <td class="px-3 py-2 {{ $row['ref_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
                         {{ $row['ref_name'] ?? '—' }}
-                        @if(!empty($row['group']))
-                            <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium align-middle
-                                         {{ !empty($row['group_manual']) ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800' }}"
-                                  title="{{ !empty($row['group_manual']) ? "Qo'lda tuzilgan fan guruhi" : 'Avtomatik topilgan fan guruhi' }}: {{ $row['group_label'] ?? '' }}">
-                                {{ !empty($row['group_manual']) ? "guruh (qo'lda)" : 'guruh' }}
-                            </span>
-                        @endif
+                        {!! $groupBadge($row, 'ref') !!}
                         @if(count($row['ref_parts'] ?? []) > 1)
                             @foreach($row['ref_parts'] as $p)
                                 <div class="text-xs text-gray-400 leading-tight">{{ $p['name'] }}</div>
@@ -109,6 +130,7 @@
                     </td>
                     <td class="px-3 py-2 {{ $row['work_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
                         {{ $row['work_name'] ?? '—' }}
+                        {!! $groupBadge($row, 'work') !!}
                         @if(count($row['work_parts'] ?? []) > 1)
                             @foreach($row['work_parts'] as $p)
                                 <div class="text-xs text-gray-400 leading-tight">{{ $p['name'] }}</div>

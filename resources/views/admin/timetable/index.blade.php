@@ -295,13 +295,6 @@
                             </div>
                         </div>
                         {{-- Pastki panel --}}
-                        <div id="asgAuditoriumsPanel" class="hidden flex-1 items-center justify-center p-8 bg-slate-50" data-asg-panel="auditoriums">
-                            <div class="max-w-md rounded-xl border border-dashed border-slate-300 bg-white px-8 py-10 text-center shadow-sm">
-                                <i class="bi bi-door-open text-3xl text-blue-600" aria-hidden="true"></i>
-                                <h3 class="mt-3 text-base font-semibold text-slate-700">Auditoriyalarni biriktirish</h3>
-                                <p class="mt-2 text-sm text-slate-500">Auditoriya biriktirish boshqaruvi shu tab ichida ishlaydi.</p>
-                            </div>
-                        </div>
                         <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
                             <div id="ascFootMsg" class="text-sm text-slate-500"></div>
                             <button type="button" id="ascCloseBtn" class="asc-btn primary px-5 py-2">Yopish</button>
@@ -702,6 +695,13 @@
                                         <button type="button" id="asgClear" class="asc-btn" disabled title="Biriktirishni olib tashlash"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                        <div id="asgAuditoriumsPanel" class="hidden flex-1 items-center justify-center p-8 bg-slate-50" data-asg-panel="auditoriums">
+                            <div class="max-w-md rounded-xl border border-dashed border-slate-300 bg-white px-8 py-10 text-center shadow-sm">
+                                <i class="bi bi-door-open text-3xl text-blue-600" aria-hidden="true"></i>
+                                <h3 class="mt-3 text-base font-semibold text-slate-700">Auditoriyalarni biriktirish</h3>
+                                <p class="mt-2 text-sm text-slate-500">Auditoriya biriktirish boshqaruvi shu tab ichida ishlaydi.</p>
                             </div>
                         </div>
                         <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">

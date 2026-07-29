@@ -54,8 +54,9 @@ class TimetableRule extends Model
     {
         if ($this->condition === 'lecture_week_distribution') {
             $params = $this->params ?: [];
-            $mode = $params['distribution'] ?? 'spread';
+            $mode = $params['distribution'] ?? 'auto';
             $labels = [
+                'auto'   => 'Avtomatik',
                 'spread' => 'Teng taqsimlash',
                 'odd'    => 'Toq haftalar',
                 'even'   => 'Juft haftalar',

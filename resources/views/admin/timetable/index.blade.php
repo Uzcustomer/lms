@@ -765,6 +765,17 @@
         .tt-merge-badge { display: inline-block; margin-left: 4px; padding: 0 4px; font-size: 8px; font-weight: 700;
             background: rgba(0,0,0,.12); border-radius: 6px; color: #334155; vertical-align: middle; }
         .tt-weeks { font-size: 9px; font-weight: 700; color: #1d4ed8; white-space: nowrap; }
+        /* Almashinuvchi karta (har hafta emas) — shablon ko'rinishida ajralib tursin:
+           yengil yo'l-yo'l fon + chapda ⇄ belgisi. Aniq hafta tanlanganda ko'rinmaydi. */
+        #grid .tt-chip.tt-alt {
+            background-image: repeating-linear-gradient(135deg,
+                rgba(255,255,255,.55) 0 5px, rgba(0,0,0,0) 5px 10px);
+            border-left-width: 3px; border-left-style: dashed;
+        }
+        #grid .tt-alt-mark {
+            display: inline-block; margin-right: 3px; font-size: 10px; font-weight: 900;
+            color: #b45309; vertical-align: 1px;
+        }
         .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
         .tt-room-vol { font-weight: 800; color: #16a34a; opacity: 1; }\n        #grid th.tt-room-head .tt-room-name { display:block; font-size:10px; font-weight:500; color:#64748b; margin-top:2px; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
@@ -2869,11 +2880,19 @@
                         : '';
                     const roomTitle = c.auditorium_name
                         ? ' · ' + c.auditorium_name + (c.auditorium_volume ? ' (sig\'im ' + c.auditorium_volume + ')' : '') : '';
+                    // Almashinuvchi karta — har hafta emas, faqat ayrim haftalarda o'tiladi
+                    // (ma'ruza va uni almashtiruvchi amaliy). Shablon ("Barcha haftalar")
+                    // ko'rinishida yo'l-yo'l fon + ⇄ belgisi bilan ajratib turadi, chunki
+                    // u yerda barcha variantlar ustma-ust ko'rinadi.
+                    const alt = !curWeek && c.weeks && c.weeks < fullWeeks;
+                    const altMark = alt ? '<span class="tt-alt-mark" title="Har hafta emas — almashib keladi">⇄</span>' : '';
                     return '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
+                        (alt ? ' tt-alt' : '') +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
-                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle) + '">' +
-                        cardLabel(c, true) + wks + badge +
+                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle
+                            + (alt ? ' · har hafta emas (almashib keladi)' : '')) + '">' +
+                        altMark + cardLabel(c, true) + wks + badge +
                         (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
                         roomTxt +
                         '</div>';

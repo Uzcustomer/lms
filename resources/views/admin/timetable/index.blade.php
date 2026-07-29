@@ -1776,18 +1776,27 @@
             function applyTimetableAccess() {
                 if (!TIMETABLE_ASSIGNMENT_ONLY) return;
 
-                const disabledIds = [
+                const restrictedIds = [
                     'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn',
-                    'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn',
+                    'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
                     'autoBtn', 'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
                     'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
                 ];
-                disabledIds.forEach(id => {
+                restrictedIds.forEach(id => {
                     const el = $(id);
                     if (!el) return;
                     el.disabled = true;
+                    el.classList.add('hidden');
                     el.title = 'Bu amal faqat jadval administratoriga ochiq';
                 });
+
+                const assignButton = $('assignBtn');
+                if (assignButton) {
+                    assignButton.disabled = false;
+                    assignButton.title = TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY
+                        ? 'Auditoriyalarni biriktirish'
+                        : 'Fanlarni o\'qituvchilarga biriktirish';
+                }
             }
 
             applyTimetableAccess();
@@ -1939,7 +1948,11 @@
             // aSc uslubidagi boshqaruv tugmalari (doska tanlash qatorida) — bitta guruh sifatida ko'rsatish/yashirish
 
             function toggleAscToolbar(show) {
-                document.querySelectorAll('[data-asc-toolbar]').forEach(el => el.classList.toggle('hidden', !show));
+                document.querySelectorAll('[data-asc-toolbar]').forEach(el => {
+                    const allowedForRole = !TIMETABLE_ASSIGNMENT_ONLY || el.id === 'assignBtn';
+                    el.classList.toggle('hidden', !show || !allowedForRole);
+                });
+                applyTimetableAccess();
             }
 
             function hideBoard() {

@@ -231,6 +231,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::prefix('english-group-applications')->name('english-group-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'export'])->name('export');
+            Route::get('/documents-zip', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'documentsZip'])->name('documents-zip');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'reject'])->name('reject');
             Route::get('/{id}/certificate', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'certificate'])->name('certificate');

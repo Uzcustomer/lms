@@ -28,6 +28,7 @@ class TimetableRule extends Model
         'not_same_day'            => "Darslar bir kunda bo'lmasin",
         'not_consecutive_same_day' => "Darslar bir kunda ketma-ket kelmasin",
         'week_spread'             => "Darslarni hafta bo'ylab taqsimlash",
+        'lecture_week_distribution' => "Ma'ruza haftalarini taqsimlash",
         'two_subjects_same_day'   => "Ikki fan bir kunda bo'lsin",
         'two_subjects_follow'     => "Ikki fan ketma-ket kelsin",
         'no_gap_between_groups'   => "Dars guruhlari orasida tanaffus bo'lmasin",
@@ -51,6 +52,19 @@ class TimetableRule extends Model
     /** Qoidaning inson o'qiydigan tavsifi (ro'yxatda ko'rsatiladi). */
     public function describe(): string
     {
+        if ($this->condition === 'lecture_week_distribution') {
+            $params = $this->params ?: [];
+            $mode = $params['distribution'] ?? 'spread';
+            $labels = [
+                'spread' => 'Teng taqsimlash',
+                'odd'    => 'Toq haftalar',
+                'even'   => 'Juft haftalar',
+            ];
+
+            return (self::CONDITIONS[$this->condition] ?? $this->condition)
+                . ': ' . ($labels[$mode] ?? $mode);
+        }
+
         return self::CONDITIONS[$this->condition] ?? $this->condition;
     }
 }

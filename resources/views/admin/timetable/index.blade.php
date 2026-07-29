@@ -697,11 +697,30 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="asgAuditoriumsPanel" class="hidden flex-1 items-center justify-center p-8 bg-slate-50" data-asg-panel="auditoriums">
-                            <div class="max-w-md rounded-xl border border-dashed border-slate-300 bg-white px-8 py-10 text-center shadow-sm">
-                                <i class="bi bi-door-open text-3xl text-blue-600" aria-hidden="true"></i>
-                                <h3 class="mt-3 text-base font-semibold text-slate-700">Auditoriyalarni biriktirish</h3>
-                                <p class="mt-2 text-sm text-slate-500">Auditoriya biriktirish boshqaruvi shu tab ichida ishlaydi.</p>
+                        <div id="asgAuditoriumsPanel" class="hidden flex-1 gap-3 p-4 overflow-hidden" data-asg-panel="auditoriums">
+                            <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
+                                    <span class="text-sm font-semibold text-slate-700">Auditoriyalar</span>
+                                    <input id="asgAudSearch" placeholder="Xona qidirish..." class="ml-auto w-52 rounded-md border-slate-300 text-xs py-1.5">
+                                    <span id="asgAudCount" class="text-xs text-slate-400"></span>
+                                </div>
+                                <div class="overflow-auto asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
+                                    <table id="asgAudTable" class="w-full text-xs asc-table"></table>
+                                </div>
+                            </div>
+                            <div class="assign-teacher-pane w-80 shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                <div class="assign-pane-title px-4 py-3 border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">Auditoriya uchun o'qituvchi</div>
+                                <div class="p-4 space-y-3 flex-1 flex flex-col overflow-hidden">
+                                    <div id="asgAudInfo" class="assign-unit-info text-xs text-slate-500 min-h-[42px] rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2">Chapdan auditoriyani tanlang</div>
+                                    <select id="asgAudDepartment" class="w-full rounded-md border-slate-300 text-xs" disabled><option value="">— barcha kafedralar —</option></select>
+                                    <input id="asgAudTeacherSearch" placeholder="O'qituvchi qidirish..." class="w-full rounded-md border-slate-300 text-sm" disabled>
+                                    <label class="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" id="asgAudGeneral" class="rounded border-slate-300" disabled> Umumiy xona</label>
+                                    <select id="asgAudTeacher" size="10" class="w-full rounded-md border-slate-300 text-sm flex-1" disabled></select>
+                                    <div class="flex gap-2 pt-1">
+                                        <button type="button" id="asgAudApply" class="asc-btn primary flex-1" disabled>Saqlash</button>
+                                        <button type="button" id="asgAudClear" class="asc-btn" disabled>Umumiy qilish</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
@@ -1576,6 +1595,13 @@
          .asg-tab-button:hover { color:#2563eb; background:#eff6ff; }
          .asg-tab-button.active { color:#1d4ed8; border-bottom-color:#2563eb; background:#eff6ff; }
          #asgAuditoriumsPanel { min-height:0; }
+         #asgAudTable tr { cursor: pointer; }
+         #asgAudTable tr:hover td { background: #eff6ff; }
+         #asgAudTable tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }
+         #asgAudTable th, #asgAudTable td { padding: 8px 10px; vertical-align: middle; }
+         #asgAudTable .aud-general { color: #059669; font-weight: 700; }
+         #asgAudTable .aud-teacher { color: #1d4ed8; font-weight: 600; }
+         #asgAudTeacher:disabled, #asgAudDepartment:disabled { background: #f8fafc; }
          #asgTable tr { cursor: pointer; }
         #asgTable tr:hover td { background: #eff6ff; }
         #asgTable tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }
@@ -1661,6 +1687,7 @@
             const BOARDS_STORE = @json(route('admin.timetable.boards.store'));
             const BASE = @json(url('admin/dars-jadvali-tuzish'));
             const TEACHERS_URL = @json(route('admin.timetable.teachers'));
+            const TEACHER_DEPARTMENTS_URL = @json(route('admin.timetable.teachers.departments'));
             const AUDS_URL = @json(route('admin.timetable.auditoriums'));
             const CSRF = @json(csrf_token());
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
@@ -4252,6 +4279,10 @@
             let asgUnits = [];        // dars birliklari
             let asgSel = null;        // tanlangan birlik
             let asgTeacherTimer = null;
+             let asgAudRooms = [];
+             let asgAudSel = null;
+             let asgAudTeacherTimer = null;
+             let asgAudDepartmentsLoaded = false;
              function setAsgTab(tab) {
                  document.querySelectorAll('[data-asg-tab]').forEach(btn => {
                      btn.classList.toggle('active', btn.dataset.asgTab === tab);
@@ -4263,7 +4294,11 @@
                  });
              }
              document.querySelectorAll('[data-asg-tab]').forEach(btn => {
-                 btn.onclick = () => setAsgTab(btn.dataset.asgTab);
+                 btn.onclick = () => {
+                     const tab = btn.dataset.asgTab;
+                     setAsgTab(tab);
+                     if (tab === 'auditoriums') loadAsgAuditoriums();
+                 };
              });
 
             $('assignBtn').onclick = async () => {
@@ -4398,6 +4433,130 @@
                     renderAsgTable();
                 } catch (e) { $('asgMsg').textContent = 'Xatolik: ' + e.message; }
                 $('asgApply').disabled = $('asgClear').disabled = false;
+            }
+
+            async function loadAsgAuditoriums() {
+                if (!board) return;
+                $('asgAudTable').innerHTML = '<tbody><tr><td class="p-3 text-gray-400">Yuklanmoqda...</td></tr></tbody>';
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/auditorium-teachers');
+                    asgAudRooms = j.auditoriums || [];
+                    if (!asgAudDepartmentsLoaded) {
+                        const departments = await api(TEACHER_DEPARTMENTS_URL);
+                        $('asgAudDepartment').innerHTML = '<option value="">— barcha kafedralar —</option>' +
+                            departments.map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('');
+                        asgAudDepartmentsLoaded = true;
+                    }
+                    renderAsgAudTable();
+                    if (asgAudSel) selectAsgAudRoom(asgAudSel.id);
+                } catch (e) {
+                    asgAudRooms = [];
+                    $('asgAudTable').innerHTML = '<tbody><tr><td class="p-3 text-red-500">' + esc(e.message) + '</td></tr></tbody>';
+                }
+            }
+
+            function filteredAsgAudRooms() {
+                const q = ($('asgAudSearch').value || '').toLowerCase().trim();
+                return asgAudRooms.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name].some(value => String(value || '').toLowerCase().includes(q)));
+            }
+
+            function renderAsgAudTable() {
+                const rows = filteredAsgAudRooms();
+                $('asgAudCount').textContent = rows.length + ' ta';
+                let h = '<thead><tr><th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th><th>Holat</th><th>O\'qituvchi</th></tr></thead><tbody>';
+                rows.forEach((room, i) => {
+                    const general = room.is_general || !room.teacher_id;
+                    const status = general ? '<span class="aud-general">Umumiy</span>' : '<span class="text-amber-600 font-semibold">Biriktirilgan</span>';
+                    const teacher = general ? '<span class="text-slate-400">Barcha o\'qituvchilar</span>' : '<span class="aud-teacher">' + esc(room.teacher_name || '—') + '</span>';
+                    h += '<tr data-i="' + i + '"' + (asgAudSel && asgAudSel.id === room.id ? ' class="sel"' : '') + '>' +
+                        '<td class="font-semibold">' + esc(room.name || room.code) + '</td><td>' + esc(room.building_name || '—') + '</td>' +
+                        '<td class="text-center text-emerald-600 font-semibold">' + (room.volume || 0) + '</td><td>' + status + '</td><td>' + teacher + '</td></tr>';
+                });
+                $('asgAudTable').innerHTML = h + '</tbody>';
+                const rowsRef = rows;
+                $('asgAudTable').querySelectorAll('tbody tr[data-i]').forEach(tr => tr.onclick = () => {
+                    asgAudSel = rowsRef[+tr.dataset.i];
+                    $('asgAudTable').querySelectorAll('tbody tr').forEach(row => row.classList.remove('sel'));
+                    tr.classList.add('sel');
+                    selectAsgAudRoom(asgAudSel.id);
+                });
+            }
+
+            function setAsgAudControls(on) {
+                ['asgAudDepartment', 'asgAudTeacherSearch', 'asgAudTeacher', 'asgAudGeneral', 'asgAudApply', 'asgAudClear'].forEach(id => $(id).disabled = !on);
+                if (!on) {
+                    $('asgAudInfo').textContent = 'Chapdan auditoriyani tanlang';
+                    $('asgAudTeacher').innerHTML = '';
+                    $('asgAudTeacherSearch').value = '';
+                    $('asgAudGeneral').checked = false;
+                }
+            }
+
+            function applyAsgAudGeneralState() {
+                const general = $('asgAudGeneral').checked;
+                $('asgAudTeacher').disabled = !asgAudSel || general;
+                $('asgAudTeacherSearch').disabled = !asgAudSel || general;
+                $('asgAudDepartment').disabled = !asgAudSel || general;
+            }
+
+            async function selectAsgAudRoom(roomId) {
+                asgAudSel = asgAudRooms.find(room => +room.id === +roomId) || null;
+                setAsgAudControls(!!asgAudSel);
+                if (!asgAudSel) return;
+                $('asgAudInfo').innerHTML = '<b>' + esc(asgAudSel.name || asgAudSel.code) + '</b><br>' + esc(asgAudSel.building_name || 'Bino ko\'rsatilmagan') + ' · ' + (asgAudSel.volume || 0) + ' o\'rin';
+                $('asgAudGeneral').checked = !!asgAudSel.is_general || !asgAudSel.teacher_id;
+                applyAsgAudGeneralState();
+                await loadAsgAudTeachers('');
+                if (asgAudSel.teacher_id) $('asgAudTeacher').value = String(asgAudSel.teacher_id);
+            }
+
+            async function loadAsgAudTeachers(search) {
+                if (!asgAudSel || $('asgAudGeneral').checked) return;
+                const p = new URLSearchParams();
+                if ($('asgAudDepartment').value) p.set('kafedra', $('asgAudDepartment').value);
+                if (search) p.set('search', search);
+                try {
+                    const list = await api(TEACHERS_URL + '?' + p);
+                    $('asgAudTeacher').innerHTML = list.map(t => '<option value="' + t.id + '">' + esc(t.short_name || t.full_name) + (t.lavozim ? ' · ' + esc(t.lavozim) : '') + '</option>').join('') || '<option disabled>topilmadi</option>';
+                    if (asgAudSel?.teacher_id) $('asgAudTeacher').value = String(asgAudSel.teacher_id);
+                } catch (e) { $('asgAudTeacher').innerHTML = '<option disabled>xato</option>'; }
+            }
+
+            $('asgAudSearch').oninput = () => renderAsgAudTable();
+            $('asgAudDepartment').onchange = () => loadAsgAudTeachers($('asgAudTeacherSearch').value.trim());
+            $('asgAudTeacherSearch').oninput = function () {
+                clearTimeout(asgAudTeacherTimer);
+                asgAudTeacherTimer = setTimeout(() => loadAsgAudTeachers(this.value.trim()), 300);
+            };
+            $('asgAudGeneral').onchange = () => {
+                applyAsgAudGeneralState();
+                if (!$('asgAudGeneral').checked) loadAsgAudTeachers('');
+            };
+            $('asgAudApply').onclick = () => saveAsgAudRoom(false);
+            $('asgAudClear').onclick = () => saveAsgAudRoom(true);
+
+            async function saveAsgAudRoom(forceGeneral) {
+                if (!asgAudSel) return;
+                const isGeneral = forceGeneral || $('asgAudGeneral').checked;
+                const teacherId = isGeneral ? null : ($('asgAudTeacher').value || null);
+                if (!isGeneral && !teacherId) {
+                    $('asgMsg').textContent = 'Umumiy bo\'lmagan xona uchun o\'qituvchi tanlang';
+                    return;
+                }
+                $('asgAudApply').disabled = $('asgAudClear').disabled = true;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/assign-auditorium-teacher', 'POST', {
+                        auditorium_id: asgAudSel.id, teacher_id: teacherId || '', is_general: isGeneral ? 1 : 0,
+                    });
+                    asgAudSel.teacher_id = j.teacher_id;
+                    asgAudSel.teacher_name = j.teacher_name;
+                    asgAudSel.is_general = !!j.is_general;
+                    $('asgAudGeneral').checked = asgAudSel.is_general;
+                    applyAsgAudGeneralState();
+                    renderAsgAudTable();
+                    $('asgMsg').textContent = asgAudSel.is_general ? '«' + asgAudSel.name + '» umumiy xona qilindi' : '«' + asgAudSel.name + '» uchun o\'qituvchi biriktirildi';
+                } catch (e) { $('asgMsg').textContent = 'Xatolik: ' + e.message; }
+                $('asgAudApply').disabled = $('asgAudClear').disabled = false;
             }
 
             // ══════════════════════════════════════════════════════════════

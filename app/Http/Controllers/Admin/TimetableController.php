@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Auditorium;
+use App\Models\AuditoriumTeacher;
 use App\Models\OqimSnapshot;
 use App\Models\Teacher;
 use App\Models\TimetableBoard;
@@ -925,8 +926,9 @@ class TimetableController extends Controller
 
         // Auditoriya havzasi (sig'im o'sish tartibida — zich joylash uchun)
         $rooms = ($assignRooms || $lectureRooms)
-            ? Auditorium::where('active', true)->orderBy('volume')->get(['code', 'name', 'volume', 'auditorium_type_name'])
+            ? Auditorium::where('active', true)->orderBy('volume')->get(['id', 'code', 'name', 'volume', 'auditorium_type_name'])
             : collect();
+        $roomTeacherMap = $this->auditoriumTeacherMapForBoard((int) $board->id);
         // Ma'ruza xonalari havzasi — tipida "ma'ruza" bo'lganlar (topilmasa — hammasi)
         $lecRooms = collect();
         if ($lectureRooms) {
@@ -936,11 +938,18 @@ class TimetableController extends Controller
             }
         }
         // Kartaga mos xona havzasini tanlash (ma'ruza → ma'ruza xonalari)
-        $poolFor = function (TimetableCard $c) use ($assignRooms, $lectureRooms, $rooms, $lecRooms) {
-            if ($lectureRooms && $c->training_type === 'lecture') {
-                return $lecRooms;
+        $poolFor = function (TimetableCard $c) use ($assignRooms, $lectureRooms, $rooms, $lecRooms, $roomTeacherMap) {
+            $pool = ($lectureRooms && $c->training_type === 'lecture')
+                ? $lecRooms
+                : ($assignRooms ? $rooms : collect());
+
+            // O'qituvchiga biriktirilgan xona faqat shu o'qituvchiga,
+            // umumiy xona esa barcha o'qituvchilarga ochiq bo'ladi.
+            if ($pool->isEmpty() || empty($roomTeacherMap) || !$c->teacher_id) {
+                return $pool;
             }
-            return $assignRooms ? $rooms : collect();
+
+            return $pool->filter(fn($r) => $this->auditoriumAllowedForCard($r, $c, $roomTeacherMap))->values();
         };
 
         // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar.
@@ -2341,6 +2350,36 @@ class TimetableController extends Controller
         return array_unique($errors);
     }
 
+    /** Tanlangan doskadagi auditoriya-o'qituvchi cheklovlari. */
+    private function auditoriumTeacherMapForBoard(int $boardId): array
+    {
+        if (!Schema::hasTable('auditorium_teacher')) {
+            return [];
+        }
+
+        return AuditoriumTeacher::where('board_id', $boardId)
+            ->get(['auditorium_id', 'teacher_id', 'is_general'])
+            ->mapWithKeys(fn ($assignment) => [
+                (string) $assignment->auditorium_id => [
+                    'teacher_id' => $assignment->teacher_id,
+                    'is_general' => (bool) $assignment->is_general,
+                ],
+            ])->all();
+    }
+
+    private function auditoriumAllowedForCard($auditorium, TimetableCard $card, array $roomTeacherMap): bool
+    {
+        if (!$card->teacher_id || empty($roomTeacherMap)) {
+            return true;
+        }
+
+        $assignment = $roomTeacherMap[(string) $auditorium->id] ?? null;
+
+        return !$assignment
+            || $assignment['is_general']
+            || (int) $assignment['teacher_id'] === (int) $card->teacher_id;
+    }
+
     /** Kartochka rekvizitlari: o'qituvchi / auditoriya biriktirish. */
     public function updateCard(Request $request, TimetableCard $card)
     {
@@ -2370,6 +2409,14 @@ class TimetableController extends Controller
         if (array_key_exists('auditorium_code', $data)) {
             if ($data['auditorium_code']) {
                 $a = Auditorium::where('code', $data['auditorium_code'])->first();
+                if ($a) {
+                    $roomMap = $this->auditoriumTeacherMapForBoard((int) $card->board_id);
+                    if (!$this->auditoriumAllowedForCard($a, $card, $roomMap)) {
+                        return response()->json([
+                            'error' => 'Bu auditoriya tanlangan o\'qituvchiga biriktirilmagan.',
+                        ], 422);
+                    }
+                }
                 $card->auditorium_code = $a?->code;
                 $card->auditorium_name = $a?->name;
             } else {
@@ -2408,6 +2455,20 @@ class TimetableController extends Controller
         }
         return response()->json(
             $q->orderBy('full_name')->limit(100)->get(['id', 'full_name', 'short_name', 'department', 'lavozim'])
+        );
+    }
+
+    /** O'qituvchilar kafedralari (auditoriya biriktirish filtri uchun). */
+    public function teacherDepartments()
+    {
+        return response()->json(
+            Teacher::whereNotNull('department')
+                ->where('department', '<>', '')
+                ->select('department')
+                ->distinct()
+                ->orderBy('department')
+                ->pluck('department')
+                ->values()
         );
     }
 
@@ -2539,6 +2600,81 @@ class TimetableController extends Controller
             Auditorium::orderBy('active', 'desc')->orderBy('name')
                 ->get(['id', 'code', 'name', 'volume', 'active', 'auditorium_type_name', 'building_name'])
         );
+    }
+
+    /** Tanlangan doska uchun auditoriya-o'qituvchi biriktirmalari. */
+    public function auditoriumTeacherAssignments(TimetableBoard $board)
+    {
+        $assignments = Schema::hasTable('auditorium_teacher')
+            ? AuditoriumTeacher::with('teacher')->where('board_id', $board->id)->get()->keyBy('auditorium_id')
+            : collect();
+
+        $auditoriums = Auditorium::where('active', true)
+            ->orderBy('building_name')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'volume', 'auditorium_type_name', 'building_name']);
+
+        return response()->json([
+            'auditoriums' => $auditoriums->map(function ($auditorium) use ($assignments) {
+                $assignment = $assignments->get($auditorium->id);
+                $teacher = $assignment?->teacher;
+
+                return [
+                    'id' => $auditorium->id,
+                    'code' => $auditorium->code,
+                    'name' => $auditorium->name,
+                    'volume' => (int) $auditorium->volume,
+                    'auditorium_type_name' => $auditorium->auditorium_type_name,
+                    'building_name' => $auditorium->building_name,
+                    'teacher_id' => $assignment?->teacher_id,
+                    'teacher_name' => $teacher?->short_name ?: $teacher?->full_name,
+                    'is_general' => (bool) ($assignment?->is_general ?? false),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /** Auditoriyani tanlangan doskada o'qituvchiga yoki umumiy holatga biriktirish. */
+    public function assignAuditoriumTeacher(Request $request, TimetableBoard $board)
+    {
+        if (!Schema::hasTable('auditorium_teacher')) {
+            return response()->json(['error' => 'auditorium_teacher jadvali mavjud emas. Migratsiyani ishga tushiring.'], 503);
+        }
+
+        $data = $request->validate([
+            'auditorium_id' => 'required|integer|exists:auditoriums,id',
+            'teacher_id' => 'nullable|integer|exists:teachers,id',
+            'is_general' => 'required|boolean',
+        ]);
+
+        $auditorium = Auditorium::where('id', $data['auditorium_id'])
+            ->where('active', true)
+            ->firstOrFail();
+
+        $isGeneral = (bool) $data['is_general'];
+        $teacher = !$isGeneral && !empty($data['teacher_id'])
+            ? Teacher::find($data['teacher_id'])
+            : null;
+
+        if (!$isGeneral && !$teacher) {
+            return response()->json(['error' => "Umumiy bo'lmagan xona uchun o'qituvchi tanlang."], 422);
+        }
+
+        $assignment = AuditoriumTeacher::updateOrCreate(
+            ['board_id' => $board->id, 'auditorium_id' => $auditorium->id],
+            [
+                'teacher_id' => $teacher?->id,
+                'is_general' => $isGeneral,
+            ]
+        );
+
+        return response()->json([
+            'ok' => true,
+            'auditorium_id' => $auditorium->id,
+            'teacher_id' => $assignment->teacher_id,
+            'teacher_name' => $teacher?->short_name ?: $teacher?->full_name,
+            'is_general' => (bool) $assignment->is_general,
+        ]);
     }
 
     /** Yangi auditoriya qo'shish. */

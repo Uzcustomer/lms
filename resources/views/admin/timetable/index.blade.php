@@ -4,7 +4,8 @@
 
 <x-app-layout>
 @php
-    $timetableUser = auth()->user();
+    $timetableUser = request()->user() ?? auth()->guard('teacher')->user() ?? auth()->guard('web')->user();
+    $timetableDepartmentName = trim((string) ($timetableUser->department ?? ''));
     $timetableRoles = $timetableUser->getRoleNames()->toArray();
     $timetableActiveRole = session('active_role', $timetableRoles[0] ?? '');
     if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
@@ -718,7 +719,11 @@
                                     <span id="asgAudCount" class="text-xs text-slate-400"></span>
                                 </div>
                                 @if($timetableAuditoriumAssignmentOnly)
-                                <form id="asgAudCreateForm" class="hidden grid grid-cols-2 md:grid-cols-6 gap-2 p-3 border-b border-slate-200 bg-blue-50">
+                                <form id="asgAudCreateForm" class="hidden grid grid-cols-2 md:grid-cols-7 gap-2 p-3 border-b border-slate-200 bg-blue-50">
+                                    <div class="rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-slate-600" title="Auditoriya avtomatik shu kafedraga biriktiriladi">
+                                        <span class="block text-[10px] uppercase tracking-wide text-slate-400">Kafedra</span>
+                                        <strong class="block truncate">{{ $timetableDepartmentName ?: 'Profil orqali aniqlanadi' }}</strong>
+                                    </div>
                                     <input id="asgAudCode" name="code" required maxlength="50" placeholder="Kod" class="rounded-md border-slate-300 text-xs">
                                     <input id="asgAudName" name="name" required maxlength="255" placeholder="Xona nomi" class="rounded-md border-slate-300 text-xs">
                                     <input id="asgAudVolume" name="volume" required type="number" min="0" max="2000" placeholder="Sig'im" class="rounded-md border-slate-300 text-xs">
@@ -4601,14 +4606,20 @@
 
             function renderAsgAudTable() {
                 const rows = filteredAsgAudRooms();
+                const showActions = TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY;
                 $('asgAudCount').textContent = rows.length + ' ta';
-                let h = '<colgroup>' +
-                    '<col style="width:16%"><col style="width:24%"><col style="width:9%">' +
-                    '<col style="width:15%"><col style="width:16%"><col style="width:20%">' +
-                    '</colgroup><thead><tr>' +
-                    '<th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th>' +
+
+                let h = showActions
+                    ? '<colgroup><col style="width:14%"><col style="width:20%"><col style="width:8%">' +
+                      '<col style="width:13%"><col style="width:14%"><col style="width:23%"><col style="width:8%"></colgroup>'
+                    : '<colgroup><col style="width:16%"><col style="width:24%"><col style="width:9%">' +
+                      '<col style="width:15%"><col style="width:16%"><col style="width:20%"></colgroup>';
+
+                h += '<thead><tr><th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th>' +
                     '<th>Turi</th><th>Holat</th><th>O\'qituvchi</th>' +
+                    (showActions ? '<th class="text-center">Amal</th>' : '') +
                     '</tr></thead><tbody>';
+
                 rows.forEach((room, i) => {
                     const general = !!room.is_general;
                     const hasTeacher = !!room.teacher_id;
@@ -4621,13 +4632,20 @@
                     const teacher = general
                         ? '<span class="text-slate-400">Barcha o\'qituvchilar</span>'
                         : (hasTeacher ? '<span class="aud-teacher">' + esc(room.teacher_name || '—') + '</span>' : '<span class="text-slate-400">Tanlanmagan</span>');
+                    const action = showActions
+                        ? '<td class="text-center">' + (room.can_delete
+                            ? '<button type="button" data-asg-aud-delete="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-600 hover:bg-red-100" title="Auditoriyani o\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>'
+                            : '<span class="text-slate-300">—</span>') + '</td>'
+                        : '';
+
                     h += '<tr data-i="' + i + '"' + (asgAudSel && asgAudSel.id === room.id ? ' class="sel"' : '') + '>' +
                         '<td class="font-semibold">' + esc(room.name || room.code) + '</td>' +
                         '<td>' + esc(room.building_name || '—') + '</td>' +
                         '<td class="text-center text-emerald-600 font-semibold">' + esc(String(capacity)) + '</td>' +
                         '<td>' + esc(room.auditorium_type_name || '—') + '</td>' +
-                        '<td>' + status + '</td><td>' + teacher + '</td></tr>';
+                        '<td>' + status + '</td><td>' + teacher + '</td>' + action + '</tr>';
                 });
+
                 $('asgAudTable').innerHTML = h + '</tbody>';
                 const rowsRef = rows;
                 $('asgAudTable').querySelectorAll('tbody tr[data-i]').forEach(tr => tr.onclick = () => {
@@ -4635,6 +4653,29 @@
                     $('asgAudTable').querySelectorAll('tbody tr').forEach(row => row.classList.remove('sel'));
                     tr.classList.add('sel');
                     selectAsgAudRoom(asgAudSel.id);
+                });
+                $('asgAudTable').querySelectorAll('[data-asg-aud-delete]').forEach(button => {
+                    button.onclick = async event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        const room = asgAudRooms.find(item => +item.id === +button.dataset.asgAudDelete);
+                        if (!room || !confirm('«' + (room.name || room.code) + '» auditoriyasini o\'chirasizmi?')) return;
+
+                        button.disabled = true;
+                        try {
+                            const result = await api(BASE + '/auditoriums/' + room.id, 'DELETE', {});
+                            if (asgAudSel && +asgAudSel.id === +room.id) {
+                                asgAudSel = null;
+                                setAsgAudControls(false);
+                            }
+                            $('asgMsg').textContent = result.message || 'Auditoriya o\'chirildi';
+                            await loadAsgAuditoriums();
+                        } catch (e) {
+                            $('asgMsg').textContent = 'Xatolik: ' + e.message;
+                            button.disabled = false;
+                        }
+                    };
                 });
             }
 

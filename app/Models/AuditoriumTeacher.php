@@ -9,7 +9,6 @@ class AuditoriumTeacher extends Model
     protected $table = 'auditorium_teacher';
 
     protected $fillable = [
-        'board_id',
         'auditorium_id',
         'teacher_id',
         'is_general',

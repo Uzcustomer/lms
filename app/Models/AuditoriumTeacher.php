@@ -18,4 +18,9 @@ class AuditoriumTeacher extends Model
     protected $casts = [
         'is_general' => 'boolean',
     ];
+
+    public function teacher()
+    {
+        return $this->belongsTo(Teacher::class, 'teacher_id');
+    }
 }

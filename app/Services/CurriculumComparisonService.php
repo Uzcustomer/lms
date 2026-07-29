@@ -167,9 +167,7 @@ class CurriculumComparisonService
         // ishchi rejalarda tanlov fanlari butunlay boshqacha yozilishi mumkin
         // ("A YOKI B" bloki ↔ bitta "A / B" qatori), avtomatik moslash esa
         // bunday hollarda ishlamaydi.
-        $choices = $manualChoices !== []
-            ? $this->manualGroups($manualChoices, $refGroups)
-            : $this->detectGroups($refGroups);
+        $choices = $this->manualGroups($manualChoices, $refGroups);
         $choiceOf = [];
         foreach ($choices as $block => $choice) {
             foreach ($choice['keys'] as $key) {

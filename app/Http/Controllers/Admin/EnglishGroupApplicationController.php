@@ -320,6 +320,7 @@ class EnglishGroupApplicationController extends Controller
         $zip->addFile($excelTemp, 'sertifikatli-arizachilar.xlsx');
 
         $zip->close();
+        @unlink($excelTemp);
         $fileName = 'ingliz-guruh-sertifikatlari-' . now()->format('Y-m-d_H-i') . '.zip';
 
         return response()->download($temp, $fileName, [

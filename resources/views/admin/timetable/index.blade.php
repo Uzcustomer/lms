@@ -4514,20 +4514,31 @@
             function renderAsgAudTable() {
                 const rows = filteredAsgAudRooms();
                 $('asgAudCount').textContent = rows.length + ' ta';
-                let h = '<thead><tr><th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th><th>Turi</th><th>Holat</th><th>O\'qituvchi</th></tr></thead><tbody>';
+                let h = '<colgroup>' +
+                    '<col style="width:18%"><col style="width:27%"><col style="width:10%">' +
+                    '<col style="width:16%"><col style="width:16%"><col style="width:23%">' +
+                    '</colgroup><thead><tr>' +
+                    '<th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th>' +
+                    '<th>Turi</th><th>Holat</th><th>O\'qituvchi</th>' +
+                    '</tr></thead><tbody>';
                 rows.forEach((room, i) => {
                     const general = !!room.is_general;
                     const hasTeacher = !!room.teacher_id;
-                    const status = general
-                        ? '<span class="aud-general">Umumiy</span>'
-                        : (hasTeacher ? '<span class="text-amber-600 font-semibold">Biriktirilgan</span>' : '<span class="text-slate-400">Biriktirilmagan</span>');
+                    const capacity = room.volume ?? room.capacity ?? 0;
+                    const status = room.active === false
+                        ? '<span class="text-red-600 font-semibold">Faol emas</span>'
+                        : (general
+                            ? '<span class="aud-general">Umumiy</span>'
+                            : (hasTeacher ? '<span class="text-amber-600 font-semibold">Biriktirilgan</span>' : '<span class="text-slate-400">Biriktirilmagan</span>'));
                     const teacher = general
                         ? '<span class="text-slate-400">Barcha o\'qituvchilar</span>'
                         : (hasTeacher ? '<span class="aud-teacher">' + esc(room.teacher_name || '—') + '</span>' : '<span class="text-slate-400">Tanlanmagan</span>');
                     h += '<tr data-i="' + i + '"' + (asgAudSel && asgAudSel.id === room.id ? ' class="sel"' : '') + '>' +
-                        '<td class="font-semibold">' + esc(room.name || room.code) + '</td><td>' + esc(room.building_name || '—') + '</td>' +
-                        '<td class="text-center text-emerald-600 font-semibold">' + (room.volume || 0) + '</td>' +
-                        '<td>' + esc(room.auditorium_type_name || '—') + '</td><td>' + status + '</td><td>' + teacher + '</td></tr>';
+                        '<td class="font-semibold">' + esc(room.name || room.code) + '</td>' +
+                        '<td>' + esc(room.building_name || '—') + '</td>' +
+                        '<td class="text-center text-emerald-600 font-semibold">' + esc(String(capacity)) + '</td>' +
+                        '<td>' + esc(room.auditorium_type_name || '—') + '</td>' +
+                        '<td>' + status + '</td><td>' + teacher + '</td></tr>';
                 });
                 $('asgAudTable').innerHTML = h + '</tbody>';
                 const rowsRef = rows;

@@ -43,6 +43,7 @@ class TimetableAssignmentAccess
                     'admin.timetable.teachers',
                     'admin.timetable.teachers.departments',
                     'admin.timetable.auditorium-teachers',
+                    'admin.timetable.auditorium-teachers.destroy',
                     'admin.timetable.assign-auditorium-teacher',
                     'admin.timetable.auditoriums',
                     'admin.timetable.auditoriums.store',

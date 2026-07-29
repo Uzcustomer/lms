@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Auditorium;
 use App\Models\AuditoriumTeacher;
+use App\Models\Department;
 use App\Models\OqimSnapshot;
 use App\Models\Teacher;
 use App\Models\TimetableBoard;
@@ -2791,12 +2792,92 @@ class TimetableController extends Controller
         return response()->json(['groups' => $out]);
     }
 
-    /** Auditoriyalar ro'yxati (dialog uchun — barcha maydonlar). */
-    public function auditoriums()
+    private function timetableActor(Request $request)
     {
+        return $request->user()
+            ?? Auth::guard('teacher')->user()
+            ?? Auth::guard('web')->user();
+    }
+
+    private function timetableActiveRole(Request $request): string
+    {
+        $actor = $this->timetableActor($request);
+        $roles = $actor && method_exists($actor, 'getRoleNames')
+            ? $actor->getRoleNames()->toArray()
+            : [];
+
+        $activeRole = session('active_role', $roles[0] ?? '');
+        return in_array($activeRole, $roles, true) ? $activeRole : ($roles[0] ?? '');
+    }
+
+    /**
+     * Kafedra mudirining kafedrasi serverdagi Teacher/Department ma'lumotidan olinadi.
+     * Client kafedrani yubormaydi, shuning uchun boshqa kafedraga xona qo'shib bo'lmaydi.
+     */
+    private function departmentHeadContext(Request $request): array
+    {
+        $actor = $this->timetableActor($request);
+        if (!$actor) {
+            abort(403, 'Foydalanuvchi aniqlanmadi.');
+        }
+
+        $department = null;
+        $departmentHemisId = $actor->department_hemis_id ?? null;
+        if ($departmentHemisId) {
+            $department = Department::where('department_hemis_id', $departmentHemisId)->first();
+        }
+
+        $departmentName = trim((string) ($actor->department ?? ''));
+        if (!$department && $departmentName !== '') {
+            $department = Department::where('name', $departmentName)
+                ->where('structure_type_code', '!=', 11)
+                ->first();
+        }
+
+        if (!$department) {
+            abort(422, 'Kafedra mudirining kafedrasi aniqlanmadi. Teacher profilidagi department ma\'lumotini tekshiring.');
+        }
+
+        return [
+            'actor_id' => (int) $actor->id,
+            'department_hemis_id' => (int) $department->department_hemis_id,
+            'department_name' => $department->name,
+        ];
+    }
+
+    /** Auditoriyalar ro'yxati (dialog uchun — barcha maydonlar). */
+    public function auditoriums(Request $request)
+    {
+        $columns = ['id', 'code', 'name', 'volume', 'active', 'auditorium_type_name', 'building_name'];
+        $hasOwnership = Schema::hasColumn('auditoriums', 'department_hemis_id')
+            && Schema::hasColumn('auditoriums', 'department_name')
+            && Schema::hasColumn('auditoriums', 'created_by_teacher_id');
+
+        if ($hasOwnership) {
+            $columns = array_merge($columns, ['department_hemis_id', 'department_name', 'created_by_teacher_id']);
+        }
+
+        $departmentId = null;
+        if ($hasOwnership && $this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $departmentId = $this->departmentHeadContext($request)['department_hemis_id'];
+        }
+
+        $auditoriums = Auditorium::orderBy('active', 'desc')
+            ->orderBy('name')
+            ->get($columns);
+
         return response()->json(
-            Auditorium::orderBy('active', 'desc')->orderBy('name')
-                ->get(['id', 'code', 'name', 'volume', 'active', 'auditorium_type_name', 'building_name'])
+            $auditoriums->map(function (Auditorium $auditorium) use ($departmentId, $hasOwnership) {
+                $auditorium->setAttribute(
+                    'can_delete',
+                    $hasOwnership
+                        && $departmentId !== null
+                        && (int) $auditorium->department_hemis_id === (int) $departmentId
+                        && !empty($auditorium->created_by_teacher_id)
+                );
+
+                return $auditorium;
+            })->values()
         );
     }
 
@@ -2880,8 +2961,26 @@ class TimetableController extends Controller
     public function storeAuditorium(Request $request)
     {
         $data = $this->validateAuditorium($request);
-        $a = Auditorium::create($data);
-        return response()->json(['ok' => true, 'auditorium' => $a]);
+
+        if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            if (!Schema::hasColumn('auditoriums', 'department_hemis_id')) {
+                return response()->json(['error' => 'Auditoriya kafedrasi migratsiyasi bajarilmagan.'], 503);
+            }
+
+            $context = $this->departmentHeadContext($request);
+            $data['department_hemis_id'] = $context['department_hemis_id'];
+            $data['department_name'] = $context['department_name'];
+            $data['created_by_teacher_id'] = $context['actor_id'];
+            $data['active'] = true;
+        }
+
+        $auditorium = Auditorium::create($data);
+
+        return response()->json([
+            'ok' => true,
+            'auditorium' => $auditorium,
+            'message' => "«{$auditorium->name}» auditoriyasi saqlandi.",
+        ]);
     }
 
     /** Auditoriyani tahrirlash. */
@@ -2893,15 +2992,40 @@ class TimetableController extends Controller
     }
 
     /** Auditoriyani o'chirish (kartochkalarda ishlatilsa faqat nofaollashadi). */
-    public function destroyAuditorium(Auditorium $auditorium)
+    public function destroyAuditorium(Request $request, Auditorium $auditorium)
     {
+        if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            if (!Schema::hasColumn('auditoriums', 'department_hemis_id')) {
+                return response()->json(['error' => 'Auditoriya kafedrasi migratsiyasi bajarilmagan.'], 503);
+            }
+
+            $context = $this->departmentHeadContext($request);
+            $ownsAuditorium = (int) $auditorium->department_hemis_id === (int) $context['department_hemis_id']
+                && !empty($auditorium->created_by_teacher_id);
+
+            if (!$ownsAuditorium) {
+                abort(403, 'Faqat o\'z kafedrangiz yaratgan auditoriyani o\'chira olasiz.');
+            }
+        }
+
         $used = TimetableCard::where('auditorium_code', $auditorium->code)->exists();
         if ($used) {
             $auditorium->update(['active' => false]);
-            return response()->json(['ok' => true, 'deactivated' => true]);
+
+            return response()->json([
+                'ok' => true,
+                'deactivated' => true,
+                'message' => 'Auditoriya jadvalda ishlatilgani uchun nofaol qilindi.',
+            ]);
         }
+
         $auditorium->delete();
-        return response()->json(['ok' => true, 'deactivated' => false]);
+
+        return response()->json([
+            'ok' => true,
+            'deactivated' => false,
+            'message' => 'Auditoriya o\'chirildi.',
+        ]);
     }
 
     private function validateAuditorium(Request $request, ?int $ignoreId = null): array

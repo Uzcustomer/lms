@@ -904,6 +904,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/assign-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignTeacher'])->name('assign-teacher');
                 Route::get('/boards/{board}/auditorium-teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriumTeacherAssignments'])->name('auditorium-teachers');
                 Route::post('/boards/{board}/assign-auditorium-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignAuditoriumTeacher'])->name('assign-auditorium-teacher');
+                Route::delete('/boards/{board}/auditorium-teachers/{auditorium}', [\App\Http\Controllers\Admin\TimetableController::class, 'unassignAuditoriumTeacher'])->name('auditorium-teachers.destroy');
                 Route::get('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriums'])->name('auditoriums');
                 Route::post('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'storeAuditorium'])->name('auditoriums.store');
                 Route::post('/auditoriums/import', [\App\Http\Controllers\Admin\TimetableController::class, 'importAuditoriums'])->name('auditoriums.import');

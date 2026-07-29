@@ -166,7 +166,7 @@ class EnglishGroupApplicationController extends Controller
                 'rejected' => 'FEE2E2',
                 default => 'FEF3C7',
             };
-            $sheet->getStyle("A{$row}:O{$row}")->applyFromArray([
+            $sheet->getStyle("A{$row}:P{$row}")->applyFromArray([
                 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $fill]],
             ]);
             $row++;

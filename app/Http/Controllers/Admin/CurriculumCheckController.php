@@ -2182,7 +2182,7 @@ class CurriculumCheckController extends Controller
                 'semester' => $s->semester ? (int) $s->semester : null,
             ])->unique('name')->values(),
             'work_subjects' => collect($workSubjects)->values(),
-            'suggestions' => $service->suggestChoiceGroups($refSubjects),
+            'suggestions' => $service->suggestGroups($refSubjects),
         ]);
     }
 

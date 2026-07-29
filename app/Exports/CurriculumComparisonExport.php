@@ -20,7 +20,7 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
         CurriculumComparisonService::STATUS_HOURS_CREDIT => 'FFC7CE',
         CurriculumComparisonService::STATUS_MISSING_IN_WORKING => 'FF9999',
         CurriculumComparisonService::STATUS_MISSING_IN_REFERENCE => 'D9D2E9',
-        CurriculumComparisonService::STATUS_CHOICE_DIFF => 'FCD5B4',
+        CurriculumComparisonService::STATUS_GROUP_DIFF => 'FCD5B4',
     ];
 
     public function __construct(
@@ -48,8 +48,8 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
                 $i + 1,
                 $row['block'],
                 $row['hemis_name'] ?? ($row['ref_name'] ?? $row['work_name']),
-                $row['ref_name'],
-                $row['work_name'],
+                $this->nameCell($row['ref_name'], $row['ref_parts'] ?? []),
+                $this->nameCell($row['work_name'], $row['work_parts'] ?? []),
                 $row['ref_hours'],
                 $row['work_hours'],
                 $row['hours_diff'],
@@ -70,6 +70,27 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
             '', '', '', ''];
 
         return $data;
+    }
+
+    /**
+     * Birikkan guruh qatorida fan nomi ostiga tarkibiy fanlar soati bilan
+     * yoziladi ("Ichki kasalliklar (120 soat)") — Excelda ham qaysi fanlar
+     * birlashtirilgani va ularning ulushi ko'rinib tursin.
+     */
+    private function nameCell(?string $name, array $parts): ?string
+    {
+        if ($name === null || count($parts) < 2) {
+            return $name;
+        }
+
+        $lines = [$name];
+        foreach ($parts as $part) {
+            $hours = $part['hours'] ?? null;
+            $lines[] = '  • ' . ($part['name'] ?? '')
+                . ($hours !== null ? ' (' . rtrim(rtrim(number_format((float) $hours, 2, '.', ''), '0'), '.') . ' soat)' : '');
+        }
+
+        return implode("\n", $lines);
     }
 
     public function styles(Worksheet $sheet)

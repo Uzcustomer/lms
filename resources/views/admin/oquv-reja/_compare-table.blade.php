@@ -8,7 +8,7 @@
         \App\Services\CurriculumComparisonService::STATUS_HOURS_CREDIT => 'bg-red-100 text-red-800',
         \App\Services\CurriculumComparisonService::STATUS_MISSING_IN_WORKING => 'bg-red-200 text-red-900',
         \App\Services\CurriculumComparisonService::STATUS_MISSING_IN_REFERENCE => 'bg-purple-100 text-purple-800',
-        \App\Services\CurriculumComparisonService::STATUS_CHOICE_DIFF => 'bg-orange-100 text-orange-800',
+        \App\Services\CurriculumComparisonService::STATUS_GROUP_DIFF => 'bg-orange-100 text-orange-800',
     ];
     $fmt = fn($v) => $v === null ? '—' : rtrim(rtrim(number_format((float) $v, 2, '.', ' '), '0'), '.');
     $fmtDiff = function ($v) {
@@ -16,6 +16,20 @@
         if (abs($v) < 0.011) return '0';
         $s = rtrim(rtrim(number_format(abs($v), 2, '.', ' '), '0'), '.');
         return ($v > 0 ? '+' : '-') . $s;
+    };
+
+    // Birikkan qatorda soat/kredit avval fan kesimida, tagida umumiysi
+    // ko'rsatiladi — qaysi fanlar birlashtirilgani raqamlardan ko'rinib tursin.
+    $breakdown = function ($parts, $key, $total) use ($fmt) {
+        if (count($parts) < 2) {
+            return '<span>' . e($fmt($total)) . '</span>';
+        }
+        $rows = '';
+        foreach ($parts as $p) {
+            $rows .= '<div class="text-xs text-gray-400 leading-tight">' . e($fmt($p[$key] ?? null)) . '</div>';
+        }
+        return $rows . '<div class="border-t border-gray-300 mt-0.5 pt-0.5 font-medium">'
+            . e($fmt($total)) . '</div>';
     };
 @endphp
 
@@ -67,23 +81,32 @@
                     </td>
                     <td class="px-3 py-2 {{ $row['ref_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
                         {{ $row['ref_name'] ?? '—' }}
-                        @if(!empty($row['choice']))
+                        @if(!empty($row['group']))
                             <span class="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium align-middle
-                                         {{ !empty($row['choice_manual']) ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800' }}"
-                                  title="{{ !empty($row['choice_manual']) ? "Qo'lda belgilangan tanlov guruhi" : 'Avtomatik topilgan tanlov bloki' }} — muqobillar: {{ implode(' / ', $row['choice_alts']) }}">
-                                {{ !empty($row['choice_manual']) ? "tanlov (qo'lda)" : 'tanlov' }}
+                                         {{ !empty($row['group_manual']) ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800' }}"
+                                  title="{{ !empty($row['group_manual']) ? "Qo'lda tuzilgan fan guruhi" : 'Avtomatik topilgan fan guruhi' }}: {{ $row['group_label'] ?? '' }}">
+                                {{ !empty($row['group_manual']) ? "guruh (qo'lda)" : 'guruh' }}
                             </span>
-                            <div class="text-xs text-gray-400">{{ implode(' / ', $row['choice_alts']) }}</div>
+                        @endif
+                        @if(count($row['ref_parts'] ?? []) > 1)
+                            @foreach($row['ref_parts'] as $p)
+                                <div class="text-xs text-gray-400 leading-tight">{{ $p['name'] }}</div>
+                            @endforeach
                         @endif
                     </td>
                     <td class="px-3 py-2 {{ $row['work_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
                         {{ $row['work_name'] ?? '—' }}
+                        @if(count($row['work_parts'] ?? []) > 1)
+                            @foreach($row['work_parts'] as $p)
+                                <div class="text-xs text-gray-400 leading-tight">{{ $p['name'] }}</div>
+                            @endforeach
+                        @endif
                     </td>
-                    <td class="px-3 py-2 text-right">{{ $fmt($row['ref_hours']) }}</td>
-                    <td class="px-3 py-2 text-right">{{ $fmt($row['work_hours']) }}</td>
+                    <td class="px-3 py-2 text-right">{!! $breakdown($row['ref_parts'] ?? [], 'hours', $row['ref_hours']) !!}</td>
+                    <td class="px-3 py-2 text-right">{!! $breakdown($row['work_parts'] ?? [], 'hours', $row['work_hours']) !!}</td>
                     <td class="px-3 py-2 text-right {{ ($row['hours_diff'] ?? 0) != 0 ? 'font-semibold text-red-600' : '' }}">{{ $fmtDiff($row['hours_diff']) }}</td>
-                    <td class="px-3 py-2 text-right">{{ $fmt($row['ref_credit']) }}</td>
-                    <td class="px-3 py-2 text-right">{{ $fmt($row['work_credit']) }}</td>
+                    <td class="px-3 py-2 text-right">{!! $breakdown($row['ref_parts'] ?? [], 'credit', $row['ref_credit']) !!}</td>
+                    <td class="px-3 py-2 text-right">{!! $breakdown($row['work_parts'] ?? [], 'credit', $row['work_credit']) !!}</td>
                     <td class="px-3 py-2 text-right {{ ($row['credit_diff'] ?? 0) != 0 ? 'font-semibold text-red-600' : '' }}">{{ $fmtDiff($row['credit_diff']) }}</td>
                     <td class="px-3 py-2">{{ $row['kurslar'] }}</td>
                     <td class="px-3 py-2">

@@ -62,13 +62,40 @@
             </div>
 
             <div class="ega-filter bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
-                <form method="GET" action="{{ route('admin.english-group-applications.index') }}" class="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div class="md:col-span-2">
+                <form method="GET" action="{{ route('admin.english-group-applications.index') }}" class="p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div class="md:col-span-3">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba, hemis, guruh, telefon..."
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba, HEMIS, guruh, telefon..."
                                class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
                     </div>
-                    <div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
+                        <select name="faculty_name" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($filterOptions['faculties'] as $faculty)
+                                <option value="{{ $faculty }}" @selected(request('faculty_name') === $faculty)>{{ $faculty }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Yo'nalish</label>
+                        <select name="specialty_name" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($filterOptions['specialties'] as $specialty)
+                                <option value="{{ $specialty }}" @selected(request('specialty_name') === $specialty)>{{ $specialty }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Kurs</label>
+                        <select name="course_name" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($filterOptions['courses'] as $course)
+                                <option value="{{ $course }}" @selected(request('course_name') === $course)>{{ $course }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Holat</label>
                         <select name="status" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
                             <option value="all" @selected(request('status') === 'all')>Barchasi</option>
@@ -77,7 +104,7 @@
                             <option value="rejected" @selected(request('status') === 'rejected')>Rad etilgan</option>
                         </select>
                     </div>
-                    <div>
+                    <div class="md:col-span-2">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Til darajasi</label>
                         <select name="english_level" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
                             <option value="">Barchasi</option>
@@ -86,7 +113,7 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="md:col-span-4 flex flex-wrap gap-2">
+                    <div class="md:col-span-12 flex flex-wrap gap-2">
                         <button type="submit" class="px-4 py-2 rounded-xl bg-sky-600 text-white font-semibold hover:bg-sky-700 transition">Filtrlash</button>
                         <a href="{{ route('admin.english-group-applications.index', ['status' => 'pending']) }}" class="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 font-semibold hover:bg-slate-300 transition">Tozalash</a>
                     </div>

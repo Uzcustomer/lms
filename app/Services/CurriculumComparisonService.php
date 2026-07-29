@@ -14,12 +14,19 @@ use Illuminate\Support\Collection;
  * ustuni (reference_name) orqali aniq bog'lanadi. Bir fan bir nechta
  * semestrda o'tilsa, soat va kreditlari jamlab solishtiriladi.
  *
- * TANLOV FANLARI alohida qoida bo'yicha solishtiriladi: namunaviy rejada
- * blok ostida bir nechta muqobil fan turadi ("2.03 Hayot faoliyati xavfsizligi
- * YOKI Bioetika"), ishchi rejada esa ulardan faqat bittasi — aniq tanlangani —
- * bo'ladi. Bunday bloklar fan emas, BLOK kesimida solishtiriladi
- * (@see choiceGroups), shunda tanlanmagan muqobillar "Ishchi rejada yo'q"
- * bo'lib xato ogohlantirish bermaydi va jami soat/kredit oshib ketmaydi.
+ * FAN GURUHLARI alohida qoida bo'yicha solishtiriladi. Ikki rejada fanlar
+ * har xil bo'linib kelishi mumkin:
+ *
+ *  - namunaviyda tanlov bloki ("2.03 Hayot faoliyati xavfsizligi YOKI
+ *    Bioetika"), ishchida esa faqat tanlangani;
+ *  - namunaviyda birikkan fan ("Ichki kasalliklar. Endokrinologiya"),
+ *    ishchida esa ikkita alohida fan ("Ichki kasalliklar", "Endokrinologiya").
+ *
+ * Ikkala holda ham nom bo'yicha yakka moslash ishlamaydi. Shuning uchun
+ * bunday fanlar GURUH kesimida solishtiriladi (@see manualGroups qo'lda,
+ * @see detectGroups avtomatik): guruh bitta qator bo'lib chiqadi, tarkibiy
+ * fanlar shu qator ichida sanaladi, jami soat/kredit esa ikki marta
+ * hisoblanmaydi.
  */
 class CurriculumComparisonService
 {
@@ -30,7 +37,7 @@ class CurriculumComparisonService
     public const STATUS_HOURS_CREDIT = 'Soat va kredit farqi';
     public const STATUS_MISSING_IN_WORKING = "Ishchi rejada yo'q";
     public const STATUS_MISSING_IN_REFERENCE = "Namunaviy rejada yo'q";
-    public const STATUS_CHOICE_DIFF = 'Tanlov farqi';
+    public const STATUS_GROUP_DIFF = 'Guruh farqi';
 
     public function compare(
         ManualCurriculum $reference,
@@ -161,8 +168,8 @@ class CurriculumComparisonService
         // ("A YOKI B" bloki ↔ bitta "A / B" qatori), avtomatik moslash esa
         // bunday hollarda ishlamaydi.
         $choices = $manualChoices !== []
-            ? $this->manualChoiceGroups($manualChoices, $refGroups)
-            : $this->choiceGroups($refGroups);
+            ? $this->manualGroups($manualChoices, $refGroups)
+            : $this->detectGroups($refGroups);
         $choiceOf = [];
         foreach ($choices as $block => $choice) {
             foreach ($choice['keys'] as $key) {
@@ -180,7 +187,7 @@ class CurriculumComparisonService
                     continue;
                 }
                 $emitted[$block] = true;
-                $rows[] = $this->buildChoiceRow($choices[$block], $refGroups, $workGroups, $hemisMap);
+                $rows[] = $this->buildGroupRow($choices[$block], $refGroups, $workGroups, $hemisMap);
                 continue;
             }
             $work = $workGroups[$key] ?? null;
@@ -325,6 +332,22 @@ class CurriculumComparisonService
         $workMatchesHemis = ($hemisName !== null && $workName !== null)
             ? ($this->collapse($workName) === $hemisName) : null;
 
+        // Birikkan fan guruhi: butun nom ("Ichki kasalliklar / Endokrinologiya")
+        // HEMIS'da bo'lmasligi tabiiy, chunki HEMIS'da fanlar alohida turadi.
+        // Bunday holda tarkibiy fanlar bittalab qidiriladi — shunda "HEMIS'da
+        // topilmadi" degan noto'g'ri xulosa chiqmaydi.
+        $missingInHemis = [];
+        if ($hemisName === null && $hemisMap !== []) {
+            $parts = array_column($work['parts'] ?? $ref['parts'] ?? [], 'name');
+            if (count($parts) > 1) {
+                [$hemisName, $missingInHemis] = $this->resolveHemisParts($parts, $hemisMap);
+                // Namunaviydagi birikkan nom HEMIS'da bo'lmasligi kamchilik emas,
+                // shu bois faqat ishchi tomon tekshiriladi.
+                $refMatchesHemis = null;
+                $workMatchesHemis = $hemisName !== null ? ($missingInHemis === []) : null;
+            }
+        }
+
         // HEMIS nomlari umuman yuklangan bo'lsa — tekshiruv faol.
         $hemisAvailable = !empty($hemisMap);
 
@@ -365,6 +388,9 @@ class CurriculumComparisonService
         if ($hemisName === null && ($refName !== null || $workName !== null)) {
             $notes[] = "HEMIS bazasida fan topilmadi";
         }
+        if ($missingInHemis !== []) {
+            $notes[] = 'HEMIS bazasida topilmagan fan(lar): ' . implode(', ', $missingInHemis);
+        }
 
         // Semestr farqi: fan namunaviy va ishchi rejada turli semestrlarda turgan
         // bo'lsa — ogohlantirish. (Ilgari mos kelmaydigan semestr fanni umuman
@@ -381,9 +407,11 @@ class CurriculumComparisonService
 
         return [
             'block' => $ref['block'] ?? $work['block'] ?? null,
-            'choice' => false,
-            'choice_manual' => false,
-            'choice_alts' => [],
+            'group' => false,
+            'group_manual' => false,
+            'group_parts' => [],
+            'ref_parts' => $ref['parts'] ?? [],
+            'work_parts' => $work['parts'] ?? [],
             'hemis_name' => $hemisName,
             'ref_name' => $refName,
             'work_name' => $workName,
@@ -415,12 +443,12 @@ class CurriculumComparisonService
      *
      * @return array<int, array{label:string, ref_names:string[], work_names:string[], norm_name:?string}>
      */
-    public function suggestChoiceGroups(Collection $refSubjects): array
+    public function suggestGroups(Collection $refSubjects): array
     {
         $refGroups = $this->groupSubjects($refSubjects, false);
 
         $out = [];
-        foreach ($this->choiceGroups($refGroups) as $choice) {
+        foreach ($this->detectGroups($refGroups) as $choice) {
             $out[] = [
                 'label'      => $choice['label'],
                 'ref_names'  => array_values($choice['alts']),
@@ -433,22 +461,22 @@ class CurriculumComparisonService
     }
 
     /**
-     * Qo'lda kiritilgan tanlov guruhlarini solishtirish shakliga o'tkazadi.
+     * Qo'lda kiritilgan fan guruhlarini solishtirish shakliga o'tkazadi.
      *
-     * Avtomatik aniqlashdan farqi: muqobillar ham, ularga mos ishchi fan(lar) ham
-     * aniq ko'rsatilgan — nom yoki blok kodi bo'yicha taxmin qilinmaydi. Shu bois
-     * namunaviyda "2.02 O'zbek/rus tili YOKI Tibbiyotda xorijiy til" bloki bilan
-     * ishchidagi bitta "O'zbek/rus tili / Tibbiyotda xorijiy til" qatori
-     * bemalol bog'lanadi.
+     * Avtomatik aniqlashdan farqi: namunaviy fanlar ham, ularga mos ishchi
+     * fan(lar) ham aniq ko'rsatilgan — nom yoki blok kodi bo'yicha taxmin
+     * qilinmaydi. Shu bois har qanday bo'linish bog'lanadi: tanlov bloki ham
+     * ("A YOKI B" ↔ bitta "A / B" qatori), birikkan fan ham ("A. B" ↔ ikkita
+     * alohida "A" va "B" qatori).
      *
-     * Namunaviy rejada birorta muqobili topilmagan guruh o'tkazib yuboriladi —
-     * solishtirishga qo'shadigan hissasi yo'q.
+     * Namunaviy rejada birorta tarkibiy fani topilmagan guruh o'tkazib
+     * yuboriladi — solishtirishga qo'shadigan hissasi yo'q.
      *
      * @param  array<int, array{label:string, ref_names:string[], work_names:string[], norm_name?:?string}>  $manual
      * @param  array<string, array>  $refGroups
      * @return array<string, array>
      */
-    private function manualChoiceGroups(array $manual, array $refGroups): array
+    private function manualGroups(array $manual, array $refGroups): array
     {
         $groups = [];
         foreach ($manual as $i => $item) {
@@ -509,7 +537,7 @@ class CurriculumComparisonService
      * @param  array<string, array>  $refGroups  groupSubjects() natijasi
      * @return array<string, array{label:string, code:?string, alts:array<string,string>, keys:string[]}>
      */
-    private function choiceGroups(array $refGroups): array
+    private function detectGroups(array $refGroups): array
     {
         $byBlock = [];
         foreach ($refGroups as $key => $group) {
@@ -552,16 +580,17 @@ class CurriculumComparisonService
     }
 
     /**
-     * Tanlov bloki uchun bitta solishtirma qatori.
+     * Fan guruhi uchun bitta solishtirma qatori.
      *
-     * Ishchi rejadagi fan avval muqobil NOMLARI bo'yicha, topilmasa blok kodi
-     * bo'yicha moslanadi. Norma soat/kredit aynan tanlangan muqobilnikidan
-     * olinadi — shu bois tanlanmagan muqobillar na farq, na jamiga qo'shiladi.
+     * Ishchi rejadagi fan(lar) avval guruh tarkibidagi NOMLAR bo'yicha,
+     * topilmasa blok kodi bo'yicha moslanadi. Norma soat/kredit aynan
+     * moslangan fan(lar)dan olinadi — shu bois guruhning ishchi rejada
+     * uchramagan tarkibi na farqqa, na jamiga qo'shiladi.
      *
      * @param  array<string, array>  $refGroups
      * @param  array<string, array>  $workGroups  moslangan fanlar chiqarib tashlanadi
      */
-    private function buildChoiceRow(array $choice, array $refGroups, array &$workGroups, array $hemisMap): array
+    private function buildGroupRow(array $choice, array $refGroups, array &$workGroups, array $hemisMap): array
     {
         $manual = !empty($choice['manual']);
         $outside = false;
@@ -614,36 +643,48 @@ class CurriculumComparisonService
             $normKeys = [$this->representativeAlt($choice, $refGroups)];
         }
 
-        $ref = $this->mergeGroups(array_map(fn($k) => $refGroups[$k], $normKeys), $choice['label']);
-        $work = $this->mergeGroups(array_values($matched), $choice['label']);
+        // Blok — namunaviy rejada qanday bo'lsa shundayligicha ("MAJBURIY
+        // FANLAR", "2.02 ... YOKI ..."). Guruh nomi blokning o'rnini bosmaydi,
+        // u izohda ko'rsatiladi: aks holda fanning qaysi blokda turgani
+        // jadvaldan yo'qolib ketardi.
+        $refBlock = $refGroups[$normKeys[0]]['block'] ?? null;
+        foreach ($choice['keys'] as $key) {
+            $refBlock = $refBlock ?: ($refGroups[$key]['block'] ?? null);
+        }
+
+        $ref = $this->mergeGroups(array_map(fn($k) => $refGroups[$k], $normKeys), (string) $refBlock);
+        $work = $this->mergeGroups(array_values($matched), (string) $refBlock);
 
         $row = $this->buildRow($ref, $work, $hemisMap);
-        $row['choice'] = true;
-        $row['choice_manual'] = $manual;
-        $row['choice_alts'] = array_values($choice['alts']);
+        $row['group'] = true;
+        $row['group_manual'] = $manual;
+        $row['group_parts'] = array_values($choice['alts']);
+        $row['group_label'] = $choice['label'];
 
         // Blok kodi bo'yicha moslangan, ammo namunaviy ro'yxatda yo'q fan —
         // soat/kredit farqi bo'lmasa ham alohida holat sifatida belgilanadi.
         if ($outside && in_array($row['status'], [self::STATUS_OK, self::STATUS_NAME], true)) {
-            $row['status'] = self::STATUS_CHOICE_DIFF;
+            $row['status'] = self::STATUS_GROUP_DIFF;
         }
 
-        // Qo'lda guruhda nom farqi tabiiy holat: ishchida "A / B" bitta qatorda
-        // yozilgani nomlar mos emasligini bildirmaydi — guruh allaqachon
-        // foydalanuvchi tomonidan tasdiqlangan.
-        if ($manual && $row['status'] === self::STATUS_NAME) {
+        // Qo'lda tuzilgan guruhda namunaviy va ishchi nomlarining farq qilishi
+        // tabiiy: fanlar bir tomonda birikkan, ikkinchisida alohida. Buni nom
+        // farqi deb hisoblamaymiz — guruhni foydalanuvchi tasdiqlagan. Ammo bu
+        // faqat NOM JUFTI bo'yicha farqqa taalluqli: HEMIS bilan mos kelmaslik
+        // (yoki HEMIS'da umuman topilmaslik) saqlanib qoladi, aks holda
+        // haqiqiy kamchilik "To'g'ri" ostida yashirinib qolardi.
+        if ($manual && $row['status'] === self::STATUS_NAME && $hemisMap === []) {
             $row['status'] = self::STATUS_OK;
         }
 
-        $label = $manual ? "Tanlov guruhi (qo'lda)" : 'Tanlov bloki';
-        $notes = [$label . ': ' . implode(' / ', $row['choice_alts'])];
+        $notes = ['Fan guruhi' . ($manual ? " (qo'lda)" : '') . ': ' . implode(' / ', $row['group_parts'])];
         if ($work === null) {
-            $notes[] = "ishchi rejada birorta muqobil tanlanmagan";
+            $notes[] = 'ishchi rejada mos fan topilmadi';
         } else {
-            $notes[] = "ishchida tanlangan: {$work['name']}";
+            $notes[] = "ishchida: {$work['name']}";
         }
         if ($outside) {
-            $notes[] = "tanlangan fan namunaviy muqobillar ro'yxatida yo'q";
+            $notes[] = "ishchidagi fan namunaviy guruh tarkibida yo'q";
         }
         if ($row['note'] !== '') {
             $notes[] = $row['note'];
@@ -673,7 +714,7 @@ class CurriculumComparisonService
 
     /**
      * Blok sarlavhasi tanlov blokiga o'xshaydimi: "YOKI" ajratuvchisi bor yoki
-     * ichki kodli ("2.03" kabi, "2.00" emas). choiceGroups() dan farqli — bu
+     * ichki kodli ("2.03" kabi, "2.00" emas). detectGroups() dan farqli — bu
      * yerda muqobillar soni tekshirilmaydi, chunki filtrlashdan OLDIN chaqiriladi.
      */
     private function looksLikeChoiceBlock(string $block): bool
@@ -737,10 +778,19 @@ class CurriculumComparisonService
             'kurslar' => [],
             'semestrlar' => [],
             'notes' => [],
+            // Tarkibiy fanlar: birikkan qatorda har bir fanning o'z soati
+            // ko'rsatilishi va HEMIS'da bittalab qidirilishi uchun.
+            'parts' => [],
         ];
         $names = [];
         foreach ($groups as $group) {
             $names[] = $group['name'];
+            $merged['parts'][] = [
+                'name' => $group['name'],
+                'hours' => $group['hours'] ?? null,
+                'credit' => $group['credit'] ?? null,
+                'semestrlar' => $group['semestrlar'] ?? [],
+            ];
             if (($group['hours'] ?? null) !== null) {
                 $merged['hours'] = round(($merged['hours'] ?? 0) + (float) $group['hours'], 2);
             }
@@ -760,6 +810,31 @@ class CurriculumComparisonService
         sort($merged['semestrlar']);
 
         return $merged;
+    }
+
+    /**
+     * Birikkan guruh tarkibidagi fanlarni HEMIS bazasidan bittalab qidiradi.
+     *
+     * @param  string[]  $names
+     * @return array{0: ?string, 1: string[]}  [topilganlar birlashtirilgan nomi, topilmaganlar]
+     */
+    private function resolveHemisParts(array $names, array $hemisMap): array
+    {
+        $found = [];
+        $missing = [];
+        foreach ($names as $name) {
+            $key = $this->normalize((string) $name);
+            if ($key === '') {
+                continue;
+            }
+            if (isset($hemisMap[$key])) {
+                $found[] = $hemisMap[$key];
+            } else {
+                $missing[] = trim((string) $name);
+            }
+        }
+
+        return [$found !== [] ? implode(' / ', array_unique($found)) : null, $missing];
     }
 
     private function groupSubjects(Collection $subjects, bool $useReferenceName): array

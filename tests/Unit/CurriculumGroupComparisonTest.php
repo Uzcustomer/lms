@@ -3,8 +3,9 @@
 use App\Services\CurriculumComparisonService;
 
 /**
- * Tanlov bloklarini solishtirish: namunaviy rejada blok ostida bir nechta
- * muqobil fan turadi, ishchi rejada esa faqat tanlangani bo'ladi.
+ * Fan guruhlarini solishtirish: ikki rejada fanlar har xil bo'linib kelishi
+ * mumkin — namunaviyda tanlov bloki (ishchida bittasi tanlangan) yoki
+ * namunaviyda birikkan fan (ishchida ikkita alohida fan).
  */
 
 /** Yopiq (private) metodni chaqirish. */
@@ -73,7 +74,7 @@ test('majburiy fanlar bloki tanlov deb qabul qilinmaydi', function () {
 
 test('tanlov bloklari sarlavha va ichki kod bo\'yicha aniqlanadi', function () {
     $service = new CurriculumComparisonService();
-    $choices = callService($service, 'choiceGroups', [referenceGroups($service)]);
+    $choices = callService($service, 'detectGroups', [referenceGroups($service)]);
 
     expect(array_keys($choices))->toBe([
         "2.02 O'zbek/rus tili YOKI Tibbiyotda xorijiy til",
@@ -91,7 +92,7 @@ test('tanlov bloklari sarlavha va ichki kod bo\'yicha aniqlanadi', function () {
 test('tanlangan muqobil topilsa norma aynan shu muqobilnikidan olinadi', function () {
     $service = new CurriculumComparisonService();
     $refGroups = referenceGroups($service);
-    $choices = callService($service, 'choiceGroups', [$refGroups]);
+    $choices = callService($service, 'detectGroups', [$refGroups]);
 
     // 2.05 blokida 360 va 60 soatlik muqobillar bor; ishchi rejada 60 soatligi tanlangan
     $workGroups = [
@@ -99,24 +100,24 @@ test('tanlangan muqobil topilsa norma aynan shu muqobilnikidan olinadi', functio
             => subjectGroup('Klinik laboratoriya tashhisoti', 'Tanlov fanlar', 60, 2),
     ];
 
-    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method = new ReflectionMethod($service, 'buildGroupRow');
     $method->setAccessible(true);
     $row = $method->invokeArgs($service, [$choices['2.05 Harbiy tibbiy tayyorgarlik'], $refGroups, &$workGroups, []]);
 
     expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
     expect($row['ref_hours'])->toBe(60.0);   // 360 emas — tanlanmagan muqobil hisobga olinmaydi
     expect($row['work_hours'])->toBe(60.0);
-    expect($row['choice'])->toBeTrue();
+    expect($row['group'])->toBeTrue();
     expect($workGroups)->toBe([]);           // moslangan fan ishchi ro'yxatdan chiqarildi
 });
 
 test('birorta muqobil tanlanmasa blok bitta qator bo\'lib ogohlantiradi', function () {
     $service = new CurriculumComparisonService();
     $refGroups = referenceGroups($service);
-    $choices = callService($service, 'choiceGroups', [$refGroups]);
+    $choices = callService($service, 'detectGroups', [$refGroups]);
     $workGroups = [];
 
-    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method = new ReflectionMethod($service, 'buildGroupRow');
     $method->setAccessible(true);
     $row = $method->invokeArgs($service, [
         $choices['2.03 Hayot faoliyati xavfsizligi YOKI Bioetika'], $refGroups, &$workGroups, [],
@@ -124,28 +125,28 @@ test('birorta muqobil tanlanmasa blok bitta qator bo\'lib ogohlantiradi', functi
 
     expect($row['status'])->toBe(CurriculumComparisonService::STATUS_MISSING_IN_WORKING);
     expect($row['ref_hours'])->toBe(60.0);
-    expect($row['note'])->toContain('Tanlov bloki');
+    expect($row['note'])->toContain('Fan guruhi');
 });
 
 test('ro\'yxatdan tashqari fan blok kodi bo\'yicha moslanadi va "Tanlov farqi" bo\'ladi', function () {
     $service = new CurriculumComparisonService();
     $refGroups = referenceGroups($service);
-    $choices = callService($service, 'choiceGroups', [$refGroups]);
+    $choices = callService($service, 'detectGroups', [$refGroups]);
 
     // Ishchi rejada 2.02 blokida namunaviyda yo'q fan turibdi, soati esa mos
     $workGroups = [
         $service->normalize('Ingliz tili') => subjectGroup('Ingliz tili', '2.02 Chet tili', 90, 3),
     ];
 
-    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method = new ReflectionMethod($service, 'buildGroupRow');
     $method->setAccessible(true);
     $row = $method->invokeArgs($service, [
         $choices["2.02 O'zbek/rus tili YOKI Tibbiyotda xorijiy til"], $refGroups, &$workGroups, [],
     ]);
 
-    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_CHOICE_DIFF);
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_GROUP_DIFF);
     expect($row['work_name'])->toBe('Ingliz tili');
-    expect($row['note'])->toContain("namunaviy muqobillar ro'yxatida yo'q");
+    expect($row['note'])->toContain("namunaviy guruh tarkibida yo'q");
 });
 
 test('qo\'lda guruh ishchidagi birlashgan "A / B" qatorini bog\'laydi', function () {
@@ -165,7 +166,7 @@ test('qo\'lda guruh ishchidagi birlashgan "A / B" qatorini bog\'laydi', function
         'norm_name' => null,
     ]];
 
-    $groups = callService($service, 'manualChoiceGroups', [$manual, $refGroups]);
+    $groups = callService($service, 'manualGroups', [$manual, $refGroups]);
     expect(array_keys($groups))->toBe(['manual-0']);
     expect($groups['manual-0']['manual'])->toBeTrue();
 
@@ -176,14 +177,14 @@ test('qo\'lda guruh ishchidagi birlashgan "A / B" qatorini bog\'laydi', function
         $service->normalize('Anatomiya') => subjectGroup('Anatomiya', 'majburiy', 210, 7),
     ];
 
-    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method = new ReflectionMethod($service, 'buildGroupRow');
     $method->setAccessible(true);
     $row = $method->invokeArgs($service, [$groups['manual-0'], $refGroups, &$workGroups, []]);
 
     expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
     expect($row['ref_hours'])->toBe(90.0);
     expect($row['work_hours'])->toBe(90.0);
-    expect($row['choice_manual'])->toBeTrue();
+    expect($row['group_manual'])->toBeTrue();
     // Faqat guruhga tegishli fan iste'mol qilinadi, qolgani jadvalda qoladi
     expect(array_keys($workGroups))->toBe([$service->normalize('Anatomiya')]);
 });
@@ -197,7 +198,7 @@ test('qo\'lda guruhda norm_name normani belgilaydi', function () {
         $service->normalize('Klinik laboratoriya tashhisoti')
             => subjectGroup('Klinik laboratoriya tashhisoti', '2.05', 60, 2),
     ];
-    $groups = callService($service, 'manualChoiceGroups', [[[
+    $groups = callService($service, 'manualGroups', [[[
         'label' => '2.05',
         'ref_names' => ['Harbiy tibbiy tayyorgarlik', 'Klinik laboratoriya tashhisoti'],
         'work_names' => ['Harbiy tibbiy tayyorgarlik / Klinik laboratoriya tashhisoti'],
@@ -209,7 +210,7 @@ test('qo\'lda guruhda norm_name normani belgilaydi', function () {
             => subjectGroup('Harbiy tibbiy tayyorgarlik / Klinik laboratoriya tashhisoti', 'tanlov', 60, 2),
     ];
 
-    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method = new ReflectionMethod($service, 'buildGroupRow');
     $method->setAccessible(true);
     $row = $method->invokeArgs($service, [$groups['manual-0'], $refGroups, &$workGroups, []]);
 
@@ -233,7 +234,7 @@ test('normalize apostrof variantlarini bir xil deb qabul qiladi', function () {
 test('namunaviyda muqobili topilmagan qo\'lda guruh o\'tkazib yuboriladi', function () {
     $service = new CurriculumComparisonService();
 
-    $groups = callService($service, 'manualChoiceGroups', [[[
+    $groups = callService($service, 'manualGroups', [[[
         'label' => 'x',
         'ref_names' => ["Rejada yo'q fan"],
         'work_names' => [],
@@ -246,13 +247,13 @@ test('namunaviyda muqobili topilmagan qo\'lda guruh o\'tkazib yuboriladi', funct
 test('soat va kredit farqi tanlov farqidan ustun turadi', function () {
     $service = new CurriculumComparisonService();
     $refGroups = referenceGroups($service);
-    $choices = callService($service, 'choiceGroups', [$refGroups]);
+    $choices = callService($service, 'detectGroups', [$refGroups]);
 
     $workGroups = [
         $service->normalize('Ingliz tili') => subjectGroup('Ingliz tili', '2.02 Chet tili', 120, 4),
     ];
 
-    $method = new ReflectionMethod($service, 'buildChoiceRow');
+    $method = new ReflectionMethod($service, 'buildGroupRow');
     $method->setAccessible(true);
     $row = $method->invokeArgs($service, [
         $choices["2.02 O'zbek/rus tili YOKI Tibbiyotda xorijiy til"], $refGroups, &$workGroups, [],
@@ -260,4 +261,122 @@ test('soat va kredit farqi tanlov farqidan ustun turadi', function () {
 
     expect($row['status'])->toBe(CurriculumComparisonService::STATUS_HOURS_CREDIT);
     expect($row['hours_diff'])->toBe(30.0);
+});
+
+/**
+ * Namunaviyda birikkan fan ("Ichki kasalliklar. Endokrinologiya"), ishchida
+ * ikkita alohida fan — tanlov emas, shunchaki boshqacha bo'lingan.
+ */
+function mergedSubjectGroup(CurriculumComparisonService $service): array
+{
+    return callService($service, 'manualGroups', [
+        [[
+            'label' => 'Ichki kasalliklar + Endokrinologiya',
+            'ref_names' => ['Ichki kasalliklar. Endokrinologiya'],
+            'work_names' => ['Ichki kasalliklar', 'Endokrinologiya'],
+            'norm_name' => null,
+        ]],
+        [
+            $service->normalize('Ichki kasalliklar. Endokrinologiya')
+                => subjectGroup('Ichki kasalliklar. Endokrinologiya', 'MAJBURIY FANLAR', 240, 8, [5]),
+        ],
+    ])['manual-0'];
+}
+
+/** Yuqoridagi guruhga mos ishchi fanlar (har chaqiruvda yangi nusxa). */
+function splitWorkGroups(CurriculumComparisonService $service): array
+{
+    return [
+        $service->normalize('Ichki kasalliklar') => subjectGroup('Ichki kasalliklar', 'majburiy', 180, 6, [5]),
+        $service->normalize('Endokrinologiya') => subjectGroup('Endokrinologiya', 'majburiy', 60, 2, [6]),
+    ];
+}
+
+/** Guruh qatorini qurish (buildGroupRow yopiq va $workGroups ni o'zgartiradi). */
+function groupRow(CurriculumComparisonService $service, array $group, array $refGroups, array &$work, array $hemis): array
+{
+    $method = new ReflectionMethod($service, 'buildGroupRow');
+    $method->setAccessible(true);
+
+    return $method->invokeArgs($service, [$group, $refGroups, &$work, $hemis]);
+}
+
+test('guruh qatorida blok namunaviy rejadagicha saqlanadi', function () {
+    $service = new CurriculumComparisonService();
+    $refGroups = [
+        $service->normalize('Ichki kasalliklar. Endokrinologiya')
+            => subjectGroup('Ichki kasalliklar. Endokrinologiya', 'MAJBURIY FANLAR', 240, 8, [5]),
+    ];
+    $work = splitWorkGroups($service);
+
+    $row = groupRow($service, mergedSubjectGroup($service), $refGroups, $work, []);
+
+    // Guruh nomi blokning o'rnini bosmaydi — u alohida maydonda
+    expect($row['block'])->toBe('MAJBURIY FANLAR');
+    expect($row['group_label'])->toBe('Ichki kasalliklar + Endokrinologiya');
+});
+
+test('birikkan qatorda har bir fanning soati alohida ko\'rsatiladi', function () {
+    $service = new CurriculumComparisonService();
+    $refGroups = [
+        $service->normalize('Ichki kasalliklar. Endokrinologiya')
+            => subjectGroup('Ichki kasalliklar. Endokrinologiya', 'MAJBURIY FANLAR', 240, 8, [5]),
+    ];
+    $work = splitWorkGroups($service);
+
+    $row = groupRow($service, mergedSubjectGroup($service), $refGroups, $work, []);
+
+    expect($row['work_parts'])->toHaveCount(2);
+    expect($row['work_parts'][0]['hours'])->toBe(180.0);
+    expect($row['work_parts'][1]['hours'])->toBe(60.0);
+    expect($row['work_hours'])->toBe(240.0);       // jami
+    expect($row['ref_parts'])->toHaveCount(1);     // namunaviyda birikkan
+});
+
+test('HEMIS nomi birikkan guruhda qism-qism qidiriladi', function () {
+    $service = new CurriculumComparisonService();
+    $refGroups = [
+        $service->normalize('Ichki kasalliklar. Endokrinologiya')
+            => subjectGroup('Ichki kasalliklar. Endokrinologiya', 'MAJBURIY FANLAR', 240, 8, [5]),
+    ];
+    $hemis = [
+        $service->normalize('Ichki kasalliklar') => 'Ichki kasalliklar',
+        $service->normalize('Endokrinologiya') => 'Endokrinologiya',
+    ];
+    $work = splitWorkGroups($service);
+
+    $row = groupRow($service, mergedSubjectGroup($service), $refGroups, $work, $hemis);
+
+    // Butun "A / B" nomi HEMIS'da yo'q, ammo qismlari bor — "topilmadi" emas
+    expect($row['hemis_name'])->toBe('Ichki kasalliklar / Endokrinologiya');
+    expect($row['ref_matches_hemis'])->toBeNull();  // birikkan nom ayblanmaydi
+    expect($row['work_matches_hemis'])->toBeTrue();
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
+});
+
+test('HEMIS kamchiligi qo\'lda guruhda ham "To\'g\'ri" ostida yashirilmaydi', function () {
+    $service = new CurriculumComparisonService();
+    $refGroups = [
+        $service->normalize('Ichki kasalliklar. Endokrinologiya')
+            => subjectGroup('Ichki kasalliklar. Endokrinologiya', 'MAJBURIY FANLAR', 240, 8, [5]),
+    ];
+
+    // Tarkibning bir qismi HEMIS'da yo'q
+    $work = splitWorkGroups($service);
+    $row = groupRow($service, mergedSubjectGroup($service), $refGroups, $work,
+        [$service->normalize('Ichki kasalliklar') => 'Ichki kasalliklar']);
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_NAME);
+    expect($row['note'])->toContain('Endokrinologiya');
+
+    // Umuman topilmadi
+    $work = splitWorkGroups($service);
+    $row = groupRow($service, mergedSubjectGroup($service), $refGroups, $work,
+        [$service->normalize('Anatomiya') => 'Anatomiya']);
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_NAME);
+    expect($row['note'])->toContain('HEMIS');
+
+    // HEMIS nomlari umuman yuklanmagan — nom jufti farqi ayblanmaydi
+    $work = splitWorkGroups($service);
+    $row = groupRow($service, mergedSubjectGroup($service), $refGroups, $work, []);
+    expect($row['status'])->toBe(CurriculumComparisonService::STATUS_OK);
 });

@@ -371,6 +371,13 @@ class TimetableController extends Controller
 
         $now = now();
         $rows = [];
+        // Takrorlanishdan himoya: bir guruhga bir fan bo'yicha karta to'plami FAQAT
+        // BIR MARTA yaratiladi. Snapshotda bir guruh bir necha blok/oqimda uchrashi
+        // mumkin (turli fakultet konteksti, bir yo'nalishning bir necha bloki) —
+        // aks holda o'sha fanning kartalari necha marta uchrasa shuncha ko'payib,
+        // haftalik yuk bir necha barobar oshib ketardi.
+        $madePractice = [];   // "spec|kurs|guruh|fan" => true
+        $madeLecture  = [];   // "spec|kurs|fan|guruhlar" => true
         // Paralar soni endi weeklyPlan() da hisoblanadi (haftalik yuk chegarasi bilan)
 
         foreach ($byFaculty as $fk => $snap) {
@@ -420,7 +427,11 @@ class TimetableController extends Controller
 
                             // Ma'ruza — bitta oqimga BITTA karta; necha hafta o'tilishi
                             // ma'ruza soatidan (1 para = 2 soat = 1 hafta).
-                            if ((float) $s->lecture > 0) {
+                            $subjKey = $this->normSubject((string) $s->subject_name);
+                            // Ma'ruza — oqim (aynan shu guruhlar to'plami) bo'yicha bir marta
+                            $lecKey = $sk . '|' . $course . '|' . $subjKey . '|' . implode(',', $groupNames);
+                            if ((float) $s->lecture > 0 && !isset($madeLecture[$lecKey])) {
+                                $madeLecture[$lecKey] = true;
                                 $rows[] = [
                                     'board_id' => $board->id,
                                     'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
@@ -463,6 +474,12 @@ class TimetableController extends Controller
                                     if ($gn === '') {
                                         continue;
                                     }
+                                    // Bu guruhga shu fan bo'yicha kartalar allaqachon yaratilganmi?
+                                    $prcKey = $sk . '|' . $course . '|' . $gn . '|' . $subjKey;
+                                    if (isset($madePractice[$prcKey])) {
+                                        continue;
+                                    }
+                                    $madePractice[$prcKey] = true;
                                     foreach ($cardPlan as [$lenHalf, $cardWeeks]) {
                                         $rows[] = [
                                             'board_id' => $board->id,

@@ -2055,6 +2055,21 @@
                 renderGrid();
             };
             // Kartaning tanlangan haftadagi (yoki shablon) effektiv joylashuvi: {day,pair} yoki null
+            // Karta QAYSI haftalarda o'tiladi (hafta istisnolaridan: bekor qilinmaganlari).
+            // Ma'ruza haftalari semestr bo'ylab tarqatilgan — kartada "6 hafta: 1,3,6..."
+            // ko'rinishida chiqadi. Ro'yxat uzun bo'lsa qisqartiriladi.
+            function activeWeeksOf(c, totalWeeks) {
+                const total = Math.max(1, +totalWeeks || 0);
+                const out = [];
+                for (let w = 1; w <= total; w++) {
+                    const ov = overrides[c.id + '|' + w];
+                    if (!(ov && ov.cancelled)) out.push(w);
+                }
+                // Hamma haftada o'tilsa — raqamlarni ko'rsatish shart emas
+                if (out.length >= total) return [];
+                return out.length > 10 ? out.slice(0, 10).concat(['…']) : out;
+            }
+
             function effPlace(c) {
                 if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
                 const ov = overrides[c.id + '|' + curWeek];
@@ -2841,8 +2856,12 @@
                     // amaliy paralar kamayadi — "qo'shimcha" para kamroq haftada bo'ladi).
                     const fullWeeks = curGrid().weeks;
                     const showWks = c.weeks && (c.training_type === 'lecture' || c.weeks < fullWeeks);
-                    const wks = showWks ? ' <span class="tt-weeks">(' + c.weeks + ' hafta)</span>' : '';
-                    const wkTitle = showWks ? ' · ' + c.weeks + ' hafta' : '';
+                    // Qaysi haftalarda o'tilishi — hafta istisnolaridan (cancelled emas)
+                    const wkList = showWks ? activeWeeksOf(c, fullWeeks) : [];
+                    const wkNums = wkList.length ? ': ' + wkList.join(',') : '';
+                    const wks = showWks
+                        ? ' <span class="tt-weeks">(' + c.weeks + ' hafta' + wkNums + ')</span>' : '';
+                    const wkTitle = showWks ? ' · ' + c.weeks + ' hafta' + wkNums : '';
                     // Auditoriya raqami (kod) — sig'imi bilan; tooltipда to'liq nomi
                     const roomNo = String(c.auditorium_name || c.auditorium_code || '').replace(/^№\s*/u, '');
                     const roomTxt = roomNo

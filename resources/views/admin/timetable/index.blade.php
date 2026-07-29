@@ -2618,7 +2618,7 @@
                     closeRuleEditor();
                     await loadRules();
                     if (cond.value === 'lecture_week_distribution') {
-                        $('rulesMsg').textContent = 'Qoida saqlandi. Qo'llash uchun Kartochkalarni qayta yarating.';
+                        $('rulesMsg').textContent = 'Qoida saqlandi. Qo\'llash uchun Kartochkalarni qayta yarating.';
                     }
                 } catch (e) { $('ruleEditMsg').textContent = 'Xatolik: ' + e.message; }
                 this.disabled = false;

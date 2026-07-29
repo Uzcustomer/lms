@@ -879,6 +879,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::post('/boards/{board}/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'saveGrid'])->name('boards.grid');
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
+                Route::post('/boards/{board}/compact-week', [\App\Http\Controllers\Admin\TimetableController::class, 'compactWeek'])->name('boards.compact-week');
                 Route::post('/cards/{card}/week-override', [\App\Http\Controllers\Admin\TimetableController::class, 'weekOverride'])->name('cards.week-override');
                 Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
                 Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');

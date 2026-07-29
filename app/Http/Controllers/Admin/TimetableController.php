@@ -2161,6 +2161,148 @@ class TimetableController extends Controller
      * Hafta bo'yicha dars istisnosi: shu haftada ko'chirish / bekor qilish / shablonga qaytarish.
      * Faqat tanlangan haftaga ta'sir qiladi — boshqa haftalar shablon bo'yicha qoladi.
      */
+    /**
+     * Tanlangan HAFTANI tepaga zichlash.
+     *
+     * Ba'zi ma'ruzalar har haftada o'tilmaydi (shu haftada bekor qilingan) —
+     * ular bo'shatgan vaqt bo'sh turadi, amaliy esa pastda qoladi. Bu amal shu
+     * hafta uchun darslarni kun boshiga suradi: har karta o'z kunida eng erta
+     * bo'sh yarim-slotga ko'chiriladi, guruh / o'qituvchi / auditoriya bandligi
+     * hisobga olingan holda. Faqat shu haftaga istisno (override) yoziladi —
+     * shablon (barcha haftalar) o'zgarmaydi.
+     */
+    public function compactWeek(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'week'            => 'required|integer|min:1|max:30',
+            'faculty_names'   => 'nullable|array',
+            'specialty_names' => 'nullable|array',
+            'courses'         => 'nullable|array',
+            'training_type'   => 'nullable|in:lecture,practice',
+        ]);
+        $week = (int) $data['week'];
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
+            if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
+            if ($specSet !== null && !isset($specSet[(string) $c->specialty_name])) return false;
+            if ($courseSet !== null && !isset($courseSet[(int) $c->course])) return false;
+            return true;
+        };
+
+        $pairs = $board->pairCount();
+        $all = TimetableCard::where('board_id', $board->id)->get()->keyBy('id');
+        $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $board->id))
+            ->where('week', $week)->get()->keyBy('card_id');
+
+        // Shu haftadagi effektiv joylashuv (bekor qilinganlar tushib qoladi)
+        $eff = [];
+        foreach ($all as $c) {
+            $ov = $ovr->get($c->id);
+            if ($ov) {
+                if ($ov->cancelled) {
+                    continue;
+                }
+                $d = $ov->day;
+                $p = $ov->pair;
+            } else {
+                $d = $c->day;
+                $p = $c->pair;
+            }
+            if (!$d || !$p) {
+                continue;
+            }
+            $eff[$c->id] = [(int) $d, (int) $p];
+        }
+
+        // Bandlik xaritalari — shu haftadagi BARCHA darslardan (qamrovdan tashqarisi ham)
+        $gBusy = [];
+        $tBusy = [];
+        $rBusy = [];
+        $mark = function (TimetableCard $c, int $d, int $p, bool $on) use (&$gBusy, &$tBusy, &$rBusy) {
+            $len = $this->parasNeeded($c);
+            $scope = $this->groupScopeKey($c);
+            for ($i = 0; $i < $len; $i++) {
+                $slot = $d . '|' . ($p + $i);
+                foreach ($c->occupiedGroups() as $g) {
+                    $k = $scope . '|' . $g . '|' . $slot;
+                    if ($on) { $gBusy[$k] = true; } else { unset($gBusy[$k]); }
+                }
+                if ($c->teacher_id) {
+                    $k = 'T' . $c->teacher_id . '|' . $slot;
+                    if ($on) { $tBusy[$k] = true; } else { unset($tBusy[$k]); }
+                }
+                if ($c->auditorium_code) {
+                    $k = 'R' . $c->auditorium_code . '|' . $slot;
+                    if ($on) { $rBusy[$k] = true; } else { unset($rBusy[$k]); }
+                }
+            }
+        };
+        foreach ($eff as $id => [$d, $p]) {
+            $mark($all[$id], $d, $p, true);
+        }
+
+        // Nomzodlar — qamrovdagi kartalar; erta paradagilar avval suriladi
+        $cands = [];
+        foreach ($eff as $id => [$d, $p]) {
+            $c = $all[$id];
+            if (!$inScope($c)) {
+                continue;
+            }
+            if (!empty($data['training_type']) && $c->training_type !== $data['training_type']) {
+                continue;
+            }
+            $cands[] = [$c, $d, $p];
+        }
+        usort($cands, fn($a, $b) => [$a[1], $a[2]] <=> [$b[1], $b[2]]);
+
+        $moved = 0;
+        $touched = [];
+        foreach ($cands as [$c, $d, $p]) {
+            $len = $this->parasNeeded($c);
+            $scope = $this->groupScopeKey($c);
+            $mark($c, $d, $p, false);          // avval o'zini bo'shatamiz
+            $best = $p;
+            for ($np = 1; $np < $p; $np++) {
+                if ($np + $len - 1 > $pairs) {
+                    break;
+                }
+                $free = true;
+                for ($i = 0; $i < $len && $free; $i++) {
+                    $slot = $d . '|' . ($np + $i);
+                    foreach ($c->occupiedGroups() as $g) {
+                        if (!empty($gBusy[$scope . '|' . $g . '|' . $slot])) { $free = false; break; }
+                    }
+                    if ($free && $c->teacher_id && !empty($tBusy['T' . $c->teacher_id . '|' . $slot])) {
+                        $free = false;
+                    }
+                    if ($free && $c->auditorium_code && !empty($rBusy['R' . $c->auditorium_code . '|' . $slot])) {
+                        $free = false;
+                    }
+                }
+                if ($free) {
+                    $best = $np;
+                    break;                      // eng erta bo'sh slot
+                }
+            }
+            $mark($c, $d, $best, true);
+            if ($best !== $p) {
+                $touched[] = ['card_id' => $c->id, 'day' => $d, 'pair' => $best];
+                $moved++;
+            }
+        }
+
+        DB::transaction(function () use ($touched, $week) {
+            foreach ($touched as $t) {
+                TimetableCardOverride::updateOrCreate(
+                    ['card_id' => $t['card_id'], 'week' => $week],
+                    ['day' => $t['day'], 'pair' => $t['pair'], 'cancelled' => false]
+                );
+            }
+        });
+
+        return response()->json(['ok' => true, 'moved' => $moved]);
+    }
+
     public function weekOverride(Request $request, TimetableCard $card)
     {
         $data = $request->validate([

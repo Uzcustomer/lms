@@ -16,7 +16,7 @@
                         Excel yuklash
                     </a>
                     <a href="{{ route('admin.english-group-applications.documents-zip') }}"
-                       class="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
+                       class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
                        title="Sertifikati bor arizachilar hujjatlarini ZIP qilib yuklash">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9ZM8 9h8M8 12h8M8 15h5"/>

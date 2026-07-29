@@ -866,7 +866,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // Dars jadvali tuzish (aSc Timetables uslubida)
         Route::prefix('dars-jadvali-tuzish')->name('timetable.')
-            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi', \App\Http\Middleware\TimetableAssignmentAccess::class])
+            ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|kafedra_mudiri', \App\Http\Middleware\TimetableAssignmentAccess::class])
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\TimetableController::class, 'index'])->name('index');
                 Route::post('/boards', [\App\Http\Controllers\Admin\TimetableController::class, 'storeBoard'])->name('boards.store');

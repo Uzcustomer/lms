@@ -10,7 +10,9 @@
     if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
         $timetableActiveRole = $timetableRoles[0];
     }
-    $timetableAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    $timetableTeacherAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    $timetableAuditoriumAssignmentOnly = $timetableActiveRole === 'kafedra_mudiri';
+    $timetableAssignmentOnly = $timetableTeacherAssignmentOnly || $timetableAuditoriumAssignmentOnly;
 @endphp
 
     <x-slot name="header">
@@ -663,14 +665,18 @@
                             </button>
                         </div>
                         <div class="asg-tabs flex items-center gap-1 px-4 pt-3 border-b border-slate-200 bg-white">
+                            @if(!$timetableAuditoriumAssignmentOnly)
                             <button type="button" class="asg-tab-button active" data-asg-tab="teachers">
                                 <i class="bi bi-person-plus" aria-hidden="true"></i> Fanlarni biriktirish
                             </button>
-                            <button type="button" class="asg-tab-button" data-asg-tab="auditoriums">
+                            @endif
+                            @if(!$timetableTeacherAssignmentOnly)
+                            <button type="button" class="asg-tab-button {{ $timetableAuditoriumAssignmentOnly ? 'active' : '' }}" data-asg-tab="auditoriums">
                                 <i class="bi bi-door-open" aria-hidden="true"></i> Auditoriyalarni biriktirish
                             </button>
+                            @endif
                         </div>
-                        <div id="asgTeachersPanel" data-asg-panel="teachers" class="assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
+                        <div id="asgTeachersPanel" data-asg-panel="teachers" class="{{ $timetableAuditoriumAssignmentOnly ? 'hidden' : '' }} assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
                             {{-- Chap: dars birliklari --}}
                             <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
@@ -699,13 +705,32 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="asgAuditoriumsPanel" class="hidden flex-1 gap-3 p-4 overflow-hidden" data-asg-panel="auditoriums">
+                        <div id="asgAuditoriumsPanel" class="{{ $timetableAuditoriumAssignmentOnly ? '' : 'hidden' }} flex-1 gap-3 p-4 overflow-hidden" data-asg-panel="auditoriums">
                             <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
                                     <span class="text-sm font-semibold text-slate-700">Auditoriyalar</span>
+                                    @if($timetableAuditoriumAssignmentOnly)
+                                    <button type="button" id="asgAudCreateBtn" class="asc-btn primary text-xs">
+                                        <i class="bi bi-plus-lg" aria-hidden="true"></i> Auditoriya qo'shish
+                                    </button>
+                                    @endif
                                     <input id="asgAudSearch" placeholder="Xona qidirish..." class="ml-auto w-52 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgAudCount" class="text-xs text-slate-400"></span>
                                 </div>
+                                @if($timetableAuditoriumAssignmentOnly)
+                                <form id="asgAudCreateForm" class="hidden grid grid-cols-2 md:grid-cols-6 gap-2 p-3 border-b border-slate-200 bg-blue-50">
+                                    <input id="asgAudCode" name="code" required maxlength="50" placeholder="Kod" class="rounded-md border-slate-300 text-xs">
+                                    <input id="asgAudName" name="name" required maxlength="255" placeholder="Xona nomi" class="rounded-md border-slate-300 text-xs">
+                                    <input id="asgAudVolume" name="volume" required type="number" min="0" max="2000" placeholder="Sig'im" class="rounded-md border-slate-300 text-xs">
+                                    <input id="asgAudBuilding" name="building_name" maxlength="255" placeholder="Bino" class="rounded-md border-slate-300 text-xs">
+                                    <input id="asgAudType" name="auditorium_type_name" maxlength="255" placeholder="Turi" class="rounded-md border-slate-300 text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <input type="hidden" name="active" value="1">
+                                        <button type="submit" id="asgAudCreateSave" class="asc-btn primary text-xs flex-1"><i class="bi bi-check2" aria-hidden="true"></i> Saqlash</button>
+                                        <button type="button" id="asgAudCreateCancel" class="asc-btn text-xs">Bekor</button>
+                                    </div>
+                                </form>
+                                @endif
                                 <div class="overflow-auto asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
                                     <table id="asgAudTable" class="w-full text-xs asc-table"></table>
                                 </div>
@@ -1716,6 +1741,7 @@
             const AUDS_URL = @json(route('admin.timetable.auditoriums'));
             const CSRF = @json(csrf_token());
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
+            const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
             let board = null;      // {id, days, pairs_per_day, ...}
@@ -4355,9 +4381,15 @@
             $('assignBtn').onclick = async () => {
                 if (!board) return;
                 asgSel = null; setAsgTeacherPanel(null);
-                 setAsgTab('teachers');
+                setAsgTab(TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY ? 'auditoriums' : 'teachers');
                 $('assignModal').classList.remove('hidden');
                 $('asgMsg').textContent = '';
+
+                if (TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY) {
+                    await loadAsgAuditoriums();
+                    return;
+                }
+
                 $('asgTable').innerHTML = '<tbody><tr><td class="p-3 text-gray-400">Yuklanmoqda...</td></tr></tbody>';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/teacher-units');
@@ -4515,6 +4547,39 @@
                     $('asgAudTable').innerHTML = '<tbody><tr><td class="p-3 text-red-500">' + esc(e.message) + '</td></tr></tbody>';
                 }
             }
+
+             if (TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY) {
+                 const createBtn = $('asgAudCreateBtn');
+                 const createForm = $('asgAudCreateForm');
+                 const createCancel = $('asgAudCreateCancel');
+
+                 createBtn?.addEventListener('click', () => {
+                     createForm.classList.toggle('hidden');
+                     if (!createForm.classList.contains('hidden')) $('asgAudCode')?.focus();
+                 });
+                 createCancel?.addEventListener('click', () => {
+                     createForm.reset();
+                     createForm.classList.add('hidden');
+                 });
+                 createForm?.addEventListener('submit', async event => {
+                     event.preventDefault();
+                     const saveBtn = $('asgAudCreateSave');
+                     saveBtn.disabled = true;
+                     try {
+                         const body = Object.fromEntries(new FormData(createForm).entries());
+                         const result = await api(BASE + '/auditoriums', 'POST', body);
+                         createForm.reset();
+                         createForm.classList.add('hidden');
+                         $('asgMsg').textContent = 'Auditoriya qo\'shildi';
+                         await loadAsgAuditoriums();
+                         if (result.auditorium?.id) selectAsgAudRoom(result.auditorium.id);
+                     } catch (e) {
+                         $('asgMsg').textContent = 'Xatolik: ' + e.message;
+                     } finally {
+                         saveBtn.disabled = false;
+                     }
+                 });
+             }
 
             function filteredAsgAudRooms() {
                 const q = ($('asgAudSearch').value || '').toLowerCase().trim();

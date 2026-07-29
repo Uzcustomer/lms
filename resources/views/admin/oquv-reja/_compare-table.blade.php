@@ -75,6 +75,19 @@
                     <td class="px-3 py-2 font-medium text-gray-800">
                         @if($row['hemis_name'] !== null)
                             {{ $row['hemis_name'] }}
+                        @elseif(!empty($row['hemis_parts']))
+                            {{-- Birikkan guruh: HEMIS'da alohida turgan fanlar o'z
+                                 holicha, qo'shib yuborilmasdan sanaladi --}}
+                            @foreach($row['hemis_parts'] as $hp)
+                                <div class="leading-tight">
+                                    @if($hp['hemis'] !== null)
+                                        {{ $hp['hemis'] }}
+                                    @else
+                                        <span class="text-gray-400 font-normal">{{ $hp['name'] }}
+                                            <span class="text-xs">(HEMIS'da topilmadi)</span></span>
+                                    @endif
+                                </div>
+                            @endforeach
                         @else
                             <span class="text-gray-400">{{ $row['ref_name'] ?? $row['work_name'] ?? '—' }} <span class="text-xs">(HEMIS'da topilmadi)</span></span>
                         @endif

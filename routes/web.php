@@ -882,6 +882,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/cards/{card}/week-override', [\App\Http\Controllers\Admin\TimetableController::class, 'weekOverride'])->name('cards.week-override');
                 Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
                 Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');
+                Route::get('/teachers/departments', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherDepartments'])->name('teachers.departments');
                 // Umumiy sozlamalar (qo'ng'iroqlar jadvali, kunlar)
                 Route::get('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'settings'])->name('settings');
                 Route::post('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSettings'])->name('settings.save');
@@ -900,6 +901,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // O'qituvchi biriktirish matritsasi
                 Route::get('/boards/{board}/teacher-units', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherUnits'])->name('teacher-units');
                 Route::post('/boards/{board}/assign-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignTeacher'])->name('assign-teacher');
+                Route::get('/boards/{board}/auditorium-teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriumTeacherAssignments'])->name('auditorium-teachers');
+                Route::post('/boards/{board}/assign-auditorium-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignAuditoriumTeacher'])->name('assign-auditorium-teacher');
                 Route::get('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriums'])->name('auditoriums');
                 Route::post('/auditoriums', [\App\Http\Controllers\Admin\TimetableController::class, 'storeAuditorium'])->name('auditoriums.store');
                 Route::post('/auditoriums/import', [\App\Http\Controllers\Admin\TimetableController::class, 'importAuditoriums'])->name('auditoriums.import');

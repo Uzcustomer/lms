@@ -330,11 +330,32 @@ class TimetableController extends Controller
         // Kafedra xaritasi
         [$kafMap, $overrides] = $this->buildKafedraMap();
 
-        // Fanlarni yo'nalish+kurs bo'yicha guruhlash
+        // Fanlarni yo'nalish+kurs bo'yicha guruhlash.
+        //
+        // MUHIM: yuqoridagi SQL guruhlash XOM mc.specialty_name va mc.level_code
+        // bo'yicha ketadi, bu yerda esa ular normallashtiriladi (specKey) va
+        // level_code 11 ham, 1 ham -> 1-kurs bo'ladi. Shu sababli bir xil fan
+        // bir necha marta tushib qolishi mumkin edi — natijada bitta guruhga
+        // o'sha fanning karta to'plami bir necha marta yaratilib, haftalik yuk
+        // bir necha barobar oshib ketardi. Endi (yo'nalish|kurs|fan) bo'yicha
+        // birlashtiramiz: soatlarning eng kattasi olinadi.
         $subjBySpec = [];
+        $seenSubj = [];   // "specKey|course|normSubject" => $subjBySpec dagi indeks
         foreach ($subjects as $s) {
             $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
-            $subjBySpec[$this->specKey($s->specialty_name)][$course][] = $s;
+            $sk = $this->specKey($s->specialty_name);
+            $key = $sk . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
+
+            if (isset($seenSubj[$key])) {
+                // Takror fan — soatlarni birlashtiramiz (eng katta qiymat)
+                $prev = $subjBySpec[$sk][$course][$seenSubj[$key]];
+                foreach (['lecture', 'practice', 'laboratory', 'seminar'] as $f) {
+                    $prev->$f = max((float) $prev->$f, (float) $s->$f);
+                }
+                continue;
+            }
+            $subjBySpec[$sk][$course][] = $s;
+            $seenSubj[$key] = count($subjBySpec[$sk][$course]) - 1;
         }
 
         // Har yo'nalish+kurs uchun hafta soni (alohida sozlama yoki doska sukut qiymati)

@@ -2973,9 +2973,28 @@ class TimetableController extends Controller
         return response()->json([
             'ok' => true,
             'auditorium_id' => $auditorium->id,
+            'assignment_id' => $assignment->id,
             'teacher_id' => $assignment->teacher_id,
             'teacher_name' => $teacher?->short_name ?: $teacher?->full_name,
             'is_general' => (bool) $assignment->is_general,
+        ]);
+    }
+
+    /** Tanlangan doskada auditoriyaga berilgan biriktirishni bekor qilish. */
+    public function unassignAuditoriumTeacher(TimetableBoard $board, Auditorium $auditorium)
+    {
+        if (!Schema::hasTable('auditorium_teacher')) {
+            return response()->json(['error' => 'auditorium_teacher jadvali mavjud emas. Migratsiyani ishga tushiring.'], 503);
+        }
+
+        AuditoriumTeacher::where('board_id', $board->id)
+            ->where('auditorium_id', $auditorium->id)
+            ->delete();
+
+        return response()->json([
+            'ok' => true,
+            'auditorium_id' => $auditorium->id,
+            'message' => "«{$auditorium->name}» auditoriyasining biriktiruvi bekor qilindi.",
         ]);
     }
 

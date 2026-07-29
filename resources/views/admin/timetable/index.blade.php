@@ -4660,24 +4660,24 @@
                     const general = !!room.is_general;
                     const hasTeacher = !!room.teacher_id;
                     const capacity = room.volume ?? room.capacity ?? 0;
+                    const unassignButton = room.assignment_id
+                        ? '<button type="button" data-asg-aud-unassign="' + room.id + '" class="inline-flex items-center justify-center text-red-500 hover:text-red-700" title="Biriktirishni bekor qilish"><i class="bi bi-trash3" aria-hidden="true"></i></button>'
+                        : '';
                     const status = room.active === false
                         ? '<span class="text-red-600 font-semibold">Faol emas</span>'
                         : (general
-                            ? '<span class="aud-general">Umumiy</span>'
-                            : (hasTeacher ? '<span class="text-amber-600 font-semibold">Biriktirilgan</span>' : '<span class="text-slate-400">Biriktirilmagan</span>'));
+                            ? '<span class="inline-flex items-center gap-1">' + unassignButton + '<span class="aud-general">Umumiy</span></span>'
+                            : (hasTeacher
+                                ? '<span class="inline-flex items-center gap-1">' + unassignButton + '<span class="text-amber-600 font-semibold">Biriktirilgan</span></span>'
+                                : '<span class="text-slate-400">Biriktirilmagan</span>'));
                     const teacher = general
                         ? '<span class="text-slate-400">Barcha o\'qituvchilar</span>'
                         : (hasTeacher ? '<span class="aud-teacher">' + esc(room.teacher_name || '—') + '</span>' : '<span class="text-slate-400">Tanlanmagan</span>');
-                    const unassignButton = room.assignment_id
-                        ? '<button type="button" data-asg-aud-unassign="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700 hover:bg-amber-100" title="Biriktirishni bekor qilish"><i class="bi bi-x-circle" aria-hidden="true"></i></button>'
-                        : '';
                     const deleteButton = room.can_delete
                         ? '<button type="button" data-asg-aud-delete="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-600 hover:bg-red-100" title="Auditoriyani o\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>'
                         : '';
                     const action = showActions
-                        ? '<td class="text-center"><span class="inline-flex items-center justify-center gap-1">' +
-                            (unassignButton || deleteButton ? unassignButton + deleteButton : '<span class="text-slate-300">—</span>') +
-                          '</span></td>'
+                        ? '<td class="text-center">' + (deleteButton || '<span class="text-slate-300">—</span>') + '</td>'
                         : '';
 
                     h += '<tr data-i="' + i + '"' + (asgAudSel && asgAudSel.id === room.id ? ' class="sel"' : '') + '>' +

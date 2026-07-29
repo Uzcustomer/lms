@@ -124,7 +124,7 @@ class EnglishGroupApplicationController extends Controller
         $headers = [
             'ID', 'F.I.Sh.', 'HEMIS ID', 'Telefon', 'Fakultet', 'Yo\'nalish',
             'Kurs', 'Semestr', 'Guruh', 'Ingliz tili darajasi', 'Holat',
-            'Rad etish sababi', 'Admin izohi', 'Ariza sanasi', 'Ko\'rib chiqilgan sana',
+            'Rad etish sababi', 'Admin izohi', 'Sertifikat fayli', 'Ariza sanasi', 'Ko\'rib chiqilgan sana',
         ];
         $sheet->fromArray($headers, null, 'A1');
 
@@ -137,7 +137,7 @@ class EnglishGroupApplicationController extends Controller
                 'wrapText' => true,
             ],
         ];
-        $sheet->getStyle('A1:O1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:P1')->applyFromArray($headerStyle);
         $sheet->getRowDimension(1)->setRowHeight(30);
 
         $row = 2;
@@ -156,6 +156,7 @@ class EnglishGroupApplicationController extends Controller
                 $statuses[$application->status] ?? $application->status,
                 $application->rejection_reason_label ?: '',
                 $application->admin_note ?: '',
+                $application->certificate_pdf_path ? basename($application->certificate_pdf_path) : '',
                 optional($application->created_at)->format('d.m.Y H:i'),
                 optional($application->reviewed_at)->format('d.m.Y H:i'),
             ], null, "A{$row}");
@@ -172,7 +173,7 @@ class EnglishGroupApplicationController extends Controller
         }
 
         $lastRow = max(1, $row - 1);
-        $sheet->getStyle("A1:O{$lastRow}")->applyFromArray([
+        $sheet->getStyle("A1:P{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => [
                     'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
@@ -184,12 +185,12 @@ class EnglishGroupApplicationController extends Controller
         foreach ([
             'A' => 8, 'B' => 28, 'C' => 16, 'D' => 16, 'E' => 24, 'F' => 28,
             'G' => 16, 'H' => 16, 'I' => 18, 'J' => 20, 'K' => 18, 'L' => 22,
-            'M' => 32, 'N' => 20, 'O' => 20,
+            'M' => 32, 'N' => 24, 'O' => 20, 'P' => 20,
         ] as $column => $width) {
             $sheet->getColumnDimension($column)->setWidth($width);
         }
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter("A1:O{$lastRow}");
+        $sheet->setAutoFilter("A1:P{$lastRow}");
 
         $fileName = 'ingliz-guruh-arizalari-' . now()->format('Y-m-d_H-i') . '.xlsx';
         $temp = tempnam(sys_get_temp_dir(), 'english_applications_');

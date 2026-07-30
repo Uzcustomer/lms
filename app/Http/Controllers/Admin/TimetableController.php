@@ -2472,7 +2472,7 @@ class TimetableController extends Controller
             $mark($all[$id], $d, $p, true);
         }
 
-        // Nomzodlar — qamrovdagi kartalar; erta paradagilar avval suriladi
+        // Nomzodlar — qamrovdagi kartalar; erta paradagilar avval suriladi.
         $cands = [];
         foreach ($eff as $id => [$d, $p]) {
             $c = $all[$id];
@@ -2486,37 +2486,119 @@ class TimetableController extends Controller
         }
         usort($cands, fn($a, $b) => [$a[1], $a[2]] <=> [$b[1], $b[2]]);
 
+        // Ketma-ket sozlamasi yoqilganida bazaviy shablonda yonma-yon turgan
+        // bir fan + bir guruh kartalari bitta atomar blok sifatida suriladi.
+        // Shunda birinchi para ma'ruza bo'shatgan joyga chiqqanda undan keyingi
+        // amaliy para ham ayni siljish miqdorida tepaga ko'chadi.
+        $consecutive = (bool) (($board->settings ?? [])['pair_consecutive'] ?? false);
+        $units = [];
+        if (!$consecutive) {
+            foreach ($cands as $item) {
+                $units[] = [$item];
+            }
+        } else {
+            $clusters = [];
+            foreach ($cands as $item) {
+                [$c, $d, $p] = $item;
+                $baseDay = (int) ($c->day ?: $d);
+                $key = $this->spreadKey($c) . '|' . $baseDay . '|' . $d;
+                $clusters[$key][] = $item;
+            }
+            foreach ($clusters as $items) {
+                usort($items, function ($a, $b) {
+                    $ap = (int) ($a[0]->pair ?: $a[2]);
+                    $bp = (int) ($b[0]->pair ?: $b[2]);
+                    return [$ap, (int) $a[0]->id] <=> [$bp, (int) $b[0]->id];
+                });
+                $chain = [];
+                $previousEnd = null;
+                foreach ($items as $item) {
+                    [$c, $d, $p] = $item;
+                    $basePair = (int) ($c->pair ?: $p);
+                    if (!empty($chain) && $basePair !== $previousEnd) {
+                        $units[] = $chain;
+                        $chain = [];
+                    }
+                    $chain[] = $item;
+                    $previousEnd = $basePair + $this->parasNeeded($c);
+                }
+                if (!empty($chain)) {
+                    $units[] = $chain;
+                }
+            }
+            usort($units, function ($a, $b) {
+                $aPair = min(array_map(fn($x) => (int) $x[2], $a));
+                $bPair = min(array_map(fn($x) => (int) $x[2], $b));
+                return [(int) $a[0][1], $aPair] <=> [(int) $b[0][1], $bPair];
+            });
+        }
+
         $moves = [];
-        foreach ($cands as [$c, $d, $p]) {
-            $len = $this->parasNeeded($c);
-            $scope = $this->groupScopeKey($c);
-            $mark($c, $d, $p, false);          // avval o'zini bo'shatamiz
-            $best = $p;
-            for ($np = 1; $np < $p; $np++) {
-                if ($np + $len - 1 > $pairs) {
+        foreach ($units as $unit) {
+            $d = (int) $unit[0][1];
+            $baseStart = min(array_map(fn($x) => (int) ($x[0]->pair ?: $x[2]), $unit));
+            $parts = [];
+            $blockEnd = $baseStart;
+            foreach ($unit as [$c, $effectiveDay, $effectivePair]) {
+                $basePair = (int) ($c->pair ?: $effectivePair);
+                $len = $this->parasNeeded($c);
+                $parts[] = [$c, (int) $effectivePair, $basePair - $baseStart, $len];
+                $blockEnd = max($blockEnd, $basePair + $len);
+                $mark($c, (int) $effectiveDay, (int) $effectivePair, false);
+            }
+            $blockLen = $blockEnd - $baseStart;
+            $bestStart = null;
+
+            // Bazaviy boshlanish ham tekshiriladi: oldingi noto'g'ri override blokni
+            // bo'lib qo'ygan bo'lsa, qayta zichlash uni yonma-yon holatga qaytaradi.
+            for ($np = 1; $np <= $baseStart; $np++) {
+                if ($np + $blockLen - 1 > $pairs) {
                     break;
                 }
                 $free = true;
-                for ($i = 0; $i < $len && $free; $i++) {
-                    $slot = $d . '|' . ($np + $i);
-                    foreach ($c->occupiedGroups() as $g) {
-                        if (!empty($gBusy[$scope . '|' . $g . '|' . $slot])) { $free = false; break; }
+                foreach ($parts as [$c, $effectivePair, $offset, $len]) {
+                    $newPair = $np + $offset;
+                    $scope = $this->groupScopeKey($c);
+                    for ($i = 0; $i < $len && $free; $i++) {
+                        $slot = $d . '|' . ($newPair + $i);
+                        foreach ($c->occupiedGroups() as $g) {
+                            if (!empty($gBusy[$scope . '|' . $g . '|' . $slot])) {
+                                $free = false;
+                                break;
+                            }
+                        }
+                        if ($free && $c->teacher_id && !empty($tBusy['T' . $c->teacher_id . '|' . $slot])) {
+                            $free = false;
+                        }
+                        if ($free && $c->auditorium_code && !empty($rBusy['R' . $c->auditorium_code . '|' . $slot])) {
+                            $free = false;
+                        }
                     }
-                    if ($free && $c->teacher_id && !empty($tBusy['T' . $c->teacher_id . '|' . $slot])) {
-                        $free = false;
-                    }
-                    if ($free && $c->auditorium_code && !empty($rBusy['R' . $c->auditorium_code . '|' . $slot])) {
-                        $free = false;
+                    if (!$free) {
+                        break;
                     }
                 }
                 if ($free) {
-                    $best = $np;
-                    break;                      // eng erta bo'sh slot
+                    $bestStart = $np;
+                    break;
                 }
             }
-            $mark($c, $d, $best, true);
-            if ($best !== $p) {
-                $moves[] = ['card_id' => (int) $c->id, 'day' => $d, 'pair' => $best];
+
+            if ($bestStart === null) {
+                // Butun blok uchun xavfsiz joy topilmasa, avvalgi effektiv
+                // joylashuvni saqlaymiz; hech bir kartani yakka holda surmaymiz.
+                foreach ($unit as [$c, $effectiveDay, $effectivePair]) {
+                    $mark($c, (int) $effectiveDay, (int) $effectivePair, true);
+                }
+                continue;
+            }
+
+            foreach ($parts as [$c, $effectivePair, $offset, $len]) {
+                $newPair = $bestStart + $offset;
+                $mark($c, $d, $newPair, true);
+                if ($newPair !== $effectivePair) {
+                    $moves[] = ['card_id' => (int) $c->id, 'day' => $d, 'pair' => $newPair];
+                }
             }
         }
 

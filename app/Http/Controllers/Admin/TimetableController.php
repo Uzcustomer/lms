@@ -379,7 +379,8 @@ class TimetableController extends Controller
         // aks holda o'sha fanning kartalari necha marta uchrasa shuncha ko'payib,
         // haftalik yuk bir necha barobar oshib ketardi.
         $madePractice = [];   // "spec|kurs|guruh|fan" => true
-        $madeLecture  = [];   // "spec|kurs|fan|guruhlar" => true
+        $madeLecture  = [];   // "fakultet|spec|kurs|oqim|til|fan" => $rows indeksi
+        $lectureGroupStudents = []; // shu mantiqiy oqimdagi noyob guruh => talaba soni
         // Paralar soni endi weeklyPlan() da hisoblanadi (haftalik yuk chegarasi bilan)
 
         foreach ($byFaculty as $fk => $snap) {
@@ -430,26 +431,52 @@ class TimetableController extends Controller
                             // Ma'ruza — bitta oqimga BITTA karta; necha hafta o'tilishi
                             // ma'ruza soatidan (1 para = 2 soat = 1 hafta).
                             $subjKey = $this->normSubject((string) $s->subject_name);
-                            // Ma'ruza — oqim (aynan shu guruhlar to'plami) bo'yicha bir marta
-                            $lecKey = $sk . '|' . $course . '|' . $subjKey . '|' . implode(',', $groupNames);
-                            if ((float) $s->lecture > 0 && !isset($madeLecture[$lecKey])) {
-                                $madeLecture[$lecKey] = true;
-                                $rows[] = [
-                                    'board_id' => $board->id,
-                                    'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
-                                    'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
-                                    'training_type' => 'lecture',
-                                    'group_name' => null, 'group_names' => json_encode($groupNames),
-                                    'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
-                                    'students' => $oqTotal,
-                                    // Ma'ruza — 2 soat (1 para). MUHIM: ustunlar to'plami
-                                    // amaliy qatorlar bilan bir xil bo'lishi shart, aks holda
-                                    // ommaviy insert() ustunlarni birinchi qatordan olib,
-                                    // qolganlarida mos kelmay SQL xatosi beradi.
-                                    'len_half' => 2,
-                                    'weeks' => max(1, (int) $wp['lecture_weeks']),
-                                    'created_at' => $now, 'updated_at' => $now,
-                                ];
+                            // Bir xil ko'rinadigan oqim bir nechta snapshot blokida kelishi mumkin.
+                            // Ma'ruza bunday bo'laklarga ajralmasin: fakultet+yo'nalish+kurs+
+                            // oqim+til+fan bo'yicha bitta karta, guruhlar esa birlashtiriladi.
+                            $flowLabel = trim((string) ($oq['label'] ?? ''));
+                            $flowIdentity = $flowLabel !== '' ? $flowLabel : implode(',', $groupNames);
+                            $lecKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|'
+                                . $flowIdentity . '|' . ($oq['lang'] ?? 'uz') . '|' . $subjKey;
+                            if ((float) $s->lecture > 0) {
+                                foreach ($oq['rows'] ?? [] as $lectureGroup) {
+                                    $lectureGroupName = trim((string) ($lectureGroup['name'] ?? ''));
+                                    if ($lectureGroupName === '') {
+                                        continue;
+                                    }
+                                    $lectureGroupStudents[$lecKey][$lectureGroupName] = max(
+                                        (int) ($lectureGroupStudents[$lecKey][$lectureGroupName] ?? 0),
+                                        (int) ($lectureGroup['count'] ?? 0)
+                                    );
+                                }
+                                $mergedLectureGroups = array_keys($lectureGroupStudents[$lecKey] ?? []);
+                                $mergedLectureStudents = array_sum($lectureGroupStudents[$lecKey] ?? []);
+
+                                if (!isset($madeLecture[$lecKey])) {
+                                    $madeLecture[$lecKey] = count($rows);
+                                    $rows[] = [
+                                        'board_id' => $board->id,
+                                        'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
+                                        'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
+                                        'training_type' => 'lecture',
+                                        'group_name' => null, 'group_names' => json_encode($mergedLectureGroups ?: $groupNames),
+                                        'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
+                                        'students' => $mergedLectureStudents > 0 ? $mergedLectureStudents : $oqTotal,
+                                        // Ma'ruza — 2 soat (1 para). MUHIM: ustunlar to'plami
+                                        // amaliy qatorlar bilan bir xil bo'lishi shart, aks holda
+                                        // ommaviy insert() ustunlarni birinchi qatordan olib,
+                                        // qolganlarida mos kelmay SQL xatosi beradi.
+                                        'len_half' => 2,
+                                        'weeks' => max(1, (int) $wp['lecture_weeks']),
+                                        'created_at' => $now, 'updated_at' => $now,
+                                    ];
+                                } else {
+                                    $lectureRowIndex = $madeLecture[$lecKey];
+                                    $rows[$lectureRowIndex]['group_names'] = json_encode($mergedLectureGroups);
+                                    $rows[$lectureRowIndex]['students'] = $mergedLectureStudents > 0
+                                        ? $mergedLectureStudents
+                                        : max((int) $rows[$lectureRowIndex]['students'], $oqTotal);
+                                }
                             }
 
                             // Amaliy darslar SOAT bo'yicha taqsimlanadi (len_half = soat):

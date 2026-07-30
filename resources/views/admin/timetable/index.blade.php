@@ -3008,7 +3008,7 @@
                     if (!pl) return;
                     const len = cardLen(c);
                     cardGroups(c).forEach(gg => {
-                        for (let k = 0; k < len; k++) { const key = gkey(c, gg) + '|' + pl.day + '|' + (pl.pair + k); if (!placedIdx[key] || curWeek || c.training_type === 'lecture') placedIdx[key] = c; }
+                        for (let k = 0; k < len; k++) { const key = gkey(c, gg) + '|' + pl.day + '|' + (pl.pair + k); if (!placedIdx[key] || (!curWeek && c.training_type === 'lecture')) placedIdx[key] = c; }
                     });
                 });
 

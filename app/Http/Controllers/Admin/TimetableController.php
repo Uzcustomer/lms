@@ -379,7 +379,7 @@ class TimetableController extends Controller
         // aks holda o'sha fanning kartalari necha marta uchrasa shuncha ko'payib,
         // haftalik yuk bir necha barobar oshib ketardi.
         $madePractice = [];   // "spec|kurs|guruh|fan" => true
-        $madeLecture  = [];   // "fakultet|spec|kurs|oqim|til|fan" => $rows indeksi
+        $madeLecture  = [];   // "fakultet|spec|kurs|oqim|fan" => $rows indeksi
         $lectureGroupStudents = []; // shu mantiqiy oqimdagi noyob guruh => talaba soni
         // Paralar soni endi weeklyPlan() da hisoblanadi (haftalik yuk chegarasi bilan)
 
@@ -435,9 +435,10 @@ class TimetableController extends Controller
                             // Ma'ruza bunday bo'laklarga ajralmasin: fakultet+yo'nalish+kurs+
                             // oqim+til+fan bo'yicha bitta karta, guruhlar esa birlashtiriladi.
                             $flowLabel = trim((string) ($oq['label'] ?? ''));
-                            $flowIdentity = $flowLabel !== '' ? $flowLabel : implode(',', $groupNames);
+                            // UI ham oqimlarni til yoki snapshot bo'lagi bo'yicha ajratmaydi.
+                            // Shu sababli ular ma'ruza kalitida ham alohida bo'lmasligi kerak.
                             $lecKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|'
-                                . $flowIdentity . '|' . ($oq['lang'] ?? 'uz') . '|' . $subjKey;
+                                . $flowLabel . '|' . $subjKey;
                             if ((float) $s->lecture > 0) {
                                 foreach ($oq['rows'] ?? [] as $lectureGroup) {
                                     $lectureGroupName = trim((string) ($lectureGroup['name'] ?? ''));

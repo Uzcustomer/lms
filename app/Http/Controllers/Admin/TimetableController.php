@@ -1548,16 +1548,27 @@ class TimetableController extends Controller
         // Hafta bo'yicha istisnolar (individual haftalar) — migratsiya kechiksa bo'sh
         $overrides = collect();
         if (Schema::hasTable('timetable_card_overrides')) {
+            $hasOverrideRoom = Schema::hasColumn('timetable_card_overrides', 'auditorium_code');
+            $overrideColumns = ['o.card_id', 'o.week', 'o.day', 'o.pair', 'o.cancelled'];
+            if ($hasOverrideRoom) {
+                $overrideColumns[] = 'o.auditorium_code';
+                $overrideColumns[] = 'o.auditorium_name';
+            }
             $overrides = DB::table('timetable_card_overrides as o')
                 ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
                 ->where('c.board_id', $board->id)
-                ->get(['o.card_id', 'o.week', 'o.day', 'o.pair', 'o.cancelled'])
+                ->get($overrideColumns)
                 ->map(fn($o) => [
                     'card_id'   => (int) $o->card_id,
                     'week'      => (int) $o->week,
                     'day'       => $o->day !== null ? (int) $o->day : null,
                     'pair'      => $o->pair !== null ? (int) $o->pair : null,
                     'cancelled' => (bool) $o->cancelled,
+                    'auditorium_code' => $hasOverrideRoom ? ($o->auditorium_code ?: null) : null,
+                    'auditorium_name' => $hasOverrideRoom ? ($o->auditorium_name ?: null) : null,
+                    'auditorium_volume' => $hasOverrideRoom && $o->auditorium_code
+                        ? ($roomVol[$o->auditorium_code] ?? null)
+                        : null,
                 ]);
         }
 
@@ -2441,7 +2452,7 @@ class TimetableController extends Controller
     {
         $pairs = $board->pairCount();
 
-        // Shu haftadagi effektiv joylashuv (bekor qilinganlar tushib qoladi)
+        // Shu haftadagi effektiv joylashuv va auditoriya (bekor qilinganlar tushib qoladi).
         $eff = [];
         foreach ($all as $c) {
             $ov = $ovr->get($c->id);
@@ -2458,14 +2469,16 @@ class TimetableController extends Controller
             if (!$d || !$p) {
                 continue;
             }
-            $eff[$c->id] = [(int) $d, (int) $p];
+            $roomCode = $ov?->auditorium_code ?: $c->auditorium_code;
+            $roomName = $ov?->auditorium_name ?: $c->auditorium_name;
+            $eff[$c->id] = [(int) $d, (int) $p, $roomCode, $roomName];
         }
 
-        // Bandlik xaritalari — shu haftadagi BARCHA darslardan
+        // Bandlik xaritalari — shu haftadagi BARCHA darslardan.
         $gBusy = [];
         $tBusy = [];
         $rBusy = [];
-        $mark = function (TimetableCard $c, int $d, int $p, bool $on) use (&$gBusy, &$tBusy, &$rBusy) {
+        $mark = function (TimetableCard $c, int $d, int $p, ?string $roomCode, bool $on) use (&$gBusy, &$tBusy, &$rBusy) {
             $len = $this->parasNeeded($c);
             $scope = $this->groupScopeKey($c);
             for ($i = 0; $i < $len; $i++) {
@@ -2490,8 +2503,8 @@ class TimetableController extends Controller
                         $tBusy[$k]--;
                     }
                 }
-                if ($c->auditorium_code) {
-                    $k = 'R' . $c->auditorium_code . '|' . $slot;
+                if ($roomCode) {
+                    $k = 'R' . $roomCode . '|' . $slot;
                     if ($on) {
                         $rBusy[$k] = ($rBusy[$k] ?? 0) + 1;
                     } elseif (($rBusy[$k] ?? 0) <= 1) {
@@ -2502,13 +2515,55 @@ class TimetableController extends Controller
                 }
             }
         };
-        foreach ($eff as $id => [$d, $p]) {
-            $mark($all[$id], $d, $p, true);
+        foreach ($eff as $id => [$d, $p, $roomCode, $roomName]) {
+            $mark($all[$id], $d, $p, $roomCode, true);
         }
+
+        // Haftalik ko'chirishda joriy xona band bo'lsa, sig'imi yetadigan boshqa
+        // faol auditoriya tanlanadi. Ma'ruzaga ma'ruza tipidagi xona afzal.
+        $settings = $board->settings ?? [];
+        $roomTolPct = max(0, min(30, (int) ($settings['room_tolerance_pct'] ?? 5)));
+        $rooms = Auditorium::where('active', true)->orderBy('volume')->get([
+            'id', 'code', 'name', 'volume', 'auditorium_type_name',
+        ]);
+        $roomTeacherMap = $this->auditoriumTeacherMap();
+        $roomOptionCache = [];
+        $roomOptionsFor = function (TimetableCard $c, ?string $preferredCode) use (
+            $rooms, $roomTeacherMap, $roomTolPct, &$roomOptionCache
+        ) {
+            $cacheKey = $c->id . '|' . ($preferredCode ?? '');
+            if (isset($roomOptionCache[$cacheKey])) {
+                return $roomOptionCache[$cacheKey];
+            }
+            $minVolume = (int) ceil((int) $c->students * (100 - $roomTolPct) / 100);
+            $eligible = [];
+            foreach ($rooms as $room) {
+                if ((int) $room->volume < $minVolume) {
+                    continue;
+                }
+                if (!$this->auditoriumAllowedForCard($room, $c, $roomTeacherMap)) {
+                    continue;
+                }
+                $eligible[] = $room;
+            }
+            usort($eligible, function ($a, $b) use ($c, $preferredCode) {
+                $aPreferred = (string) $a->code === (string) $preferredCode ? 0 : 1;
+                $bPreferred = (string) $b->code === (string) $preferredCode ? 0 : 1;
+                $aLecture = $c->training_type === 'lecture'
+                    ? (mb_stripos((string) $a->auditorium_type_name, 'ruza') !== false ? 0 : 1)
+                    : 0;
+                $bLecture = $c->training_type === 'lecture'
+                    ? (mb_stripos((string) $b->auditorium_type_name, 'ruza') !== false ? 0 : 1)
+                    : 0;
+                return [$aPreferred, $aLecture, (int) $a->volume, (string) $a->code]
+                    <=> [$bPreferred, $bLecture, (int) $b->volume, (string) $b->code];
+            });
+            return $roomOptionCache[$cacheKey] = $eligible;
+        };
 
         // Nomzodlar — qamrovdagi kartalar; erta paradagilar avval suriladi.
         $cands = [];
-        foreach ($eff as $id => [$d, $p]) {
+        foreach ($eff as $id => [$d, $p, $roomCode, $roomName]) {
             $c = $all[$id];
             if (!$inScope($c)) {
                 continue;
@@ -2516,14 +2571,12 @@ class TimetableController extends Controller
             if ($trainingType && $c->training_type !== $trainingType) {
                 continue;
             }
-            $cands[] = [$c, $d, $p];
+            $cands[] = [$c, $d, $p, $roomCode, $roomName];
         }
         usort($cands, fn($a, $b) => [$a[1], $a[2]] <=> [$b[1], $b[2]]);
 
         // Ketma-ket sozlamasi yoqilganida bazaviy shablonda yonma-yon turgan
         // bir fan + bir guruh kartalari bitta atomar blok sifatida suriladi.
-        // Shunda birinchi para ma'ruza bo'shatgan joyga chiqqanda undan keyingi
-        // amaliy para ham ayni siljish miqdorida tepaga ko'chadi.
         $consecutive = (bool) (($board->settings ?? [])['pair_consecutive'] ?? false);
         $units = [];
         if (!$consecutive) {
@@ -2573,24 +2626,31 @@ class TimetableController extends Controller
             $baseStart = min(array_map(fn($x) => (int) ($x[0]->pair ?: $x[2]), $unit));
             $parts = [];
             $blockEnd = $baseStart;
-            foreach ($unit as [$c, $effectiveDay, $effectivePair]) {
+            foreach ($unit as [$c, $effectiveDay, $effectivePair, $effectiveRoomCode, $effectiveRoomName]) {
                 $basePair = (int) ($c->pair ?: $effectivePair);
                 $len = $this->parasNeeded($c);
-                $parts[] = [$c, (int) $effectivePair, $basePair - $baseStart, $len];
+                $parts[] = [
+                    $c, (int) $effectiveDay, (int) $effectivePair,
+                    $effectiveRoomCode, $effectiveRoomName,
+                    $basePair - $baseStart, $len,
+                ];
                 $blockEnd = max($blockEnd, $basePair + $len);
-                $mark($c, (int) $effectiveDay, (int) $effectivePair, false);
+                $mark($c, (int) $effectiveDay, (int) $effectivePair, $effectiveRoomCode, false);
             }
             $blockLen = $blockEnd - $baseStart;
             $bestStart = null;
+            $bestRooms = [];
 
-            // Bazaviy boshlanish ham tekshiriladi: oldingi noto'g'ri override blokni
-            // bo'lib qo'ygan bo'lsa, qayta zichlash uni yonma-yon holatga qaytaradi.
+            // Bazaviy boshlanish ham tekshiriladi: eski override blokni bo'lib
+            // qo'ygan bo'lsa, qayta zichlash uni yonma-yon holatga qaytaradi.
             for ($np = 1; $np <= $baseStart; $np++) {
                 if ($np + $blockLen - 1 > $pairs) {
                     break;
                 }
                 $free = true;
-                foreach ($parts as [$c, $effectivePair, $offset, $len]) {
+                $candidateRooms = [];
+                $candidateRoomBusy = [];
+                foreach ($parts as [$c, $effectiveDay, $effectivePair, $effectiveRoomCode, $effectiveRoomName, $offset, $len]) {
                     $newPair = $np + $offset;
                     $scope = $this->groupScopeKey($c);
                     for ($i = 0; $i < $len && $free; $i++) {
@@ -2604,36 +2664,71 @@ class TimetableController extends Controller
                         if ($free && $c->teacher_id && !empty($tBusy['T' . $c->teacher_id . '|' . $slot])) {
                             $free = false;
                         }
-                        if ($free && $c->auditorium_code && !empty($rBusy['R' . $c->auditorium_code . '|' . $slot])) {
-                            $free = false;
-                        }
                     }
                     if (!$free) {
                         break;
                     }
+
+                    $preferredRoomCode = $effectiveRoomCode ?: $c->auditorium_code;
+                    $requiresRoom = !empty($preferredRoomCode);
+                    $chosenRoom = null;
+                    if ($requiresRoom) {
+                        foreach ($roomOptionsFor($c, $preferredRoomCode) as $room) {
+                            $roomFree = true;
+                            for ($i = 0; $i < $len; $i++) {
+                                $slot = $d . '|' . ($newPair + $i);
+                                $rk = 'R' . $room->code . '|' . $slot;
+                                if (!empty($rBusy[$rk]) || !empty($candidateRoomBusy[$rk])) {
+                                    $roomFree = false;
+                                    break;
+                                }
+                            }
+                            if ($roomFree) {
+                                $chosenRoom = $room;
+                                break;
+                            }
+                        }
+                        if (!$chosenRoom) {
+                            $free = false;
+                            break;
+                        }
+                        for ($i = 0; $i < $len; $i++) {
+                            $slot = $d . '|' . ($newPair + $i);
+                            $candidateRoomBusy['R' . $chosenRoom->code . '|' . $slot] = true;
+                        }
+                    }
+                    $candidateRooms[(int) $c->id] = $chosenRoom;
                 }
                 if ($free) {
                     $bestStart = $np;
+                    $bestRooms = $candidateRooms;
                     break;
                 }
             }
 
             if ($bestStart === null) {
                 // Butun blok uchun xavfsiz joy topilmasa, avvalgi effektiv
-                // joylashuvni saqlaymiz; hech bir kartani yakka holda surmaymiz.
-                foreach ($unit as [$c, $effectiveDay, $effectivePair]) {
-                    $mark($c, (int) $effectiveDay, (int) $effectivePair, true);
+                // joylashuv va auditoriyalarni saqlaymiz; blokni bo'lmaymiz.
+                foreach ($parts as [$c, $effectiveDay, $effectivePair, $effectiveRoomCode]) {
+                    $mark($c, $effectiveDay, $effectivePair, $effectiveRoomCode, true);
                 }
                 continue;
             }
 
-            foreach ($parts as [$c, $effectivePair, $offset, $len]) {
+            foreach ($parts as [$c, $effectiveDay, $effectivePair, $effectiveRoomCode, $effectiveRoomName, $offset, $len]) {
                 $newPair = $bestStart + $offset;
-                $mark($c, $d, $newPair, true);
-                // Muvaffaqiyatli blokning HAR bir kartasini yozamiz. Bu eski
-                // bo'linib qolgan override'ni, karta bazaviy joyida qolsa ham,
-                // yangi atomar blok natijasi bilan almashtiradi.
-                $moves[] = ['card_id' => (int) $c->id, 'day' => $d, 'pair' => $newPair];
+                $chosenRoom = $bestRooms[(int) $c->id] ?? null;
+                $newRoomCode = $chosenRoom?->code ?: null;
+                $newRoomName = $chosenRoom?->name ?: null;
+                $mark($c, $d, $newPair, $newRoomCode, true);
+                // Muvaffaqiyatli blokning HAR bir kartasi vaqt+xona bilan yoziladi.
+                $moves[] = [
+                    'card_id' => (int) $c->id,
+                    'day' => $d,
+                    'pair' => $newPair,
+                    'auditorium_code' => $newRoomCode,
+                    'auditorium_name' => $newRoomName,
+                ];
             }
         }
 
@@ -2650,7 +2745,13 @@ class TimetableController extends Controller
             foreach ($moves as $m) {
                 TimetableCardOverride::updateOrCreate(
                     ['card_id' => $m['card_id'], 'week' => $week],
-                    ['day' => $m['day'], 'pair' => $m['pair'], 'cancelled' => false]
+                    [
+                        'day' => $m['day'],
+                        'pair' => $m['pair'],
+                        'cancelled' => false,
+                        'auditorium_code' => $m['auditorium_code'] ?? null,
+                        'auditorium_name' => $m['auditorium_name'] ?? null,
+                    ]
                 );
             }
         });
@@ -2676,7 +2777,13 @@ class TimetableController extends Controller
         if ($data['action'] === 'cancel') {
             TimetableCardOverride::updateOrCreate(
                 ['card_id' => $card->id, 'week' => $week],
-                ['day' => null, 'pair' => null, 'cancelled' => true]
+                [
+                    'day' => null,
+                    'pair' => null,
+                    'cancelled' => true,
+                    'auditorium_code' => null,
+                    'auditorium_name' => null,
+                ]
             );
             return response()->json(['ok' => true]);
         }
@@ -2707,6 +2814,8 @@ class TimetableController extends Controller
 
         $myRange = $this->rangeFor($card, $pair, $startHalf);
         $myGroups = $card->occupiedGroups();
+        $myOverride = $ovr->get($card->id);
+        $myRoomCode = $myOverride?->auditorium_code ?: $card->auditorium_code;
         $errors = [];
         foreach ($others as $o) {
             $ov = $ovr->get($o->id);
@@ -2737,8 +2846,9 @@ class TimetableController extends Controller
             if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
                 $errors[] = "O'qituvchi band: " . $o->teacher_name . ' (' . $o->subject_name . ')';
             }
-            if ($card->auditorium_code && $o->auditorium_code === $card->auditorium_code) {
-                $errors[] = 'Auditoriya band: ' . $o->auditorium_name . ' (' . $o->subject_name . ')';
+            $otherRoomCode = $ov?->auditorium_code ?: $o->auditorium_code;
+            if ($myRoomCode && $otherRoomCode === $myRoomCode) {
+                $errors[] = 'Auditoriya band: ' . ($ov?->auditorium_name ?: $o->auditorium_name) . ' (' . $o->subject_name . ')';
             }
         }
         return array_unique($errors);

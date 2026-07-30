@@ -1061,6 +1061,30 @@ class TimetableController extends Controller
                 // Almashinuvchimi: haftalari aynan ma'ruzasiz haftalar soniga teng
                 if ((int) $c->weeks === $totalWeeks - $lw && $lp + $need - 1 <= $pairs) {
                     $okT = true;
+                    // O'z ma'ruzasi bilan vaqt almashishi mumkin, lekin shu oraliqda
+                    // boshqa fan guruhi band bo'lsa maxsus joylashtirish taqiqlanadi.
+                    // Aks holda uzun amaliy qo'shni ma'ruzaning yarim-slotiga kirib qoladi.
+                    $targetRange = [$lp - 1, $lp - 1 + $need];
+                    foreach ($all as $other) {
+                        if ((int) $other->id === (int) $c->id || !$other->day || !$other->pair
+                            || (int) $other->day !== (int) $ld) {
+                            continue;
+                        }
+                        if ($this->groupScopeKey($other) !== $scopeKey
+                            || empty(array_intersect($groups, $other->occupiedGroups()))) {
+                            continue;
+                        }
+                        $otherRange = $other->halfRange();
+                        if (!$otherRange || !$this->halfOverlap($targetRange, $otherRange)) {
+                            continue;
+                        }
+                        // Faqat aynan shu fanning ma'ruzasi — haftalar bo'yicha almashinuvchi juft.
+                        if ($other->training_type === 'lecture' && $subjOf($other) === $sKey) {
+                            continue;
+                        }
+                        $okT = false;
+                        break;
+                    }
                     for ($i = 0; $i < $need && $okT; $i++) {
                         if ($teacherId && !empty($teacherBusy[$teacherId . '|' . $ld . '|' . ($lp + $i)])) {
                             $okT = false;

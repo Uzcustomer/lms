@@ -1007,7 +1007,7 @@ class TimetableController extends Controller
         })->values();
 
         $subjDay = [];    // "spreadKey|day" => count (fan taqsimoti uchun)
-        $subjSlots = [];  // "spreadKey" => [[day,pair],...] (klaster: bir kun/ketma-ket)
+        $subjSlots = [];  // "spreadKey" => [[day,pair,len],...] (klaster: bir kun/ketma-ket)
         $placed = 0;
         $unplaced = 0;
         $roomsAssigned = 0;
@@ -1113,7 +1113,7 @@ class TimetableController extends Controller
                         $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
                         $skB = $this->spreadKey($c);
                         $subjDay[$skB . '|' . $ld] = ($subjDay[$skB . '|' . $ld] ?? 0) + 1;
-                        $subjSlots[$skB][] = [$ld, $lp];
+                        $subjSlots[$skB][] = [$ld, $lp, $need];
                         $touched[] = $c;
                         $placed++;
                         continue;   // joylandi — odatdagi qidiruv kerak emas
@@ -1196,7 +1196,7 @@ class TimetableController extends Controller
             }
             $skBase = $this->spreadKey($c);
             $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
-            $subjSlots[$skBase][] = [$d, $p];
+            $subjSlots[$skBase][] = [$d, $p, $need];
             $touched[] = $c;
             $placed++;
         }
@@ -1470,10 +1470,15 @@ class TimetableController extends Controller
             $slots = $subjSlots[$skBase] ?? [];
             $onSameDay = 0;
             $adjacent = false;
-            foreach ($slots as [$sd, $sp]) {
+            $currentLen = $this->parasNeeded($c);
+            foreach ($slots as $slot) {
+                [$sd, $sp] = $slot;
+                $slotLen = max(1, (int) ($slot[2] ?? 1));
                 if ($sd === $d) {
                     $onSameDay++;
-                    if (abs($sp - $p) === 1) {
+                    // Kartalar yarim-para indeksida turadi: yonma-yon bo'lishi
+                    // uchun bir interval ikkinchisining chegarasida boshlanishi kerak.
+                    if ($p === $sp + $slotLen || $sp === $p + $currentLen) {
                         $adjacent = true;
                     }
                 }

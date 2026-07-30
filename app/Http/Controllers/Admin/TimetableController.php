@@ -2405,7 +2405,23 @@ class TimetableController extends Controller
         $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $board->id))
             ->where('week', $week)->get()->keyBy('card_id');
 
-        $moves = $this->compactWeekMoves($board, $all, $ovr, $inScope, $data['training_type'] ?? null);
+        $trainingType = $data['training_type'] ?? null;
+        // Qayta zichlash eski ko'chirish override'laridan emas, bazaviy shablondan
+        // boshlanadi. Bekor qilishlar va qamrovdan tashqaridagi ko'chirishlar esa
+        // saqlanadi — ular shu hafta uchun haqiqiy bandlik hisoblanadi.
+        $calcOvr = $ovr->filter(function ($override) use ($all, $inScope, $trainingType) {
+            if ($override->cancelled) {
+                return true;
+            }
+            $card = $all->get($override->card_id);
+            if (!$card) {
+                return false;
+            }
+            $inTarget = $inScope($card) && (!$trainingType || $card->training_type === $trainingType);
+            return !$inTarget;
+        });
+
+        $moves = $this->compactWeekMoves($board, $all, $calcOvr, $inScope, $trainingType);
         $this->saveWeekMoves($moves, $week);
 
         return response()->json(['ok' => true, 'moved' => count($moves)]);
@@ -2456,15 +2472,33 @@ class TimetableController extends Controller
                 $slot = $d . '|' . ($p + $i);
                 foreach ($c->occupiedGroups() as $g) {
                     $k = $scope . '|' . $g . '|' . $slot;
-                    if ($on) { $gBusy[$k] = true; } else { unset($gBusy[$k]); }
+                    if ($on) {
+                        $gBusy[$k] = ($gBusy[$k] ?? 0) + 1;
+                    } elseif (($gBusy[$k] ?? 0) <= 1) {
+                        unset($gBusy[$k]);
+                    } else {
+                        $gBusy[$k]--;
+                    }
                 }
                 if ($c->teacher_id) {
                     $k = 'T' . $c->teacher_id . '|' . $slot;
-                    if ($on) { $tBusy[$k] = true; } else { unset($tBusy[$k]); }
+                    if ($on) {
+                        $tBusy[$k] = ($tBusy[$k] ?? 0) + 1;
+                    } elseif (($tBusy[$k] ?? 0) <= 1) {
+                        unset($tBusy[$k]);
+                    } else {
+                        $tBusy[$k]--;
+                    }
                 }
                 if ($c->auditorium_code) {
                     $k = 'R' . $c->auditorium_code . '|' . $slot;
-                    if ($on) { $rBusy[$k] = true; } else { unset($rBusy[$k]); }
+                    if ($on) {
+                        $rBusy[$k] = ($rBusy[$k] ?? 0) + 1;
+                    } elseif (($rBusy[$k] ?? 0) <= 1) {
+                        unset($rBusy[$k]);
+                    } else {
+                        $rBusy[$k]--;
+                    }
                 }
             }
         };
@@ -2596,9 +2630,10 @@ class TimetableController extends Controller
             foreach ($parts as [$c, $effectivePair, $offset, $len]) {
                 $newPair = $bestStart + $offset;
                 $mark($c, $d, $newPair, true);
-                if ($newPair !== $effectivePair) {
-                    $moves[] = ['card_id' => (int) $c->id, 'day' => $d, 'pair' => $newPair];
-                }
+                // Muvaffaqiyatli blokning HAR bir kartasini yozamiz. Bu eski
+                // bo'linib qolgan override'ni, karta bazaviy joyida qolsa ham,
+                // yangi atomar blok natijasi bilan almashtiradi.
+                $moves[] = ['card_id' => (int) $c->id, 'day' => $d, 'pair' => $newPair];
             }
         }
 

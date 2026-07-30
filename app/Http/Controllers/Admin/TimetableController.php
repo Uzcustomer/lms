@@ -1277,32 +1277,29 @@ class TimetableController extends Controller
             }
         });
 
-        // Haftalarni avtomatik zichlash: ba'zi ma'ruzalar har haftada o'tilmaydi
-        // (o'sha haftada bekor qilingan) — ular bo'shatgan vaqtga amaliy suriladi,
-        // shunda dars kun boshidan boshlanadi. Faqat bekor qilingan darsi BOR
-        // haftalar qayta hisoblanadi (qolgan haftalar shablonday qoladi, ortiqcha
-        // istisno yozilmaydi).
-        $compacted = 0;
-        $totalWeeks = max(1, (int) $board->weeks);
-        $allCards = TimetableCard::where('board_id', $board->id)->get()->keyBy('id');
-        $ovrByWeek = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $board->id))
-            ->get()->groupBy('week');
-        for ($w = 1; $w <= $totalWeeks; $w++) {
-            $weekOvr = ($ovrByWeek[$w] ?? collect())->keyBy('card_id');
-            if (!$weekOvr->contains(fn($o) => (bool) $o->cancelled)) {
-                continue;   // bu haftada o'tilmaydigan dars yo'q — surish shart emas
-            }
-            $moves = $this->compactWeekMoves($board, $allCards, $weekOvr, $inScope, $scopeType);
-            $this->saveWeekMoves($moves, $w);
-            $compacted += count($moves);
-        }
+        // Haftalik zichlash alohida, kichik HTTP so'rovlarda bajariladi. Katta
+        // doskada barcha haftani shu request ichida hisoblash reverse-proxy 504
+        // timeoutiga olib kelardi. Frontend quyidagi ro'yxatni avtomatik ketma-ket
+        // compact-week endpointiga yuboradi — foydalanuvchi hafta bosmaydi.
+        $weeksToCompact = TimetableCardOverride::query()
+            ->where('cancelled', true)
+            ->whereHas('card', function ($q) use ($board, $facSet, $specSet, $courseSet) {
+                $q->where('board_id', $board->id);
+                $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
+            })
+            ->distinct()
+            ->orderBy('week')
+            ->pluck('week')
+            ->map(fn($week) => (int) $week)
+            ->values();
 
         return response()->json([
             'ok' => true,
             'placed' => $placed,
             'unplaced' => $unplaced,
             'rooms_assigned' => $roomsAssigned,
-            'compacted' => $compacted,
+            'compacted' => 0,
+            'weeks_to_compact' => $weeksToCompact,
         ]);
     }
 
@@ -2396,6 +2393,8 @@ class TimetableController extends Controller
      */
     public function compactWeek(Request $request, TimetableBoard $board)
     {
+        @set_time_limit(0);
+        @ini_set('memory_limit', '1024M');
         $data = $request->validate([
             'week'            => 'required|integer|min:1|max:30',
             'faculty_names'   => 'nullable|array',
@@ -2417,6 +2416,18 @@ class TimetableController extends Controller
             ->where('week', $week)->get()->keyBy('card_id');
 
         $trainingType = $data['training_type'] ?? null;
+        // Shu qamrovdagi eski vaqt/xona ko'chirishlari qayta hisoblanadi. Yangi
+        // natija yozilishidan oldin ular bitta transaction ichida almashtiriladi;
+        // aks holda eski 3-para override qolib, keyingi karta 7-parada qolishi mumkin.
+        $replaceCardIds = $ovr->filter(function ($override) use ($all, $inScope, $trainingType) {
+            if ($override->cancelled) {
+                return false;
+            }
+            $card = $all->get($override->card_id);
+            return $card && $inScope($card)
+                && (!$trainingType || $card->training_type === $trainingType);
+        })->pluck('card_id')->map(fn($id) => (int) $id)->values()->all();
+
         // Qayta zichlash eski ko'chirish override'laridan emas, bazaviy shablondan
         // boshlanadi. Bekor qilishlar va qamrovdan tashqaridagi ko'chirishlar esa
         // saqlanadi — ular shu hafta uchun haqiqiy bandlik hisoblanadi.
@@ -2433,7 +2444,7 @@ class TimetableController extends Controller
         });
 
         $moves = $this->compactWeekMoves($board, $all, $calcOvr, $inScope, $trainingType);
-        $this->saveWeekMoves($moves, $week);
+        $this->saveWeekMoves($moves, $week, $replaceCardIds);
 
         return response()->json(['ok' => true, 'moved' => count($moves)]);
     }
@@ -2736,12 +2747,18 @@ class TimetableController extends Controller
     }
 
     /** Hafta ko'chirishlarini istisno (override) sifatida saqlash. */
-    private function saveWeekMoves(array $moves, int $week): void
+    private function saveWeekMoves(array $moves, int $week, array $replaceCardIds = []): void
     {
-        if (empty($moves)) {
+        if (empty($moves) && empty($replaceCardIds)) {
             return;
         }
-        DB::transaction(function () use ($moves, $week) {
+        DB::transaction(function () use ($moves, $week, $replaceCardIds) {
+            if (!empty($replaceCardIds)) {
+                TimetableCardOverride::where('week', $week)
+                    ->whereIn('card_id', $replaceCardIds)
+                    ->where('cancelled', false)
+                    ->delete();
+            }
             foreach ($moves as $m) {
                 TimetableCardOverride::updateOrCreate(
                     ['card_id' => $m['card_id'], 'week' => $week],

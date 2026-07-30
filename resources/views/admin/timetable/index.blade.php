@@ -196,7 +196,13 @@
                 {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel (flex-shrink-0 — doim ko'rinadi) --}}
                 <div class="bg-white shadow-sm sm:rounded-lg mt-2" style="flex: 0 0 auto; box-shadow: 0 -6px 12px -4px rgba(0,0,0,.15);">
                     <div class="px-3 py-1 border-b border-gray-100 flex items-center justify-between">
-                        <span class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
+                            {{-- Hafta ko'rinishida shu haftada o'tilmaydigan kartalar panelga
+                                 tushmaydi; kerak bo'lsa shu tugma orqali ko'rsatiladi. --}}
+                            <button type="button" id="skipToggle"
+                                class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50"></button>
+                        </div>
                         <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                     </div>
                     <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
@@ -864,6 +870,8 @@
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
         .pn-card.prc { background: #faf5ff; }
         .pn-card.sel { outline: 2px solid #f59e0b; }
+        /* Shu haftada o'tilmaydigan karta — odatda yashirin, "ko'rsatish" bosilganda so'nik chiqadi */
+        .pn-card.skip { opacity: .5; border-style: dashed; filter: grayscale(.5); }
         .lang-rus { box-shadow: inset 0 0 0 1px #fca5a5; }
         .lang-ing { box-shadow: inset 0 0 0 1px #86efac; }
 
@@ -2195,8 +2203,14 @@
             $('weekSel').onchange = function () {
                 curWeek = +this.value || 0;
                 selected = null;
+                showSkipped = false;
                 toggleCompactBtn();
                 renderAll();
+            };
+            // "Bu haftada o'tilmaydi" kartalarini panelda ko'rsatish/yashirish
+            $('skipToggle').onclick = function () {
+                showSkipped = !showSkipped;
+                renderPanel();
             };
             // Tanlangan haftani tepaga zichlash: o'tilmaydigan ma'ruzalar bo'shatgan
             // vaqtga darslarni suradi (faqat shu haftaga istisno yoziladi).
@@ -2245,6 +2259,19 @@
             }
             // Karta shu haftada shablondan farq qiladimi (individual)?
             const hasWeekOverride = c => curWeek && !!overrides[c.id + '|' + curWeek];
+            // Karta shu haftada umuman o'tilmaydimi (bekor qilingan / almashinuvchi
+            // fanning "bo'sh" haftasi)? Bunday karta joylashmagan hisoblanmaydi —
+            // u shu haftaga tegishli emas, shuning uchun panel va statistikadan
+            // butunlay chiqarib tashlanadi.
+            const weekCancelled = (c) => {
+                if (!curWeek) return false;
+                const ov = overrides[c.id + '|' + curWeek];
+                return !!(ov && ov.cancelled);
+            };
+            // Tanlangan haftada haqiqatan o'tiladigan kartalar (shablon ko'rinishida — hammasi)
+            const weekActiveCards = () => visibleSpecCards().filter(c => !weekCancelled(c));
+            // Panelda "bu haftada o'tilmaydi" kartalari ham ko'rsatilsinmi (odatda — yo'q)
+            let showSkipped = false;
             // Panjara saqlash endi Sozlamalar modalidagi har bir kurs katagida bajariladi.
 
             // Ko'rinayotgan tanlov qamrovi — backendga yuboriladigan massivlar
@@ -2806,14 +2833,17 @@
             function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); }
 
             function renderStats() {
-                const sc = visibleSpecCards();
+                // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda
+                // ular "joylashmagan" bo'lib ko'rinib qolardi.
+                const sc = weekActiveCards();
                 const placed = sc.filter(c => effPlace(c)).length;
-                const totPlaced = cards.filter(c => effPlace(c)).length;
+                const boardCards = cards.filter(c => !weekCancelled(c));
+                const totPlaced = boardCards.filter(c => effPlace(c)).length;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
                 const weekLbl = curWeek ? ' · ' + curWeek + '-hafta' : '';
                 $('statChips').innerHTML =
                     '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>' +
-                    '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + cards.length + '</b></span>';
+                    '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
@@ -2826,20 +2856,34 @@
 
             // Joylashmagan kartalar — pastda gorizontal panel (aSc uslubida): tekis
             // ravishda ketma-ket chiqadi (fan bo'yicha saralangan, guruhlash chizig'i yo'q).
+            // Hafta ko'rinishida shu haftada o'tilmaydigan kartalar bu yerga tushmaydi.
             function renderPanel() {
-                const un = visibleSpecCards().filter(c => !effPlace(c))
-                    .sort((a, b) => a.subject_name.localeCompare(b.subject_name, 'uz'));
-                $('cardPanel').innerHTML = un.map(c =>
-                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (selected && selected.id === c.id ? ' sel' : '') +
-                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name) + '">' +
+                const bySubject = (a, b) => a.subject_name.localeCompare(b.subject_name, 'uz');
+                const un = weekActiveCards().filter(c => !effPlace(c)).sort(bySubject);
+                // Shu haftada o'tilmaydigan kartalar — odatda yashirin. Ular joylashgan,
+                // shunchaki bu haftaga tegishli emas; qo'lda bekor qilinganini qaytarish
+                // uchun "ko'rsatish" tugmasi orqali chiqariladi.
+                const skipped = curWeek ? visibleSpecCards().filter(weekCancelled).sort(bySubject) : [];
+                const skipBtn = $('skipToggle');
+                skipBtn.classList.toggle('hidden', !skipped.length);
+                skipBtn.textContent = (showSkipped ? 'Yashirish' : 'Ko\'rsatish') +
+                    ': bu haftada o\'tilmaydi (' + skipped.length + ' ta)';
+
+                const panelCard = (c, skip) =>
+                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (selected && selected.id === c.id ? ' sel' : '') +
+                    ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
                     cardLabel(c, true) +
                     '<div class="text-[9px] text-gray-500">' +
                     (c.training_type === 'lecture'
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <img src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true">' : '') +
-                    '</div></div>'
-                ).join('') || '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>';
+                    '</div></div>';
+
+                $('cardPanel').innerHTML =
+                    un.map(c => panelCard(c, false)).join('') +
+                    (showSkipped ? skipped.map(c => panelCard(c, true)).join('') : '')
+                    || '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>';
 
                 document.querySelectorAll('.pn-card').forEach(el => {
                     el.onclick = () => {

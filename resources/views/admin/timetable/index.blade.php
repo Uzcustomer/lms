@@ -2321,22 +2321,75 @@
                 const scopeLabel = (whole ? 'Butun doska' : scopeLabelText()) + typeLbl;
                 if ($('autoReset').checked &&
                     !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
-                $('autoBtn').disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
+
+                // Katta qamrovni fakultet+yo'nalish+kurs bo'yicha kichik requestlarga
+                // bo'lamiz. Oldingi requestlar yozgan bandlik keyingi requestlarda ham
+                // hisobga olinadi, ammo reverse-proxy 504 vaqt chegarasi urilmaydi.
+                const scopeCards = whole ? cards : cards.filter(c =>
+                    selectedFaculties.has(c.faculty_name || '') &&
+                    selectedDirs.has(c.specialty_name) &&
+                    selectedCourses.has(+c.course));
+                const chunkMap = new Map();
+                scopeCards.forEach(c => {
+                    const item = { faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: +c.course };
+                    const key = item.faculty + '¦' + item.specialty + '¦' + item.course;
+                    if (item.specialty && item.course && !chunkMap.has(key)) chunkMap.set(key, item);
+                });
+                const chunks = [...chunkMap.values()];
+                if (!chunks.length) {
+                    $('autoMsg').textContent = 'Joylashtirish uchun qamrov topilmadi.';
+                    return;
+                }
+
+                $('autoBtn').disabled = true;
+                const result = { placed: 0, unplaced: 0, rooms_assigned: 0, compacted: 0 };
+                const weeksSet = new Set();
                 try {
-                    const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0,
+                    const common = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0,
                         lecture_rooms: $('autoLecRooms').checked ? 1 : 0 };
-                    if (!whole) Object.assign(body, scopeBody());
-                    if (typeFilter !== 'all') body.training_type = typeFilter;
-                    const j = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
+                    if (typeFilter !== 'all') common.training_type = typeFilter;
+
+                    for (let i = 0; i < chunks.length; i++) {
+                        const chunk = chunks[i];
+                        $('autoMsg').textContent = 'Asosiy jadval avtomatik joylashtirilmoqda: ' +
+                            (i + 1) + '/' + chunks.length + ' · ' + chunk.specialty + ' · ' + chunk.course + '-kurs';
+                        const body = {
+                            ...common,
+                            faculty_names: [chunk.faculty],
+                            specialty_names: [chunk.specialty],
+                            courses: [chunk.course],
+                        };
+                        const part = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
+                        result.placed += +(part.placed || 0);
+                        result.unplaced += +(part.unplaced || 0);
+                        result.rooms_assigned += +(part.rooms_assigned || 0);
+                        (part.weeks_to_compact || []).forEach(w => weeksSet.add(+w));
+                    }
+
+                    // Ma'ruza o'tilmaydigan haftalarni foydalanuvchi bosmasdan, bittadan
+                    // hisoblaymiz. Bitta ulkan request o'rniga kichik requestlar 504
+                    // timeoutini chetlab o'tadi va progress ekranda ko'rinadi.
+                    const weeks = [...weeksSet].filter(Boolean).sort((a, b) => a - b);
+                    for (let i = 0; i < weeks.length; i++) {
+                        $('autoMsg').textContent = 'Asosiy jadval joylandi · haftalar avtomatik hisoblanmoqda: ' +
+                            (i + 1) + '/' + weeks.length + ' (' + weeks[i] + '-hafta)';
+                        const compactBody = { week: weeks[i] };
+                        if (!whole) Object.assign(compactBody, scopeBody());
+                        if (typeFilter !== 'all') compactBody.training_type = typeFilter;
+                        const weekResult = await api(BASE + '/boards/' + board.id + '/compact-week', 'POST', compactBody);
+                        result.compacted += +(weekResult.moved || 0);
+                    }
+
                     await loadBoard(board.id);
-                    $('autoMsg').textContent = 'Joylandi: ' + j.placed +
-                        (j.unplaced ? (' · joy topilmadi: ' + j.unplaced) : '') +
-                        (j.rooms_assigned ? (' · xona biriktirildi: ' + j.rooms_assigned) : '') +
-                        (j.compacted ? (' · haftalarda tepaga surildi: ' + j.compacted) : '');
+                    $('autoMsg').textContent = 'Joylandi: ' + result.placed +
+                        (result.unplaced ? (' · joy topilmadi: ' + result.unplaced) : '') +
+                        (result.rooms_assigned ? (' · xona biriktirildi: ' + result.rooms_assigned) : '') +
+                        (result.compacted ? (' · haftalarda tepaga surildi: ' + result.compacted) : '') +
+                        (weeks.length ? (' · hisoblangan hafta: ' + weeks.length) : '');
                     // Hammasi allaqachon joylashgan va reset belgilanmagan — yangi
                     // sozlama bo'yicha qayta taqsimlash uchun yo'l ko'rsatamiz.
-                    // Xona biriktirilgan bo'lsa — ish bajarildi, qayta joylash so'ralmaydi
-                    if (!$('autoReset').checked && !j.placed && !j.unplaced && !j.rooms_assigned && !j.compacted) {
+                    if (!$('autoReset').checked && !result.placed && !result.unplaced &&
+                        !result.rooms_assigned && !result.compacted && !weeks.length) {
                         $('autoMsg').textContent = 'Hammasi joylashgan. Yangi sozlama bo\'yicha qayta joylash kerak.';
                         if (confirm('Barcha kartalar allaqachon joylashgan.\nYangi sozlama (bir kunga / ketma-ket) bo\'yicha mavjud joylashuvlarni bo\'shatib QAYTA joylaymizmi?')) {
                             $('autoReset').checked = true;
@@ -2344,7 +2397,13 @@
                             return doAutoPlace();
                         }
                     }
-                } catch (e) { $('autoMsg').textContent = ''; alert('Xatolik: ' + e.message); }
+                } catch (e) {
+                    // Oldingi bo'laklar yozilgan bo'lishi mumkin; ekranni serverdagi
+                    // haqiqiy holat bilan yangilab qo'yamiz.
+                    try { await loadBoard(board.id); } catch (_) {}
+                    $('autoMsg').textContent = '';
+                    alert('Xatolik: ' + e.message);
+                }
                 $('autoBtn').disabled = false;
             }
             $('autoBtn').onclick = doAutoPlace;

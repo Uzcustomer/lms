@@ -160,6 +160,17 @@
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms" checked><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/07_building.png') }}" alt="" aria-hidden="true"></span>Auditoriya</label>
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms" checked><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/08_maruza_xonasi.png') }}" alt="" aria-hidden="true"></span>Ma'ruza xonasi</label>
                     </div>
+                    <div id="autoProgress" class="hidden" style="width:min(420px,100%);min-width:260px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;font-size:11px;font-weight:600;color:#047857">
+                            <span id="autoProgressLabel"></span>
+                            <span id="autoProgressPercent">0%</span>
+                        </div>
+                        <div id="autoProgressTrack" role="progressbar" aria-label="Avtomatik joylashtirish jarayoni"
+                             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+                             style="height:7px;overflow:hidden;border-radius:9999px;background:#d1fae5">
+                            <div id="autoProgressBar" style="width:0;height:100%;border-radius:9999px;background:#059669;transition:width .25s ease"></div>
+                        </div>
+                    </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
                 </div>
@@ -2313,6 +2324,24 @@
             }
 
             // ===== Avtomatik (optimal) joylashtirish =====
+            function setAutoProgress(phase, completed, total, detail = '') {
+                const safeTotal = Math.max(1, +total || 0);
+                const fraction = Math.max(0, Math.min(1, (+completed || 0) / safeTotal));
+                const phaseStart = phase === 1 ? 0 : 50;
+                const percent = Math.round(phaseStart + fraction * 50);
+                const phaseLabel = phase === 1 ? '1/2 · Asosiy jadval' : '2/2 · Haftalarni moslash';
+                $('autoProgress').classList.remove('hidden');
+                $('autoProgressLabel').textContent = phaseLabel + (detail ? ' · ' + detail : '');
+                $('autoProgressPercent').textContent = percent + '%';
+                $('autoProgressBar').style.width = percent + '%';
+                $('autoProgressTrack').setAttribute('aria-valuenow', String(percent));
+            }
+            function hideAutoProgress() {
+                $('autoProgress').classList.add('hidden');
+                $('autoProgressBar').style.width = '0%';
+                $('autoProgressTrack').setAttribute('aria-valuenow', '0');
+            }
+
             async function doAutoPlace() {
                 if (!board || !curSpec) return;
                 const whole = $('autoScope').checked;
@@ -2342,6 +2371,8 @@
                 }
 
                 $('autoBtn').disabled = true;
+                $('autoMsg').textContent = '';
+                setAutoProgress(1, 0, chunks.length, 'Tayyorlanmoqda');
                 const result = { placed: 0, unplaced: 0, rooms_assigned: 0, compacted: 0 };
                 const weeksSet = new Set();
                 try {
@@ -2351,8 +2382,9 @@
 
                     for (let i = 0; i < chunks.length; i++) {
                         const chunk = chunks[i];
-                        $('autoMsg').textContent = 'Asosiy jadval avtomatik joylashtirilmoqda: ' +
-                            (i + 1) + '/' + chunks.length + ' · ' + chunk.specialty + ' · ' + chunk.course + '-kurs';
+                        const chunkLabel = (i + 1) + '/' + chunks.length + ' · ' +
+                            chunk.specialty + ' · ' + chunk.course + '-kurs';
+                        setAutoProgress(1, i, chunks.length, chunkLabel);
                         const body = {
                             ...common,
                             faculty_names: [chunk.faculty],
@@ -2364,23 +2396,31 @@
                         result.unplaced += +(part.unplaced || 0);
                         result.rooms_assigned += +(part.rooms_assigned || 0);
                         (part.weeks_to_compact || []).forEach(w => weeksSet.add(+w));
+                        setAutoProgress(1, i + 1, chunks.length, chunkLabel);
                     }
 
                     // Ma'ruza o'tilmaydigan haftalarni foydalanuvchi bosmasdan, bittadan
                     // hisoblaymiz. Bitta ulkan request o'rniga kichik requestlar 504
                     // timeoutini chetlab o'tadi va progress ekranda ko'rinadi.
                     const weeks = [...weeksSet].filter(Boolean).sort((a, b) => a - b);
+                    if (weeks.length) {
+                        setAutoProgress(2, 0, weeks.length, '1/' + weeks.length + ' · ' + weeks[0] + '-hafta');
+                    } else {
+                        setAutoProgress(2, 1, 1, 'Haftalik o\'zgarish yo\'q');
+                    }
                     for (let i = 0; i < weeks.length; i++) {
-                        $('autoMsg').textContent = 'Asosiy jadval joylandi · haftalar avtomatik hisoblanmoqda: ' +
-                            (i + 1) + '/' + weeks.length + ' (' + weeks[i] + '-hafta)';
+                        const weekLabel = (i + 1) + '/' + weeks.length + ' · ' + weeks[i] + '-hafta';
+                        setAutoProgress(2, i, weeks.length, weekLabel);
                         const compactBody = { week: weeks[i] };
                         if (!whole) Object.assign(compactBody, scopeBody());
                         if (typeFilter !== 'all') compactBody.training_type = typeFilter;
                         const weekResult = await api(BASE + '/boards/' + board.id + '/compact-week', 'POST', compactBody);
                         result.compacted += +(weekResult.moved || 0);
+                        setAutoProgress(2, i + 1, weeks.length, weekLabel);
                     }
 
                     await loadBoard(board.id);
+                    setAutoProgress(2, 1, 1, 'Tugallandi');
                     $('autoMsg').textContent = 'Joylandi: ' + result.placed +
                         (result.unplaced ? (' · joy topilmadi: ' + result.unplaced) : '') +
                         (result.rooms_assigned ? (' · xona biriktirildi: ' + result.rooms_assigned) : '') +
@@ -2401,6 +2441,7 @@
                     // Oldingi bo'laklar yozilgan bo'lishi mumkin; ekranni serverdagi
                     // haqiqiy holat bilan yangilab qo'yamiz.
                     try { await loadBoard(board.id); } catch (_) {}
+                    hideAutoProgress();
                     $('autoMsg').textContent = '';
                     alert('Xatolik: ' + e.message);
                 }

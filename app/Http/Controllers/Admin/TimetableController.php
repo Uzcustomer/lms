@@ -1410,8 +1410,9 @@ class TimetableController extends Controller
                     // ma'ruza va amaliyni bog'lamaydi — ularning spreadKey'i har xil
                     // (ma'ruza oqim bo'yicha, amaliy guruh bo'yicha), shu sababli
                     // amaliy ma'ruzadan uzoqqa tushib, orasiga boshqa fan kirib qolardi.
-                    if ($c->training_type === 'practice' && isset($lecSlot[$sKey])) {
-                        [$ld, $lp, ] = $lecSlot[$sKey];
+                    if ($c->training_type === 'practice' && isset($chain[$sKey])) {
+                        $ld = (int) $chain[$sKey]['day'];
+                        $lp = (int) $chain[$sKey]['lec'];
                         if ($d === $ld) {
                             $pen -= 20;   // ma'ruza bilan bir kunda — mukofot
                             // Ikki blok orasidagi bo'shliq (0 = yonma-yon)

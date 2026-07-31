@@ -1142,6 +1142,29 @@ class TimetableController extends Controller
         foreach ($units as $unit) {
             // ── Ko'p kartali blok (bir darsning paralari) ────────────────────
             if (count($unit) > 1) {
+                // Almashtiruvchi karta (ma'ruza yo'q haftalarda o'tiladigan) blokning
+                // BOSHIDA turishi kerak — shunda blok ma'ruza slotidan boshlanadi va
+                // ma'ruzali haftada u slotni ma'ruza egallaydi (oyna qolmaydi).
+                // Aks holda blok ma'ruzadan KEYIN boshlanib, ma'ruzali haftada
+                // ma'ruza bilan amaliy orasida bo'sh para qolardi.
+                $u0 = $unit[0];
+                $uCh0 = $chain[$subjOf($u0)] ?? null;
+                if ($uCh0) {
+                    $tw = $weeksFor($u0->faculty_name, $u0->specialty_name, (int) $u0->course);
+                    $standInIdx = null;
+                    foreach ($unit as $ix => $uc) {
+                        if ((int) $uc->weeks === $tw - (int) $uCh0['lw']
+                            && $this->parasNeeded($uc) === (int) $uCh0['next'] - (int) $uCh0['lec']) {
+                            $standInIdx = $ix;
+                            break;
+                        }
+                    }
+                    if ($standInIdx !== null && $standInIdx !== 0) {
+                        $tmp = $unit[$standInIdx];
+                        array_splice($unit, $standInIdx, 1);
+                        array_unshift($unit, $tmp);
+                    }
+                }
                 $lead = $unit[0];
                 [$uDays, $uPairs] = $dimsFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
                 $uScope = $this->groupScopeKey($lead);

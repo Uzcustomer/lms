@@ -11,9 +11,9 @@
     if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
         $timetableActiveRole = $timetableRoles[0];
     }
-    $timetableTeacherAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
-    $timetableAuditoriumAssignmentOnly = $timetableActiveRole === 'kafedra_mudiri';
-    $timetableAssignmentOnly = $timetableTeacherAssignmentOnly || $timetableAuditoriumAssignmentOnly;
+    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
+    $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead;
 @endphp
 
     <x-slot name="header">
@@ -159,6 +159,17 @@
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoReset"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/06_qaytadan_joylash.png') }}" alt="" aria-hidden="true"></span>Qaytadan joylash</label>
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms" checked><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/07_building.png') }}" alt="" aria-hidden="true"></span>Auditoriya</label>
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms" checked><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/08_maruza_xonasi.png') }}" alt="" aria-hidden="true"></span>Ma'ruza xonasi</label>
+                    </div>
+                    <div id="autoProgress" class="hidden" style="width:min(420px,100%);min-width:260px">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;font-size:11px;font-weight:600;color:#047857">
+                            <span id="autoProgressLabel"></span>
+                            <span id="autoProgressPercent">0%</span>
+                        </div>
+                        <div id="autoProgressTrack" role="progressbar" aria-label="Avtomatik joylashtirish jarayoni"
+                             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+                             style="height:7px;overflow:hidden;border-radius:9999px;background:#d1fae5">
+                            <div id="autoProgressBar" style="width:0;height:100%;border-radius:9999px;background:#059669;transition:width .25s ease"></div>
+                        </div>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -694,11 +705,9 @@
                                 <i class="bi bi-person-plus" aria-hidden="true"></i> Fanlarni biriktirish
                             </button>
                             @endif
-                            @if(!$timetableTeacherAssignmentOnly)
                             <button type="button" class="asg-tab-button {{ $timetableAuditoriumAssignmentOnly ? 'active' : '' }}" data-asg-tab="auditoriums">
                                 <i class="bi bi-door-open" aria-hidden="true"></i> Auditoriyalarni biriktirish
                             </button>
-                            @endif
                         </div>
                         <div id="asgTeachersPanel" data-asg-panel="teachers" class="{{ $timetableAuditoriumAssignmentOnly ? 'hidden' : '' }} assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
                             {{-- Chap: dars birliklari --}}
@@ -733,32 +742,11 @@
                             <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
                                     <span class="text-sm font-semibold text-slate-700">Auditoriyalar</span>
-                                    @if($timetableAuditoriumAssignmentOnly)
-                                    <button type="button" id="asgAudCreateBtn" class="asc-btn primary text-xs">
-                                        <i class="bi bi-plus-lg" aria-hidden="true"></i> Auditoriya qo'shish
-                                    </button>
-                                    @endif
+                                    
                                     <input id="asgAudSearch" placeholder="Xona qidirish..." class="ml-auto w-52 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgAudCount" class="text-xs text-slate-400"></span>
                                 </div>
-                                @if($timetableAuditoriumAssignmentOnly)
-                                <form id="asgAudCreateForm" class="hidden grid grid-cols-2 md:grid-cols-7 gap-2 p-3 border-b border-slate-200 bg-blue-50">
-                                    <div class="rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-slate-600" title="Auditoriya avtomatik shu kafedraga biriktiriladi">
-                                        <span class="block text-[10px] uppercase tracking-wide text-slate-400">Kafedra</span>
-                                        <strong class="block truncate">{{ $timetableDepartmentName ?: 'Profil orqali aniqlanadi' }}</strong>
-                                    </div>
-                                    <input id="asgAudCode" name="code" required maxlength="50" placeholder="Kod" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudName" name="name" required maxlength="255" placeholder="Xona nomi" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudVolume" name="volume" required type="number" min="0" max="2000" placeholder="Sig'im" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudBuilding" name="building_name" maxlength="255" placeholder="Bino" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudType" name="auditorium_type_name" maxlength="255" placeholder="Turi" class="rounded-md border-slate-300 text-xs">
-                                    <div class="flex items-center gap-2">
-                                        <input type="hidden" name="active" value="1">
-                                        <button type="submit" id="asgAudCreateSave" class="asc-btn primary text-xs flex-1"><i class="bi bi-check2" aria-hidden="true"></i> Saqlash</button>
-                                        <button type="button" id="asgAudCreateCancel" class="asc-btn text-xs">Bekor</button>
-                                    </div>
-                                </form>
-                                @endif
+                                
                                 <div class="overflow-auto asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
                                     <table id="asgAudTable" class="w-full text-xs asc-table"></table>
                                 </div>
@@ -1772,6 +1760,7 @@
             const CSRF = @json(csrf_token());
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
+            const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
             let board = null;      // {id, days, pairs_per_day, ...}
@@ -1788,7 +1777,7 @@
             let selected = null;   // tanlangan karta (obyekt)
             let audCache = null;
             let modalCard = null;
-            let overrides = {};    // "cardId|week" => {day, pair, cancelled} (hafta bo'yicha istisnolar)
+            let overrides = {};    // "cardId|week" => {day, pair, cancelled, auditorium_*}
             let missingGroups = []; // rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
             const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
@@ -2006,7 +1995,16 @@
                 (j.grids || []).forEach(g => { grids[gridKey(g.faculty_name, g.specialty_name, g.course)] = g; });
                 // Hafta bo'yicha istisnolar
                 overrides = {};
-                (j.overrides || []).forEach(o => { overrides[o.card_id + '|' + o.week] = { day: o.day, pair: o.pair, cancelled: o.cancelled }; });
+                (j.overrides || []).forEach(o => {
+                    overrides[o.card_id + '|' + o.week] = {
+                        day: o.day,
+                        pair: o.pair,
+                        cancelled: o.cancelled,
+                        auditorium_code: o.auditorium_code || null,
+                        auditorium_name: o.auditorium_name || null,
+                        auditorium_volume: o.auditorium_volume || null,
+                    };
+                });
                 // Fan rejimi (hafta almashinuvi / sikl): "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
                 subjectSettings = {};
                 (j.subject_settings || []).forEach(s => { subjectSettings[subjModeKey(s.specialty_name, s.course, s.subject_name)] = s; });
@@ -2259,6 +2257,19 @@
                 if (ov) return ov.cancelled ? null : { day: ov.day, pair: ov.pair };
                 return c.day ? { day: c.day, pair: c.pair } : null;
             }
+            // Tanlangan haftada vaqt bilan birga auditoriya ham individual
+            // override'dan olinadi; shablon ko'rinishida bazaviy xona qoladi.
+            function effectiveCard(c) {
+                if (!curWeek) return c;
+                const ov = overrides[c.id + '|' + curWeek];
+                if (!ov || ov.cancelled || !ov.auditorium_code) return c;
+                return {
+                    ...c,
+                    auditorium_code: ov.auditorium_code,
+                    auditorium_name: ov.auditorium_name || ov.auditorium_code,
+                    auditorium_volume: ov.auditorium_volume || null,
+                };
+            }
             // Karta shu haftada shablondan farq qiladimi (individual)?
             const hasWeekOverride = c => curWeek && !!overrides[c.id + '|' + curWeek];
             // Karta shu haftada umuman o'tilmaydimi (bekor qilingan / almashinuvchi
@@ -2293,6 +2304,24 @@
             }
 
             // ===== Avtomatik (optimal) joylashtirish =====
+            function setAutoProgress(phase, completed, total, detail = '') {
+                const safeTotal = Math.max(1, +total || 0);
+                const fraction = Math.max(0, Math.min(1, (+completed || 0) / safeTotal));
+                const phaseStart = phase === 1 ? 0 : 50;
+                const percent = Math.round(phaseStart + fraction * 50);
+                const phaseLabel = phase === 1 ? '1/2 · Asosiy jadval' : '2/2 · Haftalarni moslash';
+                $('autoProgress').classList.remove('hidden');
+                $('autoProgressLabel').textContent = phaseLabel + (detail ? ' · ' + detail : '');
+                $('autoProgressPercent').textContent = percent + '%';
+                $('autoProgressBar').style.width = percent + '%';
+                $('autoProgressTrack').setAttribute('aria-valuenow', String(percent));
+            }
+            function hideAutoProgress() {
+                $('autoProgress').classList.add('hidden');
+                $('autoProgressBar').style.width = '0%';
+                $('autoProgressTrack').setAttribute('aria-valuenow', '0');
+            }
+
             async function doAutoPlace() {
                 if (!board || !curSpec) return;
                 const whole = $('autoScope').checked;
@@ -2301,22 +2330,86 @@
                 const scopeLabel = (whole ? 'Butun doska' : scopeLabelText()) + typeLbl;
                 if ($('autoReset').checked &&
                     !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
-                $('autoBtn').disabled = true; $('autoMsg').textContent = 'Joylashtirilmoqda...';
+
+                // Katta qamrovni fakultet+yo'nalish+kurs bo'yicha kichik requestlarga
+                // bo'lamiz. Oldingi requestlar yozgan bandlik keyingi requestlarda ham
+                // hisobga olinadi, ammo reverse-proxy 504 vaqt chegarasi urilmaydi.
+                const scopeCards = whole ? cards : cards.filter(c =>
+                    selectedFaculties.has(c.faculty_name || '') &&
+                    selectedDirs.has(c.specialty_name) &&
+                    selectedCourses.has(+c.course));
+                const chunkMap = new Map();
+                scopeCards.forEach(c => {
+                    const item = { faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: +c.course };
+                    const key = item.faculty + '¦' + item.specialty + '¦' + item.course;
+                    if (item.specialty && item.course && !chunkMap.has(key)) chunkMap.set(key, item);
+                });
+                const chunks = [...chunkMap.values()];
+                if (!chunks.length) {
+                    $('autoMsg').textContent = 'Joylashtirish uchun qamrov topilmadi.';
+                    return;
+                }
+
+                $('autoBtn').disabled = true;
+                $('autoMsg').textContent = '';
+                setAutoProgress(1, 0, chunks.length, 'Tayyorlanmoqda');
+                const result = { placed: 0, unplaced: 0, rooms_assigned: 0, compacted: 0 };
+                const weeksSet = new Set();
                 try {
-                    const body = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0,
+                    const common = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0,
                         lecture_rooms: $('autoLecRooms').checked ? 1 : 0 };
-                    if (!whole) Object.assign(body, scopeBody());
-                    if (typeFilter !== 'all') body.training_type = typeFilter;
-                    const j = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
+                    if (typeFilter !== 'all') common.training_type = typeFilter;
+
+                    for (let i = 0; i < chunks.length; i++) {
+                        const chunk = chunks[i];
+                        const chunkLabel = (i + 1) + '/' + chunks.length + ' · ' +
+                            chunk.specialty + ' · ' + chunk.course + '-kurs';
+                        setAutoProgress(1, i, chunks.length, chunkLabel);
+                        const body = {
+                            ...common,
+                            faculty_names: [chunk.faculty],
+                            specialty_names: [chunk.specialty],
+                            courses: [chunk.course],
+                        };
+                        const part = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
+                        result.placed += +(part.placed || 0);
+                        result.unplaced += +(part.unplaced || 0);
+                        result.rooms_assigned += +(part.rooms_assigned || 0);
+                        (part.weeks_to_compact || []).forEach(w => weeksSet.add(+w));
+                        setAutoProgress(1, i + 1, chunks.length, chunkLabel);
+                    }
+
+                    // Ma'ruza o'tilmaydigan haftalarni foydalanuvchi bosmasdan, bittadan
+                    // hisoblaymiz. Bitta ulkan request o'rniga kichik requestlar 504
+                    // timeoutini chetlab o'tadi va progress ekranda ko'rinadi.
+                    const weeks = [...weeksSet].filter(Boolean).sort((a, b) => a - b);
+                    if (weeks.length) {
+                        setAutoProgress(2, 0, weeks.length, '1/' + weeks.length + ' · ' + weeks[0] + '-hafta');
+                    } else {
+                        setAutoProgress(2, 1, 1, 'Haftalik o\'zgarish yo\'q');
+                    }
+                    for (let i = 0; i < weeks.length; i++) {
+                        const weekLabel = (i + 1) + '/' + weeks.length + ' · ' + weeks[i] + '-hafta';
+                        setAutoProgress(2, i, weeks.length, weekLabel);
+                        const compactBody = { week: weeks[i] };
+                        if (!whole) Object.assign(compactBody, scopeBody());
+                        if (typeFilter !== 'all') compactBody.training_type = typeFilter;
+                        const weekResult = await api(BASE + '/boards/' + board.id + '/compact-week', 'POST', compactBody);
+                        result.compacted += +(weekResult.moved || 0);
+                        setAutoProgress(2, i + 1, weeks.length, weekLabel);
+                    }
+
                     await loadBoard(board.id);
-                    $('autoMsg').textContent = 'Joylandi: ' + j.placed +
-                        (j.unplaced ? (' · joy topilmadi: ' + j.unplaced) : '') +
-                        (j.rooms_assigned ? (' · xona biriktirildi: ' + j.rooms_assigned) : '') +
-                        (j.compacted ? (' · haftalarda tepaga surildi: ' + j.compacted) : '');
+                    setAutoProgress(2, 1, 1, 'Tugallandi');
+                    $('autoMsg').textContent = 'Joylandi: ' + result.placed +
+                        (result.unplaced ? (' · joy topilmadi: ' + result.unplaced) : '') +
+                        (result.rooms_assigned ? (' · xona biriktirildi: ' + result.rooms_assigned) : '') +
+                        (result.compacted ? (' · haftalarda tepaga surildi: ' + result.compacted) : '') +
+                        (weeks.length ? (' · hisoblangan hafta: ' + weeks.length) : '');
                     // Hammasi allaqachon joylashgan va reset belgilanmagan — yangi
                     // sozlama bo'yicha qayta taqsimlash uchun yo'l ko'rsatamiz.
-                    // Xona biriktirilgan bo'lsa — ish bajarildi, qayta joylash so'ralmaydi
-                    if (!$('autoReset').checked && !j.placed && !j.unplaced && !j.rooms_assigned && !j.compacted) {
+                    if (!$('autoReset').checked && !result.placed && !result.unplaced &&
+                        !result.rooms_assigned && !result.compacted && !weeks.length) {
                         $('autoMsg').textContent = 'Hammasi joylashgan. Yangi sozlama bo\'yicha qayta joylash kerak.';
                         if (confirm('Barcha kartalar allaqachon joylashgan.\nYangi sozlama (bir kunga / ketma-ket) bo\'yicha mavjud joylashuvlarni bo\'shatib QAYTA joylaymizmi?')) {
                             $('autoReset').checked = true;
@@ -2324,7 +2417,14 @@
                             return doAutoPlace();
                         }
                     }
-                } catch (e) { $('autoMsg').textContent = ''; alert('Xatolik: ' + e.message); }
+                } catch (e) {
+                    // Oldingi bo'laklar yozilgan bo'lishi mumkin; ekranni serverdagi
+                    // haqiqiy holat bilan yangilab qo'yamiz.
+                    try { await loadBoard(board.id); } catch (_) {}
+                    hideAutoProgress();
+                    $('autoMsg').textContent = '';
+                    alert('Xatolik: ' + e.message);
+                }
                 $('autoBtn').disabled = false;
             }
             $('autoBtn').onclick = doAutoPlace;
@@ -2734,9 +2834,11 @@
             function conflictsAt(card, day, pair) {
                 const my = cardGKeys(card);   // guruh kaliti (fakultet+yo'nalish+kurs+nom)
                 const errs = [];
+                const effectiveSource = effectiveCard(card);
                 const a0 = pair, a1 = pair + cardLen(card);   // [a0, a1)
                 cards.forEach(o => {
                     if (o.id === card.id) return;
+                    const effectiveOther = effectiveCard(o);
                     const pl = effPlace(o);
                     if (!pl || pl.day !== day) return;
                     const b0 = pl.pair, b1 = pl.pair + cardLen(o);   // [b0, b1)
@@ -2746,7 +2848,7 @@
                     const ov = cardGKeys(o).filter(k => my.includes(k));
                     if (ov.length) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
-                    if (card.auditorium_code && o.auditorium_code === card.auditorium_code) errs.push('Auditoriya band: ' + o.auditorium_name);
+                    if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
                 });
                 return errs;
             }
@@ -2759,7 +2861,8 @@
                 } else {
                     await api(BASE + '/cards/' + card.id + '/week-override', 'POST',
                         { week: curWeek, action: 'move', day: d, pair: p });
-                    overrides[card.id + '|' + curWeek] = { day: d, pair: p, cancelled: false };
+                    const key = card.id + '|' + curWeek;
+                    overrides[key] = { ...(overrides[key] || {}), day: d, pair: p, cancelled: false };
                 }
             }
             async function placeCardAt(card, d, p) {
@@ -2899,7 +3002,7 @@
 
             // Jadval kesimi (faqat ko'rish): o'qituvchi / auditoriya / fan ustunlari
             function renderGridCross(mode) {
-                const placed = visibleSpecCards().filter(c => effPlace(c));
+                const placed = visibleSpecCards().filter(c => effPlace(c)).map(effectiveCard);
                 const keyOf = c => mode === 'teacher' ? (c.teacher_name || '— (biriktirilmagan)')
                     : mode === 'room' ? (c.auditorium_name || '— (xona yo\'q)')
                     : c.subject_name;
@@ -3052,9 +3155,10 @@
                 visibleSpecCards().forEach(c => {
                     const pl = effPlace(c);
                     if (!pl) return;
-                    const len = cardLen(c);
-                    cardGroups(c).forEach(gg => {
-                        for (let k = 0; k < len; k++) { const key = gkey(c, gg) + '|' + pl.day + '|' + (pl.pair + k); if (!placedIdx[key] || (!curWeek && c.training_type === 'lecture')) placedIdx[key] = c; }
+                    const ec = effectiveCard(c);
+                    const len = cardLen(ec);
+                    cardGroups(ec).forEach(gg => {
+                        for (let k = 0; k < len; k++) { const key = gkey(ec, gg) + '|' + pl.day + '|' + (pl.pair + k); if (!placedIdx[key] || (!curWeek && ec.training_type === 'lecture')) placedIdx[key] = ec; }
                     });
                 });
 
@@ -3411,7 +3515,10 @@
                     } else {
                         // Faqat shu haftada bekor qilish
                         await api(BASE + '/cards/' + modalCard.id + '/week-override', 'POST', { week: curWeek, action: 'cancel' });
-                        overrides[modalCard.id + '|' + curWeek] = { day: null, pair: null, cancelled: true };
+                        overrides[modalCard.id + '|' + curWeek] = {
+                            day: null, pair: null, cancelled: true,
+                            auditorium_code: null, auditorium_name: null, auditorium_volume: null,
+                        };
                     }
                 } catch (e) { alert('Xatolik: ' + e.message); return; }
                 $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
@@ -3988,7 +4095,7 @@
                 // o'zini yuklaymiz.
                 const src = specCards();
                 // Dars turi filtri + tanlangan hafta Excel ko'rinishga ham qo'llanadi
-                const placed = src.filter(c => effPlace(c) && typeVisible(c));
+                const placed = src.filter(c => effPlace(c) && typeVisible(c)).map(effectiveCard);
                 // Ustun tuzilishi rejimga qarab: guruh / o'qituvchi / auditoriya.
                 // headGroups: [{title, span, cols:[{key,label}]}]; idx: "colKey|day|pair" → karta(lar)
                 let headGroups = [], idx = {};
@@ -4649,10 +4756,10 @@
                         const departmentOptions = departments
                             .map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>')
                             .join('');
-                        $('asgAudDepartment').innerHTML = TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY
+                        $('asgAudDepartment').innerHTML = TIMETABLE_DEPARTMENT_HEAD
                             ? departmentOptions
                             : '<option value="">— barcha kafedralar —</option>' + departmentOptions;
-                        if (TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY && departments.length) {
+                        if (TIMETABLE_DEPARTMENT_HEAD && departments.length) {
                             $('asgAudDepartment').value = departments[0];
                         }
                         asgAudDepartmentsLoaded = true;
@@ -4665,39 +4772,6 @@
                 }
             }
 
-             if (TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY) {
-                 const createBtn = $('asgAudCreateBtn');
-                 const createForm = $('asgAudCreateForm');
-                 const createCancel = $('asgAudCreateCancel');
-
-                 createBtn?.addEventListener('click', () => {
-                     createForm.classList.toggle('hidden');
-                     if (!createForm.classList.contains('hidden')) $('asgAudCode')?.focus();
-                 });
-                 createCancel?.addEventListener('click', () => {
-                     createForm.reset();
-                     createForm.classList.add('hidden');
-                 });
-                 createForm?.addEventListener('submit', async event => {
-                     event.preventDefault();
-                     const saveBtn = $('asgAudCreateSave');
-                     saveBtn.disabled = true;
-                     try {
-                         const body = Object.fromEntries(new FormData(createForm).entries());
-                         const result = await api(BASE + '/auditoriums', 'POST', body);
-                         createForm.reset();
-                         createForm.classList.add('hidden');
-                         $('asgMsg').textContent = 'Auditoriya qo\'shildi';
-                         await loadAsgAuditoriums();
-                         if (result.auditorium?.id) selectAsgAudRoom(result.auditorium.id);
-                     } catch (e) {
-                         $('asgMsg').textContent = 'Xatolik: ' + e.message;
-                     } finally {
-                         saveBtn.disabled = false;
-                     }
-                 });
-             }
-
             function filteredAsgAudRooms() {
                 const q = ($('asgAudSearch').value || '').toLowerCase().trim();
                 return asgAudRooms.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name].some(value => String(value || '').toLowerCase().includes(q)));
@@ -4705,19 +4779,13 @@
 
             function renderAsgAudTable() {
                 const rows = filteredAsgAudRooms();
-                const showActions = TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY;
                 $('asgAudCount').textContent = rows.length + ' ta';
 
-                let h = showActions
-                    ? '<colgroup><col style="width:14%"><col style="width:20%"><col style="width:8%">' +
-                      '<col style="width:13%"><col style="width:14%"><col style="width:23%"><col style="width:8%"></colgroup>'
-                    : '<colgroup><col style="width:16%"><col style="width:24%"><col style="width:9%">' +
-                      '<col style="width:15%"><col style="width:16%"><col style="width:20%"></colgroup>';
+                let h = '<colgroup><col style="width:16%"><col style="width:24%"><col style="width:9%">' +
+                    '<col style="width:15%"><col style="width:16%"><col style="width:20%"></colgroup>';
 
                 h += '<thead><tr><th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th>' +
-                    '<th>Turi</th><th>Holat</th><th>O\'qituvchi</th>' +
-                    (showActions ? '<th class="text-center">Amal</th>' : '') +
-                    '</tr></thead><tbody>';
+                    '<th>Turi</th><th>Holat</th><th>O\'qituvchi</th></tr></thead><tbody>';
 
                 rows.forEach((room, i) => {
                     const general = !!room.is_general;
@@ -4736,19 +4804,12 @@
                     const teacher = general
                         ? '<span class="text-slate-400">Barcha o\'qituvchilar</span>'
                         : (hasTeacher ? '<span class="aud-teacher">' + esc(room.teacher_name || '—') + '</span>' : '<span class="text-slate-400">Tanlanmagan</span>');
-                    const deleteButton = room.can_delete
-                        ? '<button type="button" data-asg-aud-delete="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-600 hover:bg-red-100" title="Auditoriyani o\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>'
-                        : '';
-                    const action = showActions
-                        ? '<td class="text-center">' + (deleteButton || '<span class="text-slate-300">—</span>') + '</td>'
-                        : '';
-
                     h += '<tr data-i="' + i + '"' + (asgAudSel && asgAudSel.id === room.id ? ' class="sel"' : '') + '>' +
                         '<td class="font-semibold">' + esc(room.name || room.code) + '</td>' +
                         '<td>' + esc(room.building_name || '—') + '</td>' +
                         '<td class="text-center text-emerald-600 font-semibold">' + esc(String(capacity)) + '</td>' +
                         '<td>' + esc(room.auditorium_type_name || '—') + '</td>' +
-                        '<td>' + status + '</td><td>' + teacher + '</td>' + action + '</tr>';
+                        '<td>' + status + '</td><td>' + teacher + '</td></tr>';
                 });
 
                 $('asgAudTable').innerHTML = h + '</tbody>';
@@ -4787,29 +4848,6 @@
                         }
                     };
                 });
-                $('asgAudTable').querySelectorAll('[data-asg-aud-delete]').forEach(button => {
-                    button.onclick = async event => {
-                        event.preventDefault();
-                        event.stopPropagation();
-
-                        const room = asgAudRooms.find(item => +item.id === +button.dataset.asgAudDelete);
-                        if (!room || !confirm('«' + (room.name || room.code) + '» auditoriyasini o\'chirasizmi?')) return;
-
-                        button.disabled = true;
-                        try {
-                            const result = await api(BASE + '/auditoriums/' + room.id, 'DELETE', {});
-                            if (asgAudSel && +asgAudSel.id === +room.id) {
-                                asgAudSel = null;
-                                setAsgAudControls(false);
-                            }
-                            $('asgMsg').textContent = result.message || 'Auditoriya o\'chirildi';
-                            await loadAsgAuditoriums();
-                        } catch (e) {
-                            $('asgMsg').textContent = 'Xatolik: ' + e.message;
-                            button.disabled = false;
-                        }
-                    };
-                });
             }
 
             function setAsgAudControls(on) {
@@ -4826,7 +4864,7 @@
                 const general = $('asgAudGeneral').checked;
                 $('asgAudTeacher').disabled = !asgAudSel || general;
                 $('asgAudTeacherSearch').disabled = !asgAudSel || general;
-                $('asgAudDepartment').disabled = !asgAudSel || general || TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY;
+                $('asgAudDepartment').disabled = !asgAudSel || general || TIMETABLE_DEPARTMENT_HEAD;
             }
 
             async function selectAsgAudRoom(roomId) {

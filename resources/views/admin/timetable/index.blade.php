@@ -11,9 +11,9 @@
     if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
         $timetableActiveRole = $timetableRoles[0];
     }
-    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
+    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
-    $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly;
+    $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead;
 @endphp
 
     <x-slot name="header">
@@ -740,32 +740,11 @@
                             <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
                                     <span class="text-sm font-semibold text-slate-700">Auditoriyalar</span>
-                                    @if($timetableDepartmentHead)
-                                    <button type="button" id="asgAudCreateBtn" class="asc-btn primary text-xs">
-                                        <i class="bi bi-plus-lg" aria-hidden="true"></i> Auditoriya qo'shish
-                                    </button>
-                                    @endif
+                                    
                                     <input id="asgAudSearch" placeholder="Xona qidirish..." class="ml-auto w-52 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgAudCount" class="text-xs text-slate-400"></span>
                                 </div>
-                                @if($timetableDepartmentHead)
-                                <form id="asgAudCreateForm" class="hidden grid grid-cols-2 md:grid-cols-7 gap-2 p-3 border-b border-slate-200 bg-blue-50">
-                                    <div class="rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-slate-600" title="Auditoriya avtomatik shu kafedraga biriktiriladi">
-                                        <span class="block text-[10px] uppercase tracking-wide text-slate-400">Kafedra</span>
-                                        <strong class="block truncate">{{ $timetableDepartmentName ?: 'Profil orqali aniqlanadi' }}</strong>
-                                    </div>
-                                    <input id="asgAudCode" name="code" required maxlength="50" placeholder="Kod" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudName" name="name" required maxlength="255" placeholder="Xona nomi" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudVolume" name="volume" required type="number" min="0" max="2000" placeholder="Sig'im" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudBuilding" name="building_name" maxlength="255" placeholder="Bino" class="rounded-md border-slate-300 text-xs">
-                                    <input id="asgAudType" name="auditorium_type_name" maxlength="255" placeholder="Turi" class="rounded-md border-slate-300 text-xs">
-                                    <div class="flex items-center gap-2">
-                                        <input type="hidden" name="active" value="1">
-                                        <button type="submit" id="asgAudCreateSave" class="asc-btn primary text-xs flex-1"><i class="bi bi-check2" aria-hidden="true"></i> Saqlash</button>
-                                        <button type="button" id="asgAudCreateCancel" class="asc-btn text-xs">Bekor</button>
-                                    </div>
-                                </form>
-                                @endif
+                                
                                 <div class="overflow-auto asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
                                     <table id="asgAudTable" class="w-full text-xs asc-table"></table>
                                 </div>
@@ -4784,39 +4763,6 @@
                 }
             }
 
-             if (TIMETABLE_DEPARTMENT_HEAD) {
-                 const createBtn = $('asgAudCreateBtn');
-                 const createForm = $('asgAudCreateForm');
-                 const createCancel = $('asgAudCreateCancel');
-
-                 createBtn?.addEventListener('click', () => {
-                     createForm.classList.toggle('hidden');
-                     if (!createForm.classList.contains('hidden')) $('asgAudCode')?.focus();
-                 });
-                 createCancel?.addEventListener('click', () => {
-                     createForm.reset();
-                     createForm.classList.add('hidden');
-                 });
-                 createForm?.addEventListener('submit', async event => {
-                     event.preventDefault();
-                     const saveBtn = $('asgAudCreateSave');
-                     saveBtn.disabled = true;
-                     try {
-                         const body = Object.fromEntries(new FormData(createForm).entries());
-                         const result = await api(BASE + '/auditoriums', 'POST', body);
-                         createForm.reset();
-                         createForm.classList.add('hidden');
-                         $('asgMsg').textContent = 'Auditoriya qo\'shildi';
-                         await loadAsgAuditoriums();
-                         if (result.auditorium?.id) selectAsgAudRoom(result.auditorium.id);
-                     } catch (e) {
-                         $('asgMsg').textContent = 'Xatolik: ' + e.message;
-                     } finally {
-                         saveBtn.disabled = false;
-                     }
-                 });
-             }
-
             function filteredAsgAudRooms() {
                 const q = ($('asgAudSearch').value || '').toLowerCase().trim();
                 return asgAudRooms.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name].some(value => String(value || '').toLowerCase().includes(q)));
@@ -4824,19 +4770,13 @@
 
             function renderAsgAudTable() {
                 const rows = filteredAsgAudRooms();
-                const showActions = TIMETABLE_DEPARTMENT_HEAD;
                 $('asgAudCount').textContent = rows.length + ' ta';
 
-                let h = showActions
-                    ? '<colgroup><col style="width:14%"><col style="width:20%"><col style="width:8%">' +
-                      '<col style="width:13%"><col style="width:14%"><col style="width:23%"><col style="width:8%"></colgroup>'
-                    : '<colgroup><col style="width:16%"><col style="width:24%"><col style="width:9%">' +
-                      '<col style="width:15%"><col style="width:16%"><col style="width:20%"></colgroup>';
+                let h = '<colgroup><col style="width:16%"><col style="width:24%"><col style="width:9%">' +
+                    '<col style="width:15%"><col style="width:16%"><col style="width:20%"></colgroup>';
 
                 h += '<thead><tr><th>Xona</th><th>Bino</th><th class="text-center">Sig\'im</th>' +
-                    '<th>Turi</th><th>Holat</th><th>O\'qituvchi</th>' +
-                    (showActions ? '<th class="text-center">Amal</th>' : '') +
-                    '</tr></thead><tbody>';
+                    '<th>Turi</th><th>Holat</th><th>O\'qituvchi</th></tr></thead><tbody>';
 
                 rows.forEach((room, i) => {
                     const general = !!room.is_general;
@@ -4855,19 +4795,12 @@
                     const teacher = general
                         ? '<span class="text-slate-400">Barcha o\'qituvchilar</span>'
                         : (hasTeacher ? '<span class="aud-teacher">' + esc(room.teacher_name || '—') + '</span>' : '<span class="text-slate-400">Tanlanmagan</span>');
-                    const deleteButton = room.can_delete
-                        ? '<button type="button" data-asg-aud-delete="' + room.id + '" class="inline-flex items-center justify-center rounded-md border border-red-200 bg-red-50 px-2 py-1 text-red-600 hover:bg-red-100" title="Auditoriyani o\'chirish"><i class="bi bi-trash3" aria-hidden="true"></i></button>'
-                        : '';
-                    const action = showActions
-                        ? '<td class="text-center">' + (deleteButton || '<span class="text-slate-300">—</span>') + '</td>'
-                        : '';
-
                     h += '<tr data-i="' + i + '"' + (asgAudSel && asgAudSel.id === room.id ? ' class="sel"' : '') + '>' +
                         '<td class="font-semibold">' + esc(room.name || room.code) + '</td>' +
                         '<td>' + esc(room.building_name || '—') + '</td>' +
                         '<td class="text-center text-emerald-600 font-semibold">' + esc(String(capacity)) + '</td>' +
                         '<td>' + esc(room.auditorium_type_name || '—') + '</td>' +
-                        '<td>' + status + '</td><td>' + teacher + '</td>' + action + '</tr>';
+                        '<td>' + status + '</td><td>' + teacher + '</td></tr>';
                 });
 
                 $('asgAudTable').innerHTML = h + '</tbody>';
@@ -4900,29 +4833,6 @@
                             }
                             $('asgMsg').textContent = result.message || 'Biriktirish bekor qilindi';
                             renderAsgAudTable();
-                        } catch (e) {
-                            $('asgMsg').textContent = 'Xatolik: ' + e.message;
-                            button.disabled = false;
-                        }
-                    };
-                });
-                $('asgAudTable').querySelectorAll('[data-asg-aud-delete]').forEach(button => {
-                    button.onclick = async event => {
-                        event.preventDefault();
-                        event.stopPropagation();
-
-                        const room = asgAudRooms.find(item => +item.id === +button.dataset.asgAudDelete);
-                        if (!room || !confirm('«' + (room.name || room.code) + '» auditoriyasini o\'chirasizmi?')) return;
-
-                        button.disabled = true;
-                        try {
-                            const result = await api(BASE + '/auditoriums/' + room.id, 'DELETE', {});
-                            if (asgAudSel && +asgAudSel.id === +room.id) {
-                                asgAudSel = null;
-                                setAsgAudControls(false);
-                            }
-                            $('asgMsg').textContent = result.message || 'Auditoriya o\'chirildi';
-                            await loadAsgAuditoriums();
                         } catch (e) {
                             $('asgMsg').textContent = 'Xatolik: ' + e.message;
                             button.disabled = false;

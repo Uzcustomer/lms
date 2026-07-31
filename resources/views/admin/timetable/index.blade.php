@@ -11,9 +11,9 @@
     if (!in_array($timetableActiveRole, $timetableRoles, true) && $timetableRoles) {
         $timetableActiveRole = $timetableRoles[0];
     }
-    $timetableTeacherAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
-    $timetableAuditoriumAssignmentOnly = $timetableActiveRole === 'kafedra_mudiri';
-    $timetableAssignmentOnly = $timetableTeacherAssignmentOnly || $timetableAuditoriumAssignmentOnly;
+    $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
+    $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
+    $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly;
 @endphp
 
     <x-slot name="header">
@@ -703,11 +703,9 @@
                                 <i class="bi bi-person-plus" aria-hidden="true"></i> Fanlarni biriktirish
                             </button>
                             @endif
-                            @if(!$timetableTeacherAssignmentOnly)
                             <button type="button" class="asg-tab-button {{ $timetableAuditoriumAssignmentOnly ? 'active' : '' }}" data-asg-tab="auditoriums">
                                 <i class="bi bi-door-open" aria-hidden="true"></i> Auditoriyalarni biriktirish
                             </button>
-                            @endif
                         </div>
                         <div id="asgTeachersPanel" data-asg-panel="teachers" class="{{ $timetableAuditoriumAssignmentOnly ? 'hidden' : '' }} assign-modal-content flex gap-3 p-4 overflow-hidden" style="min-height: 0;">
                             {{-- Chap: dars birliklari --}}
@@ -742,7 +740,7 @@
                             <div class="assign-pane flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                 <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
                                     <span class="text-sm font-semibold text-slate-700">Auditoriyalar</span>
-                                    @if($timetableAuditoriumAssignmentOnly)
+                                    @if($timetableDepartmentHead)
                                     <button type="button" id="asgAudCreateBtn" class="asc-btn primary text-xs">
                                         <i class="bi bi-plus-lg" aria-hidden="true"></i> Auditoriya qo'shish
                                     </button>
@@ -750,7 +748,7 @@
                                     <input id="asgAudSearch" placeholder="Xona qidirish..." class="ml-auto w-52 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgAudCount" class="text-xs text-slate-400"></span>
                                 </div>
-                                @if($timetableAuditoriumAssignmentOnly)
+                                @if($timetableDepartmentHead)
                                 <form id="asgAudCreateForm" class="hidden grid grid-cols-2 md:grid-cols-7 gap-2 p-3 border-b border-slate-200 bg-blue-50">
                                     <div class="rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-slate-600" title="Auditoriya avtomatik shu kafedraga biriktiriladi">
                                         <span class="block text-[10px] uppercase tracking-wide text-slate-400">Kafedra</span>
@@ -1781,6 +1779,7 @@
             const CSRF = @json(csrf_token());
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
+            const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
             let board = null;      // {id, days, pairs_per_day, ...}
@@ -4769,10 +4768,10 @@
                         const departmentOptions = departments
                             .map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>')
                             .join('');
-                        $('asgAudDepartment').innerHTML = TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY
+                        $('asgAudDepartment').innerHTML = TIMETABLE_DEPARTMENT_HEAD
                             ? departmentOptions
                             : '<option value="">— barcha kafedralar —</option>' + departmentOptions;
-                        if (TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY && departments.length) {
+                        if (TIMETABLE_DEPARTMENT_HEAD && departments.length) {
                             $('asgAudDepartment').value = departments[0];
                         }
                         asgAudDepartmentsLoaded = true;
@@ -4785,7 +4784,7 @@
                 }
             }
 
-             if (TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY) {
+             if (TIMETABLE_DEPARTMENT_HEAD) {
                  const createBtn = $('asgAudCreateBtn');
                  const createForm = $('asgAudCreateForm');
                  const createCancel = $('asgAudCreateCancel');
@@ -4825,7 +4824,7 @@
 
             function renderAsgAudTable() {
                 const rows = filteredAsgAudRooms();
-                const showActions = TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY;
+                const showActions = TIMETABLE_DEPARTMENT_HEAD;
                 $('asgAudCount').textContent = rows.length + ' ta';
 
                 let h = showActions
@@ -4946,7 +4945,7 @@
                 const general = $('asgAudGeneral').checked;
                 $('asgAudTeacher').disabled = !asgAudSel || general;
                 $('asgAudTeacherSearch').disabled = !asgAudSel || general;
-                $('asgAudDepartment').disabled = !asgAudSel || general || TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY;
+                $('asgAudDepartment').disabled = !asgAudSel || general || TIMETABLE_DEPARTMENT_HEAD;
             }
 
             async function selectAsgAudRoom(roomId) {

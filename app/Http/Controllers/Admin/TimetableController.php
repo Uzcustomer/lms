@@ -943,13 +943,51 @@ class TimetableController extends Controller
             }
         }
 
+        // ══ Kartaning faol haftalari — bitmask ═══════════════════════════════
+        // Ikki dars BIR slotni bo'lishishi mumkin, agar ular hech qachon bir
+        // haftaga tushmasa. Masalan toq haftalardagi Psixologiya ma'ruzasi va
+        // juft haftalardagi Gigiyena ma'ruzasi bitta 08:30 ni, bitta xonani
+        // egallay oladi; ma'ruza va uni almashtiruvchi amaliy ham shunday.
+        // Shuning uchun bandlik xaritalari "band/bo'sh" emas, QAYSI HAFTALARDA
+        // band ekanini saqlaydi va to'qnashuv niqoblar kesishishi bilan
+        // aniqlanadi.
+        $cancelledWeeks = [];   // card_id => [hafta => true]
+        if (Schema::hasTable('timetable_card_overrides')) {
+            $rows = DB::table('timetable_card_overrides as o')
+                ->join('timetable_cards as c', 'c.id', '=', 'o.card_id')
+                ->where('c.board_id', $board->id)
+                ->where('o.cancelled', true)
+                ->get(['o.card_id', 'o.week']);
+            foreach ($rows as $row) {
+                $cancelledWeeks[(int) $row->card_id][(int) $row->week] = true;
+            }
+        }
+        $maskCache = [];
+        $maskOf = function (TimetableCard $c) use (&$maskCache, $cancelledWeeks, $weeksFor): int {
+            $id = (int) $c->id;
+            if (isset($maskCache[$id])) {
+                return $maskCache[$id];
+            }
+            $total = max(1, min(60, $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course)));
+            $skip = $cancelledWeeks[$id] ?? [];
+            $mask = 0;
+            for ($w = 1; $w <= $total; $w++) {
+                if (!isset($skip[$w])) {
+                    $mask |= 1 << ($w - 1);
+                }
+            }
+            // Hamma haftada bekor qilingan karta (mask 0) hech kim bilan
+            // to'qnashmay, xohlagan joyga tushib ketmasin — to'liq band deb olamiz.
+            return $maskCache[$id] = ($mask !== 0 ? $mask : ((1 << $total) - 1));
+        };
+
         // Band kataklar — joylashgan (fiks) kartalardan
-        $groupBusy = [];   // "spec|course|day|pair" => [group,...]
-        $teacherBusy = []; // "teacher_id|day|pair" => true
-        $roomBusy = [];    // "code|day|pair" => true
+        $groupBusy = [];   // "spec|course|day|pair" => [guruh => hafta niqobi]
+        $teacherBusy = []; // "teacher_id|day|pair" => hafta niqobi
+        $roomBusy = [];    // "code|day|pair" => hafta niqobi
         foreach ($all as $c) {
             if ($c->day && $c->pair) {
-                $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
+                $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $maskOf($c));
             }
         }
 
@@ -998,11 +1036,14 @@ class TimetableController extends Controller
 
         // Tartib: eng ko'p cheklovli avval — ma'ruza (ko'p guruh band qiladi),
         // ko'proq guruh, ko'proq talaba
+        // Amaliylar orasida KAM haftalik karta avval keladi: ma'ruza o'rnini
+        // bosuvchi amaliy ma'ruza slotini egallashi, har haftalik amaliy esa
+        // uning ketidan tizilishi kerak.
         $toPlace = $toPlace->sort(function ($a, $b) {
             $ka = [$a->specialty_name, (int) $a->course, $a->training_type === 'lecture' ? 0 : 1,
-                   -count($a->occupiedGroups()), -(int) $a->students];
+                   (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
             $kb = [$b->specialty_name, (int) $b->course, $b->training_type === 'lecture' ? 0 : 1,
-                   -count($b->occupiedGroups()), -(int) $b->students];
+                   (int) $b->weeks, -count($b->occupiedGroups()), -(int) $b->students];
             return $ka <=> $kb;
         })->values();
 
@@ -1017,9 +1058,44 @@ class TimetableController extends Controller
         // Ma'ruzani ALMASHTIRUVCHI amaliy karta (ma'ruza yo'q haftalarda o'tiladi)
         // aynan shu slotga qo'yiladi — shunda dars ertaroq boshlanadi va haftalik
         // yuk oshmaydi (ular hech qachon bir haftaga tushmaydi).
-        $lecSlot = [];
+        // Fan zanjiri: "yo'nalish|kurs|fan" => ma'ruzadan boshlanadigan blok.
+        //   lec  — ma'ruzaning boshlanish yarim-sloti
+        //   next — zanjirning navbatdagi bo'sh yarim-sloti (ma'ruzadan keyin)
+        //   lw   — ma'ruza necha haftada o'tiladi
+        // Reja soati fanni bir necha kartaga bo'ladi:
+        //   · har haftalik amaliy soat            (hamma haftada)
+        //   · ma'ruzasiz haftalardagi qo'shimcha  (ma'ruza o'tilmaydigan haftalarda)
+        //   · qoldiq 1 soat                        (bir nechta haftada)
+        // Bular bitta fanning bir kunlik yuki: ma'ruzasiz haftada ma'ruza o'rnini
+        // bosuvchi amaliy ma'ruza slotidan boshlanadi, qolgan amaliy soat esa
+        // uning ketidan tiziladi — nechchi soat bo'lishidan qat'i nazar
+        // (2+2, 2+4, 4+2 …) guruh uchun dars yaxlit va bir vaqtda boshlanadi.
+        $chain = [];
         $subjOf = fn($c) => $this->specKey($c->specialty_name) . '|' . (int) $c->course
             . '|' . $this->normSubject((string) $c->subject_name);
+
+        // Zanjirdagi aniq joyga qo'yishga urinish. Muvaffaqiyatsiz bo'lsa null —
+        // chaqiruvchi odatdagi qidiruvga tushadi.
+        $chainSpot = function (array $segs, ?array $ch, bool $standIn, int $days, int $pairs, string $scope)
+            use (&$groupBusy, &$teacherBusy, &$roomBusy) {
+            if (!$ch) {
+                return null;
+            }
+            $start = $standIn ? $ch['lec'] : $ch['next'];
+            $total = array_sum(array_column($segs, 'len'));
+            if ($start < 1 || $start + $total - 1 > $pairs) {
+                return null;
+            }
+            // Soxta "anchor" — blok aynan $start dan boshlanishini majburlaydi.
+            $spot = $this->clusterPlacement(
+                $segs, $days, $pairs, $scope,
+                $groupBusy, $teacherBusy, $roomBusy,
+                true, [$ch['day'] => [[$start - 1, $start - 1]]],
+                fn(int $d, int $p) => ($d === $ch['day'] && $p === $start) ? 0.0 : 1000.0
+            );
+            return ($spot && (int) $spot[0]['day'] === (int) $ch['day'] && (int) $spot[0]['pair'] === $start)
+                ? $spot : null;
+        };
 
         // ══ Bir dars = bir blok ══════════════════════════════════════════════
         // Reja soati kartalarga bo'lingan (mas. haftasiga 4 soat amaliy → 2 ta
@@ -1093,6 +1169,7 @@ class TimetableController extends Controller
                         'teacher' => $uc->teacher_id,
                         'room_required' => $ucNeedRoom,
                         'pool' => $ucArr,
+                        'mask' => $maskOf($uc),
                     ];
                 }
                 if ($noRoom) {
@@ -1101,14 +1178,33 @@ class TimetableController extends Controller
                 }
                 $unionGroups = array_values(array_unique($unionGroups));
 
-                $penaltyFor = fn(int $d, int $p) => $this->slotPenalty(
-                    $lead, $unionGroups, $d, $p, $uPairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots
-                );
-                $spot = $this->clusterPlacement(
-                    $segs, $uDays, $uPairs, $uScope,
-                    $groupBusy, $teacherBusy, $roomBusy,
-                    $consecutive, $anchors[$uKey] ?? [], $penaltyFor
-                );
+                // Avval fan zanjiri: ma'ruzadan boshlanadigan joyga tizilsin
+                // (bir necha kartadan iborat amaliy blok ham shu yo'l bilan
+                // ma'ruza slotiga yoki uning ketiga tushadi).
+                $spot = null;
+                $uChainKey = $subjOf($lead);
+                if ($lead->training_type === 'practice' && isset($chain[$uChainKey])) {
+                    $uCh = $chain[$uChainKey];
+                    $uTotal = $weeksFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
+                    $spot = $chainSpot(
+                        $segs, $uCh, (int) $lead->weeks === $uTotal - (int) $uCh['lw'],
+                        $uDays, $uPairs, $uScope
+                    );
+                    if ($spot !== null) {
+                        $blockLen = array_sum(array_column($segs, 'len'));
+                        $chain[$uChainKey]['next'] = max((int) $uCh['next'], (int) $spot[0]['pair'] + $blockLen);
+                    }
+                }
+                if ($spot === null) {
+                    $penaltyFor = fn(int $d, int $p) => $this->slotPenalty(
+                        $lead, $unionGroups, $d, $p, $uPairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $maskOf($lead)
+                    );
+                    $spot = $this->clusterPlacement(
+                        $segs, $uDays, $uPairs, $uScope,
+                        $groupBusy, $teacherBusy, $roomBusy,
+                        $consecutive, $anchors[$uKey] ?? [], $penaltyFor
+                    );
+                }
                 if ($spot === null) {
                     // Blok butunligicha sig'madi — kartalar joylashmaganlarda qoladi.
                     $unplaced += count($unit);
@@ -1126,10 +1222,13 @@ class TimetableController extends Controller
                         $uc->auditorium_name = $item['room']->name;
                         $roomsAssigned++;
                     }
-                    $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $uc);
+                    $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $uc, $maskOf($uc));
                     if ($uc->training_type === 'lecture' && (int) $uc->weeks > 0
-                        && !isset($lecSlot[$subjOf($uc)])) {
-                        $lecSlot[$subjOf($uc)] = [(int) $uc->day, (int) $uc->pair, (int) $uc->weeks, (int) $uc->id];
+                        && !isset($chain[$subjOf($uc)])) {
+                        $chain[$subjOf($uc)] = [
+                            'day' => (int) $uc->day, 'lec' => (int) $uc->pair,
+                            'next' => (int) $uc->pair + $this->parasNeeded($uc), 'lw' => (int) $uc->weeks,
+                        ];
                     }
                     $ucSk = $this->spreadKey($uc);
                     $subjDay[$ucSk . '|' . $uc->day] = ($subjDay[$ucSk . '|' . $uc->day] ?? 0) + 1;
@@ -1153,6 +1252,7 @@ class TimetableController extends Controller
             // (katta doskalarda bu qayta-qayta hisoblanib, sezilarli sekinlashtirardi).
             $scopeKey = $this->groupScopeKey($c);
             $teacherId = $c->teacher_id;
+            $cardMask = $maskOf($c);
             $minVol = $minVolFor($c);
             $pool = $poolFor($c);
             // Xona kerakmi (havza bo'sh bo'lmasa — kerak). Sig'imi yetmaydiganlarni
@@ -1169,89 +1269,43 @@ class TimetableController extends Controller
             }
             $need = $this->parasNeeded($c);
 
-            // ── Ma'ruza slotiga qo'yish (almashinuvchi amaliy) ───────────────
-            // Amaliy karta ma'ruzani almashtiradigan bo'lsa (haftalari ma'ruza
-            // haftalarini to'ldiradi), uni AYNAN ma'ruza slotiga qo'yamiz:
-            // ular bir haftada uchramaydi, shu sababli guruh to'qnashuvi yo'q,
-            // dars esa ertaroq boshlanadi. O'qituvchi/xona bo'sh bo'lmasa —
-            // odatdagi qidiruvga tushib ketadi.
+            // ── Fan zanjiri: ma'ruzadan boshlanadigan blok ───────────────────
+            // Ma'ruza o'rnini bosuvchi amaliy AYNAN ma'ruza slotiga, qolgan
+            // amaliy soat esa uning ketidan tushadi. Guruh uchun natija:
+            // ma'ruzali haftada [ma'ruza + amaliy], ma'ruzasiz haftada
+            // [amaliy + amaliy] — ikkalasi ham bir vaqtda boshlanadi va
+            // uzilmaydi (soat taqsimoti 2+2 bo'ladimi, 2+4 bo'ladimi).
             $sKey = $subjOf($c);
-            if ($c->training_type === 'practice' && isset($lecSlot[$sKey]) && (int) $c->weeks > 0) {
-                [$ld, $lp, $lw, $lecId] = $lecSlot[$sKey];
-                $totalWeeks = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
-                // Almashinuvchimi: haftalari aynan ma'ruzasiz haftalar soniga teng
-                if ((int) $c->weeks === $totalWeeks - $lw && $lp + $need - 1 <= $pairs) {
-                    $okT = true;
-                    // O'z ma'ruzasi bilan vaqt almashishi mumkin, lekin shu oraliqda
-                    // boshqa fan guruhi band bo'lsa maxsus joylashtirish taqiqlanadi.
-                    // Aks holda uzun amaliy qo'shni ma'ruzaning yarim-slotiga kirib qoladi.
-                    $targetRange = [$lp - 1, $lp - 1 + $need];
-                    foreach ($all as $other) {
-                        if ((int) $other->id === (int) $c->id || !$other->day || !$other->pair
-                            || (int) $other->day !== (int) $ld) {
-                            continue;
-                        }
-                        if ($this->groupScopeKey($other) !== $scopeKey
-                            || empty(array_intersect($groups, $other->occupiedGroups()))) {
-                            continue;
-                        }
-                        $otherRange = $other->halfRange();
-                        if (!$otherRange || !$this->halfOverlap($targetRange, $otherRange)) {
-                            continue;
-                        }
-                        // Faqat aynan shu fanning ma'ruzasi — haftalar bo'yicha almashinuvchi juft.
-                        if ($other->training_type === 'lecture' && $subjOf($other) === $sKey) {
-                            continue;
-                        }
-                        $okT = false;
-                        break;
+            $ch = $chain[$sKey] ?? null;
+            if ($c->training_type === 'practice' && $ch) {
+                $total = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
+                $standIn = (int) $c->weeks === $total - (int) $ch['lw'];
+                $seg = [[
+                    'card' => $c, 'len' => $need, 'groups' => $groups,
+                    'teacher' => $teacherId, 'room_required' => $roomRequired,
+                    'pool' => $poolArr, 'mask' => $cardMask,
+                ]];
+                $spot = $chainSpot($seg, $ch, $standIn, $days, $pairs, $scopeKey);
+                if ($spot !== null) {
+                    $c->day = $spot[0]['day'];
+                    $c->pair = $spot[0]['pair'];
+                    $c->start_half = 0;
+                    if ($spot[0]['room']) {
+                        $c->auditorium_code = $spot[0]['room']->code;
+                        $c->auditorium_name = $spot[0]['room']->name;
+                        $roomsAssigned++;
                     }
-                    // O'qituvchi shu slotda band bo'lsa-yu, uni band qilgan aynan
-                    // SHU fanning ma'ruzasi bo'lsa — bu soxta to'qnashuv: ma'ruza va
-                    // uni almashtiruvchi amaliy hech qachon bir haftaga tushmaydi.
-                    // Ilgari shu tekshiruv (odatda o'qituvchi bir xil bo'lgani uchun)
-                    // maxsus joylashtirishni bekor qilar, amaliy esa boshqa kunga
-                    // tushib ketardi.
-                    for ($i = 0; $i < $need && $okT; $i++) {
-                        $busyBy = $teacherBusy[$teacherId . '|' . $ld . '|' . ($lp + $i)] ?? null;
-                        if ($teacherId && $busyBy !== null && (int) $busyBy !== $lecId) {
-                            $okT = false;
-                        }
+                    $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
+                    $chain[$sKey]['next'] = max((int) $ch['next'], (int) $c->pair + $need);
+                    $skC = $this->spreadKey($c);
+                    $subjDay[$skC . '|' . $c->day] = ($subjDay[$skC . '|' . $c->day] ?? 0) + 1;
+                    $subjSlots[$skC][] = [(int) $c->day, (int) $c->pair, $need];
+                    if ($clusterMode) {
+                        $anchors[$clusterKey($c)][(int) $c->day][] = [(int) $c->pair, (int) $c->pair + $need - 1];
                     }
-                    $altRoom = null;
-                    if ($okT && $roomRequired) {
-                        foreach ($poolArr as $r) {
-                            $free = true;
-                            for ($i = 0; $i < $need; $i++) {
-                                // Ma'ruzaning o'z xonasi ham bo'sh hisoblanadi — o'sha
-                                // haftalarda ma'ruza o'tilmaydi.
-                                $by = $roomBusy[$r->code . '|' . $ld . '|' . ($lp + $i)] ?? null;
-                                if ($by !== null && (int) $by !== $lecId) { $free = false; break; }
-                            }
-                            if ($free) { $altRoom = $r; break; }
-                        }
-                        if (!$altRoom) { $okT = false; }
-                    }
-                    if ($okT) {
-                        $c->day = $ld;
-                        $c->pair = $lp;
-                        $c->start_half = 0;
-                        if ($altRoom) {
-                            $c->auditorium_code = $altRoom->code;
-                            $c->auditorium_name = $altRoom->name;
-                            $roomsAssigned++;
-                        }
-                        $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
-                        $skB = $this->spreadKey($c);
-                        $subjDay[$skB . '|' . $ld] = ($subjDay[$skB . '|' . $ld] ?? 0) + 1;
-                        $subjSlots[$skB][] = [$ld, $lp, $need];
-                        if ($clusterMode) {
-                            $anchors[$clusterKey($c)][$ld][] = [$lp, $lp + $need - 1];
-                        }
-                        $touched[] = $c;
-                        $placed++;
-                        continue;   // joylandi — odatdagi qidiruv kerak emas
-                    }
+                    $touched[] = $c;
+                    $placed++;
+                    continue;
                 }
             }
 
@@ -1267,12 +1321,13 @@ class TimetableController extends Controller
                     'teacher' => $teacherId,
                     'room_required' => $roomRequired,
                     'pool' => $poolArr,
+                    'mask' => $cardMask,
                 ]];
                 $spot = $this->clusterPlacement(
                     $seg, $days, $pairs, $scopeKey,
                     $groupBusy, $teacherBusy, $roomBusy,
                     $consecutive, $anchors[$clusterKey($c)],
-                    fn(int $d, int $p) => $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots)
+                    fn(int $d, int $p) => $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask)
                 );
                 if ($spot === null) {
                     $unplaced++;
@@ -1286,9 +1341,12 @@ class TimetableController extends Controller
                     $c->auditorium_name = $spot[0]['room']->name;
                     $roomsAssigned++;
                 }
-                $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
-                if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($lecSlot[$sKey])) {
-                    $lecSlot[$sKey] = [(int) $c->day, (int) $c->pair, (int) $c->weeks, (int) $c->id];
+                $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
+                if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($chain[$sKey])) {
+                    $chain[$sKey] = [
+                        'day' => (int) $c->day, 'lec' => (int) $c->pair,
+                        'next' => (int) $c->pair + $need, 'lw' => (int) $c->weeks,
+                    ];
                 }
                 $skA = $this->spreadKey($c);
                 $subjDay[$skA . '|' . $c->day] = ($subjDay[$skA . '|' . $c->day] ?? 0) + 1;
@@ -1308,13 +1366,13 @@ class TimetableController extends Controller
                         if (!empty($groupBusy[$gk])) {
                             $busyMap = $groupBusy[$gk];
                             foreach ($groups as $g) {
-                                if (isset($busyMap[$g])) {
+                                if (($busyMap[$g] ?? 0) & $cardMask) {
                                     $freeAll = false;
                                     break 2;
                                 }
                             }
                         }
-                        if ($teacherId && !empty($teacherBusy[$teacherId . '|' . $d . '|' . ($p + $i)])) {
+                        if ($teacherId && (($teacherBusy[$teacherId . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask)) {
                             $freeAll = false;
                             break;
                         }
@@ -1329,7 +1387,7 @@ class TimetableController extends Controller
                         foreach ($poolArr as $r) {   // havza allaqachon sig'im bo'yicha filtrlangan
                             $roomFree = true;
                             for ($i = 0; $i < $need; $i++) {
-                                if (!empty($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)])) {
+                                if (($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask) {
                                     $roomFree = false;
                                     break;
                                 }
@@ -1345,7 +1403,7 @@ class TimetableController extends Controller
                         }
                     }
                     // Yumshoq jarima
-                    $pen = $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots);
+                    $pen = $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask);
                     if ($pen < $bestPen) {
                         $bestPen = $pen;
                         $best = [$d, $p];
@@ -1367,10 +1425,10 @@ class TimetableController extends Controller
                 $c->auditorium_name = $bestRoom->name;
                 $roomsAssigned++;
             }
-            $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
+            $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
             // Ma'ruza joylashdi — uni almashtiruvchi amaliy shu slotga tushsin
-            if ($c->training_type === 'lecture' && (int) $c->weeks > 0) {
-                $lecSlot[$subjOf($c)] = [$d, $p, (int) $c->weeks, (int) $c->id];
+            if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($chain[$subjOf($c)])) {
+                $chain[$subjOf($c)] = ['day' => $d, 'lec' => $p, 'next' => $p + $need, 'lw' => (int) $c->weeks];
             }
             $skBase = $this->spreadKey($c);
             $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
@@ -1410,9 +1468,10 @@ class TimetableController extends Controller
                     if ((int) ($r->volume ?? 0) < $minVolFor($c)) {
                         continue;
                     }
+                    $mask = $maskOf($c);
                     $free = true;
                     for ($i = 0; $i < $need; $i++) {
-                        if (!empty($roomBusy[$r->code . '|' . $c->day . '|' . ((int) $c->pair + $i)])) {
+                        if (($roomBusy[$r->code . '|' . $c->day . '|' . ((int) $c->pair + $i)] ?? 0) & $mask) {
                             $free = false;
                             break;
                         }
@@ -1423,7 +1482,8 @@ class TimetableController extends Controller
                     $c->auditorium_code = $r->code;
                     $c->auditorium_name = $r->name;
                     for ($i = 0; $i < $need; $i++) {
-                        $roomBusy[$r->code . '|' . $c->day . '|' . ((int) $c->pair + $i)] = (int) $c->id;
+                        $rk = $r->code . '|' . $c->day . '|' . ((int) $c->pair + $i);
+                        $roomBusy[$rk] = ($roomBusy[$rk] ?? 0) | $mask;
                     }
                     $roomsAssigned++;
                     $touched[] = $c;
@@ -1581,10 +1641,15 @@ class TimetableController extends Controller
      * Katakni band deb belgilash. Dars uzunligiga qarab len_half ta ketma-ket
      * yarim-slotni band qiladi (avto-joylash konfliktsiz bo'lishi uchun).
      *
-     * $groupBusy — "scope|day|pair" => [guruh_nomi => true] (ro'yxat emas, XARITA:
-     * katta doskalarda in_array/array_intersect O(n) qidiruvi juda qimmat edi).
+     * $groupBusy — "scope|day|pair" => [guruh_nomi => hafta niqobi] (ro'yxat emas,
+     * XARITA: katta doskalarda in_array/array_intersect O(n) qidiruvi qimmat edi).
+     *
+     * $mask — karta qaysi haftalarda o'tilishi (bitmask). Slot "band" emas,
+     * MA'LUM HAFTALARDA band bo'ladi: hech qachon bir haftaga tushmaydigan
+     * darslar (toq/juft haftalardagi ma'ruzalar, ma'ruza va uni almashtiruvchi
+     * amaliy) bitta slotni bemalol bo'lishadi.
      */
-    private function markBusy(array &$groupBusy, array &$teacherBusy, array &$roomBusy, TimetableCard $c): void
+    private function markBusy(array &$groupBusy, array &$teacherBusy, array &$roomBusy, TimetableCard $c, int $mask = -1): void
     {
         $need = $this->parasNeeded($c);
         $scope = $this->groupScopeKey($c);
@@ -1593,16 +1658,15 @@ class TimetableController extends Controller
             $p = (int) $c->pair + $i;
             $k = $scope . '|' . $c->day . '|' . $p;
             foreach ($groups as $g) {
-                $groupBusy[$k][$g] = true;
+                $groupBusy[$k][$g] = ($groupBusy[$k][$g] ?? 0) | $mask;
             }
-            // Qiymat — kartaning id'si (oddiy "true" emas): ma'ruza va uni
-            // almashtiruvchi amaliy bir slotni bo'lishishi mumkin, shuning uchun
-            // slotni KIM band qilgani ma'lum bo'lishi kerak.
             if ($c->teacher_id) {
-                $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $p] = (int) $c->id;
+                $tk = $c->teacher_id . '|' . $c->day . '|' . $p;
+                $teacherBusy[$tk] = ($teacherBusy[$tk] ?? 0) | $mask;
             }
             if ($c->auditorium_code) {
-                $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $p] = (int) $c->id;
+                $rk = $c->auditorium_code . '|' . $c->day . '|' . $p;
+                $roomBusy[$rk] = ($roomBusy[$rk] ?? 0) | $mask;
             }
         }
     }
@@ -1641,15 +1705,16 @@ class TimetableController extends Controller
         }
         // Bir yarim-slot shu segment uchun bo'shmi (guruh + o'qituvchi)?
         $slotFree = function (array $seg, int $d, int $p) use ($scopeKey, $groupBusy, $teacherBusy): bool {
+            $mask = $seg['mask'] ?? -1;
             $busy = $groupBusy[$scopeKey . '|' . $d . '|' . $p] ?? null;
             if ($busy !== null) {
                 foreach ($seg['groups'] as $g) {
-                    if (isset($busy[$g])) {
+                    if (($busy[$g] ?? 0) & $mask) {
                         return false;
                     }
                 }
             }
-            return !($seg['teacher'] && !empty($teacherBusy[$seg['teacher'] . '|' . $d . '|' . $p]));
+            return !($seg['teacher'] && (($teacherBusy[$seg['teacher'] . '|' . $d . '|' . $p] ?? 0) & $mask));
         };
         // Segment $d kunida $p dan boshlab joylasha oladimi? Qaytadi: xona (yoki null),
         // joylashmasa — false.
@@ -1662,10 +1727,11 @@ class TimetableController extends Controller
             if (!$seg['room_required']) {
                 return null;   // xona kerak emas
             }
+            $mask = $seg['mask'] ?? -1;
             foreach ($seg['pool'] as $r) {   // havza sig'im bo'yicha saralangan
                 $free = true;
                 for ($i = 0; $i < $seg['len']; $i++) {
-                    if (!empty($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)])) {
+                    if (($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)] ?? 0) & $mask) {
                         $free = false;
                         break;
                     }
@@ -1795,7 +1861,7 @@ class TimetableController extends Controller
      * $sameDay/$consecutive — sozlamalar: bir fanning paralarini bir kunga /
      * ketma-ket joylash (default — kunlar bo'ylab yoyish).
      */
-    private function slotPenalty(TimetableCard $c, array $groups, int $d, int $p, int $pairs, array $groupBusy, array $subjDay, bool $sameDay = false, bool $consecutive = false, array $subjSlots = []): float
+    private function slotPenalty(TimetableCard $c, array $groups, int $d, int $p, int $pairs, array $groupBusy, array $subjDay, bool $sameDay = false, bool $consecutive = false, array $subjSlots = [], int $mask = -1): float
     {
         $spc = $this->groupScopeKey($c);
         $pen = ($p - 1) * 0.2; // ertalabki paralarga yengil ustunlik
@@ -1810,7 +1876,8 @@ class TimetableController extends Controller
         foreach ($groups as $g) {
             $used = [$p => true];
             foreach ($dayBusy as $pp => $busy) {
-                if ($busy !== null && isset($busy[$g])) {
+                // Boshqa haftalardagi dars shu kartaning kunida "oyna" yaratmaydi.
+                if ($busy !== null && (($busy[$g] ?? 0) & $mask)) {
                     $used[$pp] = true;
                 }
             }

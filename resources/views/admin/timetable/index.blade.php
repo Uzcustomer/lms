@@ -3152,15 +3152,31 @@
                 // indeksi; dars cardLen(c) ta yarim-slotni egallaydi, shuning uchun karta
                 // qamragan HAR bir yarim-slotga yoziladi (band/konflikt/rowspan tekshiruvi uchun).
                 const placedIdx = {};
+                // Bir katakni bo'lishadigan darslar: hech qachon bir haftaga
+                // tushmaydigan kartalar (toq/juft haftalardagi ma'ruzalar,
+                // ma'ruza va uni almashtiruvchi amaliy) bitta slotda tura oladi.
+                // placedIdx katakka bittasini saqlaydi — qolganlari yo'qolmasligi
+                // uchun ular alohida ro'yxatda yig'iladi va shu katakda birga
+                // chiziladi. Hafta ko'rinishida ro'yxatda faqat bittasi qoladi.
+                const cellStack = {};
                 visibleSpecCards().forEach(c => {
                     const pl = effPlace(c);
                     if (!pl) return;
                     const ec = effectiveCard(c);
                     const len = cardLen(ec);
                     cardGroups(ec).forEach(gg => {
-                        for (let k = 0; k < len; k++) { const key = gkey(ec, gg) + '|' + pl.day + '|' + (pl.pair + k); if (!placedIdx[key] || (!curWeek && ec.training_type === 'lecture')) placedIdx[key] = ec; }
+                        const base = gkey(ec, gg) + '|' + pl.day;
+                        (cellStack[base + '|' + pl.pair] = cellStack[base + '|' + pl.pair] || []).push(ec);
+                        for (let k = 0; k < len; k++) { const key = base + '|' + (pl.pair + k); if (!placedIdx[key] || (!curWeek && ec.training_type === 'lecture')) placedIdx[key] = ec; }
                     });
                 });
+                // Shu katakda boshlanadigan, lekin asosiy chipda ko'rsatilmagan darslar
+                const stackExtras = (grp, d, p, ids) => {
+                    const list = cellStack[grp + '|' + d + '|' + p];
+                    if (!list || list.length < 2) return [];
+                    const shown = new Set(ids && ids.length ? ids : []);
+                    return list.filter(x => !shown.has(x.id));
+                };
 
                 // Vertikal qamrov: karta o'zining cardLen(c) yarim-slotini to'ldiradi; qo'shimcha
                 // ravishda ketma-ket bir xil fan kartalari (masalan "para qo'shish" bilan)
@@ -3334,7 +3350,8 @@
                                         for (let gg = gi; gg < gi + span; gg++)
                                             vConsumed[o.groups[gg] + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    h += '<td class="tt-cell tt-lec' + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
+                                    const lecExtras = stackExtras(o.groups[gi], d, p, ids).map(x => chipHtml(x, [x.id])).join('');
+                                    h += '<td class="tt-cell tt-lec' + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + lecExtras + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
@@ -3343,7 +3360,8 @@
                                     const vs = chain.span, ids = chain.ids;
                                     for (let k = 1; k < vs; k++) vConsumed[grp + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    h += '<td class="tt-cell' + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + '</td>';
+                                    const prcExtras = stackExtras(grp, d, p, ids).map(x => chipHtml(x, [x.id])).join('');
+                                    h += '<td class="tt-cell' + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + prcExtras + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin

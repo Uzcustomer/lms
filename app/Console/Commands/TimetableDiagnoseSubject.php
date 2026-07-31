@@ -6,6 +6,7 @@ use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
 use App\Models\TimetableCardOverride;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Bitta fanning kartalari qayerga joylashganini ko'rsatadi va ma'ruzani
@@ -86,8 +87,10 @@ class TimetableDiagnoseSubject extends Command
             $this->warn($unplaced->count() . ' ta karta JOYLASHMAGAN (kun/para bo\'sh).');
         }
 
+        $week = max(1, (int) $this->option('week'));
         $this->checkAlternating($board, $cards);
-        $this->showWeek($cards, max(1, (int) $this->option('week')));
+        $this->showWeek($cards, $week);
+        $this->showDayLayout($cards, $group, $week);
         $this->showBoardSummary($board);
 
         return self::SUCCESS;
@@ -221,6 +224,64 @@ class TimetableDiagnoseSubject extends Command
         }
 
         return null;
+    }
+
+    /**
+     * Guruhning shu haftadagi TO'LIQ kuni: qaysi yarim-slotda qaysi fan turibdi.
+     * Fanning bo'laklari uzilgan bo'lsa, orasiga nima kirib qolgani shu yerda
+     * ko'rinadi.
+     */
+    private function showDayLayout($cards, string $group, int $week): void
+    {
+        $day = null;
+        foreach ($cards as $card) {
+            if ($card->day) {
+                $day = (int) $card->day;
+                break;
+            }
+        }
+        if (!$day) {
+            return;
+        }
+
+        $overrides = DB::table('timetable_card_overrides')->where('week', $week)->get()->keyBy('card_id');
+        $layout = [];
+        $all = TimetableCard::where('board_id', $cards->first()->board_id)
+            ->where('course', $cards->first()->course)->get();
+
+        foreach ($all as $card) {
+            if (!$this->matchesGroup($card, $group)) {
+                continue;
+            }
+            $ov = $overrides->get($card->id);
+            if ($ov && $ov->cancelled) {
+                continue;
+            }
+            $d = ($ov && $ov->day) ? (int) $ov->day : (int) $card->day;
+            $p = ($ov && $ov->day) ? (int) $ov->pair : (int) $card->pair;
+            if ($d !== $day || !$p) {
+                continue;
+            }
+            for ($i = 0; $i < $card->lenHalf(); $i++) {
+                $layout[$p + $i] = mb_substr($card->subject_name, 0, 22)
+                    . ($card->training_type === 'lecture' ? ' [M]' : ' [A]');
+            }
+        }
+        if (!$layout) {
+            return;
+        }
+        ksort($layout);
+
+        $this->line('');
+        $this->line($this->dayName($day) . " kuni ({$week}-hafta) guruhning to'liq jadvali:");
+        $previous = null;
+        foreach ($layout as $slot => $name) {
+            if ($previous !== null && $slot > $previous + 1) {
+                $this->line('  ' . str_pad('…', 6) . '— bo\'sh —');
+            }
+            $this->line('  ' . str_pad((string) $slot, 6) . $name);
+            $previous = $slot;
+        }
     }
 
     /** Tanlangan haftadagi haqiqiy holat (hafta istisnolari bilan). */

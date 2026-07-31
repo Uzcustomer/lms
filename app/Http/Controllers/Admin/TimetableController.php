@@ -3589,7 +3589,7 @@ class TimetableController extends Controller
             'training_type'  => 'required|in:lecture,practice',
             'oqim_label'     => 'nullable|string|max:50',
             'group_name'     => 'nullable|string|max:255',
-            'teacher_id'     => 'nullable|integer',
+            'teacher_id'     => 'nullable|integer|exists:teachers,id',
         ]);
 
         $q = TimetableCard::where('board_id', $board->id)
@@ -3605,9 +3605,17 @@ class TimetableController extends Controller
 
         $teacherName = null;
         if (!empty($data['teacher_id'])) {
-            $t = Teacher::find($data['teacher_id']);
-            $teacherName = $t?->short_name ?: $t?->full_name;
-            $affected = $q->update(['teacher_id' => $t?->id, 'teacher_name' => $teacherName]);
+            $t = Teacher::findOrFail($data['teacher_id']);
+            if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
+                $context = $this->departmentHeadContext($request);
+                if ((int) $t->department_hemis_id !== (int) $context['department_hemis_id']) {
+                    return response()->json([
+                        'error' => "Faqat o'z kafedrangizdagi o'qituvchini biriktira olasiz.",
+                    ], 422);
+                }
+            }
+            $teacherName = $t->short_name ?: $t->full_name;
+            $affected = $q->update(['teacher_id' => $t->id, 'teacher_name' => $teacherName]);
         } else {
             $affected = $q->update(['teacher_id' => null, 'teacher_name' => null]);
         }

@@ -1404,6 +1404,24 @@ class TimetableController extends Controller
                     }
                     // Yumshoq jarima
                     $pen = $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask);
+
+                    // Fan YAXLIT kelsin: amaliy dars o'z fanining ma'ruzasi bilan
+                    // bir kunda va yonma-yon bo'lsin. Klasterlash mukofoti (subjSlots)
+                    // ma'ruza va amaliyni bog'lamaydi — ularning spreadKey'i har xil
+                    // (ma'ruza oqim bo'yicha, amaliy guruh bo'yicha), shu sababli
+                    // amaliy ma'ruzadan uzoqqa tushib, orasiga boshqa fan kirib qolardi.
+                    if ($c->training_type === 'practice' && isset($lecSlot[$sKey])) {
+                        [$ld, $lp, ] = $lecSlot[$sKey];
+                        if ($d === $ld) {
+                            $pen -= 20;   // ma'ruza bilan bir kunda — mukofot
+                            // Ikki blok orasidagi bo'shliq (0 = yonma-yon)
+                            $gap = $p >= $lp ? ($p - ($lp + 2)) : ($lp - ($p + $need));
+                            $pen += max(0, $gap) * 8;   // uzilish — jarima
+                        } else {
+                            $pen += 12;   // boshqa kunda — yengil jarima
+                        }
+                    }
+
                     if ($pen < $bestPen) {
                         $bestPen = $pen;
                         $best = [$d, $p];

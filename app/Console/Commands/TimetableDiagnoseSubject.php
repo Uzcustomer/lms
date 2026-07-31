@@ -81,10 +81,33 @@ class TimetableDiagnoseSubject extends Command
             ])->all()
         );
 
+        $unplaced = $cards->filter(fn(TimetableCard $c) => !$c->day || !$c->pair);
+        if ($unplaced->isNotEmpty()) {
+            $this->warn($unplaced->count() . ' ta karta JOYLASHMAGAN (kun/para bo\'sh).');
+        }
+
         $this->checkAlternating($board, $cards);
         $this->showWeek($cards, max(1, (int) $this->option('week')));
+        $this->showBoardSummary($board);
 
         return self::SUCCESS;
+    }
+
+    /** Butun doska bo'yicha qisqa hisob — karta joylashmagan bo'lsa sabab shu yerda ko'rinadi. */
+    private function showBoardSummary(TimetableBoard $board): void
+    {
+        $total = TimetableCard::where('board_id', $board->id)->count();
+        $placed = TimetableCard::where('board_id', $board->id)
+            ->whereNotNull('day')->whereNotNull('pair')->count();
+
+        $this->line(sprintf(
+            'Doska bo\'yicha: %d karta · %d joylashgan · %d joylashmagan',
+            $total, $placed, $total - $placed
+        ));
+        if ($placed === 0 && $total > 0) {
+            $this->warn('Doskada birorta karta joylashmagan — "Avtomatik joylash" ishga tushirilmagan bo\'lishi mumkin.');
+        }
+        $this->line('');
     }
 
     /** Karta shu guruhga tegishlimi (til qo'shimchasiz yozilgan nom ham mos keladi). */
@@ -143,17 +166,61 @@ class TimetableDiagnoseSubject extends Command
         ));
 
         $alt = $cards->first(fn(TimetableCard $c) => $c->training_type === 'practice' && (int) $c->weeks === $expect);
-        if (!$alt) {
+        if (!$lecture->day || !$lecture->pair) {
+            // Joylashmagan kartalarni solishtirib bo'lmaydi — ikkalasi ham bo'sh
+            // bo'lsa "bir xil" chiqadi va soxta OK berardi.
+            $this->warn("Ma'ruza joylashmagan — slot solishtirib bo'lmaydi.");
+        } elseif (!$alt) {
             $this->line("Almashtiruvchi amaliy ({$expect} hafta) yo'q — ma'ruza o'rnini bosuvchi amaliy yaratilmagan.");
+        } elseif (!$alt->day || !$alt->pair) {
+            $this->warn("Almashtiruvchi amaliy ({$expect} hafta) joylashmagan.");
         } elseif ($alt->day === $lecture->day && $alt->pair === $lecture->pair) {
             $this->info("OK: almashtiruvchi amaliy ma'ruza slotida turibdi.");
         } else {
-            $this->warn(sprintf(
-                "MUAMMO: almashtiruvchi amaliy %s / %s da — ma'ruza sloti emas. "
-                . "'Qaytadan joylash' bilan avtomatik joylashni qayta ishga tushiring.",
-                $this->dayName($alt->day), $alt->pair ?? '—'
-            ));
+            // Ma'ruza sloti boshqa fanning ma'ruzasi bilan bo'lishilgan bo'lishi
+            // mumkin (biri toq, ikkinchisi juft haftalarda) — u holda o'rin
+            // bosuvchi amaliy u yerga tusha olmaydi va bu kutilgan holat.
+            $sharedWith = $this->slotSharedWith($lecture);
+            if ($sharedWith !== null) {
+                $this->line(sprintf(
+                    "Almashtiruvchi amaliy %s / %s da — ma'ruza sloti «%s» bilan bo'lishilgan, "
+                    . "shuning uchun u yerga tusha olmaydi. Hafta ichidagi tartib zichlash bilan to'g'rilanadi.",
+                    $this->dayName($alt->day), $alt->pair ?? '—', $sharedWith
+                ));
+            } else {
+                $this->warn(sprintf(
+                    "MUAMMO: almashtiruvchi amaliy %s / %s da — ma'ruza sloti emas. "
+                    . "'Qaytadan joylash' bilan avtomatik joylashni qayta ishga tushiring.",
+                    $this->dayName($alt->day), $alt->pair ?? '—'
+                ));
+            }
         }
+    }
+
+    /** Ma'ruza slotini boshqa qaysi fan bilan bo'lishgan (bo'lishmagan bo'lsa null). */
+    private function slotSharedWith(TimetableCard $lecture): ?string
+    {
+        $groups = $lecture->occupiedGroups();
+        $end = (int) $lecture->pair + $lecture->lenHalf() - 1;
+
+        $others = TimetableCard::where('board_id', $lecture->board_id)
+            ->where('id', '!=', $lecture->id)
+            ->where('day', $lecture->day)
+            ->where('subject_name', '!=', $lecture->subject_name)
+            ->whereNotNull('pair')
+            ->get();
+
+        foreach ($others as $other) {
+            $otherEnd = (int) $other->pair + $other->lenHalf() - 1;
+            if ((int) $other->pair > $end || $otherEnd < (int) $lecture->pair) {
+                continue;   // vaqt bo'yicha kesishmaydi
+            }
+            if (array_intersect($groups, $other->occupiedGroups())) {
+                return $other->subject_name;
+            }
+        }
+
+        return null;
     }
 
     /** Tanlangan haftadagi haqiqiy holat (hafta istisnolari bilan). */

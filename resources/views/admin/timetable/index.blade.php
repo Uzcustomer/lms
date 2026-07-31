@@ -853,6 +853,19 @@
             display: inline-block; margin-right: 3px; font-size: 10px; font-weight: 900;
             color: #b45309; vertical-align: 1px;
         }
+        /* ── Bitta katakda bir necha fan almashib keladi (hafta bo'yicha) ──
+           Katak bo'ylab DIAGONAL ajratgich chiziladi, fanlar esa o'z rangida
+           qoladi — faqat biri ozgina ochroq, ikkinchisi to'qroq qilinadi. */
+        #grid td.tt-cell.tt-split { position: relative; }
+        #grid td.tt-cell.tt-split::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background: linear-gradient(to top right,
+                rgba(0,0,0,0) calc(50% - 1px), rgba(120,53,15,.55) 50%, rgba(0,0,0,0) calc(50% + 1px));
+        }
+        #grid td.tt-split .tt-chip { position: relative; z-index: 1; }
+        /* Och / to'q soyalar — fanning o'z rangi saqlanadi (sariq sariqligicha) */
+        #grid .tt-chip.tt-shade-a { filter: brightness(1.07) saturate(.95); }
+        #grid .tt-chip.tt-shade-b { filter: brightness(.90) saturate(1.1); }
         .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
         .tt-room-vol { font-weight: 800; color: #16a34a; opacity: 1; }\n        #grid th.tt-room-head .tt-room-name { display:block; font-size:10px; font-weight:500; color:#64748b; margin-top:2px; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
@@ -3197,7 +3210,9 @@
                     return { span: span || cardLen(c), ids: ids.length ? ids : [c.id] };
                 };
 
-                const chipHtml = (c, ids) => {
+                // shade — bitta katakda bir necha almashinuvchi karta bo'lsa, ularni
+                // biroz och/to'q qilib farqlash uchun (0 = ochroq, 1 = to'qroq).
+                const chipHtml = (c, ids, shade) => {
                     const merged = ids && ids.length > 1;
                     const mids = merged ? ' data-merge-ids="' + ids.join(',') + '"' : '';
                     const badge = merged ? '<span class="tt-merge-badge">' + ids.length + ' para</span>' : '';
@@ -3227,6 +3242,7 @@
                     const altMark = alt ? '<span class="tt-alt-mark" title="Har hafta emas — almashib keladi">⇄</span>' : '';
                     return '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
                         (alt ? ' tt-alt' : '') +
+                        (shade === 0 ? ' tt-shade-a' : shade === 1 ? ' tt-shade-b' : '') +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
                         esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle
@@ -3350,8 +3366,11 @@
                                         for (let gg = gi; gg < gi + span; gg++)
                                             vConsumed[o.groups[gg] + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    const lecExtras = stackExtras(o.groups[gi], d, p, ids).map(x => chipHtml(x, [x.id])).join('');
-                                    h += '<td class="tt-cell tt-lec' + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + lecExtras + '</td>';
+                                    const lecEx = stackExtras(o.groups[gi], d, p, ids);
+                                    // Bir katakda bir necha almashinuvchi fan — diagonal ajratgich
+                                    const lecSplit = lecEx.length ? ' tt-split' : '';
+                                    const lecExtras = lecEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
+                                    h += '<td class="tt-cell tt-lec' + lecSplit + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
@@ -3360,8 +3379,10 @@
                                     const vs = chain.span, ids = chain.ids;
                                     for (let k = 1; k < vs; k++) vConsumed[grp + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    const prcExtras = stackExtras(grp, d, p, ids).map(x => chipHtml(x, [x.id])).join('');
-                                    h += '<td class="tt-cell' + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids) + prcExtras + '</td>';
+                                    const prcEx = stackExtras(grp, d, p, ids);
+                                    const prcSplit = prcEx.length ? ' tt-split' : '';
+                                    const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
+                                    h += '<td class="tt-cell' + prcSplit + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin

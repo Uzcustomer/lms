@@ -871,8 +871,9 @@
             clip-path: polygon(100% 0, 100% 100%, 0 100%);
             align-items: flex-end; justify-content: flex-end; text-align: right;
         }
-        /* Nom uchburchakdan chiqib ketmasin */
-        #grid td.tt-split .tt-tri-name { max-width: 60%; }
+        /* Nom va haftalar uchburchakdan chiqib ketmasin */
+        #grid td.tt-split .tt-tri-name { max-width: 62%; }
+        #grid td.tt-split .tt-tri-name .tt-weeks { display: block; font-size: 8px; }
         /* Ikki rang tutashgan joydagi nozik ajratgich */
         #grid td.tt-cell.tt-split::after {
             content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
@@ -3242,11 +3243,11 @@
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
                         esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle
                             + (alt ? ' · har hafta emas (almashib keladi)' : '')) + '">';
-                    // Uchburchakka bo'lingan katakda faqat fan nomi ko'rinadi —
-                    // o'qituvchi, xona va haftalar tooltipda qoladi, aks holda
-                    // yozuvlar uchburchakka sig'may xunuk chiqadi.
+                    // Uchburchakka bo'lingan katakda fan nomi va u qaysi haftalarda
+                    // o'tilishi ko'rinadi; o'qituvchi bilan xona tooltipda qoladi —
+                    // ular uchburchakka sig'may, yozuvni buzadi.
                     if (tri) {
-                        return head + '<span class="tt-tri-name">' + cardLabel(c, true) + '</span></div>';
+                        return head + '<span class="tt-tri-name">' + cardLabel(c, true) + wks + '</span></div>';
                     }
                     return head +
                         altMark + cardLabel(c, true) + wks + badge +

@@ -852,26 +852,38 @@
             color: #b45309; vertical-align: 1px;
         }
         /* ── Bitta katakda bir necha fan almashib keladi (hafta bo'yicha) ──
-           Katak chapdan o'ngga, pastdan tepaga DIAGONAL bilan ikki uchburchakka
-           bo'linadi: birinchi fan yuqori-chapdagi uchburchakda, ikkinchisi
-           quyi-o'ngdagida. Fanlar o'z rangida qoladi — biri ozgina ochroq,
-           ikkinchisi to'qroq. */
-        #grid td.tt-cell.tt-split { position: relative; }
-        #grid td.tt-cell.tt-split::after {
-            content: ''; position: absolute; inset: 0; pointer-events: none;
-            background: linear-gradient(to bottom right,
-                rgba(0,0,0,0) calc(50% - 1px), rgba(120,53,15,.55) 50%, rgba(0,0,0,0) calc(50% + 1px));
+           Katak chapdan o'ngga, pastdan tepaga diagonal bilan IKKI UCHBURCHAKKA
+           bo'linadi. Har uchburchak to'lig'icha o'z fanining rangida bo'ladi —
+           kartochka ramkasi yo'q, ichida faqat fan nomi turadi. */
+        #grid td.tt-cell.tt-split { position: relative; padding: 0; overflow: hidden; }
+        #grid td.tt-split .tt-chip {
+            position: absolute; inset: 0; width: auto; margin: 0; padding: 3px 5px;
+            border: 0; border-radius: 0; box-shadow: none; overflow: hidden;
+            display: flex; font-size: 10px; line-height: 1.15;
         }
-        #grid td.tt-split .tt-chip { position: relative; z-index: 1; width: 50%;
-            overflow: hidden; }
         /* Yuqori-chapdagi uchburchak */
-        #grid td.tt-split .tt-chip.tt-tri-a { margin-right: auto; text-align: left; }
+        #grid td.tt-split .tt-chip.tt-tri-a {
+            clip-path: polygon(0 0, 100% 0, 0 100%);
+            align-items: flex-start; justify-content: flex-start; text-align: left;
+        }
         /* Quyi-o'ngdagi uchburchak */
-        #grid td.tt-split .tt-chip.tt-tri-b { margin-left: auto; text-align: right; }
+        #grid td.tt-split .tt-chip.tt-tri-b {
+            clip-path: polygon(100% 0, 100% 100%, 0 100%);
+            align-items: flex-end; justify-content: flex-end; text-align: right;
+        }
+        /* Nom uchburchakdan chiqib ketmasin */
+        #grid td.tt-split .tt-tri-name { max-width: 60%; }
+        /* Ikki rang tutashgan joydagi nozik ajratgich */
+        #grid td.tt-cell.tt-split::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+            background: linear-gradient(to bottom right,
+                rgba(0,0,0,0) calc(50% - 1px), rgba(255,255,255,.9) 50%, rgba(0,0,0,0) calc(50% + 1px));
+        }
         /* Diagonal chizilgan katakda yo'l-yo'l fon kerak emas — diagonalning
            o'zi "har hafta emas" ekanini bildiradi. */
         #grid td.tt-split .tt-chip.tt-alt { background-image: none; }
-        /* Och / to'q soyalar — fanning o'z rangi saqlanadi (sariq sariqligicha) */
+        #grid td.tt-split .tt-chip.sel { outline: none; box-shadow: inset 0 0 0 2px #f59e0b; }
+        /* Ikki ma'ruza bir xil sariq bo'lsa ajralib tursin */
         #grid .tt-chip.tt-shade-a { filter: brightness(1.07) saturate(.95); }
         #grid .tt-chip.tt-shade-b { filter: brightness(.90) saturate(1.1); }
         .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
@@ -3223,13 +3235,20 @@
                     // u yerda barcha variantlar ustma-ust ko'rinadi.
                     const alt = !curWeek && showWks;
                     const altMark = alt ? '<span class="tt-alt-mark" title="Har hafta emas — almashib keladi">⇄</span>' : '';
-                    return '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
-                        (alt ? ' tt-alt' : '') +
-                        (shade === 0 ? ' tt-shade-a tt-tri-a' : shade === 1 ? ' tt-shade-b tt-tri-b' : '') +
+                    const tri = shade === 0 ? ' tt-shade-a tt-tri-a' : shade === 1 ? ' tt-shade-b tt-tri-b' : '';
+                    const head = '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
+                        (alt ? ' tt-alt' : '') + tri +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
                         esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle
-                            + (alt ? ' · har hafta emas (almashib keladi)' : '')) + '">' +
+                            + (alt ? ' · har hafta emas (almashib keladi)' : '')) + '">';
+                    // Uchburchakka bo'lingan katakda faqat fan nomi ko'rinadi —
+                    // o'qituvchi, xona va haftalar tooltipda qoladi, aks holda
+                    // yozuvlar uchburchakka sig'may xunuk chiqadi.
+                    if (tri) {
+                        return head + '<span class="tt-tri-name">' + cardLabel(c, true) + '</span></div>';
+                    }
+                    return head +
                         altMark + cardLabel(c, true) + wks + badge +
                         (c.teacher_name ? '<div class="text-[9px] text-gray-600">' + esc(c.teacher_name) + '</div>' : '') +
                         roomTxt +

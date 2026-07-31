@@ -1021,7 +1021,128 @@ class TimetableController extends Controller
         $subjOf = fn($c) => $this->specKey($c->specialty_name) . '|' . (int) $c->course
             . '|' . $this->normSubject((string) $c->subject_name);
 
-        foreach ($toPlace as $c) {
+        // ══ Bir dars = bir blok ══════════════════════════════════════════════
+        // Reja soati kartalarga bo'lingan (mas. haftasiga 4 soat amaliy → 2 ta
+        // 2 soatlik karta), lekin bu — BITTA dars. "Bitta fanning paralarini bir
+        // kunga qo'yish" / "Ketma-ket paralarga qo'yish" yoqilgan bo'lsa, shunday
+        // kartalar QATTIQ cheklov sifatida birga joylashadi. Sig'masa (guruh,
+        // o'qituvchi yoki auditoriya band) — butun blok joylashmagan bo'lib
+        // qoladi, ya'ni yarmi u kunga, yarmi bu kunga bo'linib ketmaydi.
+        //
+        // Klaster kaliti: fan+guruh (spreadKey) + hafta shabloni (weeks). Hafta
+        // shabloni ataylab kiritilgan — ma'ruzani ALMASHTIRUVCHI amaliy karta
+        // (ma'ruzasiz haftalarda o'tiladi) boshqa "weeks" ga ega, shuning uchun
+        // u blokka qo'shilmaydi va o'zining ma'ruza slotiga tushaveradi.
+        $clusterMode = $sameDay || $consecutive;
+        $clusterKey = fn(TimetableCard $c) => $this->spreadKey($c) . '|w' . (int) $c->weeks;
+
+        // Allaqachon joylashgan kartalar — blok ular bilan bir kunga / ularning
+        // yoniga tushishi kerak (avtomatik joylash qayta bosilganda muhim).
+        $anchors = [];   // clusterKey => [day => [[boshlanish, tugash], ...]]
+        if ($clusterMode) {
+            foreach ($all as $c) {
+                if ($c->day && $c->pair) {
+                    $anchors[$clusterKey($c)][(int) $c->day][] =
+                        [(int) $c->pair, (int) $c->pair + $this->parasNeeded($c) - 1];
+                }
+            }
+        }
+
+        // Joylanadigan birliklar: klaster rejimida bir klasterning kartalari
+        // bitta birlik; aks holda har karta alohida.
+        $units = [];
+        if ($clusterMode) {
+            $byKey = [];
+            foreach ($toPlace as $c) {
+                $byKey[$clusterKey($c)][] = $c;
+            }
+            $units = array_values($byKey);
+        } else {
+            foreach ($toPlace as $c) {
+                $units[] = [$c];
+            }
+        }
+
+        foreach ($units as $unit) {
+            // ── Ko'p kartali blok (bir darsning paralari) ────────────────────
+            if (count($unit) > 1) {
+                $lead = $unit[0];
+                [$uDays, $uPairs] = $dimsFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
+                $uScope = $this->groupScopeKey($lead);
+                $uKey = $clusterKey($lead);
+
+                $segs = [];
+                $unionGroups = [];
+                $noRoom = false;
+                foreach ($unit as $uc) {
+                    $ucPool = $poolFor($uc);
+                    $ucNeedRoom = $ucPool->isNotEmpty();
+                    $ucArr = $ucNeedRoom
+                        ? array_values(array_filter($ucPool->all(), fn($r) => (int) ($r->volume ?? 0) >= $minVolFor($uc)))
+                        : [];
+                    if ($ucNeedRoom && !$ucArr) {
+                        $noRoom = true;   // sig'imi yetadigan xona umuman yo'q
+                        break;
+                    }
+                    $ucGroups = $uc->occupiedGroups();
+                    $unionGroups = array_merge($unionGroups, $ucGroups);
+                    $segs[] = [
+                        'card' => $uc,
+                        'len' => $this->parasNeeded($uc),
+                        'groups' => $ucGroups,
+                        'teacher' => $uc->teacher_id,
+                        'room_required' => $ucNeedRoom,
+                        'pool' => $ucArr,
+                    ];
+                }
+                if ($noRoom) {
+                    $unplaced += count($unit);
+                    continue;
+                }
+                $unionGroups = array_values(array_unique($unionGroups));
+
+                $penaltyFor = fn(int $d, int $p) => $this->slotPenalty(
+                    $lead, $unionGroups, $d, $p, $uPairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots
+                );
+                $spot = $this->clusterPlacement(
+                    $segs, $uDays, $uPairs, $uScope,
+                    $groupBusy, $teacherBusy, $roomBusy,
+                    $consecutive, $anchors[$uKey] ?? [], $penaltyFor
+                );
+                if ($spot === null) {
+                    // Blok butunligicha sig'madi — kartalar joylashmaganlarda qoladi.
+                    $unplaced += count($unit);
+                    continue;
+                }
+
+                foreach ($spot as $item) {
+                    /** @var TimetableCard $uc */
+                    $uc = $item['card'];
+                    $uc->day = $item['day'];
+                    $uc->pair = $item['pair'];
+                    $uc->start_half = 0;
+                    if ($item['room']) {
+                        $uc->auditorium_code = $item['room']->code;
+                        $uc->auditorium_name = $item['room']->name;
+                        $roomsAssigned++;
+                    }
+                    $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $uc);
+                    if ($uc->training_type === 'lecture' && (int) $uc->weeks > 0
+                        && !isset($lecSlot[$subjOf($uc)])) {
+                        $lecSlot[$subjOf($uc)] = [(int) $uc->day, (int) $uc->pair, (int) $uc->weeks];
+                    }
+                    $ucSk = $this->spreadKey($uc);
+                    $subjDay[$ucSk . '|' . $uc->day] = ($subjDay[$ucSk . '|' . $uc->day] ?? 0) + 1;
+                    $subjSlots[$ucSk][] = [(int) $uc->day, (int) $uc->pair, $this->parasNeeded($uc)];
+                    $anchors[$uKey][(int) $uc->day][] =
+                        [(int) $uc->pair, (int) $uc->pair + $this->parasNeeded($uc) - 1];
+                    $touched[] = $uc;
+                    $placed++;
+                }
+                continue;
+            }
+
+            $c = $unit[0];
             [$days, $pairs] = $dimsFor($c->faculty_name, $c->specialty_name, (int) $c->course);
             $groups = $c->occupiedGroups();
             $best = null;
@@ -1114,11 +1235,58 @@ class TimetableController extends Controller
                         $skB = $this->spreadKey($c);
                         $subjDay[$skB . '|' . $ld] = ($subjDay[$skB . '|' . $ld] ?? 0) + 1;
                         $subjSlots[$skB][] = [$ld, $lp, $need];
+                        if ($clusterMode) {
+                            $anchors[$clusterKey($c)][$ld][] = [$lp, $lp + $need - 1];
+                        }
                         $touched[] = $c;
                         $placed++;
                         continue;   // joylandi — odatdagi qidiruv kerak emas
                     }
                 }
+            }
+
+            // ── Shu darsning boshqa paralari allaqachon joylashgan bo'lsa ────
+            // Klaster rejimida yangi karta ular bilan bir kunga (va ketma-ket
+            // sozlamasi yoqilgan bo'lsa — yoniga) tushishi shart. Joy bo'lmasa
+            // karta joylashmaganlarda qoladi — boshqa kunga surib yuborilmaydi.
+            if ($clusterMode && !empty($anchors[$clusterKey($c)])) {
+                $seg = [[
+                    'card' => $c,
+                    'len' => $need,
+                    'groups' => $groups,
+                    'teacher' => $teacherId,
+                    'room_required' => $roomRequired,
+                    'pool' => $poolArr,
+                ]];
+                $spot = $this->clusterPlacement(
+                    $seg, $days, $pairs, $scopeKey,
+                    $groupBusy, $teacherBusy, $roomBusy,
+                    $consecutive, $anchors[$clusterKey($c)],
+                    fn(int $d, int $p) => $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots)
+                );
+                if ($spot === null) {
+                    $unplaced++;
+                    continue;
+                }
+                $c->day = $spot[0]['day'];
+                $c->pair = $spot[0]['pair'];
+                $c->start_half = 0;
+                if ($spot[0]['room']) {
+                    $c->auditorium_code = $spot[0]['room']->code;
+                    $c->auditorium_name = $spot[0]['room']->name;
+                    $roomsAssigned++;
+                }
+                $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
+                if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($lecSlot[$sKey])) {
+                    $lecSlot[$sKey] = [(int) $c->day, (int) $c->pair, (int) $c->weeks];
+                }
+                $skA = $this->spreadKey($c);
+                $subjDay[$skA . '|' . $c->day] = ($subjDay[$skA . '|' . $c->day] ?? 0) + 1;
+                $subjSlots[$skA][] = [(int) $c->day, (int) $c->pair, $need];
+                $anchors[$clusterKey($c)][(int) $c->day][] = [(int) $c->pair, (int) $c->pair + $need - 1];
+                $touched[] = $c;
+                $placed++;
+                continue;
             }
 
             for ($d = 1; $d <= $days; $d++) {
@@ -1197,6 +1365,9 @@ class TimetableController extends Controller
             $skBase = $this->spreadKey($c);
             $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
             $subjSlots[$skBase][] = [$d, $p, $need];
+            if ($clusterMode) {
+                $anchors[$clusterKey($c)][$d][] = [$p, $p + $need - 1];
+            }
             $touched[] = $c;
             $placed++;
         }
@@ -1421,6 +1592,182 @@ class TimetableController extends Controller
                 $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $p] = true;
             }
         }
+    }
+
+    /**
+     * Bir darsning barcha paralarini (kartalarini) birga joylash uchun joy topadi.
+     *
+     * $segs — [['card'=>TimetableCard, 'len'=>yarim-slot, 'groups'=>[], 'teacher'=>?id,
+     *           'room_required'=>bool, 'pool'=>[Auditorium,...]], ...]
+     * $anchorRuns — shu darsning ALLAQACHON joylashgan bo'laklari: [kun => [[bosh, oxir], ...]].
+     *   Bo'sh bo'lmasa — yangi bo'laklar aynan shu kunga (va $consecutive bo'lsa
+     *   mavjud blokning yoniga) tushadi.
+     * $consecutive — paralar ketma-ket (yonma-yon) bo'lishi shart.
+     *
+     * Qaytadi: [['card'=>, 'day'=>, 'pair'=>, 'room'=>?Auditorium], ...] yoki null.
+     * null — blok butunligicha sig'madi; chaqiruvchi kartalarni joylashmagan
+     * qoldiradi (yarmini boshqa kunga surib yubormaydi).
+     *
+     * $groupBusy/$teacherBusy/$roomBusy qiymat bo'yicha uzatiladi — bu yerda
+     * o'zgartirilmaydi, shuning uchun PHP nusxa olmaydi (copy-on-write).
+     */
+    private function clusterPlacement(
+        array $segs,
+        int $days,
+        int $pairs,
+        string $scopeKey,
+        array $groupBusy,
+        array $teacherBusy,
+        array $roomBusy,
+        bool $consecutive,
+        array $anchorRuns,
+        callable $penaltyFor
+    ): ?array {
+        if (!$segs) {
+            return null;
+        }
+        // Bir yarim-slot shu segment uchun bo'shmi (guruh + o'qituvchi)?
+        $slotFree = function (array $seg, int $d, int $p) use ($scopeKey, $groupBusy, $teacherBusy): bool {
+            $busy = $groupBusy[$scopeKey . '|' . $d . '|' . $p] ?? null;
+            if ($busy !== null) {
+                foreach ($seg['groups'] as $g) {
+                    if (isset($busy[$g])) {
+                        return false;
+                    }
+                }
+            }
+            return !($seg['teacher'] && !empty($teacherBusy[$seg['teacher'] . '|' . $d . '|' . $p]));
+        };
+        // Segment $d kunida $p dan boshlab joylasha oladimi? Qaytadi: xona (yoki null),
+        // joylashmasa — false.
+        $fit = function (array $seg, int $d, int $p) use ($slotFree, $roomBusy) {
+            for ($i = 0; $i < $seg['len']; $i++) {
+                if (!$slotFree($seg, $d, $p + $i)) {
+                    return false;
+                }
+            }
+            if (!$seg['room_required']) {
+                return null;   // xona kerak emas
+            }
+            foreach ($seg['pool'] as $r) {   // havza sig'im bo'yicha saralangan
+                $free = true;
+                for ($i = 0; $i < $seg['len']; $i++) {
+                    if (!empty($roomBusy[$r->code . '|' . $d . '|' . ($p + $i)])) {
+                        $free = false;
+                        break;
+                    }
+                }
+                if ($free) {
+                    return $r;
+                }
+            }
+            return false;   // bo'sh xona yo'q
+        };
+
+        $total = array_sum(array_column($segs, 'len'));
+        $best = null;
+        $bestPen = INF;
+
+        for ($d = 1; $d <= $days; $d++) {
+            // Mavjud bo'laklar boshqa kunda bo'lsa — bu kun mumkin emas
+            if ($anchorRuns && empty($anchorRuns[$d])) {
+                continue;
+            }
+            for ($p = 1; $p + $total - 1 <= $pairs; $p++) {
+                // Ketma-ketlik: mavjud blok bilan yonma-yon bo'lishi shart
+                if ($consecutive && !empty($anchorRuns[$d])) {
+                    $touching = false;
+                    foreach ($anchorRuns[$d] as [$as, $ae]) {
+                        if ($p === $ae + 1 || $p + $total === $as) {
+                            $touching = true;
+                            break;
+                        }
+                    }
+                    if (!$touching) {
+                        continue;
+                    }
+                }
+                $off = 0;
+                $items = [];
+                foreach ($segs as $seg) {
+                    $room = $fit($seg, $d, $p + $off);
+                    if ($room === false) {
+                        $items = null;
+                        break;
+                    }
+                    $items[] = ['card' => $seg['card'], 'day' => $d, 'pair' => $p + $off, 'room' => $room];
+                    $off += $seg['len'];
+                }
+                if ($items === null) {
+                    continue;
+                }
+                $pen = (float) $penaltyFor($d, $p);
+                if ($pen < $bestPen) {
+                    $bestPen = $pen;
+                    $best = $items;
+                }
+            }
+        }
+        if ($best !== null || $consecutive) {
+            return $best;   // ketma-ket majburiy bo'lsa — faqat yaxlit blok
+        }
+
+        // "Bir kunga" yoqilgan, "ketma-ket" o'chirilgan: yaxlit blok sig'masa,
+        // paralar bir kun ichida bo'shliq bilan ham tursa bo'ladi.
+        $bestPen = INF;
+        for ($d = 1; $d <= $days; $d++) {
+            if ($anchorRuns && empty($anchorRuns[$d])) {
+                continue;
+            }
+            $used = [];        // shu birlik band qilgan yarim-slotlar
+            $items = [];
+            $dayPen = 0.0;
+            foreach ($segs as $seg) {
+                $pick = null;
+                $pickPen = INF;
+                $pickRoom = null;
+                for ($p = 1; $p + $seg['len'] - 1 <= $pairs; $p++) {
+                    $clash = false;
+                    for ($i = 0; $i < $seg['len']; $i++) {
+                        if (isset($used[$p + $i])) {
+                            $clash = true;
+                            break;
+                        }
+                    }
+                    if ($clash) {
+                        continue;
+                    }
+                    $room = $fit($seg, $d, $p);
+                    if ($room === false) {
+                        continue;
+                    }
+                    $pen = (float) $penaltyFor($d, $p);
+                    if ($pen < $pickPen) {
+                        $pickPen = $pen;
+                        $pick = $p;
+                        $pickRoom = $room;
+                    }
+                }
+                if ($pick === null) {
+                    $items = null;
+                    break;
+                }
+                for ($i = 0; $i < $seg['len']; $i++) {
+                    $used[$pick + $i] = true;
+                }
+                $items[] = ['card' => $seg['card'], 'day' => $d, 'pair' => $pick, 'room' => $pickRoom];
+                $dayPen += $pickPen;
+            }
+            if ($items === null) {
+                continue;
+            }
+            if ($dayPen < $bestPen) {
+                $bestPen = $dayPen;
+                $best = $items;
+            }
+        }
+
+        return $best;
     }
 
     /** Fan taqsimoti kaliti: ma'ruza — oqim bo'yicha, amaliyot — guruhcha bo'yicha. */
@@ -2323,44 +2670,43 @@ class TimetableController extends Controller
     }
 
     /**
-     * Ekrandagi Excel jadvalini (HTML) haqiqiy .xlsx faylga aylantirib beradi.
-     * Shu bilan Excel "fayl formati kengaytmага mos emas" ogohlantirishi chiqmaydi.
-     * Kataklar ranglari inline (hex) — PhpSpreadsheet HTML o'quvchisi ularni saqlaydi;
-     * birlashtirilgan kataklar colspan/rowspan orqali merge bo'ladi.
+     * Ekrandagi panjarani haqiqiy .xlsx faylga yozadi.
+     *
+     * Klient katak ma'lumotini ixcham JSON qilib yuboradi:
+     *   {"rows": [[{"t":"matn","cs":2,"rs":1,"bg":"#fde68a","b":1}, ...], ...],
+     *    "freeze_rows": 2, "freeze_cols": 2}
+     * Ilgari butun jadval inline-uslubli HTML bo'lib kelib, PhpSpreadsheet ning
+     * HTML o'quvchisi orqali o'qilardi — katta doskada (o'n minglab katak) bu
+     * juda sekin bo'lib, so'rov timeout bo'lardi va klient jimgina HTML ni
+     * ".xls" nomi bilan saqlab qo'yardi (Excel "format kengaytmaga mos emas"
+     * deb ogohlantirardi). Endi kataklar to'g'ridan-to'g'ri yoziladi.
+     *
+     * Eski klientlar uchun "html" maydoni ham qabul qilinadi (zaxira yo'l).
      */
     public function excelExport(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([
-            'html'     => 'required|string',
+            'payload'  => 'nullable|string',
+            'html'     => 'nullable|string',
+            'title'    => 'nullable|string|max:255',
             'filename' => 'nullable|string|max:150',
         ]);
+        if (empty($data['payload']) && empty($data['html'])) {
+            return response()->json(['error' => 'Yuklash uchun ma\'lumot yuborilmadi.'], 422);
+        }
 
-        @ini_set('memory_limit', '512M');
-        @set_time_limit(120);
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
 
         $base = preg_replace('/[^\w\-]+/u', '_', (string) ($data['filename'] ?? 'dars-jadvali')) ?: 'dars-jadvali';
-        $tmp = tempnam(sys_get_temp_dir(), 'ttx');
-        $tmpHtml = $tmp . '.html';
-        @rename($tmp, $tmpHtml);
-        file_put_contents($tmpHtml, $data['html']);
 
         try {
-            $reader = new \PhpOffice\PhpSpreadsheet\Reader\Html();
-            $spreadsheet = $reader->load($tmpHtml);
-            $sheet = $spreadsheet->getActiveSheet();
-            $sheet->setTitle('Dars jadvali');
-
-            // Chegara chiziqlari — HTML <style> dagi border qoidasi o'quvchi
-            // tomonidan qo'llanmaydi, shuning uchun butun diapazonga qo'lda beramiz.
-            $dim = $sheet->calculateWorksheetDimension();
-            if ($dim && strpos($dim, ':') !== false) {
-                $sheet->getStyle($dim)->getBorders()->getAllBorders()
-                    ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
-                    ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF888888'));
-                $sheet->getStyle($dim)->getAlignment()->setVertical(
-                    \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER
-                );
-            }
+            $spreadsheet = !empty($data['payload'])
+                ? $this->buildGridSpreadsheet(
+                    json_decode($data['payload'], true, 32, JSON_THROW_ON_ERROR),
+                    (string) ($data['title'] ?? '')
+                )
+                : $this->buildSpreadsheetFromHtml((string) $data['html']);
 
             $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
 
@@ -2372,6 +2718,152 @@ class TimetableController extends Controller
         } catch (\Throwable $e) {
             Log::warning('Timetable excel-export xatosi: ' . $e->getMessage());
             return response()->json(['error' => 'Excel yaratishda xatolik: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /** Katak ma'lumotidan (klientdan kelgan JSON) xlsx varaqni tuzadi. */
+    private function buildGridSpreadsheet(array $payload, string $title): \PhpOffice\PhpSpreadsheet\Spreadsheet
+    {
+        $rows = $payload['rows'] ?? [];
+        if (!is_array($rows) || !$rows) {
+            throw new \RuntimeException('Panjara bo\'sh.');
+        }
+        // Excel chegaralari — bundan kattasini baribir ocholmaydi.
+        if (count($rows) > 10000) {
+            throw new \RuntimeException('Jadval juda katta (' . count($rows) . ' qator). Qamrovni kichraytiring.');
+        }
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Dars jadvali');
+
+        $firstRow = 1;
+        if ($title !== '') {
+            $sheet->setCellValue('A1', $title);
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+            $firstRow = 3;
+        }
+
+        $occupied = [];   // "qator|ustun" => true (birlashtirilgan kataklar egallagan joy)
+        $maxCol = 1;
+        $maxRow = $firstRow;
+
+        foreach (array_values($rows) as $r => $cells) {
+            if (!is_array($cells)) {
+                continue;
+            }
+            $excelRow = $firstRow + $r;
+            $col = 1;
+            foreach ($cells as $cell) {
+                if (!is_array($cell)) {
+                    continue;
+                }
+                while (isset($occupied[$excelRow . '|' . $col])) {
+                    $col++;
+                }
+                $cs = max(1, min(200, (int) ($cell['cs'] ?? 1)));
+                $rs = max(1, min(200, (int) ($cell['rs'] ?? 1)));
+                $from = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $excelRow;
+                $to = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col + $cs - 1) . ($excelRow + $rs - 1);
+
+                $text = trim((string) ($cell['t'] ?? ''));
+                if ($text !== '') {
+                    $sheet->setCellValueExplicit(
+                        $from,
+                        $text,
+                        \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                    );
+                }
+                if ($cs > 1 || $rs > 1) {
+                    $sheet->mergeCells($from . ':' . $to);
+                }
+                $bg = $this->argbColor($cell['bg'] ?? null);
+                $bold = !empty($cell['b']);
+                if ($bg !== null || $bold) {
+                    $style = $sheet->getStyle($cs > 1 || $rs > 1 ? $from . ':' . $to : $from);
+                    if ($bg !== null) {
+                        $style->getFill()
+                            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                            ->getStartColor()->setARGB($bg);
+                    }
+                    if ($bold) {
+                        $style->getFont()->setBold(true);
+                    }
+                }
+
+                for ($i = 0; $i < $cs; $i++) {
+                    for ($j = 0; $j < $rs; $j++) {
+                        $occupied[($excelRow + $j) . '|' . ($col + $i)] = true;
+                    }
+                }
+                $col += $cs;
+                $maxCol = max($maxCol, $col - 1);
+                $maxRow = max($maxRow, $excelRow + $rs - 1);
+            }
+        }
+
+        // Umumiy ko'rinish: chegaralar, markazlash, matnni o'rash, ustun kengligi.
+        $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($maxCol);
+        $dim = 'A' . $firstRow . ':' . $lastCol . $maxRow;
+        $sheet->getStyle($dim)->getBorders()->getAllBorders()
+            ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+            ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF888888'));
+        $sheet->getStyle($dim)->getAlignment()
+            ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER)
+            ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
+            ->setWrapText(true);
+        $sheet->getStyle($dim)->getFont()->setSize(9);
+
+        for ($i = 1; $i <= $maxCol; $i++) {
+            $sheet->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i))
+                ->setWidth($i <= 2 ? 7 : 16);
+        }
+
+        // Sarlavha qatorlari va chap ustunlarni qotirish (skrollda ko'rinib tursin)
+        $fr = max(0, (int) ($payload['freeze_rows'] ?? 0));
+        $fc = max(0, (int) ($payload['freeze_cols'] ?? 0));
+        if (($fr > 0 || $fc > 0) && $fc < $maxCol) {
+            $sheet->freezePane(
+                \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($fc + 1) . ($firstRow + $fr)
+            );
+        }
+
+        return $spreadsheet;
+    }
+
+    /** "#fde68a" → "FFFDE68A" (yaroqsiz bo'lsa null). */
+    private function argbColor($hex): ?string
+    {
+        $hex = ltrim((string) $hex, '#');
+        if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
+            return null;
+        }
+        $up = strtoupper($hex);
+        return $up === 'FFFFFF' ? null : 'FF' . $up;   // oq — sukut, bo'yash shart emas
+    }
+
+    /** Eski klient uchun zaxira yo'l: inline-uslubli HTML jadvalni o'qish. */
+    private function buildSpreadsheetFromHtml(string $html): \PhpOffice\PhpSpreadsheet\Spreadsheet
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'ttx');
+        $tmpHtml = $tmp . '.html';
+        @rename($tmp, $tmpHtml);
+        file_put_contents($tmpHtml, $html);
+        try {
+            $reader = new \PhpOffice\PhpSpreadsheet\Reader\Html();
+            $spreadsheet = $reader->load($tmpHtml);
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Dars jadvali');
+            $dim = $sheet->calculateWorksheetDimension();
+            if ($dim && strpos($dim, ':') !== false) {
+                $sheet->getStyle($dim)->getBorders()->getAllBorders()
+                    ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+                    ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF888888'));
+                $sheet->getStyle($dim)->getAlignment()->setVertical(
+                    \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER
+                );
+            }
+            return $spreadsheet;
         } finally {
             @unlink($tmpHtml);
         }

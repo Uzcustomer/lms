@@ -456,7 +456,9 @@
                                         <label class="flex items-center gap-2 text-sm text-gray-600">
                                             <input id="stConsec" type="checkbox" class="rounded border-gray-300"> Ketma-ket (yonma-yon) paralarga qo'yish
                                         </label>
-                                        <p class="text-[11px] text-gray-400 mt-0.5">Masalan 4 soatlik dars — ikki para bir kunda, ketma-ket (2+2 alohida kunga bo'linmaydi).</p>
+                                        <p class="text-[11px] text-gray-400 mt-0.5">Masalan 4 soatlik dars — ikki para bir kunda, ketma-ket (2+2 alohida kunga bo'linmaydi).
+                                            Bu — <b>qat'iy</b> qoida: guruh, o'qituvchi yoki auditoriya band bo'lib blok butunligicha sig'masa,
+                                            kartalar bo'linmaydi — joylashmaganlar panelida qoladi.</p>
                                         <label class="flex items-center gap-2 text-sm text-gray-600 mt-2">
                                             Auditoriya sig'imi toleransi:
                                             <input id="stRoomTol" type="number" min="0" max="30" class="w-16 rounded border-gray-300 text-sm"> %
@@ -3989,69 +3991,72 @@
             $('excelPrint').onclick = () => window.print();
             $('excelDownload').onclick = () => downloadExcelXls();
 
-            // ── Ekrandagi panjarani inline-uslubli HTML jadval sifatida tayyorlash ──
+            // ── Rang yordamchisi (Excel eksporti uchun) ──
             const rgbToHex = c => {
                 const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
                 if (!m) return null;
                 return '#' + [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
             };
-            const cssBorder = (cs, side) => {
-                const w = parseFloat(cs['border' + side + 'Width']) || 0;
-                if (w <= 0) return 'none';
-                return Math.round(w) + 'px solid ' + (rgbToHex(cs['border' + side + 'Color']) || '#000');
-            };
-            // #grid jadvalini nusxalab, har katakning hisoblangan (computed) fon/chegara/
-            // shrift uslublarini inline qo'yamiz — Excel aynan ekrandagidek ko'rsatadi.
-            function gridExportHtml() {
+            // ── Panjarani ixcham katak ma'lumoti sifatida yig'ish ──────────────
+            // Ilgari butun jadval inline-uslubli HTML bo'lib yuborilar, server esa
+            // uni PhpSpreadsheet ning HTML o'quvchisi orqali o'qirdi. Katta doskada
+            // (o'n minglab katak) bu juda sekin — so'rov timeout bo'lib, brauzer
+            // jimgina HTML ni ".xls" nomi bilan saqlab qo'yardi. Excel esa aynan
+            // shu sababli "fayl formati kengaytmaga mos emas" deb ogohlantirardi.
+            // Endi faqat matn + rang + birlashtirish ma'lumoti yuboriladi va server
+            // xlsx ni to'g'ridan-to'g'ri yozadi.
+            function gridExportCells() {
                 const grid = document.getElementById('grid');
                 if (!grid || !grid.querySelector('tbody tr')) return null;
-                const clone = grid.cloneNode(true);
-                const origCells = grid.querySelectorAll('th, td');
-                const cloneCells = clone.querySelectorAll('th, td');
-                for (let i = 0; i < origCells.length; i++) {
-                    const cs = getComputedStyle(origCells[i]);
-                    const el = cloneCells[i];
-                    const st = [];
-                    const bg = rgbToHex(cs.backgroundColor);
-                    if (bg && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent') st.push('background-color:' + bg);
-                    ['Top', 'Right', 'Bottom', 'Left'].forEach(s => st.push('border-' + s.toLowerCase() + ':' + cssBorder(cs, s)));
-                    st.push('font-weight:' + cs.fontWeight);
-                    st.push('font-size:' + cs.fontSize);
-                    st.push('text-align:' + cs.textAlign);
-                    st.push('vertical-align:middle');
-                    st.push('color:' + (rgbToHex(cs.color) || '#000'));
-                    if (cs.writingMode && cs.writingMode.indexOf('vertical') === 0) st.push('mso-rotate:90');
-                    el.setAttribute('style', st.join(';'));
-                    ['data-day', 'data-pair', 'data-place', 'data-chip', 'data-merge-ids', 'title', 'class'].forEach(a => el.removeAttribute(a));
-                }
-                clone.querySelectorAll('[draggable]').forEach(x => x.removeAttribute('draggable'));
-                clone.querySelectorAll('[data-chip],[data-merge-ids],[data-place]').forEach(x => {
-                    ['data-chip', 'data-merge-ids', 'data-place', 'title'].forEach(a => x.removeAttribute(a));
+                const rows = [];
+                grid.querySelectorAll('tr').forEach(tr => {
+                    const cells = [];
+                    [...tr.children].forEach(el => {
+                        if (el.tagName !== 'TD' && el.tagName !== 'TH') return;
+                        // Chip (kartochka) bo'lsa rangni undan olamiz — katak oq bo'lsa ham
+                        // Excelda dars rangi ekrandagidek chiqsin.
+                        const chip = el.querySelector('.tt-chip');
+                        const cs = getComputedStyle(chip || el);
+                        const bgRaw = cs.backgroundColor;
+                        const transparent = !bgRaw || bgRaw === 'transparent' || bgRaw === 'rgba(0, 0, 0, 0)';
+                        const cell = { t: (el.innerText || '').replace(/\s+/g, ' ').trim() };
+                        if (el.colSpan > 1) cell.cs = el.colSpan;
+                        if (el.rowSpan > 1) cell.rs = el.rowSpan;
+                        if (!transparent) { const hex = rgbToHex(bgRaw); if (hex) cell.bg = hex; }
+                        if (parseInt(cs.fontWeight, 10) >= 600) cell.b = 1;
+                        cells.push(cell);
+                    });
+                    rows.push(cells);
                 });
-                return '<table style="border-collapse:collapse">' + clone.innerHTML + '</table>';
+                return { rows, freeze_rows: grid.querySelectorAll('thead tr').length, freeze_cols: 2 };
             }
+
             // Jadvalni HAQIQIY .xlsx fayl sifatida yuklab olish (serverda PhpSpreadsheet
             // orqali) — Excel "format kengaytmага mos emas" ogohlantirishi chiqmaydi.
-            // Xato bo'lsa — eski HTML .xls ga qaytamiz (ogohlantirish bilan bo'lса ham ishlaydi).
             async function downloadExcelXls() {
-                const tableHtml = gridExportHtml();
-                if (!tableHtml) { alert('Yuklab olish uchun panjara yo\'q.'); return; }
-                // Kataklar uslublari inline (fon/chegara/shrift) — Excel aynan ekrandagidek chiqaradi.
-                const title = (board.institution_name ? esc(board.institution_name) + ' — ' : '') + esc(board.name || 'Dars jadvali') +
+                const cellData = gridExportCells();
+                if (!cellData) { alert('Yuklab olish uchun panjara yo\'q.'); return; }
+                const title = (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali') +
                     (curWeek ? ' · ' + curWeek + '-hafta' : '');
-                const titleRow = '<div style="font-weight:700;font-size:14px;padding:6px 2px">' + title + '</div>';
-                const html = '<html xmlns="http://www.w3.org/TR/REC-html40">' +
-                    '<head><meta charset="utf-8"><style>table{border-collapse:collapse}td,th{padding:2px 4px}</style></head><body>' +
-                    titleRow + tableHtml + '</body></html>';
                 const base = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') +
                     (curWeek ? '_' + curWeek + '-hafta' : '');
+                const btn = $('excelViewBtn');
+                const btnHtml = btn ? btn.innerHTML : null;
+                if (btn) { btn.disabled = true; btn.textContent = 'Tayyorlanmoqda…'; }
                 try {
                     const fd = new FormData();
                     fd.append('_token', CSRF);
-                    fd.append('html', html);
+                    fd.append('payload', JSON.stringify(cellData));
+                    fd.append('title', title);
                     fd.append('filename', base);
-                    const r = await fetch(BASE + '/boards/' + board.id + '/excel-export', { method: 'POST', body: fd });
-                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    const r = await fetch(BASE + '/boards/' + board.id + '/excel-export', {
+                        method: 'POST', headers: { 'Accept': 'application/json' }, body: fd
+                    });
+                    if (!r.ok) {
+                        let msg = 'HTTP ' + r.status;
+                        try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (_) { }
+                        throw new Error(msg);
+                    }
                     const blob = await r.blob();
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -4059,8 +4064,12 @@
                     document.body.appendChild(a); a.click(); a.remove();
                     setTimeout(() => URL.revokeObjectURL(url), 5000);
                 } catch (e) {
-                    // Zaxira: HTML .xls (Excel ogohlantirish berishi mumkin, lekin ochiladi)
-                    dl('﻿' + html, base + '.xls', 'application/vnd.ms-excel');
+                    // Jimgina ".xls" (aslida HTML) saqlamaymiz — Excel uni "format
+                    // kengaytmaga mos emas" deb ogohlantiradi va sabab ko'rinmay qoladi.
+                    alert('Excel faylini yaratib bo\'lmadi: ' + e.message +
+                        '\n\nQamrovni kichraytirib (fakultet/kurs tanlab) qayta urinib ko\'ring.');
+                } finally {
+                    if (btn && btnHtml !== null) { btn.disabled = false; btn.innerHTML = btnHtml; }
                 }
             }
             document.querySelectorAll('.ex-mode').forEach(b => b.onclick = () => {

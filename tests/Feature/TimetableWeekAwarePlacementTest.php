@@ -28,13 +28,13 @@ function weekTestBoard(): TimetableBoard
 
     $board = TimetableBoard::create([
         'name' => 'Test', 'academic_year' => '2026-2027', 'semester' => 'kuzgi',
-        'days' => 6, 'pairs_per_day' => 8, 'weeks' => WEEK_TEST_TOTAL,
+        'days' => 6, 'pairs_per_day' => 12, 'weeks' => WEEK_TEST_TOTAL,
         'settings' => ['pair_same_day' => true, 'pair_consecutive' => true],
     ]);
     TimetableGridSetting::create([
         'board_id' => $board->id, 'faculty_name' => 'F1',
         'specialty_name' => 'davolash ishi', 'course' => 2,
-        'days' => 6, 'pairs_per_day' => 8, 'weeks' => WEEK_TEST_TOTAL,
+        'days' => 6, 'pairs_per_day' => 12, 'weeks' => WEEK_TEST_TOTAL,
     ]);
 
     return $board;
@@ -64,6 +64,24 @@ function weekTestCard(TimetableBoard $board, array $attrs, ?array $activeWeeks =
     }
 
     return $card;
+}
+
+/** splitPracticeHours() bilan bir xil: soatni 2 soatlik kartalarga bo'ladi. */
+function weekTestSplitHours(int $hours): array
+{
+    $out = [];
+    while ($hours >= 2) {
+        $out[] = 2;
+        $hours -= 2;
+    }
+    if ($hours === 1) {
+        if ($out) {
+            $out[count($out) - 1] = 3;
+        } else {
+            $out[] = 1;
+        }
+    }
+    return $out;
 }
 
 function weekTestPlace(TimetableBoard $board): void
@@ -133,3 +151,57 @@ test('ma\'ruzasiz haftada ikki amaliy ma\'ruza vaqtidan boshlab yaxlit turadi', 
     // Ma'ruza va uni almashtiruvchi amaliy bitta xonani bo'lishadi
     expect($standIn->auditorium_code)->toBe($lecture->auditorium_code);
 });
+
+/**
+ * Soat taqsimoti ixtiyoriy: reja "har haftalik" va "ma'ruzasiz haftalardagi"
+ * soatni alohida chelaklarga bo'ladi, har biri 2 soatlik kartalarga bo'linadi.
+ * Ma'ruzasiz haftadagi butun amaliy yuk (ikkala chelak) bir kunda, uzluksiz va
+ * ma'ruza vaqtidan boshlanishi kerak — 2+2 ham, 2+4 ham, 4+4 ham.
+ */
+dataset('soat taqsimotlari', [
+    'ma\'ruza 2 + amaliy 2 + qo\'shimcha 2' => [2, 2, 2],
+    'ma\'ruza 2 + amaliy 4 + qo\'shimcha 2' => [2, 4, 2],
+    'ma\'ruza 2 + amaliy 6 + qo\'shimcha 2' => [2, 6, 2],
+    'ma\'ruza 2 + amaliy 2 + qo\'shimcha 4' => [2, 2, 4],
+    'ma\'ruza 4 + amaliy 4 + qo\'shimcha 4' => [4, 4, 4],
+]);
+
+test('ma\'ruzasiz haftadagi amaliy yuk yaxlit va ma\'ruza vaqtidan boshlanadi',
+    function (int $lectureHalves, int $weeklyHours, int $standInHours) {
+        $board = weekTestBoard();
+        $lecture = weekTestCard($board, ['training_type' => 'lecture', 'group_names' => ['g-01a'],
+            'subject_name' => 'Mikrobiologiya', 'len_half' => $lectureHalves,
+            'weeks' => 5, 'teacher_id' => 1], WEEK_TEST_ODD);
+
+        $practices = [];
+        foreach (weekTestSplitHours($weeklyHours) as $len) {
+            $practices[] = weekTestCard($board, ['training_type' => 'practice', 'group_name' => 'g-01a',
+                'subject_name' => 'Mikrobiologiya', 'len_half' => $len,
+                'weeks' => WEEK_TEST_TOTAL, 'teacher_id' => 1]);
+        }
+        foreach (weekTestSplitHours($standInHours) as $len) {
+            $practices[] = weekTestCard($board, ['training_type' => 'practice', 'group_name' => 'g-01a',
+                'subject_name' => 'Mikrobiologiya', 'len_half' => $len,
+                'weeks' => 5, 'teacher_id' => 1], WEEK_TEST_EVEN);
+        }
+
+        weekTestPlace($board);
+        $lecture = $lecture->fresh();
+
+        // Ma'ruzasiz haftada band bo'ladigan yarim-slotlar
+        $slots = [];
+        foreach ($practices as $card) {
+            $card = $card->fresh();
+            expect($card->day)->not->toBeNull();
+            expect($card->day)->toBe($lecture->day);
+            for ($i = 0; $i < $card->len_half; $i++) {
+                $slots[] = (int) $card->pair + $i;
+            }
+        }
+        sort($slots);
+
+        expect($slots)->toHaveCount($weeklyHours + $standInHours);
+        expect($slots)->toBe(range($slots[0], $slots[0] + count($slots) - 1));   // uzluksiz
+        expect($slots[0])->toBe((int) $lecture->pair);                            // ma'ruza vaqtidan
+    }
+)->with('soat taqsimotlari');

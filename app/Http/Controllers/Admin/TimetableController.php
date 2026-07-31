@@ -3247,8 +3247,13 @@ class TimetableController extends Controller
         // Shu sababli zichlashda birliklar fan bo'yicha guruhlanadi va ketma-ket
         // tiziladi — guruh uchun dars yaxlit chiqadi. Fanlar tartibi o'zgarmaydi:
         // har fan o'zining eng erta bo'lagi bo'yicha joyda qoladi.
-        $subjectKeyOf = fn(TimetableCard $c) => $this->specKey($c->specialty_name)
-            . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+        // Kalitga OQIM ham kiradi. Busiz bir yo'nalish+kursdagi barcha oqimlar
+        // bitta hisobga qo'shilib ketardi: boshqa oqimning o'sha fani kun boshida
+        // tursa, ikki fanning tartib raqami tenglashib, saralash oddiy para
+        // tartibiga tushib qolardi va guruhlash umuman ishlamasdi.
+        $subjectKeyOf = fn(TimetableCard $c) => $this->groupScopeKey($c)
+            . '|' . (string) $c->oqim_label
+            . '|' . $this->normSubject((string) $c->subject_name);
         $unitMeta = [];
         $subjectRank = [];
         foreach ($units as $i => $unit) {
@@ -3262,8 +3267,13 @@ class TimetableController extends Controller
         foreach ($units as $i => $unit) {
             $ordered[] = [$unitMeta[$i], $unit];
         }
-        usort($ordered, fn($a, $b) => [$a[0]['day'], $subjectRank[$a[0]['subject']], $a[0]['pair']]
-            <=> [$b[0]['day'], $subjectRank[$b[0]['subject']], $b[0]['pair']]);
+        // Tartib raqami teng bo'lsa fan nomi bo'yicha ajratiladi — aks holda
+        // ikki fanning birliklari yana bir-biriga kirib ketadi.
+        usort($ordered, fn($a, $b) => [
+            $a[0]['day'], $subjectRank[$a[0]['subject']], $a[0]['subject'], $a[0]['pair'],
+        ] <=> [
+            $b[0]['day'], $subjectRank[$b[0]['subject']], $b[0]['subject'], $b[0]['pair'],
+        ]);
         $units = array_map(fn($x) => $x[1], $ordered);
 
         // Qayta tizishdan OLDIN barcha ko'chiriladigan birliklar bandlik

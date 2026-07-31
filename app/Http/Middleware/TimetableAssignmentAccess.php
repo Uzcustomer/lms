@@ -20,23 +20,15 @@ class TimetableAssignmentAccess
             $activeRole = $userRoles[0];
         }
 
-        $teacherAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi'];
-        $auditoriumAssignmentRoles = ['kafedra_mudiri'];
-        $assignmentRoles = array_merge($teacherAssignmentRoles, $auditoriumAssignmentRoles);
+        $auditoriumAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];
+        $departmentHeadRoles = ['kafedra_mudiri'];
+        $assignmentRoles = $auditoriumAssignmentRoles;
 
         if ($user && in_array($activeRole, $assignmentRoles, true)) {
             $allowed = [
                 'admin.timetable.index',
                 'admin.timetable.boards.data',
             ];
-
-            if (in_array($activeRole, $teacherAssignmentRoles, true)) {
-                $allowed = array_merge($allowed, [
-                    'admin.timetable.teachers',
-                    'admin.timetable.teacher-units',
-                    'admin.timetable.assign-teacher',
-                ]);
-            }
 
             if (in_array($activeRole, $auditoriumAssignmentRoles, true)) {
                 $allowed = array_merge($allowed, [
@@ -46,6 +38,11 @@ class TimetableAssignmentAccess
                     'admin.timetable.auditorium-teachers.destroy',
                     'admin.timetable.assign-auditorium-teacher',
                     'admin.timetable.auditoriums',
+                ]);
+            }
+
+            if (in_array($activeRole, $departmentHeadRoles, true)) {
+                $allowed = array_merge($allowed, [
                     'admin.timetable.auditoriums.store',
                     'admin.timetable.auditoriums.destroy',
                 ]);

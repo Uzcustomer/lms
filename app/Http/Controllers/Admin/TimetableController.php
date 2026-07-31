@@ -3238,16 +3238,40 @@ class TimetableController extends Controller
                     $units[] = $chain;
                 }
             }
-            usort($units, function ($a, $b) {
-                $aPair = min(array_map(fn($x) => (int) $x[2], $a));
-                $bPair = min(array_map(fn($x) => (int) $x[2], $b));
-                return [(int) $a[0][1], $aPair] <=> [(int) $b[0][1], $bPair];
-            });
         }
 
-        $moves = [];
+        // ── Hafta ichida FAN bo'yicha guruhlash ──────────────────────────────
+        // Bir fanning bo'laklari (ma'ruza / o'rin bosuvchi amaliy / har haftalik
+        // amaliy) hafta bo'yicha turli slotlarda qolishi mumkin: ma'ruza sloti
+        // boshqa fan bilan almashsa, o'rin bosuvchi amaliy u yerga tusha olmaydi.
+        // Shu sababli zichlashda birliklar fan bo'yicha guruhlanadi va ketma-ket
+        // tiziladi — guruh uchun dars yaxlit chiqadi. Fanlar tartibi o'zgarmaydi:
+        // har fan o'zining eng erta bo'lagi bo'yicha joyda qoladi.
+        $subjectKeyOf = fn(TimetableCard $c) => $this->specKey($c->specialty_name)
+            . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+        $unitMeta = [];
+        $subjectRank = [];
+        foreach ($units as $i => $unit) {
+            $day = (int) $unit[0][1];
+            $pair = min(array_map(fn($x) => (int) $x[2], $unit));
+            $key = $day . '|' . $subjectKeyOf($unit[0][0]);
+            $unitMeta[$i] = ['day' => $day, 'pair' => $pair, 'subject' => $key];
+            $subjectRank[$key] = isset($subjectRank[$key]) ? min($subjectRank[$key], $pair) : $pair;
+        }
+        $ordered = [];
+        foreach ($units as $i => $unit) {
+            $ordered[] = [$unitMeta[$i], $unit];
+        }
+        usort($ordered, fn($a, $b) => [$a[0]['day'], $subjectRank[$a[0]['subject']], $a[0]['pair']]
+            <=> [$b[0]['day'], $subjectRank[$b[0]['subject']], $b[0]['pair']]);
+        $units = array_map(fn($x) => $x[1], $ordered);
+
+        // Qayta tizishdan OLDIN barcha ko'chiriladigan birliklar bandlik
+        // xaritasidan olib tashlanadi. Aks holda birlik joylashayotganda
+        // keyingi birliklar hali eski o'rnida band turib, fan bo'yicha
+        // guruhlash ishlamay qolardi (dars o'z fanining yoniga tusholmasdi).
+        $pending = [];
         foreach ($units as $unit) {
-            $d = (int) $unit[0][1];
             $baseStart = min(array_map(fn($x) => (int) ($x[0]->pair ?: $x[2]), $unit));
             $parts = [];
             $blockEnd = $baseStart;
@@ -3262,16 +3286,19 @@ class TimetableController extends Controller
                 $blockEnd = max($blockEnd, $basePair + $len);
                 $mark($c, (int) $effectiveDay, (int) $effectivePair, $effectiveRoomCode, false);
             }
-            $blockLen = $blockEnd - $baseStart;
+            $pending[] = [(int) $unit[0][1], $parts, $blockEnd - $baseStart];
+        }
+
+        $moves = [];
+        foreach ($pending as [$d, $parts, $blockLen]) {
             $bestStart = null;
             $bestRooms = [];
 
-            // Bazaviy boshlanish ham tekshiriladi: eski override blokni bo'lib
-            // qo'ygan bo'lsa, qayta zichlash uni yonma-yon holatga qaytaradi.
-            for ($np = 1; $np <= $baseStart; $np++) {
-                if ($np + $blockLen - 1 > $pairs) {
-                    break;
-                }
+            // Kun boshidan boshlab birinchi mos joy olinadi. Oraliq bazaviy
+            // slot bilan cheklanmaydi: fan bo'yicha guruhlashda blok o'z
+            // shablon slotidan kechroqqa ham tushishi mumkin, aks holda unga
+            // joy topilmay, eski o'rnida boshqa dars bilan to'qnashib qolardi.
+            for ($np = 1; $np + $blockLen - 1 <= $pairs; $np++) {
                 $free = true;
                 $candidateRooms = [];
                 $candidateRoomBusy = [];

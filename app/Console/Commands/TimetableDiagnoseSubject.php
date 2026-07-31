@@ -51,8 +51,11 @@ class TimetableDiagnoseSubject extends Command
         }
         // Ma'ruza guruhlari group_names (JSON) da, amaliyniki group_name da —
         // shuning uchun filtrlash PHP tomonida, occupiedGroups() orqali.
-        $cards = $query->get()
-            ->filter(fn(TimetableCard $c) => in_array($group, $c->occupiedGroups(), true))
+        // Moslik QISMIY: bazadagi nom "d1/d25-01a (o'z)" ko'rinishida — til
+        // qo'shimchasi bilan, foydalanuvchi esa odatda "d1/d25-01a" deb yozadi.
+        $subjectCards = $query->get();
+        $cards = $subjectCards
+            ->filter(fn(TimetableCard $c) => $this->matchesGroup($c, $group))
             ->sortBy(fn(TimetableCard $c) => [$c->training_type === 'lecture' ? 0 : 1, -(int) $c->weeks])
             ->values();
 
@@ -60,7 +63,8 @@ class TimetableDiagnoseSubject extends Command
         $this->info($board->name . '  |  ' . $subject . ' · ' . $group);
 
         if ($cards->isEmpty()) {
-            $this->warn('Bu qamrovda karta topilmadi. --subject / --group / --course ni tekshiring.');
+            $this->warn('Bu qamrovda karta topilmadi.');
+            $this->showAvailable($subjectCards, $subject);
             return self::SUCCESS;
         }
 
@@ -81,6 +85,45 @@ class TimetableDiagnoseSubject extends Command
         $this->showWeek($cards, max(1, (int) $this->option('week')));
 
         return self::SUCCESS;
+    }
+
+    /** Karta shu guruhga tegishlimi (til qo'shimchasiz yozilgan nom ham mos keladi). */
+    private function matchesGroup(TimetableCard $card, string $group): bool
+    {
+        foreach ($card->occupiedGroups() as $name) {
+            if (mb_stripos((string) $name, $group) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Hech narsa topilmasa — qaysi fan/guruh nomlari borligini ko'rsatamiz. */
+    private function showAvailable($subjectCards, string $subject): void
+    {
+        if ($subjectCards->isEmpty()) {
+            $this->line('"' . $subject . '" bilan boshlanadigan fan umuman yo\'q. --subject ni tekshiring.');
+            return;
+        }
+
+        $subjects = $subjectCards->pluck('subject_name')->unique()->sort()->values();
+        $this->line('');
+        $this->line('Topilgan fanlar:');
+        foreach ($subjects as $name) {
+            $this->line('  · ' . $name);
+        }
+
+        $groups = $subjectCards->flatMap(fn(TimetableCard $c) => $c->occupiedGroups())
+            ->unique()->sort()->values();
+        $this->line('');
+        $this->line('Shu fandagi guruh nomlari (--group uchun):');
+        foreach ($groups->take(40) as $name) {
+            $this->line('  · ' . $name);
+        }
+        if ($groups->count() > 40) {
+            $this->line('  … jami ' . $groups->count() . ' ta');
+        }
+        $this->line('');
     }
 
     /** Ma'ruzani almashtiruvchi amaliy ma'ruza slotida turibdimi? */

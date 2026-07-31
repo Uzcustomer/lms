@@ -1129,7 +1129,7 @@ class TimetableController extends Controller
                     $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $uc);
                     if ($uc->training_type === 'lecture' && (int) $uc->weeks > 0
                         && !isset($lecSlot[$subjOf($uc)])) {
-                        $lecSlot[$subjOf($uc)] = [(int) $uc->day, (int) $uc->pair, (int) $uc->weeks];
+                        $lecSlot[$subjOf($uc)] = [(int) $uc->day, (int) $uc->pair, (int) $uc->weeks, (int) $uc->id];
                     }
                     $ucSk = $this->spreadKey($uc);
                     $subjDay[$ucSk . '|' . $uc->day] = ($subjDay[$ucSk . '|' . $uc->day] ?? 0) + 1;
@@ -1177,7 +1177,7 @@ class TimetableController extends Controller
             // odatdagi qidiruvga tushib ketadi.
             $sKey = $subjOf($c);
             if ($c->training_type === 'practice' && isset($lecSlot[$sKey]) && (int) $c->weeks > 0) {
-                [$ld, $lp, $lw] = $lecSlot[$sKey];
+                [$ld, $lp, $lw, $lecId] = $lecSlot[$sKey];
                 $totalWeeks = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
                 // Almashinuvchimi: haftalari aynan ma'ruzasiz haftalar soniga teng
                 if ((int) $c->weeks === $totalWeeks - $lw && $lp + $need - 1 <= $pairs) {
@@ -1206,8 +1206,15 @@ class TimetableController extends Controller
                         $okT = false;
                         break;
                     }
+                    // O'qituvchi shu slotda band bo'lsa-yu, uni band qilgan aynan
+                    // SHU fanning ma'ruzasi bo'lsa — bu soxta to'qnashuv: ma'ruza va
+                    // uni almashtiruvchi amaliy hech qachon bir haftaga tushmaydi.
+                    // Ilgari shu tekshiruv (odatda o'qituvchi bir xil bo'lgani uchun)
+                    // maxsus joylashtirishni bekor qilar, amaliy esa boshqa kunga
+                    // tushib ketardi.
                     for ($i = 0; $i < $need && $okT; $i++) {
-                        if ($teacherId && !empty($teacherBusy[$teacherId . '|' . $ld . '|' . ($lp + $i)])) {
+                        $busyBy = $teacherBusy[$teacherId . '|' . $ld . '|' . ($lp + $i)] ?? null;
+                        if ($teacherId && $busyBy !== null && (int) $busyBy !== $lecId) {
                             $okT = false;
                         }
                     }
@@ -1216,7 +1223,10 @@ class TimetableController extends Controller
                         foreach ($poolArr as $r) {
                             $free = true;
                             for ($i = 0; $i < $need; $i++) {
-                                if (!empty($roomBusy[$r->code . '|' . $ld . '|' . ($lp + $i)])) { $free = false; break; }
+                                // Ma'ruzaning o'z xonasi ham bo'sh hisoblanadi — o'sha
+                                // haftalarda ma'ruza o'tilmaydi.
+                                $by = $roomBusy[$r->code . '|' . $ld . '|' . ($lp + $i)] ?? null;
+                                if ($by !== null && (int) $by !== $lecId) { $free = false; break; }
                             }
                             if ($free) { $altRoom = $r; break; }
                         }
@@ -1278,7 +1288,7 @@ class TimetableController extends Controller
                 }
                 $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
                 if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($lecSlot[$sKey])) {
-                    $lecSlot[$sKey] = [(int) $c->day, (int) $c->pair, (int) $c->weeks];
+                    $lecSlot[$sKey] = [(int) $c->day, (int) $c->pair, (int) $c->weeks, (int) $c->id];
                 }
                 $skA = $this->spreadKey($c);
                 $subjDay[$skA . '|' . $c->day] = ($subjDay[$skA . '|' . $c->day] ?? 0) + 1;
@@ -1360,7 +1370,7 @@ class TimetableController extends Controller
             $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c);
             // Ma'ruza joylashdi — uni almashtiruvchi amaliy shu slotga tushsin
             if ($c->training_type === 'lecture' && (int) $c->weeks > 0) {
-                $lecSlot[$subjOf($c)] = [$d, $p, (int) $c->weeks];
+                $lecSlot[$subjOf($c)] = [$d, $p, (int) $c->weeks, (int) $c->id];
             }
             $skBase = $this->spreadKey($c);
             $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
@@ -1413,7 +1423,7 @@ class TimetableController extends Controller
                     $c->auditorium_code = $r->code;
                     $c->auditorium_name = $r->name;
                     for ($i = 0; $i < $need; $i++) {
-                        $roomBusy[$r->code . '|' . $c->day . '|' . ((int) $c->pair + $i)] = true;
+                        $roomBusy[$r->code . '|' . $c->day . '|' . ((int) $c->pair + $i)] = (int) $c->id;
                     }
                     $roomsAssigned++;
                     $touched[] = $c;
@@ -1585,11 +1595,14 @@ class TimetableController extends Controller
             foreach ($groups as $g) {
                 $groupBusy[$k][$g] = true;
             }
+            // Qiymat — kartaning id'si (oddiy "true" emas): ma'ruza va uni
+            // almashtiruvchi amaliy bir slotni bo'lishishi mumkin, shuning uchun
+            // slotni KIM band qilgani ma'lum bo'lishi kerak.
             if ($c->teacher_id) {
-                $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $p] = true;
+                $teacherBusy[$c->teacher_id . '|' . $c->day . '|' . $p] = (int) $c->id;
             }
             if ($c->auditorium_code) {
-                $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $p] = true;
+                $roomBusy[$c->auditorium_code . '|' . $c->day . '|' . $p] = (int) $c->id;
             }
         }
     }

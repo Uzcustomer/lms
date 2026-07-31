@@ -132,8 +132,6 @@
                     <div class="tt-field tt-week-field">
                         <label>Hafta</label>
                         <select id="weekSel"></select>
-                        <button type="button" id="compactWeekBtn" class="hidden tt-compact-btn"
-                            title="Shu haftada o'tilmaydigan ma'ruzalar bo'shatgan vaqtga darslarni tepaga suradi (guruh/o'qituvchi/auditoriya band bo'lmasa)">⬆ Bo'sh vaqtga surish</button>
                         <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
                     </div>
                     <div class="tt-field tt-view-field">
@@ -854,15 +852,25 @@
             color: #b45309; vertical-align: 1px;
         }
         /* ── Bitta katakda bir necha fan almashib keladi (hafta bo'yicha) ──
-           Katak bo'ylab DIAGONAL ajratgich chiziladi, fanlar esa o'z rangida
-           qoladi — faqat biri ozgina ochroq, ikkinchisi to'qroq qilinadi. */
+           Katak chapdan o'ngga, pastdan tepaga DIAGONAL bilan ikki uchburchakka
+           bo'linadi: birinchi fan yuqori-chapdagi uchburchakda, ikkinchisi
+           quyi-o'ngdagida. Fanlar o'z rangida qoladi — biri ozgina ochroq,
+           ikkinchisi to'qroq. */
         #grid td.tt-cell.tt-split { position: relative; }
         #grid td.tt-cell.tt-split::after {
             content: ''; position: absolute; inset: 0; pointer-events: none;
-            background: linear-gradient(to top right,
+            background: linear-gradient(to bottom right,
                 rgba(0,0,0,0) calc(50% - 1px), rgba(120,53,15,.55) 50%, rgba(0,0,0,0) calc(50% + 1px));
         }
-        #grid td.tt-split .tt-chip { position: relative; z-index: 1; }
+        #grid td.tt-split .tt-chip { position: relative; z-index: 1; width: 50%;
+            overflow: hidden; }
+        /* Yuqori-chapdagi uchburchak */
+        #grid td.tt-split .tt-chip.tt-tri-a { margin-right: auto; text-align: left; }
+        /* Quyi-o'ngdagi uchburchak */
+        #grid td.tt-split .tt-chip.tt-tri-b { margin-left: auto; text-align: right; }
+        /* Diagonal chizilgan katakda yo'l-yo'l fon kerak emas — diagonalning
+           o'zi "har hafta emas" ekanini bildiradi. */
+        #grid td.tt-split .tt-chip.tt-alt { background-image: none; }
         /* Och / to'q soyalar — fanning o'z rangi saqlanadi (sariq sariqligicha) */
         #grid .tt-chip.tt-shade-a { filter: brightness(1.07) saturate(.95); }
         #grid .tt-chip.tt-shade-b { filter: brightness(.90) saturate(1.1); }
@@ -1512,10 +1520,6 @@
             color: #fff;
         }
         .tt-week-field select { min-width: 170px; }
-        .tt-compact-btn { margin-top: 4px; padding: 3px 8px; font-size: 11px; font-weight: 600;
-            color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; cursor: pointer; }
-        .tt-compact-btn:hover { background: #dbeafe; }
-        .tt-compact-btn:disabled { opacity: .6; cursor: default; }
         .tt-view-field select { min-width: 100px; }
         .tt-main-actions {
             display: flex;
@@ -2206,42 +2210,17 @@
                 for (let i = 1; i <= w; i++) opts += '<option value="' + i + '">' + i + '-hafta</option>';
                 $('weekSel').innerHTML = opts;
                 $('weekSel').value = String(curWeek);
-                toggleCompactBtn();
-            }
-            // "Bo'sh vaqtga surish" faqat aniq hafta tanlanganda ma'noga ega
-            function toggleCompactBtn() {
-                const b = $('compactWeekBtn');
-                if (b) b.classList.toggle('hidden', !curWeek);
             }
             $('weekSel').onchange = function () {
                 curWeek = +this.value || 0;
                 selected = null;
                 showSkipped = false;
-                toggleCompactBtn();
                 renderAll();
             };
             // "Bu haftada o'tilmaydi" kartalarini panelda ko'rsatish/yashirish
             $('skipToggle').onclick = function () {
                 showSkipped = !showSkipped;
                 renderPanel();
-            };
-            // Tanlangan haftani tepaga zichlash: o'tilmaydigan ma'ruzalar bo'shatgan
-            // vaqtga darslarni suradi (faqat shu haftaga istisno yoziladi).
-            $('compactWeekBtn').onclick = async function () {
-                if (!board || !curWeek) return;
-                if (!confirm(curWeek + '-hafta uchun darslar kun boshiga suriladi (guruh/o\'qituvchi/auditoriya band bo\'lmasa). Shablon o\'zgarmaydi. Davom etamizmi?')) return;
-                this.disabled = true;
-                const prev = this.textContent;
-                this.textContent = 'Surilmoqda...';
-                try {
-                    const body = Object.assign({ week: curWeek }, scopeBody());
-                    if (typeFilter !== 'all') body.training_type = typeFilter;
-                    const j = await api(BASE + '/boards/' + board.id + '/compact-week', 'POST', body);
-                    await loadBoard(board.id);
-                    $('autoMsg').textContent = (j.moved || 0) + ' ta dars tepaga surildi';
-                } catch (e) { alert('Xatolik: ' + e.message); }
-                this.disabled = false;
-                this.textContent = prev;
             };
             $('viewMode').onchange = function () {
                 viewMode = this.value;
@@ -3216,11 +3195,15 @@
                     const merged = ids && ids.length > 1;
                     const mids = merged ? ' data-merge-ids="' + ids.join(',') + '"' : '';
                     const badge = merged ? '<span class="tt-merge-badge">' + ids.length + ' para</span>' : '';
-                    // Karta necha hafta o'tiladi: "(N hafta)". Ma'ruzada doim, amaliyda
-                    // esa faqat semestrning hamma haftasida bo'lmasa (ma'ruzali haftada
-                    // amaliy paralar kamayadi — "qo'shimcha" para kamroq haftada bo'ladi).
+                    // Karta necha hafta o'tiladi: "(N hafta)". Semestrning HAR haftasida
+                    // o'tiladigan dars uchun buni yozish shart emas — 1 soatmi, 3 soatmi,
+                    // farqi yo'q. "Har hafta"ni karta haftalar sonidan emas, hafta
+                    // istisnolaridan aniqlaymiz: bitta ham bekor qilingan hafta bo'lmasa,
+                    // dars butun semestr davomida o'tiladi.
                     const fullWeeks = curGrid().weeks;
-                    const showWks = c.weeks && (c.training_type === 'lecture' || c.weeks < fullWeeks);
+                    const skipsWeeks = (activeWeeksOf(c, fullWeeks).length > 0)
+                        || (c.weeks && c.weeks < fullWeeks);
+                    const showWks = !!(c.weeks && skipsWeeks);
                     // Qaysi haftalarda o'tilishi — hafta istisnolaridan (cancelled emas)
                     const wkList = showWks ? activeWeeksOf(c, fullWeeks) : [];
                     const wkNums = wkList.length ? ': ' + wkList.join(',') : '';
@@ -3238,11 +3221,11 @@
                     // (ma'ruza va uni almashtiruvchi amaliy). Shablon ("Barcha haftalar")
                     // ko'rinishida yo'l-yo'l fon + ⇄ belgisi bilan ajratib turadi, chunki
                     // u yerda barcha variantlar ustma-ust ko'rinadi.
-                    const alt = !curWeek && c.weeks && c.weeks < fullWeeks;
+                    const alt = !curWeek && showWks;
                     const altMark = alt ? '<span class="tt-alt-mark" title="Har hafta emas — almashib keladi">⇄</span>' : '';
                     return '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
                         (alt ? ' tt-alt' : '') +
-                        (shade === 0 ? ' tt-shade-a' : shade === 1 ? ' tt-shade-b' : '') +
+                        (shade === 0 ? ' tt-shade-a tt-tri-a' : shade === 1 ? ' tt-shade-b tt-tri-b' : '') +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
                         esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle
@@ -3366,7 +3349,11 @@
                                         for (let gg = gi; gg < gi + span; gg++)
                                             vConsumed[o.groups[gg] + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    const lecEx = stackExtras(o.groups[gi], d, p, ids);
+                                    // Ma'ruza katagi bir necha guruh ustunini qamrab oladi
+                                    // (colspan), amaliy esa bitta guruhniki — shuning uchun
+                                    // ma'ruza katagida faqat MA'RUZA kartalari chiziladi.
+                                    const lecEx = stackExtras(o.groups[gi], d, p, ids)
+                                        .filter(x => x.training_type === 'lecture');
                                     // Bir katakda bir necha almashinuvchi fan — diagonal ajratgich
                                     const lecSplit = lecEx.length ? ' tt-split' : '';
                                     const lecExtras = lecEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
@@ -3379,7 +3366,8 @@
                                     const vs = chain.span, ids = chain.ids;
                                     for (let k = 1; k < vs; k++) vConsumed[grp + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
-                                    const prcEx = stackExtras(grp, d, p, ids);
+                                    const prcEx = stackExtras(grp, d, p, ids)
+                                        .filter(x => x.training_type !== 'lecture');
                                     const prcSplit = prcEx.length ? ' tt-split' : '';
                                     const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
                                     h += '<td class="tt-cell' + prcSplit + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';

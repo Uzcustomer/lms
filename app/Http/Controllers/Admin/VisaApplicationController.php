@@ -427,7 +427,7 @@ class VisaApplicationController extends Controller
 
     public function downloadDocuments(Request $request)
     {
-        $data = $request->validate([
+        $request->validate([
             'ids'   => 'nullable|array',
             'ids.*' => 'integer|exists:visa_applications,id',
             'selection_scope' => 'nullable|in:page,all_filtered',
@@ -442,7 +442,8 @@ class VisaApplicationController extends Controller
             abort(500, 'ZipArchive extension is not available on the server.');
         }
 
-        $apps = VisaApplication::whereIn('id', $selectedIds)
+        $apps = VisaApplication::with(['student:id,hemis_id,full_name'])
+            ->whereIn('id', $selectedIds)
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get();
@@ -450,6 +451,11 @@ class VisaApplicationController extends Controller
         if ($apps->isEmpty()) {
             return back()->with('error', 'Tanlangan arizalar topilmadi.');
         }
+
+        $studentsByHemis = Student::query()
+            ->whereIn('hemis_id', $apps->pluck('student_hemis_id')->filter()->unique())
+            ->get(['hemis_id', 'full_name'])
+            ->keyBy(fn (Student $student) => (string) $student->hemis_id);
 
         $tmp = tempnam(sys_get_temp_dir(), 'visa_docs_');
         if ($tmp === false) {
@@ -464,46 +470,87 @@ class VisaApplicationController extends Controller
             abort(500, 'ZIP file could not be created.');
         }
 
-        $addedFiles = 0;
-        $fileCounts = [];
+        $studentZipPaths = [];
+        $studentZipNames = [];
+        $addedStudents = 0;
 
-        foreach ($apps as $app) {
-            $fullName = trim(implode(' ', array_filter([
-                $app->last_name,
-                $app->first_name,
-                $app->middle_name,
-            ])));
-            $baseName = $this->zipSafeName($fullName, 'student-' . $app->application_number);
+        try {
+            foreach ($apps as $app) {
+                $documents = [
+                    'passport' => $app->passport_pdf_path,
+                    'visa_application' => $app->application_pdf_path,
+                    'billing_document' => $app->receipt_pdf_path,
+                ];
 
-            $documents = [
-                'passport'    => $app->passport_pdf_path,
-                'application' => $app->application_pdf_path,
-                'billing_document' => $app->receipt_pdf_path,
-            ];
+                $availableDocuments = collect($documents)->filter(
+                    fn ($path) => $path && Storage::disk('local')->exists($path)
+                );
 
-            foreach ($documents as $label => $path) {
-                if (!$path || !Storage::disk('local')->exists($path)) {
+                if ($availableDocuments->isEmpty()) {
                     continue;
                 }
 
-                $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
-                $extension = $extension !== '' ? $extension : 'pdf';
-                $rawName = $baseName . '_' . $label . '.' . $extension;
-                $targetName = $this->uniqueZipFileName($rawName, $fileCounts);
+                $hemisStudent = $studentsByHemis->get((string) $app->student_hemis_id);
+                $lmsFullName = trim((string) ($app->student?->full_name ?: $hemisStudent?->full_name));
+                if ($lmsFullName === '') {
+                    $lmsFullName = trim(implode(' ', array_filter([
+                        $app->last_name,
+                        $app->first_name,
+                        $app->middle_name,
+                    ])));
+                }
+                $baseName = $this->zipSafeName($lmsFullName, 'student-' . $app->application_number);
 
-                $zip->addFile(Storage::disk('local')->path($path), $targetName);
-                $addedFiles++;
+                $studentTmp = tempnam(sys_get_temp_dir(), 'visa_student_');
+                if ($studentTmp === false) {
+                    throw new \RuntimeException('Student ZIP temporary file could not be created.');
+                }
+                $studentZipPath = $studentTmp . '.zip';
+                @unlink($studentTmp);
+
+                $studentZip = new ZipArchive();
+                if ($studentZip->open($studentZipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                    throw new \RuntimeException('Student ZIP file could not be created.');
+                }
+
+                foreach ($availableDocuments as $label => $path) {
+                    $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+                    $extension = $extension !== '' ? $extension : 'pdf';
+                    $studentZip->addFile(
+                        Storage::disk('local')->path($path),
+                        $label . '.' . $extension
+                    );
+                }
+                $studentZip->close();
+
+                $studentZipPaths[] = $studentZipPath;
+                $targetName = $this->uniqueZipFileName($baseName . '.zip', $studentZipNames);
+                if (!$zip->addFile($studentZipPath, $targetName)) {
+                    throw new \RuntimeException('Student ZIP could not be added to the archive.');
+                }
+                $addedStudents++;
             }
+
+            $zip->close();
+        } catch (\Throwable $e) {
+            $zip->close();
+            foreach ($studentZipPaths as $studentZipPath) {
+                @unlink($studentZipPath);
+            }
+            @unlink($zipPath);
+            throw $e;
         }
 
-        $zip->close();
+        foreach ($studentZipPaths as $studentZipPath) {
+            @unlink($studentZipPath);
+        }
 
-        if ($addedFiles === 0) {
+        if ($addedStudents === 0) {
             @unlink($zipPath);
             return back()->with('error', 'Tanlangan arizalarda yuklab olinadigan hujjatlar topilmadi.');
         }
 
-        $filename = 'visa-documents-' . now()->format('Ymd_His') . '.zip';
+        $filename = 'visa-hujjatlari-' . now()->format('Ymd_His') . '.zip';
 
         return response()->download($zipPath, $filename, [
             'Content-Type' => 'application/zip',

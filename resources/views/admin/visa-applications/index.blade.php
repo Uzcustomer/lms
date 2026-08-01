@@ -341,15 +341,13 @@
                         Telex
                     </button>
 
-                    @if($status === 'approved')
-                        <button type="button"
-                                onclick="vaBulkSubmit('{{ route('admin.visa-applications.download-documents') }}', 'POST', null, 'Tanlangan arizalarning hujjatlarini bitta ZIP qilib yuklab olasizmi?');"
-                                class="px-2.5 py-1.5 text-[11px] font-bold text-white rounded-lg flex items-center gap-1"
-                                style="background:linear-gradient(135deg,#0f766e,#0d9488);">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V4.5m0 12 4.5-4.5M12 16.5l-4.5-4.5M4.5 19.5h15"/></svg>
-                            Hujjatlarni yuklash
-                        </button>
-                    @endif
+                    <button type="button"
+                            onclick="vaBulkSubmit('{{ route('admin.visa-applications.download-documents') }}', 'POST', null, 'Tanlangan talabalar hujjatlarini ism-familiyasi bo\'yicha ZIP qilib yuklab olasizmi?');"
+                            class="px-2.5 py-1.5 text-[11px] font-bold text-white rounded-lg flex items-center gap-1"
+                            style="background:linear-gradient(135deg,#0f766e,#0d9488);">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V4.5m0 12 4.5-4.5M12 16.5l-4.5-4.5M4.5 19.5h15"/></svg>
+                        Hujjatlarni yuklash
+                    </button>
 
                     {{-- Excel (faqat tanlanganlar) --}}
                     <button type="button"

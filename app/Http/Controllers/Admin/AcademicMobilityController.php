@@ -24,9 +24,14 @@ class AcademicMobilityController extends Controller
             $selectedStatus = (string) $request->input('student_status', '');
         }
 
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
+
         $students = $studentsQuery
-            ->orderBy('full_name')
-            ->paginate((int) $request->input('per_page', 25))
+            ->orderByDesc('id')
+            ->paginate($perPage)
             ->withQueryString();
 
         return view('admin.academic-mobility.index', [
@@ -89,14 +94,12 @@ class AcademicMobilityController extends Controller
 
     private function applyStudentFilters(Builder $query, Request $request): void
     {
-        $search = trim((string) $request->input('search', ''));
-        if ($search !== '') {
-            $query->where(function (Builder $builder) use ($search) {
-                $builder->where('full_name', 'like', "%{$search}%")
-                    ->orWhere('student_id_number', 'like', "%{$search}%")
-                    ->orWhere('hemis_id', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
+        if ($request->filled('full_name')) {
+            $query->where('full_name', 'like', '%' . trim((string) $request->input('full_name')) . '%');
+        }
+
+        if ($request->filled('student_id_number')) {
+            $query->where('student_id_number', $request->input('student_id_number'));
         }
 
         $filters = [
@@ -106,6 +109,7 @@ class AcademicMobilityController extends Controller
             'level_code' => 'level_code',
             'semester_code' => 'semester_code',
             'group' => 'group_id',
+            'country' => 'country_name',
             'student_status' => 'student_status_code',
         ];
 
@@ -113,6 +117,18 @@ class AcademicMobilityController extends Controller
             if ($request->filled($input)) {
                 $query->where($column, $request->input($input));
             }
+        }
+
+        if ($request->input('has_files') === 'yes') {
+            $query->whereHas('files');
+        } elseif ($request->input('has_files') === 'no') {
+            $query->whereDoesntHave('files');
+        }
+
+        if ($request->input('has_admission_data') === 'yes') {
+            $query->whereHas('admissionData');
+        } elseif ($request->input('has_admission_data') === 'no') {
+            $query->whereDoesntHave('admissionData');
         }
     }
 
@@ -155,6 +171,12 @@ class AcademicMobilityController extends Controller
                 ->distinct()
                 ->orderBy('group_name')
                 ->get(),
+            'countries' => Student::query()
+                ->whereNotNull('country_name')
+                ->where('country_name', '!=', '')
+                ->distinct()
+                ->orderBy('country_name')
+                ->pluck('country_name'),
             'statuses' => Student::query()
                 ->select('student_status_code', 'student_status_name')
                 ->whereNotNull('student_status_code')
@@ -163,4 +185,5 @@ class AcademicMobilityController extends Controller
                 ->get(),
         ];
     }
+
 }

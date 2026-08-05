@@ -1063,6 +1063,16 @@
         </a>
         @endif
 
+        @if($hasActiveRole('registrator_ofisi'))
+        <a href="{{ route('admin.academic-mobility.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.academic-mobility.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-5-8.5V16c0 1.1 2.24 2 5 2s5-.9 5-2v-4.5"></path>
+            </svg>
+            Akademik mobillik
+        </a>
+        @endif
+
         <a href="{{ route('admin.yn-form-corrections.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.yn-form-corrections.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -239,6 +239,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'destroy'])->name('destroy');
         });
 
+        // Akademik mobillik (faqat Registrator ofisi)
+        Route::get('/academic-mobility', function () {
+            return view('admin.academic-mobility.index');
+        })->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi')
+            ->name('academic-mobility.index');
+
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)
         Route::prefix('yn-form-corrections')->name('yn-form-corrections.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'index'])->name('index');

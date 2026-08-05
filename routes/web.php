@@ -240,10 +240,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // Akademik mobillik (faqat Registrator ofisi)
-        Route::get('/academic-mobility', function () {
-            return view('admin.academic-mobility.index');
-        })->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi')
-            ->name('academic-mobility.index');
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi')
+            ->prefix('academic-mobility')
+            ->name('academic-mobility.')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'index'])->name('index');
+                Route::get('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'applications'])->name('applications');
+                Route::post('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'store'])->name('store');
+            });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)
         Route::prefix('yn-form-corrections')->name('yn-form-corrections.')->group(function () {

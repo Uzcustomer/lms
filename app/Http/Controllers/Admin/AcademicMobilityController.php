@@ -8,7 +8,10 @@ use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class AcademicMobilityController extends Controller
 {
@@ -52,16 +55,78 @@ class AcademicMobilityController extends Controller
             $query->where(function (Builder $builder) use ($search) {
                 $builder->where('phone', 'like', "%{$search}%")
                     ->orWhere('reason', 'like', "%{$search}%")
+                    ->orWhere('created_by_name', 'like', "%{$search}%")
                     ->orWhereHas('student', function (Builder $studentQuery) use ($search) {
                         $studentQuery->where('full_name', 'like', "%{$search}%")
                             ->orWhere('student_id_number', 'like', "%{$search}%")
-                            ->orWhere('hemis_id', 'like', "%{$search}%");
+                            ->orWhere('hemis_id', 'like', "%{$search}%")
+                            ->orWhere('group_name', 'like', "%{$search}%");
                     });
             });
         }
 
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->input('has_document') === 'yes') {
+            $query->whereNotNull('document_path');
+        } elseif ($request->input('has_document') === 'no') {
+            $query->whereNull('document_path');
+        }
+
+        foreach ([
+            'department' => 'department_id',
+            'specialty' => 'specialty_id',
+            'level_code' => 'level_code',
+        ] as $input => $column) {
+            if ($request->filled($input)) {
+                $query->whereHas('student', fn (Builder $studentQuery) =>
+                    $studentQuery->where($column, $request->input($input))
+                );
+            }
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->input('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->input('date_to'));
+        }
+
+        $applicantStudents = Student::query()
+            ->whereIn('id', AkademikMobillikAriza::query()->select('student_id'));
+
+        $filterOptions = [
+            'departments' => (clone $applicantStudents)
+                ->select('department_id', 'department_name')
+                ->whereNotNull('department_id')
+                ->distinct()
+                ->orderBy('department_name')
+                ->get(),
+            'specialties' => (clone $applicantStudents)
+                ->select('specialty_id', 'specialty_name')
+                ->whereNotNull('specialty_id')
+                ->distinct()
+                ->orderBy('specialty_name')
+                ->get(),
+            'levels' => (clone $applicantStudents)
+                ->select('level_code', 'level_name')
+                ->whereNotNull('level_code')
+                ->distinct()
+                ->orderBy('level_code')
+                ->get(),
+        ];
+
         return view('admin.academic-mobility.applications', [
-            'applications' => $query->paginate(30)->withQueryString(),
+            'applications' => $query->paginate(25)->withQueryString(),
+            'stats' => [
+                'total' => AkademikMobillikAriza::count(),
+                'pending' => AkademikMobillikAriza::where('status', 'pending')->count(),
+                'withDocument' => AkademikMobillikAriza::whereNotNull('document_path')->count(),
+                'today' => AkademikMobillikAriza::whereDate('created_at', today())->count(),
+            ],
+            'filterOptions' => $filterOptions,
         ]);
     }
 
@@ -71,25 +136,68 @@ class AcademicMobilityController extends Controller
             'student_id' => ['required', 'integer', 'exists:students,id'],
             'phone' => ['required', 'string', 'max:50'],
             'reason' => ['required', 'string', 'min:5', 'max:3000'],
+            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
         ], [
             'student_id.required' => 'Talabani tanlang.',
             'phone.required' => 'Telefon raqamini kiriting.',
             'reason.required' => 'Ariza berish sababini kiriting.',
             'reason.min' => 'Ariza sababi kamida 5 ta belgidan iborat bo\'lsin.',
+            'document.file' => 'Yuklangan hujjat fayl bo\'lishi kerak.',
+            'document.mimes' => 'Hujjat PDF, Word, JPG yoki PNG formatida bo\'lishi kerak.',
+            'document.max' => 'Hujjat hajmi 10 MB dan oshmasligi kerak.',
         ]);
 
         $user = auth()->user() ?? auth('teacher')->user();
 
-        AkademikMobillikAriza::create([
-            ...$validated,
+        $application = AkademikMobillikAriza::create([
+            'student_id' => $validated['student_id'],
+            'phone' => $validated['phone'],
+            'reason' => $validated['reason'],
             'status' => 'pending',
             'created_by_id' => $user?->id,
             'created_by_name' => $user?->name ?? $user?->full_name ?? $user?->short_name,
         ]);
 
+        if ($request->hasFile('document')) {
+            $file = $request->file('document');
+            $extension = strtolower($file->getClientOriginalExtension());
+            $path = $file->storeAs(
+                "academic-mobility-applications/{$application->id}",
+                "hujjat.{$extension}"
+            );
+
+            if (!$path) {
+                $application->delete();
+                throw ValidationException::withMessages([
+                    'document' => 'Hujjatni saqlashda xatolik yuz berdi. Qayta urinib ko\'ring.',
+                ]);
+            }
+
+            $application->update([
+                'document_path' => $path,
+                'document_name' => $file->getClientOriginalName(),
+                'document_mime' => $file->getMimeType(),
+                'document_size' => $file->getSize(),
+            ]);
+        }
+
         return redirect()
             ->route('admin.academic-mobility.applications')
             ->with('success', 'Akademik mobillik arizasi muvaffaqiyatli yuborildi.');
+    }
+
+    public function downloadDocument(AkademikMobillikAriza $application): BinaryFileResponse
+    {
+        abort_if(
+            !$application->document_path || !Storage::exists($application->document_path),
+            404
+        );
+
+        return response()->download(
+            Storage::path($application->document_path),
+            $application->document_name ?: basename($application->document_path),
+            ['Content-Type' => $application->document_mime ?: 'application/octet-stream']
+        );
     }
 
     private function applyStudentFilters(Builder $query, Request $request): void
@@ -185,5 +293,4 @@ class AcademicMobilityController extends Controller
                 ->get(),
         ];
     }
-
 }

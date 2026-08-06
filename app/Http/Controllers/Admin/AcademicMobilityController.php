@@ -134,6 +134,25 @@ class AcademicMobilityController extends Controller
             ->with('success', 'Akademik mobillik arizasi muvaffaqiyatli yuborildi.');
     }
 
+    public function updateTransferDestination(Request $request, AkademikMobillikAriza $application): RedirectResponse
+    {
+        abort_unless($this->activeRole() === 'registrator_ofisi', 403);
+
+        $validated = $request->validate([
+            'transfer_destination' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'transfer_destination.max' => "O'tish joyi 1000 ta belgidan oshmasligi kerak.",
+        ]);
+
+        $application->update([
+            'transfer_destination' => filled($validated['transfer_destination'] ?? null)
+                ? trim($validated['transfer_destination'])
+                : null,
+        ]);
+
+        return back()->with('success', "Talabaning o'tish joyi saqlandi.");
+    }
+
     public function downloadDocument(AkademikMobillikAriza $application): BinaryFileResponse
     {
         abort_if(

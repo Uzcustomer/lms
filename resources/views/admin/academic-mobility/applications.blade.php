@@ -119,6 +119,7 @@
                     <table class="am-table">
                         <thead>
                             <tr>
+                                <th class="am-number-heading">№</th>
                                 <th>Talaba</th>
                                 <th>O'qish ma'lumoti</th>
                                 <th>Telefon</th>
@@ -146,6 +147,7 @@
                                     $viceRectorEnabled = $departmentApproved && (bool) $application->curriculum_document_path;
                                 @endphp
                                 <tr>
+                                    <td class="am-number-cell">{{ ($applications->firstItem() ?? 1) + $loop->index }}</td>
                                     <td>
                                         <div class="am-student-name">{{ $application->student?->full_name ?? 'Talaba topilmadi' }}</div>
                                         <div class="am-muted">HEMIS: {{ $application->student?->hemis_id ?? '-' }}</div>
@@ -278,7 +280,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="{{ 6 + ($showReviewColumn ? 1 : 0) }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
+                                <tr><td colspan="{{ 7 + ($showReviewColumn ? 1 : 0) }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -336,6 +338,8 @@
         .am-table thead tr { background:linear-gradient(135deg,#e8edf5,#dbe4ef,#d1d9e6); }
         .am-table th { padding:11px 10px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#334155;white-space:nowrap; }
         .am-table td { padding:10px;vertical-align:middle;border-bottom:1px solid #eef2f7;line-height:1.4;color:#475569; }
+        .am-number-heading,.am-number-cell { width:46px;min-width:46px;text-align:center!important; }
+        .am-number-cell { font-weight:800;color:#64748b!important; }
         .am-table tbody tr:nth-child(even) { background:#f8fafc; }.am-table tbody tr:nth-child(odd) { background:#fff; }
         .am-table tbody tr:hover { background:#eff6ff;box-shadow:inset 4px 0 0 #2b5ea7; }
         .am-student-name { font-weight:700;color:#1e40af;white-space:nowrap; }

@@ -236,7 +236,7 @@
                                                 <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}" onsubmit="return confirm('Arizani rad etasizmi?')">
                                                     @csrf
                                                     <input type="hidden" name="decision" value="rejected">
-                                                    <button type="submit" class="am-reject-btn" @disabled($isViceRector && !$departmentApproved)>Rad</button>
+                                                    <button type="submit" class="am-reject-btn" @disabled(!$application->curriculum_document_path || ($isViceRector && !$departmentApproved))>Rad</button>
                                                 </form>
                                             </div>
                                             @if($isViceRector && !$departmentApproved)

@@ -197,6 +197,33 @@ class AcademicMobilityController extends Controller
         return back()->with('success', "O'quv reja mosligi hujjati saqlandi.");
     }
 
+    public function deleteCurriculumDocument(AkademikMobillikAriza $application): RedirectResponse
+    {
+        $this->ensureAcademicDepartmentRole();
+
+        if (!$application->curriculum_document_path) {
+            return back()->with('success', "O'quv reja mosligi hujjati allaqachon olib tashlangan.");
+        }
+
+        $path = $application->curriculum_document_path;
+
+        DB::transaction(function () use ($application) {
+            $application->update([
+                'curriculum_document_path' => null,
+                'curriculum_document_name' => null,
+                'curriculum_document_mime' => null,
+                'curriculum_document_size' => null,
+                'status' => 'pending',
+            ]);
+
+            $application->approvals()->delete();
+        });
+
+        Storage::delete($path);
+
+        return back()->with('success', "O'quv reja mosligi hujjati olib tashlandi.");
+    }
+
     public function curriculumDocument(AkademikMobillikAriza $application): BinaryFileResponse
     {
         abort_unless(

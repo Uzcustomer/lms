@@ -233,16 +233,31 @@ class TimetableDiagnoseSubject extends Command
      */
     private function showDayLayout($cards, string $group, int $week): void
     {
-        $day = null;
+        // Fan bir necha kunga tarqalgan bo'lishi mumkin — HAR bir kun ko'rsatiladi,
+        // aks holda darsning ikkinchi yarmi qayerdaligi ko'rinmay qoladi.
+        $days = [];
         foreach ($cards as $card) {
             if ($card->day) {
-                $day = (int) $card->day;
-                break;
+                $days[(int) $card->day] = true;
             }
         }
-        if (!$day) {
+        if (!$days) {
             return;
         }
+        $days = array_keys($days);
+        sort($days);
+        if (count($days) > 1) {
+            $this->warn('Diqqat: fan ' . count($days) . ' xil kunga tarqalgan — '
+                . implode(', ', array_map(fn($d) => $this->dayName($d), $days)));
+        }
+        foreach ($days as $day) {
+            $this->showOneDay($cards, $group, $week, $day);
+        }
+    }
+
+    /** Bitta kunning to'liq jadvali. */
+    private function showOneDay($cards, string $group, int $week, int $day): void
+    {
 
         $overrides = DB::table('timetable_card_overrides')->where('week', $week)->get()->keyBy('card_id');
         $layout = [];

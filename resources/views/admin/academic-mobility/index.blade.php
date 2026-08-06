@@ -265,13 +265,13 @@
                     </div>
 
                     <div>
-                        <label for="mobility-reason" class="mb-1.5 block text-sm font-semibold text-slate-700">
-                            Ariza berish sababi <span class="text-red-500">*</span>
+                        <label for="mobility-destination" class="mb-1.5 block text-sm font-semibold text-slate-700">
+                            Mobillik bo'layotgan joy <span class="text-red-500">*</span>
                         </label>
-                        <textarea id="mobility-reason" name="reason" required minlength="5" maxlength="3000" rows="4"
-                                  placeholder="Akademik mobillik arizasining sababini batafsil kiriting..."
-                                  class="w-full resize-y rounded-xl border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
-                        <p class="mt-1 text-xs text-slate-400">Sababni tushunarli va to'liq yozing.</p>
+                        <input id="mobility-destination" name="transfer_destination" required minlength="2" maxlength="1000"
+                               placeholder="Universitet, tashkilot yoki davlat nomini kiriting..."
+                               class="w-full rounded-xl border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        <p class="mt-1 text-xs text-slate-400">Talaba akademik mobillik asosida qayerga o'tayotganini kiriting.</p>
                     </div>
 
                     <div>
@@ -340,7 +340,7 @@
             document.getElementById('mobility-student-id').value = button.dataset.studentId;
             document.getElementById('mobility-phone').value = button.dataset.studentPhone || '';
             document.getElementById('mobility-student-meta').textContent = button.dataset.studentName + ' · ID: ' + (button.dataset.studentNumber || '-');
-            document.getElementById('mobility-reason').value = '';
+            document.getElementById('mobility-destination').value = '';
             document.getElementById('mobility-document').value = '';
             document.getElementById('mobility-file-name').textContent = 'Faylni tanlash uchun bosing';
             document.getElementById('mobility-modal').style.display = 'flex';

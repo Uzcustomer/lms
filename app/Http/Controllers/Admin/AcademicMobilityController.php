@@ -131,10 +131,12 @@ class AcademicMobilityController extends Controller
             404
         );
 
-        return response()->download(
+        return response()->file(
             Storage::path($application->document_path),
-            $application->document_name ?: basename($application->document_path),
-            ['Content-Type' => $application->document_mime ?: 'application/octet-stream']
+            [
+                'Content-Type' => $application->document_mime ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="' . basename($application->document_path) . '"',
+            ]
         );
     }
 

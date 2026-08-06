@@ -250,6 +250,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'store'])->name('store');
                 Route::get('/applications/{application}/document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'downloadDocument'])->name('document');
                 Route::post('/applications/{application}/curriculum-document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'uploadCurriculumDocument'])->name('curriculum-document.upload');
+                Route::delete('/applications/{application}/curriculum-document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'deleteCurriculumDocument'])->name('curriculum-document.delete');
                 Route::get('/applications/{application}/curriculum-document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'curriculumDocument'])->name('curriculum-document');
                 Route::post('/applications/{application}/decision', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'decide'])->name('decision');
             });

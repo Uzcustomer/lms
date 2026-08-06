@@ -21,6 +21,7 @@ class TimetableDiagnoseSubject extends Command
         {--subject= : Fan nomining boshi (majburiy)}
         {--group= : Guruh nomi (majburiy)}
         {--course= : Kurs}
+        {--faculty= : Fakultet nomi (guruh nomi fakultetlar boylab takrorlanadi)}
         {--board= : Doska id (sukut — eng oxirgisi)}
         {--week=1 : Qaysi hafta bo\'yicha holat ko\'rsatilsin}';
 
@@ -50,6 +51,9 @@ class TimetableDiagnoseSubject extends Command
         if ($this->option('course')) {
             $query->where('course', (int) $this->option('course'));
         }
+        if ($this->option('faculty')) {
+            $query->where('faculty_name', 'like', '%' . $this->option('faculty') . '%');
+        }
         // Ma'ruza guruhlari group_names (JSON) da, amaliyniki group_name da —
         // shuning uchun filtrlash PHP tomonida, occupiedGroups() orqali.
         // Moslik QISMIY: bazadagi nom "d1/d25-01a (o'z)" ko'rinishida — til
@@ -69,18 +73,35 @@ class TimetableDiagnoseSubject extends Command
             return self::SUCCESS;
         }
 
+        // Guruh nomi fakultetlar bo'ylab takrorlanadi (mas. "1K-01a (o'z)" ham
+        // 1-son, ham 2-son davolashda bor) — shuning uchun fakultet, oqim va
+        // to'liq fan nomi ham ko'rsatiladi. Bir nechtasi aralashib qolgan bo'lsa
+        // shu yerda ko'rinadi va --faculty bilan toraytiriladi.
         $this->table(
-            ['tur', 'hafta', 'kun', 'para', 'uzunlik', "o'qituvchi", 'xona'],
+            ['fakultet', 'oqim', 'fan', 'tur', 'hafta', 'kun', 'para', 'uzunlik', 'xona'],
             $cards->map(fn(TimetableCard $c) => [
+                mb_substr((string) $c->faculty_name, 0, 18),
+                (string) $c->oqim_label,
+                mb_substr((string) $c->subject_name, 0, 24),
                 $c->training_type,
                 $c->weeks,
                 $this->dayName($c->day),
                 $c->pair ?? '—',
                 $c->len_half . ' yarim-slot',
-                $c->teacher_id ?? '—',
                 $c->auditorium_code ?? '—',
             ])->all()
         );
+
+        $scopes = $cards->map(fn(TimetableCard $c) => ($c->faculty_name ?? '') . ' · ' . $c->specialty_name)
+            ->unique()->values();
+        if ($scopes->count() > 1) {
+            $this->warn('Bu qamrovda ' . $scopes->count() . ' xil fakultet/yo\'nalish aralashgan — '
+                . '--faculty bilan toraytiring. Aks holda quyidagi jadvallar bir necha '
+                . 'guruhning jadvalini ustma-ust qo\'shib ko\'rsatadi:');
+            foreach ($scopes as $scope) {
+                $this->line('  · ' . $scope);
+            }
+        }
 
         $unplaced = $cards->filter(fn(TimetableCard $c) => !$c->day || !$c->pair);
         if ($unplaced->isNotEmpty()) {
@@ -261,8 +282,17 @@ class TimetableDiagnoseSubject extends Command
 
         $overrides = DB::table('timetable_card_overrides')->where('week', $week)->get()->keyBy('card_id');
         $layout = [];
-        $all = TimetableCard::where('board_id', $cards->first()->board_id)
-            ->where('course', $cards->first()->course)->get();
+        $first = $cards->first();
+        // Faqat SHU fakultet + yo'nalish + kursning kartalari: guruh nomi
+        // fakultetlar bo'ylab takrorlanadi, aks holda bir necha guruhning
+        // jadvali ustma-ust tushib qoladi.
+        $all = TimetableCard::where('board_id', $first->board_id)
+            ->where('course', $first->course)
+            ->where('specialty_name', $first->specialty_name)
+            ->where(fn($q) => $first->faculty_name === null
+                ? $q->whereNull('faculty_name')
+                : $q->where('faculty_name', $first->faculty_name))
+            ->get();
 
         foreach ($all as $card) {
             if (!$this->matchesGroup($card, $group)) {

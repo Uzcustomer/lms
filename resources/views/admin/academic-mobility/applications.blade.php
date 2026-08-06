@@ -326,7 +326,7 @@
         .am-review-file { display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:#e0f2fe;padding:5px 9px;font-size:11px;font-weight:700;color:#0369a1;text-decoration:none; }
         .am-review-file svg { width:15px;height:15px; }.am-review-filename { display:block;max-width:245px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94a3b8; }
         .am-review-missing { display:inline-flex;border-radius:6px;background:#fff7ed;padding:5px 8px;font-size:10.5px;font-weight:700;color:#c2410c; }
-        .am-review-upload { display:flex;align-items:center;justify-content:center;gap:6px;margin-top:7px; }
+        .am-review-upload { display:flex;align-items:center;justify-content:flex-start;gap:6px;margin-top:7px; }
         .am-review-upload label { height:30px;max-width:180px;display:flex;align-items:center;justify-content:center;flex:1;overflow:hidden;border:1px dashed #93c5fd;border-radius:6px;background:#fff;cursor:pointer; }
         .am-review-upload label input { position:absolute;width:1px;height:1px;opacity:0; }
         .am-review-upload label span { width:100%;overflow:hidden;padding:5px 8px;font-size:10.5px;font-weight:700;color:#2563eb;text-align:center;text-overflow:ellipsis;white-space:nowrap; }

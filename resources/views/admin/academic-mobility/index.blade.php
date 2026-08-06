@@ -209,8 +209,8 @@
     </div>
 
     <div id="mobility-modal" class="fixed inset-0 z-[100] items-center justify-center bg-slate-900/65 p-4 backdrop-blur-sm" style="display:none;" role="dialog" aria-modal="true">
-        <div class="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl">
-            <div class="relative overflow-hidden bg-gradient-to-r from-[#1f4f91] via-[#2b67ae] to-[#3b82c4] px-6 py-5 text-white">
+        <div class="mobility-dialog">
+            <div class="mobility-modal-header">
                 <div class="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-white/10"></div>
                 <div class="relative flex items-center justify-between">
                     <div class="flex items-center gap-3">
@@ -232,11 +232,11 @@
                 </div>
             </div>
 
-            <form method="POST" action="{{ route('admin.academic-mobility.store') }}" enctype="multipart/form-data" class="bg-slate-50/70">
+            <form method="POST" action="{{ route('admin.academic-mobility.store') }}" enctype="multipart/form-data" class="mobility-form">
                 @csrf
                 <input type="hidden" name="student_id" id="mobility-student-id">
 
-                <div class="space-y-4 p-6">
+                <div class="mobility-body">
                     <div class="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,7 +275,7 @@
                     <div>
                         <label class="mb-1.5 block text-sm font-semibold text-slate-700">Ariza hujjati</label>
                         <label for="mobility-document"
-                               class="group flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-white px-5 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/40">
+                               class="mobility-upload-zone">
                             <span class="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
                                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 0L7 9m5-5 5 5M5 15v4h14v-4"/>
@@ -289,13 +289,13 @@
                     </div>
                 </div>
 
-                <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
+                <div class="mobility-footer">
                     <button type="button" onclick="closeMobilityModal()"
-                            class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                            class="mobility-cancel-btn">
                         Bekor qilish
                     </button>
                     <button type="submit"
-                            class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#2b5ea7] to-[#3b82f6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md">
+                            class="mobility-submit-btn">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12l14-7-4 14-3-6-7-1z"/>
                         </svg>
@@ -372,6 +372,107 @@
     </script>
 
     <style>
+        .mobility-dialog {
+            width: min(620px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #dbe4ef;
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .32);
+        }
+        .mobility-modal-header {
+            position: relative;
+            flex: 0 0 auto;
+            overflow: hidden;
+            padding: 16px 20px;
+            color: #fff;
+            background: linear-gradient(135deg, #1f4f91, #2b67ae 55%, #3b82c4);
+        }
+        .mobility-form {
+            min-height: 0;
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            background: #f8fafc;
+        }
+        .mobility-body {
+            min-height: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 18px 20px;
+        }
+        .mobility-upload-zone {
+            display: flex;
+            min-height: 104px;
+            cursor: pointer;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #bfdbfe;
+            border-radius: 12px;
+            background: #fff;
+            padding: 14px 18px;
+            text-align: center;
+            transition: .18s ease;
+        }
+        .mobility-upload-zone:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        .mobility-footer {
+            flex: 0 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 8px;
+            border-top: 1px solid #e2e8f0;
+            background: #fff;
+            padding: 12px 20px;
+        }
+        .mobility-cancel-btn,
+        .mobility-submit-btn {
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            border-radius: 8px;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: .18s ease;
+        }
+        .mobility-cancel-btn {
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #475569;
+        }
+        .mobility-cancel-btn:hover {
+            background: #f1f5f9;
+        }
+        .mobility-submit-btn {
+            border: 1px solid #2563eb;
+            background: #2563eb;
+            color: #fff;
+            box-shadow: 0 3px 10px rgba(37, 99, 235, .24);
+        }
+        .mobility-submit-btn:hover {
+            background: #1d4ed8;
+        }
+        @media (max-height: 680px) {
+            .mobility-dialog { max-height: calc(100vh - 16px); }
+            .mobility-modal-header { padding: 12px 18px; }
+            .mobility-body { gap: 10px; padding: 12px 18px; }
+            .mobility-upload-zone { min-height: 82px; padding: 10px; }
+            .mobility-footer { padding: 10px 18px; }
+        }
+
         .filter-container { padding:16px 20px 12px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);border-bottom:2px solid #dbe4ef; }
         .filter-row { display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end; }
         .filter-row:last-child { margin-bottom:0; }

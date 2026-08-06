@@ -268,9 +268,9 @@
                                                         <svg style="width:28px;height:28px;margin-bottom:8px;color:#2563eb;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 0L7 9m5-5 5 5M5 15v4h14v-4"/>
                                                         </svg>
-                                                        <span style="font-size:13px;font-weight:700;color:#334155;">PDF faylni tanlang</span>
-                                                        <span style="margin-top:4px;font-size:11px;color:#64748b;">Maksimal hajm: 10 MB</span>
-                                                        <input type="file" name="certificate_pdf" accept=".pdf,application/pdf" required
+                                                        <span style="font-size:13px;font-weight:700;color:#334155;">PDF yoki JPG faylni tanlang</span>
+                                                        <span style="margin-top:4px;font-size:11px;color:#64748b;">PDF, JPG, JPEG · maksimal 10 MB</span>
+                                                        <input type="file" name="certificate_pdf" accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg" required
                                                                style="margin-top:12px;width:100%;font-size:12px;color:#475569;">
                                                     </label>
                                                     @if($application->certificate_pdf_path)

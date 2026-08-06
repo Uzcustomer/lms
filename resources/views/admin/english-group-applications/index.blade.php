@@ -38,6 +38,17 @@
                 </div>
             @endif
 
+            @if($errors->any())
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                    <div class="font-semibold">Hujjatni yuklashda xatolik:</div>
+                    <ul class="mt-1 list-disc list-inside text-sm">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="ega-stats grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <a href="{{ route('admin.english-group-applications.index') }}"
                    class="block rounded-xl border-2 p-4 transition hover:shadow-md {{ request('status') === 'all' ? 'border-sky-500 bg-sky-50' : 'border-sky-200 bg-white hover:border-sky-300' }}">

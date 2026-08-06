@@ -1111,14 +1111,19 @@ class TimetableController extends Controller
         // u blokka qo'shilmaydi va o'zining ma'ruza slotiga tushaveradi.
         $clusterMode = $sameDay || $consecutive;
         $clusterKey = fn(TimetableCard $c) => $this->spreadKey($c) . '|w' . (int) $c->weeks;
+        // "Bir kunga" cheklovi FAN + GURUH bo'yicha, hafta shabloniga qaramay:
+        // har haftalik amaliy va ma'ruza o'rnini bosuvchi amaliy alohida
+        // klasterlar, lekin ular baribir bitta kunda, yonma-yon turishi kerak —
+        // aks holda fan ikki kunga bo'linib ketadi.
+        $anchorKey = fn(TimetableCard $c) => $this->spreadKey($c);
 
         // Allaqachon joylashgan kartalar — blok ular bilan bir kunga / ularning
         // yoniga tushishi kerak (avtomatik joylash qayta bosilganda muhim).
-        $anchors = [];   // clusterKey => [day => [[boshlanish, tugash], ...]]
+        $anchors = [];   // anchorKey => [day => [[boshlanish, tugash], ...]]
         if ($clusterMode) {
             foreach ($all as $c) {
                 if ($c->day && $c->pair) {
-                    $anchors[$clusterKey($c)][(int) $c->day][] =
+                    $anchors[$anchorKey($c)][(int) $c->day][] =
                         [(int) $c->pair, (int) $c->pair + $this->parasNeeded($c) - 1];
                 }
             }
@@ -1168,7 +1173,7 @@ class TimetableController extends Controller
                 $lead = $unit[0];
                 [$uDays, $uPairs] = $dimsFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
                 $uScope = $this->groupScopeKey($lead);
-                $uKey = $clusterKey($lead);
+                $uKey = $anchorKey($lead);
 
                 $segs = [];
                 $unionGroups = [];
@@ -1324,7 +1329,7 @@ class TimetableController extends Controller
                     $subjDay[$skC . '|' . $c->day] = ($subjDay[$skC . '|' . $c->day] ?? 0) + 1;
                     $subjSlots[$skC][] = [(int) $c->day, (int) $c->pair, $need];
                     if ($clusterMode) {
-                        $anchors[$clusterKey($c)][(int) $c->day][] = [(int) $c->pair, (int) $c->pair + $need - 1];
+                        $anchors[$anchorKey($c)][(int) $c->day][] = [(int) $c->pair, (int) $c->pair + $need - 1];
                     }
                     $touched[] = $c;
                     $placed++;
@@ -1336,7 +1341,7 @@ class TimetableController extends Controller
             // Klaster rejimida yangi karta ular bilan bir kunga (va ketma-ket
             // sozlamasi yoqilgan bo'lsa — yoniga) tushishi shart. Joy bo'lmasa
             // karta joylashmaganlarda qoladi — boshqa kunga surib yuborilmaydi.
-            if ($clusterMode && !empty($anchors[$clusterKey($c)])) {
+            if ($clusterMode && !empty($anchors[$anchorKey($c)])) {
                 $seg = [[
                     'card' => $c,
                     'len' => $need,
@@ -1349,7 +1354,7 @@ class TimetableController extends Controller
                 $spot = $this->clusterPlacement(
                     $seg, $days, $pairs, $scopeKey,
                     $groupBusy, $teacherBusy, $roomBusy,
-                    $consecutive, $anchors[$clusterKey($c)],
+                    $consecutive, $anchors[$anchorKey($c)],
                     fn(int $d, int $p) => $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask)
                 );
                 if ($spot === null) {
@@ -1374,7 +1379,7 @@ class TimetableController extends Controller
                 $skA = $this->spreadKey($c);
                 $subjDay[$skA . '|' . $c->day] = ($subjDay[$skA . '|' . $c->day] ?? 0) + 1;
                 $subjSlots[$skA][] = [(int) $c->day, (int) $c->pair, $need];
-                $anchors[$clusterKey($c)][(int) $c->day][] = [(int) $c->pair, (int) $c->pair + $need - 1];
+                $anchors[$anchorKey($c)][(int) $c->day][] = [(int) $c->pair, (int) $c->pair + $need - 1];
                 $touched[] = $c;
                 $placed++;
                 continue;
@@ -1476,7 +1481,7 @@ class TimetableController extends Controller
             $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
             $subjSlots[$skBase][] = [$d, $p, $need];
             if ($clusterMode) {
-                $anchors[$clusterKey($c)][$d][] = [$p, $p + $need - 1];
+                $anchors[$anchorKey($c)][$d][] = [$p, $p + $need - 1];
             }
             $touched[] = $c;
             $placed++;

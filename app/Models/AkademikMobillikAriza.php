@@ -14,6 +14,7 @@ class AkademikMobillikAriza extends Model
         'student_id',
         'phone',
         'reason',
+        'transfer_destination',
         'document_path',
         'document_name',
         'document_mime',

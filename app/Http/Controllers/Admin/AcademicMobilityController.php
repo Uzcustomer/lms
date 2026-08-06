@@ -192,6 +192,11 @@ class AcademicMobilityController extends Controller
 
     public function curriculumDocument(AkademikMobillikAriza $application): BinaryFileResponse
     {
+        abort_unless(
+            in_array($this->activeRole(), ['oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori'], true),
+            403
+        );
+
         abort_if(
             !$application->curriculum_document_path || !Storage::exists($application->curriculum_document_path),
             404

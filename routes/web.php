@@ -236,6 +236,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'reject'])->name('reject');
             Route::get('/{id}/certificate', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'certificate'])->name('certificate');
+            Route::post('/{id}/certificate', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'uploadCertificate'])->name('certificate.upload');
             Route::delete('/{id}', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'destroy'])->name('destroy');
         });
 

@@ -6,145 +6,99 @@
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             @if(session('success'))
-                <div class="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                    <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="am-alert">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     {{ session('success') }}
                 </div>
             @endif
 
-            <div class="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div class="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden bg-gradient-to-r from-[#1f4f91] via-[#2b67ae] to-[#3b82c4] px-5 py-4 text-white">
-                    <div class="absolute -right-10 -top-20 h-44 w-44 rounded-full bg-white/10"></div>
-                    <div class="relative flex items-center gap-3">
-                        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
-                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <section class="am-overview">
+                <header class="am-hero">
+                    <div class="am-hero-title">
+                        <span class="am-hero-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 3h7l5 5v11a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"/>
                             </svg>
                         </span>
                         <div>
-                            <h1 class="text-lg font-bold">Akademik mobillik arizalari</h1>
-                            <p class="mt-0.5 text-xs text-blue-100">Yuborilgan arizalarni qidiring, filtrlang va hujjatlarini ko'ring</p>
+                            <h1>Akademik mobillik arizalari</h1>
+                            <p>Yuborilgan arizalar va biriktirilgan hujjatlar</p>
                         </div>
                     </div>
-                    <a href="{{ route('admin.academic-mobility.index') }}"
-                       class="relative inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <a href="{{ route('admin.academic-mobility.index') }}" class="am-back-btn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7 7-7m-7 7h18"/>
                         </svg>
                         Talabalar ro'yxati
                     </a>
+                </header>
+
+                <div class="am-stats">
+                    <article class="am-stat am-stat-blue">
+                        <span class="am-stat-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 3h7l5 5v11a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+                            </svg>
+                        </span>
+                        <div><span>Jami arizalar</span><strong>{{ $stats['total'] }}</strong></div>
+                    </article>
+                    <article class="am-stat am-stat-amber">
+                        <span class="am-stat-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </span>
+                        <div><span>Yangi</span><strong>{{ $stats['pending'] }}</strong></div>
+                    </article>
+                    <article class="am-stat am-stat-green">
+                        <span class="am-stat-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 00-5.657-5.657L5.757 10.757a6 6 0 108.486 8.486L20 13.486"/>
+                            </svg>
+                        </span>
+                        <div><span>Hujjatli</span><strong>{{ $stats['withDocument'] }}</strong></div>
+                    </article>
+                    <article class="am-stat am-stat-violet">
+                        <span class="am-stat-icon">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 012-2h10a2 2 0 012 2v12a2 2 0 01-2 2z"/>
+                            </svg>
+                        </span>
+                        <div><span>Bugun</span><strong>{{ $stats['today'] }}</strong></div>
+                    </article>
                 </div>
+            </section>
 
-                <div class="grid grid-cols-2 gap-px bg-slate-200 lg:grid-cols-4">
-                    <div class="stat-card">
-                        <span class="stat-icon bg-blue-50 text-blue-600">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 3h7l5 5v11a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
-                        </span>
-                        <div><div class="stat-label">Jami arizalar</div><div class="stat-value">{{ $stats['total'] }}</div></div>
+            <section class="am-list-card">
+                <form method="GET" action="{{ route('admin.academic-mobility.applications') }}" class="am-search-panel">
+                    <div class="am-search-heading">
+                        <span>Talaba qidirish</span>
+                        <small>Ism yoki familiyani kiriting</small>
                     </div>
-                    <div class="stat-card">
-                        <span class="stat-icon bg-amber-50 text-amber-600">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </span>
-                        <div><div class="stat-label">Yangi</div><div class="stat-value">{{ $stats['pending'] }}</div></div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-icon bg-emerald-50 text-emerald-600">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 00-5.657-5.657L5.757 10.757a6 6 0 108.486 8.486L20 13.486"/></svg>
-                        </span>
-                        <div><div class="stat-label">Hujjatli</div><div class="stat-value">{{ $stats['withDocument'] }}</div></div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-icon bg-violet-50 text-violet-600">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        </span>
-                        <div><div class="stat-label">Bugun</div><div class="stat-value">{{ $stats['today'] }}</div></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <form method="GET" action="{{ route('admin.academic-mobility.applications') }}" class="application-filter">
-                    <div class="filter-row">
-                        <div class="filter-item" style="flex:2;min-width:260px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Qidiruv</label>
-                            <input name="search" value="{{ request('search') }}" placeholder="Talaba, HEMIS ID, telefon, guruh yoki sabab..." class="filter-input">
-                        </div>
-                        <div class="filter-item" style="flex:1;min-width:190px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
-                            <select name="department" class="filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['departments'] as $item)
-                                    <option value="{{ $item->department_id }}" @selected((string) request('department') === (string) $item->department_id)>{{ $item->department_name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-item" style="flex:1;min-width:220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
-                            <select name="specialty" class="filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['specialties'] as $item)
-                                    <option value="{{ $item->specialty_id }}" @selected((string) request('specialty') === (string) $item->specialty_id)>{{ $item->specialty_name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-item" style="min-width:130px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
-                            <select name="level_code" class="filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['levels'] as $item)
-                                    <option value="{{ $item->level_code }}" @selected((string) request('level_code') === (string) $item->level_code)>{{ $item->level_name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="filter-row">
-                        <div class="filter-item" style="min-width:150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Holat</label>
-                            <select name="status" class="filter-input">
-                                <option value="all" @selected(request('status', 'all') === 'all')>Barchasi</option>
-                                <option value="pending" @selected(request('status') === 'pending')>Yangi</option>
-                                <option value="approved" @selected(request('status') === 'approved')>Qabul qilingan</option>
-                                <option value="rejected" @selected(request('status') === 'rejected')>Rad etilgan</option>
-                            </select>
-                        </div>
-                        <div class="filter-item" style="min-width:160px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#22c55e;"></span> Hujjat</label>
-                            <select name="has_document" class="filter-input">
-                                <option value="">Barchasi</option>
-                                <option value="yes" @selected(request('has_document') === 'yes')>Mavjud</option>
-                                <option value="no" @selected(request('has_document') === 'no')>Mavjud emas</option>
-                            </select>
-                        </div>
-                        <div class="filter-item" style="min-width:150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Boshlanish sana</label>
-                            <input type="date" name="date_from" value="{{ request('date_from') }}" class="filter-input">
-                        </div>
-                        <div class="filter-item" style="min-width:150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Tugash sana</label>
-                            <input type="date" name="date_to" value="{{ request('date_to') }}" class="filter-input">
-                        </div>
-                        <div class="filter-actions">
-                            <button type="submit" class="filter-submit">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="am-search-controls">
+                        <div class="am-search-input">
+                            <span>
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                                 </svg>
-                                Filtrlash
-                            </button>
-                            <a href="{{ route('admin.academic-mobility.applications') }}" class="filter-clear">Tozalash</a>
+                            </span>
+                            <input name="search" value="{{ request('search') }}" placeholder="Talabaning ism-familiyasi...">
                         </div>
+                        <button type="submit" class="am-search-btn">Qidirish</button>
+                        @if(request()->filled('search'))
+                            <a href="{{ route('admin.academic-mobility.applications') }}" class="am-clear-btn">Tozalash</a>
+                        @endif
                     </div>
                 </form>
 
-                <div class="table-summary">
-                    <span>Natija: <strong>{{ $applications->total() }}</strong> ta ariza</span>
+                <div class="am-result-bar">
+                    <span>Topildi: <strong>{{ $applications->total() }}</strong> ta ariza</span>
                 </div>
 
-                <div class="overflow-x-auto">
-                    <table class="application-table">
+                <div class="am-table-scroll">
+                    <table class="am-table">
                         <thead>
                             <tr>
                                 <th>Talaba</th>
@@ -160,108 +114,125 @@
                             @forelse($applications as $application)
                                 @php
                                     $statusStyles = [
-                                        'pending' => ['Yangi', 'status-pending'],
-                                        'approved' => ['Qabul qilingan', 'status-approved'],
-                                        'rejected' => ['Rad etilgan', 'status-rejected'],
+                                        'pending' => ['Yangi', 'am-status-pending'],
+                                        'approved' => ['Qabul qilingan', 'am-status-approved'],
+                                        'rejected' => ['Rad etilgan', 'am-status-rejected'],
                                     ];
-                                    [$statusLabel, $statusClass] = $statusStyles[$application->status] ?? [$application->status, 'status-default'];
+                                    [$statusLabel, $statusClass] = $statusStyles[$application->status] ?? [$application->status, 'am-status-default'];
                                 @endphp
                                 <tr>
                                     <td>
-                                        <div class="student-name">{{ $application->student?->full_name ?? 'Talaba topilmadi' }}</div>
-                                        <div class="cell-muted">HEMIS: {{ $application->student?->hemis_id ?? '-' }}</div>
-                                        <div class="cell-muted">ID: {{ $application->student?->student_id_number ?? '-' }}</div>
+                                        <div class="am-student-name">{{ $application->student?->full_name ?? 'Talaba topilmadi' }}</div>
+                                        <div class="am-muted">HEMIS: {{ $application->student?->hemis_id ?? '-' }}</div>
+                                        <div class="am-muted">ID: {{ $application->student?->student_id_number ?? '-' }}</div>
                                     </td>
                                     <td>
-                                        <div class="faculty-text">{{ $application->student?->department_name ?? '-' }}</div>
-                                        <div class="specialty-text">{{ $application->student?->specialty_name ?? '-' }}</div>
-                                        <div class="mt-1 flex flex-wrap gap-1">
-                                            <span class="course-badge">{{ $application->student?->level_name ?? '-' }}</span>
-                                            <span class="group-badge">{{ $application->student?->group_name ?? '-' }}</span>
+                                        <div class="am-faculty">{{ $application->student?->department_name ?? '-' }}</div>
+                                        <div class="am-specialty">{{ $application->student?->specialty_name ?? '-' }}</div>
+                                        <div class="am-study-badges">
+                                            <span class="am-course">{{ $application->student?->level_name ?? '-' }}</span>
+                                            <span class="am-group">{{ $application->student?->group_name ?? '-' }}</span>
                                         </div>
                                     </td>
-                                    <td class="whitespace-nowrap">{{ $application->phone }}</td>
-                                    <td><div class="reason-text" title="{{ $application->reason }}">{{ $application->reason }}</div></td>
+                                    <td class="am-phone">{{ $application->phone }}</td>
+                                    <td><div class="am-reason" title="{{ $application->reason }}">{{ $application->reason }}</div></td>
                                     <td>
                                         @if($application->document_path)
-                                            <a href="{{ route('admin.academic-mobility.document', $application) }}" class="document-btn" title="{{ $application->document_name }}">
-                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 00-5.657-5.657L5.757 10.757a6 6 0 108.486 8.486L20 13.486"/>
+                                            <a href="{{ route('admin.academic-mobility.document', $application) }}" class="am-document-btn" title="{{ $application->document_name }}">
+                                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/>
                                                 </svg>
                                                 Yuklash
                                             </a>
-                                            <div class="mt-1 max-w-[150px] truncate text-[10px] text-slate-400">{{ $application->document_name }}</div>
-                                            @if($application->document_size)
-                                                <div class="text-[10px] text-slate-400">{{ number_format($application->document_size / 1048576, 2) }} MB</div>
-                                            @endif
+                                            <div class="am-file-name" title="{{ $application->document_name }}">{{ $application->document_name }}</div>
                                         @else
-                                            <span class="no-document">Hujjat yo'q</span>
+                                            <span class="am-no-document">Hujjat yo'q</span>
                                         @endif
                                     </td>
                                     <td>
-                                        <div class="font-medium text-slate-700">{{ $application->created_by_name ?? '-' }}</div>
-                                        <div class="cell-muted">{{ $application->created_at?->format('d.m.Y H:i') }}</div>
+                                        <div class="am-creator">{{ $application->created_by_name ?? '-' }}</div>
+                                        <div class="am-muted">{{ $application->created_at?->format('d.m.Y H:i') }}</div>
                                     </td>
-                                    <td><span class="status-badge {{ $statusClass }}">{{ $statusLabel }}</span></td>
+                                    <td><span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="empty-state">Tanlangan filtrlar bo'yicha arizalar topilmadi.</td></tr>
+                                <tr><td colspan="7" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
 
                 @if($applications->hasPages())
-                    <div class="border-t border-slate-200 px-4 py-3">{{ $applications->links() }}</div>
+                    <div class="am-pagination">{{ $applications->links() }}</div>
                 @endif
-            </div>
+            </section>
         </div>
     </div>
 
     <style>
-        .stat-card { display:flex;align-items:center;gap:12px;background:#fff;padding:14px 18px; }
-        .stat-icon { display:flex;width:42px;height:42px;align-items:center;justify-content:center;border-radius:12px; }
-        .stat-icon svg { width:21px;height:21px; }
-        .stat-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b; }
-        .stat-value { margin-top:2px;font-size:22px;font-weight:800;line-height:1;color:#172554; }
-        .application-filter { padding:16px 20px 12px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);border-bottom:2px solid #dbe4ef; }
-        .filter-row { display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end; }
-        .filter-row:last-child { margin-bottom:0; }
-        .filter-label { display:flex;align-items:center;gap:5px;margin-bottom:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#475569; }
-        .fl-dot { width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0; }
-        .filter-input { width:100%;height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:.8rem;font-weight:500;color:#1e293b;box-shadow:0 1px 2px rgba(0,0,0,.04); }
-        .filter-input:focus { outline:none;border-color:#2b5ea7;box-shadow:0 0 0 2px rgba(43,94,167,.18); }
-        .filter-actions { display:flex;align-items:center;gap:8px; }
-        .filter-submit { display:inline-flex;height:36px;align-items:center;gap:7px;border:0;border-radius:8px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);padding:0 18px;font-size:13px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(43,94,167,.25); }
-        .filter-clear { display:inline-flex;height:36px;align-items:center;border-radius:8px;background:#fff;padding:0 16px;font-size:13px;font-weight:600;color:#475569;border:1px solid #cbd5e1; }
-        .table-summary { display:flex;align-items:center;justify-content:space-between;background:#f8fafc;padding:9px 20px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0; }
-        .application-table { width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px; }
-        .application-table thead tr { background:linear-gradient(135deg,#e8edf5,#dbe4ef,#d1d9e6); }
-        .application-table th { padding:11px 10px;text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#334155;white-space:nowrap;border-bottom:2px solid #cbd5e1; }
-        .application-table td { padding:11px 10px;vertical-align:middle;line-height:1.4;border-bottom:1px solid #eef2f7; }
-        .application-table tbody tr:nth-child(even) { background:#f8fafc; }
-        .application-table tbody tr:nth-child(odd) { background:#fff; }
-        .application-table tbody tr:hover { background:#eff6ff;box-shadow:inset 4px 0 0 #2b5ea7; }
-        .student-name { font-weight:700;color:#1e40af;white-space:nowrap; }
-        .cell-muted { margin-top:2px;font-size:10.5px;color:#94a3b8; }
-        .faculty-text { font-weight:600;color:#047857; }
-        .specialty-text { max-width:230px;color:#0e7490;white-space:normal; }
-        .course-badge { border:1px solid #ddd6fe;border-radius:5px;background:#ede9fe;padding:2px 6px;font-size:10px;font-weight:600;color:#5b21b6; }
-        .group-badge { border-radius:5px;background:#1e4b8a;padding:2px 6px;font-size:10px;font-weight:600;color:#fff; }
-        .reason-text { max-width:300px;display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;white-space:normal;color:#475569; }
-        .document-btn { display:inline-flex;align-items:center;gap:5px;border-radius:6px;background:#e0f2fe;padding:5px 9px;font-size:11px;font-weight:700;color:#0369a1;transition:.15s; }
-        .document-btn:hover { background:#bae6fd;color:#075985; }
-        .no-document { display:inline-block;border-radius:6px;background:#f1f5f9;padding:5px 8px;font-size:10.5px;font-weight:600;color:#94a3b8; }
-        .status-badge { display:inline-block;border-radius:999px;padding:4px 9px;font-size:10.5px;font-weight:700;white-space:nowrap; }
-        .status-pending { background:#fef3c7;color:#b45309; }
-        .status-approved { background:#d1fae5;color:#047857; }
-        .status-rejected { background:#fee2e2;color:#b91c1c; }
-        .status-default { background:#e2e8f0;color:#475569; }
-        .empty-state { padding:48px !important;text-align:center;color:#64748b; }
-        @media (max-width:640px) {
-            .stat-card { padding:12px; }
-            .stat-value { font-size:19px; }
-            .application-filter { padding:12px; }
-        }
+        .am-alert { display:flex;align-items:center;gap:10px;margin-bottom:14px;border:1px solid #a7f3d0;border-radius:10px;background:#ecfdf5;padding:11px 14px;font-size:13px;font-weight:600;color:#047857; }
+        .am-alert svg { width:19px;height:19px;flex:0 0 19px; }
+        .am-overview,.am-list-card { overflow:hidden;border:1px solid #dbe4ef;border-radius:12px;background:#fff;box-shadow:0 4px 16px rgba(15,23,42,.06); }
+        .am-overview { margin-bottom:14px; }
+        .am-hero { min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;color:#fff;background:linear-gradient(135deg,#1f4f91,#2b67ae 58%,#3b82c4); }
+        .am-hero-title { display:flex;align-items:center;gap:12px; }
+        .am-hero-title h1 { margin:0;font-size:18px;line-height:1.25;font-weight:800;color:#fff; }
+        .am-hero-title p { margin:3px 0 0;font-size:12px;color:#dbeafe; }
+        .am-hero-icon { width:42px;height:42px;display:flex;align-items:center;justify-content:center;flex:0 0 42px;border:1px solid rgba(255,255,255,.24);border-radius:11px;background:rgba(255,255,255,.13); }
+        .am-hero-icon svg { width:22px;height:22px; }
+        .am-back-btn { height:36px;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.35);border-radius:8px;background:rgba(255,255,255,.14);padding:0 13px;font-size:12px;font-weight:700;color:#fff;text-decoration:none;transition:.18s;white-space:nowrap; }
+        .am-back-btn:hover { background:rgba(255,255,255,.24); }
+        .am-back-btn svg { width:16px;height:16px; }
+        .am-stats { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px;background:#f8fafc; }
+        .am-stat { min-height:72px;display:flex;align-items:center;gap:11px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;padding:11px 13px;box-shadow:0 2px 7px rgba(15,23,42,.04); }
+        .am-stat-icon { width:40px;height:40px;display:flex;align-items:center;justify-content:center;flex:0 0 40px;border-radius:10px; }
+        .am-stat-icon svg { width:20px;height:20px; }
+        .am-stat span:not(.am-stat-icon) { display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#64748b; }
+        .am-stat strong { display:block;margin-top:2px;font-size:21px;line-height:1;font-weight:800;color:#172554; }
+        .am-stat-blue { border-top:3px solid #3b82f6; }.am-stat-blue .am-stat-icon { background:#eff6ff;color:#2563eb; }
+        .am-stat-amber { border-top:3px solid #f59e0b; }.am-stat-amber .am-stat-icon { background:#fffbeb;color:#d97706; }
+        .am-stat-green { border-top:3px solid #10b981; }.am-stat-green .am-stat-icon { background:#ecfdf5;color:#059669; }
+        .am-stat-violet { border-top:3px solid #8b5cf6; }.am-stat-violet .am-stat-icon { background:#f5f3ff;color:#7c3aed; }
+        .am-search-panel { display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:14px 18px;background:linear-gradient(135deg,#f0f4f8,#e8edf5);border-bottom:2px solid #dbe4ef; }
+        .am-search-heading span { display:block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#334155; }
+        .am-search-heading small { display:block;margin-top:2px;font-size:11px;color:#64748b;white-space:nowrap; }
+        .am-search-controls { width:min(680px,100%);display:flex;align-items:center;gap:8px; }
+        .am-search-input { height:38px;min-width:0;display:flex;flex:1 1 auto;overflow:hidden;border:1px solid #cbd5e1;border-radius:9px;background:#fff; }
+        .am-search-input:focus-within { border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+        .am-search-input span { width:40px;display:flex;align-items:center;justify-content:center;flex:0 0 40px;border-right:1px solid #e2e8f0;background:#eff6ff;color:#2563eb; }
+        .am-search-input svg { width:17px;height:17px; }
+        .am-search-input input { min-width:0;flex:1;border:0!important;outline:0!important;padding:0 11px;font-size:13px;color:#1e293b;box-shadow:none!important; }
+        .am-search-btn,.am-clear-btn { height:38px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:0 16px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;transition:.18s;white-space:nowrap; }
+        .am-search-btn { border:1px solid #2563eb;background:#2563eb;color:#fff;box-shadow:0 3px 9px rgba(37,99,235,.2); }
+        .am-search-btn:hover { background:#1d4ed8; }
+        .am-clear-btn { border:1px solid #cbd5e1;background:#fff;color:#475569; }
+        .am-clear-btn:hover { background:#f8fafc; }
+        .am-result-bar { padding:8px 18px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:11px;color:#64748b; }
+        .am-table-scroll { overflow-x:auto; }
+        .am-table { width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px; }
+        .am-table thead tr { background:linear-gradient(135deg,#e8edf5,#dbe4ef,#d1d9e6); }
+        .am-table th { padding:11px 10px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#334155;white-space:nowrap; }
+        .am-table td { padding:10px;vertical-align:middle;border-bottom:1px solid #eef2f7;line-height:1.4;color:#475569; }
+        .am-table tbody tr:nth-child(even) { background:#f8fafc; }.am-table tbody tr:nth-child(odd) { background:#fff; }
+        .am-table tbody tr:hover { background:#eff6ff;box-shadow:inset 4px 0 0 #2b5ea7; }
+        .am-student-name { font-weight:700;color:#1e40af;white-space:nowrap; }
+        .am-muted { margin-top:2px;font-size:10.5px;color:#94a3b8; }
+        .am-faculty { font-weight:600;color:#047857; }.am-specialty { max-width:230px;color:#0e7490;white-space:normal; }
+        .am-study-badges { display:flex;flex-wrap:wrap;gap:4px;margin-top:5px; }
+        .am-course,.am-group { display:inline-block;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:600; }
+        .am-course { border:1px solid #ddd6fe;background:#ede9fe;color:#5b21b6; }.am-group { background:#1e4b8a;color:#fff; }
+        .am-phone { white-space:nowrap;color:#334155!important; }
+        .am-reason { max-width:300px;display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;white-space:normal; }
+        .am-document-btn { display:inline-flex;align-items:center;gap:5px;border-radius:6px;background:#e0f2fe;padding:5px 9px;font-size:11px;font-weight:700;color:#0369a1;text-decoration:none; }
+        .am-document-btn:hover { background:#bae6fd; }.am-document-btn svg { width:15px;height:15px; }
+        .am-file-name { max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;font-size:10px;color:#94a3b8; }
+        .am-no-document { display:inline-block;border-radius:6px;background:#f1f5f9;padding:5px 8px;font-size:10.5px;font-weight:600;color:#94a3b8; }
+        .am-creator { font-weight:600;color:#334155; }.am-status { display:inline-block;border-radius:999px;padding:4px 9px;font-size:10.5px;font-weight:700;white-space:nowrap; }
+        .am-status-pending { background:#fef3c7;color:#b45309; }.am-status-approved { background:#d1fae5;color:#047857; }
+        .am-status-rejected { background:#fee2e2;color:#b91c1c; }.am-status-default { background:#e2e8f0;color:#475569; }
+        .am-empty { padding:48px!important;text-align:center;color:#64748b!important; }
+        .am-pagination { border-top:1px solid #e2e8f0;padding:10px 16px; }
+        @media (max-width:900px) { .am-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }.am-search-panel { align-items:stretch;flex-direction:column; }.am-search-controls { width:100%; } }
+        @media (max-width:560px) { .am-hero { align-items:flex-start;flex-direction:column; }.am-stats { grid-template-columns:1fr; }.am-search-controls { flex-wrap:wrap; }.am-search-input { flex-basis:100%; }.am-search-btn,.am-clear-btn { flex:1; } }
     </style>
 </x-app-layout>

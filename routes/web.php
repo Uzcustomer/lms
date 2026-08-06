@@ -240,8 +240,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'destroy'])->name('destroy');
         });
 
-        // Akademik mobillik (faqat Registrator ofisi)
-        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi')
+        // Akademik mobillik: Registrator ariza yaratadi, O'quv bo'limi va prorektor tasdiqlaydi.
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|oquv_prorektori')
             ->prefix('academic-mobility')
             ->name('academic-mobility.')
             ->group(function () {
@@ -249,6 +249,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'applications'])->name('applications');
                 Route::post('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'store'])->name('store');
                 Route::get('/applications/{application}/document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'downloadDocument'])->name('document');
+                Route::post('/applications/{application}/curriculum-document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'uploadCurriculumDocument'])->name('curriculum-document.upload');
+                Route::get('/applications/{application}/curriculum-document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'curriculumDocument'])->name('curriculum-document');
+                Route::post('/applications/{application}/decision', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'decide'])->name('decision');
             });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)

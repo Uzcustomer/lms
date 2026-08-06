@@ -52,71 +52,10 @@ class AcademicMobilityController extends Controller
 
         if ($request->filled('search')) {
             $search = trim((string) $request->input('search'));
-            $query->where(function (Builder $builder) use ($search) {
-                $builder->where('phone', 'like', "%{$search}%")
-                    ->orWhere('reason', 'like', "%{$search}%")
-                    ->orWhere('created_by_name', 'like', "%{$search}%")
-                    ->orWhereHas('student', function (Builder $studentQuery) use ($search) {
-                        $studentQuery->where('full_name', 'like', "%{$search}%")
-                            ->orWhere('student_id_number', 'like', "%{$search}%")
-                            ->orWhere('hemis_id', 'like', "%{$search}%")
-                            ->orWhere('group_name', 'like', "%{$search}%");
-                    });
+            $query->whereHas('student', function (Builder $studentQuery) use ($search) {
+                $studentQuery->where('full_name', 'like', "%{$search}%");
             });
         }
-
-        if ($request->filled('status') && $request->input('status') !== 'all') {
-            $query->where('status', $request->input('status'));
-        }
-
-        if ($request->input('has_document') === 'yes') {
-            $query->whereNotNull('document_path');
-        } elseif ($request->input('has_document') === 'no') {
-            $query->whereNull('document_path');
-        }
-
-        foreach ([
-            'department' => 'department_id',
-            'specialty' => 'specialty_id',
-            'level_code' => 'level_code',
-        ] as $input => $column) {
-            if ($request->filled($input)) {
-                $query->whereHas('student', fn (Builder $studentQuery) =>
-                    $studentQuery->where($column, $request->input($input))
-                );
-            }
-        }
-
-        if ($request->filled('date_from')) {
-            $query->whereDate('created_at', '>=', $request->input('date_from'));
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('created_at', '<=', $request->input('date_to'));
-        }
-
-        $applicantStudents = Student::query()
-            ->whereIn('id', AkademikMobillikAriza::query()->select('student_id'));
-
-        $filterOptions = [
-            'departments' => (clone $applicantStudents)
-                ->select('department_id', 'department_name')
-                ->whereNotNull('department_id')
-                ->distinct()
-                ->orderBy('department_name')
-                ->get(),
-            'specialties' => (clone $applicantStudents)
-                ->select('specialty_id', 'specialty_name')
-                ->whereNotNull('specialty_id')
-                ->distinct()
-                ->orderBy('specialty_name')
-                ->get(),
-            'levels' => (clone $applicantStudents)
-                ->select('level_code', 'level_name')
-                ->whereNotNull('level_code')
-                ->distinct()
-                ->orderBy('level_code')
-                ->get(),
-        ];
 
         return view('admin.academic-mobility.applications', [
             'applications' => $query->paginate(25)->withQueryString(),
@@ -126,7 +65,6 @@ class AcademicMobilityController extends Controller
                 'withDocument' => AkademikMobillikAriza::whereNotNull('document_path')->count(),
                 'today' => AkademikMobillikAriza::whereDate('created_at', today())->count(),
             ],
-            'filterOptions' => $filterOptions,
         ]);
     }
 

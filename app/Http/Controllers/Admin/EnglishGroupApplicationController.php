@@ -347,6 +347,41 @@ class EnglishGroupApplicationController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
+    public function uploadCertificate(Request $request, int $id)
+    {
+        $user = auth()->user() ?? auth('teacher')->user();
+        abort_unless(
+            $user && $user->hasAnyRole(['registrator_ofisi', 'superadmin', 'admin']),
+            403
+        );
+
+        $request->validate([
+            'certificate_pdf' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+        ], [
+            'certificate_pdf.required' => 'Yuklanadigan hujjatni tanlang.',
+            'certificate_pdf.mimes' => 'Hujjat faqat PDF formatida bo\'lishi kerak.',
+            'certificate_pdf.max' => 'Hujjat hajmi 10 MB dan oshmasligi kerak.',
+        ]);
+
+        $application = InglizGuruhAriza::findOrFail($id);
+        $path = $request->file('certificate_pdf')->storeAs(
+            "english-group-applications/{$application->id}",
+            'til_sertifikati.pdf'
+        );
+
+        if (!$path) {
+            return redirect()
+                ->route('admin.english-group-applications.index', $request->query())
+                ->with('error', 'Hujjatni saqlashda xatolik yuz berdi. Qayta urinib ko\'ring.');
+        }
+
+        $application->update(['certificate_pdf_path' => $path]);
+
+        return redirect()
+            ->route('admin.english-group-applications.index', $request->query())
+            ->with('success', $application->full_name . ' uchun hujjat muvaffaqiyatli yuklandi.');
+    }
+
     public function certificate(int $id)
     {
         $application = InglizGuruhAriza::findOrFail($id);

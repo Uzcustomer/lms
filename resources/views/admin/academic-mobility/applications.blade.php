@@ -176,12 +176,21 @@
                                     @if($showReviewColumn)
                                         <td class="am-review-cell">
                                             @if($application->curriculum_document_path)
-                                                <a href="{{ route('admin.academic-mobility.curriculum-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-review-file" title="{{ $application->curriculum_document_name }}">
-                                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8m-4-6v6h6M9 15l2 2 4-4"/>
-                                                    </svg>
-                                                    Hujjatni ko'rish
-                                                </a>
+                                                <div class="am-review-file-row">
+                                                    @if($isDepartmentReviewer)
+                                                        <form method="POST" action="{{ route('admin.academic-mobility.curriculum-document.delete', $application) }}" class="am-review-delete" onsubmit="return confirm('O\'quv reja mosligi hujjatini olib tashlaysizmi?')">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" title="Hujjatni olib tashlash" aria-label="Hujjatni olib tashlash">&times;</button>
+                                                        </form>
+                                                    @endif
+                                                    <a href="{{ route('admin.academic-mobility.curriculum-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-review-file" title="{{ $application->curriculum_document_name }}">
+                                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8m-4-6v6h6M9 15l2 2 4-4"/>
+                                                        </svg>
+                                                        Hujjatni ko'rish
+                                                    </a>
+                                                </div>
                                                 <small class="am-review-filename" title="{{ $application->curriculum_document_name }}">{{ $application->curriculum_document_name }}</small>
                                             @else
                                                 <span class="am-review-missing">Hujjat yuklanmagan</span>
@@ -323,6 +332,10 @@
         .am-review-heading { min-width:265px; }
         .am-review-cell { min-width:265px;background:#f8fbff; }
         .am-status-heading,.am-status-cell { min-width:235px; }
+        .am-review-file-row { display:flex;align-items:center;justify-content:flex-start;gap:5px; }
+        .am-review-delete { display:flex;flex:0 0 auto;margin:0; }
+        .am-review-delete button { width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #fecaca;border-radius:50%;background:#fff;color:#dc2626;font-size:16px;font-weight:700;line-height:1;cursor:pointer;transition:.15s; }
+        .am-review-delete button:hover { border-color:#dc2626;background:#fee2e2;transform:scale(1.06); }
         .am-review-file { display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:#e0f2fe;padding:5px 9px;font-size:11px;font-weight:700;color:#0369a1;text-decoration:none; }
         .am-review-file svg { width:15px;height:15px; }.am-review-filename { display:block;max-width:245px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94a3b8; }
         .am-review-missing { display:inline-flex;border-radius:6px;background:#fff7ed;padding:5px 8px;font-size:10.5px;font-weight:700;color:#c2410c; }

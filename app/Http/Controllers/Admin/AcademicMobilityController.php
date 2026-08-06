@@ -83,13 +83,14 @@ class AcademicMobilityController extends Controller
         $validated = $request->validate([
             'student_id' => ['required', 'integer', 'exists:students,id'],
             'phone' => ['required', 'string', 'max:50'],
-            'reason' => ['required', 'string', 'min:5', 'max:3000'],
+            'transfer_destination' => ['required', 'string', 'min:2', 'max:1000'],
             'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
         ], [
             'student_id.required' => 'Talabani tanlang.',
             'phone.required' => 'Telefon raqamini kiriting.',
-            'reason.required' => 'Ariza berish sababini kiriting.',
-            'reason.min' => 'Ariza sababi kamida 5 ta belgidan iborat bo\'lsin.',
+            'transfer_destination.required' => "Mobillik bo'layotgan joyni kiriting.",
+            'transfer_destination.min' => "Mobillik bo'layotgan joy kamida 2 ta belgidan iborat bo'lsin.",
+            'transfer_destination.max' => "Mobillik bo'layotgan joy 1000 ta belgidan oshmasligi kerak.",
             'document.file' => 'Yuklangan hujjat fayl bo\'lishi kerak.',
             'document.mimes' => 'Hujjat PDF, Word, JPG yoki PNG formatida bo\'lishi kerak.',
             'document.max' => 'Hujjat hajmi 10 MB dan oshmasligi kerak.',
@@ -100,7 +101,9 @@ class AcademicMobilityController extends Controller
         $application = AkademikMobillikAriza::create([
             'student_id' => $validated['student_id'],
             'phone' => $validated['phone'],
-            'reason' => $validated['reason'],
+            // Eski jadval sxemasi bilan moslik uchun reason bo'sh saqlanadi.
+            'reason' => '',
+            'transfer_destination' => trim($validated['transfer_destination']),
             'status' => 'pending',
             'created_by_id' => $user?->id,
             'created_by_name' => $user?->name ?? $user?->full_name ?? $user?->short_name,

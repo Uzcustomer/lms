@@ -247,6 +247,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'index'])->name('index');
                 Route::get('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'applications'])->name('applications');
                 Route::post('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'store'])->name('store');
+                Route::get('/applications/{application}/document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'downloadDocument'])->name('document');
             });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)

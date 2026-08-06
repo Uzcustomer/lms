@@ -176,18 +176,41 @@ class AcademicMobilityController extends Controller
         }
 
         $oldPath = $application->curriculum_document_path;
-        $application->update([
-            'curriculum_document_path' => $path,
-            'curriculum_document_name' => $file->getClientOriginalName(),
-            'curriculum_document_mime' => $file->getMimeType(),
-            'curriculum_document_size' => $file->getSize(),
-        ]);
+        $user = auth()->user() ?? auth('teacher')->user();
+
+        DB::transaction(function () use ($application, $file, $path, $user) {
+            $application->update([
+                'curriculum_document_path' => $path,
+                'curriculum_document_name' => $file->getClientOriginalName(),
+                'curriculum_document_mime' => $file->getMimeType(),
+                'curriculum_document_size' => $file->getSize(),
+                'status' => 'pending',
+            ]);
+
+            // Yangi yoki almashtirilgan hujjat prorektor tomonidan qayta ko'rib chiqiladi.
+            $application->approvals()
+                ->where('role', 'oquv_prorektori')
+                ->delete();
+
+            AkademikMobillikTasdiq::updateOrCreate(
+                [
+                    'application_id' => $application->id,
+                    'role' => 'oquv_bolimi',
+                ],
+                [
+                    'status' => 'approved',
+                    'reviewed_by_id' => $user?->id,
+                    'reviewed_by_name' => $user?->name ?? $user?->full_name ?? $user?->short_name,
+                    'reviewed_at' => now(),
+                ]
+            );
+        });
 
         if ($oldPath && $oldPath !== $path) {
             Storage::delete($oldPath);
         }
 
-        return back()->with('success', "O'quv reja mosligi hujjati saqlandi.");
+        return back()->with('success', "Hujjat yuklandi va O'quv bo'limi bosqichi qabul qilindi.");
     }
 
     public function curriculumDocument(AkademikMobillikAriza $application): BinaryFileResponse
@@ -213,54 +236,30 @@ class AcademicMobilityController extends Controller
 
     public function decide(Request $request, AkademikMobillikAriza $application): RedirectResponse
     {
-        $stage = $this->decisionStage();
+        abort_unless($this->activeRole() === 'oquv_prorektori', 403);
 
         $validated = $request->validate([
             'decision' => ['required', 'in:approved,rejected'],
         ]);
 
-        if (
-            $validated['decision'] === 'approved'
-            && !$application->curriculum_document_path
-        ) {
+        $departmentApproved = $application->approvals()
+            ->where('role', 'oquv_bolimi')
+            ->where('status', 'approved')
+            ->exists();
+
+        if (!$departmentApproved || !$application->curriculum_document_path) {
             throw ValidationException::withMessages([
-                'decision' => "Ruxsat berishdan oldin o'quv reja mosligi hujjatini yuklang.",
+                'decision' => "Avval O'quv bo'limi o'quv reja mosligi hujjatini yuklashi kerak.",
             ]);
         }
 
-        DB::transaction(function () use ($application, $stage, $validated) {
-            $current = $application->approvals()
-                ->where('role', $stage)
-                ->first();
-
-            if (
-                $stage === 'oquv_bolimi'
-                && (!$current || $current->status !== $validated['decision'])
-            ) {
-                $application->approvals()
-                    ->where('role', 'oquv_prorektori')
-                    ->delete();
-            }
-
-            if ($stage === 'oquv_prorektori') {
-                $departmentApproved = $application->approvals()
-                    ->where('role', 'oquv_bolimi')
-                    ->where('status', 'approved')
-                    ->exists();
-
-                if (!$departmentApproved) {
-                    throw ValidationException::withMessages([
-                        'decision' => "Avval O'quv bo'limi arizaga ruxsat berishi kerak.",
-                    ]);
-                }
-            }
-
+        DB::transaction(function () use ($application, $validated) {
             $user = auth()->user() ?? auth('teacher')->user();
 
             AkademikMobillikTasdiq::updateOrCreate(
                 [
                     'application_id' => $application->id,
-                    'role' => $stage,
+                    'role' => 'oquv_prorektori',
                 ],
                 [
                     'status' => $validated['decision'],
@@ -270,22 +269,14 @@ class AcademicMobilityController extends Controller
                 ]
             );
 
-            $statuses = $application->approvals()
-                ->pluck('status', 'role');
-
             $application->update([
-                'status' => match (true) {
-                    $statuses->contains('rejected') => 'rejected',
-                    $statuses->get('oquv_bolimi') === 'approved'
-                        && $statuses->get('oquv_prorektori') === 'approved' => 'approved',
-                    default => 'pending',
-                },
+                'status' => $validated['decision'] === 'approved' ? 'approved' : 'rejected',
             ]);
         });
 
         $message = $validated['decision'] === 'approved'
-            ? 'Arizaga ruxsat berildi.'
-            : 'Ariza rad etildi.';
+            ? 'Ariza prorektor tomonidan qabul qilindi.'
+            : 'Ariza prorektor tomonidan rad etildi.';
 
         return back()->with('success', $message);
     }
@@ -320,19 +311,6 @@ class AcademicMobilityController extends Controller
             in_array($this->activeRole(), ['oquv_bolimi', 'oquv_bolimi_boshligi'], true),
             403
         );
-    }
-
-    private function decisionStage(): string
-    {
-        $activeRole = $this->activeRole();
-
-        if (in_array($activeRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true)) {
-            return 'oquv_bolimi';
-        }
-
-        abort_unless($activeRole === 'oquv_prorektori', 403);
-
-        return 'oquv_prorektori';
     }
 
     private function applyStudentFilters(Builder $query, Request $request): void

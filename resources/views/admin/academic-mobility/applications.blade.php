@@ -126,8 +126,7 @@
                                 @if($showReviewColumn)
                                     <th class="am-review-heading">O'quv reja mosligi</th>
                                 @endif
-                                <th>Yuborgan / sana</th>
-                                <th>Holat</th>
+                                <th class="{{ $showReviewColumn ? 'am-status-heading' : '' }}">Holat</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -176,90 +175,80 @@
                                     </td>
                                     @if($showReviewColumn)
                                         <td class="am-review-cell">
-                                            <div class="am-review-document">
-                                                @if($application->curriculum_document_path)
-                                                    <a href="{{ route('admin.academic-mobility.curriculum-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-review-file" title="{{ $application->curriculum_document_name }}">
-                                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8m-4-6v6h6M9 15l2 2 4-4"/>
-                                                        </svg>
-                                                        Hujjatni ko'rish
-                                                    </a>
-                                                    <small title="{{ $application->curriculum_document_name }}">{{ $application->curriculum_document_name }}</small>
-                                                @else
-                                                    <span class="am-review-missing">Hujjat yuklanmagan</span>
-                                                @endif
+                                            @if($application->curriculum_document_path)
+                                                <a href="{{ route('admin.academic-mobility.curriculum-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-review-file" title="{{ $application->curriculum_document_name }}">
+                                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8m-4-6v6h6M9 15l2 2 4-4"/>
+                                                    </svg>
+                                                    Hujjatni ko'rish
+                                                </a>
+                                                <small class="am-review-filename" title="{{ $application->curriculum_document_name }}">{{ $application->curriculum_document_name }}</small>
+                                            @else
+                                                <span class="am-review-missing">Hujjat yuklanmagan</span>
+                                            @endif
 
-                                                @if($isDepartmentReviewer)
-                                                    <form method="POST" action="{{ route('admin.academic-mobility.curriculum-document.upload', $application) }}" enctype="multipart/form-data" class="am-review-upload">
-                                                        @csrf
-                                                        <label>
-                                                            <input type="file" name="curriculum_document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
-                                                            <span>{{ $application->curriculum_document_path ? 'Almashtirish' : 'Hujjat tanlash' }}</span>
-                                                        </label>
-                                                        <button type="submit">Saqlash</button>
-                                                    </form>
-                                                @endif
-                                            </div>
-
+                                            @if($isDepartmentReviewer)
+                                                <form method="POST" action="{{ route('admin.academic-mobility.curriculum-document.upload', $application) }}" enctype="multipart/form-data" class="am-review-upload">
+                                                    @csrf
+                                                    <label>
+                                                        <input type="file" name="curriculum_document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" required>
+                                                        <span>{{ $application->curriculum_document_path ? 'Almashtirish' : 'Hujjat tanlash' }}</span>
+                                                    </label>
+                                                    <button type="submit">Saqlash</button>
+                                                </form>
+                                            @endif
+                                        </td>
+                                    @endif
+                                    <td class="{{ $showReviewColumn ? 'am-status-cell' : '' }}">
+                                        @if($showReviewColumn)
                                             <div class="am-stage-list">
                                                 <div class="am-stage">
                                                     <span>O'quv bo'limi</span>
                                                     @if($departmentApproval?->status === 'approved')
-                                                        <b class="am-stage-approved">Ruxsat</b>
+                                                        <b class="am-stage-approved">Qabul</b>
                                                     @elseif($departmentApproval?->status === 'rejected')
-                                                        <b class="am-stage-rejected">Rad etilgan</b>
+                                                        <b class="am-stage-rejected">Rad</b>
                                                     @else
                                                         <b class="am-stage-pending">Kutilmoqda</b>
                                                     @endif
                                                 </div>
-                                                @if($departmentApproval)
-                                                    <small>{{ $departmentApproval->reviewed_by_name ?? '-' }} · {{ $departmentApproval->reviewed_at?->format('d.m.Y H:i') }}</small>
-                                                @endif
                                                 <div class="am-stage">
                                                     <span>O'quv prorektori</span>
                                                     @if($viceRectorApproval?->status === 'approved')
-                                                        <b class="am-stage-approved">Ruxsat</b>
+                                                        <b class="am-stage-approved">Qabul</b>
                                                     @elseif($viceRectorApproval?->status === 'rejected')
-                                                        <b class="am-stage-rejected">Rad etilgan</b>
+                                                        <b class="am-stage-rejected">Rad</b>
                                                     @else
                                                         <b class="am-stage-pending">Kutilmoqda</b>
                                                     @endif
                                                 </div>
-                                                @if($viceRectorApproval)
-                                                    <small>{{ $viceRectorApproval->reviewed_by_name ?? '-' }} · {{ $viceRectorApproval->reviewed_at?->format('d.m.Y H:i') }}</small>
-                                                @endif
                                             </div>
 
-                                            @if($isDepartmentReviewer || $isViceRector)
-                                                @php
-                                                    $decisionDisabled = $isViceRector && !$viceRectorEnabled;
-                                                @endphp
-                                                <div class="am-decision-actions">
-                                                    <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}">
-                                                        @csrf
-                                                        <input type="hidden" name="decision" value="approved">
-                                                        <button type="submit" class="am-approve-btn" @disabled($decisionDisabled || !$application->curriculum_document_path)>Ruxsat</button>
-                                                    </form>
-                                                    <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}" onsubmit="return confirm('Arizani rad etasizmi?')">
-                                                        @csrf
-                                                        <input type="hidden" name="decision" value="rejected">
-                                                        <button type="submit" class="am-reject-btn" @disabled($isViceRector && !$departmentApproved)>Rad etish</button>
-                                                    </form>
-                                                </div>
-                                                @if($isViceRector && !$departmentApproved)
-                                                    <div class="am-stage-note">Avval O'quv bo'limi tasdiqlashi kerak.</div>
-                                                @endif
+                                            @php
+                                                $decisionDisabled = $isViceRector && !$viceRectorEnabled;
+                                            @endphp
+                                            <div class="am-decision-actions">
+                                                <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}">
+                                                    @csrf
+                                                    <input type="hidden" name="decision" value="approved">
+                                                    <button type="submit" class="am-approve-btn" @disabled($decisionDisabled || !$application->curriculum_document_path)>Qabul</button>
+                                                </form>
+                                                <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}" onsubmit="return confirm('Arizani rad etasizmi?')">
+                                                    @csrf
+                                                    <input type="hidden" name="decision" value="rejected">
+                                                    <button type="submit" class="am-reject-btn" @disabled($isViceRector && !$departmentApproved)>Rad</button>
+                                                </form>
+                                            </div>
+                                            @if($isViceRector && !$departmentApproved)
+                                                <div class="am-stage-note">O'quv bo'limi tasdig'i kutilmoqda.</div>
                                             @endif
-                                        </td>
-                                    @endif
-                                    <td>
-                                        <div class="am-creator">{{ $application->created_by_name ?? '-' }}</div>
-                                        <div class="am-muted">{{ $application->created_at?->format('d.m.Y H:i') }}</div>
+                                        @else
+                                            <span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span>
+                                        @endif
                                     </td>
-                                    <td><span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="{{ $showReviewColumn ? 8 : 7 }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
+                                <tr><td colspan="{{ $showReviewColumn ? 7 : 6 }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -331,24 +320,23 @@
         .am-document-btn:hover { background:#bae6fd; }.am-document-btn svg { width:15px;height:15px; }
         .am-file-name { max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;font-size:10px;color:#94a3b8; }
         .am-no-document { display:inline-block;border-radius:6px;background:#f1f5f9;padding:5px 8px;font-size:10.5px;font-weight:600;color:#94a3b8; }
-        .am-review-heading { min-width:310px; }
-        .am-review-cell { min-width:310px;background:#f8fbff; }
-        .am-review-document { padding-bottom:8px;border-bottom:1px solid #dbeafe; }
+        .am-review-heading { min-width:265px; }
+        .am-review-cell { min-width:265px;background:#f8fbff; }
+        .am-status-heading,.am-status-cell { min-width:235px; }
         .am-review-file { display:inline-flex;align-items:center;gap:6px;border-radius:6px;background:#e0f2fe;padding:5px 9px;font-size:11px;font-weight:700;color:#0369a1;text-decoration:none; }
-        .am-review-file svg { width:15px;height:15px; }.am-review-document small { display:block;max-width:280px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94a3b8; }
+        .am-review-file svg { width:15px;height:15px; }.am-review-filename { display:block;max-width:245px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94a3b8; }
         .am-review-missing { display:inline-flex;border-radius:6px;background:#fff7ed;padding:5px 8px;font-size:10.5px;font-weight:700;color:#c2410c; }
         .am-review-upload { display:flex;align-items:center;gap:6px;margin-top:7px; }
         .am-review-upload label { max-width:180px;display:flex;flex:1;overflow:hidden;border:1px dashed #93c5fd;border-radius:6px;background:#fff;cursor:pointer; }
         .am-review-upload label input { position:absolute;width:1px;height:1px;opacity:0; }
         .am-review-upload label span { width:100%;overflow:hidden;padding:5px 8px;font-size:10.5px;font-weight:700;color:#2563eb;text-align:center;text-overflow:ellipsis;white-space:nowrap; }
         .am-review-upload button { border:0;border-radius:6px;background:#2563eb;padding:6px 10px;font-size:10.5px;font-weight:700;color:#fff;cursor:pointer; }
-        .am-stage-list { display:grid;gap:4px;margin-top:8px; }
+        .am-stage-list { display:grid;gap:4px; }
         .am-stage { display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;color:#475569; }
         .am-stage b { border-radius:999px;padding:3px 7px;font-size:9.5px;white-space:nowrap; }
         .am-stage-approved { background:#dcfce7;color:#15803d; }.am-stage-rejected { background:#fee2e2;color:#b91c1c; }.am-stage-pending { background:#fef3c7;color:#b45309; }
-        .am-stage-list small { margin-top:-2px;font-size:9px;color:#94a3b8; }
         .am-decision-actions { display:flex;align-items:center;gap:6px;margin-top:8px; }
-        .am-decision-actions form { flex:1; }.am-decision-actions button { width:100%;border:0;border-radius:6px;padding:6px 9px;font-size:10.5px;font-weight:800;color:#fff;cursor:pointer; }
+        .am-decision-actions form { flex:1; }.am-decision-actions button { width:100%;border:0;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:800;color:#fff;cursor:pointer; }
         .am-approve-btn { background:#059669; }.am-reject-btn { background:#dc2626; }
         .am-decision-actions button:disabled { background:#cbd5e1;color:#64748b;cursor:not-allowed; }
         .am-stage-note { margin-top:5px;font-size:9.5px;color:#b45309; }

@@ -241,7 +241,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // Akademik mobillik (faqat Registrator ofisi)
-        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi')
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi')
             ->prefix('academic-mobility')
             ->name('academic-mobility.')
             ->group(function () {

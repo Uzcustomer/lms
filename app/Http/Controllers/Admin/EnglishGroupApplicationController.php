@@ -246,13 +246,15 @@ class EnglishGroupApplicationController extends Controller
             $baseName = preg_replace('/[\\\\\\/:*?"<>|]+/u', ' ', $baseName);
             $baseName = preg_replace('/\\s+/u', ' ', trim($baseName));
             $baseName = $baseName ?: ('ariza-' . $application->id);
-            $fileName = $baseName . '.pdf';
+            $extension = strtolower(pathinfo($application->certificate_pdf_path, PATHINFO_EXTENSION)) ?: 'pdf';
+            $originalName = $baseName . '.' . $extension;
+            $fileName = $originalName;
 
-            if (isset($usedNames[$fileName])) {
-                $usedNames[$fileName]++;
-                $fileName = $baseName . ' (' . $usedNames[$baseName . '.pdf'] . ').pdf';
+            if (isset($usedNames[$originalName])) {
+                $usedNames[$originalName]++;
+                $fileName = $baseName . ' (' . $usedNames[$originalName] . ').' . $extension;
             } else {
-                $usedNames[$fileName] = 1;
+                $usedNames[$originalName] = 1;
             }
 
             $zip->addFile(Storage::path($application->certificate_pdf_path), $fileName);
@@ -356,23 +358,30 @@ class EnglishGroupApplicationController extends Controller
         );
 
         $request->validate([
-            'certificate_pdf' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'certificate_pdf' => ['required', 'file', 'mimes:pdf,jpg,jpeg', 'max:10240'],
         ], [
             'certificate_pdf.required' => 'Yuklanadigan hujjatni tanlang.',
-            'certificate_pdf.mimes' => 'Hujjat faqat PDF formatida bo\'lishi kerak.',
+            'certificate_pdf.mimes' => 'Hujjat PDF, JPG yoki JPEG formatida bo\'lishi kerak.',
             'certificate_pdf.max' => 'Hujjat hajmi 10 MB dan oshmasligi kerak.',
         ]);
 
         $application = InglizGuruhAriza::findOrFail($id);
-        $path = $request->file('certificate_pdf')->storeAs(
+        $oldPath = $application->certificate_pdf_path;
+        $file = $request->file('certificate_pdf');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $path = $file->storeAs(
             "english-group-applications/{$application->id}",
-            'til_sertifikati.pdf'
+            "til_sertifikati.{$extension}"
         );
 
         if (!$path) {
             return redirect()
                 ->route('admin.english-group-applications.index', $request->query())
                 ->with('error', 'Hujjatni saqlashda xatolik yuz berdi. Qayta urinib ko\'ring.');
+        }
+
+        if ($oldPath && $oldPath !== $path) {
+            Storage::delete($oldPath);
         }
 
         $application->update(['certificate_pdf_path' => $path]);
@@ -387,9 +396,11 @@ class EnglishGroupApplicationController extends Controller
         $application = InglizGuruhAriza::findOrFail($id);
         abort_if(!$application->certificate_pdf_path || !Storage::exists($application->certificate_pdf_path), 404);
 
+        $mimeType = Storage::mimeType($application->certificate_pdf_path) ?: 'application/octet-stream';
+
         return response()->file(Storage::path($application->certificate_pdf_path), [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="til_sertifikati.pdf"',
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . basename($application->certificate_pdf_path) . '"',
         ]);
     }
 

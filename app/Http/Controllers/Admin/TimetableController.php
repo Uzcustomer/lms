@@ -1070,8 +1070,14 @@ class TimetableController extends Controller
         // bosuvchi amaliy ma'ruza slotidan boshlanadi, qolgan amaliy soat esa
         // uning ketidan tiziladi — nechchi soat bo'lishidan qat'i nazar
         // (2+2, 2+4, 4+2 …) guruh uchun dars yaxlit va bir vaqtda boshlanadi.
+        // Zanjir kaliti FAKULTET va OQIM bilan birga olinadi. Busiz bir yo'nalish+
+        // kursdagi barcha fakultet va oqimlar bitta zanjirga qo'shilib ketardi:
+        // birinchi joylashgan ma'ruza qolgan hamma fakultet/oqimning amaliylarini
+        // o'z kuniga va slotiga tortib, ular u yerga sig'may uzilib qolardi.
         $chain = [];
-        $subjOf = fn($c) => $this->specKey($c->specialty_name) . '|' . (int) $c->course
+        $subjOf = fn($c) => (string) ($c->faculty_name ?? '') . '|'
+            . $this->specKey($c->specialty_name) . '|' . (int) $c->course
+            . '|' . (string) $c->oqim_label
             . '|' . $this->normSubject((string) $c->subject_name);
 
         // Zanjirdagi aniq joyga qo'yishga urinish. Muvaffaqiyatsiz bo'lsa null —
@@ -1081,8 +1087,19 @@ class TimetableController extends Controller
             if (!$ch) {
                 return null;
             }
-            $start = $standIn ? $ch['lec'] : $ch['next'];
             $total = array_sum(array_column($segs, 'len'));
+            // O'rin bosuvchi blok ma'ruza slotiga tushadi. Ma'ruzadan QISQA bo'lsa
+            // (mas. ma'ruza 2 soat, o'rnini bosuvchi amaliy 1 soat) u slotning
+            // OXIRIGA tekislanadi: shunda ma'ruzasiz haftada u undan keyingi
+            // amaliyga yopishadi va orada bo'sh yarim-slot qolmaydi. Boshiga
+            // qo'yilsa, ma'ruzasiz haftada [amaliy][oyna][amaliy] chiqardi.
+            // Tekislash blokning BIRINCHI bo'lagi (o'rin bosuvchi karta) bo'yicha
+            // hisoblanadi — undan keyingi amaliy soat ma'ruza tugagan joydan
+            // boshlansin, aks holda ma'ruzali haftada ma'ruza bilan ustma-ust
+            // tushib, butun blok joylasha olmay qolardi.
+            $start = $standIn
+                ? (int) $ch['lec'] + max(0, (int) ($ch['llen'] ?? 0) - (int) $segs[0]['len'])
+                : (int) $ch['next'];
             if ($start < 1 || $start + $total - 1 > $pairs) {
                 return null;
             }
@@ -1105,12 +1122,19 @@ class TimetableController extends Controller
         // o'qituvchi yoki auditoriya band) — butun blok joylashmagan bo'lib
         // qoladi, ya'ni yarmi u kunga, yarmi bu kunga bo'linib ketmaydi.
         //
-        // Klaster kaliti: fan+guruh (spreadKey) + hafta shabloni (weeks). Hafta
-        // shabloni ataylab kiritilgan — ma'ruzani ALMASHTIRUVCHI amaliy karta
-        // (ma'ruzasiz haftalarda o'tiladi) boshqa "weeks" ga ega, shuning uchun
-        // u blokka qo'shilmaydi va o'zining ma'ruza slotiga tushaveradi.
+        // Klaster kaliti: fan+guruh (spreadKey) — hafta shabloniga QARAMAY.
+        // Bir fanning guruh uchun barcha amaliy kartalari (har haftalik soat,
+        // ma'ruzani almashtiruvchi soat, qoldiq soat) bitta blok bo'lib
+        // joylashadi. Blok boshida ma'ruzani almashtiruvchi karta turadi va
+        // butun blok ma'ruza tugaydigan joyga tekislanadi — ma'ruzali haftada
+        // ham, ma'ruzasiz haftada ham guruh uchun dars yaxlit chiqadi.
+        //
+        // Ilgari kalitga "weeks" ham kirardi: o'rin bosuvchi karta alohida
+        // joylashib ma'ruza slotini egallardi, keyingi amaliy esa uning yoniga
+        // sig'masa JOYLASHMAY qolardi (kun bo'ylab teshik qolardi). Bitta blok
+        // bo'lganda esa u boshqa kunga butunligicha ko'chib, joyini topadi.
         $clusterMode = $sameDay || $consecutive;
-        $clusterKey = fn(TimetableCard $c) => $this->spreadKey($c) . '|w' . (int) $c->weeks;
+        $clusterKey = fn(TimetableCard $c) => $this->spreadKey($c);
         // "Bir kunga" cheklovi FAN + GURUH bo'yicha, hafta shabloniga qaramay:
         // har haftalik amaliy va ma'ruza o'rnini bosuvchi amaliy alohida
         // klasterlar, lekin ular baribir bitta kunda, yonma-yon turishi kerak —
@@ -1158,8 +1182,11 @@ class TimetableController extends Controller
                     $tw = $weeksFor($u0->faculty_name, $u0->specialty_name, (int) $u0->course);
                     $standInIdx = null;
                     foreach ($unit as $ix => $uc) {
-                        if ((int) $uc->weeks === $tw - (int) $uCh0['lw']
-                            && $this->parasNeeded($uc) === (int) $uCh0['next'] - (int) $uCh0['lec']) {
+                        // O'rin bosuvchi karta hafta shabloni bo'yicha aniqlanadi:
+                        // ma'ruza o'tilmaydigan haftalarda o'tiladi. Uzunligi
+                        // ma'ruzanikiga teng bo'lishi shart emas (2 soat ma'ruza
+                        // o'rniga 1 soat yoki 4 soat amaliy ham bo'lishi mumkin).
+                        if ((int) $uc->weeks === $tw - (int) $uCh0['lw']) {
                             $standInIdx = $ix;
                             break;
                         }
@@ -1255,6 +1282,7 @@ class TimetableController extends Controller
                         && !isset($chain[$subjOf($uc)])) {
                         $chain[$subjOf($uc)] = [
                             'day' => (int) $uc->day, 'lec' => (int) $uc->pair,
+                            'llen' => $this->parasNeeded($uc),
                             'next' => (int) $uc->pair + $this->parasNeeded($uc), 'lw' => (int) $uc->weeks,
                         ];
                     }
@@ -1372,7 +1400,7 @@ class TimetableController extends Controller
                 $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
                 if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($chain[$sKey])) {
                     $chain[$sKey] = [
-                        'day' => (int) $c->day, 'lec' => (int) $c->pair,
+                        'day' => (int) $c->day, 'lec' => (int) $c->pair, 'llen' => $need,
                         'next' => (int) $c->pair + $need, 'lw' => (int) $c->weeks,
                     ];
                 }
@@ -1475,7 +1503,8 @@ class TimetableController extends Controller
             $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
             // Ma'ruza joylashdi — uni almashtiruvchi amaliy shu slotga tushsin
             if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($chain[$subjOf($c)])) {
-                $chain[$subjOf($c)] = ['day' => $d, 'lec' => $p, 'next' => $p + $need, 'lw' => (int) $c->weeks];
+                $chain[$subjOf($c)] = ['day' => $d, 'lec' => $p, 'llen' => $need,
+                    'next' => $p + $need, 'lw' => (int) $c->weeks];
             }
             $skBase = $this->spreadKey($c);
             $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
@@ -1896,11 +1925,19 @@ class TimetableController extends Controller
         return $best;
     }
 
-    /** Fan taqsimoti kaliti: ma'ruza — oqim bo'yicha, amaliyot — guruhcha bo'yicha. */
+    /**
+     * Fan taqsimoti kaliti: ma'ruza — oqim bo'yicha, amaliyot — guruhcha bo'yicha.
+     *
+     * Kalitga FAKULTET ham kiradi: guruh nomlari fakultetlar bo'ylab takrorlanadi
+     * (mas. "25-01a (o'z)" ham 1-son, ham 2-son davolashda bor). Fakultetsiz ikki
+     * fakultetning bir xil nomli guruhi bitta klaster deb qabul qilinar, "bir
+     * kunga / ketma-ket" cheklovi ular orasida ishlab, dars uzilib qolardi.
+     */
     private function spreadKey(TimetableCard $c): string
     {
         $who = $c->training_type === 'lecture' ? ('L' . $c->oqim_label) : ('P' . $c->group_name);
-        return $c->specialty_name . '|' . $c->course . '|' . $who . '|' . $this->normSubject((string) $c->subject_name);
+        return (string) ($c->faculty_name ?? '') . '|' . $c->specialty_name . '|' . $c->course
+            . '|' . $who . '|' . $this->normSubject((string) $c->subject_name);
     }
 
     /**
@@ -3304,102 +3341,320 @@ class TimetableController extends Controller
             $pending[] = [(int) $unit[0][1], $parts, $blockEnd - $baseStart];
         }
 
-        $moves = [];
-        foreach ($pending as [$d, $parts, $blockLen]) {
-            $bestStart = null;
-            $bestRooms = [];
+        // Bitta bo'lak $d kunida $np dan boshlab tura oladimi? Qaytadi:
+        //   Auditorium — mos xona topildi
+        //   null       — xona umuman kerak emas
+        //   false      — sig'madi (guruh, o'qituvchi yoki xona band)
+        // Topilgan xona $roomHold ga yoziladi — bitta blokning bo'laklari
+        // bir-birining xonasini qayta olmasligi uchun.
+        $partFits = function (array $part, int $np, int $d, array &$roomHold) use (
+            &$gBusy, &$tBusy, &$rBusy, $roomOptionsFor
+        ) {
+            [$c, , , $effectiveRoomCode, , , $len] = $part;
+            $scope = $this->groupScopeKey($c);
+            for ($i = 0; $i < $len; $i++) {
+                $slot = $d . '|' . ($np + $i);
+                foreach ($c->occupiedGroups() as $g) {
+                    if (!empty($gBusy[$scope . '|' . $g . '|' . $slot])) {
+                        return false;
+                    }
+                }
+                if ($c->teacher_id && !empty($tBusy['T' . $c->teacher_id . '|' . $slot])) {
+                    return false;
+                }
+            }
+            $preferred = $effectiveRoomCode ?: $c->auditorium_code;
+            if (!$preferred) {
+                return null;
+            }
+            foreach ($roomOptionsFor($c, $preferred) as $room) {
+                $roomFree = true;
+                for ($i = 0; $i < $len; $i++) {
+                    $rk = 'R' . $room->code . '|' . $d . '|' . ($np + $i);
+                    if (!empty($rBusy[$rk]) || !empty($roomHold[$rk])) {
+                        $roomFree = false;
+                        break;
+                    }
+                }
+                if ($roomFree) {
+                    for ($i = 0; $i < $len; $i++) {
+                        $roomHold['R' . $room->code . '|' . $d . '|' . ($np + $i)] = true;
+                    }
+                    return $room;
+                }
+            }
+            return false;
+        };
 
+        $placedUnits = [];
+        foreach ($pending as [$d, $parts, $blockLen]) {
+            // ── 1) Yaxlit blok ──────────────────────────────────────────────
             // Kun boshidan boshlab birinchi mos joy olinadi. Oraliq bazaviy
             // slot bilan cheklanmaydi: fan bo'yicha guruhlashda blok o'z
             // shablon slotidan kechroqqa ham tushishi mumkin, aks holda unga
             // joy topilmay, eski o'rnida boshqa dars bilan to'qnashib qolardi.
+            $chosen = null;
             for ($np = 1; $np + $blockLen - 1 <= $pairs; $np++) {
-                $free = true;
-                $candidateRooms = [];
-                $candidateRoomBusy = [];
-                foreach ($parts as [$c, $effectiveDay, $effectivePair, $effectiveRoomCode, $effectiveRoomName, $offset, $len]) {
-                    $newPair = $np + $offset;
-                    $scope = $this->groupScopeKey($c);
-                    for ($i = 0; $i < $len && $free; $i++) {
-                        $slot = $d . '|' . ($newPair + $i);
-                        foreach ($c->occupiedGroups() as $g) {
-                            if (!empty($gBusy[$scope . '|' . $g . '|' . $slot])) {
-                                $free = false;
-                                break;
-                            }
-                        }
-                        if ($free && $c->teacher_id && !empty($tBusy['T' . $c->teacher_id . '|' . $slot])) {
-                            $free = false;
-                        }
-                    }
-                    if (!$free) {
+                $roomHold = [];
+                $attempt = [];
+                foreach ($parts as $part) {
+                    $room = $partFits($part, $np + $part[5], $d, $roomHold);
+                    if ($room === false) {
+                        $attempt = null;
                         break;
                     }
-
-                    $preferredRoomCode = $effectiveRoomCode ?: $c->auditorium_code;
-                    $requiresRoom = !empty($preferredRoomCode);
-                    $chosenRoom = null;
-                    if ($requiresRoom) {
-                        foreach ($roomOptionsFor($c, $preferredRoomCode) as $room) {
-                            $roomFree = true;
-                            for ($i = 0; $i < $len; $i++) {
-                                $slot = $d . '|' . ($newPair + $i);
-                                $rk = 'R' . $room->code . '|' . $slot;
-                                if (!empty($rBusy[$rk]) || !empty($candidateRoomBusy[$rk])) {
-                                    $roomFree = false;
-                                    break;
-                                }
-                            }
-                            if ($roomFree) {
-                                $chosenRoom = $room;
-                                break;
-                            }
-                        }
-                        if (!$chosenRoom) {
-                            $free = false;
-                            break;
-                        }
-                        for ($i = 0; $i < $len; $i++) {
-                            $slot = $d . '|' . ($newPair + $i);
-                            $candidateRoomBusy['R' . $chosenRoom->code . '|' . $slot] = true;
-                        }
-                    }
-                    $candidateRooms[(int) $c->id] = $chosenRoom;
+                    $attempt[(int) $part[0]->id] = ['pair' => $np + $part[5], 'room' => $room];
                 }
-                if ($free) {
-                    $bestStart = $np;
-                    $bestRooms = $candidateRooms;
+                if ($attempt !== null) {
+                    $chosen = $attempt;
                     break;
                 }
             }
 
-            if ($bestStart === null) {
-                // Butun blok uchun xavfsiz joy topilmasa, avvalgi effektiv
-                // joylashuv va auditoriyalarni saqlaymiz; blokni bo'lmaymiz.
-                foreach ($parts as [$c, $effectiveDay, $effectivePair, $effectiveRoomCode]) {
-                    $mark($c, $effectiveDay, $effectivePair, $effectiveRoomCode, true);
+            // ── 2) Yaxlit sig'masa — bo'laklab ──────────────────────────────
+            // Fan uzilib qolishi mumkin, lekin bu birlikni eski (endi band
+            // bo'lishi mumkin) o'rniga qaytarishdan afzal: u yerda guruh
+            // ustma-ust ikki darsda qolib ketardi.
+            if ($chosen === null) {
+                $roomHold = [];
+                $used = [];
+                $attempt = [];
+                foreach ($parts as $part) {
+                    $len = $part[6];
+                    $pick = null;
+                    for ($np = 1; $np + $len - 1 <= $pairs; $np++) {
+                        $overlap = false;
+                        for ($i = 0; $i < $len; $i++) {
+                            if (isset($used[$np + $i])) {
+                                $overlap = true;
+                                break;
+                            }
+                        }
+                        if ($overlap) {
+                            continue;
+                        }
+                        $room = $partFits($part, $np, $d, $roomHold);
+                        if ($room === false) {
+                            continue;
+                        }
+                        $pick = ['pair' => $np, 'room' => $room];
+                        break;
+                    }
+                    if ($pick === null) {
+                        $attempt = null;
+                        break;
+                    }
+                    for ($i = 0; $i < $len; $i++) {
+                        $used[$pick['pair'] + $i] = true;
+                    }
+                    $attempt[(int) $part[0]->id] = $pick;
                 }
-                continue;
+                $chosen = $attempt;
             }
 
-            foreach ($parts as [$c, $effectiveDay, $effectivePair, $effectiveRoomCode, $effectiveRoomName, $offset, $len]) {
-                $newPair = $bestStart + $offset;
-                $chosenRoom = $bestRooms[(int) $c->id] ?? null;
-                $newRoomCode = $chosenRoom?->code ?: null;
-                $newRoomName = $chosenRoom?->name ?: null;
-                $mark($c, $d, $newPair, $newRoomCode, true);
+            // ── 3) Hech qayerga sig'masa — eski joyida qoladi ───────────────
+            if ($chosen === null) {
+                $chosen = [];
+                foreach ($parts as $part) {
+                    $chosen[(int) $part[0]->id] = ['pair' => $part[2], 'room' => null,
+                        'code' => $part[3], 'name' => $part[4]];
+                }
+            }
+
+            foreach ($parts as $part) {
+                $c = $part[0];
+                $id = (int) $c->id;
+                $chosen[$id]['code'] = $chosen[$id]['code'] ?? ($chosen[$id]['room']?->code ?: null);
+                $chosen[$id]['name'] = $chosen[$id]['name'] ?? ($chosen[$id]['room']?->name ?: null);
+                $mark($c, $d, $chosen[$id]['pair'], $chosen[$id]['code'], true);
+            }
+            $placedUnits[] = ['day' => $d, 'parts' => $parts, 'pos' => $chosen];
+        }
+
+        $this->closeWeekGaps($placedUnits, $pairs, $gBusy, $mark, $partFits);
+
+        $moves = [];
+        foreach ($placedUnits as $unit) {
+            foreach ($unit['parts'] as $part) {
+                $c = $part[0];
+                $pick = $unit['pos'][(int) $c->id];
                 // Muvaffaqiyatli blokning HAR bir kartasi vaqt+xona bilan yoziladi.
                 $moves[] = [
                     'card_id' => (int) $c->id,
-                    'day' => $d,
-                    'pair' => $newPair,
-                    'auditorium_code' => $newRoomCode,
-                    'auditorium_name' => $newRoomName,
+                    'day' => $unit['day'],
+                    'pair' => $pick['pair'],
+                    'auditorium_code' => $pick['code'],
+                    'auditorium_name' => $pick['name'],
                 ];
             }
         }
 
         return $moves;
+    }
+
+    /**
+     * Zichlashdan keyin qolgan oynalarni yopadi (haftalik ko'chirish uchun).
+     *
+     * Guruh kunida [dars][oyna][dars] holati qolishi mumkin: oynadan keyingi
+     * blok o'qituvchi yoki auditoriya bandligi sababli tepaga chiqa olmaydi.
+     * Bunday holatda oynadan OLDINGI bloklarni pastga surish yetarli — kun
+     * kechroq boshlanadi, lekin ichida bo'sh para qolmaydi.
+     *
+     * Surish faqat umumiy oyna soni kamayganda qabul qilinadi: oqim ma'ruzasi
+     * bir necha guruhga tegishli, uni surish boshqa guruhda yangi oyna ochishi
+     * mumkin.
+     *
+     * @param  array<int,array{day:int,parts:array,pos:array}>  $placedUnits
+     * @param  array  $gBusy  guruh bandligi (havola — $mark uni yangilab boradi)
+     */
+    private function closeWeekGaps(array &$placedUnits, int $pairs, array &$gBusy, callable $mark, callable $partFits): void
+    {
+        // Birlik qaysi guruh-kunlarga tegishli va qaysi yarim-slotlarni egallaydi
+        $unitKeys = [];    // birlik => ["scope|guruh", ...]
+        $dayUnits = [];    // "scope|guruh|kun" => [birlik, ...]
+        foreach ($placedUnits as $i => $unit) {
+            $keys = [];
+            foreach ($unit['parts'] as $part) {
+                $scope = $this->groupScopeKey($part[0]);
+                foreach ($part[0]->occupiedGroups() as $g) {
+                    $keys[$scope . '|' . $g] = true;
+                }
+            }
+            $unitKeys[$i] = array_keys($keys);
+            foreach ($unitKeys[$i] as $key) {
+                $dayUnits[$key . '|' . $unit['day']][] = $i;
+            }
+        }
+
+        $gapsOf = function (string $key, int $d) use (&$gBusy, $pairs): int {
+            $slots = [];
+            for ($p = 1; $p <= $pairs; $p++) {
+                if (!empty($gBusy[$key . '|' . $d . '|' . $p])) {
+                    $slots[] = $p;
+                }
+            }
+            return count($slots) < 2 ? 0 : (max($slots) - min($slots) + 1) - count($slots);
+        };
+
+        // Birlikni $k yarim-slotga pastga surish. Muvaffaqiyatsiz bo'lsa hamma
+        // narsa o'z joyiga qaytariladi.
+        $shift = function (int $i, int $k) use (&$placedUnits, $pairs, $mark, $partFits): bool {
+            $unit = $placedUnits[$i];
+            $d = $unit['day'];
+            foreach ($unit['parts'] as $part) {
+                $pick = $unit['pos'][(int) $part[0]->id];
+                if ($pick['pair'] + $k + $part[6] - 1 > $pairs) {
+                    return false;
+                }
+                $mark($part[0], $d, $pick['pair'], $pick['code'], false);
+            }
+            $roomHold = [];
+            $next = [];
+            $ok = true;
+            foreach ($unit['parts'] as $part) {
+                $pick = $unit['pos'][(int) $part[0]->id];
+                $room = $partFits($part, $pick['pair'] + $k, $d, $roomHold);
+                if ($room === false) {
+                    $ok = false;
+                    break;
+                }
+                $next[(int) $part[0]->id] = [
+                    'pair' => $pick['pair'] + $k,
+                    'room' => $room,
+                    'code' => $room?->code ?: $pick['code'],
+                    'name' => $room?->name ?: $pick['name'],
+                ];
+            }
+            $use = $ok ? $next : $unit['pos'];
+            foreach ($unit['parts'] as $part) {
+                $pick = $use[(int) $part[0]->id];
+                $mark($part[0], $d, $pick['pair'], $pick['code'], true);
+            }
+            if ($ok) {
+                $placedUnits[$i]['pos'] = $next;
+            }
+            return $ok;
+        };
+
+        foreach ($dayUnits as $dayKey => $ids) {
+            $parts = explode('|', $dayKey);
+            $day = (int) array_pop($parts);
+            $key = implode('|', $parts);
+
+            for ($round = 0; $round < $pairs; $round++) {
+                $slots = [];
+                for ($p = 1; $p <= $pairs; $p++) {
+                    if (!empty($gBusy[$key . '|' . $day . '|' . $p])) {
+                        $slots[] = $p;
+                    }
+                }
+                if (count($slots) < 2) {
+                    break;
+                }
+                // Birinchi oyna
+                $hole = null;
+                foreach ($slots as $ix => $p) {
+                    if ($ix > 0 && $p > $slots[$ix - 1] + 1) {
+                        $hole = [$slots[$ix - 1] + 1, $p - $slots[$ix - 1] - 1];
+                        break;
+                    }
+                }
+                if ($hole === null) {
+                    break;
+                }
+                [$holeStart, $holeLen] = $hole;
+
+                // Oynadan yuqoridagi birliklar — pastga suriladi (pastdan boshlab)
+                $above = [];
+                foreach ($ids as $i) {
+                    $maxSlot = 0;
+                    foreach ($placedUnits[$i]['parts'] as $part) {
+                        $pick = $placedUnits[$i]['pos'][(int) $part[0]->id];
+                        $maxSlot = max($maxSlot, $pick['pair'] + $part[6] - 1);
+                    }
+                    if ($maxSlot < $holeStart) {
+                        $above[$i] = $maxSlot;
+                    }
+                }
+                if (!$above) {
+                    break;
+                }
+                arsort($above);
+
+                $affected = [];
+                foreach (array_keys($above) as $i) {
+                    foreach ($unitKeys[$i] as $k2) {
+                        $affected[$k2] = true;
+                    }
+                }
+                $before = 0;
+                foreach (array_keys($affected) as $k2) {
+                    $before += $gapsOf($k2, $day);
+                }
+
+                $done = [];
+                $allShifted = true;
+                foreach (array_keys($above) as $i) {
+                    if ($shift($i, $holeLen)) {
+                        $done[] = $i;
+                    } else {
+                        $allShifted = false;
+                        break;
+                    }
+                }
+                $after = 0;
+                foreach (array_keys($affected) as $k2) {
+                    $after += $gapsOf($k2, $day);
+                }
+                if (!$allShifted || $after >= $before) {
+                    // Foydasi bo'lmadi — hammasini orqaga qaytaramiz
+                    foreach (array_reverse($done) as $i) {
+                        $shift($i, -$holeLen);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     /** Hafta ko'chirishlarini istisno (override) sifatida saqlash. */

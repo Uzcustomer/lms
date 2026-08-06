@@ -16,9 +16,11 @@ use Illuminate\Support\Facades\DB;
  * buzilishlarni sanaydi. "Kafolat" shu raqam nolga tushgani bilan o'lchanadi.
  *
  * Tekshiriladigan qoidalar:
- *   1. Fan uzilmasin — guruh kunida bir fanning bo'laklari orasiga boshqa fan
+ *   1. To'qnashuv bo'lmasin — bitta guruh / o'qituvchi / auditoriya bir vaqtda
+ *      ikkita darsda turmasin. Bu eng og'ir buzilish: jadval yaroqsiz bo'ladi.
+ *   2. Fan uzilmasin — guruh kunida bir fanning bo'laklari orasiga boshqa fan
  *      kirmasin (bo'laklar bitta uzluksiz blok bo'lsin).
- *   2. Oyna bo'lmasin — guruh kuni birinchi darsdan oxirgisigacha uzluksiz.
+ *   3. Oyna bo'lmasin — guruh kuni birinchi darsdan oxirgisigacha uzluksiz.
  *
  * Misol:
  *   php artisan timetable:verify
@@ -64,11 +66,12 @@ class TimetableVerify extends Command
 
         $overrides = DB::table('timetable_card_overrides')
             ->whereIn('card_id', $cards->pluck('id'))
-            ->get(['card_id', 'week', 'day', 'pair', 'cancelled'])
+            ->get(['card_id', 'week', 'day', 'pair', 'cancelled', 'auditorium_code'])
             ->groupBy('week');
 
         $splitSubjects = [];   // fan uzilgan holatlar
         $dayGaps = [];         // kunda oyna
+        $clashes = [];         // guruh / o'qituvchi / auditoriya to'qnashuvi
         $checkedDays = 0;
 
         $bar = $this->output->createProgressBar(count($weeks));
@@ -78,6 +81,10 @@ class TimetableVerify extends Command
 
             // "fakultet|yo'nalish|kurs|guruh|kun" => [yarim-slot => fan]
             $layout = [];
+            // To'qnashuv uchun: band qiluvchi => [slot => [karta tavsifi, ...]]
+            $groupSlots = [];
+            $teacherSlots = [];
+            $roomSlots = [];
             foreach ($cards as $card) {
                 $override = $weekOverrides->get($card->id);
                 if ($override && $override->cancelled) {
@@ -88,14 +95,42 @@ class TimetableVerify extends Command
                 if (!$day || !$pair) {
                     continue;
                 }
+                $room = ($override && $override->auditorium_code)
+                    ? $override->auditorium_code
+                    : $card->auditorium_code;
                 // Guruh nomi fakultetlar bo'ylab takrorlanadi — kalitga fakultet,
                 // yo'nalish va kurs ham kiradi, aks holda turli fakultetlarning
                 // jadvali ustma-ust tushib, soxta "buzilish" chiqadi.
                 $scope = ($card->faculty_name ?? '') . '|' . $card->specialty_name . '|' . (int) $card->course;
-                foreach ($card->occupiedGroups() as $group) {
-                    $key = $scope . '|' . $group . '|' . $day;
-                    for ($i = 0; $i < $card->lenHalf(); $i++) {
+                $label = (string) $card->subject_name . ' #' . $card->id;
+                for ($i = 0; $i < $card->lenHalf(); $i++) {
+                    $slot = $day . ':' . ($pair + $i);
+                    foreach ($card->occupiedGroups() as $group) {
+                        $key = $scope . '|' . $group . '|' . $day;
                         $layout[$key][$pair + $i] = (string) $card->subject_name;
+                        $groupSlots[$scope . '|' . $group][$slot][] = $label;
+                    }
+                    if ($card->teacher_id) {
+                        $teacherSlots['T' . $card->teacher_id][$slot][] = $label;
+                    }
+                    if ($room) {
+                        $roomSlots['R' . $room][$slot][] = $label;
+                    }
+                }
+            }
+
+            // ── To'qnashuv: bitta slotda ikkitadan ortiq dars ────────────────
+            foreach ([['Guruh', $groupSlots], ['O\'qituvchi', $teacherSlots],
+                      ['Auditoriya', $roomSlots]] as [$kind, $map]) {
+                foreach ($map as $owner => $slots) {
+                    foreach ($slots as $slot => $labels) {
+                        // Bir karta bir necha guruhga tegishli bo'lsa (oqim
+                        // ma'ruzasi) o'zi bilan o'zi to'qnashmasin.
+                        $unique = array_values(array_unique($labels));
+                        if (count($unique) > 1) {
+                            $clashes[] = ['week' => $week, 'kind' => $kind,
+                                'owner' => $owner, 'slot' => $slot, 'labels' => $unique];
+                        }
                     }
                 }
             }
@@ -132,6 +167,13 @@ class TimetableVerify extends Command
         $this->line('');
 
         $this->line('Tekshirildi: ' . $checkedDays . ' ta (guruh × kun × hafta)');
+        $this->report('To\'qnashuv (bir vaqtda ikki dars)', $clashes, $limit, function ($r) {
+            [$day, $half] = explode(':', $r['slot']);
+            $owner = explode('|', $r['owner']);
+            return $r['week'] . '-hafta · ' . (self::DAY_NAMES[(int) $day] ?? $day)
+                . ' · ' . $half . '-yarim-slot · ' . $r['kind'] . ': ' . end($owner)
+                . ' — ' . implode(' + ', array_map(fn($l) => mb_substr($l, 0, 28), $r['labels']));
+        });
         $this->report('Fan uzilgan (orasiga boshqa fan kirgan)', $splitSubjects, $limit,
             fn($r) => $this->describe($r) . ' · ' . mb_substr($r['subject'], 0, 32)
                 . ' — yarim-slotlar: ' . implode(',', $r['slots']));
@@ -139,7 +181,7 @@ class TimetableVerify extends Command
             fn($r) => $this->describe($r) . ' · ' . $r['gaps'] . ' ta bo\'sh · band: '
                 . implode(',', $r['slots']));
 
-        $total = count($splitSubjects) + count($dayGaps);
+        $total = count($clashes) + count($splitSubjects) + count($dayGaps);
         $this->line('');
         if ($total === 0) {
             $this->info('Buzilish topilmadi.');
@@ -174,8 +216,12 @@ class TimetableVerify extends Command
         $group = array_pop($parts);
         $course = array_pop($parts);
         $specialty = array_pop($parts);
+        $faculty = array_pop($parts);
 
+        // Guruh nomi fakultetlar bo'ylab takrorlanadi — fakultetsiz ikki xil
+        // guruh bir xil ko'rinib, ro'yxat takrorlanayotgandek tuyulardi.
         return $row['week'] . '-hafta · ' . (self::DAY_NAMES[$day] ?? $day)
-            . ' · ' . $group . ' (' . $specialty . ' ' . $course . '-kurs)';
+            . ' · ' . $group . ' (' . ($faculty ? $faculty . ' · ' : '')
+            . $specialty . ' ' . $course . '-kurs)';
     }
 }

@@ -208,40 +208,98 @@
         </div>
     </div>
 
-    <div id="mobility-modal" class="fixed inset-0 z-[100] items-center justify-center bg-slate-900/60 p-4" style="display:none;" role="dialog" aria-modal="true">
-        <div class="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div class="flex items-center justify-between bg-gradient-to-r from-blue-700 to-blue-500 px-5 py-4 text-white">
-                <div>
-                    <h2 class="text-lg font-bold">Akademik mobillik arizasi</h2>
-                    <p id="mobility-student-meta" class="mt-0.5 text-xs text-blue-100"></p>
+    <div id="mobility-modal" class="fixed inset-0 z-[100] items-center justify-center bg-slate-900/65 p-4 backdrop-blur-sm" style="display:none;" role="dialog" aria-modal="true">
+        <div class="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl">
+            <div class="relative overflow-hidden bg-gradient-to-r from-[#1f4f91] via-[#2b67ae] to-[#3b82c4] px-6 py-5 text-white">
+                <div class="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-white/10"></div>
+                <div class="relative flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-5-8.5V16c0 1.1 2.24 2 5 2s5-.9 5-2v-4.5"/>
+                            </svg>
+                        </span>
+                        <div>
+                            <h2 class="text-lg font-bold">Akademik mobillik arizasi</h2>
+                            <p class="mt-0.5 text-xs text-blue-100">Talaba ma'lumotlarini tekshirib, arizani yuboring</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeMobilityModal()" class="rounded-full p-2 transition hover:bg-white/15" aria-label="Yopish">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
                 </div>
-                <button type="button" onclick="closeMobilityModal()" class="rounded-full p-2 transition hover:bg-white/15" aria-label="Yopish">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
             </div>
-            <form method="POST" action="{{ route('admin.academic-mobility.store') }}" class="space-y-4 p-5">
+
+            <form method="POST" action="{{ route('admin.academic-mobility.store') }}" enctype="multipart/form-data" class="bg-slate-50/70">
                 @csrf
                 <input type="hidden" name="student_id" id="mobility-student-id">
-                <div>
-                    <label for="mobility-phone" class="mb-1 block text-sm font-semibold text-slate-700">Talaba telefon raqami</label>
-                    <input id="mobility-phone" name="phone" required maxlength="50" placeholder="+998 90 123 45 67"
-                           class="w-full rounded-lg border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+
+                <div class="space-y-4 p-6">
+                    <div class="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19a6 6 0 00-12 0m9-11a4 4 0 11-8 0 4 4 0 018 0zm4 3h5m-2.5-2.5v5"/>
+                            </svg>
+                        </span>
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-wide text-blue-500">Tanlangan talaba</div>
+                            <div id="mobility-student-meta" class="mt-0.5 font-bold text-slate-800"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="mobility-phone" class="mb-1.5 block text-sm font-semibold text-slate-700">
+                            Talaba telefon raqami <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3l2 5-2 1a16 16 0 007 7l1-2 5 2v3a2 2 0 01-2 2h-1C10 21 3 14 3 6V5z"/>
+                            </svg>
+                            <input id="mobility-phone" name="phone" required maxlength="50" placeholder="+998 90 123 45 67"
+                                   class="w-full rounded-xl border-slate-300 py-2.5 pl-10 pr-3 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="mobility-reason" class="mb-1.5 block text-sm font-semibold text-slate-700">
+                            Ariza berish sababi <span class="text-red-500">*</span>
+                        </label>
+                        <textarea id="mobility-reason" name="reason" required minlength="5" maxlength="3000" rows="4"
+                                  placeholder="Akademik mobillik arizasining sababini batafsil kiriting..."
+                                  class="w-full resize-y rounded-xl border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        <p class="mt-1 text-xs text-slate-400">Sababni tushunarli va to'liq yozing.</p>
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-semibold text-slate-700">Ariza hujjati</label>
+                        <label for="mobility-document"
+                               class="group flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-200 bg-white px-5 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/40">
+                            <span class="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 0L7 9m5-5 5 5M5 15v4h14v-4"/>
+                                </svg>
+                            </span>
+                            <span id="mobility-file-name" class="text-sm font-semibold text-slate-700">Faylni tanlash uchun bosing</span>
+                            <span class="mt-1 text-xs text-slate-400">PDF, DOC, DOCX, JPG yoki PNG · maksimal 10 MB</span>
+                            <input id="mobility-document" type="file" name="document"
+                                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="hidden" onchange="updateMobilityFile(this)">
+                        </label>
+                    </div>
                 </div>
-                <div>
-                    <label for="mobility-reason" class="mb-1 block text-sm font-semibold text-slate-700">Ariza berish sababi</label>
-                    <textarea id="mobility-reason" name="reason" required minlength="5" maxlength="3000" rows="5"
-                              placeholder="Akademik mobillik arizasining sababini kiriting..."
-                              class="w-full resize-y rounded-lg border-slate-300 focus:border-blue-500 focus:ring-blue-500"></textarea>
-                </div>
-                <div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                    <button type="button" onclick="closeMobilityModal()" class="rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200">Bekor qilish</button>
-                    <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+
+                <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4">
+                    <button type="button" onclick="closeMobilityModal()"
+                            class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                        Bekor qilish
+                    </button>
+                    <button type="submit"
+                            class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#2b5ea7] to-[#3b82f6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:shadow-md">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12l14-7-4 14-3-6-7-1z"/>
                         </svg>
-                        Yuborish
+                        Arizani yuborish
                     </button>
                 </div>
             </form>
@@ -281,8 +339,22 @@
             document.getElementById('mobility-phone').value = button.dataset.studentPhone || '';
             document.getElementById('mobility-student-meta').textContent = button.dataset.studentName + ' · ID: ' + (button.dataset.studentNumber || '-');
             document.getElementById('mobility-reason').value = '';
+            document.getElementById('mobility-document').value = '';
+            document.getElementById('mobility-file-name').textContent = 'Faylni tanlash uchun bosing';
             document.getElementById('mobility-modal').style.display = 'flex';
             document.body.style.overflow = 'hidden';
+        }
+
+        function updateMobilityFile(input) {
+            var label = document.getElementById('mobility-file-name');
+            if (!input.files || !input.files.length) {
+                label.textContent = 'Faylni tanlash uchun bosing';
+                return;
+            }
+
+            var file = input.files[0];
+            var sizeMb = (file.size / 1024 / 1024).toFixed(2);
+            label.textContent = file.name + ' · ' + sizeMb + ' MB';
         }
 
         function closeMobilityModal() {

@@ -253,12 +253,14 @@
                         <label for="mobility-phone" class="mb-1.5 block text-sm font-semibold text-slate-700">
                             Talaba telefon raqami <span class="text-red-500">*</span>
                         </label>
-                        <div class="relative">
-                            <svg class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3l2 5-2 1a16 16 0 007 7l1-2 5 2v3a2 2 0 01-2 2h-1C10 21 3 14 3 6V5z"/>
-                            </svg>
+                        <div class="mobility-phone-wrap">
+                            <span class="mobility-phone-icon" aria-hidden="true">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3l2 5-2 1a16 16 0 007 7l1-2 5 2v3a2 2 0 01-2 2h-1C10 21 3 14 3 6V5z"/>
+                                </svg>
+                            </span>
                             <input id="mobility-phone" name="phone" required maxlength="50" placeholder="+998 90 123 45 67"
-                                   class="w-full rounded-xl border-slate-300 py-2.5 pl-10 pr-3 text-sm focus:border-blue-500 focus:ring-blue-500">
+                                   class="mobility-phone-input">
                         </div>
                     </div>
 
@@ -406,6 +408,47 @@
             gap: 14px;
             padding: 18px 20px;
         }
+        .mobility-phone-wrap {
+            width: 100%;
+            height: 40px;
+            display: flex;
+            align-items: stretch;
+            overflow: hidden;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            background: #fff;
+            transition: .18s ease;
+        }
+        .mobility-phone-wrap:focus-within {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, .12);
+        }
+        .mobility-phone-icon {
+            width: 42px;
+            flex: 0 0 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid #dbe4ef;
+            background: #eff6ff;
+            color: #2563eb;
+        }
+        .mobility-phone-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+        .mobility-phone-input {
+            min-width: 0;
+            flex: 1 1 auto;
+            border: 0 !important;
+            outline: 0 !important;
+            background: #fff;
+            padding: 0 12px;
+            font-size: 13px;
+            color: #1e293b;
+            box-shadow: none !important;
+        }
+
         .mobility-upload-zone {
             display: flex;
             min-height: 104px;

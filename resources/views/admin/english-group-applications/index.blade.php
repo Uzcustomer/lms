@@ -137,7 +137,7 @@
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @forelse($applications as $application)
-                                <tr x-data="{ rejectOpen: false }" class="hover:bg-slate-50 transition">
+                                <tr x-data="{ rejectOpen: false, uploadOpen: false }" class="hover:bg-slate-50 transition">
                                     <td class="px-4 py-4 align-top">
                                         <div class="font-semibold text-slate-800">{{ $application->full_name }}</div>
                                         <div class="text-xs text-slate-500 mt-1">HEMIS: {{ $application->student_hemis_id ?: '-' }}</div>
@@ -186,6 +186,16 @@
                                     </td>
                                     <td class="px-4 py-4 align-top text-right">
                                         <div class="flex items-center justify-end gap-2 flex-wrap">
+                                            <button type="button"
+                                                    @click="uploadOpen = true"
+                                                    title="{{ $application->certificate_pdf_path ? 'Hujjatni almashtirish' : 'Hujjat yuklash' }}"
+                                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-semibold transition"
+                                                    style="background:#2563eb;border:0;border-radius:8px;">
+                                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 0L7 9m5-5 5 5M5 15v4h14v-4"/>
+                                                </svg>
+                                                {{ $application->certificate_pdf_path ? 'Almashtirish' : 'Hujjat yuklash' }}
+                                            </button>
                                             @if($application->status !== 'approved')
                                                 <form method="POST" action="{{ route('admin.english-group-applications.approve', $application->id) }}">
                                                     @csrf
@@ -216,6 +226,59 @@
                                                     </svg>
                                                 </button>
                                             </form>
+                                        </div>
+
+                                        <div x-show="uploadOpen"
+                                             x-cloak
+                                             class="fixed inset-0 z-50 flex items-center justify-center px-4"
+                                             style="background:rgba(15,23,42,.58);backdrop-filter:blur(4px);"
+                                             @keydown.escape.window="uploadOpen = false">
+                                            <div @click.outside="uploadOpen = false"
+                                                 style="width:min(460px,calc(100vw - 32px));overflow:hidden;border-radius:14px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.32);text-align:left;">
+                                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;color:#fff;background:linear-gradient(135deg,#1f4f91,#2563eb);">
+                                                    <div>
+                                                        <div style="font-size:16px;font-weight:800;">{{ $application->certificate_pdf_path ? 'Hujjatni almashtirish' : 'Hujjat yuklash' }}</div>
+                                                        <div style="margin-top:3px;font-size:12px;color:#dbeafe;">{{ $application->full_name }}</div>
+                                                    </div>
+                                                    <button type="button" @click="uploadOpen = false"
+                                                            style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;">
+                                                        <svg style="width:17px;height:17px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <form method="POST"
+                                                      action="{{ route('admin.english-group-applications.certificate.upload', $application->id) }}"
+                                                      enctype="multipart/form-data"
+                                                      style="padding:18px;">
+                                                    @csrf
+                                                    <label style="display:block;margin-bottom:7px;font-size:12px;font-weight:700;color:#334155;">Sertifikat hujjati</label>
+                                                    <label style="min-height:118px;display:flex;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;border:2px dashed #bfdbfe;border-radius:11px;background:#f8fbff;padding:16px;text-align:center;">
+                                                        <svg style="width:28px;height:28px;margin-bottom:8px;color:#2563eb;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 0L7 9m5-5 5 5M5 15v4h14v-4"/>
+                                                        </svg>
+                                                        <span style="font-size:13px;font-weight:700;color:#334155;">PDF faylni tanlang</span>
+                                                        <span style="margin-top:4px;font-size:11px;color:#64748b;">Maksimal hajm: 10 MB</span>
+                                                        <input type="file" name="certificate_pdf" accept=".pdf,application/pdf" required
+                                                               style="margin-top:12px;width:100%;font-size:12px;color:#475569;">
+                                                    </label>
+                                                    @if($application->certificate_pdf_path)
+                                                        <div style="margin-top:10px;border-radius:8px;background:#fffbeb;padding:9px 11px;font-size:11px;color:#92400e;">
+                                                            Yangi fayl yuklansa, avvalgi sertifikat almashtiriladi.
+                                                        </div>
+                                                    @endif
+                                                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+                                                        <button type="button" @click="uploadOpen = false"
+                                                                style="height:37px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:0 15px;font-size:12px;font-weight:700;color:#475569;cursor:pointer;">
+                                                            Bekor qilish
+                                                        </button>
+                                                        <button type="submit"
+                                                                style="height:37px;border:1px solid #2563eb;border-radius:8px;background:#2563eb;padding:0 16px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;">
+                                                            Saqlash
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
                                         </div>
 
                                         @if($application->status !== 'rejected')

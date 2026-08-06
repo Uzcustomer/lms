@@ -122,10 +122,7 @@
                                 <th>Talaba</th>
                                 <th>O'qish ma'lumoti</th>
                                 <th>Telefon</th>
-                                <th>Ariza sababi</th>
-                                @if($isRegistrar)
-                                    <th class="am-destination-heading">O'tish joyi</th>
-                                @endif
+                                <th class="am-destination-heading">Mobillik bo'layotgan joy</th>
                                 <th>Hujjat</th>
                                 @if($showReviewColumn)
                                     <th class="am-review-heading">O'quv reja mosligi</th>
@@ -163,9 +160,8 @@
                                         </div>
                                     </td>
                                     <td class="am-phone">{{ $application->phone }}</td>
-                                    <td><div class="am-reason" title="{{ $application->reason }}">{{ $application->reason }}</div></td>
-                                    @if($isRegistrar)
-                                        <td class="am-destination-cell">
+                                    <td class="am-destination-cell">
+                                        @if($isRegistrar)
                                             <form method="POST" action="{{ route('admin.academic-mobility.transfer-destination.update', $application) }}" class="am-destination-form">
                                                 @csrf
                                                 @method('PATCH')
@@ -175,12 +171,16 @@
                                                     value="{{ $application->transfer_destination }}"
                                                     maxlength="1000"
                                                     placeholder="Talaba qayerga o'tmoqda..."
-                                                    aria-label="Talabaning o'tish joyi"
+                                                    aria-label="Mobillik bo'layotgan joy"
                                                 >
                                                 <button type="submit">Saqlash</button>
                                             </form>
-                                        </td>
-                                    @endif
+                                        @else
+                                            <div class="am-destination-text" title="{{ $application->transfer_destination }}">
+                                                {{ $application->transfer_destination ?: 'Kiritilmagan' }}
+                                            </div>
+                                        @endif
+                                    </td>
                                     <td>
                                         @if($application->document_path)
                                             <a href="{{ route('admin.academic-mobility.document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-document-btn" title="{{ $application->document_name }}">
@@ -278,7 +278,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="{{ 6 + ($showReviewColumn ? 1 : 0) + ($isRegistrar ? 1 : 0) }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
+                                <tr><td colspan="{{ 6 + ($showReviewColumn ? 1 : 0) }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -345,13 +345,13 @@
         .am-course,.am-group { display:inline-block;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:600; }
         .am-course { border:1px solid #ddd6fe;background:#ede9fe;color:#5b21b6; }.am-group { background:#1e4b8a;color:#fff; }
         .am-phone { white-space:nowrap;color:#334155!important; }
-        .am-reason { max-width:300px;display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;white-space:normal; }
         .am-destination-heading,.am-destination-cell { min-width:285px; }
         .am-destination-form { display:flex;align-items:center;gap:6px; }
         .am-destination-form input { height:32px;min-width:0;flex:1;border:1px solid #cbd5e1;border-radius:6px;background:#fff;padding:0 9px;font-size:11px;color:#334155;outline:0;box-shadow:none; }
         .am-destination-form input:focus { border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.12); }
         .am-destination-form button { height:32px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:6px;background:#2563eb;padding:0 11px;font-size:10.5px;font-weight:700;color:#fff;cursor:pointer; }
         .am-destination-form button:hover { background:#1d4ed8; }
+        .am-destination-text { max-width:320px;white-space:normal;overflow-wrap:anywhere;font-weight:600;color:#334155; }
         .am-document-btn { display:inline-flex;align-items:center;gap:5px;border-radius:6px;background:#e0f2fe;padding:5px 9px;font-size:11px;font-weight:700;color:#0369a1;text-decoration:none; }
         .am-document-btn:hover { background:#bae6fd; }.am-document-btn svg { width:15px;height:15px; }
         .am-file-name { max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;font-size:10px;color:#94a3b8; }

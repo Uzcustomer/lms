@@ -241,7 +241,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // Akademik mobillik: Registrator ariza yaratadi, O'quv bo'limi va prorektor tasdiqlaydi.
-        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|oquv_prorektori')
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|oquv_prorektori')
             ->prefix('academic-mobility')
             ->name('academic-mobility.')
             ->group(function () {

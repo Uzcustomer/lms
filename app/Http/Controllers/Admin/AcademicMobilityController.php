@@ -139,7 +139,10 @@ class AcademicMobilityController extends Controller
 
     public function updateTransferDestination(Request $request, AkademikMobillikAriza $application): RedirectResponse
     {
-        abort_unless($this->activeRole() === 'registrator_ofisi', 403);
+        abort_unless(
+            in_array($this->activeRole(), ['superadmin', 'admin', 'registrator_ofisi'], true),
+            403
+        );
 
         $validated = $request->validate([
             'transfer_destination' => ['nullable', 'string', 'max:1000'],

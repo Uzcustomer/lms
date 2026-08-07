@@ -3,7 +3,7 @@
         $departmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi'];
         $isDepartmentReviewer = in_array($activeRole ?? '', $departmentRoles, true);
         $isViceRector = ($activeRole ?? '') === 'oquv_prorektori';
-        $isRegistrar = ($activeRole ?? '') === 'registrator_ofisi';
+        $isRegistrar = in_array($activeRole ?? '', ['superadmin', 'admin', 'registrator_ofisi'], true);
         $showReviewColumn = $isDepartmentReviewer || $isViceRector;
     @endphp
     <x-slot name="header">
@@ -43,7 +43,7 @@
                             <p>Yuborilgan arizalar va biriktirilgan hujjatlar</p>
                         </div>
                     </div>
-                    @if(($activeRole ?? '') === 'registrator_ofisi')
+                    @if($isRegistrar)
                         <a href="{{ route('admin.academic-mobility.index') }}" class="am-back-btn">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7 7-7m-7 7h18"/>

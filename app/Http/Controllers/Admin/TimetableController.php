@@ -2981,7 +2981,8 @@ class TimetableController extends Controller
                 }
                 $bg = $this->argbColor($cell['bg'] ?? null);
                 $bold = !empty($cell['b']);
-                if ($bg !== null || $bold) {
+                $diagonal = !empty($cell['diagonal']);
+                if ($bg !== null || $bold || $diagonal) {
                     $style = $sheet->getStyle($cs > 1 || $rs > 1 ? $from . ':' . $to : $from);
                     if ($bg !== null) {
                         $style->getFill()
@@ -2990,6 +2991,14 @@ class TimetableController extends Controller
                     }
                     if ($bold) {
                         $style->getFont()->setBold(true);
+                    }
+                    if ($diagonal) {
+                        $style->getBorders()->getDiagonal()
+                            ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+                            ->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF000000'));
+                        $style->getBorders()->setDiagonalDirection(
+                            \PhpOffice\PhpSpreadsheet\Style\Borders::DIAGONAL_DOWN
+                        );
                     }
                 }
 

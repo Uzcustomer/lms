@@ -41,8 +41,8 @@ class StudentTransferApplicationController extends Controller
         $validated = $request->validate([
             'phone' => ['required', 'string', 'max:50'],
             'target_institution' => ['required', 'string', 'max:255'],
-            'reason' => ['required', 'string', 'min:10', 'max:2000'],
-            'order_document' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
+            'reason' => ['nullable', 'string', 'max:2000'],
+            'order_document' => ['required', 'file', 'max:10240'],
         ], [
             'phone.required' => 'Telefon raqamini kiriting.',
             'phone.max' => 'Telefon raqami juda uzun.',
@@ -62,7 +62,7 @@ class StudentTransferApplicationController extends Controller
             'student_id' => $student->id,
             'phone' => trim($validated['phone']),
             'target_institution' => trim($validated['target_institution']),
-            'reason' => trim($validated['reason']),
+            'reason' => isset($validated['reason']) ? trim($validated['reason']) : null,
             'order_path' => 'pending',
             'order_name' => $file->getClientOriginalName(),
             'order_mime' => $file->getMimeType(),

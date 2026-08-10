@@ -891,7 +891,7 @@
         #grid td.tt-cell.tt-split::after {
             content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
             background: linear-gradient(to bottom right,
-                rgba(0,0,0,0) calc(50% - 1px), rgba(255,255,255,.9) 50%, rgba(0,0,0,0) calc(50% + 1px));
+                rgba(0,0,0,0) calc(50% - 1px), rgba(0,0,0,.9) 50%, rgba(0,0,0,0) calc(50% + 1px));
         }
         /* Diagonal chizilgan katakda yo'l-yo'l fon kerak emas — diagonalning
            o'zi "har hafta emas" ekanini bildiradi. */

@@ -835,6 +835,15 @@
         /* Bitta oddiy katakda ketma-ket turgan fanlar qora chiziq bilan ajralsin. */
         #grid td.tt-cell:not(.tt-split) > .tt-chip { margin-top: 0; margin-bottom: 0; }
         #grid td.tt-cell:not(.tt-split) > .tt-chip + .tt-chip { border-top: 1px solid #000; border-radius: 0; }
+        /* Auditoriya/o'qituvchi/fan kesimida to'liq karta ma'lumoti o'qiladigan bo'lsin. */
+        #grid.tt-cross-details td.tt-cell { width: 118px; min-width: 118px; max-width: 118px; height: auto; padding: 0; }
+        #grid.tt-cross-details th.tt-grp { width: 118px; min-width: 118px; max-width: 118px; }
+        #grid.tt-cross-details .tt-chip { padding: 4px 5px; font-size: 9px; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
+        #grid.tt-cross-details .tt-cross-fac { font-size: 8px; font-weight: 700; color: #334155; }
+        #grid.tt-cross-details .tt-cross-dir { font-size: 8px; color: #475569; }
+        #grid.tt-cross-details .tt-cross-subject { margin-top: 2px; font-weight: 800; color: #713f12; }
+        #grid.tt-cross-details .tt-cross-flow { font-size: 8px; font-weight: 700; color: #334155; }
+        #grid.tt-cross-details .tt-cross-weeks { font-size: 8px; font-weight: 700; color: #1d4ed8; }
         /* Ma'ruza — butun katak bitta sariq (chip'ning alohida foni yo'q); amaliy — fan rangi (inline) */
         .tt-chip.lec { background: transparent; border-left: none; color: #713f12; font-weight: 700; }
         .tt-chip.prc { border-left: 3px dotted #94a3b8; color: #1f2937; font-weight: 500; }
@@ -3074,14 +3083,16 @@
                             for (let k = 1; k < vs; k++) consumed[col + '|' + d + '|' + (p + k)] = 1;
                             const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
                             const inner = list.map(c => {
-                                const extra = mode === 'teacher' ? [c.group_name || c.oqim_label, c.auditorium_name]
-                                    : mode === 'room' ? [c.group_name || c.oqim_label, c.teacher_name]
-                                    : [c.group_name || c.oqim_label, c.teacher_name];
-                                const sub = extra.filter(Boolean).join(' · ');
                                 const isLec = c.training_type === 'lecture';
                                 const st = isLec ? 'background:#fde68a;' : ('background-color:' + subjColor(c.subject_name).bg + ';');
-                                return '<div class="tt-chip ' + (isLec ? 'lec' : 'prc') + '" style="' + st + '">' + cardLabel(c, true) +
-                                    (sub ? '<div class="text-[9px] text-gray-600">' + esc(sub) + '</div>' : '') + '</div>';
+                                const detailLines = excelCardText(c).split('\n');
+                                return '<div class="tt-chip ' + (isLec ? 'lec' : 'prc') + '" data-chip="' + c.id + '" style="' + st + '">' +
+                                    '<div class="tt-cross-fac">' + esc(detailLines[0] || '') + '</div>' +
+                                    '<div class="tt-cross-dir">' + esc(detailLines[1] || '') + '</div>' +
+                                    '<div class="tt-cross-subject">' + esc(detailLines[2] || '') + '</div>' +
+                                    '<div class="tt-cross-flow">' + esc(detailLines[3] || '') + '</div>' +
+                                    '<div class="tt-cross-weeks">' + esc(detailLines[4] || '') + '</div>' +
+                                    '</div>';
                             }).join('');
                             // Bir katakda bir nechta (o'qituvchi/xona kesimida) — to'qnashuv
                             const conflict = (list.length > 1 && mode !== 'subject') ? ' style="outline:2px solid #ef4444;outline-offset:-2px"' : '';
@@ -3096,6 +3107,7 @@
             }
 
             function renderGrid() {
+                $('grid').classList.toggle('tt-cross-details', viewMode !== 'group' && viewMode !== 'cycle');
                 // Sikl ko'rinishi — alohida kalendar (sana × guruh)
                 const cycleView = viewMode === 'cycle';
                 $('gridWrap').classList.toggle('hidden', cycleView);

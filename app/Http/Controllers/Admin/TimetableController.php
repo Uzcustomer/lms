@@ -1100,6 +1100,24 @@ class TimetableController extends Controller
             . '|' . (string) $c->oqim_label
             . '|' . $this->normSubject((string) $c->subject_name);
 
+        // Avtomatik joylash qayta ishga tushirilganda allaqachon joylashgan
+        // ma'ruzalar ham fan zanjirining anchor'i bo'lishi kerak. Aks holda
+        // ularga tegishli amaliy kartalar oddiy fan kabi joylashib ketadi.
+        foreach ($all as $placedCard) {
+            if ($placedCard->training_type !== 'lecture'
+                || !$placedCard->day || !$placedCard->pair
+                || (int) $placedCard->weeks <= 0) {
+                continue;
+            }
+            $chain[$subjOf($placedCard)] = [
+                'day' => (int) $placedCard->day,
+                'lec' => (int) $placedCard->pair,
+                'llen' => $this->parasNeeded($placedCard),
+                'next' => (int) $placedCard->pair + $this->parasNeeded($placedCard),
+                'lw' => (int) $placedCard->weeks,
+            ];
+        }
+
         // Zanjirdagi aniq joyga qo'yishga urinish. Muvaffaqiyatsiz bo'lsa null —
         // chaqiruvchi odatdagi qidiruvga tushadi.
         $chainSpot = function (array $segs, ?array $ch, bool $standIn, int $days, int $pairs, string $scope)

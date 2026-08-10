@@ -4056,6 +4056,44 @@
             // shu sababli "fayl formati kengaytmaga mos emas" deb ogohlantirardi.
             // Endi faqat matn + rang + birlashtirish ma'lumoti yuboriladi va server
             // xlsx ni to'g'ridan-to'g'ri yozadi.
+            function excelCardText(card) {
+                if (!card) return '';
+
+                const cardGrid = grids[gridKey(card.faculty_name, card.specialty_name, card.course)] || {};
+                const totalWeeks = Math.max(1, +cardGrid.weeks || +(board && board.weeks) || +card.weeks || 15);
+                const activeWeeks = [];
+                let hasWeekExceptions = false;
+
+                for (let week = 1; week <= totalWeeks; week++) {
+                    const override = overrides[card.id + '|' + week];
+                    if (override && override.cancelled) {
+                        hasWeekExceptions = true;
+                    } else {
+                        activeWeeks.push(week);
+                    }
+                }
+
+                let weeksText;
+                if (hasWeekExceptions) {
+                    weeksText = activeWeeks.length ? activeWeeks.join(', ') : '—';
+                } else if (+card.weeks > 0 && +card.weeks < totalWeeks) {
+                    weeksText = card.weeks + ' hafta';
+                } else {
+                    weeksText = '1–' + totalWeeks;
+                }
+
+                const lessonType = card.training_type === 'lecture' ? 'M' : 'A';
+                const flow = card.oqim_label || card.group_name || '—';
+
+                return [
+                    'Fakultet: ' + (card.faculty_name || '—'),
+                    "Yo'nalish: " + (card.specialty_name || '—') + (card.course ? ' · ' + card.course + '-kurs' : ''),
+                    'Fan: [' + lessonType + '] ' + (card.subject_name || '—'),
+                    'Oqim: ' + flow,
+                    '(Haftalar: ' + weeksText + ')',
+                ].join('\n');
+            }
+
             function gridExportCells() {
                 const grid = document.getElementById('grid');
                 if (!grid || !grid.querySelector('tbody tr')) return null;
@@ -4070,12 +4108,14 @@
                         const cs = getComputedStyle(chip || el);
                         const bgRaw = cs.backgroundColor;
                         const transparent = !bgRaw || bgRaw === 'transparent' || bgRaw === 'rgba(0, 0, 0, 0)';
-                        const stackedChips = !el.classList.contains('tt-split')
-                            ? [...el.children].filter(child => child.classList && child.classList.contains('tt-chip'))
-                            : [];
-                        const exportedText = stackedChips.length > 1
-                            ? stackedChips.map(child => (child.innerText || '').replace(/\s+/g, ' ').trim())
-                                .filter(Boolean).join('\n────────────\n')
+                        const subjectChips = [...el.children]
+                            .filter(child => child.classList && child.classList.contains('tt-chip'));
+                        const subjectTexts = subjectChips.map(child => {
+                            const card = cards.find(item => item.id === +child.dataset.chip);
+                            return card ? excelCardText(card) : (child.innerText || '').replace(/\s+/g, ' ').trim();
+                        }).filter(Boolean);
+                        const exportedText = subjectTexts.length
+                            ? subjectTexts.join('\n────────────\n')
                             : (el.innerText || '').replace(/\s+/g, ' ').trim();
                         const cell = { t: exportedText };
                         if (el.colSpan > 1) cell.cs = el.colSpan;

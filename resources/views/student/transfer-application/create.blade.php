@@ -57,15 +57,15 @@
 
                 <div>
                     <label for="reason" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirish sababi <span class="text-red-500">*</span></label>
-                    <textarea id="reason" name="reason" rows="5" required minlength="10" maxlength="2000" placeholder="O'qishni ko'chirish sababini batafsil yozing..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-3 text-sm leading-6 shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ old('reason') }}</textarea>
-                    <p class="mt-2 text-xs text-slate-400">Sababni aniq va tushunarli yozing.</p>
+                    <textarea id="reason" name="reason" rows="5" maxlength="2000" placeholder="O'qishni ko'chirish sababini batafsil yozing..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-3 text-sm leading-6 shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ old('reason') }}</textarea>
+                    <p class="mt-2 text-xs text-slate-400">Agar mavjud bo‘lsa, sababni batafsil yozing.</p>
                 </div>
 
                 <div>
-                    <label for="order_document" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirish buyrug'i <span class="text-red-500">*</span></label>
+                    <label for="order_document" class="mb-2 block text-sm font-semibold text-slate-700">Transfer.edu.uz da o'qishni ko'chirish bo'yicha bergan arizangizni tasdiqlovchi hujjatni yuklang <span class="text-red-500">*</span></label>
                     <div class="mt-1 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
-                        <input id="order_document" name="order_document" type="file" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700">
-                        <p class="mt-3 text-xs text-slate-500">PDF, DOC, DOCX, JPG yoki PNG. Maksimal hajm: 10 MB.</p>
+                        <input id="order_document" name="order_document" type="file" required accept="*/*" class="block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700">
+                        <p class="mt-3 text-xs text-slate-500">Skrinshot yoki boshqa turdagi hujjatlarni yuklashingiz mumkin. Maksimal hajm: 10 MB.</p>
                     </div>
                 </div>
             </div>

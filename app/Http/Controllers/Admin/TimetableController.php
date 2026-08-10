@@ -1130,30 +1130,31 @@ class TimetableController extends Controller
                 return null;
             }
             $total = array_sum(array_column($segs, 'len'));
-            // O'rin bosuvchi blok ma'ruza slotiga tushadi. Ma'ruzadan QISQA bo'lsa
-            // (mas. ma'ruza 2 soat, o'rnini bosuvchi amaliy 1 soat) u slotning
-            // OXIRIGA tekislanadi: shunda ma'ruzasiz haftada u undan keyingi
-            // amaliyga yopishadi va orada bo'sh yarim-slot qolmaydi. Boshiga
-            // qo'yilsa, ma'ruzasiz haftada [amaliy][oyna][amaliy] chiqardi.
-            // Tekislash blokning BIRINCHI bo'lagi (o'rin bosuvchi karta) bo'yicha
-            // hisoblanadi — undan keyingi amaliy soat ma'ruza tugagan joydan
-            // boshlansin, aks holda ma'ruzali haftada ma'ruza bilan ustma-ust
-            // tushib, butun blok joylasha olmay qolardi.
+            // Ma'ruzasiz haftadagi o'rin bosuvchi amaliy ma'ruza slotidan,
+            // odatiy amaliy esa ma'ruza tugagan slotdan boshlab qidiriladi.
             $start = $standIn
                 ? (int) $ch['lec'] + max(0, (int) ($ch['llen'] ?? 0) - (int) $segs[0]['len'])
                 : (int) $ch['next'];
             if ($start < 1 || $start + $total - 1 > $pairs) {
                 return null;
             }
-            // Soxta "anchor" — blok aynan $start dan boshlanishini majburlaydi.
-            $spot = $this->clusterPlacement(
-                $segs, $days, $pairs, $scope,
-                $groupBusy, $teacherBusy, $roomBusy,
-                true, [$ch['day'] => [[$start - 1, $start - 1]]],
-                fn(int $d, int $p) => ($d === $ch['day'] && $p === $start) ? 0.0 : 1000.0
-            );
-            return ($spot && (int) $spot[0]['day'] === (int) $ch['day'] && (int) $spot[0]['pair'] === $start)
-                ? $spot : null;
+
+            // Faqat ma'ruza kuni bo'ylab, boshlang'ich nuqtadan keyingi birinchi
+            // mos yaxlit blokni olamiz. Boshqa kunga fallback qilinmaydi.
+            for ($candidate = $start; $candidate + $total - 1 <= $pairs; $candidate++) {
+                $spot = $this->clusterPlacement(
+                    $segs, $days, $pairs, $scope,
+                    $groupBusy, $teacherBusy, $roomBusy,
+                    true, [$ch['day'] => [[$candidate - 1, $candidate - 1]]],
+                    fn(int $d, int $p) => ($d === (int) $ch['day'] && $p === $candidate) ? 0.0 : 1000.0
+                );
+                if ($spot && (int) $spot[0]['day'] === (int) $ch['day']
+                    && (int) $spot[0]['pair'] === $candidate) {
+                    return $spot;
+                }
+            }
+
+            return null;
         };
 
         // ══ Bir dars = bir blok ══════════════════════════════════════════════
@@ -1285,9 +1286,11 @@ class TimetableController extends Controller
                     $uCh = $chain[$uChainKey];
                     $practiceKey = $this->spreadKey($lead);
                     $uCh['next'] = $practiceNext[$practiceKey] ?? $uCh['next'];
-                    // Ma'ruzasi bor amaliy blok faqat o'sha kuni, ma'ruzadan
-                    // keyin joylashadi. Konflikt bo'lsa boshqa kun qidirilmaydi.
-                    $spot = $chainSpot($segs, $uCh, false, $uDays, $uPairs, $uScope);
+                    // O'rin bosuvchi amaliy ma'ruzasiz haftalarda uning
+                    // slotidan, qolgan blok esa ma'ruzadan keyin boshlanadi.
+                    $uTotal = $weeksFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
+                    $standIn = (int) $lead->weeks === $uTotal - (int) $uCh['lw'];
+                    $spot = $chainSpot($segs, $uCh, $standIn, $uDays, $uPairs, $uScope);
                     if ($spot === null) {
                         $unplaced += count($unit);
                         continue;
@@ -1387,9 +1390,11 @@ class TimetableController extends Controller
                     'teacher' => $teacherId, 'room_required' => $roomRequired,
                     'pool' => $poolArr, 'mask' => $cardMask,
                 ]];
-                // Ma'ruzasi bor amaliy karta faqat o'sha kuni va ma'ruzadan
-                // keyin joylashadi; sig'masa odatiy boshqa kun qidiruviga tushmaydi.
-                $spot = $chainSpot($seg, $cardChain, false, $days, $pairs, $scopeKey);
+                // O'rin bosuvchi karta ma'ruzasiz haftalarda ma'ruza
+                // slotidan, qolgan amaliy esa ma'ruzadan keyin qidiriladi.
+                $total = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
+                $standIn = (int) $c->weeks === $total - (int) $ch['lw'];
+                $spot = $chainSpot($seg, $cardChain, $standIn, $days, $pairs, $scopeKey);
                 if ($spot !== null) {
                     $c->day = $spot[0]['day'];
                     $c->pair = $spot[0]['pair'];

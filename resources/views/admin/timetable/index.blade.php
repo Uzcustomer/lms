@@ -832,6 +832,9 @@
         #grid td.tt-paraend { border-bottom: 3px solid #000; }
         #grid td.tt-dayend { border-bottom: 5px solid #000; }
         .tt-chip { border-radius: 5px; padding: 2px 4px; margin: 1px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
+        /* Bitta oddiy katakda ketma-ket turgan fanlar qora chiziq bilan ajralsin. */
+        #grid td.tt-cell:not(.tt-split) > .tt-chip { margin-top: 0; margin-bottom: 0; }
+        #grid td.tt-cell:not(.tt-split) > .tt-chip + .tt-chip { border-top: 1px solid #000; border-radius: 0; }
         /* Ma'ruza — butun katak bitta sariq (chip'ning alohida foni yo'q); amaliy — fan rangi (inline) */
         .tt-chip.lec { background: transparent; border-left: none; color: #713f12; font-weight: 700; }
         .tt-chip.prc { border-left: 3px dotted #94a3b8; color: #1f2937; font-weight: 500; }
@@ -879,7 +882,7 @@
         #grid td.tt-cell.tt-split::after {
             content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
             background: linear-gradient(to bottom right,
-                rgba(0,0,0,0) calc(50% - 1px), rgba(0,0,0,.95) 50%, rgba(0,0,0,0) calc(50% + 1px));
+                rgba(0,0,0,0) calc(50% - 1px), rgba(255,255,255,.9) 50%, rgba(0,0,0,0) calc(50% + 1px));
         }
         /* Diagonal chizilgan katakda yo'l-yo'l fon kerak emas — diagonalning
            o'zi "har hafta emas" ekanini bildiradi. */
@@ -4067,13 +4070,18 @@
                         const cs = getComputedStyle(chip || el);
                         const bgRaw = cs.backgroundColor;
                         const transparent = !bgRaw || bgRaw === 'transparent' || bgRaw === 'rgba(0, 0, 0, 0)';
-                        const cell = { t: (el.innerText || '').replace(/\s+/g, ' ').trim() };
+                        const stackedChips = !el.classList.contains('tt-split')
+                            ? [...el.children].filter(child => child.classList && child.classList.contains('tt-chip'))
+                            : [];
+                        const exportedText = stackedChips.length > 1
+                            ? stackedChips.map(child => (child.innerText || '').replace(/\s+/g, ' ').trim())
+                                .filter(Boolean).join('\n────────────\n')
+                            : (el.innerText || '').replace(/\s+/g, ' ').trim();
+                        const cell = { t: exportedText };
                         if (el.colSpan > 1) cell.cs = el.colSpan;
                         if (el.rowSpan > 1) cell.rs = el.rowSpan;
                         if (!transparent) { const hex = rgbToHex(bgRaw); if (hex) cell.bg = hex; }
                         if (parseInt(cs.fontWeight, 10) >= 600) cell.b = 1;
-                        // Split katakdagi ikki fan orasidagi diagonal Excelda ham chizilsin.
-                        if (el.classList.contains('tt-split')) cell.diagonal = 1;
                         cells.push(cell);
                     });
                     rows.push(cells);

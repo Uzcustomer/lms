@@ -1,17 +1,4 @@
 <x-student-app-layout>
-    <x-slot name="header">
-        <div class="flex items-center gap-3">
-            <a href="{{ route('student.services') }}" class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-300 hover:text-blue-600" aria-label="Xizmatlarga qaytish">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-                </svg>
-            </a>
-            <div>
-                <h2 class="font-semibold text-sm text-gray-800 leading-tight">O'qishni ko'chirish uchun ariza</h2>
-                <p class="mt-0.5 text-[11px] text-slate-500">Ariza ma'lumotlarini to'ldiring va buyruqni yuklang</p>
-            </div>
-        </div>
-    </x-slot>
 
     <div class="mx-auto max-w-3xl px-3 pb-8 sm:px-6">
         @if($errors->any())

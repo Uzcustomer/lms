@@ -68,6 +68,19 @@
                 <span class="text-[11px] text-gray-400 mt-1 text-center">O'tish uchun ariza yuborish</span>
             </a>
 
+            {{-- O'qishni ko'chirish uchun ariza --}}
+            <a href="{{ route('student.transfer-application.create') }}"
+               class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
+               style="padding:16px 10px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);">
+                <div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mb-3">
+                    <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 3.75h9l3 3v13.5H6a1.5 1.5 0 01-1.5-1.5v-13A1.5 1.5 0 016 3.75zM14.5 3.75v3h3M8 11h6m-6 3h6m-6 3h4"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-bold text-gray-800 text-center leading-tight">O'qishni ko'chirish uchun ariza</span>
+                <span class="text-[11px] text-gray-400 mt-1 text-center">Buyruq asosida ariza yuborish</span>
+            </a>
+
             {{-- 4. Pasport ma'lumotlari (faqat bitiruvchilar uchun) --}}
             @if(Auth::guard('student')->user()->is_graduate)
             <a href="{{ route('student.passport.index') }}"

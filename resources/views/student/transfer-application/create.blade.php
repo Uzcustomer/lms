@@ -91,58 +91,8 @@
             </div>
         </form>
 
-        @else
-            @if($latest)
-                <div class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                    <div class="flex items-start gap-3">
-                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75l2 2 4-4m5.25 1.25a8.25 8.25 0 11-16.5 0 8.25 8.25 0 0116.5 0z"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <p class="text-sm font-bold text-slate-800">Arizangiz yuborilgan</p>
-                            <p class="mt-1 text-xs text-slate-500">Ariza ko'rib chiqilmoqda. Holat yangilanganda shu sahifada ko'rsatiladi.</p>
-                        </div>
-                    </div>
-                    @php
-                        $latestStatus = [
-                            'pending' => ["Ko'rib chiqilmoqda", 'bg-amber-100 text-amber-700'],
-                            'approved' => ['Qabul qilindi', 'bg-emerald-100 text-emerald-700'],
-                            'rejected' => ['Rad etildi', 'bg-red-100 text-red-700'],
-                        ][$latest->status] ?? [$latest->status, 'bg-slate-100 text-slate-700'];
-                    @endphp
-                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                        <span class="text-xs text-slate-500">Yuborilgan vaqt: {{ $latest->created_at?->format('d.m.Y H:i') }}</span>
-                        <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $latestStatus[1] }}">{{ $latestStatus[0] }}</span>
-                    </div>
-                </div>
-            @endif
         @endif
 
-        @if($applications->isNotEmpty())
-            <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 class="mb-3 text-sm font-bold text-slate-800">Yuborilgan arizalar</h3>
-                <div class="space-y-2">
-                    @foreach($applications as $application)
-                        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-700">{{ $application->created_at?->format('d.m.Y H:i') }}</p>
-                                <p class="text-xs text-slate-500">{{ Str::limit($application->reason, 100) }}</p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold {{ $application->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : ($application->status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700') }}">
-                                    {{ $application->status === 'approved' ? 'Qabul qilindi' : ($application->status === 'rejected' ? 'Rad etildi' : "Ko'rib chiqilmoqda") }}
-                                </span>
-                                @if($application->order_path && $application->order_path !== 'pending')
-                                    <a target="_blank" href="{{ route('student.transfer-application.document', $application->id) }}" class="text-xs font-semibold text-blue-600 hover:text-blue-800">Buyruqni ko'rish</a>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        @endif
     </div>
         @if(session('success'))
             <div x-data="{ open: true }" x-show="open" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="transfer-success-title">

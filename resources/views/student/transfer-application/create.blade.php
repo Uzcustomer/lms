@@ -44,6 +44,7 @@
             </div>
         </div>
 
+        @if($canSubmit)
         <form method="POST" action="{{ route('student.transfer-application.store') }}" enctype="multipart/form-data" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             @csrf
             <div class="grid gap-6">
@@ -76,6 +77,28 @@
             </div>
         </form>
 
+        @else
+            @if($latest)
+                <div class="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75l2 2 4-4m5.25 1.25a8.25 8.25 0 11-16.5 0 8.25 8.25 0 0116.5 0z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-slate-800">Arizangiz yuborilgan</p>
+                            <p class="mt-1 text-xs text-slate-500">Ariza ko'rib chiqilmoqda. Holat yangilanganda shu sahifada ko'rsatiladi.</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                        <span class="text-xs text-slate-500">Yuborilgan vaqt: {{ $latest->created_at?->format('d.m.Y H:i') }}</span>
+                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Ko'rib chiqilmoqda</span>
+                    </div>
+                </div>
+            @endif
+        @endif
+
         @if($applications->isNotEmpty())
             <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 class="mb-3 text-sm font-bold text-slate-800">Yuborilgan arizalar</h3>
@@ -100,4 +123,19 @@
             </div>
         @endif
     </div>
+        @if(session('success'))
+            <div x-data="{ open: true }" x-show="open" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 px-4" role="dialog" aria-modal="true" aria-labelledby="transfer-success-title">
+                <div @click.outside="open = false" class="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+                    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                        <svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                    <h3 id="transfer-success-title" class="mt-4 text-lg font-bold text-slate-800">Ariza yuborildi</h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">{{ session('success') }}</p>
+                    <button type="button" @click="open = false" class="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">Tushunarli</button>
+                </div>
+            </div>
+        @endif
+
 </x-student-app-layout>

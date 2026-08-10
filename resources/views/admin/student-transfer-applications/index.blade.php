@@ -44,12 +44,12 @@
                         <table class="min-w-[1180px] w-full text-left text-sm">
                             <thead class="bg-[#e8eff7] text-[10px] uppercase tracking-wide text-slate-600">
                                 <tr>
-                                    <th class="px-4 py-3">№</th><th class="px-4 py-3">Talaba</th><th class="px-4 py-3">O'qish ma'lumoti</th><th class="px-4 py-3">Telefon</th><th class="px-4 py-3">Sabab</th><th class="px-4 py-3">Buyruq</th><th class="px-4 py-3">Holat</th><th class="px-4 py-3">Vaqt</th>
+                                    <th class="px-4 py-3">№</th><th class="px-4 py-3">Talaba</th><th class="px-4 py-3">O'qish ma'lumoti</th><th class="px-4 py-3">Telefon</th><th class="px-4 py-3">Ko'chiriladigan ta'lim tashkiloti</th><th class="px-4 py-3">Sabab</th><th class="px-4 py-3">Buyruq</th><th class="px-4 py-3">Holat</th><th class="px-4 py-3">Vaqt</th>
                                 </tr>
                                 <tr class="border-t border-slate-200 bg-white">
                                     <th class="px-4 py-2"></th>
                                     <th class="px-4 py-2"><label class="sr-only" for="transfer-search">Qidirish</label><input id="transfer-search" name="search" value="{{ request('search') }}" placeholder="Ism, HEMIS ID yoki telefon..." class="w-full min-w-[210px] rounded-lg border-slate-300 bg-white px-2.5 py-2 text-xs font-normal normal-case tracking-normal focus:border-blue-500 focus:ring-blue-500"></th>
-                                    <th class="px-4 py-2"></th><th class="px-4 py-2"></th><th class="px-4 py-2"></th><th class="px-4 py-2"></th>
+                                    <th class="px-4 py-2"></th><th class="px-4 py-2"></th><th class="px-4 py-2"></th><th class="px-4 py-2"></th><th class="px-4 py-2"></th>
                                     <th class="px-4 py-2"><label class="sr-only" for="transfer-status">Holat</label><select id="transfer-status" name="status" class="w-full min-w-[150px] rounded-lg border-slate-300 bg-white px-2.5 py-2 text-xs font-normal normal-case tracking-normal focus:border-blue-500 focus:ring-blue-500"><option value="">Barchasi</option><option value="pending" @selected(request('status') === 'pending')>Kutilmoqda</option><option value="approved" @selected(request('status') === 'approved')>Qabul qilingan</option><option value="rejected" @selected(request('status') === 'rejected')>Rad etilgan</option></select></th>
                                     <th class="px-4 py-2"></th>
                                 </tr>
@@ -68,13 +68,14 @@
                                     <td class="px-4 py-4"><div class="font-bold text-slate-800">{{ $application->student?->full_name ?? '—' }}</div><div class="mt-1 text-xs text-slate-500">HEMIS: {{ $application->student?->hemis_id ?? '—' }}</div></td>
                                     <td class="px-4 py-4 text-xs text-slate-600"><div class="font-semibold text-slate-700">{{ $application->student?->department_name ?? '—' }}</div><div class="mt-1">{{ $application->student?->specialty_name ?? '—' }}</div><div class="mt-1 font-semibold">{{ $application->student?->level_name ?? '—' }} · {{ $application->student?->group_name ?? '—' }}</div></td>
                                     <td class="whitespace-nowrap px-4 py-4 text-slate-700">{{ $application->phone }}</td>
+                                    <td class="max-w-xs px-4 py-4 text-slate-600">{{ $application->target_institution ?: '—' }}</td>
                                     <td class="max-w-xs px-4 py-4 leading-6 text-slate-600">{{ $application->reason }}</td>
                                     <td class="px-4 py-4"><a href="{{ route('admin.student-transfer-applications.document', $application) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/></svg>Ko'rish</a><div class="mt-1 max-w-[160px] truncate text-[11px] text-slate-400" title="{{ $application->order_name }}">{{ $application->order_name }}</div></td>
                                     <td class="px-4 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $status[1] }}">{{ $status[0] }}</span></td>
                                     <td class="whitespace-nowrap px-4 py-4 text-xs text-slate-500">{{ $application->created_at?->format('d.m.Y H:i') }}</td>
                                 </tr>
                             @empty
-                                <tr><td colspan="8" class="px-4 py-14 text-center text-sm text-slate-500">Arizalar topilmadi.</td></tr>
+                                <tr><td colspan="9" class="px-4 py-14 text-center text-sm text-slate-500">Arizalar topilmadi.</td></tr>
                             @endforelse
                         </tbody>
                         </table>

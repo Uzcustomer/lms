@@ -76,7 +76,6 @@
                         <p class="mt-3 text-xs text-slate-500">O'qishni ko'chirishga asos bo'ladigan hujjatni yuklang. Barcha fayl turlari qabul qilinadi, maksimal hajm: 10 MB.</p>
                     </div>
                 </div>
-                </div>
             </div>
 
             <div class="mt-6 flex flex-col-reverse justify-end gap-2 border-t border-slate-100 pt-4 sm:flex-row">

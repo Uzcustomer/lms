@@ -91,7 +91,7 @@
 
     </div>
         @if(session('success'))
-            <div x-data="{ open: true }" x-show="open" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="transfer-success-title">
+            <div x-data="{ open: true }" x-show="open" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-300/65 px-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="transfer-success-title">
                 <div @click.outside="open = false" class="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
                     <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                         <svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">

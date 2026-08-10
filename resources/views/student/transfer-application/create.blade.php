@@ -56,7 +56,7 @@
                 </div>
 
                 <div class="transfer-field transfer-field-blue">
-                    <label for="order_document" class="mb-2 block text-sm font-semibold text-slate-700">Transfer.edu.uz da o'qishni ko'chirish bo'yicha bergan arizangizni tasdiqlovchi hujjatni yuklang (skrinshot yoki boshqa turdagi hujjatlar) <span class="text-red-500">*</span></label>
+                    <label for="order_document" class="mb-2 block text-sm font-semibold text-slate-700">Transfer.edu.uz saytida o'qishni ko'chirish bo'yicha bergan arizangizni tasdiqlovchi hujjatni yuklang (skrinshot yoki boshqa turdagi hujjatlar) <span class="text-red-500">*</span></label>
                     <div class="transfer-dropzone transfer-dropzone-blue mt-1 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
                         <input id="order_document" name="order_document" type="file" required accept="*/*" class="transfer-file transfer-file-blue block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700">
                         <p class="mt-3 text-xs text-slate-500">Skrinshot yoki boshqa turdagi hujjatlarni yuklashingiz mumkin. Maksimal hajm: 10 MB.</p>

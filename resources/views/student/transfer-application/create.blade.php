@@ -42,45 +42,45 @@
         @endif
 
         @if($canSubmit)
-        <form method="POST" action="{{ route('student.transfer-application.store') }}" enctype="multipart/form-data" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <form method="POST" action="{{ route('student.transfer-application.store') }}" enctype="multipart/form-data" class="transfer-form rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             @csrf
-            <div class="grid gap-6">
-                <div>
+            <div class="grid gap-4">
+                <div class="transfer-field">
                     <label for="phone" class="mb-2 block text-sm font-semibold text-slate-700">Telefon raqami <span class="text-red-500">*</span></label>
-                    <input id="phone" name="phone" type="tel" required value="{{ old('phone', $student->phone) }}" placeholder="+998 90 123 45 67" class="mt-1 w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <input id="phone" name="phone" type="tel" required value="{{ old('phone', $student->phone) }}" placeholder="+998 90 123 45 67" class="transfer-control mt-1 w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
 
-                <div>
+                <div class="transfer-field">
                     <label for="target_institution" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirmoqchi bo'lgan ta'lim tashkiloti <span class="text-red-500">*</span></label>
                     <input id="target_institution" name="target_institution" type="text" required maxlength="255" value="{{ old('target_institution') }}" placeholder="Ta'lim tashkiloti nomini kiriting..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
 
-                <div>
+                <div class="transfer-field transfer-field-blue">
                     <label for="order_document" class="mb-2 block text-sm font-semibold text-slate-700">Transfer.edu.uz da o'qishni ko'chirish bo'yicha bergan arizangizni tasdiqlovchi hujjatni yuklang (skrinshot yoki boshqa turdagi hujjatlar) <span class="text-red-500">*</span></label>
-                    <div class="mt-1 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
-                        <input id="order_document" name="order_document" type="file" required accept="*/*" class="block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700">
+                    <div class="transfer-dropzone transfer-dropzone-blue mt-1 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
+                        <input id="order_document" name="order_document" type="file" required accept="*/*" class="transfer-file transfer-file-blue block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700">
                         <p class="mt-3 text-xs text-slate-500">Skrinshot yoki boshqa turdagi hujjatlarni yuklashingiz mumkin. Maksimal hajm: 10 MB.</p>
                     </div>
                 </div>
 
-                <div>
+                <div class="transfer-field">
                     <label for="reason" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirish sababi <span class="text-xs font-normal text-slate-400">(ixtiyoriy)</span></label>
-                    <textarea id="reason" name="reason" rows="5" maxlength="2000" placeholder="O'qishni ko'chirish sababini batafsil yozing..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-3 text-sm leading-6 shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ old('reason') }}</textarea>
+                    <textarea id="reason" name="reason" rows="5" maxlength="2000" placeholder="O'qishni ko'chirish sababini batafsil yozing..." class="transfer-control transfer-textarea mt-1 w-full rounded-xl border-slate-300 px-3 py-3 text-sm leading-6 shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ old('reason') }}</textarea>
                     <p class="mt-2 text-xs text-slate-400">Agar mavjud bo'lsa, sababni batafsil yozing.</p>
                 </div>
 
-                <div>
+                <div class="transfer-field transfer-field-green">
                     <label for="basis_document" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirish uchun asos hujjati <span class="text-red-500">*</span></label>
-                    <div class="mt-1 rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-4">
-                        <input id="basis_document" name="basis_document" type="file" required accept="*/*" class="block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-emerald-700">
+                    <div class="transfer-dropzone transfer-dropzone-green mt-1 rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/40 p-4">
+                        <input id="basis_document" name="basis_document" type="file" required accept="*/*" class="transfer-file transfer-file-green block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-emerald-700">
                         <p class="mt-3 text-xs text-slate-500">O'qishni ko'chirishga asos bo'ladigan hujjatni yuklang. Barcha fayl turlari qabul qilinadi, maksimal hajm: 10 MB.</p>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-6 flex flex-col-reverse justify-end gap-2 border-t border-slate-100 pt-4 sm:flex-row">
-                <a href="{{ route('student.services') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Bekor qilish</a>
-                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
+            <div class="transfer-actions mt-5 flex flex-col-reverse justify-end gap-2 border-t border-slate-200 pt-4 sm:flex-row">
+                <a href="{{ route('student.services') }}" class="transfer-cancel inline-flex items-center justify-center rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Bekor qilish</a>
+                <button type="submit" class="transfer-submit inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M5 20h14"/></svg>
                     Arizani yuborish
                 </button>
@@ -104,5 +104,95 @@
                 </div>
             </div>
         @endif
+
+<style>
+    .transfer-form {
+        background: #f4f7fb !important;
+        border-color: #d8e3f0 !important;
+        box-shadow: 0 12px 28px rgba(30, 64, 110, .10) !important;
+    }
+    .transfer-field {
+        padding: 15px;
+        border: 1px solid #dce5ef;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 3px 10px rgba(30, 64, 110, .04);
+    }
+    .transfer-field-blue {
+        border-color: #bcd8ff;
+        background: linear-gradient(135deg, #f4f9ff 0%, #ffffff 75%);
+    }
+    .transfer-field-green {
+        border-color: #b7e7d1;
+        background: linear-gradient(135deg, #f1fbf6 0%, #ffffff 75%);
+    }
+    .transfer-field label {
+        margin-bottom: 8px !important;
+        color: #19375e !important;
+        line-height: 1.45;
+    }
+    .transfer-control {
+        border: 1px solid #b9c8da !important;
+        background: #fbfdff !important;
+        color: #172b4d !important;
+        box-shadow: none !important;
+        transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .transfer-control:focus {
+        border-color: #2878d0 !important;
+        background: #fff !important;
+        box-shadow: 0 0 0 3px rgba(40, 120, 208, .13) !important;
+    }
+    .transfer-textarea {
+        min-height: 126px;
+        resize: vertical;
+    }
+    .transfer-dropzone {
+        padding: 12px !important;
+        border-radius: 12px !important;
+    }
+    .transfer-dropzone-blue {
+        border-color: #9fc8ff !important;
+        background: rgba(235, 245, 255, .72) !important;
+    }
+    .transfer-dropzone-green {
+        border-color: #9edbbf !important;
+        background: rgba(235, 250, 242, .78) !important;
+    }
+    .transfer-file {
+        padding: 5px !important;
+        border: 1px solid #c7d5e5 !important;
+        border-radius: 10px !important;
+        background: #fff !important;
+        color: #51657f !important;
+    }
+    .transfer-file::file-selector-button {
+        margin-right: 12px;
+        padding: 9px 14px;
+        border: 0;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .transfer-file-blue::file-selector-button { background: #2368b5; }
+    .transfer-file-green::file-selector-button { background: #16845d; }
+    .transfer-actions {
+        margin-top: 16px !important;
+    }
+    .transfer-cancel {
+        background: #fff !important;
+        border-color: #cbd7e5 !important;
+    }
+    .transfer-submit {
+        background: linear-gradient(135deg, #1769bb, #246ee9) !important;
+        box-shadow: 0 7px 16px rgba(36, 110, 233, .24) !important;
+    }
+    @media (max-width: 640px) {
+        .transfer-form { padding: 12px !important; }
+        .transfer-field { padding: 13px; }
+        .transfer-file::file-selector-button { padding: 8px 11px; }
+    }
+</style>
 
 </x-student-app-layout>

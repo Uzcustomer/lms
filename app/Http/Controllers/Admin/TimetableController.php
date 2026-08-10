@@ -1107,7 +1107,7 @@ class TimetableController extends Controller
             $spot = $this->clusterPlacement(
                 $segs, $days, $pairs, $scope,
                 $groupBusy, $teacherBusy, $roomBusy,
-                true, [$ch['day'] => [[$start - 1, $start - 1]]],
+                false, [$ch['day'] => [[$start - 1, $start - 1]]],
                 fn(int $d, int $p) => ($d === $ch['day'] && $p === $start) ? 0.0 : 1000.0
             );
             return ($spot && (int) $spot[0]['day'] === (int) $ch['day'] && (int) $spot[0]['pair'] === $start)

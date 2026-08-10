@@ -4098,9 +4098,9 @@
                 const flow = card.oqim_label || card.group_name || '—';
 
                 return [
-                    'Fakultet: ' + (card.faculty_name || '—'),
-                    "Yo'nalish: " + (card.specialty_name || '—') + (card.course ? ' · ' + card.course + '-kurs' : ''),
-                    'Fan: [' + lessonType + '] ' + (card.subject_name || '—'),
+                    card.faculty_name || '—',
+                    (card.specialty_name || '—') + (card.course ? ' · ' + card.course + '-kurs' : ''),
+                    '[' + lessonType + '] ' + (card.subject_name || '—'),
                     'Oqim: ' + flow,
                     '(Haftalar: ' + weeksText + ')',
                 ].join('\n');

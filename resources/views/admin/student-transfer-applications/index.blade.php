@@ -24,21 +24,39 @@
             </div>
 
             <div class="grid grid-cols-4 gap-3">
-                <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div class="rounded-xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
+                    <div class="flex items-center justify-between"><span class="text-xs font-semibold text-blue-700">Jami</span><span class="h-2.5 w-2.5 rounded-full bg-blue-500"></span></div>
+                    <p class="mt-2 text-2xl font-bold text-slate-800">{{ $stats['total'] }}</p>
+                </div>
+                <div class="rounded-xl border border-amber-100 bg-amber-50 p-4 shadow-sm">
+                    <div class="flex items-center justify-between"><span class="text-xs font-semibold text-amber-700">Kutilmoqda</span><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span></div>
+                    <p class="mt-2 text-2xl font-bold text-amber-800">{{ $stats['pending'] }}</p>
+                </div>
+                <div class="rounded-xl border border-teal-100 bg-teal-50 p-4 shadow-sm">
+                    <div class="flex items-center justify-between"><span class="text-xs font-semibold text-teal-700">Qabul qilingan</span><span class="h-2.5 w-2.5 rounded-full bg-teal-500"></span></div>
+                    <p class="mt-2 text-2xl font-bold text-teal-800">{{ $stats['approved'] }}</p>
+                </div>
+                <div class="rounded-xl border border-rose-100 bg-rose-50 p-4 shadow-sm">
+                    <div class="flex items-center justify-between"><span class="text-xs font-semibold text-rose-700">Rad etilgan</span><span class="h-2.5 w-2.5 rounded-full bg-rose-500"></span></div>
+                    <p class="mt-2 text-2xl font-bold text-rose-800">{{ $stats['rejected'] }}</p>
+                </div>
+            </div>
+
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
                     <div><h3 class="text-sm font-bold text-slate-800">Arizalar ro'yxati</h3><p class="mt-0.5 text-xs text-slate-500">Topildi: {{ $applications->total() }} ta</p></div>
                     <div class="flex items-center gap-2">
                         @if(request()->filled('search') || request()->filled('status'))
                             <a href="{{ route('admin.student-transfer-applications.index') }}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">Tozalash</a>
                         @endif
-                        <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700">
+                        <button type="submit" form="transfer-filters" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700">
                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                             Filtrlash
                         </button>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
-                    <form method="GET">
+                    <form id="transfer-filters" method="GET">
                         <table class="min-w-[1180px] w-full text-left text-sm">
                             <thead class="bg-slate-100 text-[10px] uppercase tracking-wide text-slate-600">
                                 <tr>

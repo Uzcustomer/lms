@@ -52,7 +52,7 @@
 
                 <div class="transfer-field">
                     <label for="target_institution" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirmoqchi bo'lgan ta'lim tashkiloti <span class="text-red-500">*</span></label>
-                    <input id="target_institution" name="target_institution" type="text" required maxlength="255" value="{{ old('target_institution') }}" placeholder="Ta'lim tashkiloti nomini kiriting..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <input id="target_institution" name="target_institution" type="text" required maxlength="255" value="{{ old('target_institution') }}" placeholder="Ta'lim tashkiloti nomini kiriting..." class="transfer-control mt-1 w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
 
                 <div class="transfer-field transfer-field-blue">

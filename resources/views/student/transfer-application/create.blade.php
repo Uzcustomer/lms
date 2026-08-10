@@ -44,6 +44,20 @@
             </div>
         </div>
 
+        @if(!$canSubmit && $latest)
+            @php
+                $compactStatus = [
+                    'pending' => ["Ko'rib chiqilmoqda", 'bg-amber-100 text-amber-700'],
+                    'approved' => ['Qabul qilindi', 'bg-emerald-100 text-emerald-700'],
+                    'rejected' => ['Rad etildi', 'bg-red-100 text-red-700'],
+                ][$latest->status] ?? [$latest->status, 'bg-slate-100 text-slate-700'];
+            @endphp
+            <div class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <span class="text-xs font-semibold text-slate-600">Ariza holati</span>
+                <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $compactStatus[1] }}">{{ $compactStatus[0] }}</span>
+            </div>
+        @endif
+
         @if($canSubmit)
         <form method="POST" action="{{ route('student.transfer-application.store') }}" enctype="multipart/form-data" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             @csrf
@@ -131,7 +145,7 @@
         @endif
     </div>
         @if(session('success'))
-            <div x-data="{ open: true }" x-show="open" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 px-4" role="dialog" aria-modal="true" aria-labelledby="transfer-success-title">
+            <div x-data="{ open: true }" x-show="open" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="transfer-success-title">
                 <div @click.outside="open = false" class="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
                     <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                         <svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">

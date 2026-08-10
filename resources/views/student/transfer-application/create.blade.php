@@ -46,23 +46,23 @@
 
         <form method="POST" action="{{ route('student.transfer-application.store') }}" enctype="multipart/form-data" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
             @csrf
-            <div class="grid gap-5">
+            <div class="grid gap-6">
                 <div>
-                    <label for="phone" class="mb-1.5 block text-sm font-semibold text-slate-700">Telefon raqami <span class="text-red-500">*</span></label>
-                    <input id="phone" name="phone" type="tel" required value="{{ old('phone', $student->phone) }}" placeholder="+998 90 123 45 67" class="w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <label for="phone" class="mb-2 block text-sm font-semibold text-slate-700">Telefon raqami <span class="text-red-500">*</span></label>
+                    <input id="phone" name="phone" type="tel" required value="{{ old('phone', $student->phone) }}" placeholder="+998 90 123 45 67" class="mt-1 w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </div>
 
                 <div>
-                    <label for="reason" class="mb-1.5 block text-sm font-semibold text-slate-700">O'qishni ko'chirish sababi <span class="text-red-500">*</span></label>
-                    <textarea id="reason" name="reason" rows="5" required minlength="10" maxlength="2000" placeholder="O'qishni ko'chirish sababini batafsil yozing..." class="w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ old('reason') }}</textarea>
-                    <p class="mt-1 text-xs text-slate-400">Sababni aniq va tushunarli yozing.</p>
+                    <label for="reason" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirish sababi <span class="text-red-500">*</span></label>
+                    <textarea id="reason" name="reason" rows="5" required minlength="10" maxlength="2000" placeholder="O'qishni ko'chirish sababini batafsil yozing..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-3 text-sm leading-6 shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ old('reason') }}</textarea>
+                    <p class="mt-2 text-xs text-slate-400">Sababni aniq va tushunarli yozing.</p>
                 </div>
 
                 <div>
-                    <label for="order_document" class="mb-1.5 block text-sm font-semibold text-slate-700">O'qishni ko'chirish buyrug'i <span class="text-red-500">*</span></label>
-                    <div class="rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
+                    <label for="order_document" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirish buyrug'i <span class="text-red-500">*</span></label>
+                    <div class="mt-1 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
                         <input id="order_document" name="order_document" type="file" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="block w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700">
-                        <p class="mt-2 text-xs text-slate-500">PDF, DOC, DOCX, JPG yoki PNG. Maksimal hajm: 10 MB.</p>
+                        <p class="mt-3 text-xs text-slate-500">PDF, DOC, DOCX, JPG yoki PNG. Maksimal hajm: 10 MB.</p>
                     </div>
                 </div>
             </div>

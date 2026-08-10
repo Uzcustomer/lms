@@ -18,21 +18,12 @@
 
     <div class="min-h-full bg-slate-50 px-3 py-5 sm:px-5 lg:px-6">
         <div class="mx-auto max-w-[1600px] space-y-4">
-            <div class="overflow-hidden rounded-2xl bg-gradient-to-r from-[#123d7a] via-[#1d5aa6] to-[#347fc7] p-5 text-white shadow-lg shadow-blue-100">
-                <div class="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-100">Talaba arizalari</p>
-                        <h1 class="mt-1 text-xl font-bold">O'qishni ko'chirish bo'yicha nazorat</h1>
-                        <p class="mt-1 max-w-xl text-xs leading-5 text-blue-100">Ariza ma'lumotlari va buyruq hujjatlarini yagona oynada ko'ring.</p>
-                    </div>
-                    <div class="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-right backdrop-blur">
-                        <p class="text-[11px] text-blue-100">Jami arizalar</p>
-                        <p class="mt-0.5 text-2xl font-bold">{{ $stats['total'] }}</p>
-                    </div>
-                </div>
+            <div class="mb-1">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Talaba arizalari</p>
+                <h1 class="mt-1 text-xl font-bold text-slate-800">O'qishni ko'chirish bo'yicha nazorat</h1>
             </div>
 
-            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="grid grid-cols-4 gap-3">
                 <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-slate-500">Jami</span><span class="h-2.5 w-2.5 rounded-full bg-blue-500"></span></div><p class="mt-2 text-2xl font-bold text-slate-800">{{ $stats['total'] }}</p></div>
                 <div class="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-amber-700">Kutilmoqda</span><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span></div><p class="mt-2 text-2xl font-bold text-amber-800">{{ $stats['pending'] }}</p></div>
                 <div class="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm"><div class="flex items-center justify-between"><span class="text-xs font-semibold text-emerald-700">Qabul qilingan</span><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span></div><p class="mt-2 text-2xl font-bold text-emerald-800">{{ $stats['approved'] }}</p></div>

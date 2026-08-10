@@ -1250,6 +1250,12 @@ class TimetableController extends Controller
                         $chain[$uChainKey]['next'] = max((int) $uCh['next'], (int) $spot[0]['pair'] + $blockLen);
                     }
                 }
+                if ($spot === null && $lead->training_type === 'practice' && isset($chain[$uChainKey])) {
+                    // Ma'ruza bilan bog'langan amaliy blok boshqa kunga
+                    // ko'chirilmaydi: shu kun sig'masa, konflikt sifatida qoladi.
+                    $unplaced += count($unit);
+                    continue;
+                }
                 if ($spot === null) {
                     $penaltyFor = fn(int $d, int $p) => $this->slotPenalty(
                         $lead, $unionGroups, $d, $p, $uPairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $maskOf($lead)
@@ -1364,6 +1370,11 @@ class TimetableController extends Controller
                     continue;
                 }
             }
+
+                if ($c->training_type === 'practice' && $ch && $spot === null) {
+                    $unplaced++;
+                    continue;
+                }
 
             // ── Shu darsning boshqa paralari allaqachon joylashgan bo'lsa ────
             // Klaster rejimida yangi karta ular bilan bir kunga (va ketma-ket

@@ -2338,47 +2338,42 @@ class TimetableController extends Controller
             return $empty;
         }
 
-        $perWeek = $total / $weeks;                       // haftalik soat byudjeti (ko'rsatkich)
-        $lecWeeks = min((int) round($lec / 2), $weeks);   // ma'ruza 2 soatdan
+        $totalInt = (int) round($total);
+        $lecInt = max(0, (int) round($lec));
+        $prcInt = max(0, (int) round($prc));
+        $perWeek = $total / $weeks;
+
+        // Ma'ruza har doim 2 soatlik bitta para sifatida bir haftani egallaydi.
+        // Qolgan haftalarda shu faning amaliyoti 2 soatga ko'proq bo'ladi.
+        $lecWeeks = min((int) round($lecInt / 2), $weeks);
         $plainWeeks = $weeks - $lecWeeks;
 
-        // Amaliy soat butun songa keltiriladi (reja odatda butun soatda beriladi)
-        $prcInt = (int) round($prc);
+        // Haftalik yukning pastki butun qismi tayanch bo'ladi. Qolgan soatlar
+        // alohida qoldiq kartalari orqali beriladi, shuning uchun reja soatlari
+        // yo'qolmaydi va keraksiz kasrli darslar yaratilmaydi.
+        $weeklyFloor = intdiv($totalInt, $weeks);
+        $practiceInLecture = max(0, $weeklyFloor - 2);
+        $practiceInPlain = $weeklyFloor;
 
-        // Ideal holat: ma'ruzasiz haftada amaliy ma'ruzali haftadagidan 2 soat ko'p
-        // (chunki ma'ruzali haftada 2 soatni ma'ruza egallaydi).
-        if ($prcInt - 2 * $plainWeeks >= 0) {
-            $prcInLec = intdiv($prcInt - 2 * $plainWeeks, $weeks);
-            $prcInPlain = $prcInLec + 2;
-        } else {
-            // Amaliy soat kam — 2 soatlik farqni saqlab bo'lmaydi, teng taqsimlaymiz
-            $prcInLec = intdiv($prcInt, $weeks);
-            $prcInPlain = $prcInLec;
-        }
-
-        // Qoldiq: shuncha haftaga +1 soat qo'shiladi (yig'indi rejaga aniq tushsin)
-        $allocated = $lecWeeks * $prcInLec + $plainWeeks * $prcInPlain;
+        // Masalan: 2 soat ma'ruza + 6 soat amaliy / 2 hafta:
+        // 1-hafta = 2 soat ma'ruza + 2 soat amaliy,
+        // 2-hafta = 4 soat amaliy.
+        $allocated = ($lecWeeks * $practiceInLecture) + ($plainWeeks * $practiceInPlain);
         $extraWeeks = max(0, $prcInt - $allocated);
 
-        // ── Amaliy paralarga aylantirish (1 para = 2 soat) ─────────────────
-        // Har hafta o'tiladigan paralar + faqat ma'ruzasiz haftada o'tiladiganlari.
-        // Kartochka yaratish AYNAN shu qiymatlarni ishlatadi (yagona manba).
-        $parasLec   = intdiv($prcInLec, 2);
-        // ── Amaliy soatlarni kartalarga bo'lish (SOAT aniqligida) ──────────
-        // Dars uzunligi len_half birligida = SOAT (2 = 1 para = 2 soat). Shu sababli
-        // 3 soatlik byudjetni ham aniq ifodalash mumkin — avval faqat 2 soatlik
-        // paralarda taqsimlanib, qoldiq soatlar yo'qolib ketardi.
-        //  - hBase  : har hafta o'tiladigan amaliy soat
-        //  - hExtra : faqat ma'ruzasiz haftalarda qo'shimcha soat
-        //  - qoldiq : extra_weeks ta haftaga +1 soat (yig'indi rejaga aniq tushsin)
-        $hBase  = $lecWeeks > 0 ? min($prcInLec, $prcInPlain) : $prcInPlain;
-        $hExtra = max(0, $prcInPlain - $hBase);
+        // Tayanch amaliy karta har hafta, qo'shimcha amaliy karta faqat
+        // ma'ruzasiz haftalarda ishlaydi.
+        $hBase = $lecWeeks > 0 ? min($practiceInLecture, $practiceInPlain) : $practiceInPlain;
+        $hExtra = max(0, $practiceInPlain - $hBase);
+
+        // Qolgan soatlar uchun alohida 1 soatlik karta yaratiladi. U mavjud
+        // hafta-maskasi mexanizmi orqali ma'ruza bo'lmagan haftalarga yoyiladi.
         $remWeeks = $extraWeeks;
         if ($prcInt <= 0) {
             $hBase = $hExtra = $remWeeks = 0;
         }
-        $prcScheduled = $hBase * $weeks + $hExtra * $plainWeeks + $remWeeks;
 
+        $prcScheduled = $hBase * $weeks + $hExtra * $plainWeeks + $remWeeks;
         $lecCheck = $lecWeeks * 2;
         $prcCheck = $allocated + $extraWeeks;
 
@@ -2387,22 +2382,17 @@ class TimetableController extends Controller
             'per_week_hours'           => round($perWeek, 2),
             'lecture_weeks'            => $lecWeeks,
             'plain_weeks'              => $plainWeeks,
-            'practice_in_lecture_week' => $prcInLec,
-            'practice_in_plain_week'   => $prcInPlain,
-            // Nechta haftaga qoldiq sifatida +1 soat qo'shilgan
+            'practice_in_lecture_week' => $practiceInLecture,
+            'practice_in_plain_week'   => $practiceInPlain,
             'extra_weeks'              => $extraWeeks,
-            // Amaliy soat taqsimoti (kartochka yaratish shu qiymatlarni ishlatadi)
-            'practice_hours_base'      => $hBase,       // har hafta
-            'practice_hours_extra'     => $hExtra,      // faqat ma'ruzasiz haftalarda
-            'practice_extra_weeks'     => $plainWeeks,  // ma'ruzasiz haftalar soni
-            'practice_remainder_weeks' => $remWeeks,    // +1 soatlik qoldiq haftalar
+            'practice_hours_base'      => $hBase,
+            'practice_hours_extra'     => $hExtra,
+            'practice_extra_weeks'     => $plainWeeks,
+            'practice_remainder_weeks' => $remWeeks,
             'practice_hours_scheduled' => $prcScheduled,
-            // Haftalik chegarani buzmaslik uchun joylanmay qolgan amaliy soat
             'practice_shortfall'       => max(0, $prcInt - $prcScheduled),
             'lecture_check'            => round($lecCheck, 2),
-            'practice_check'           => round($prcCheck, 2),
-            // Aniqlik KO'RSATILAYOTGAN taqsimot bo'yicha baholanadi: ma'ruza soati
-            // 2 ga bo'linib haftaga sig'dimi va amaliy yig'indi rejaga tushdimi.
+            'practice_check'            => round($prcCheck, 2),
             'exact' => abs($lecCheck - $lec) < 0.01
                 && abs($prcCheck - $prc) < 0.01
                 && abs($prcInt - $prc) < 0.01,

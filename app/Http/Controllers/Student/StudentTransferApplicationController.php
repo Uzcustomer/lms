@@ -40,11 +40,14 @@ class StudentTransferApplicationController extends Controller
 
         $validated = $request->validate([
             'phone' => ['required', 'string', 'max:50'],
+            'target_institution' => ['required', 'string', 'max:255'],
             'reason' => ['required', 'string', 'min:10', 'max:2000'],
             'order_document' => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:10240'],
         ], [
             'phone.required' => 'Telefon raqamini kiriting.',
             'phone.max' => 'Telefon raqami juda uzun.',
+            'target_institution.required' => "O'qishni ko'chirmoqchi bo'lgan ta'lim tashkiloti nomini kiriting.",
+            'target_institution.max' => 'Ta\'lim tashkiloti nomi 255 ta belgidan oshmasligi kerak.',
             'reason.required' => "O'qishni ko'chirish sababini kiriting.",
             'reason.min' => 'Sabab kamida 10 ta belgidan iborat bo\'lsin.',
             'reason.max' => 'Sabab 2000 ta belgidan oshmasligi kerak.',
@@ -58,6 +61,7 @@ class StudentTransferApplicationController extends Controller
         $application = StudentTransferApplication::create([
             'student_id' => $student->id,
             'phone' => trim($validated['phone']),
+            'target_institution' => trim($validated['target_institution']),
             'reason' => trim($validated['reason']),
             'order_path' => 'pending',
             'order_name' => $file->getClientOriginalName(),

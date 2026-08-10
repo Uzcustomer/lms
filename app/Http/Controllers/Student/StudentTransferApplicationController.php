@@ -48,10 +48,9 @@ class StudentTransferApplicationController extends Controller
             'phone.max' => 'Telefon raqami juda uzun.',
             'target_institution.required' => "O'qishni ko'chirmoqchi bo'lgan ta'lim tashkiloti nomini kiriting.",
             'target_institution.max' => 'Ta\'lim tashkiloti nomi 255 ta belgidan oshmasligi kerak.',
-            'reason.required' => "O'qishni ko'chirish sababini kiriting.",
             'reason.min' => 'Sabab kamida 10 ta belgidan iborat bo\'lsin.',
             'reason.max' => 'Sabab 2000 ta belgidan oshmasligi kerak.',
-            'order_document.required' => "O'qishni ko'chirish buyrug'ini yuklang.",
+            'order_document.required' => "O'qishni ko'chirish uchun asos hujjatini yuklang.",
             'order_document.mimes' => 'Buyruq PDF, Word, JPG yoki PNG formatida bo\'lishi kerak.',
             'order_document.max' => 'Fayl hajmi 10 MB dan oshmasligi kerak.',
         ]);

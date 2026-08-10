@@ -10,6 +10,7 @@ class StudentTransferApplication extends Model
     protected $fillable = [
         'student_id',
         'phone',
+        'target_institution',
         'reason',
         'order_path',
         'order_name',

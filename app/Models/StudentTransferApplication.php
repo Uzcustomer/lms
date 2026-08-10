@@ -16,6 +16,10 @@ class StudentTransferApplication extends Model
         'order_name',
         'order_mime',
         'order_size',
+        'basis_document_path',
+        'basis_document_name',
+        'basis_document_mime',
+        'basis_document_size',
         'status',
     ];
 

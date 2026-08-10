@@ -21,6 +21,7 @@ class StudentTransferApplicationController extends Controller
             $search = trim((string) $request->input('search'));
             $query->where(function ($q) use ($search) {
                 $q->where('phone', 'like', "%{$search}%")
+                    ->orWhere('target_institution', 'like', "%{$search}%")
                     ->orWhere('reason', 'like', "%{$search}%")
                     ->orWhereHas('student', function ($student) use ($search) {
                         $student->where('full_name', 'like', "%{$search}%")
@@ -58,4 +59,20 @@ class StudentTransferApplicationController extends Controller
             'Content-Disposition' => 'inline; filename="' . basename($application->order_name) . '"',
         ]);
     }
+
+    public function basisDocument(StudentTransferApplication $application): BinaryFileResponse
+    {
+        abort_if(
+            !$application->basis_document_path
+                || $application->basis_document_path === 'pending'
+                || !Storage::exists($application->basis_document_path),
+            404
+        );
+
+        return response()->file(Storage::path($application->basis_document_path), [
+            'Content-Type' => $application->basis_document_mime ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="' . basename($application->basis_document_name) . '"',
+        ]);
+    }
+
 }

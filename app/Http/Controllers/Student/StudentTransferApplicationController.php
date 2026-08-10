@@ -43,6 +43,7 @@ class StudentTransferApplicationController extends Controller
             'target_institution' => ['required', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:2000'],
             'order_document' => ['required', 'file', 'max:10240'],
+            'basis_document' => ['required', 'file', 'max:10240'],
         ], [
             'phone.required' => 'Telefon raqamini kiriting.',
             'phone.max' => 'Telefon raqami juda uzun.',
@@ -52,37 +53,53 @@ class StudentTransferApplicationController extends Controller
             'reason.max' => 'Sabab 2000 ta belgidan oshmasligi kerak.',
             'order_document.required' => "O'qishni ko'chirish uchun asos hujjatini yuklang.",
             'order_document.mimes' => 'Buyruq PDF, Word, JPG yoki PNG formatida bo\'lishi kerak.',
-            'order_document.max' => 'Fayl hajmi 10 MB dan oshmasligi kerak.',
+            'order_document.max' => 'Transfer.edu.uz tasdiqlovchi hujjati 10 MB dan oshmasligi kerak.',
+            'basis_document.required' => "O'qishni ko'chirish uchun asos hujjatini yuklang.",
+            'basis_document.max' => 'Asos hujjati 10 MB dan oshmasligi kerak.',
         ]);
 
         $file = $validated['order_document'];
-        $extension = strtolower($file->getClientOriginalExtension());
+        $basisFile = $validated['basis_document'];
+        $extension = strtolower($file->getClientOriginalExtension()) ?: 'bin';
+        $basisExtension = strtolower($basisFile->getClientOriginalExtension()) ?: 'bin';
         $application = StudentTransferApplication::create([
             'student_id' => $student->id,
             'phone' => trim($validated['phone']),
             'target_institution' => trim($validated['target_institution']),
-            'reason' => isset($validated['reason']) ? trim($validated['reason']) : null,
+            'reason' => trim((string) ($validated['reason'] ?? '')),
             'order_path' => 'pending',
             'order_name' => $file->getClientOriginalName(),
             'order_mime' => $file->getMimeType(),
             'order_size' => $file->getSize(),
+            'basis_document_path' => 'pending',
+            'basis_document_name' => $basisFile->getClientOriginalName(),
+            'basis_document_mime' => $basisFile->getMimeType(),
+            'basis_document_size' => $basisFile->getSize(),
             'status' => 'pending',
         ]);
 
-        $path = $file->storeAs(
-            "student-transfer-applications/{$application->id}",
-            "buyruq.{$extension}"
-        );
+        $directory = "student-transfer-applications/{$application->id}";
+        $path = $file->storeAs($directory, "transfer-tasdiq.{$extension}");
+        $basisPath = $basisFile->storeAs($directory, "asos-hujjati.{$basisExtension}");
 
-        if (!$path) {
+        if (!$path || !$basisPath) {
+            if ($path) {
+                Storage::delete($path);
+            }
+            if ($basisPath) {
+                Storage::delete($basisPath);
+            }
             $application->delete();
 
             return back()
                 ->withInput()
-                ->withErrors(['order_document' => 'Faylni saqlashda xatolik yuz berdi. Qayta urinib ko\'ring.']);
+                ->withErrors(['basis_document' => 'Hujjatlarni saqlashda xatolik yuz berdi. Qayta urinib ko\'ring.']);
         }
 
-        $application->update(['order_path' => $path]);
+        $application->update([
+            'order_path' => $path,
+            'basis_document_path' => $basisPath,
+        ]);
 
         return redirect()
             ->route('student.transfer-application.create')

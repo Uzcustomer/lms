@@ -240,6 +240,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'destroy'])->name('destroy');
         });
 
+        // O'qishni ko'chirish arizalari
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
+            ->prefix('student-transfer-applications')
+            ->name('student-transfer-applications.')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\StudentTransferApplicationController::class, 'index'])->name('index');
+                Route::get('/{application}/document', [\App\Http\Controllers\Admin\StudentTransferApplicationController::class, 'document'])->name('document');
+            });
+
         // Akademik mobillik: Registrator ariza yaratadi, O'quv bo'limi va prorektor tasdiqlaydi.
         Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|oquv_prorektori')
             ->prefix('academic-mobility')

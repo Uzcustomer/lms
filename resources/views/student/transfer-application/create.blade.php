@@ -91,9 +91,16 @@
                             <p class="mt-1 text-xs text-slate-500">Ariza ko'rib chiqilmoqda. Holat yangilanganda shu sahifada ko'rsatiladi.</p>
                         </div>
                     </div>
+                    @php
+                        $latestStatus = [
+                            'pending' => ["Ko'rib chiqilmoqda", 'bg-amber-100 text-amber-700'],
+                            'approved' => ['Qabul qilindi', 'bg-emerald-100 text-emerald-700'],
+                            'rejected' => ['Rad etildi', 'bg-red-100 text-red-700'],
+                        ][$latest->status] ?? [$latest->status, 'bg-slate-100 text-slate-700'];
+                    @endphp
                     <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
                         <span class="text-xs text-slate-500">Yuborilgan vaqt: {{ $latest->created_at?->format('d.m.Y H:i') }}</span>
-                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Ko'rib chiqilmoqda</span>
+                        <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $latestStatus[1] }}">{{ $latestStatus[0] }}</span>
                     </div>
                 </div>
             @endif

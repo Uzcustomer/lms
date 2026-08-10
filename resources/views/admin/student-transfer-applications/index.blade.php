@@ -44,7 +44,7 @@
                         <table class="min-w-[1180px] w-full text-left text-sm">
                             <thead class="bg-[#e8eff7] text-[10px] uppercase tracking-wide text-slate-600">
                                 <tr>
-                                    <th class="px-4 py-3">№</th><th class="px-4 py-3">Talaba</th><th class="px-4 py-3">O'qish ma'lumoti</th><th class="px-4 py-3">Telefon</th><th class="px-4 py-3">Ko'chiriladigan ta'lim tashkiloti</th><th class="px-4 py-3">Sabab</th><th class="px-4 py-3">Buyruq</th><th class="px-4 py-3">Holat</th><th class="px-4 py-3">Vaqt</th>
+                                    <th class="px-4 py-3">№</th><th class="px-4 py-3">Talaba</th><th class="px-4 py-3">O'qish ma'lumoti</th><th class="px-4 py-3">Telefon</th><th class="px-4 py-3">Ko'chiriladigan ta'lim tashkiloti</th><th class="px-4 py-3">Sabab</th><th class="px-4 py-3">Hujjatlar</th><th class="px-4 py-3">Holat</th><th class="px-4 py-3">Vaqt</th>
                                 </tr>
                                 <tr class="border-t border-slate-200 bg-white">
                                     <th class="px-4 py-2"></th>
@@ -70,7 +70,20 @@
                                     <td class="whitespace-nowrap px-4 py-4 text-slate-700">{{ $application->phone }}</td>
                                     <td class="max-w-xs px-4 py-4 text-slate-600">{{ $application->target_institution ?: '—' }}</td>
                                     <td class="max-w-xs px-4 py-4 leading-6 text-slate-600">{{ $application->reason }}</td>
-                                    <td class="px-4 py-4"><a href="{{ route('admin.student-transfer-applications.document', $application) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/></svg>Ko'rish</a><div class="mt-1 max-w-[160px] truncate text-[11px] text-slate-400" title="{{ $application->order_name }}">{{ $application->order_name }}</div></td>
+                                    <td class="px-4 py-4">
+                                        <div class="flex flex-col items-start gap-2">
+                                            <a href="{{ route('admin.student-transfer-applications.document', $application) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/></svg>
+                                                Transfer arizasi
+                                            </a>
+                                            @if($application->basis_document_path && $application->basis_document_path !== 'pending')
+                                                <a href="{{ route('admin.student-transfer-applications.basis-document', $application) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700">
+                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3.75h7l3 3v13.5H7a1.5 1.5 0 01-1.5-1.5V5.25A1.5 1.5 0 017 3.75zM13.5 3.75v3.5H17M8.5 12h6m-6 3h6"/></svg>
+                                                    Asos hujjati
+                                                </a>
+                                            @endif
+                                        </div>
+                                    </td>
                                     <td class="px-4 py-4"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold {{ $status[1] }}">{{ $status[0] }}</span></td>
                                     <td class="whitespace-nowrap px-4 py-4 text-xs text-slate-500">{{ $application->created_at?->format('d.m.Y H:i') }}</td>
                                 </tr>

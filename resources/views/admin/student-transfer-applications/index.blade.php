@@ -1,48 +1,32 @@
 <x-app-layout>
-    <x-slot name="header">
-        <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 3.75h9l3 3v13.5H6a1.5 1.5 0 01-1.5-1.5v-13A1.5 1.5 0 016 3.75zM14.5 3.75v3h3M8 11h6m-6 3h6m-6 3h4"/>
-                    </svg>
-                </div>
-                <div>
-                    <h2 class="text-lg font-bold text-slate-800">O'qishni ko'chirish arizalari</h2>
-                    <p class="mt-0.5 text-xs text-slate-500">Talabalar yuborgan arizalarni ko'rish</p>
-                </div>
-            </div>
-            <div class="hidden rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 sm:block">Jami: {{ $stats['total'] }}</div>
-        </div>
-    </x-slot>
 
-    <div class="min-h-full bg-slate-50 px-3 py-5 sm:px-5 lg:px-6">
+    <div class="min-h-full bg-[#eef3f9] px-3 py-5 sm:px-5 lg:px-6">
         <div class="mx-auto max-w-[1600px] space-y-4">
-            <div class="mb-1">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Talaba arizalari</p>
-                <h1 class="mt-1 text-xl font-bold text-slate-800">O'qishni ko'chirish bo'yicha nazorat</h1>
+            <div class="rounded-2xl bg-gradient-to-br from-[#102a56] via-[#1e5da8] to-[#3181c8] px-6 py-5 text-white shadow-lg shadow-blue-900/15">
+                <h1 class="text-2xl font-bold">O'qishni ko'chirish arizalari</h1>
+                <p class="mt-1 text-sm text-white/80">Talabalar yuborgan arizalarni ko'rish, saralash va ko'rib chiqish oynasi</p>
             </div>
 
-            <div class="grid grid-cols-4 gap-3">
-                <div class="rounded-xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <div class="rounded-xl border border-slate-200 border-l-4 border-l-sky-500 bg-white p-4 shadow-sm">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-blue-700">Jami</span><span class="h-2.5 w-2.5 rounded-full bg-blue-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-slate-800">{{ $stats['total'] }}</p>
                 </div>
-                <div class="rounded-xl border border-amber-100 bg-amber-50 p-4 shadow-sm">
+                <div class="rounded-xl border border-slate-200 border-l-4 border-l-amber-500 bg-white p-4 shadow-sm">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-amber-700">Kutilmoqda</span><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-amber-800">{{ $stats['pending'] }}</p>
                 </div>
-                <div class="rounded-xl border border-teal-100 bg-teal-50 p-4 shadow-sm">
+                <div class="rounded-xl border border-slate-200 border-l-4 border-l-emerald-500 bg-white p-4 shadow-sm">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-teal-700">Qabul qilingan</span><span class="h-2.5 w-2.5 rounded-full bg-teal-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-teal-800">{{ $stats['approved'] }}</p>
                 </div>
-                <div class="rounded-xl border border-rose-100 bg-rose-50 p-4 shadow-sm">
+                <div class="rounded-xl border border-slate-200 border-l-4 border-l-rose-500 bg-white p-4 shadow-sm">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-rose-700">Rad etilgan</span><span class="h-2.5 w-2.5 rounded-full bg-rose-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-rose-800">{{ $stats['rejected'] }}</p>
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
                     <div><h3 class="text-sm font-bold text-slate-800">Arizalar ro'yxati</h3><p class="mt-0.5 text-xs text-slate-500">Topildi: {{ $applications->total() }} ta</p></div>
                     <div class="flex items-center gap-2">
@@ -58,7 +42,7 @@
                 <div class="overflow-x-auto">
                     <form id="transfer-filters" method="GET">
                         <table class="min-w-[1180px] w-full text-left text-sm">
-                            <thead class="bg-slate-100 text-[10px] uppercase tracking-wide text-slate-600">
+                            <thead class="bg-[#e8eff7] text-[10px] uppercase tracking-wide text-slate-600">
                                 <tr>
                                     <th class="px-4 py-3">№</th><th class="px-4 py-3">Talaba</th><th class="px-4 py-3">O'qish ma'lumoti</th><th class="px-4 py-3">Telefon</th><th class="px-4 py-3">Sabab</th><th class="px-4 py-3">Buyruq</th><th class="px-4 py-3">Holat</th><th class="px-4 py-3">Vaqt</th>
                                 </tr>

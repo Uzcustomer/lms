@@ -1075,6 +1075,14 @@
         @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
+        <a href="{{ route('admin.student-transfer-applications.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.student-transfer-applications.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 3.75h7l3 3v13.5H7A1.5 1.5 0 015.5 18.75v-13A1.5 1.5 0 017 3.75zM13.5 3.75v3H17M8.5 11h6m-6 3h5m-5 3h3"/>
+            </svg>
+            O'qishni ko'chirish arizalari
+        </a>
+
         <a href="{{ route('admin.academic-mobility.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.academic-mobility.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

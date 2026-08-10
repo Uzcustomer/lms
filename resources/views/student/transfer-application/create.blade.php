@@ -51,6 +51,11 @@
                 </div>
 
                 <div>
+                    <label for="target_institution" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirmoqchi bo'lgan ta'lim tashkiloti <span class="text-red-500">*</span></label>
+                    <input id="target_institution" name="target_institution" type="text" required maxlength="255" value="{{ old('target_institution') }}" placeholder="Ta'lim tashkiloti nomini kiriting..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+
+                <div>
                     <label for="reason" class="mb-2 block text-sm font-semibold text-slate-700">O'qishni ko'chirish sababi <span class="text-red-500">*</span></label>
                     <textarea id="reason" name="reason" rows="5" required minlength="10" maxlength="2000" placeholder="O'qishni ko'chirish sababini batafsil yozing..." class="mt-1 w-full rounded-xl border-slate-300 px-3 py-3 text-sm leading-6 shadow-sm focus:border-blue-500 focus:ring-blue-500">{{ old('reason') }}</textarea>
                     <p class="mt-2 text-xs text-slate-400">Sababni aniq va tushunarli yozing.</p>

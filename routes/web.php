@@ -247,6 +247,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\StudentTransferApplicationController::class, 'index'])->name('index');
                 Route::get('/{application}/document', [\App\Http\Controllers\Admin\StudentTransferApplicationController::class, 'document'])->name('document');
+                Route::get('/{application}/basis-document', [\App\Http\Controllers\Admin\StudentTransferApplicationController::class, 'basisDocument'])->name('basis-document');
             });
 
         // Akademik mobillik: Registrator ariza yaratadi, O'quv bo'limi va prorektor tasdiqlaydi.

@@ -1034,15 +1034,35 @@ class TimetableController extends Controller
             return $inScope($c);
         });
 
-        // Tartib: eng ko'p cheklovli avval — ma'ruza (ko'p guruh band qiladi),
-        // ko'proq guruh, ko'proq talaba
-        // Amaliylar orasida KAM haftalik karta avval keladi: ma'ruza o'rnini
-        // bosuvchi amaliy ma'ruza slotini egallashi, har haftalik amaliy esa
-        // uning ketidan tizilishi kerak.
-        $toPlace = $toPlace->sort(function ($a, $b) {
-            $ka = [$a->specialty_name, (int) $a->course, $a->training_type === 'lecture' ? 0 : 1,
+        // Joylashtirish ustuvorligi:
+        //   1) ma'ruzalar;
+        //   2) shu ma'ruzaga bog'langan amaliy kartalar;
+        //   3) boshqa amaliy kartalar.
+        // Ma'ruza bilan bog'langan amaliyot avval joylashsa, oddiy fanlar uning
+        // guruh/para/xona slotlarini oldindan egallab olmaydi.
+        $placementSubjectKey = function ($c): string {
+            return (string) ($c->faculty_name ?? '') . '|'
+                . $this->specKey($c->specialty_name) . '|' . (int) $c->course
+                . '|' . (string) $c->oqim_label
+                . '|' . $this->normSubject((string) $c->subject_name);
+        };
+        $lectureKeys = [];
+        foreach ($all as $card) {
+            if ($card->training_type === 'lecture') {
+                $lectureKeys[$placementSubjectKey($card)] = true;
+            }
+        }
+
+        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $placementSubjectKey) {
+            $priority = function ($c) use ($lectureKeys, $placementSubjectKey): int {
+                if ($c->training_type === 'lecture') {
+                    return 0;
+                }
+                return isset($lectureKeys[$placementSubjectKey($c)]) ? 1 : 2;
+            };
+            $ka = [$a->specialty_name, (int) $a->course, $priority($a),
                    (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
-            $kb = [$b->specialty_name, (int) $b->course, $b->training_type === 'lecture' ? 0 : 1,
+            $kb = [$b->specialty_name, (int) $b->course, $priority($b),
                    (int) $b->weeks, -count($b->occupiedGroups()), -(int) $b->students];
             return $ka <=> $kb;
         })->values();

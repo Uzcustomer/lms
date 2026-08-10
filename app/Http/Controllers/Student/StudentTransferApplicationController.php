@@ -17,11 +17,18 @@ class StudentTransferApplicationController extends Controller
 
         abort_unless($student, 401);
 
+        $applications = StudentTransferApplication::where('student_id', $student->id)
+            ->latest()
+            ->get();
+
+        $latest = $applications->first();
+        $canSubmit = !$latest || $latest->status === 'rejected';
+
         return view('student.transfer-application.create', [
             'student' => $student,
-            'applications' => StudentTransferApplication::where('student_id', $student->id)
-                ->latest()
-                ->get(),
+            'applications' => $applications,
+            'latest' => $latest,
+            'canSubmit' => $canSubmit,
         ]);
     }
 

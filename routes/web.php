@@ -1427,6 +1427,11 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/english-group-application', [\App\Http\Controllers\Student\EnglishGroupApplicationController::class, 'store'])->name('english-group-application.store');
         Route::get('/english-group-application/{id}/certificate', [\App\Http\Controllers\Student\EnglishGroupApplicationController::class, 'certificate'])->name('english-group-application.certificate');
 
+        // O'qishni ko'chirish uchun ariza
+        Route::get('/transfer-application', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'create'])->name('transfer-application.create');
+        Route::post('/transfer-application', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'store'])->name('transfer-application.store');
+        Route::get('/transfer-application/{id}/document', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'document'])->name('transfer-application.document');
+
         // Ish e'lonlari
         Route::get('/job-listings', function () {
             return view('student.job-listings');

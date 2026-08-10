@@ -2947,6 +2947,7 @@ class TimetableController extends Controller
         }
 
         $occupied = [];   // "qator|ustun" => true (birlashtirilgan kataklar egallagan joy)
+        $rowHeights = []; // Katak ichidagi o'ralgan matnga mos qator balandligi
         $maxCol = 1;
         $maxRow = $firstRow;
 
@@ -2975,6 +2976,21 @@ class TimetableController extends Controller
                         $text,
                         \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
                     );
+
+                    // Excel birlashtirilgan kataklarni avtomatik balandlashtirmaydi.
+                    // Matnning haqiqiy qatorlari va ustun kengligida o'ralishini taxminan
+                    // hisoblab, balandlikni rowspan bo'ylab teng taqsimlaymiz.
+                    $visualLines = 0;
+                    $charsPerLine = max(8, 14 * $cs);
+                    foreach (preg_split('/\R/u', $text) ?: [$text] as $line) {
+                        $length = function_exists('mb_strlen') ? mb_strlen($line, 'UTF-8') : strlen($line);
+                        $visualLines += max(1, (int) ceil($length / $charsPerLine));
+                    }
+                    $heightPerRow = min(409, max(15, (($visualLines * 10) + 4) / $rs));
+                    for ($heightRow = 0; $heightRow < $rs; $heightRow++) {
+                        $targetRow = $excelRow + $heightRow;
+                        $rowHeights[$targetRow] = max($rowHeights[$targetRow] ?? 15, $heightPerRow);
+                    }
                 }
                 if ($cs > 1 || $rs > 1) {
                     $sheet->mergeCells($from . ':' . $to);
@@ -3014,7 +3030,13 @@ class TimetableController extends Controller
             ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER)
             ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
             ->setWrapText(true);
-        $sheet->getStyle($dim)->getFont()->setSize(9);
+        $sheet->getStyle($dim)->getFont()->setSize(8);
+
+        // Ikkinchi va keyingi fanlar yashirinib qolmasligi uchun qatorlar
+        // katak ichidagi barcha matnga mos balandlikda ochiladi.
+        foreach ($rowHeights as $rowNumber => $height) {
+            $sheet->getRowDimension($rowNumber)->setRowHeight($height);
+        }
 
         for ($i = 1; $i <= $maxCol; $i++) {
             $sheet->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i))

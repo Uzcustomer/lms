@@ -1095,6 +1095,10 @@ class TimetableController extends Controller
         // birinchi joylashgan ma'ruza qolgan hamma fakultet/oqimning amaliylarini
         // o'z kuniga va slotiga tortib, ular u yerga sig'may uzilib qolardi.
         $chain = [];
+        // Har bir amaliy guruh uchun ma'ruzadan keyingi navbatdagi slot.
+        // Oqimdagi guruhlar bir vaqtda boshlaydi, bitta guruhning kartalari esa
+        // o'zaro ketma-ket davom etadi.
+        $practiceNext = [];
         $subjOf = fn($c) => (string) ($c->faculty_name ?? '') . '|'
             . $this->specKey($c->specialty_name) . '|' . (int) $c->course
             . '|' . (string) $c->oqim_label
@@ -1276,17 +1280,20 @@ class TimetableController extends Controller
                 // ma'ruza slotiga yoki uning ketiga tushadi).
                 $spot = null;
                 $uChainKey = $subjOf($lead);
-                if ($lead->training_type === 'practice' && isset($chain[$uChainKey])) {
+                $linkedPractice = $lead->training_type === 'practice' && isset($chain[$uChainKey]);
+                if ($linkedPractice) {
                     $uCh = $chain[$uChainKey];
-                    $uTotal = $weeksFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
-                    $spot = $chainSpot(
-                        $segs, $uCh, (int) $lead->weeks === $uTotal - (int) $uCh['lw'],
-                        $uDays, $uPairs, $uScope
-                    );
-                    if ($spot !== null) {
-                        $blockLen = array_sum(array_column($segs, 'len'));
-                        $chain[$uChainKey]['next'] = max((int) $uCh['next'], (int) $spot[0]['pair'] + $blockLen);
+                    $practiceKey = $this->spreadKey($lead);
+                    $uCh['next'] = $practiceNext[$practiceKey] ?? $uCh['next'];
+                    // Ma'ruzasi bor amaliy blok faqat o'sha kuni, ma'ruzadan
+                    // keyin joylashadi. Konflikt bo'lsa boshqa kun qidirilmaydi.
+                    $spot = $chainSpot($segs, $uCh, false, $uDays, $uPairs, $uScope);
+                    if ($spot === null) {
+                        $unplaced += count($unit);
+                        continue;
                     }
+                    $blockLen = array_sum(array_column($segs, 'len'));
+                    $practiceNext[$practiceKey] = (int) $spot[0]['pair'] + $blockLen;
                 }
                 if ($spot === null) {
                     $penaltyFor = fn(int $d, int $p) => $this->slotPenalty(
@@ -1372,14 +1379,17 @@ class TimetableController extends Controller
             $sKey = $subjOf($c);
             $ch = $chain[$sKey] ?? null;
             if ($c->training_type === 'practice' && $ch) {
-                $total = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
-                $standIn = (int) $c->weeks === $total - (int) $ch['lw'];
+                $practiceKey = $this->spreadKey($c);
+                $cardChain = $ch;
+                $cardChain['next'] = $practiceNext[$practiceKey] ?? $ch['next'];
                 $seg = [[
                     'card' => $c, 'len' => $need, 'groups' => $groups,
                     'teacher' => $teacherId, 'room_required' => $roomRequired,
                     'pool' => $poolArr, 'mask' => $cardMask,
                 ]];
-                $spot = $chainSpot($seg, $ch, $standIn, $days, $pairs, $scopeKey);
+                // Ma'ruzasi bor amaliy karta faqat o'sha kuni va ma'ruzadan
+                // keyin joylashadi; sig'masa odatiy boshqa kun qidiruviga tushmaydi.
+                $spot = $chainSpot($seg, $cardChain, false, $days, $pairs, $scopeKey);
                 if ($spot !== null) {
                     $c->day = $spot[0]['day'];
                     $c->pair = $spot[0]['pair'];
@@ -1390,7 +1400,7 @@ class TimetableController extends Controller
                         $roomsAssigned++;
                     }
                     $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
-                    $chain[$sKey]['next'] = max((int) $ch['next'], (int) $c->pair + $need);
+                    $practiceNext[$practiceKey] = (int) $c->pair + $need;
                     $skC = $this->spreadKey($c);
                     $subjDay[$skC . '|' . $c->day] = ($subjDay[$skC . '|' . $c->day] ?? 0) + 1;
                     $subjSlots[$skC][] = [(int) $c->day, (int) $c->pair, $need];
@@ -1401,6 +1411,9 @@ class TimetableController extends Controller
                     $placed++;
                     continue;
                 }
+
+                $unplaced++;
+                continue;
             }
 
             // ── Shu darsning boshqa paralari allaqachon joylashgan bo'lsa ────

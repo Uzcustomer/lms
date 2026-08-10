@@ -28,16 +28,18 @@
         </div>
 
         @if(!$canSubmit && $latest)
-            @php
-                $compactStatus = [
-                    'pending' => ["Ko'rib chiqilmoqda", 'bg-amber-100 text-amber-700'],
-                    'approved' => ['Qabul qilindi', 'bg-emerald-100 text-emerald-700'],
-                    'rejected' => ['Rad etildi', 'bg-red-100 text-red-700'],
-                ][$latest->status] ?? [$latest->status, 'bg-slate-100 text-slate-700'];
-            @endphp
-            <div class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                <span class="text-xs font-semibold text-slate-600">Ariza holati</span>
-                <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $compactStatus[1] }}">{{ $compactStatus[0] }}</span>
+            <div class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm">
+                <div class="flex items-start gap-3">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-emerald-800">Arizangiz yuborildi</p>
+                        <p class="mt-1 text-sm leading-6 text-emerald-700">Transfer.edu.uz saytiga bergan arizangiz tasdiqlanganda va bizga bergan arizangiz ko'rib chiqilganda sizga ma'lumot beriladi. Arizangiz uchun rahmat.</p>
+                    </div>
+                </div>
             </div>
         @endif
 

@@ -2981,15 +2981,14 @@ class TimetableController extends Controller
                     // Matnning haqiqiy qatorlari va ustun kengligida o'ralishini taxminan
                     // hisoblab, balandlikni rowspan bo'ylab teng taqsimlaymiz.
                     $visualLines = 0;
-                    // 8 pt shrift va 16 birlikli ustunda uzun fan nomlari Excel
-                    // tomonidan taxminan 10 belgidan keyin o'raladi. Konservativ
-                    // hisob barcha fanlar fayl ochilishi bilan ko'rinishini ta'minlaydi.
-                    $charsPerLine = max(8, 10 * $cs);
+                    // 8 pt shrift va 16 birlikli ustun uchun o'ralgan matn
+                    // balandligini hisoblaymiz; eksport ixcham, lekin o'qiladigan qoladi.
+                    $charsPerLine = max(8, 12 * $cs);
                     foreach (preg_split('/\R/u', $text) ?: [$text] as $line) {
                         $length = function_exists('mb_strlen') ? mb_strlen($line, 'UTF-8') : strlen($line);
                         $visualLines += max(1, (int) ceil($length / $charsPerLine));
                     }
-                    $heightPerRow = min(409, max(15, (($visualLines * 12) + 8) / $rs));
+                    $heightPerRow = min(300, max(15, (($visualLines * 9.5) + 5) / $rs));
                     for ($heightRow = 0; $heightRow < $rs; $heightRow++) {
                         $targetRow = $excelRow + $heightRow;
                         $rowHeights[$targetRow] = max($rowHeights[$targetRow] ?? 15, $heightPerRow);

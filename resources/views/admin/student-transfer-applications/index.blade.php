@@ -2,25 +2,25 @@
 
     <div class="min-h-full bg-[#eef3f9] px-3 py-5 sm:px-5 lg:px-6">
         <div class="mx-auto max-w-[1600px] space-y-4">
-            <div class="rounded-2xl bg-gradient-to-br from-[#102a56] via-[#1e5da8] to-[#3181c8] px-6 py-5 text-white shadow-lg shadow-blue-900/15">
+            <div class="rounded-2xl px-6 py-5 text-white shadow-lg" style="background: linear-gradient(135deg, #102a56 0%, #1e5da8 68%, #3181c8 100%) !important;">
                 <h1 class="text-2xl font-bold">O'qishni ko'chirish arizalari</h1>
                 <p class="mt-1 text-sm text-white/80">Talabalar yuborgan arizalarni ko'rish, saralash va ko'rib chiqish oynasi</p>
             </div>
 
             <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
-                <div class="rounded-xl border border-slate-200 border-l-4 border-l-sky-500 bg-white p-4 shadow-sm">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="border-left: 4px solid #0ea5e9 !important;">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-blue-700">Jami</span><span class="h-2.5 w-2.5 rounded-full bg-blue-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-slate-800">{{ $stats['total'] }}</p>
                 </div>
-                <div class="rounded-xl border border-slate-200 border-l-4 border-l-amber-500 bg-white p-4 shadow-sm">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="border-left: 4px solid #f59e0b !important;">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-amber-700">Kutilmoqda</span><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-amber-800">{{ $stats['pending'] }}</p>
                 </div>
-                <div class="rounded-xl border border-slate-200 border-l-4 border-l-emerald-500 bg-white p-4 shadow-sm">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="border-left: 4px solid #10b981 !important;">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-teal-700">Qabul qilingan</span><span class="h-2.5 w-2.5 rounded-full bg-teal-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-teal-800">{{ $stats['approved'] }}</p>
                 </div>
-                <div class="rounded-xl border border-slate-200 border-l-4 border-l-rose-500 bg-white p-4 shadow-sm">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" style="border-left: 4px solid #ef4444 !important;">
                     <div class="flex items-center justify-between"><span class="text-xs font-semibold text-rose-700">Rad etilgan</span><span class="h-2.5 w-2.5 rounded-full bg-rose-500"></span></div>
                     <p class="mt-2 text-2xl font-bold text-rose-800">{{ $stats['rejected'] }}</p>
                 </div>

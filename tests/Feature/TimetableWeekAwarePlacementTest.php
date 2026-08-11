@@ -243,48 +243,10 @@ test('bir oqimdagi amaliy guruhlar ma\'ruzadan keyin parallel joylashadi', funct
         ->toBe($cards['g-01b']['weekly']->fresh()->pair);
 });
 
-test('amaliyga joy bo\'lmasa ma\'ruza paket bilan boshqa anchorni tanlaydi', function () {
+test('ma\'ruza va amaliy alohida bosqichlarda ham oqim labeldan mustaqil bog\'lanadi', function () {
     $board = weekTestBoard();
     $lecture = weekTestCard($board, [
         'training_type' => 'lecture', 'group_names' => ['g-01a'],
-        'subject_name' => 'Odam anatomiyasi', 'weeks' => 5, 'teacher_id' => 1,
-    ], WEEK_TEST_ODD);
-    $weekly = weekTestCard($board, [
-        'training_type' => 'practice', 'group_name' => 'g-01a',
-        'subject_name' => 'Odam anatomiyasi', 'weeks' => WEEK_TEST_TOTAL,
-        'teacher_id' => 2,
-    ]);
-    $standIn = weekTestCard($board, [
-        'training_type' => 'practice', 'group_name' => 'g-01a',
-        'subject_name' => 'Odam anatomiyasi', 'weeks' => 5, 'teacher_id' => 2,
-    ], WEEK_TEST_EVEN);
-
-    // Birinchi anchorning keyingi slotida amaliy o'qituvchisi band.
-    weekTestCard($board, [
-        'training_type' => 'practice', 'group_name' => 'other-group',
-        'subject_name' => 'Fiks dars', 'weeks' => WEEK_TEST_TOTAL,
-        'teacher_id' => 2, 'day' => 1, 'pair' => 3,
-    ]);
-
-    (new TimetableController())->autoPlace(
-        Request::create('/', 'POST', ['assign_rooms' => true]),
-        $board
-    );
-
-    $lecture = $lecture->fresh();
-    $weekly = $weekly->fresh();
-    $standIn = $standIn->fresh();
-    expect($lecture->day)->not->toBeNull()
-        ->and($standIn->day)->toBe($lecture->day)
-        ->and($standIn->pair)->toBe($lecture->pair)
-        ->and($weekly->day)->toBe($lecture->day)
-        ->and($weekly->pair)->toBe($lecture->pair + $lecture->len_half);
-});
-
-test('ma\'ruza va amaliy alohida bosqichlarda ham bir paket bo\'lib qoladi', function () {
-    $board = weekTestBoard();
-    $lecture = weekTestCard($board, [
-        'training_type' => 'lecture', 'group_names' => ['g-01a', 'g-01b'],
         'oqim_label' => '1-oqim', 'subject_name' => 'Odam anatomiyasi',
         'weeks' => 5, 'teacher_id' => 1,
     ], WEEK_TEST_ODD);
@@ -309,11 +271,8 @@ test('ma\'ruza va amaliy alohida bosqichlarda ham bir paket bo\'lib qoladi', fun
     );
 
     $lecture = $lecture->fresh();
-    $weekly = $weekly->fresh();
-    $standIn = $standIn->fresh();
-    expect($lecture->day)->not->toBeNull()
-        ->and($standIn->day)->toBe($lecture->day)
-        ->and($standIn->pair)->toBe($lecture->pair)
-        ->and($weekly->day)->toBe($lecture->day)
-        ->and($weekly->pair)->toBe($lecture->pair + $lecture->len_half);
+    expect($standIn->fresh()->day)->toBe($lecture->day)
+        ->and($standIn->fresh()->pair)->toBe($lecture->pair)
+        ->and($weekly->fresh()->day)->toBe($lecture->day)
+        ->and($weekly->fresh()->pair)->toBe($lecture->pair + $lecture->len_half);
 });

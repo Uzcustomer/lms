@@ -280,3 +280,40 @@ test('amaliyga joy bo\'lmasa ma\'ruza paket bilan boshqa anchorni tanlaydi', fun
         ->and($weekly->day)->toBe($lecture->day)
         ->and($weekly->pair)->toBe($lecture->pair + $lecture->len_half);
 });
+
+test('ma\'ruza va amaliy alohida bosqichlarda ham bir paket bo\'lib qoladi', function () {
+    $board = weekTestBoard();
+    $lecture = weekTestCard($board, [
+        'training_type' => 'lecture', 'group_names' => ['g-01a', 'g-01b'],
+        'oqim_label' => '1-oqim', 'subject_name' => 'Odam anatomiyasi',
+        'weeks' => 5, 'teacher_id' => 1,
+    ], WEEK_TEST_ODD);
+    $weekly = weekTestCard($board, [
+        'training_type' => 'practice', 'group_name' => 'g-01a',
+        'oqim_label' => 'eski-label', 'subject_name' => 'Odam anatomiyasi',
+        'weeks' => WEEK_TEST_TOTAL, 'teacher_id' => 2,
+    ]);
+    $standIn = weekTestCard($board, [
+        'training_type' => 'practice', 'group_name' => 'g-01a',
+        'oqim_label' => 'eski-label', 'subject_name' => 'Odam anatomiyasi',
+        'weeks' => 5, 'teacher_id' => 2,
+    ], WEEK_TEST_EVEN);
+
+    (new TimetableController())->autoPlace(
+        Request::create('/', 'POST', ['reset' => true, 'training_type' => 'lecture']),
+        $board
+    );
+    (new TimetableController())->autoPlace(
+        Request::create('/', 'POST', ['reset' => true, 'training_type' => 'practice']),
+        $board
+    );
+
+    $lecture = $lecture->fresh();
+    $weekly = $weekly->fresh();
+    $standIn = $standIn->fresh();
+    expect($lecture->day)->not->toBeNull()
+        ->and($standIn->day)->toBe($lecture->day)
+        ->and($standIn->pair)->toBe($lecture->pair)
+        ->and($weekly->day)->toBe($lecture->day)
+        ->and($weekly->pair)->toBe($lecture->pair + $lecture->len_half);
+});

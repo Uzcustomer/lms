@@ -145,7 +145,9 @@ function lecturePackagePlace(array $items, array $opts = [])
         $opts['group_busy'] ?? [],
         $opts['teacher_busy'] ?? [],
         $opts['room_busy'] ?? [],
-        $opts['penalty'] ?? fn(int $day, int $pair) => ($day - 1) * 100 + $pair
+        $opts['penalty'] ?? fn(int $day, int $pair) => ($day - 1) * 100 + $pair,
+        $opts['fixed_day'] ?? null,
+        $opts['fixed_start'] ?? null
     );
 }
 
@@ -212,4 +214,44 @@ test('amaliyning keyingi sloti band bo\'lsa paket anchorni birga ko\'chiradi', f
         ->and($spot[0]['pair'])->toBe(4)
         ->and($spot[1]['pair'])->toBe(4)
         ->and($spot[2]['pair'])->toBe(6);
+});
+
+test('oldin joylashgan ma\'ruzaga amaliylar o\'sha kun va slotdan bog\'lanadi', function () {
+    $odd = 0b010101;
+    $even = 0b101010;
+    $all = $odd | $even;
+    $items = [
+        lecturePackageItem('practice', ['g-a'], 2, 0, $even),
+        lecturePackageItem('practice', ['g-a'], 2, 2, $all),
+    ];
+    $groupBusy = [
+        'F1|Davolash|1|2|3' => ['g-a' => $odd],
+        'F1|Davolash|1|2|4' => ['g-a' => $odd],
+    ];
+
+    $spot = lecturePackagePlace($items, [
+        'group_busy' => $groupBusy,
+        'fixed_day' => 2,
+        'fixed_start' => 3,
+    ]);
+
+    expect($spot)->toHaveCount(2)
+        ->and($spot[0]['day'])->toBe(2)
+        ->and($spot[0]['pair'])->toBe(3)
+        ->and($spot[1]['day'])->toBe(2)
+        ->and($spot[1]['pair'])->toBe(5);
+});
+
+test('oldin joylashgan ma\'ruza paketi sig\'masa boshqa kunga ko\'chmaydi', function () {
+    $all = 0b111111;
+    $items = [lecturePackageItem('practice', ['g-a'], 2, 2, $all)];
+    $teacherBusy = ['2|2|5' => $all];
+
+    $spot = lecturePackagePlace($items, [
+        'teacher_busy' => $teacherBusy,
+        'fixed_day' => 2,
+        'fixed_start' => 3,
+    ]);
+
+    expect($spot)->toBeNull();
 });

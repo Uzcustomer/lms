@@ -1046,6 +1046,39 @@ class TimetableController extends Controller
                 . '|' . (string) $c->oqim_label
                 . '|' . $this->normSubject((string) $c->subject_name);
         };
+        $placementBaseKey = fn($c) => (string) ($c->faculty_name ?? '') . '|'
+            . $this->specKey($c->specialty_name) . '|' . (int) $c->course
+            . '|' . $this->normSubject((string) $c->subject_name);
+        $lecturesByBase = [];
+        foreach ($all as $card) {
+            if ($card->training_type === 'lecture') {
+                $lecturesByBase[$placementBaseKey($card)][] = $card;
+            }
+        }
+        // Eski kartalarda oqim_label farq qilishi mumkin. Amaliy guruhni fan
+        // ma'ruzasiga uning group_names tarkibi bo'yicha bog'laymiz.
+        $lectureForPractice = function ($practice) use ($lecturesByBase, $placementBaseKey) {
+            $candidates = array_values(array_filter(
+                $lecturesByBase[$placementBaseKey($practice)] ?? [],
+                fn($lecture) => in_array((string) $practice->group_name, $lecture->occupiedGroups(), true)
+            ));
+            if (count($candidates) <= 1) {
+                return $candidates[0] ?? null;
+            }
+            foreach ($candidates as $lecture) {
+                if ((string) $lecture->oqim_label === (string) $practice->oqim_label) {
+                    return $lecture;
+                }
+            }
+            return $candidates[0];
+        };
+        $packageKeyForCard = function ($card) use ($placementSubjectKey, $lectureForPractice): string {
+            if ($card->training_type === 'lecture') {
+                return $placementSubjectKey($card);
+            }
+            $lecture = $lectureForPractice($card);
+            return $lecture ? $placementSubjectKey($lecture) : $placementSubjectKey($card);
+        };
         $lectureKeys = [];
         foreach ($all as $card) {
             if ($card->training_type === 'lecture') {
@@ -1053,12 +1086,12 @@ class TimetableController extends Controller
             }
         }
 
-        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $placementSubjectKey) {
-            $priority = function ($c) use ($lectureKeys, $placementSubjectKey): int {
+        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $packageKeyForCard) {
+            $priority = function ($c) use ($lectureKeys, $packageKeyForCard): int {
                 if ($c->training_type === 'lecture') {
                     return 0;
                 }
-                return isset($lectureKeys[$placementSubjectKey($c)]) ? 1 : 2;
+                return isset($lectureKeys[$packageKeyForCard($c)]) ? 1 : 2;
             };
             $ka = [$a->specialty_name, (int) $a->course, $priority($a),
                    (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
@@ -1198,37 +1231,36 @@ class TimetableController extends Controller
         // Paket to'liq sig'masa ma'ruzani yolg'iz qoldirmay, boshqa anchor
         // sinab ko'ramiz; hech biri sig'masa paketning hammasi joylashmaydi.
         $processedPackageIds = [];
-        if ($scopeType === null) {
-            $placedSubjectKeys = [];
+        if ($scopeType !== 'lecture') {
+            $lectureByPackageKey = [];
             foreach ($all as $card) {
-                if ($card->day && $card->pair) {
-                    $placedSubjectKeys[$placementSubjectKey($card)] = true;
+                if ($card->training_type === 'lecture') {
+                    $lectureByPackageKey[$placementSubjectKey($card)] = $card;
                 }
             }
 
             $subjectPackages = [];
             foreach ($toPlace as $card) {
-                $subjectPackages[$placementSubjectKey($card)][] = $card;
+                $subjectPackages[$packageKeyForCard($card)][] = $card;
             }
 
             foreach ($subjectPackages as $packageKey => $packageCards) {
-                if (isset($placedSubjectKeys[$packageKey])) {
-                    continue; // qisman joylashgan fan eski chain logikasida davom etadi
-                }
-                $lectures = array_values(array_filter(
-                    $packageCards,
-                    fn($card) => $card->training_type === 'lecture'
-                ));
+                /** @var TimetableCard|null $lecture */
+                $lecture = $lectureByPackageKey[$packageKey] ?? null;
                 $practices = array_values(array_filter(
                     $packageCards,
                     fn($card) => $card->training_type === 'practice'
                 ));
-                if (count($lectures) !== 1 || !$practices) {
+                if (!$lecture || !$practices) {
                     continue;
                 }
 
-                /** @var TimetableCard $lecture */
-                $lecture = $lectures[0];
+                $lectureIsPlaced = (bool) ($lecture->day && $lecture->pair);
+                // Faqat amaliy rejimida joylashmagan ma'ruzani ko'chirmaymiz.
+                if (!$lectureIsPlaced && $scopeType === 'practice') {
+                    continue;
+                }
+
                 [$packageDays, $packagePairs] = $dimsFor(
                     $lecture->faculty_name,
                     $lecture->specialty_name,
@@ -1271,7 +1303,11 @@ class TimetableController extends Controller
                     ];
                 };
 
-                $appendItem($lecture, 0);
+                // Joylashgan ma'ruza bandlik xaritasida allaqachon mavjud. Uni
+                // paketga qayta qo'shsak, o'zi bilan to'qnashib qoladi.
+                if (!$lectureIsPlaced) {
+                    $appendItem($lecture, 0);
+                }
                 $practiceByGroup = [];
                 foreach ($practices as $practice) {
                     $practiceByGroup[(string) $practice->group_name][] = $practice;
@@ -1325,7 +1361,9 @@ class TimetableController extends Controller
                         false,
                         $subjSlots,
                         $lectureMask
-                    )
+                    ),
+                    $lectureIsPlaced ? (int) $lecture->day : null,
+                    $lectureIsPlaced ? (int) $lecture->pair : null
                 );
 
                 foreach ($packageCards as $card) {
@@ -2161,7 +2199,9 @@ class TimetableController extends Controller
         array $groupBusy,
         array $teacherBusy,
         array $roomBusy,
-        callable $penaltyFor
+        callable $penaltyFor,
+        ?int $fixedDay = null,
+        ?int $fixedStart = null
     ): ?array {
         if (!$items) {
             return null;
@@ -2174,8 +2214,12 @@ class TimetableController extends Controller
 
         $best = null;
         $bestPenalty = INF;
-        for ($day = 1; $day <= $days; $day++) {
-            for ($start = 1; $start + $span - 1 <= $pairs; $start++) {
+        $firstDay = $fixedDay ?? 1;
+        $lastDay = $fixedDay ?? $days;
+        for ($day = $firstDay; $day <= $lastDay; $day++) {
+            $firstStart = $fixedStart ?? 1;
+            $lastStart = $fixedStart ?? ($pairs - $span + 1);
+            for ($start = $firstStart; $start <= $lastStart && $start + $span - 1 <= $pairs; $start++) {
                 $localGroups = [];
                 $localTeachers = [];
                 $localRooms = [];

@@ -205,3 +205,78 @@ test('ma\'ruzasiz haftadagi amaliy yuk yaxlit va ma\'ruza vaqtidan boshlanadi',
         expect($slots[0])->toBe((int) $lecture->pair);                            // ma'ruza vaqtidan
     }
 )->with('soat taqsimotlari');
+
+test('bir oqimdagi amaliy guruhlar ma\'ruzadan keyin parallel joylashadi', function () {
+    $board = weekTestBoard();
+    $lecture = weekTestCard($board, [
+        'training_type' => 'lecture', 'group_names' => ['g-01a', 'g-01b'],
+        'subject_name' => 'Odam anatomiyasi', 'weeks' => 5, 'teacher_id' => 1,
+    ], WEEK_TEST_ODD);
+
+    $cards = [];
+    foreach ([['g-01a', 2], ['g-01b', 3]] as [$group, $teacher]) {
+        $cards[$group]['weekly'] = weekTestCard($board, [
+            'training_type' => 'practice', 'group_name' => $group,
+            'subject_name' => 'Odam anatomiyasi', 'weeks' => WEEK_TEST_TOTAL,
+            'teacher_id' => $teacher,
+        ]);
+        $cards[$group]['stand_in'] = weekTestCard($board, [
+            'training_type' => 'practice', 'group_name' => $group,
+            'subject_name' => 'Odam anatomiyasi', 'weeks' => 5,
+            'teacher_id' => $teacher,
+        ], WEEK_TEST_EVEN);
+    }
+
+    weekTestPlace($board);
+    $lecture = $lecture->fresh();
+
+    foreach ($cards as $groupCards) {
+        $weekly = $groupCards['weekly']->fresh();
+        $standIn = $groupCards['stand_in']->fresh();
+        expect($standIn->day)->toBe($lecture->day)
+            ->and($standIn->pair)->toBe($lecture->pair)
+            ->and($weekly->day)->toBe($lecture->day)
+            ->and($weekly->pair)->toBe($lecture->pair + $lecture->len_half);
+    }
+
+    expect($cards['g-01a']['weekly']->fresh()->pair)
+        ->toBe($cards['g-01b']['weekly']->fresh()->pair);
+});
+
+test('amaliyga joy bo\'lmasa ma\'ruza paket bilan boshqa anchorni tanlaydi', function () {
+    $board = weekTestBoard();
+    $lecture = weekTestCard($board, [
+        'training_type' => 'lecture', 'group_names' => ['g-01a'],
+        'subject_name' => 'Odam anatomiyasi', 'weeks' => 5, 'teacher_id' => 1,
+    ], WEEK_TEST_ODD);
+    $weekly = weekTestCard($board, [
+        'training_type' => 'practice', 'group_name' => 'g-01a',
+        'subject_name' => 'Odam anatomiyasi', 'weeks' => WEEK_TEST_TOTAL,
+        'teacher_id' => 2,
+    ]);
+    $standIn = weekTestCard($board, [
+        'training_type' => 'practice', 'group_name' => 'g-01a',
+        'subject_name' => 'Odam anatomiyasi', 'weeks' => 5, 'teacher_id' => 2,
+    ], WEEK_TEST_EVEN);
+
+    // Birinchi anchorning keyingi slotida amaliy o'qituvchisi band.
+    weekTestCard($board, [
+        'training_type' => 'practice', 'group_name' => 'other-group',
+        'subject_name' => 'Fiks dars', 'weeks' => WEEK_TEST_TOTAL,
+        'teacher_id' => 2, 'day' => 1, 'pair' => 3,
+    ]);
+
+    (new TimetableController())->autoPlace(
+        Request::create('/', 'POST', ['assign_rooms' => true]),
+        $board
+    );
+
+    $lecture = $lecture->fresh();
+    $weekly = $weekly->fresh();
+    $standIn = $standIn->fresh();
+    expect($lecture->day)->not->toBeNull()
+        ->and($standIn->day)->toBe($lecture->day)
+        ->and($standIn->pair)->toBe($lecture->pair)
+        ->and($weekly->day)->toBe($lecture->day)
+        ->and($weekly->pair)->toBe($lecture->pair + $lecture->len_half);
+});

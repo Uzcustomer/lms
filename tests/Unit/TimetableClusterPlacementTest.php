@@ -130,3 +130,86 @@ test('o\'qituvchi band kuni o\'tkazib yuboriladi', function () {
     expect($spot)->toHaveCount(2);
     expect($spot[0]['day'])->toBe(2);
 });
+
+function lecturePackagePlace(array $items, array $opts = [])
+{
+    $method = new ReflectionMethod(TimetableController::class, 'lecturePracticePackagePlacement');
+    $method->setAccessible(true);
+
+    return $method->invoke(
+        new TimetableController(),
+        $items,
+        $opts['days'] ?? 2,
+        $opts['pairs'] ?? 8,
+        $opts['scope'] ?? 'F1|Davolash|1',
+        $opts['group_busy'] ?? [],
+        $opts['teacher_busy'] ?? [],
+        $opts['room_busy'] ?? [],
+        $opts['penalty'] ?? fn(int $day, int $pair) => ($day - 1) * 100 + $pair
+    );
+}
+
+function lecturePackageItem(
+    string $type,
+    array $groups,
+    int $teacher,
+    int $offset,
+    int $mask
+): array {
+    $card = new TimetableCard();
+    $card->training_type = $type;
+    $card->group_name = $groups[0] ?? null;
+    $card->group_names = $type === 'lecture' ? $groups : null;
+    $card->len_half = 2;
+
+    return [
+        'card' => $card,
+        'offset' => $offset,
+        'len' => 2,
+        'groups' => $groups,
+        'teacher' => $teacher,
+        'room_required' => false,
+        'pool' => [],
+        'mask' => $mask,
+    ];
+}
+
+test('ma\'ruza paketi amaliy guruhlarni parallel joylaydi', function () {
+    $odd = 0b010101;
+    $even = 0b101010;
+    $all = $odd | $even;
+    $items = [
+        lecturePackageItem('lecture', ['g-a', 'g-b'], 1, 0, $odd),
+        lecturePackageItem('practice', ['g-a'], 2, 0, $even),
+        lecturePackageItem('practice', ['g-a'], 2, 2, $all),
+        lecturePackageItem('practice', ['g-b'], 3, 0, $even),
+        lecturePackageItem('practice', ['g-b'], 3, 2, $all),
+    ];
+
+    $spot = lecturePackagePlace($items);
+
+    expect($spot)->toHaveCount(5)
+        ->and($spot[0]['pair'])->toBe(1)
+        ->and($spot[1]['pair'])->toBe(1)
+        ->and($spot[2]['pair'])->toBe(3)
+        ->and($spot[3]['pair'])->toBe(1)
+        ->and($spot[4]['pair'])->toBe(3);
+});
+
+test('amaliyning keyingi sloti band bo\'lsa paket anchorni birga ko\'chiradi', function () {
+    $odd = 0b010101;
+    $even = 0b101010;
+    $items = [
+        lecturePackageItem('lecture', ['g-a'], 1, 0, $odd),
+        lecturePackageItem('practice', ['g-a'], 2, 0, $even),
+        lecturePackageItem('practice', ['g-a'], 2, 2, $odd | $even),
+    ];
+    $teacherBusy = ['2|1|3' => $odd | $even];
+
+    $spot = lecturePackagePlace($items, ['teacher_busy' => $teacherBusy]);
+
+    expect($spot)->toHaveCount(3)
+        ->and($spot[0]['pair'])->toBe(4)
+        ->and($spot[1]['pair'])->toBe(4)
+        ->and($spot[2]['pair'])->toBe(6);
+});

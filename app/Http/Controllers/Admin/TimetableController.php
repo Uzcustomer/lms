@@ -1191,6 +1191,186 @@ class TimetableController extends Controller
             }
         }
 
+        // Ma'ruza + amaliy paketlari boshqa fanlardan OLDIN atomar joylashadi.
+        // Har bir amaliy guruh o'z parallel yo'lagiga ega:
+        //   ma'ruzali hafta    [ma'ruza][har haftalik amaliy]
+        //   ma'ruzasiz hafta  [o'rinbosar amaliy][har haftalik amaliy]
+        // Paket to'liq sig'masa ma'ruzani yolg'iz qoldirmay, boshqa anchor
+        // sinab ko'ramiz; hech biri sig'masa paketning hammasi joylashmaydi.
+        $processedPackageIds = [];
+        if ($scopeType === null) {
+            $placedSubjectKeys = [];
+            foreach ($all as $card) {
+                if ($card->day && $card->pair) {
+                    $placedSubjectKeys[$placementSubjectKey($card)] = true;
+                }
+            }
+
+            $subjectPackages = [];
+            foreach ($toPlace as $card) {
+                $subjectPackages[$placementSubjectKey($card)][] = $card;
+            }
+
+            foreach ($subjectPackages as $packageKey => $packageCards) {
+                if (isset($placedSubjectKeys[$packageKey])) {
+                    continue; // qisman joylashgan fan eski chain logikasida davom etadi
+                }
+                $lectures = array_values(array_filter(
+                    $packageCards,
+                    fn($card) => $card->training_type === 'lecture'
+                ));
+                $practices = array_values(array_filter(
+                    $packageCards,
+                    fn($card) => $card->training_type === 'practice'
+                ));
+                if (count($lectures) !== 1 || !$practices) {
+                    continue;
+                }
+
+                /** @var TimetableCard $lecture */
+                $lecture = $lectures[0];
+                [$packageDays, $packagePairs] = $dimsFor(
+                    $lecture->faculty_name,
+                    $lecture->specialty_name,
+                    (int) $lecture->course
+                );
+                $packageScope = $this->groupScopeKey($lecture);
+                $totalWeeks = $weeksFor(
+                    $lecture->faculty_name,
+                    $lecture->specialty_name,
+                    (int) $lecture->course
+                );
+                $lectureLen = $this->parasNeeded($lecture);
+                $lectureMask = $maskOf($lecture);
+                $items = [];
+                $packageHasNoRoom = false;
+
+                $appendItem = function (TimetableCard $card, int $offset) use (
+                    &$items, &$packageHasNoRoom, $poolFor, $minVolFor, $maskOf
+                ): void {
+                    $pool = $poolFor($card);
+                    $roomRequired = $pool->isNotEmpty();
+                    $eligibleRooms = $roomRequired
+                        ? array_values(array_filter(
+                            $pool->all(),
+                            fn($room) => (int) ($room->volume ?? 0) >= $minVolFor($card)
+                        ))
+                        : [];
+                    if ($roomRequired && !$eligibleRooms) {
+                        $packageHasNoRoom = true;
+                    }
+                    $items[] = [
+                        'card' => $card,
+                        'offset' => $offset,
+                        'len' => $this->parasNeeded($card),
+                        'groups' => $card->occupiedGroups(),
+                        'teacher' => $card->teacher_id,
+                        'room_required' => $roomRequired,
+                        'pool' => $eligibleRooms,
+                        'mask' => $maskOf($card),
+                    ];
+                };
+
+                $appendItem($lecture, 0);
+                $practiceByGroup = [];
+                foreach ($practices as $practice) {
+                    $practiceByGroup[(string) $practice->group_name][] = $practice;
+                }
+                ksort($practiceByGroup, SORT_NATURAL | SORT_FLAG_CASE);
+
+                foreach ($practiceByGroup as $groupCards) {
+                    usort($groupCards, fn($a, $b) => [(int) $a->weeks, (int) $a->id]
+                        <=> [(int) $b->weeks, (int) $b->id]);
+                    $standIns = [];
+                    $regular = [];
+                    foreach ($groupCards as $practice) {
+                        $isStandIn = (int) $practice->weeks === $totalWeeks - (int) $lecture->weeks
+                            && (($maskOf($practice) & $lectureMask) === 0);
+                        if ($isStandIn) {
+                            $standIns[] = $practice;
+                        } else {
+                            $regular[] = $practice;
+                        }
+                    }
+
+                    $standInOffset = 0;
+                    foreach ($standIns as $practice) {
+                        $appendItem($practice, $standInOffset);
+                        $standInOffset += $this->parasNeeded($practice);
+                    }
+                    $regularOffset = max($lectureLen, $standInOffset);
+                    foreach ($regular as $practice) {
+                        $appendItem($practice, $regularOffset);
+                        $regularOffset += $this->parasNeeded($practice);
+                    }
+                }
+
+                $spot = $packageHasNoRoom ? null : $this->lecturePracticePackagePlacement(
+                    $items,
+                    $packageDays,
+                    $packagePairs,
+                    $packageScope,
+                    $groupBusy,
+                    $teacherBusy,
+                    $roomBusy,
+                    fn(int $day, int $pair) => $this->slotPenalty(
+                        $lecture,
+                        $lecture->occupiedGroups(),
+                        $day,
+                        $pair,
+                        $packagePairs,
+                        $groupBusy,
+                        $subjDay,
+                        false,
+                        false,
+                        $subjSlots,
+                        $lectureMask
+                    )
+                );
+
+                foreach ($packageCards as $card) {
+                    $processedPackageIds[(int) $card->id] = true;
+                }
+                if ($spot === null) {
+                    $unplaced += count($packageCards);
+                    continue;
+                }
+
+                foreach ($spot as $item) {
+                    /** @var TimetableCard $card */
+                    $card = $item['card'];
+                    $card->day = $item['day'];
+                    $card->pair = $item['pair'];
+                    $card->start_half = 0;
+                    if ($item['room']) {
+                        $card->auditorium_code = $item['room']->code;
+                        $card->auditorium_name = $item['room']->name;
+                        $roomsAssigned++;
+                    }
+                    $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $card, $maskOf($card));
+                    $spread = $this->spreadKey($card);
+                    $subjDay[$spread . '|' . $card->day] = ($subjDay[$spread . '|' . $card->day] ?? 0) + 1;
+                    $subjSlots[$spread][] = [
+                        (int) $card->day,
+                        (int) $card->pair,
+                        $this->parasNeeded($card),
+                    ];
+                    $anchors[$anchorKey($card)][(int) $card->day][] = [
+                        (int) $card->pair,
+                        (int) $card->pair + $this->parasNeeded($card) - 1,
+                    ];
+                    $touched[] = $card;
+                    $placed++;
+                }
+            }
+
+            if ($processedPackageIds) {
+                $toPlace = $toPlace->reject(
+                    fn($card) => isset($processedPackageIds[(int) $card->id])
+                )->values();
+            }
+        }
+
         // Joylanadigan birliklar: klaster rejimida bir klasterning kartalari
         // bitta birlik; aks holda har karta alohida.
         $units = [];
@@ -1957,6 +2137,124 @@ class TimetableController extends Controller
             if ($dayPen < $bestPen) {
                 $bestPen = $dayPen;
                 $best = $items;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * Ma'ruza va unga bog'langan amaliy guruhlarni bitta atomar paket sifatida
+     * joylaydi. `offset` bir xil bo'lgan amaliy guruhlar parallel turadi; hafta
+     * niqoblari kesishmasa ma'ruza va o'rinbosar amaliy bir slotni bo'lishadi.
+     * Paketning bittagina elementi sig'masa, boshqa anchor sinab ko'riladi.
+     *
+     * @param array<int,array{card:TimetableCard,offset:int,len:int,groups:array,
+     *     teacher:?int,room_required:bool,pool:array,mask:int}> $items
+     * @return array<int,array{card:TimetableCard,day:int,pair:int,room:mixed}>|null
+     */
+    private function lecturePracticePackagePlacement(
+        array $items,
+        int $days,
+        int $pairs,
+        string $scopeKey,
+        array $groupBusy,
+        array $teacherBusy,
+        array $roomBusy,
+        callable $penaltyFor
+    ): ?array {
+        if (!$items) {
+            return null;
+        }
+
+        $span = 0;
+        foreach ($items as $item) {
+            $span = max($span, (int) $item['offset'] + (int) $item['len']);
+        }
+
+        $best = null;
+        $bestPenalty = INF;
+        for ($day = 1; $day <= $days; $day++) {
+            for ($start = 1; $start + $span - 1 <= $pairs; $start++) {
+                $localGroups = [];
+                $localTeachers = [];
+                $localRooms = [];
+                $candidate = [];
+                $fits = true;
+
+                foreach ($items as $item) {
+                    $pair = $start + (int) $item['offset'];
+                    $mask = (int) ($item['mask'] ?? -1);
+
+                    for ($i = 0; $i < (int) $item['len']; $i++) {
+                        $slotPair = $pair + $i;
+                        $groupKey = $scopeKey . '|' . $day . '|' . $slotPair;
+                        foreach ($item['groups'] as $group) {
+                            if ((($groupBusy[$groupKey][$group] ?? 0) & $mask)
+                                || (($localGroups[$groupKey][$group] ?? 0) & $mask)) {
+                                $fits = false;
+                                break 3;
+                            }
+                        }
+                        if ($item['teacher']) {
+                            $teacherKey = $item['teacher'] . '|' . $day . '|' . $slotPair;
+                            if ((($teacherBusy[$teacherKey] ?? 0) & $mask)
+                                || (($localTeachers[$teacherKey] ?? 0) & $mask)) {
+                                $fits = false;
+                                break 2;
+                            }
+                        }
+                    }
+
+                    $room = null;
+                    if ($item['room_required']) {
+                        foreach ($item['pool'] as $option) {
+                            $roomFree = true;
+                            for ($i = 0; $i < (int) $item['len']; $i++) {
+                                $roomKey = $option->code . '|' . $day . '|' . ($pair + $i);
+                                if ((($roomBusy[$roomKey] ?? 0) & $mask)
+                                    || (($localRooms[$roomKey] ?? 0) & $mask)) {
+                                    $roomFree = false;
+                                    break;
+                                }
+                            }
+                            if ($roomFree) {
+                                $room = $option;
+                                break;
+                            }
+                        }
+                        if (!$room) {
+                            $fits = false;
+                            break;
+                        }
+                    }
+
+                    for ($i = 0; $i < (int) $item['len']; $i++) {
+                        $slotPair = $pair + $i;
+                        $groupKey = $scopeKey . '|' . $day . '|' . $slotPair;
+                        foreach ($item['groups'] as $group) {
+                            $localGroups[$groupKey][$group] = ($localGroups[$groupKey][$group] ?? 0) | $mask;
+                        }
+                        if ($item['teacher']) {
+                            $teacherKey = $item['teacher'] . '|' . $day . '|' . $slotPair;
+                            $localTeachers[$teacherKey] = ($localTeachers[$teacherKey] ?? 0) | $mask;
+                        }
+                        if ($room) {
+                            $roomKey = $room->code . '|' . $day . '|' . $slotPair;
+                            $localRooms[$roomKey] = ($localRooms[$roomKey] ?? 0) | $mask;
+                        }
+                    }
+                    $candidate[] = ['card' => $item['card'], 'day' => $day, 'pair' => $pair, 'room' => $room];
+                }
+
+                if (!$fits) {
+                    continue;
+                }
+                $penalty = (float) $penaltyFor($day, $start);
+                if ($penalty < $bestPenalty) {
+                    $bestPenalty = $penalty;
+                    $best = $candidate;
+                }
             }
         }
 

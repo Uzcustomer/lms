@@ -1697,10 +1697,355 @@ class TimetableController extends Controller
     }
 
     /**
-     * Dars egallaydigan yarim-slotlar soni. Bu modelda `pair` — yarim-slot
-     * indeksi (grid qatori), shuning uchun dars len_half ta ketma-ket yarim-slotni
-     * egallaydi (2 = to'liq para = 2 soat).
+     * Joylashmagan karta uchun hozirgi jadval holatiga asoslangan diagnostika.
+     * Hech narsani o'zgartirmaydi; faqat barcha mumkin bo'lgan slotlarni tekshiradi.
      */
+    public function placementDiagnostics(Request $request, TimetableBoard $board, TimetableCard $card)
+    {
+        abort_unless((int) $card->board_id === (int) $board->id, 404);
+
+        $options = $request->validate([
+            'assign_rooms' => 'nullable|boolean',
+            'lecture_rooms' => 'nullable|boolean',
+        ]);
+        $assignRooms = (bool) ($options['assign_rooms'] ?? false);
+        $lectureRooms = (bool) ($options['lecture_rooms'] ?? false);
+
+        if ($card->day && $card->pair) {
+            return response()->json([
+                'ok' => true,
+                'status' => 'placed',
+                'primary' => 'Karta hozir jadvalga joylashtirilgan.',
+                'recommendation' => null,
+                'checked_slots' => 0,
+                'free_slots' => 0,
+                'details' => [],
+            ]);
+        }
+
+        $gridSettings = TimetableGridSetting::where('board_id', $board->id)->get()
+            ->keyBy(fn($grid) => ($grid->faculty_name ?? '') . '|' . $grid->specialty_name . '|' . $grid->course);
+        $gridFor = function (TimetableCard $item) use ($gridSettings, $board) {
+            return $gridSettings[($item->faculty_name ?? '') . '|' . $item->specialty_name . '|' . $item->course]
+                ?? $gridSettings['|' . $item->specialty_name . '|' . $item->course]
+                ?? null;
+        };
+        $grid = $gridFor($card);
+        $days = max(1, (int) ($grid->days ?? $board->days));
+        $pairs = max(1, (int) $board->pairCount());
+        $totalWeeks = max(1, min(60, (int) ($grid->weeks ?? $board->weeks)));
+        $need = $this->parasNeeded($card);
+
+        if ($need > $pairs) {
+            return response()->json([
+                'ok' => true,
+                'status' => 'unplaced',
+                'primary_code' => 'lesson_too_long',
+                'primary' => 'Dars uzunligi bir kunlik panjaraga sig\'maydi.',
+                'recommendation' => "Dars uzunligini yoki kunlik paralar sonini tekshiring.",
+                'checked_slots' => 0,
+                'free_slots' => 0,
+                'details' => [[
+                    'code' => 'lesson_too_long',
+                    'label' => 'Kerakli yarim-slot',
+                    'count' => $need,
+                    'examples' => ["Panjara: {$pairs} ta yarim-slot"],
+                ]],
+            ]);
+        }
+
+        $all = TimetableCard::where('board_id', $board->id)->get();
+        $cancelled = [];
+        if (Schema::hasTable('timetable_card_overrides')) {
+            $cancelled = DB::table('timetable_card_overrides as override')
+                ->join('timetable_cards as card', 'card.id', '=', 'override.card_id')
+                ->where('card.board_id', $board->id)
+                ->where('override.cancelled', true)
+                ->get(['override.card_id', 'override.week'])
+                ->groupBy(fn($row) => (int) $row->card_id)
+                ->map(fn($rows) => $rows->pluck('week')->mapWithKeys(fn($week) => [(int) $week => true])->all())
+                ->all();
+        }
+        $maskCache = [];
+        $maskOf = function (TimetableCard $item) use (&$maskCache, $cancelled, $gridFor, $board): int {
+            $id = (int) $item->id;
+            if (isset($maskCache[$id])) {
+                return $maskCache[$id];
+            }
+            $itemGrid = $gridFor($item);
+            $weeks = max(1, min(60, (int) ($itemGrid->weeks ?? $board->weeks)));
+            $skip = $cancelled[$id] ?? [];
+            $mask = 0;
+            for ($week = 1; $week <= $weeks; $week++) {
+                if (!isset($skip[$week])) {
+                    $mask |= 1 << ($week - 1);
+                }
+            }
+            return $maskCache[$id] = ($mask ?: ((1 << $weeks) - 1));
+        };
+        $cardMask = $maskOf($card);
+
+        $boardSettings = $board->settings ?? [];
+        $roomTolPct = max(0, min(30, (int) ($boardSettings['room_tolerance_pct'] ?? 5)));
+        $minVolume = (int) ceil((int) $card->students * (100 - $roomTolPct) / 100);
+        $rooms = ($assignRooms || $lectureRooms)
+            ? Auditorium::where('active', true)->orderBy('volume')->get(['id', 'code', 'name', 'volume', 'auditorium_type_name'])
+            : collect();
+        if ($lectureRooms && $card->training_type === 'lecture') {
+            $lecturePool = $rooms->filter(fn($room) => mb_stripos((string) ($room->auditorium_type_name ?? ''), 'ruza') !== false)->values();
+            $rooms = $lecturePool->isNotEmpty() ? $lecturePool : $rooms;
+        } elseif (!$assignRooms) {
+            $rooms = collect();
+        }
+        $roomRequired = $rooms->isNotEmpty();
+        $roomTeacherMap = $this->auditoriumTeacherMap();
+        $eligibleRooms = $rooms->filter(fn($room) =>
+            (int) ($room->volume ?? 0) >= $minVolume
+            && $this->auditoriumAllowedForCard($room, $card, $roomTeacherMap)
+        )->values();
+
+        if ($roomRequired && $eligibleRooms->isEmpty()) {
+            return response()->json([
+                'ok' => true,
+                'status' => 'unplaced',
+                'primary_code' => 'room_capacity',
+                'primary' => "Talabalar soniga mos auditoriya topilmadi.",
+                'recommendation' => "Kamida {$minVolume} o'rinli faol xona kerak yoki auditoriya toleransini tekshiring.",
+                'checked_slots' => $days * max(0, $pairs - $need + 1),
+                'free_slots' => 0,
+                'details' => [[
+                    'code' => 'room_capacity',
+                    'label' => "Sig'imi yetadigan mos xona",
+                    'count' => 0,
+                    'examples' => ["Talaba: {$card->students} ta", "Minimal sig'im: {$minVolume} ta"],
+                ]],
+            ]);
+        }
+
+        $groups = $card->occupiedGroups();
+        $scope = $this->groupScopeKey($card);
+        $dayNames = $board->day_names ?: array_slice(TimetableBoard::DEFAULT_DAY_NAMES, 0, $days);
+        $stats = ['group_busy' => 0, 'teacher_busy' => 0, 'room_busy' => 0];
+        $examples = ['group_busy' => [], 'teacher_busy' => [], 'room_busy' => []];
+        $placedByDay = [];
+        $roomCards = [];
+        foreach ($all as $placedCard) {
+            if (!$placedCard->day || !$placedCard->pair) {
+                continue;
+            }
+            $placedByDay[(int) $placedCard->day][] = $placedCard;
+            if ($placedCard->auditorium_code) {
+                $roomCards[(string) $placedCard->auditorium_code][(int) $placedCard->day][] = $placedCard;
+            }
+        }
+
+        $analyseSlot = function (int $day, int $pair) use (
+            $placedByDay, $roomCards, $card, $cardMask, $maskOf, $need, $groups, $scope,
+            $roomRequired, $eligibleRooms
+        ): array {
+            $reasons = [];
+            $slotEnd = $pair + $need;
+            foreach ($placedByDay[$day] ?? [] as $other) {
+                if ((int) $other->id === (int) $card->id) {
+                    continue;
+                }
+                $otherStart = (int) $other->pair;
+                $otherEnd = $otherStart + $this->parasNeeded($other);
+                if ($pair >= $otherEnd || $otherStart >= $slotEnd || !(($maskOf($other) & $cardMask))) {
+                    continue;
+                }
+                $sameScope = $this->groupScopeKey($other) === $scope;
+                $overlap = $sameScope ? array_values(array_intersect($groups, $other->occupiedGroups())) : [];
+                if ($overlap) {
+                    $reasons['group_busy'][] = implode(', ', $overlap) . ' - ' . $other->subject_name;
+                }
+                if ($card->teacher_id && (int) $other->teacher_id === (int) $card->teacher_id) {
+                    $reasons['teacher_busy'][] = ($other->teacher_name ?: $card->teacher_name ?: "O'qituvchi") . ' - ' . $other->subject_name;
+                }
+            }
+
+            if ($roomRequired) {
+                $freeRoom = false;
+                $blockedRooms = [];
+                foreach ($eligibleRooms as $room) {
+                    $roomBlocker = null;
+                    foreach ($roomCards[(string) $room->code][$day] ?? [] as $other) {
+                        if (!(($maskOf($other) & $cardMask))) {
+                            continue;
+                        }
+                        $otherStart = (int) $other->pair;
+                        $otherEnd = $otherStart + $this->parasNeeded($other);
+                        if ($pair < $otherEnd && $otherStart < $slotEnd) {
+                            $roomBlocker = $other;
+                            break;
+                        }
+                    }
+                    if (!$roomBlocker) {
+                        $freeRoom = true;
+                        break;
+                    }
+                    $blockedRooms[] = ($room->name ?: $room->code) . ' - ' . $roomBlocker->subject_name;
+                }
+                if (!$freeRoom) {
+                    $reasons['room_busy'] = $blockedRooms ?: ['Mos auditoriyalar band'];
+                }
+            }
+
+            return $reasons;
+        };
+
+        $record = function (array $reasons) use (&$stats, &$examples) {
+            foreach ($reasons as $code => $items) {
+                $stats[$code]++;
+                foreach ($items as $item) {
+                    if (count($examples[$code]) < 3 && !in_array($item, $examples[$code], true)) {
+                        $examples[$code][] = $item;
+                    }
+                }
+            }
+        };
+
+        $checkedSlots = 0;
+        $freeSlots = 0;
+        $chainContext = null;
+        if ($card->training_type === 'practice') {
+            $lecturesByBase = [];
+            foreach ($all as $item) {
+                if ($item->training_type === 'lecture') {
+                    $lecturesByBase[$this->placementBaseKey($item)][] = $item;
+                }
+            }
+            $lecture = $this->matchingLectureForPractice($card, $lecturesByBase);
+            if ($lecture) {
+                if (!$lecture->day || !$lecture->pair) {
+                    return response()->json([
+                        'ok' => true,
+                        'status' => 'unplaced',
+                        'primary_code' => 'lecture_unplaced',
+                        'primary' => "Mos ma'ruza hali joylashtirilmagan.",
+                        'recommendation' => "Avval {$lecture->subject_name} ma'ruzasini joylashtiring, keyin amaliy kartalarni qayta joylang.",
+                        'checked_slots' => 0,
+                        'free_slots' => 0,
+                        'details' => [[
+                            'code' => 'lecture_unplaced',
+                            'label' => "Bog'langan ma'ruza",
+                            'count' => 1,
+                            'examples' => [$lecture->oqim_label ?: $lecture->subject_name],
+                        ]],
+                    ]);
+                }
+                $standIn = (int) $card->weeks === $totalWeeks - (int) $lecture->weeks;
+                $expectedPair = $standIn
+                    ? (int) $lecture->pair + max(0, $this->parasNeeded($lecture) - $need)
+                    : (int) $lecture->pair + $this->parasNeeded($lecture);
+                $chainContext = [
+                    'lecture' => $lecture,
+                    'day' => (int) $lecture->day,
+                    'pair' => $expectedPair,
+                ];
+                $checkedSlots = 1;
+                if ($expectedPair < 1 || $expectedPair + $need - 1 > $pairs) {
+                    return response()->json([
+                        'ok' => true,
+                        'status' => 'unplaced',
+                        'primary_code' => 'chain_out_of_grid',
+                        'primary' => "Ma'ruzadan keyin amaliy uchun yetarli para qolmagan.",
+                        'recommendation' => "Ma'ruzani kunning ertaroq parasiga ko'chiring yoki panjara sozlamasini kengaytiring.",
+                        'checked_slots' => 1,
+                        'free_slots' => 0,
+                        'details' => [[
+                            'code' => 'chain_out_of_grid',
+                            'label' => "Talab qilingan boshlanish",
+                            'count' => 1,
+                            'examples' => [($dayNames[$lecture->day - 1] ?? $lecture->day . '-kun') . ', ' . $expectedPair . '-yarim-slot'],
+                        ]],
+                    ]);
+                }
+                $reasons = $analyseSlot((int) $lecture->day, $expectedPair);
+                if (!$reasons) {
+                    $freeSlots = 1;
+                } else {
+                    $record($reasons);
+                }
+            }
+        }
+
+        if (!$chainContext) {
+            for ($day = 1; $day <= $days; $day++) {
+                for ($pair = 1; $pair <= $pairs - $need + 1; $pair++) {
+                    $checkedSlots++;
+                    $reasons = $analyseSlot($day, $pair);
+                    if (!$reasons) {
+                        $freeSlots++;
+                    } else {
+                        $record($reasons);
+                    }
+                }
+            }
+        }
+
+        $labels = [
+            'group_busy' => 'Guruh band bo\'lgan slotlar',
+            'teacher_busy' => "O'qituvchi band bo'lgan slotlar",
+            'room_busy' => 'Mos auditoriyalar band bo\'lgan slotlar',
+        ];
+        $details = [];
+        foreach ($stats as $code => $count) {
+            if ($count > 0) {
+                $details[] = [
+                    'code' => $code,
+                    'label' => $labels[$code],
+                    'count' => $count,
+                    'examples' => $examples[$code],
+                ];
+            }
+        }
+        usort($details, fn($left, $right) => $right['count'] <=> $left['count']);
+
+        if ($chainContext) {
+            $lecture = $chainContext['lecture'];
+            $slotName = ($dayNames[$chainContext['day'] - 1] ?? $chainContext['day'] . '-kun')
+                . ', ' . $chainContext['pair'] . '-yarim-slot';
+            $primaryCode = $freeSlots ? 'chain_order' : 'chain_slot_blocked';
+            $primary = $freeSlots
+                ? "Ma'ruzaga bog'langan slot hozir bo'sh, lekin joylash navbatida zanjir to'liq sig'magan."
+                : "Amaliy uchun ma'ruzaga bog'langan majburiy slot band.";
+            $recommendation = $freeSlots
+                ? "Qaytadan joylashni butun fan qamrovi bo'yicha ishga tushiring."
+                : "{$lecture->subject_name} ma'ruzasidan keyingi {$slotName} dagi to'qnashuvni bo'shating.";
+        } elseif ($freeSlots > 0) {
+            $clusterMode = (bool) ($boardSettings['pair_same_day'] ?? false)
+                || (bool) ($boardSettings['pair_consecutive'] ?? false);
+            if ($clusterMode) {
+                $primaryCode = 'subject_block_did_not_fit';
+                $primary = "Kartaning o'zi uchun {$freeSlots} ta bo'sh slot bor, lekin shu fan-guruh kartalarining yaxlit bloki birga sig'magan.";
+                $recommendation = "Bir kunga/ketma-ket joylash qoidasiga yetadigan uzluksiz joy bo'shating yoki shu qoidani yumshating.";
+            } else {
+                $primaryCode = 'free_slot_exists';
+                $primary = "Hozir {$freeSlots} ta mos bo'sh slot bor, ammo karta oldingi joylash navbatida o'tkazib yuborilgan.";
+                $recommendation = "Qaytadan joylashni tanlangan yo'nalish va kurs bo'yicha yana ishga tushiring.";
+            }
+        } else {
+            $primaryCode = $details[0]['code'] ?? 'no_slot';
+            $primary = $details
+                ? $details[0]['label'] . ' asosiy to\'siq bo\'lib turibdi.'
+                : 'Mos bo\'sh slot topilmadi.';
+            $recommendation = "Quyidagi bandliklardan birini bo'shating yoki kun/paralar sonini oshiring.";
+        }
+
+        return response()->json([
+            'ok' => true,
+            'status' => 'unplaced',
+            'primary_code' => $primaryCode,
+            'primary' => $primary,
+            'recommendation' => $recommendation,
+            'checked_slots' => $checkedSlots,
+            'free_slots' => $freeSlots,
+            'details' => $details,
+        ]);
+    }
+
+    /** Karta egallaydigan ketma-ket yarim-slotlar soni. */
     private function parasNeeded(TimetableCard $c): int
     {
         return $c->lenHalf();

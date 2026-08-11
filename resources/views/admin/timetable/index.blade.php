@@ -278,6 +278,28 @@
             </div>
 
             {{-- ═══ aSc Timetables uslubidagi boshqaruv dialogi (Fanlar/Guruhlar/Auditoriyalar/O'qituvchilar) ═══ --}}
+            {{-- Joylashmagan karta diagnostikasi --}}
+            <div id="placementDiagModal" class="hidden tt-modal tt-modal-top">
+                <div class="tt-modal-body">
+                    <div class="tt-modal-win asc-small-modal bg-white shadow-xl" style="width:min(560px,94vw);">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-activity"></i></span>
+                                <div>
+                                    <div class="font-semibold">Nega joylashmadi?</div>
+                                    <div id="placementDiagTitle" class="text-xs text-white/75"></div>
+                                </div>
+                            </div>
+                            <button type="button" id="placementDiagClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div id="placementDiagBody" class="p-5"></div>
+                        <div class="flex justify-end px-5 py-3 border-t bg-slate-50">
+                            <button type="button" id="placementDiagDone" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Tushunarli</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="ascModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
                     <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 200px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
@@ -902,11 +924,21 @@
         #grid .tt-chip.tt-shade-b { filter: brightness(.90) saturate(1.1); }
         .tt-room { font-size: 10px; font-weight: 700; color: #b45309; white-space: nowrap; }
         .tt-room-vol { font-weight: 800; color: #16a34a; opacity: 1; }\n        #grid th.tt-room-head .tt-room-name { display:block; font-size:10px; font-weight:500; color:#64748b; margin-top:2px; }
-        .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
+        .pn-card { position: relative; display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 28px 4px 6px;
             font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
         .pn-card.prc { background: #faf5ff; }
         .pn-card.sel { outline: 2px solid #f59e0b; }
+        .pn-diagnose { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; display: inline-flex;
+            align-items: center; justify-content: center; border: 1px solid rgba(51,65,85,.18); border-radius: 50%;
+            background: rgba(255,255,255,.88); color: #2563eb; cursor: pointer; font-size: 11px; line-height: 1; }
+        .pn-diagnose:hover { color: #fff; background: #2563eb; border-color: #2563eb; transform: scale(1.08); }
+        .placement-diag-primary { border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; border-radius: 8px;
+            background: #eff6ff; color: #1e3a8a; padding: 12px 14px; font-size: 14px; font-weight: 600; }
+        .placement-diag-stat { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+            border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; background: #fff; }
+        .placement-diag-count { flex: 0 0 auto; border-radius: 999px; background: #fff7ed; color: #c2410c;
+            padding: 2px 8px; font-size: 11px; font-weight: 700; }
         /* Shu haftada o'tilmaydigan karta — odatda yashirin, "ko'rsatish" bosilganda so'nik chiqadi */
         .pn-card.skip { opacity: .5; border-style: dashed; filter: grayscale(.5); }
         .lang-rus { box-shadow: inset 0 0 0 1px #fca5a5; }
@@ -2971,6 +3003,56 @@
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
 
+            function closePlacementDiagnostics() {
+                $('placementDiagModal').classList.add('hidden');
+            }
+            $('placementDiagClose').onclick = $('placementDiagDone').onclick = closePlacementDiagnostics;
+            $('placementDiagModal').addEventListener('click', event => {
+                if (event.target === $('placementDiagModal')) closePlacementDiagnostics();
+            });
+
+            async function showPlacementDiagnostics(card, trigger) {
+                trigger.disabled = true;
+                $('placementDiagTitle').textContent = '[' + (card.training_type === 'lecture' ? 'M' : 'A') + '] ' + card.subject_name
+                    + ' · ' + (card.group_name || card.oqim_label || '');
+                $('placementDiagBody').innerHTML =
+                    '<div class="flex items-center justify-center gap-3 py-10 text-sm text-slate-500">' +
+                    '<span class="inline-block h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></span>' +
+                    'Barcha mos slotlar tekshirilmoqda...</div>';
+                $('placementDiagModal').classList.remove('hidden');
+
+                try {
+                    const params = new URLSearchParams({
+                        assign_rooms: $('autoRooms').checked ? '1' : '0',
+                        lecture_rooms: $('autoLecRooms').checked ? '1' : '0',
+                    });
+                    const result = await api(BASE + '/boards/' + board.id + '/cards/' + card.id
+                        + '/placement-diagnostics?' + params.toString());
+                    const detailHtml = (result.details || []).map(detail => {
+                        const examples = (detail.examples || []).map(example =>
+                            '<div class="mt-1 text-[11px] text-slate-500">' + esc(example) + '</div>'
+                        ).join('');
+                        return '<div class="placement-diag-stat">' +
+                            '<div><div class="text-sm font-semibold text-slate-700">' + esc(detail.label) + '</div>' + examples + '</div>' +
+                            '<span class="placement-diag-count">' + esc(detail.count) + ' slot</span></div>';
+                    }).join('');
+                    $('placementDiagBody').innerHTML =
+                        '<div class="placement-diag-primary">' + esc(result.primary || 'Sabab aniqlanmadi.') + '</div>' +
+                        '<div class="mt-3 flex items-center gap-2 text-[11px] text-slate-500">' +
+                            '<span class="rounded bg-slate-100 px-2 py-1">Tekshirildi: <b>' + esc(result.checked_slots || 0) + '</b></span>' +
+                            '<span class="rounded bg-emerald-50 px-2 py-1 text-emerald-700">Bo\'sh: <b>' + esc(result.free_slots || 0) + '</b></span>' +
+                        '</div>' +
+                        (detailHtml ? '<div class="mt-4 space-y-2">' + detailHtml + '</div>' : '') +
+                        (result.recommendation ? '<div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">' +
+                            '<b>Yechim:</b> ' + esc(result.recommendation) + '</div>' : '');
+                } catch (error) {
+                    $('placementDiagBody').innerHTML = '<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">' +
+                        'Diagnostika bajarilmadi: ' + esc(error.message) + '</div>';
+                } finally {
+                    trigger.disabled = false;
+                }
+            }
+
             function cardLabel(c, short) {
                 const t = c.training_type === 'lecture' ? 'M' : 'A';
                 const name = short && c.subject_name.length > 26 ? c.subject_name.slice(0, 26) + '…' : c.subject_name;
@@ -2995,6 +3077,7 @@
                 const panelCard = (c, skip) =>
                     '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (selected && selected.id === c.id ? ' sel' : '') +
                     ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
+                    (!skip ? '<button type="button" class="pn-diagnose" data-diagnose-id="' + c.id + '" draggable="false" title="Nega joylashmaganini tekshirish" aria-label="Joylashmaslik sababini tekshirish"><i class="bi bi-question-lg"></i></button>' : '') +
                     cardLabel(c, true) +
                     '<div class="text-[9px] text-gray-500">' +
                     (c.training_type === 'lecture'
@@ -3009,12 +3092,22 @@
                     || '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>';
 
                 document.querySelectorAll('.pn-card').forEach(el => {
-                    el.onclick = () => {
+                    el.onclick = (event) => {
+                        if (event.target.closest('.pn-diagnose')) return;
                         const c = cards.find(x => x.id === +el.dataset.id);
                         selected = (selected && selected.id === c.id) ? null : c;
                         renderPanel(); renderGrid();
                     };
                     el.addEventListener('dragstart', ev => startDrag(+el.dataset.id, ev));
+                });
+                document.querySelectorAll('.pn-diagnose').forEach(button => {
+                    button.onpointerdown = event => event.stopPropagation();
+                    button.onclick = event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const card = cards.find(item => item.id === +button.dataset.diagnoseId);
+                        if (card) showPlacementDiagnostics(card, button);
+                    };
                 });
             }
 

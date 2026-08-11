@@ -310,3 +310,34 @@ test('diagnostika ma\'ruzadan keyingi majburiy slot bloklanganini ajratadi', fun
         ->and($payload['checked_slots'])->toBe(1)
         ->and(collect($payload['details'])->pluck('code'))->toContain('group_busy');
 });
+
+test('joylashmagan kartalar diagnostikasi excel fayl sifatida yuklanadi', function () {
+    $board = TimetableBoard::create([
+        'name' => 'Test doska',
+        'days' => 1,
+        'pairs_per_day' => 4,
+        'weeks' => 10,
+    ]);
+    TimetableGridSetting::create([
+        'board_id' => $board->id,
+        'faculty_name' => '1-son davolash',
+        'specialty_name' => 'davolash ishi',
+        'course' => 1,
+        'days' => 1,
+        'pairs_per_day' => 4,
+        'weeks' => 10,
+    ]);
+    autoFlowCard($board, [
+        'training_type' => 'practice',
+        'group_name' => '1K-01a',
+        'subject_name' => 'Joylashmagan fan',
+    ]);
+
+    $response = (new TimetableController)->unplacedDiagnosticsExport(
+        Request::create('/', 'POST'),
+        $board
+    );
+
+    expect($response->getStatusCode())->toBe(200)
+        ->and($response->headers->get('content-disposition'))->toContain('attachment;');
+});

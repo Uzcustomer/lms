@@ -212,7 +212,14 @@
                             <button type="button" id="skipToggle"
                                 class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50"></button>
                         </div>
-                        <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="unplacedExportBtn"
+                                class="hidden inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60">
+                                <i class="bi bi-file-earmark-excel" aria-hidden="true"></i>
+                                Excelga yuklash
+                            </button>
+                            <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
+                        </div>
                     </div>
                     <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
                 </div>
@@ -1873,7 +1880,7 @@
                 const restrictedIds = [
                     'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn',
                     'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
-                    'autoBtn', 'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
+                    'autoBtn', 'unplaceBtn', 'unplacedExportBtn', 'gsSave', 'cycleHolAddBtn',
                     'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
                 ];
                 restrictedIds.forEach(id => {
@@ -3000,8 +3007,73 @@
                     '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>' +
                     '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
+                $('unplacedExportBtn').classList.toggle('hidden', TIMETABLE_ASSIGNMENT_ONLY || sc.length === placed);
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
+
+            async function downloadUnplacedDiagnostics() {
+                if (!board) {
+                    alert('Avval doskani tanlang.');
+                    return;
+                }
+
+                const btn = $('unplacedExportBtn');
+                const originalHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin"></span> Tahlil qilinmoqda...';
+
+                try {
+                    const body = {
+                        ...scopeBody(),
+                        assign_rooms: $('autoRooms').checked ? 1 : 0,
+                        lecture_rooms: $('autoLecRooms').checked ? 1 : 0,
+                    };
+                    if (typeFilter !== 'all') body.training_type = typeFilter;
+
+                    const fd = new FormData();
+                    fd.append('_token', CSRF);
+                    Object.entries(body).forEach(([key, value]) => {
+                        if (value === undefined || value === null) return;
+                        if (Array.isArray(value)) value.forEach(item => fd.append(key + '[]', item));
+                        else fd.append(key, value);
+                    });
+
+                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-diagnostics-export', {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json' },
+                        body: fd,
+                    });
+                    if (!response.ok) {
+                        let message = 'HTTP ' + response.status;
+                        try {
+                            const result = await response.json();
+                            message = result.error || result.message || message;
+                        } catch (_) { }
+                        throw new Error(message);
+                    }
+
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    const disposition = response.headers.get('Content-Disposition') || '';
+                    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+                    const plainName = disposition.match(/filename="?([^";]+)"?/i);
+                    link.href = url;
+                    link.download = encodedName
+                        ? decodeURIComponent(encodedName[1])
+                        : (plainName ? plainName[1] : 'joylashmagan_kartalar.xlsx');
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 5000);
+                } catch (error) {
+                    alert('Joylashmagan kartalar hisobotini yaratib bo\'lmadi: ' + error.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+            $('unplacedExportBtn').onclick = downloadUnplacedDiagnostics;
 
             function closePlacementDiagnostics() {
                 $('placementDiagModal').classList.add('hidden');

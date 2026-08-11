@@ -1260,7 +1260,6 @@ class TimetableController extends Controller
                     'mask' => $lectureMask,
                 ]];
                 $packageCards = [$lecture];
-                $packageSpan = $lectureLen;
 
                 ksort($practiceGroups, SORT_NATURAL | SORT_FLAG_CASE);
                 foreach ($practiceGroups as $groupCards) {
@@ -1280,7 +1279,6 @@ class TimetableController extends Controller
                             ? max(0, $lectureLen - $practiceLen)
                             : $cursor;
                         $cursor = max($cursor, $relative + $practiceLen);
-                        $packageSpan = max($packageSpan, $cursor);
                         $descriptors[] = [
                             'card' => $practice,
                             'relative' => $relative,
@@ -1296,7 +1294,7 @@ class TimetableController extends Controller
                 }
 
                 // Xona havzasi va sig'im tekshiruvi paket bo'yicha bir marta.
-                $packageHasImpossibleRoom = false;
+                $lectureHasImpossibleRoom = false;
                 foreach ($descriptors as &$descriptor) {
                     /** @var TimetableCard $itemCard */
                     $itemCard = $descriptor['card'];
@@ -1308,8 +1306,12 @@ class TimetableController extends Controller
                             fn($room) => (int) ($room->volume ?? 0) >= $minVolFor($itemCard)
                         ))
                         : [];
-                    if ($descriptor['room_required'] && !$descriptor['pool']) {
-                        $packageHasImpossibleRoom = true;
+                    if (
+                        $itemCard->training_type === 'lecture'
+                        && $descriptor['room_required']
+                        && !$descriptor['pool']
+                    ) {
+                        $lectureHasImpossibleRoom = true;
                     }
                 }
                 unset($descriptor);
@@ -1335,40 +1337,52 @@ class TimetableController extends Controller
                 });
 
                 $bestPackage = null;
+                $bestPackagePracticeCount = -1;
                 $bestPackagePenalty = INF;
-                if (!$packageHasImpossibleRoom && $packageSpan <= $packagePairs) {
+                if (!$lectureHasImpossibleRoom) {
                     for ($day = 1; $day <= $packageDays; $day++) {
-                        for ($start = 1; $start + $packageSpan - 1 <= $packagePairs; $start++) {
+                        for ($start = 1; $start + $lectureLen - 1 <= $packagePairs; $start++) {
                             $internalGroupBusy = [];
                             $internalTeacherBusy = [];
                             $internalRoomBusy = [];
                             $items = [];
-                            $fits = true;
+                            $lectureFits = true;
+                            $practiceCount = 0;
 
                             foreach ($fitDescriptors as $descriptor) {
                                 /** @var TimetableCard $itemCard */
                                 $itemCard = $descriptor['card'];
+                                $isLecture = $itemCard->training_type === 'lecture';
                                 $itemPair = $start + (int) $descriptor['relative'];
                                 $itemMask = (int) $descriptor['mask'];
                                 $itemGroups = $itemCard->occupiedGroups();
                                 $itemScope = $this->groupScopeKey($itemCard);
+                                $itemFits = $itemPair >= 1
+                                    && $itemPair + (int) $descriptor['len'] - 1 <= $packagePairs;
 
-                                for ($offset = 0; $offset < (int) $descriptor['len']; $offset++) {
+                                for ($offset = 0; $itemFits && $offset < (int) $descriptor['len']; $offset++) {
                                     $slot = $itemPair + $offset;
                                     $groupKey = $itemScope . '|' . $day . '|' . $slot;
                                     foreach ($itemGroups as $group) {
                                         if (((($groupBusy[$groupKey][$group] ?? 0) | ($internalGroupBusy[$groupKey][$group] ?? 0)) & $itemMask) !== 0) {
-                                            $fits = false;
-                                            break 3;
+                                            $itemFits = false;
+                                            break;
                                         }
                                     }
-                                    if ($itemCard->teacher_id) {
+                                    if ($itemFits && $itemCard->teacher_id) {
                                         $teacherKey = $itemCard->teacher_id . '|' . $day . '|' . $slot;
                                         if (((($teacherBusy[$teacherKey] ?? 0) | ($internalTeacherBusy[$teacherKey] ?? 0)) & $itemMask) !== 0) {
-                                            $fits = false;
-                                            break 2;
+                                            $itemFits = false;
                                         }
                                     }
+                                }
+
+                                if (!$itemFits) {
+                                    if ($isLecture) {
+                                        $lectureFits = false;
+                                        break;
+                                    }
+                                    continue;
                                 }
 
                                 $chosenRoom = null;
@@ -1388,8 +1402,11 @@ class TimetableController extends Controller
                                         }
                                     }
                                     if (!$chosenRoom) {
-                                        $fits = false;
-                                        break;
+                                        if ($isLecture) {
+                                            $lectureFits = false;
+                                            break;
+                                        }
+                                        continue;
                                     }
                                 }
 
@@ -1417,9 +1434,12 @@ class TimetableController extends Controller
                                     'pair' => $itemPair,
                                     'room' => $chosenRoom,
                                 ];
+                                if (!$isLecture) {
+                                    $practiceCount++;
+                                }
                             }
 
-                            if (!$fits) {
+                            if (!$lectureFits) {
                                 continue;
                             }
                             $penalty = $this->slotPenalty(
@@ -1435,7 +1455,11 @@ class TimetableController extends Controller
                                 $subjSlots,
                                 $lectureMask
                             );
-                            if ($penalty < $bestPackagePenalty) {
+                            if (
+                                $practiceCount > $bestPackagePracticeCount
+                                || ($practiceCount === $bestPackagePracticeCount && $penalty < $bestPackagePenalty)
+                            ) {
+                                $bestPackagePracticeCount = $practiceCount;
                                 $bestPackagePenalty = $penalty;
                                 $bestPackage = $items;
                             }
@@ -1447,6 +1471,8 @@ class TimetableController extends Controller
                     $unplaced += count($packageCards);
                     continue;
                 }
+
+                $unplaced += count($packageCards) - count($bestPackage);
 
                 foreach ($bestPackage as $item) {
                     /** @var TimetableCard $itemCard */

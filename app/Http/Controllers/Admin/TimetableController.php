@@ -1040,62 +1040,31 @@ class TimetableController extends Controller
         //   3) boshqa amaliy kartalar.
         // Ma'ruza bilan bog'langan amaliyot avval joylashsa, oddiy fanlar uning
         // guruh/para/xona slotlarini oldindan egallab olmaydi.
-        $lecturesByBase = [];
+        $placementSubjectKey = function ($c): string {
+            return (string) ($c->faculty_name ?? '') . '|'
+                . $this->specKey($c->specialty_name) . '|' . (int) $c->course
+                . '|' . (string) $c->oqim_label
+                . '|' . $this->normSubject((string) $c->subject_name);
+        };
+        $lectureKeys = [];
         foreach ($all as $card) {
             if ($card->training_type === 'lecture') {
-                $lecturesByBase[$this->placementBaseKey($card)][] = $card;
-            }
-        }
-        // Eski kartalarda oqim_label o'zgargan bo'lishi mumkin. Amaliy guruhni
-        // ma'ruzaning group_names ro'yxati orqali bog'lash ancha ishonchli.
-        $lectureMatchCache = [];
-        $lectureForPractice = function ($card) use (&$lectureMatchCache, $lecturesByBase) {
-            if ($card->training_type !== 'practice') {
-                return null;
-            }
-            $id = (int) $card->id;
-            if (!array_key_exists($id, $lectureMatchCache)) {
-                $lectureMatchCache[$id] = $this->matchingLectureForPractice($card, $lecturesByBase);
-            }
-            return $lectureMatchCache[$id];
-        };
-        $packageKeyForCard = function ($card) use ($lectureForPractice): string {
-            if ($card->training_type === 'lecture') {
-                return $this->placementSubjectKey($card);
-            }
-            $lecture = $lectureForPractice($card);
-            return $lecture
-                ? $this->placementSubjectKey($lecture)
-                : $this->placementSubjectKey($card);
-        };
-
-        // Fan paketlari navbat bilan yuradi: ma'ruza, shu ma'ruzaning amaliy
-        // guruhlari, keyin boshqa fan. Shunda keyingi fan kerakli slotni oldindan
-        // egallamaydi; bitta guruh sig'masa qolgan guruhlar joylashaveradi.
-        $baseOrder = fn($card) => [
-            (string) $card->specialty_name, (int) $card->course, (int) $card->weeks,
-            -count($card->occupiedGroups()), -(int) $card->students,
-            $this->normSubject((string) $card->subject_name),
-            (string) $card->oqim_label, (int) $card->id,
-        ];
-        $orderedLectures = $all->filter(fn($card) => $card->training_type === 'lecture')
-            ->sort(fn($a, $b) => $baseOrder($a) <=> $baseOrder($b));
-        $packageRanks = [];
-        foreach ($orderedLectures as $lecture) {
-            $key = $this->placementSubjectKey($lecture);
-            if (!isset($packageRanks[$key])) {
-                $packageRanks[$key] = count($packageRanks);
+                $lectureKeys[$placementSubjectKey($card)] = true;
             }
         }
 
-        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureForPractice, $packageKeyForCard, $packageRanks, $baseOrder) {
-            $linkedA = $a->training_type === 'lecture' || $lectureForPractice($a);
-            $linkedB = $b->training_type === 'lecture' || $lectureForPractice($b);
-            $rankA = $linkedA ? ($packageRanks[$packageKeyForCard($a)] ?? PHP_INT_MAX - 1) : PHP_INT_MAX;
-            $rankB = $linkedB ? ($packageRanks[$packageKeyForCard($b)] ?? PHP_INT_MAX - 1) : PHP_INT_MAX;
-            $typeA = $a->training_type === 'lecture' ? 0 : ($linkedA ? 1 : 2);
-            $typeB = $b->training_type === 'lecture' ? 0 : ($linkedB ? 1 : 2);
-            return [$rankA, $typeA, ...$baseOrder($a)] <=> [$rankB, $typeB, ...$baseOrder($b)];
+        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $placementSubjectKey) {
+            $priority = function ($c) use ($lectureKeys, $placementSubjectKey): int {
+                if ($c->training_type === 'lecture') {
+                    return 0;
+                }
+                return isset($lectureKeys[$placementSubjectKey($c)]) ? 1 : 2;
+            };
+            $ka = [$a->specialty_name, (int) $a->course, $priority($a),
+                   (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
+            $kb = [$b->specialty_name, (int) $b->course, $priority($b),
+                   (int) $b->weeks, -count($b->occupiedGroups()), -(int) $b->students];
+            return $ka <=> $kb;
         })->values();
 
         $subjDay = [];    // "spreadKey|day" => count (fan taqsimoti uchun)
@@ -1126,7 +1095,10 @@ class TimetableController extends Controller
         // birinchi joylashgan ma'ruza qolgan hamma fakultet/oqimning amaliylarini
         // o'z kuniga va slotiga tortib, ular u yerga sig'may uzilib qolardi.
         $chain = [];
-        $subjOf = $packageKeyForCard;
+        $subjOf = fn($c) => (string) ($c->faculty_name ?? '') . '|'
+            . $this->specKey($c->specialty_name) . '|' . (int) $c->course
+            . '|' . (string) $c->oqim_label
+            . '|' . $this->normSubject((string) $c->subject_name);
 
         // Avtomatik joylash qayta ishga tushirilganda allaqachon joylashgan
         // ma'ruzalar ham fan zanjirining anchor'i bo'lishi kerak. Aks holda
@@ -1234,8 +1206,6 @@ class TimetableController extends Controller
             }
         }
 
-        // Birinchi guruhning amaliyoti keyingi guruhni ma'ruzadan uzoqlashtirmasin.
-        $practiceNext = [];
         foreach ($units as $unit) {
             // ── Ko'p kartali blok (bir darsning paralari) ────────────────────
             if (count($unit) > 1) {
@@ -1306,11 +1276,8 @@ class TimetableController extends Controller
                 // ma'ruza slotiga yoki uning ketiga tushadi).
                 $spot = null;
                 $uChainKey = $subjOf($lead);
-                $linkedToLecture = $lead->training_type === 'practice' && isset($chain[$uChainKey]);
-                if ($linkedToLecture) {
+                if ($lead->training_type === 'practice' && isset($chain[$uChainKey])) {
                     $uCh = $chain[$uChainKey];
-                    $uPracticeKey = $uChainKey . '|' . (string) $lead->group_name;
-                    $uCh['next'] = $practiceNext[$uPracticeKey] ?? $uCh['next'];
                     $uTotal = $weeksFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
                     $spot = $chainSpot(
                         $segs, $uCh, (int) $lead->weeks === $uTotal - (int) $uCh['lw'],
@@ -1318,10 +1285,10 @@ class TimetableController extends Controller
                     );
                     if ($spot !== null) {
                         $blockLen = array_sum(array_column($segs, 'len'));
-                        $practiceNext[$uPracticeKey] = max((int) $uCh['next'], (int) $spot[0]['pair'] + $blockLen);
+                        $chain[$uChainKey]['next'] = max((int) $uCh['next'], (int) $spot[0]['pair'] + $blockLen);
                     }
                 }
-                if ($spot === null && !$linkedToLecture) {
+                if ($spot === null) {
                     $penaltyFor = fn(int $d, int $p) => $this->slotPenalty(
                         $lead, $unionGroups, $d, $p, $uPairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $maskOf($lead)
                     );
@@ -1405,8 +1372,6 @@ class TimetableController extends Controller
             $sKey = $subjOf($c);
             $ch = $chain[$sKey] ?? null;
             if ($c->training_type === 'practice' && $ch) {
-                $practiceChainKey = $sKey . '|' . (string) $c->group_name;
-                $ch['next'] = $practiceNext[$practiceChainKey] ?? $ch['next'];
                 $total = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
                 $standIn = (int) $c->weeks === $total - (int) $ch['lw'];
                 $seg = [[
@@ -1425,7 +1390,7 @@ class TimetableController extends Controller
                         $roomsAssigned++;
                     }
                     $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
-                    $practiceNext[$practiceChainKey] = max((int) $ch['next'], (int) $c->pair + $need);
+                    $chain[$sKey]['next'] = max((int) $ch['next'], (int) $c->pair + $need);
                     $skC = $this->spreadKey($c);
                     $subjDay[$skC . '|' . $c->day] = ($subjDay[$skC . '|' . $c->day] ?? 0) + 1;
                     $subjSlots[$skC][] = [(int) $c->day, (int) $c->pair, $need];
@@ -1436,9 +1401,6 @@ class TimetableController extends Controller
                     $placed++;
                     continue;
                 }
-                // Bog'langan amaliy boshqa kunni qidirmaydi.
-                $unplaced++;
-                continue;
             }
 
             // ── Shu darsning boshqa paralari allaqachon joylashgan bo'lsa ────
@@ -2001,50 +1963,14 @@ class TimetableController extends Controller
         return $best;
     }
 
-    private function placementBaseKey(TimetableCard $card): string
-    {
-        return (string) ($card->faculty_name ?? '') . '|'
-            . $this->specKey($card->specialty_name) . '|' . (int) $card->course . '|'
-            . $this->normSubject((string) $card->subject_name);
-    }
-
-    private function placementSubjectKey(TimetableCard $card): string
-    {
-        return $this->placementBaseKey($card) . '|' . (string) $card->oqim_label;
-    }
-
-    /** @param array<string,array<int,TimetableCard>> $lecturesByBase */
-    private function matchingLectureForPractice(TimetableCard $practice, array $lecturesByBase): ?TimetableCard
-    {
-        $candidates = $lecturesByBase[$this->placementBaseKey($practice)] ?? [];
-        if (!$candidates) {
-            return null;
-        }
-
-        $group = trim((string) $practice->group_name);
-        if ($group !== '') {
-            $matches = array_values(array_filter(
-                $candidates,
-                fn(TimetableCard $lecture) => in_array($group, $lecture->occupiedGroups(), true)
-            ));
-            if ($matches) {
-                $candidates = $matches;
-            }
-        }
-
-        $matches = array_values(array_filter(
-            $candidates,
-            fn(TimetableCard $lecture) => (string) $lecture->oqim_label === (string) $practice->oqim_label
-        ));
-        if ($matches) {
-            $candidates = $matches;
-        }
-
-        usort($candidates, fn(TimetableCard $a, TimetableCard $b) => (int) $a->id <=> (int) $b->id);
-        return $candidates[0] ?? null;
-    }
-
-    /** Fan taqsimoti: ma'ruza oqim, amaliyot guruhcha bo'yicha klasterlanadi. */
+    /**
+     * Fan taqsimoti kaliti: ma'ruza — oqim bo'yicha, amaliyot — guruhcha bo'yicha.
+     *
+     * Kalitga FAKULTET ham kiradi: guruh nomlari fakultetlar bo'ylab takrorlanadi
+     * (mas. "25-01a (o'z)" ham 1-son, ham 2-son davolashda bor). Fakultetsiz ikki
+     * fakultetning bir xil nomli guruhi bitta klaster deb qabul qilinar, "bir
+     * kunga / ketma-ket" cheklovi ular orasida ishlab, dars uzilib qolardi.
+     */
     private function spreadKey(TimetableCard $c): string
     {
         $who = $c->training_type === 'lecture' ? ('L' . $c->oqim_label) : ('P' . $c->group_name);

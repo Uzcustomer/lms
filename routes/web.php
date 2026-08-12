@@ -902,7 +902,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/refresh-names', [\App\Http\Controllers\Admin\TimetableController::class, 'refreshSubjectNames'])->name('boards.refresh-names');
                 Route::post('/boards/{board}/auto-place', [\App\Http\Controllers\Admin\TimetableController::class, 'autoPlace'])->name('boards.auto-place');
                 Route::get('/boards/{board}/cards/{card}/placement-diagnostics', [\App\Http\Controllers\Admin\TimetableController::class, 'placementDiagnostics'])->name('cards.placement-diagnostics');
-                Route::post('/boards/{board}/unplaced-diagnostics-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedDiagnosticsExport'])->name('boards.unplaced-diagnostics-export');
                 Route::post('/boards/{board}/unplace', [\App\Http\Controllers\Admin\TimetableController::class, 'unplaceAll'])->name('boards.unplace');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');

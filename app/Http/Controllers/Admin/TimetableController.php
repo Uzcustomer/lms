@@ -1118,7 +1118,8 @@ class TimetableController extends Controller
         // yuk oshmaydi (ular hech qachon bir haftaga tushmaydi).
         // Fan zanjiri: "yo'nalish|kurs|fan" => ma'ruzadan boshlanadigan blok.
         //   lec  — ma'ruzaning boshlanish yarim-sloti
-        //   next — zanjirning navbatdagi bo'sh yarim-sloti (ma'ruzadan keyin)
+        //   next — guruhsiz kartalar uchun zanjirning navbatdagi bo'sh yarim-sloti
+        //   nextByGroup — har bir amaliy guruh uchun alohida navbatdagi slot
         //   lw   — ma'ruza necha haftada o'tiladi
         // Reja soati fanni bir necha kartaga bo'ladi:
         //   · har haftalik amaliy soat            (hamma haftada)
@@ -1182,6 +1183,62 @@ class TimetableController extends Controller
             return $baseMatches === 1 ? $fallback : null;
         };
 
+        // Bir oqimdagi guruhlar bir xil ma'ruza anchor'iga ega bo'lishi mumkin,
+        // lekin amaliyotning keyingi sloti guruhlar o'rtasida umumiy bo'lmasligi
+        // kerak. Aks holda birinchi joylashgan guruh qolgan guruhlarni ketma-ket
+        // keyingi paralarga surib, ko'p kartani keraksiz joylanmagan qoldiradi.
+        $chainGroupsForCard = function (TimetableCard $card): array {
+            $group = trim((string) $card->group_name);
+            if ($group !== '') {
+                return [$group];
+            }
+            return array_values(array_unique(array_filter(
+                array_map('strval', $card->occupiedGroups()),
+                static fn(string $value): bool => $value !== ''
+            )));
+        };
+        $nextByGroupFor = static function (array $groups, int $next): array {
+            $result = [];
+            foreach ($groups as $group) {
+                $result[(string) $group] = $next;
+            }
+            return $result;
+        };
+        $chainStateForCard = function (array $candidate, TimetableCard $card) use ($chainGroupsForCard): array {
+            $groups = $chainGroupsForCard($card);
+            if (!$groups) {
+                return $candidate;
+            }
+
+            $nextByGroup = $candidate['nextByGroup'] ?? [];
+            $nexts = [];
+            foreach ($groups as $group) {
+                $nexts[] = (int) ($nextByGroup[(string) $group] ?? $candidate['next']);
+            }
+            // Bir nechta guruhli karta faqat hamma guruhlar bo'sh bo'ladigan
+            // joydan boshlanishi mumkin, shuning uchun eng kech slot olinadi.
+            $candidate['next'] = max($nexts);
+            return $candidate;
+        };
+        $advanceChain = function (string $key, TimetableCard $card, int $end) use (&$chain, $chainGroupsForCard): void {
+            if (!isset($chain[$key])) {
+                return;
+            }
+
+            $groups = $chainGroupsForCard($card);
+            if (!$groups) {
+                $chain[$key]['next'] = max((int) ($chain[$key]['next'] ?? 0), $end);
+                return;
+            }
+
+            $nextByGroup = $chain[$key]['nextByGroup'] ?? [];
+            foreach ($groups as $group) {
+                $group = (string) $group;
+                $nextByGroup[$group] = max((int) ($nextByGroup[$group] ?? $chain[$key]['next'] ?? 0), $end);
+            }
+            $chain[$key]['nextByGroup'] = $nextByGroup;
+        };
+
         // Avtomatik joylash qayta ishga tushirilganda allaqachon joylashgan
         // ma'ruzalar ham fan zanjirining anchor'i bo'lishi kerak. Aks holda
         // ularga tegishli amaliy kartalar oddiy fan kabi joylashib ketadi.
@@ -1196,6 +1253,7 @@ class TimetableController extends Controller
                 'lec' => (int) $placedCard->pair,
                 'llen' => $this->parasNeeded($placedCard),
                 'next' => (int) $placedCard->pair + $this->parasNeeded($placedCard),
+                'nextByGroup' => $nextByGroupFor($placedCard->occupiedGroups(), (int) $placedCard->pair + $this->parasNeeded($placedCard)),
                 'lw' => (int) $placedCard->weeks,
                 'base' => $subjectBaseKey($placedCard),
                 'groups' => $placedCard->occupiedGroups(),
@@ -1365,7 +1423,7 @@ class TimetableController extends Controller
                 $uLinkedPractice = $lead->training_type === 'practice'
                     && isset($lectureBaseKeys[$subjectBaseKey($lead)]);
                 if ($lead->training_type === 'practice' && $uChainMatch) {
-                    $uCh = $uChainMatch['chain'];
+                    $uCh = $chainStateForCard($uChainMatch['chain'], $lead);
                     $uTotal = $weeksFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
                     $spot = $chainSpot(
                         $segs, $uCh, (int) $lead->weeks === $uTotal - (int) $uCh['lw'],
@@ -1373,7 +1431,7 @@ class TimetableController extends Controller
                     );
                     if ($spot !== null) {
                         $blockLen = array_sum(array_column($segs, 'len'));
-                        $chain[$uChainKey]['next'] = max((int) $uCh['next'], (int) $spot[0]['pair'] + $blockLen);
+                        $advanceChain($uChainKey, $lead, (int) $spot[0]['pair'] + $blockLen);
                     }
                 }
                 if ($spot === null && $uLinkedPractice) {
@@ -1421,6 +1479,7 @@ class TimetableController extends Controller
                             'day' => (int) $uc->day, 'lec' => (int) $uc->pair,
                             'llen' => $this->parasNeeded($uc),
                             'next' => (int) $uc->pair + $this->parasNeeded($uc), 'lw' => (int) $uc->weeks,
+                            'nextByGroup' => $nextByGroupFor($uc->occupiedGroups(), (int) $uc->pair + $this->parasNeeded($uc)),
                             'base' => $subjectBaseKey($uc),
                             'groups' => $uc->occupiedGroups(),
                         ];
@@ -1476,6 +1535,7 @@ class TimetableController extends Controller
             $linkedPractice = $c->training_type === 'practice'
                 && isset($lectureBaseKeys[$subjectBaseKey($c)]);
             if ($c->training_type === 'practice' && $ch) {
+                $ch = $chainStateForCard($ch, $c);
                 $total = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
                 $standIn = (int) $c->weeks === $total - (int) $ch['lw'];
                 $seg = [[
@@ -1494,7 +1554,7 @@ class TimetableController extends Controller
                         $roomsAssigned++;
                     }
                     $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
-                    $chain[$sKey]['next'] = max((int) $ch['next'], (int) $c->pair + $need);
+                    $advanceChain($sKey, $c, (int) $c->pair + $need);
                     $skC = $this->spreadKey($c);
                     $subjDay[$skC . '|' . $c->day] = ($subjDay[$skC . '|' . $c->day] ?? 0) + 1;
                     $subjSlots[$skC][] = [(int) $c->day, (int) $c->pair, $need];
@@ -1557,6 +1617,7 @@ class TimetableController extends Controller
                     $chain[$sKey] = [
                         'day' => (int) $c->day, 'lec' => (int) $c->pair, 'llen' => $need,
                         'next' => (int) $c->pair + $need, 'lw' => (int) $c->weeks,
+                        'nextByGroup' => $nextByGroupFor($c->occupiedGroups(), (int) $c->pair + $need),
                         'base' => $subjectBaseKey($c), 'groups' => $c->occupiedGroups(),
                     ];
                 }
@@ -1661,6 +1722,7 @@ class TimetableController extends Controller
             if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($chain[$subjOf($c)])) {
                 $chain[$subjOf($c)] = ['day' => $d, 'lec' => $p, 'llen' => $need,
                     'next' => $p + $need, 'lw' => (int) $c->weeks,
+                    'nextByGroup' => $nextByGroupFor($c->occupiedGroups(), $p + $need),
                     'base' => $subjectBaseKey($c), 'groups' => $c->occupiedGroups()];
             }
             $skBase = $this->spreadKey($c);

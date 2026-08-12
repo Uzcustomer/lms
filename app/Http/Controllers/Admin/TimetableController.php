@@ -1893,19 +1893,25 @@ class TimetableController extends Controller
         ]);
 
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
-        $q = TimetableCard::where('board_id', $board->id)
-            ->where(function ($w) { $w->whereNotNull('day')->orWhereNotNull('pair'); });
-        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
+        $scopeQuery = TimetableCard::where('board_id', $board->id);
+        $this->applyScopeToQuery($scopeQuery, $facSet, $specSet, $courseSet);
         if (!empty($data['training_type'])) {
-            $q->where('training_type', $data['training_type']);
+            $scopeQuery->where('training_type', $data['training_type']);
         }
 
+        $q = (clone $scopeQuery)
+            ->where(function ($w) { $w->whereNotNull('day')->orWhereNotNull('pair'); });
         $count = (clone $q)->count();
         $q->update([
             'day' => null,
             'pair' => null,
             'auditorium_code' => null,
             'auditorium_name' => null,
+        ]);
+
+        // Joylashmagan kartalarda ham oldingi auto-place sababi qolmasin.
+        // Keyingi avtomatik joylash yangi sabablarni qayta yozadi.
+        $scopeQuery->update([
             'placement_reason_code' => null,
             'placement_reason' => null,
         ]);

@@ -181,7 +181,7 @@ test('fan amaliy guruhlari keyingi fan joylashishidan oldin ma\'ruza ketiga reze
         ->not->toBe([$lecture->day, $lecture->pair + $lecture->len_half]);
 });
 
-test('fiks dars sabab amaliy sig\'masa ma\'ruza joylashib faqat amaliy joylashtirilmaydi', function () {
+test('fiks dars sabab paket sig\'masa ma\'ruza ham amaliy ham joylashtirilmaydi', function () {
     $board = TimetableBoard::create([
         'name' => 'Test',
         'days' => 1,
@@ -221,61 +221,10 @@ test('fiks dars sabab amaliy sig\'masa ma\'ruza joylashib faqat amaliy joylashti
 
     (new TimetableController)->autoPlace(Request::create('/', 'POST'), $board);
 
-    expect($lecture->fresh()->day)->toBe(1)
-        ->and($lecture->fresh()->pair)->toBe(1)
+    expect($lecture->fresh()->day)->toBeNull()
+        ->and($lecture->fresh()->pair)->toBeNull()
         ->and($practice->fresh()->day)->toBeNull()
         ->and($practice->fresh()->pair)->toBeNull();
-});
-
-test('bitta guruh amaliysi band bo\'lsa qolgan guruh amaliysi ma\'ruzadan keyin joylashadi', function () {
-    $board = TimetableBoard::create([
-        'name' => 'Test',
-        'days' => 1,
-        'pairs_per_day' => 4,
-        'weeks' => 10,
-        'settings' => ['pair_same_day' => true, 'pair_consecutive' => true],
-    ]);
-    TimetableGridSetting::create([
-        'board_id' => $board->id,
-        'faculty_name' => '1-son davolash',
-        'specialty_name' => 'davolash ishi',
-        'course' => 1,
-        'days' => 1,
-        'pairs_per_day' => 4,
-        'weeks' => 10,
-    ]);
-
-    autoFlowCard($board, [
-        'training_type' => 'practice',
-        'group_name' => '1K-01a',
-        'subject_name' => 'Fiks fan',
-        'day' => 1,
-        'pair' => 3,
-    ]);
-    $lecture = autoFlowCard($board, [
-        'training_type' => 'lecture',
-        'group_names' => ['1K-01a', '1K-01b'],
-        'subject_name' => 'Odam anatomiyasi',
-        'weeks' => 5,
-    ], [1, 3, 5, 7, 9]);
-    $blockedPractice = autoFlowCard($board, [
-        'training_type' => 'practice',
-        'group_name' => '1K-01a',
-        'subject_name' => 'Odam anatomiyasi',
-    ]);
-    $freePractice = autoFlowCard($board, [
-        'training_type' => 'practice',
-        'group_name' => '1K-01b',
-        'subject_name' => 'Odam anatomiyasi',
-    ]);
-
-    (new TimetableController)->autoPlace(Request::create('/', 'POST'), $board);
-
-    expect($lecture->fresh()->day)->toBe(1)
-        ->and($lecture->fresh()->pair)->toBe(1)
-        ->and($blockedPractice->fresh()->day)->toBeNull()
-        ->and($freePractice->fresh()->day)->toBe(1)
-        ->and($freePractice->fresh()->pair)->toBe(3);
 });
 
 test('birinchi kun band bo\'lsa ma\'ruza va amaliy paketi boshqa kunga to\'liq ko\'chadi', function () {

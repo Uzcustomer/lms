@@ -889,7 +889,14 @@ class TimetableController extends Controller
             if ($scopeType !== null) {
                 $q->where('training_type', $scopeType);
             }
-            $q->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
+            $q->update([
+                'day' => null,
+                'pair' => null,
+                'auditorium_code' => null,
+                'auditorium_name' => null,
+                'placement_reason_code' => null,
+                'placement_reason' => null,
+            ]);
         }
 
         // Panjara o'lchamlari (yo'nalish+kurs bo'yicha)
@@ -933,7 +940,14 @@ class TimetableController extends Controller
             $cycleIds = $all->filter(fn($c) => $isCycle($c) && ($c->day || $c->pair) && $inScope($c))->pluck('id');
             if ($cycleIds->isNotEmpty()) {
                 TimetableCard::whereIn('id', $cycleIds)
-                    ->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
+                    ->update([
+                        'day' => null,
+                        'pair' => null,
+                        'auditorium_code' => null,
+                        'auditorium_name' => null,
+                        'placement_reason_code' => null,
+                        'placement_reason' => null,
+                    ]);
                 foreach ($all as $c) {
                     if ($isCycle($c)) {
                         $c->day = null;
@@ -1082,8 +1096,21 @@ class TimetableController extends Controller
         $subjSlots = [];  // "spreadKey" => [[day,pair,len],...] (klaster: bir kun/ketma-ket)
         $placed = 0;
         $unplaced = 0;
+        $unplacedReasons = [];
         $roomsAssigned = 0;
         $touched = [];
+
+        $markUnplaced = function (iterable $cards, string $code, string $reason) use (&$unplaced, &$unplacedReasons): void {
+            $count = 0;
+            foreach ($cards as $card) {
+                $unplacedReasons[(int) $card->id] = [
+                    'code' => $code,
+                    'reason' => $reason,
+                ];
+                $count++;
+            }
+            $unplaced += $count;
+        };
 
         // Ma'ruza joylashuvi: "yo'nalish|kurs|fan" => [kun, para, ma'ruza haftalari].
         // Ma'ruzani ALMASHTIRUVCHI amaliy karta (ma'ruza yo'q haftalarda o'tiladi)
@@ -1324,7 +1351,7 @@ class TimetableController extends Controller
                     ];
                 }
                 if ($noRoom) {
-                    $unplaced += count($unit);
+                    $markUnplaced($unit, 'room_capacity', 'Karta uchun yetarli sig‘imli faol auditoriya topilmadi.');
                     continue;
                 }
                 $unionGroups = array_values(array_unique($unionGroups));
@@ -1351,7 +1378,13 @@ class TimetableController extends Controller
                 }
                 if ($spot === null && $uLinkedPractice) {
                     // Ma'ruzaga bog'langan amaliy boshqa kunga ko'chirilmaydi.
-                    $unplaced += count($unit);
+                    $markUnplaced(
+                        $unit,
+                        $uChainMatch ? 'lecture_next_slot_conflict' : 'lecture_chain_not_found',
+                        $uChainMatch
+                            ? 'Ma’ruzadan keyingi talab qilingan slot guruh, o‘qituvchi, xona yoki hafta bandligi sababli bo‘sh emas.'
+                            : 'Shu fan va guruh uchun mos ma’ruza zanjiri topilmadi.'
+                    );
                     continue;
                 }
                 if ($spot === null) {
@@ -1366,7 +1399,7 @@ class TimetableController extends Controller
                 }
                 if ($spot === null) {
                     // Blok butunligicha sig'madi — kartalar joylashmaganlarda qoladi.
-                    $unplaced += count($unit);
+                    $markUnplaced($unit, 'block_conflict', 'Fan kartalari bitta blok sifatida guruh, o‘qituvchi, xona yoki panjara cheklovlariga sig‘madi.');
                     continue;
                 }
 
@@ -1426,7 +1459,7 @@ class TimetableController extends Controller
                 ? array_values(array_filter($pool->all(), fn($r) => (int) ($r->volume ?? 0) >= $minVol))
                 : [];
             if ($roomRequired && !$poolArr) {
-                $unplaced++;   // sig'imi yetadigan xona umuman yo'q
+                $markUnplaced([$c], 'room_capacity', 'Karta uchun yetarli sig‘imli faol auditoriya topilmadi.');
                 continue;
             }
             $need = $this->parasNeeded($c);
@@ -1477,7 +1510,13 @@ class TimetableController extends Controller
             if ($linkedPractice) {
                 // Mos ma'ruza anchor'i bo'lmasa yoki uning ketidan joy bo'lmasa,
                 // odatiy qidiruvga o'tmaymiz: karta joylanmaganlar ro'yxatida qoladi.
-                $unplaced++;
+                $markUnplaced(
+                    [$c],
+                    $ch ? 'lecture_next_slot_conflict' : 'lecture_chain_not_found',
+                    $ch
+                        ? 'Ma’ruzadan keyingi talab qilingan slot guruh, o‘qituvchi, xona yoki hafta bandligi sababli bo‘sh emas.'
+                        : 'Shu fan va guruh uchun mos ma’ruza zanjiri topilmadi.'
+                );
                 continue;
             }
 
@@ -1502,7 +1541,7 @@ class TimetableController extends Controller
                     fn(int $d, int $p) => $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask)
                 );
                 if ($spot === null) {
-                    $unplaced++;
+                    $markUnplaced([$c], 'same_day_block_conflict', 'Fan kartasi oldindan joylashgan kartalari bilan bir kun/ketma-ket slotga sig‘madi.');
                     continue;
                 }
                 $c->day = $spot[0]['day'];
@@ -1605,7 +1644,7 @@ class TimetableController extends Controller
             }
 
             if ($best === null) {
-                $unplaced++;
+                $markUnplaced([$c], 'no_available_slot', 'Guruh, o‘qituvchi, xona yoki hafta bandligi sababli mos bo‘sh slot topilmadi.');
                 continue;
             }
             [$d, $p] = $best;
@@ -1700,6 +1739,8 @@ class TimetableController extends Controller
                     'start_half'      => (int) $c->start_half,
                     'auditorium_code' => $c->auditorium_code,
                     'auditorium_name' => $c->auditorium_name,
+                    'placement_reason_code' => null,
+                    'placement_reason' => null,
                 ], 'ids' => []];
             }
             $batches[$k]['ids'][] = $c->id;
@@ -1708,6 +1749,28 @@ class TimetableController extends Controller
             foreach ($batches as $b) {
                 foreach (array_chunk($b['ids'], 1000) as $chunk) {
                     TimetableCard::whereIn('id', $chunk)->update($b['vals']);
+                }
+            }
+        });
+
+        // Joylanmagan kartaning aniq sababini keyingi tahlil va Excel eksporti uchun saqlaymiz.
+        $reasonBatches = [];
+        foreach ($unplacedReasons as $cardId => $diagnostic) {
+            $key = $diagnostic['code'] . '|' . $diagnostic['reason'];
+            $reasonBatches[$key] ??= [
+                'ids' => [],
+                'code' => $diagnostic['code'],
+                'reason' => $diagnostic['reason'],
+            ];
+            $reasonBatches[$key]['ids'][] = $cardId;
+        }
+        DB::transaction(function () use ($reasonBatches) {
+            foreach ($reasonBatches as $batch) {
+                foreach (array_chunk($batch['ids'], 1000) as $chunk) {
+                    TimetableCard::whereIn('id', $chunk)->update([
+                        'placement_reason_code' => $batch['code'],
+                        'placement_reason' => $batch['reason'],
+                    ]);
                 }
             }
         });
@@ -1776,7 +1839,14 @@ class TimetableController extends Controller
         }
 
         $count = (clone $q)->count();
-        $q->update(['day' => null, 'pair' => null, 'auditorium_code' => null, 'auditorium_name' => null]);
+        $q->update([
+            'day' => null,
+            'pair' => null,
+            'auditorium_code' => null,
+            'auditorium_name' => null,
+            'placement_reason_code' => null,
+            'placement_reason' => null,
+        ]);
 
         return response()->json(['ok' => true, 'unplaced' => $count]);
     }
@@ -3003,6 +3073,114 @@ class TimetableController extends Controller
         }
     }
 
+    /** Joylanmagan kartalar va auto-place aniqlagan sabablarni XLSX ga chiqaradi. */
+    public function unplacedExport(TimetableBoard $board)
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $cards = TimetableCard::where('board_id', $board->id)
+            ->where(function ($q) {
+                $q->whereNull('day')->orWhereNull('pair');
+            })
+            ->orderBy('faculty_name')
+            ->orderBy('specialty_name')
+            ->orderBy('course')
+            ->orderBy('subject_name')
+            ->get();
+
+        $labels = [
+            'room_capacity' => 'Xona/sig\'im',
+            'lecture_next_slot_conflict' => 'Ma\'ruzadan keyingi slot band',
+            'lecture_chain_not_found' => 'Ma\'ruza zanjiri topilmadi',
+            'block_conflict' => 'Blok sig\'madi',
+            'same_day_block_conflict' => 'Bir kun/ketma-ket blok sig\'madi',
+            'no_available_slot' => 'Mos bo\'sh slot topilmadi',
+        ];
+        $recommendations = [
+            'room_capacity' => 'Yetarli sig\'imli faol auditoriya, umumiy xona yoki xona toleransini tekshiring.',
+            'lecture_next_slot_conflict' => 'Ma\'ruzadan keyingi slotda guruh, o\'qituvchi va xona bandligini tekshiring.',
+            'lecture_chain_not_found' => 'Fan nomi, yo\'nalish, kurs, oqim va guruh bog\'lanishini tekshiring.',
+            'block_conflict' => 'Fan blokidagi barcha kartalar uchun ketma-ket bo\'sh slot va resurslarni tekshiring.',
+            'same_day_block_conflict' => 'Bir kunga/ketma-ket joylash sozlamasini va shu fan guruhlarining bandligini tekshiring.',
+            'no_available_slot' => 'Guruh, o\'qituvchi, xona, sig\'im va panjara kun/para sonini tekshiring.',
+            'diagnostics_not_recorded' => 'Kartani diagnostika saqlanadigan yangi auto-place ishga tushirilgandan keyin qayta tekshiring.',
+        ];
+
+        try {
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Joylanmagan kartalar');
+
+            $headers = [
+                'ID', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Oqim', 'Guruh', 'Fan',
+                'Turi', 'Hafta', 'Talabalar', 'O\'qituvchi', 'Auditoriya',
+                'Sabab kodi', 'Joylanmagan sababi', 'Tavsiya',
+            ];
+            $sheet->fromArray([$headers], null, 'A1');
+            $sheet->mergeCells('A1:O1');
+            $sheet->setCellValue('A1', 'Joylanmagan kartalar diagnostikasi - ' . $board->name);
+            $sheet->getStyle('A1:O1')->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 13],
+                'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1D4ED8']],
+                'alignment' => ['horizontal' => 'center', 'vertical' => 'center'],
+            ]);
+            $sheet->getRowDimension(1)->setRowHeight(24);
+
+            $sheet->fromArray([$headers], null, 'A2');
+            $sheet->getStyle('A2:O2')->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '475569']],
+                'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true],
+            ]);
+
+            $rows = [];
+            foreach ($cards as $card) {
+                $code = $card->placement_reason_code ?: 'diagnostics_not_recorded';
+                $rows[] = [
+                    $card->id,
+                    $card->faculty_name ?: '-',
+                    $card->specialty_name,
+                    (int) $card->course,
+                    $card->oqim_label ?: '-',
+                    $card->group_name ?: (is_array($card->group_names) ? implode(', ', $card->group_names) : '-'),
+                    $card->subject_name,
+                    $card->training_type === 'lecture' ? 'Ma\'ruza' : 'Amaliy',
+                    $card->weeks !== null ? (int) $card->weeks : $board->weeks,
+                    (int) $card->students,
+                    $card->teacher_name ?: 'Biriktirilmagan',
+                    $card->auditorium_name ?: 'Biriktirilmagan',
+                    $code . ' (' . ($labels[$code] ?? 'Boshqa') . ')',
+                    $card->placement_reason ?: 'Sabab eski auto-place ishida yozilmagan.',
+                    $recommendations[$code] ?? 'Karta resurslari va panjara cheklovlarini tekshiring.',
+                ];
+            }
+            if ($rows) {
+                $sheet->fromArray($rows, null, 'A3');
+            }
+
+            $lastRow = max(2, 2 + count($rows));
+            $sheet->getStyle('A2:O' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
+            $sheet->getStyle('A3:O' . $lastRow)->getAlignment()->setVertical('top')->setWrapText(true);
+            $sheet->freezePane('A3');
+            $widths = ['A'=>9,'B'=>22,'C'=>25,'D'=>8,'E'=>14,'F'=>20,'G'=>34,'H'=>12,'I'=>9,'J'=>11,'K'=>24,'L'=>22,'M'=>28,'N'=>48,'O'=>52];
+            foreach ($widths as $col => $width) $sheet->getColumnDimension($col)->setWidth($width);
+            for ($r = 3; $r <= $lastRow; $r++) $sheet->getRowDimension($r)->setRowHeight(-1);
+
+            $sheet->getAutoFilter()->setRange('A2:O' . $lastRow);
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $filename = 'joylanmagan-kartalar-diagnostikasi-' . $board->id . '.xlsx';
+            return response()->streamDownload(function () use ($writer) {
+                $writer->save('php://output');
+            }, $filename, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Timetable unplaced-export xatosi: ' . $e->getMessage());
+            return response()->json(['error' => 'Diagnostika Excelini yaratib bo\'lmadi: ' . $e->getMessage()], 500);
+        }
+    }
+
     /** Katak ma'lumotidan (klientdan kelgan JSON) xlsx varaqni tuzadi. */
     private function buildGridSpreadsheet(array $payload, string $title): \PhpOffice\PhpSpreadsheet\Spreadsheet
     {
@@ -3973,6 +4151,8 @@ class TimetableController extends Controller
         $card->update([
             'day' => $day, 'pair' => $pair,
             'start_half' => $day && $pair ? $startHalf : 0,
+            'placement_reason_code' => null,
+            'placement_reason' => null,
         ]);
         return response()->json(['ok' => true]);
     }

@@ -904,6 +904,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/unplace', [\App\Http\Controllers\Admin\TimetableController::class, 'unplaceAll'])->name('boards.unplace');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
+                Route::get('/boards/{board}/unplaced-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedExport'])->name('boards.unplaced-export');
                 Route::post('/boards/{board}/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'saveGrid'])->name('boards.grid');
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
                 Route::post('/boards/{board}/compact-week', [\App\Http\Controllers\Admin\TimetableController::class, 'compactWeek'])->name('boards.compact-week');

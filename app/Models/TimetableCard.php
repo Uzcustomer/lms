@@ -13,6 +13,7 @@ class TimetableCard extends Model
         'auditorium_code', 'auditorium_name', 'day', 'pair', 'start_half', 'len_half',
         // Karta necha haftada o'tiladi (ma'ruzali haftada amaliy paralar kamayadi)
         'weeks',
+        'placement_reason_code', 'placement_reason',
     ];
 
     protected $casts = [

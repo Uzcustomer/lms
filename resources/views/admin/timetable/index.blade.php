@@ -212,7 +212,14 @@
                             <button type="button" id="skipToggle"
                                 class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50"></button>
                         </div>
-                        <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
+                        <div class="flex items-center gap-2">
+                            <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
+                            <button type="button" id="unplacedExportBtn"
+                                class="hidden text-[11px] rounded px-2 py-1 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                title="Joylanmagan kartalar va sabablarini Excelga yuklash">
+                                <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Excel (sabablar)
+                            </button>
+                        </div>
                     </div>
                     <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
                 </div>
@@ -2968,8 +2975,43 @@
                     '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>' +
                     '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
+                $('unplacedExportBtn').classList.toggle('hidden', !cards.some(c => !effPlace(c)));
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
+
+            async function downloadUnplacedDiagnostics() {
+                if (!board) return;
+                const btn = $('unplacedExportBtn');
+                const old = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i> Tayyorlanmoqda...';
+                try {
+                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?_=' + Date.now(), {
+                        headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+                        cache: 'no-store',
+                    });
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => ({}));
+                        throw new Error(error.error || 'HTTP ' + response.status);
+                    }
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'joylanmagan-kartalar-diagnostikasi-' + board.id + '.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    alert('Diagnostika Excelini yuklab bo\'lmadi: ' + e.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = old;
+                }
+            }
+
+            $('unplacedExportBtn').onclick = downloadUnplacedDiagnostics;
 
             function cardLabel(c, short) {
                 const t = c.training_type === 'lecture' ? 'M' : 'A';

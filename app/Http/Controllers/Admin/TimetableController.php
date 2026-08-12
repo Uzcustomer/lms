@@ -1348,6 +1348,83 @@ class TimetableController extends Controller
             }
         }
 
+        // Ma'ruza joylashgach, shu fan va guruhning amaliy kartalari uchun
+        // keyingi slotlarni vaqtincha rezerv qilamiz. Rezerv guruh va o'qituvchi
+        // bo'yicha ishlaydi: amaliy kartaning o'zi zanjir orqali shu slotni
+        // ishlatadi, boshqa fanlar esa uni egallay olmaydi.
+        $nextReservations = ['groups' => [], 'teachers' => []];
+        $reserveLectureNextSlots = function (TimetableCard $lecture) use (
+            &$nextReservations, $toPlace, $subjectBaseKey, $weeksFor, $maskOf, $boardPairs
+        ): void {
+            $lectureGroups = array_values(array_unique(array_map('strval', $lecture->occupiedGroups())));
+            if (!$lectureGroups) {
+                return;
+            }
+
+            $linked = $toPlace->filter(function (TimetableCard $card) use ($lecture, $subjectBaseKey, $lectureGroups): bool {
+                return $card->training_type === 'practice'
+                    && (!$card->day || !$card->pair)
+                    && $subjectBaseKey($card) === $subjectBaseKey($lecture)
+                    && array_intersect($lectureGroups, array_map('strval', $card->occupiedGroups()));
+            });
+            if ($linked->isEmpty()) {
+                return;
+            }
+
+            $scope = $this->groupScopeKey($lecture);
+            $lectureDay = (int) $lecture->day;
+            $lecturePair = (int) $lecture->pair;
+            $lectureLen = $this->parasNeeded($lecture);
+            $totalWeeks = $weeksFor($lecture->faculty_name, $lecture->specialty_name, (int) $lecture->course);
+
+            foreach ($lectureGroups as $group) {
+                $groupCards = $linked->filter(function (TimetableCard $card) use ($group): bool {
+                    return in_array($group, array_map('strval', $card->occupiedGroups()), true);
+                });
+                if ($groupCards->isEmpty()) {
+                    continue;
+                }
+
+                // Ma'ruzani almashtiruvchi karta avval ma'ruza slotiga,
+                // qolgan amaliy kartalar esa ma'ruzadan keyin ketma-ket rezerv qilinadi.
+                $standIns = $groupCards->filter(fn(TimetableCard $card): bool =>
+                    (int) $card->weeks === $totalWeeks - (int) $lecture->weeks
+                );
+                $others = $groupCards->reject(fn(TimetableCard $card): bool =>
+                    (int) $card->weeks === $totalWeeks - (int) $lecture->weeks
+                );
+                $ordered = $standIns->concat($others);
+                $cursor = $lecturePair + $lectureLen;
+
+                foreach ($ordered as $card) {
+                    $len = $this->parasNeeded($card);
+                    $isStandIn = (int) $card->weeks === $totalWeeks - (int) $lecture->weeks;
+                    $start = $isStandIn
+                        ? $lecturePair + max(0, $lectureLen - $len)
+                        : $cursor;
+                    if (!$isStandIn) {
+                        $cursor = $start + $len;
+                    }
+                    if ($start < 1 || $start + $len - 1 > $boardPairs) {
+                        continue;
+                    }
+
+                    $mask = $maskOf($card);
+                    for ($offset = 0; $offset < $len; $offset++) {
+                        $pair = $start + $offset;
+                        $groupKey = $scope . '|' . $lectureDay . '|' . $pair . '|' . $group;
+                        $nextReservations['groups'][$groupKey] =
+                            ($nextReservations['groups'][$groupKey] ?? 0) | $mask;
+                        if ($card->teacher_id) {
+                            $teacherKey = $card->teacher_id . '|' . $lectureDay . '|' . $pair;
+                            $nextReservations['teachers'][$teacherKey] =
+                                ($nextReservations['teachers'][$teacherKey] ?? 0) | $mask;
+                        }
+                    }
+                }
+            }
+        };
+
         foreach ($units as $unit) {
             // ── Ko'p kartali blok (bir darsning paralari) ────────────────────
             if (count($unit) > 1) {
@@ -1452,7 +1529,7 @@ class TimetableController extends Controller
                     $spot = $this->clusterPlacement(
                         $segs, $uDays, $uPairs, $uScope,
                         $groupBusy, $teacherBusy, $roomBusy,
-                        $consecutive, $anchors[$uKey] ?? [], $penaltyFor
+                        $consecutive, $anchors[$uKey] ?? [], $penaltyFor, $nextReservations
                     );
                 }
                 if ($spot === null) {
@@ -1483,6 +1560,9 @@ class TimetableController extends Controller
                             'base' => $subjectBaseKey($uc),
                             'groups' => $uc->occupiedGroups(),
                         ];
+                    }
+                    if ($uc->training_type === 'lecture' && (int) $uc->weeks > 0) {
+                        $reserveLectureNextSlots($uc);
                     }
                     $ucSk = $this->spreadKey($uc);
                     $subjDay[$ucSk . '|' . $uc->day] = ($subjDay[$ucSk . '|' . $uc->day] ?? 0) + 1;
@@ -1598,7 +1678,8 @@ class TimetableController extends Controller
                     $seg, $days, $pairs, $scopeKey,
                     $groupBusy, $teacherBusy, $roomBusy,
                     $consecutive, $anchors[$anchorKey($c)],
-                    fn(int $d, int $p) => $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask)
+                    fn(int $d, int $p) => $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask),
+                    $nextReservations
                 );
                 if ($spot === null) {
                     $markUnplaced([$c], 'same_day_block_conflict', 'Fan kartasi oldindan joylashgan kartalari bilan bir kun/ketma-ket slotga sig‘madi.');
@@ -1620,6 +1701,9 @@ class TimetableController extends Controller
                         'nextByGroup' => $nextByGroupFor($c->occupiedGroups(), (int) $c->pair + $need),
                         'base' => $subjectBaseKey($c), 'groups' => $c->occupiedGroups(),
                     ];
+                }
+                if ($c->training_type === 'lecture' && (int) $c->weeks > 0) {
+                    $reserveLectureNextSlots($c);
                 }
                 $skA = $this->spreadKey($c);
                 $subjDay[$skA . '|' . $c->day] = ($subjDay[$skA . '|' . $c->day] ?? 0) + 1;
@@ -1646,6 +1730,16 @@ class TimetableController extends Controller
                             }
                         }
                         if ($teacherId && (($teacherBusy[$teacherId . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask)) {
+                            $freeAll = false;
+                            break;
+                        }
+                        foreach ($groups as $g) {
+                            if (($nextReservations['groups'][$scopeKey . '|' . $d . '|' . ($p + $i) . '|' . $g] ?? 0) & $cardMask) {
+                                $freeAll = false;
+                                break 2;
+                            }
+                        }
+                        if ($teacherId && (($nextReservations['teachers'][$teacherId . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask)) {
                             $freeAll = false;
                             break;
                         }
@@ -1724,6 +1818,7 @@ class TimetableController extends Controller
                     'next' => $p + $need, 'lw' => (int) $c->weeks,
                     'nextByGroup' => $nextByGroupFor($c->occupiedGroups(), $p + $need),
                     'base' => $subjectBaseKey($c), 'groups' => $c->occupiedGroups()];
+                $reserveLectureNextSlots($c);
             }
             $skBase = $this->spreadKey($c);
             $subjDay[$skBase . '|' . $d] = ($subjDay[$skBase . '|' . $d] ?? 0) + 1;
@@ -2030,13 +2125,14 @@ class TimetableController extends Controller
         array $roomBusy,
         bool $consecutive,
         array $anchorRuns,
-        callable $penaltyFor
+        callable $penaltyFor,
+        array $reservations = []
     ): ?array {
         if (!$segs) {
             return null;
         }
         // Bir yarim-slot shu segment uchun bo'shmi (guruh + o'qituvchi)?
-        $slotFree = function (array $seg, int $d, int $p) use ($scopeKey, $groupBusy, $teacherBusy): bool {
+        $slotFree = function (array $seg, int $d, int $p) use ($scopeKey, $groupBusy, $teacherBusy, $reservations): bool {
             $mask = $seg['mask'] ?? -1;
             $busy = $groupBusy[$scopeKey . '|' . $d . '|' . $p] ?? null;
             if ($busy !== null) {
@@ -2046,7 +2142,15 @@ class TimetableController extends Controller
                     }
                 }
             }
-            return !($seg['teacher'] && (($teacherBusy[$seg['teacher'] . '|' . $d . '|' . $p] ?? 0) & $mask));
+            foreach ($seg['groups'] as $g) {
+                if (($reservations['groups'][$scopeKey . '|' . $d . '|' . $p . '|' . $g] ?? 0) & $mask) {
+                    return false;
+                }
+            }
+            if ($seg['teacher'] && (($teacherBusy[$seg['teacher'] . '|' . $d . '|' . $p] ?? 0) & $mask)) {
+                return false;
+            }
+            return !($seg['teacher'] && (($reservations['teachers'][$seg['teacher'] . '|' . $d . '|' . $p] ?? 0) & $mask));
         };
         // Segment $d kunida $p dan boshlab joylasha oladimi? Qaytadi: xona (yoki null),
         // joylashmasa — false.

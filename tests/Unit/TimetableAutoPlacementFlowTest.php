@@ -278,6 +278,94 @@ test('bitta guruh amaliysi band bo\'lsa qolgan guruh amaliysi ma\'ruzadan keyin 
         ->and($freePractice->fresh()->pair)->toBe(3);
 });
 
+test('kartasi ko\'p va to\'liq zanjir varianti kam paket avval joylashadi', function () {
+    $board = TimetableBoard::create([
+        'name' => 'Test',
+        'days' => 1,
+        'pairs_per_day' => 6,
+        'weeks' => 10,
+        'settings' => ['pair_same_day' => true, 'pair_consecutive' => true],
+    ]);
+    TimetableGridSetting::create([
+        'board_id' => $board->id,
+        'faculty_name' => '1-son davolash',
+        'specialty_name' => 'davolash ishi',
+        'course' => 1,
+        'days' => 1,
+        'pairs_per_day' => 6,
+        'weeks' => 10,
+    ]);
+
+    $smallLecture = autoFlowCard($board, [
+        'training_type' => 'lecture',
+        'group_names' => ['1K-01a'],
+        'subject_name' => 'A kichik fan',
+    ]);
+    $smallPractice = autoFlowCard($board, [
+        'training_type' => 'practice',
+        'group_name' => '1K-01a',
+        'subject_name' => 'A kichik fan',
+    ]);
+    $largeLecture = autoFlowCard($board, [
+        'training_type' => 'lecture',
+        'group_names' => ['1K-01a'],
+        'subject_name' => 'Z murakkab fan',
+    ]);
+    $largePracticeOne = autoFlowCard($board, [
+        'training_type' => 'practice',
+        'group_name' => '1K-01a',
+        'subject_name' => 'Z murakkab fan',
+    ]);
+    $largePracticeTwo = autoFlowCard($board, [
+        'training_type' => 'practice',
+        'group_name' => '1K-01a',
+        'subject_name' => 'Z murakkab fan',
+    ]);
+
+    (new TimetableController)->autoPlace(Request::create('/', 'POST'), $board);
+
+    expect($largeLecture->fresh()->pair)->toBe(1)
+        ->and($largePracticeOne->fresh()->pair)->toBe(3)
+        ->and($largePracticeTwo->fresh()->pair)->toBe(5)
+        ->and($smallLecture->fresh()->day)->toBeNull()
+        ->and($smallPractice->fresh()->day)->toBeNull();
+});
+
+test('ma\'ruza amaliy uchun panjarada joy qolmaydigan oxirgi slotga qo\'yilmaydi', function () {
+    $board = TimetableBoard::create([
+        'name' => 'Test',
+        'days' => 1,
+        'pairs_per_day' => 4,
+        'weeks' => 10,
+        'settings' => ['pair_same_day' => true, 'pair_consecutive' => true],
+    ]);
+    TimetableGridSetting::create([
+        'board_id' => $board->id,
+        'faculty_name' => '1-son davolash',
+        'specialty_name' => 'davolash ishi',
+        'course' => 1,
+        'days' => 1,
+        'pairs_per_day' => 4,
+        'weeks' => 10,
+    ]);
+
+    $lecture = autoFlowCard($board, [
+        'training_type' => 'lecture',
+        'group_names' => ['1K-01a'],
+        'subject_name' => 'Odam anatomiyasi',
+    ]);
+    $practice = autoFlowCard($board, [
+        'training_type' => 'practice',
+        'group_name' => '1K-01a',
+        'subject_name' => 'Odam anatomiyasi',
+    ]);
+
+    (new TimetableController)->autoPlace(Request::create('/', 'POST'), $board);
+
+    expect($lecture->fresh()->pair)->toBe(1)
+        ->and($practice->fresh()->pair)->toBe(3);
+});
+
 test('birinchi kun band bo\'lsa ma\'ruza va amaliy paketi boshqa kunga to\'liq ko\'chadi', function () {
     $board = TimetableBoard::create([
         'name' => 'Test',

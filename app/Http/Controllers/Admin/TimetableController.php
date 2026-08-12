@@ -1238,7 +1238,79 @@ class TimetableController extends Controller
                 $practicesByLecture[(int) $lecture->id][(string) $candidate->group_name][] = $candidate;
             }
 
+            // Greedy algoritmda paketlar tartibi natijaga kuchli ta'sir qiladi.
+            // Mos xonasi va to'liq zanjir uchun boshlanish variantlari kam paketlar
+            // avval joylashadi; aks holda erkin paketlar ularning yagona yechimini
+            // egallab, keyin yuzlab bog'liq amaliy kartalar joylashmay qoladi.
+            $packagePriority = [];
             foreach ($orderedLectures as $lecture) {
+                $lectureId = (int) $lecture->id;
+                $practiceGroups = $practicesByLecture[$lectureId] ?? [];
+                if (!$practiceGroups || !$toPlaceById->has($lectureId)) {
+                    continue;
+                }
+
+                $lectureMask = $maskOf($lecture);
+                $lectureLen = $this->parasNeeded($lecture);
+                [$priorityDays, $priorityPairs] = $dimsFor(
+                    $lecture->faculty_name,
+                    $lecture->specialty_name,
+                    (int) $lecture->course
+                );
+                $maxChainSpan = $lectureLen;
+                $packageCardCount = 1;
+                $roomOptionCounts = [];
+                $priorityCards = [$lecture];
+
+                foreach ($practiceGroups as $groupCards) {
+                    usort($groupCards, function (TimetableCard $left, TimetableCard $right) use ($maskOf, $lectureMask) {
+                        $leftStandIn = (($maskOf($left) & $lectureMask) === 0) ? 0 : 1;
+                        $rightStandIn = (($maskOf($right) & $lectureMask) === 0) ? 0 : 1;
+                        return [$leftStandIn, (int) $left->weeks, (int) $left->id]
+                            <=> [$rightStandIn, (int) $right->weeks, (int) $right->id];
+                    });
+                    $cursor = $lectureLen;
+                    foreach ($groupCards as $position => $practice) {
+                        $practiceLen = $this->parasNeeded($practice);
+                        $standIn = $position === 0 && (($maskOf($practice) & $lectureMask) === 0);
+                        $relative = $standIn ? max(0, $lectureLen - $practiceLen) : $cursor;
+                        $cursor = max($cursor, $relative + $practiceLen);
+                        $maxChainSpan = max($maxChainSpan, $cursor);
+                        $priorityCards[] = $practice;
+                        $packageCardCount++;
+                    }
+                }
+
+                foreach ($priorityCards as $priorityCard) {
+                    $pool = $poolFor($priorityCard);
+                    if ($pool->isEmpty()) {
+                        continue;
+                    }
+                    $fitRoomCount = $pool->filter(
+                        fn($room) => (int) ($room->volume ?? 0) >= $minVolFor($priorityCard)
+                    )->count();
+                    // Nol xona yechimsiz paketdir; u boshqa paketlarning resursini
+                    // band qilolmaydi, shuning uchun navbat oxiriga o'tadi.
+                    $roomOptionCounts[] = $fitRoomCount > 0 ? $fitRoomCount : PHP_INT_MAX;
+                }
+
+                $fullChainStarts = max(0, $priorityPairs - $maxChainSpan + 1) * $priorityDays;
+                $packagePriority[$lectureId] = [
+                    $roomOptionCounts ? min($roomOptionCounts) : PHP_INT_MAX,
+                    $fullChainStarts > 0 ? $fullChainStarts : PHP_INT_MAX - 1,
+                    -$packageCardCount,
+                    -(int) $lecture->students,
+                    ...$baseOrder($lecture),
+                ];
+            }
+
+            $packageLectures = $orderedLectures->filter(
+                fn($lecture) => isset($packagePriority[(int) $lecture->id])
+            )->sort(
+                fn($left, $right) => $packagePriority[(int) $left->id] <=> $packagePriority[(int) $right->id]
+            );
+
+            foreach ($packageLectures as $lecture) {
                 $lectureId = (int) $lecture->id;
                 $practiceGroups = $practicesByLecture[$lectureId] ?? [];
                 if (!$practiceGroups || !$toPlaceById->has($lectureId)) {
@@ -1260,6 +1332,7 @@ class TimetableController extends Controller
                     'mask' => $lectureMask,
                 ]];
                 $packageCards = [$lecture];
+                $minimumPostLectureLen = null;
 
                 ksort($practiceGroups, SORT_NATURAL | SORT_FLAG_CASE);
                 foreach ($practiceGroups as $groupCards) {
@@ -1279,6 +1352,11 @@ class TimetableController extends Controller
                             ? max(0, $lectureLen - $practiceLen)
                             : $cursor;
                         $cursor = max($cursor, $relative + $practiceLen);
+                        if (!$standIn) {
+                            $minimumPostLectureLen = $minimumPostLectureLen === null
+                                ? $practiceLen
+                                : min($minimumPostLectureLen, $practiceLen);
+                        }
                         $descriptors[] = [
                             'card' => $practice,
                             'relative' => $relative,
@@ -1339,9 +1417,10 @@ class TimetableController extends Controller
                 $bestPackage = null;
                 $bestPackagePracticeCount = -1;
                 $bestPackagePenalty = INF;
+                $minimumPackageSpan = $lectureLen + ($minimumPostLectureLen ?? 0);
                 if (!$lectureHasImpossibleRoom) {
                     for ($day = 1; $day <= $packageDays; $day++) {
-                        for ($start = 1; $start + $lectureLen - 1 <= $packagePairs; $start++) {
+                        for ($start = 1; $start + $minimumPackageSpan - 1 <= $packagePairs; $start++) {
                             $internalGroupBusy = [];
                             $internalTeacherBusy = [];
                             $internalRoomBusy = [];

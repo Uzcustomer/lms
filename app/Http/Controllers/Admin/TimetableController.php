@@ -879,26 +879,11 @@ class TimetableController extends Controller
         // Katta farq (mas. 80 xona — 120 oqim) baribir rad etiladi.
         $roomTolPct = max(0, min(30, (int) ($set['room_tolerance_pct'] ?? 5)));
         $minVolFor = fn(TimetableCard $c) => (int) ceil((int) $c->students * (100 - $roomTolPct) / 100);
+        $seasonLookup = $this->subjectSeasonLookup($board);
 
         // Reset — tanlangan qamrovdagi mavjud joylashuvlarni bo'shatamiz.
         // Qamrov: tanlangan fakultet/yo'nalish/kurs to'plamlari bo'yicha; hech
         // biri berilmasa — butun doska.
-        if ($reset) {
-            $q = TimetableCard::where('board_id', $board->id);
-            $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
-            if ($scopeType !== null) {
-                $q->where('training_type', $scopeType);
-            }
-            $q->update([
-                'day' => null,
-                'pair' => null,
-                'auditorium_code' => null,
-                'auditorium_name' => null,
-                'placement_reason_code' => null,
-                'placement_reason' => null,
-            ]);
-        }
-
         // Panjara o'lchamlari (yo'nalish+kurs bo'yicha)
         $gridSettings = TimetableGridSetting::where('board_id', $board->id)->get()
             ->keyBy(fn($g) => ($g->faculty_name ?? '') . '|' . $g->specialty_name . '|' . $g->course);
@@ -922,6 +907,43 @@ class TimetableController extends Controller
         };
 
         $all = TimetableCard::where('board_id', $board->id)->get();
+        $allById = $all->keyBy('id');
+
+        if ($reset) {
+            $resetIds = $all->filter(function (TimetableCard $c) use ($inScope, $scopeType, $board, $seasonLookup) {
+                if ($scopeType !== null && $c->training_type !== $scopeType) {
+                    return false;
+                }
+                if (!$this->cardMatchesBoardSeason($board, $c, $seasonLookup)) {
+                    return false;
+                }
+                return $inScope($c);
+            })->pluck('id')->map(fn($id) => (int) $id)->values();
+
+            if ($resetIds->isNotEmpty()) {
+                TimetableCard::whereIn('id', $resetIds->all())->update([
+                    'day' => null,
+                    'pair' => null,
+                    'auditorium_code' => null,
+                    'auditorium_name' => null,
+                    'placement_reason_code' => null,
+                    'placement_reason' => null,
+                ]);
+
+                $resetMap = array_fill_keys($resetIds->all(), true);
+                foreach ($all as $card) {
+                    if (!isset($resetMap[(int) $card->id])) {
+                        continue;
+                    }
+                    $card->day = null;
+                    $card->pair = null;
+                    $card->auditorium_code = null;
+                    $card->auditorium_name = null;
+                    $card->placement_reason_code = null;
+                    $card->placement_reason = null;
+                }
+            }
+        }
 
         // Sikl (4-6 kurs) fanlari HAFTALIK panjaraga tushmaydi — ular sikl
         // kalendarida ketma-ket kunli blok bo'lib turadi (bir guruh N kun bir
@@ -1035,11 +1057,14 @@ class TimetableController extends Controller
 
         // Joylanadigan kartalar — qamrovdagi bo'sh (joylashmagan)lar.
         // Sikl fanlari o'tkazib yuboriladi (ular panjaraga tushmaydi).
-        $toPlace = $all->filter(function ($c) use ($scopeType, $inScope, $isCycle) {
+        $toPlace = $all->filter(function ($c) use ($scopeType, $inScope, $isCycle, $board, $seasonLookup) {
             if ($c->day && $c->pair) {
                 return false;
             }
             if ($isCycle($c)) {
+                return false;
+            }
+            if (!$this->cardMatchesBoardSeason($board, $c, $seasonLookup)) {
                 return false;
             }
             if ($scopeType !== null && $c->training_type !== $scopeType) {
@@ -1835,11 +1860,14 @@ class TimetableController extends Controller
         // "Auditoriya"/"Ma'ruza xonasi" belgilansa ham hech narsa biriktirilmasdi —
         // chunki yuqoridagi sikl faqat joylashmagan kartalar bo'yicha yuradi.
         if ($assignRooms || $lectureRooms) {
-            $needRoom = $all->filter(function ($c) use ($scopeType, $inScope, $isCycle) {
+            $needRoom = $all->filter(function ($c) use ($scopeType, $inScope, $isCycle, $board, $seasonLookup) {
                 if (!$c->day || !$c->pair || $c->auditorium_code) {
                     return false;
                 }
                 if ($isCycle($c)) {
+                    return false;
+                }
+                if (!$this->cardMatchesBoardSeason($board, $c, $seasonLookup)) {
                     return false;
                 }
                 if ($scopeType !== null && $c->training_type !== $scopeType) {
@@ -1942,9 +1970,12 @@ class TimetableController extends Controller
                 $q->where('board_id', $board->id);
                 $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
             })
-            ->distinct()
-            ->orderBy('week')
+            ->get(['card_id', 'week'])
+            ->filter(fn($override) => ($card = $allById->get((int) $override->card_id))
+                && $this->cardMatchesBoardSeason($board, $card, $seasonLookup))
             ->pluck('week')
+            ->unique()
+            ->sort()
             ->map(fn($week) => (int) $week)
             ->values();
 
@@ -2470,13 +2501,19 @@ class TimetableController extends Controller
         if (!Schema::hasTable('timetable_subject_settings')) {
             return [];
         }
+        $hasSeason = Schema::hasColumn('timetable_subject_settings', 'season');
+        $columns = ['specialty_name', 'course', 'subject_name', 'mode', 'rotation_group', 'occurrences', 'cycle_days'];
+        if ($hasSeason) {
+            $columns[] = 'season';
+        }
         return TimetableSubjectSetting::where('board_id', $board->id)
-            ->get(['specialty_name', 'course', 'subject_name', 'mode', 'rotation_group', 'occurrences', 'cycle_days'])
+            ->get($columns)
             ->map(fn($s) => [
                 'specialty_name' => $s->specialty_name,
                 'course'         => (int) $s->course,
                 'subject_name'   => $s->subject_name,
                 'mode'           => $s->mode,
+                'season'         => $hasSeason ? ((string) ($s->season ?: $board->semester_parity)) : $board->semester_parity,
                 'rotation_group' => $s->rotation_group,
                 'occurrences'    => $s->occurrences !== null ? (int) $s->occurrences : null,
                 'cycle_days'     => $s->cycle_days !== null ? (int) $s->cycle_days : null,
@@ -2494,10 +2531,15 @@ class TimetableController extends Controller
             'course'         => 'required|integer|min:1|max:7',
             'subject_name'   => 'required|string|max:255',
             'mode'           => 'required|in:normal,alternate,cycle',
+            'season'         => 'nullable|in:kuzgi,bahorgi',
             'rotation_group' => 'nullable|string|max:255',
             'occurrences'    => 'nullable|integer|min:1|max:60',
             'cycle_days'     => 'nullable|integer|min:1|max:120',
         ]);
+        $hasSeason = Schema::hasTable('timetable_subject_settings')
+            && Schema::hasColumn('timetable_subject_settings', 'season');
+        $season = $data['season'] ?? $board->semester_parity;
+        $seasonOverride = $hasSeason && $season !== $board->semester_parity ? $season : null;
 
         // Mavjud yozuvni katta-kichik harfga befarq topamiz — reja (mc) nomi
         // "Davolash ishi", karta/snapshot nomi "davolash ishi" bo'lishi mumkin;
@@ -2509,11 +2551,11 @@ class TimetableController extends Controller
             ->first();
 
         // normal — sozlama shart emas, mavjud yozuvni o'chiramiz
-        if ($data['mode'] === 'normal') {
+        if ($data['mode'] === 'normal' && $seasonOverride === null) {
             if ($existing) {
                 $existing->delete();
             }
-            return response()->json(['ok' => true, 'mode' => 'normal']);
+            return response()->json(['ok' => true, 'mode' => 'normal', 'season' => $board->semester_parity]);
         }
 
         $values = [
@@ -2522,6 +2564,9 @@ class TimetableController extends Controller
             'occurrences'    => $data['mode'] === 'alternate' ? ($data['occurrences'] ?? null) : null,
             'cycle_days'     => $data['mode'] === 'cycle' ? ($data['cycle_days'] ?? null) : null,
         ];
+        if ($hasSeason) {
+            $values['season'] = $seasonOverride;
+        }
         if ($existing) {
             $existing->update($values);
         } else {
@@ -2533,7 +2578,7 @@ class TimetableController extends Controller
             ], $values));
         }
 
-        return response()->json(['ok' => true, 'mode' => $data['mode']]);
+        return response()->json(['ok' => true, 'mode' => $data['mode'], 'season' => $season]);
     }
 
     // ===================== QOIDALAR (aSc "Взаимосвязи") =====================
@@ -3560,6 +3605,7 @@ class TimetableController extends Controller
         };
 
         $all = TimetableCard::where('board_id', $board->id)->get()->keyBy('id');
+        $seasonLookup = $this->subjectSeasonLookup($board);
         $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $board->id))
             ->where('week', $week)->get()->keyBy('card_id');
 
@@ -3567,19 +3613,20 @@ class TimetableController extends Controller
         // Shu qamrovdagi eski vaqt/xona ko'chirishlari qayta hisoblanadi. Yangi
         // natija yozilishidan oldin ular bitta transaction ichida almashtiriladi;
         // aks holda eski 3-para override qolib, keyingi karta 7-parada qolishi mumkin.
-        $replaceCardIds = $ovr->filter(function ($override) use ($all, $inScope, $trainingType) {
+        $replaceCardIds = $ovr->filter(function ($override) use ($all, $inScope, $trainingType, $board, $seasonLookup) {
             if ($override->cancelled) {
                 return false;
             }
             $card = $all->get($override->card_id);
             return $card && $inScope($card)
+                && $this->cardMatchesBoardSeason($board, $card, $seasonLookup)
                 && (!$trainingType || $card->training_type === $trainingType);
         })->pluck('card_id')->map(fn($id) => (int) $id)->values()->all();
 
         // Qayta zichlash eski ko'chirish override'laridan emas, bazaviy shablondan
         // boshlanadi. Bekor qilishlar va qamrovdan tashqaridagi ko'chirishlar esa
         // saqlanadi — ular shu hafta uchun haqiqiy bandlik hisoblanadi.
-        $calcOvr = $ovr->filter(function ($override) use ($all, $inScope, $trainingType) {
+        $calcOvr = $ovr->filter(function ($override) use ($all, $inScope, $trainingType, $board, $seasonLookup) {
             if ($override->cancelled) {
                 return true;
             }
@@ -3587,11 +3634,13 @@ class TimetableController extends Controller
             if (!$card) {
                 return false;
             }
-            $inTarget = $inScope($card) && (!$trainingType || $card->training_type === $trainingType);
+            $inTarget = $inScope($card)
+                && $this->cardMatchesBoardSeason($board, $card, $seasonLookup)
+                && (!$trainingType || $card->training_type === $trainingType);
             return !$inTarget;
         });
 
-        $moves = $this->compactWeekMoves($board, $all, $calcOvr, $inScope, $trainingType);
+        $moves = $this->compactWeekMoves($board, $all, $calcOvr, $inScope, $trainingType, $seasonLookup);
         $this->saveWeekMoves($moves, $week, $replaceCardIds);
 
         return response()->json(['ok' => true, 'moved' => count($moves)]);
@@ -3607,7 +3656,14 @@ class TimetableController extends Controller
      * @param  \Illuminate\Support\Collection  $ovr  shu haftaning istisnolari (card_id bo'yicha)
      * @return array<int,array{card_id:int,day:int,pair:int}>
      */
-    private function compactWeekMoves(TimetableBoard $board, $all, $ovr, callable $inScope, ?string $trainingType): array
+    private function compactWeekMoves(
+        TimetableBoard $board,
+        $all,
+        $ovr,
+        callable $inScope,
+        ?string $trainingType,
+        array $seasonLookup
+    ): array
     {
         $pairs = $board->pairCount();
 
@@ -3725,6 +3781,9 @@ class TimetableController extends Controller
         foreach ($eff as $id => [$d, $p, $roomCode, $roomName]) {
             $c = $all[$id];
             if (!$inScope($c)) {
+                continue;
+            }
+            if (!$this->cardMatchesBoardSeason($board, $c, $seasonLookup)) {
                 continue;
             }
             if ($trainingType && $c->training_type !== $trainingType) {
@@ -4555,6 +4614,7 @@ class TimetableController extends Controller
 
         [$kafMap, $overrides] = $this->buildKafedraMap();
         $weeks = max(1, (int) $board->weeks);
+        $seasonLookup = $this->subjectSeasonLookup($board);
 
         // Yo'nalish+kurs bo'yicha hafta soni doska sukutidan farq qilishi mumkin —
         // kartochka yaratish (assembleRows) aynan shu sozlamani ishlatadi, shuning
@@ -4585,9 +4645,14 @@ class TimetableController extends Controller
                 'faculty_name'   => $facName,
                 'weeks'          => $rowWeeks,
                 'semester'       => (int) $r->semester,
-                'season'         => ((int) $r->semester % 2) === 1 ? 'kuzgi' : 'bahorgi',
-                'semester_label' => (int) $r->semester . '-semestr'
-                    . (((int) $r->semester % 2) === 1 ? ' (kuzgi)' : ' (bahorgi)'),
+                'season'         => $this->subjectEffectiveSeason(
+                    $board,
+                    $seasonLookup,
+                    (string) $r->specialty_name,
+                    $course,
+                    (string) $r->subject_name
+                ),
+                'semester_label' => (int) $r->semester . '-semestr',
                 'subject_name'   => $r->subject_name,
                 'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),
                 'lecture'        => $lec,
@@ -4605,6 +4670,52 @@ class TimetableController extends Controller
         }
 
         return response()->json(['weeks' => $weeks, 'subjects' => $out]);
+    }
+
+    private function subjectSettingLookupKey(string $specialtyName, int $course, string $subjectName): string
+    {
+        return $this->specKey($specialtyName) . '|' . (int) $course . '|' . $this->normSubject($subjectName);
+    }
+
+    private function subjectSeasonLookup(TimetableBoard $board): array
+    {
+        if (!Schema::hasTable('timetable_subject_settings')
+            || !Schema::hasColumn('timetable_subject_settings', 'season')) {
+            return [];
+        }
+
+        return TimetableSubjectSetting::where('board_id', $board->id)
+            ->whereNotNull('season')
+            ->get(['specialty_name', 'course', 'subject_name', 'season'])
+            ->mapWithKeys(fn($s) => [
+                $this->subjectSettingLookupKey(
+                    (string) $s->specialty_name,
+                    (int) $s->course,
+                    (string) $s->subject_name
+                ) => (string) $s->season,
+            ])->all();
+    }
+
+    private function subjectEffectiveSeason(
+        TimetableBoard $board,
+        array $seasonLookup,
+        string $specialtyName,
+        int $course,
+        string $subjectName
+    ): string {
+        return $seasonLookup[$this->subjectSettingLookupKey($specialtyName, $course, $subjectName)]
+            ?? $board->semester_parity;
+    }
+
+    private function cardMatchesBoardSeason(TimetableBoard $board, TimetableCard $card, array $seasonLookup): bool
+    {
+        return $this->subjectEffectiveSeason(
+            $board,
+            $seasonLookup,
+            (string) $card->specialty_name,
+            (int) $card->course,
+            (string) $card->subject_name
+        ) === $board->semester_parity;
     }
 
     /**

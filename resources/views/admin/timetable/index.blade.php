@@ -1021,6 +1021,9 @@
         .asc-column-filter-row input:focus,
         .asc-column-filter-row select:focus { border-color: #60a5fa; outline: 2px solid rgba(96,165,250,.18); }
         .asc-subj-mode-cell { min-width: 0; white-space: nowrap !important; display: table-cell; vertical-align: middle; }
+        .asc-subj-season-cell { min-width: 132px; }
+        .asc-subj-season-wrap { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+        .asc-subj-season { min-width: 112px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
         .asc-subj-mode { display: inline-block; vertical-align: middle; width: 45%; min-width: 120px; margin-right: 12px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; }
         .asc-subj-mode option { text-align: left; }
         .asc-subj-mode-cell .asc-subj-params { display: inline-flex; vertical-align: middle; width: calc(45% - 8px); min-width: 0; margin-top: 0; flex-wrap: nowrap; }
@@ -1844,8 +1847,9 @@
             let modalCard = null;
             let overrides = {};    // "cardId|week" => {day, pair, cancelled, auditorium_*}
             let missingGroups = []; // rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
-            let subjectSettings = {};  // "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
+            let subjectSettings = {};  // "spec|course|subject" => {mode, season, rotation_group, occurrences, cycle_days}
             const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
+            const SUBJ_SEASON_LABELS = { kuzgi: 'Kuzgi', bahorgi: 'Bahorgi' };
             // Fan-rejim kaliti — katta-kichik harf/bo'shliqqa befarq (reja nomi
             // "Davolash ishi", karta nomi "davolash ishi" bo'lishi mumkin).
             const gridKey = (faculty, spec, course) =>
@@ -1856,6 +1860,15 @@
 
             const $ = id => document.getElementById(id);
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            const subjectSettingOf = row => subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
+            const subjectSeasonOf = row => subjectSettingOf(row).season || row.season || (board && board.semester_parity) || 'kuzgi';
+            const subjectSeasonOptionsHtml = season => Object.entries(SUBJ_SEASON_LABELS).map(([value, label]) =>
+                '<option value="' + value + '"' + (season === value ? ' selected' : '') + '>' + label + '</option>').join('');
+            const repaintSubjectSeason = (tr, season) => {
+                const pill = tr.querySelector('.asc-semester-pill');
+                if (!pill) return;
+                pill.className = 'asc-semester-pill asc-semester-' + String(season || '');
+            };
 
             function applyTimetableAccess() {
                 if (!TIMETABLE_ASSIGNMENT_ONLY) return;
@@ -2524,7 +2537,14 @@
 
             async function saveSubjectModeRow(tr, row) {
                 const mode = tr.querySelector('.asc-subj-mode').value;
-                const body = { specialty_name: row.specialty_name, course: +row.course, subject_name: row.subject_name, mode };
+                const seasonSelect = tr.querySelector('.asc-subj-season');
+                const body = {
+                    specialty_name: row.specialty_name,
+                    course: +row.course,
+                    subject_name: row.subject_name,
+                    mode,
+                    season: seasonSelect ? seasonSelect.value : subjectSeasonOf(row),
+                };
                 if (mode === 'alternate') {
                     const group = tr.querySelector('.asc-subj-group');
                     const occurrences = tr.querySelector('.asc-subj-occ');
@@ -2538,10 +2558,14 @@
                 status.textContent = '…';
                 status.className = 'asc-subj-status text-slate-400';
                 try {
-                    await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
+                    const saved = await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
                     const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
-                    if (mode === 'normal') delete subjectSettings[key];
-                    else subjectSettings[key] = { ...body };
+                    const effectiveSeason = (saved && saved.season) || body.season || ((board && board.semester_parity) || 'kuzgi');
+                    row.season = effectiveSeason;
+                    if (mode === 'normal' && effectiveSeason === ((board && board.semester_parity) || 'kuzgi')) delete subjectSettings[key];
+                    else subjectSettings[key] = { ...subjectSettingOf(row), ...body, season: effectiveSeason };
+                    if (seasonSelect) seasonSelect.value = effectiveSeason;
+                    repaintSubjectSeason(tr, effectiveSeason);
                     status.textContent = '✓';
                     status.className = 'asc-subj-status text-emerald-600';
                 } catch (e) {
@@ -3883,7 +3907,7 @@
                             h += '<tr class="asc-row-head"><td colspan="9"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td></tr>';
                             lastSpec = sk;
                         }
-                        const setting = subjectSettings[subjModeKey(r.specialty_name, r.course, r.subject_name)] || { mode: 'normal' };
+                        const setting = { mode: 'normal', ...subjectSettingOf(r), season: subjectSeasonOf(r) };
                         const modeOptions = Object.entries(SUBJ_MODE_LABELS).map(([value, label]) =>
                             '<option value="' + value + '"' + (setting.mode === value ? ' selected' : '') + '>' + label + '</option>').join('');
                         h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td class="asc-subject-path"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td>' +
@@ -3934,7 +3958,15 @@
                 document.querySelectorAll('#ascTable tbody tr[data-idx]').forEach(tr => {
                     if (ascType === 'subjects') {
                         const row = rows[+tr.dataset.idx];
+                        const semesterCell = tr.querySelector('.asc-semester-pill')?.parentElement || null;
+                        if (semesterCell && !tr.querySelector('.asc-subj-season')) {
+                            semesterCell.classList.add('asc-subj-season-cell');
+                            semesterCell.innerHTML = '<div class="asc-subj-season-wrap">' + semesterCell.innerHTML +
+                                '<select class="asc-subj-season">' + subjectSeasonOptionsHtml(subjectSeasonOf(row)) + '</select></div>';
+                            repaintSubjectSeason(tr, subjectSeasonOf(row));
+                        }
                         const modeSelect = tr.querySelector('.asc-subj-mode');
+                        const seasonSelect = tr.querySelector('.asc-subj-season');
                         const refreshParams = () => {
                             const current = subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
                             tr.querySelector('.asc-subj-params').innerHTML = subjectModeParamsHtml({ ...current, mode: modeSelect.value });
@@ -3943,6 +3975,9 @@
                             refreshParams();
                             await saveSubjectModeRow(tr, row);
                         };
+                        if (seasonSelect) {
+                            seasonSelect.onchange = () => saveSubjectModeRow(tr, row);
+                        }
                         tr.addEventListener('change', ev => {
                             if (ev.target.classList.contains('asc-subj-group') ||
                                 ev.target.classList.contains('asc-subj-occ') ||

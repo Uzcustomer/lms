@@ -12,7 +12,7 @@ class TimetableSubjectSetting extends Model
 {
     protected $fillable = [
         'board_id', 'specialty_name', 'course', 'subject_name',
-        'mode', 'rotation_group', 'occurrences', 'cycle_weeks', 'cycle_days', 'note',
+        'mode', 'season', 'rotation_group', 'occurrences', 'cycle_weeks', 'cycle_days', 'note',
     ];
 
     protected $casts = [
@@ -23,6 +23,7 @@ class TimetableSubjectSetting extends Model
     ];
 
     public const MODES = ['normal', 'alternate', 'cycle'];
+    public const SEASONS = ['kuzgi', 'bahorgi'];
 
     public function board()
     {

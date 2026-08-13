@@ -4585,6 +4585,9 @@ class TimetableController extends Controller
                 'faculty_name'   => $facName,
                 'weeks'          => $rowWeeks,
                 'semester'       => (int) $r->semester,
+                'season'         => ((int) $r->semester % 2) === 1 ? 'kuzgi' : 'bahorgi',
+                'semester_label' => (int) $r->semester . '-semestr'
+                    . (((int) $r->semester % 2) === 1 ? ' (kuzgi)' : ' (bahorgi)'),
                 'subject_name'   => $r->subject_name,
                 'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),
                 'lecture'        => $lec,

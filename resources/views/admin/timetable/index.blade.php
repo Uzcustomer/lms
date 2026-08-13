@@ -1319,17 +1319,32 @@
         .asc-subject-table-scroll.is-dragging { cursor: default; }
         #ascTable.asc-subject-table { width: 100%; min-width: 100%; table-layout: fixed; }
         .asc-subject-table th, .asc-subject-table td { white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
-        .asc-subject-table th:nth-child(1), .asc-subject-table td:nth-child(1) { width: 17%; }
+        .asc-subject-table th:nth-child(1), .asc-subject-table td:nth-child(1) { width: 16%; }
         .asc-subject-table th:nth-child(2), .asc-subject-table td:nth-child(2) { width: 10%; }
-        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 24%; }
-        .asc-subject-table th:nth-child(4), .asc-subject-table td:nth-child(4),
+        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 7%; }
+        .asc-subject-table th:nth-child(4), .asc-subject-table td:nth-child(4) { width: 22%; }
         .asc-subject-table th:nth-child(5), .asc-subject-table td:nth-child(5),
         .asc-subject-table th:nth-child(6), .asc-subject-table td:nth-child(6),
         .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 4%; }
-        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 29%; }
+        .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 10%; }
+        .asc-subject-table th:nth-child(9), .asc-subject-table td:nth-child(9) { width: 23%; }
         .asc-subject-path { line-height: 1.2; }
         .asc-subject-faculty { color: #334155; font-size: 11px; font-weight: 600; line-height: 1.25; }
         .asc-subject-specialty { color: #64748b; font-size: 10px; line-height: 1.25; }
+        .asc-semester-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 22px;
+            padding: 3px 7px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.15;
+            white-space: normal;
+        }
+        .asc-semester-kuzgi { color: #92400e; background: #fef3c7; border: 1px solid #fde68a; }
+        .asc-semester-bahorgi { color: #0369a1; background: #e0f2fe; border: 1px solid #bae6fd; }
         .asc-table-scroll.is-dragging {
             cursor: grabbing;
             user-select: none;
@@ -3772,6 +3787,7 @@
                     const values = {
                         subject: r.subject_name,
                         course: r.specialty_name + ' · ' + r.course + '-kurs',
+                        semester: r.semester_label || (r.semester ? (r.semester + '-semestr') : ''),
                         department: r.kafedra_name || '',
                         lecture: r.lecture,
                         practice: (+r.practice || 0) + (+r.laboratory || 0) + (+r.seminar || 0),
@@ -3844,13 +3860,14 @@
                 $('ascCount').textContent = rows.length + ' ta';
                 let h = '';
                 if (ascType === 'subjects') {
-                    h = '<thead><tr><th>Fan</th><th>Fakultet · yo\'nalish · kurs</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th>' +
+                    h = '<thead><tr><th>Fan</th><th>Fakultet · yo\'nalish · kurs</th><th>Semestr</th><th>Kafedra</th><th>Ma\'ruza s.</th><th>Amaliy s.</th>' +
                         '<th title="Jami soat / semestr haftalari — haftada shundan oshmasligi kerak">Hafta yuki</th>' +
                         '<th title="Ma\'ruza 2 soatdan. Ma\'ruzali haftada amaliy shunga kamayadi, ma\'ruzasiz haftada to\'liq yuk amaliyga beriladi.">Haftalik taqsimot</th>' +
                         '<th>Fan rejimi</th></tr>' +
                         '<tr class="asc-column-filter-row">' +
                         '<th>' + subjectFilterControl('subject', 'Fan...') + '</th>' +
                         '<th>' + subjectFilterControl('course', 'Kurs', 'select') + '</th>' +
+                        '<th>' + subjectFilterControl('semester', 'Semestr...') + '</th>' +
                         '<th>' + subjectFilterControl('department', 'Kafedra...') + '</th>' +
                         '<th>' + subjectFilterControl('lecture', 'Soat', 'number') + '</th>' +
                         '<th>' + subjectFilterControl('practice', 'Soat', 'number') + '</th>' +
@@ -3863,13 +3880,14 @@
                         const faculty = r.faculty_name || 'Fakultet ko\'rsatilmagan';
                         const sk = (r.faculty_name || '') + '·' + r.specialty_name + '·' + r.course;
                         if (sk !== lastSpec) {
-                            h += '<tr class="asc-row-head"><td colspan="8"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td></tr>';
+                            h += '<tr class="asc-row-head"><td colspan="9"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td></tr>';
                             lastSpec = sk;
                         }
                         const setting = subjectSettings[subjModeKey(r.specialty_name, r.course, r.subject_name)] || { mode: 'normal' };
                         const modeOptions = Object.entries(SUBJ_MODE_LABELS).map(([value, label]) =>
                             '<option value="' + value + '"' + (setting.mode === value ? ' selected' : '') + '>' + label + '</option>').join('');
                         h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td class="asc-subject-path"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td>' +
+                            '<td><span class="asc-semester-pill asc-semester-' + esc(r.season || '') + '">' + esc(r.semester_label || (r.semester ? r.semester + '-semestr' : '—')) + '</span></td>' +
                             '<td>' + esc(r.kafedra_name || '—') + '</td><td>' + fmt(r.lecture) + '</td><td>' + fmt(r.practice + r.laboratory + r.seminar) +
                             '</td><td>' + weekLoadHtml(r) + '</td><td>' + weekSplitHtml(r) + '</td>' +
                             '<td class="asc-subj-mode-cell"><select class="asc-subj-mode">' + modeOptions + '</select><div class="asc-subj-params">' +

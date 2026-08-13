@@ -1021,9 +1021,9 @@
         .asc-column-filter-row input:focus,
         .asc-column-filter-row select:focus { border-color: #60a5fa; outline: 2px solid rgba(96,165,250,.18); }
         .asc-subj-mode-cell { min-width: 0; white-space: nowrap !important; display: table-cell; vertical-align: middle; }
-        .asc-subj-season-cell { min-width: 132px; }
-        .asc-subj-season-wrap { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-        .asc-subj-season { min-width: 112px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
+        .asc-subj-season-cell { min-width: 164px; }
+        .asc-subj-season-wrap { display: inline-flex; align-items: center; min-height: 28px; }
+        .asc-subj-season { min-width: 116px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
         .asc-subj-mode { display: inline-block; vertical-align: middle; width: 45%; min-width: 120px; margin-right: 12px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; }
         .asc-subj-mode option { text-align: left; }
         .asc-subj-mode-cell .asc-subj-params { display: inline-flex; vertical-align: middle; width: calc(45% - 8px); min-width: 0; margin-top: 0; flex-wrap: nowrap; }
@@ -1862,12 +1862,25 @@
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
             const subjectSettingOf = row => subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
             const subjectSeasonOf = row => subjectSettingOf(row).season || row.season || (board && board.semester_parity) || 'kuzgi';
+            const subjectSeasonLabel = season => SUBJ_SEASON_LABELS[season] || season || 'Kuzgi';
             const subjectSeasonOptionsHtml = season => Object.entries(SUBJ_SEASON_LABELS).map(([value, label]) =>
                 '<option value="' + value + '"' + (season === value ? ' selected' : '') + '>' + label + '</option>').join('');
-            const repaintSubjectSeason = (tr, season) => {
+            const subjectSeasonBadgeText = (row, season = subjectSeasonOf(row)) => {
+                const semester = row.semester_label || (row.semester ? (row.semester + '-semestr') : '—');
+                return semester + ' (' + subjectSeasonLabel(season) + ')';
+            };
+            const repaintSubjectSeason = (tr, row, season, editing = false) => {
                 const pill = tr.querySelector('.asc-semester-pill');
-                if (!pill) return;
-                pill.className = 'asc-semester-pill asc-semester-' + String(season || '');
+                const select = tr.querySelector('.asc-subj-season');
+                if (pill) {
+                    pill.className = 'asc-semester-pill asc-semester-' + String(season || '');
+                    pill.textContent = subjectSeasonBadgeText(row, season);
+                    pill.classList.toggle('hidden', editing);
+                }
+                if (select) {
+                    select.value = season || '';
+                    select.classList.toggle('hidden', !editing);
+                }
             };
 
             function applyTimetableAccess() {
@@ -2564,13 +2577,13 @@
                     row.season = effectiveSeason;
                     if (mode === 'normal' && effectiveSeason === ((board && board.semester_parity) || 'kuzgi')) delete subjectSettings[key];
                     else subjectSettings[key] = { ...subjectSettingOf(row), ...body, season: effectiveSeason };
-                    if (seasonSelect) seasonSelect.value = effectiveSeason;
-                    repaintSubjectSeason(tr, effectiveSeason);
+                    repaintSubjectSeason(tr, row, effectiveSeason);
                     status.textContent = '✓';
                     status.className = 'asc-subj-status text-emerald-600';
                 } catch (e) {
                     status.textContent = '✕';
                     status.className = 'asc-subj-status text-red-600';
+                    repaintSubjectSeason(tr, row, subjectSeasonOf(row));
                     alert('Xatolik: ' + e.message);
                 }
             }
@@ -3962,10 +3975,11 @@
                         if (semesterCell && !tr.querySelector('.asc-subj-season')) {
                             semesterCell.classList.add('asc-subj-season-cell');
                             semesterCell.innerHTML = '<div class="asc-subj-season-wrap">' + semesterCell.innerHTML +
-                                '<select class="asc-subj-season">' + subjectSeasonOptionsHtml(subjectSeasonOf(row)) + '</select></div>';
-                            repaintSubjectSeason(tr, subjectSeasonOf(row));
+                                '<select class="asc-subj-season hidden">' + subjectSeasonOptionsHtml(subjectSeasonOf(row)) + '</select></div>';
+                            repaintSubjectSeason(tr, row, subjectSeasonOf(row));
                         }
                         const modeSelect = tr.querySelector('.asc-subj-mode');
+                        const seasonPill = tr.querySelector('.asc-semester-pill');
                         const seasonSelect = tr.querySelector('.asc-subj-season');
                         const refreshParams = () => {
                             const current = subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
@@ -3975,8 +3989,17 @@
                             refreshParams();
                             await saveSubjectModeRow(tr, row);
                         };
+                        if (seasonPill) {
+                            seasonPill.style.cursor = 'pointer';
+                            seasonPill.onclick = ev => {
+                                ev.stopPropagation();
+                                repaintSubjectSeason(tr, row, subjectSeasonOf(row), true);
+                                if (seasonSelect) seasonSelect.focus();
+                            };
+                        }
                         if (seasonSelect) {
                             seasonSelect.onchange = () => saveSubjectModeRow(tr, row);
+                            seasonSelect.onblur = () => repaintSubjectSeason(tr, row, subjectSeasonOf(row));
                         }
                         tr.addEventListener('change', ev => {
                             if (ev.target.classList.contains('asc-subj-group') ||

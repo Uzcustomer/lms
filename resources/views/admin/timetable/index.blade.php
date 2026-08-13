@@ -14,6 +14,7 @@
     $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead;
+    $timetableCanUseManager = $timetableAuditoriumAssignmentOnly;
 @endphp
 
     <x-slot name="header">
@@ -1829,6 +1830,7 @@
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
+            const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
             let board = null;      // {id, days, pairs_per_day, ...}
@@ -1873,8 +1875,26 @@
             };
             const repaintSubjectSeason = (tr, row, season) => {
                 const select = tr.querySelector('.asc-subj-season');
-                if (select) select.value = season || '';
+                if (select) {
+                    syncSubjectSeasonSelect(tr, row, season);
+                    select.value = season || '';
+                }
             };
+            function subjectSeasonSemesterLabel(row, season = subjectSeasonOf(row)) {
+                const base = Number.parseInt(row.semester, 10);
+                if (!Number.isFinite(base) || base <= 0) return row.semester_label || '-';
+                const boardSeason = (board && board.semester_parity) || 'kuzgi';
+                if (season === boardSeason) return base + '-semestr';
+                return (boardSeason === 'kuzgi' ? (base + 1) : Math.max(1, base - 1)) + '-semestr';
+            }
+            function syncSubjectSeasonSelect(tr, row, season = subjectSeasonOf(row)) {
+                const select = tr.querySelector('.asc-subj-season');
+                if (!select) return;
+                select.innerHTML = Object.keys(SUBJ_SEASON_LABELS).map(value =>
+                    '<option value="' + value + '"' + (season === value ? ' selected' : '') + '>'
+                    + esc(subjectSeasonSemesterLabel(row, value) + ' (' + subjectSeasonLabel(value) + ')')
+                    + '</option>').join('');
+            }
 
             function applyTimetableAccess() {
                 if (!TIMETABLE_ASSIGNMENT_ONLY) return;
@@ -1886,6 +1906,7 @@
                     'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
                 ];
                 restrictedIds.forEach(id => {
+                    if (id === 'managerBtn' && TIMETABLE_CAN_USE_MANAGER) return;
                     const el = $(id);
                     if (!el) return;
                     el.disabled = true;
@@ -1901,8 +1922,18 @@
                         : 'Fanlarni o\'qituvchilarga biriktirish';
                 }
             }
+            function applyAscRoleAccess() {
+                if (!TIMETABLE_CAN_USE_MANAGER) return;
+                document.querySelectorAll('.asc-nav-btn').forEach(btn => {
+                    const allowed = btn.dataset.ascType === 'subjects';
+                    btn.classList.toggle('hidden', !allowed);
+                    btn.disabled = !allowed;
+                    btn.tabIndex = allowed ? 0 : -1;
+                });
+            }
 
             applyTimetableAccess();
+            applyAscRoleAccess();
 
             // Jadvallarni sichqoncha bilan ushlab chap-o'ngga siljitish.
             document.querySelectorAll('[data-drag-scroll]').forEach(el => {
@@ -2052,7 +2083,9 @@
 
             function toggleAscToolbar(show) {
                 document.querySelectorAll('[data-asc-toolbar]').forEach(el => {
-                    const allowedForRole = !TIMETABLE_ASSIGNMENT_ONLY || el.id === 'assignBtn';
+                    const allowedForRole = !TIMETABLE_ASSIGNMENT_ONLY
+                        || el.id === 'assignBtn'
+                        || (TIMETABLE_CAN_USE_MANAGER && el.id === 'managerBtn');
                     el.classList.toggle('hidden', !show || !allowedForRole);
                 });
                 applyTimetableAccess();
@@ -3727,6 +3760,7 @@
 
             async function openDialog(type) {
                 if (!board) return;
+                if (TIMETABLE_CAN_USE_MANAGER && type !== 'subjects') return;
 
                 const modalIsOpen = !$('ascModal').classList.contains('hidden');
                 if (modalIsOpen && ascType === type) return;
@@ -3809,7 +3843,14 @@
                 const fv = $('ascFilter').value;
                 return ascData.filter(r => {
                     if (fv && (r.specialty_name + ' · ' + r.course + '-kurs') !== fv) return false;
-                    if (q && !JSON.stringify(r).toLowerCase().includes(q)) return false;
+                    const haystack = ascType === 'subjects'
+                        ? JSON.stringify({
+                            ...r,
+                            semester_display: subjectSeasonSemesterLabel(r, subjectSeasonOf(r)),
+                            season_display: subjectSeasonLabel(subjectSeasonOf(r)),
+                        }).toLowerCase()
+                        : JSON.stringify(r).toLowerCase();
+                    if (q && !haystack.includes(q)) return false;
                     if (ascType !== 'subjects') return true;
 
                     const f = ascColumnFilters;
@@ -3817,7 +3858,7 @@
                     const values = {
                         subject: r.subject_name,
                         course: r.specialty_name + ' · ' + r.course + '-kurs',
-                        semester: r.semester_label || (r.semester ? (r.semester + '-semestr') : ''),
+                        semester: subjectSeasonSemesterLabel(r, subjectSeasonOf(r)),
                         department: r.kafedra_name || '',
                         lecture: r.lecture,
                         practice: (+r.practice || 0) + (+r.laboratory || 0) + (+r.seminar || 0),
@@ -3967,7 +4008,7 @@
                         const semesterCell = tr.querySelector('.asc-semester-pill')?.parentElement || null;
                         if (semesterCell && !tr.querySelector('.asc-subj-season')) {
                             semesterCell.classList.add('asc-subj-season-cell');
-                            semesterCell.innerHTML = '<select class="asc-subj-season">' + subjectSeasonOptionsHtml(row, subjectSeasonOf(row)) + '</select>';
+                            semesterCell.innerHTML = '<select class="asc-subj-season"></select>';
                             repaintSubjectSeason(tr, row, subjectSeasonOf(row));
                         }
                         const modeSelect = tr.querySelector('.asc-subj-mode');

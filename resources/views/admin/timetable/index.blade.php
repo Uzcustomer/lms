@@ -1021,9 +1021,9 @@
         .asc-column-filter-row input:focus,
         .asc-column-filter-row select:focus { border-color: #60a5fa; outline: 2px solid rgba(96,165,250,.18); }
         .asc-subj-mode-cell { min-width: 0; white-space: nowrap !important; display: table-cell; vertical-align: middle; }
-        .asc-subj-season-cell { min-width: 164px; }
+        .asc-subj-season-cell { min-width: 164px; white-space: nowrap !important; overflow-wrap: normal !important; word-break: normal !important; vertical-align: middle; }
         .asc-subj-season-wrap { display: block; min-height: 28px; }
-        .asc-subj-season { display: none; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; }
+        .asc-subj-season { display: none; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; white-space: nowrap; }
         .asc-subj-mode { display: inline-block; vertical-align: middle; width: 45%; min-width: 120px; margin-right: 12px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; }
         .asc-subj-mode option { text-align: left; }
         .asc-subj-mode-cell .asc-subj-params { display: inline-flex; vertical-align: middle; width: calc(45% - 8px); min-width: 0; margin-top: 0; flex-wrap: nowrap; }
@@ -1324,13 +1324,13 @@
         .asc-subject-table th, .asc-subject-table td { white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
         .asc-subject-table th:nth-child(1), .asc-subject-table td:nth-child(1) { width: 16%; }
         .asc-subject-table th:nth-child(2), .asc-subject-table td:nth-child(2) { width: 10%; }
-        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 7%; }
+        .asc-subject-table th:nth-child(3), .asc-subject-table td:nth-child(3) { width: 10%; }
         .asc-subject-table th:nth-child(4), .asc-subject-table td:nth-child(4) { width: 22%; }
         .asc-subject-table th:nth-child(5), .asc-subject-table td:nth-child(5),
         .asc-subject-table th:nth-child(6), .asc-subject-table td:nth-child(6),
         .asc-subject-table th:nth-child(7), .asc-subject-table td:nth-child(7) { width: 4%; }
         .asc-subject-table th:nth-child(8), .asc-subject-table td:nth-child(8) { width: 10%; }
-        .asc-subject-table th:nth-child(9), .asc-subject-table td:nth-child(9) { width: 23%; }
+        .asc-subject-table th:nth-child(9), .asc-subject-table td:nth-child(9) { width: 20%; }
         .asc-subject-path { line-height: 1.2; }
         .asc-subject-faculty { color: #334155; font-size: 11px; font-weight: 600; line-height: 1.25; }
         .asc-subject-specialty { color: #64748b; font-size: 10px; line-height: 1.25; }
@@ -1344,7 +1344,7 @@
             font-size: 10px;
             font-weight: 700;
             line-height: 1.15;
-            white-space: normal;
+            white-space: nowrap;
         }
         .asc-semester-kuzgi { color: #92400e; background: #fef3c7; border: 1px solid #fde68a; }
         .asc-semester-bahorgi { color: #0369a1; background: #e0f2fe; border: 1px solid #bae6fd; }

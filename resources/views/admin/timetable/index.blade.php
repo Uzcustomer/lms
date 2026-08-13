@@ -287,7 +287,7 @@
             {{-- ═══ aSc Timetables uslubidagi boshqaruv dialogi (Fanlar/Guruhlar/Auditoriyalar/O'qituvchilar) ═══ --}}
             <div id="ascModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
-                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 200px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 120px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
                         {{-- Sarlavha satri --}}
                         <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
                             <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
@@ -1023,7 +1023,7 @@
         .asc-subj-mode-cell { min-width: 0; white-space: nowrap !important; display: table-cell; vertical-align: middle; }
         .asc-subj-season-cell { min-width: 164px; white-space: nowrap !important; overflow-wrap: normal !important; word-break: normal !important; vertical-align: middle; }
         .asc-subj-season-wrap { display: block; min-height: 28px; }
-        .asc-subj-season { display: none; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; white-space: nowrap; }
+        .asc-subj-season { display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; white-space: nowrap; }
         .asc-subj-mode { display: inline-block; vertical-align: middle; width: 45%; min-width: 120px; margin-right: 12px; padding: 4px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; color: #334155; font-size: 11px; text-align: left; text-align-last: left; }
         .asc-subj-mode option { text-align: left; }
         .asc-subj-mode-cell .asc-subj-params { display: inline-flex; vertical-align: middle; width: calc(45% - 8px); min-width: 0; margin-top: 0; flex-wrap: nowrap; }
@@ -1863,24 +1863,17 @@
             const subjectSettingOf = row => subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
             const subjectSeasonOf = row => subjectSettingOf(row).season || row.season || (board && board.semester_parity) || 'kuzgi';
             const subjectSeasonLabel = season => SUBJ_SEASON_LABELS[season] || season || 'Kuzgi';
-            const subjectSeasonOptionsHtml = season => Object.entries(SUBJ_SEASON_LABELS).map(([value, label]) =>
-                '<option value="' + value + '"' + (season === value ? ' selected' : '') + '>' + label + '</option>').join('');
+            const subjectSemesterLabel = row => row.semester_label || (row.semester ? (row.semester + '-semestr') : 'вЂ”');
+            const subjectSeasonOptionLabel = (row, season) => subjectSemesterLabel(row) + ' (' + subjectSeasonLabel(season) + ')';
+            const subjectSeasonOptionsHtml = (row, season) => Object.keys(SUBJ_SEASON_LABELS).map(value =>
+                '<option value="' + value + '"' + (season === value ? ' selected' : '') + '>' + esc(subjectSeasonOptionLabel(row, value)) + '</option>').join('');
             const subjectSeasonBadgeText = (row, season = subjectSeasonOf(row)) => {
                 const semester = row.semester_label || (row.semester ? (row.semester + '-semestr') : '—');
                 return semester + ' (' + subjectSeasonLabel(season) + ')';
             };
-            const repaintSubjectSeason = (tr, row, season, editing = false) => {
-                const pill = tr.querySelector('.asc-semester-pill');
+            const repaintSubjectSeason = (tr, row, season) => {
                 const select = tr.querySelector('.asc-subj-season');
-                if (pill) {
-                    pill.className = 'asc-semester-pill asc-semester-' + String(season || '');
-                    pill.textContent = subjectSeasonBadgeText(row, season);
-                    pill.style.display = editing ? 'none' : '';
-                }
-                if (select) {
-                    select.value = season || '';
-                    select.style.display = editing ? 'block' : 'none';
-                }
+                if (select) select.value = season || '';
             };
 
             function applyTimetableAccess() {
@@ -3974,12 +3967,10 @@
                         const semesterCell = tr.querySelector('.asc-semester-pill')?.parentElement || null;
                         if (semesterCell && !tr.querySelector('.asc-subj-season')) {
                             semesterCell.classList.add('asc-subj-season-cell');
-                            semesterCell.innerHTML = '<div class="asc-subj-season-wrap">' + semesterCell.innerHTML +
-                                '<select class="asc-subj-season">' + subjectSeasonOptionsHtml(subjectSeasonOf(row)) + '</select></div>';
+                            semesterCell.innerHTML = '<select class="asc-subj-season">' + subjectSeasonOptionsHtml(row, subjectSeasonOf(row)) + '</select>';
                             repaintSubjectSeason(tr, row, subjectSeasonOf(row));
                         }
                         const modeSelect = tr.querySelector('.asc-subj-mode');
-                        const seasonPill = tr.querySelector('.asc-semester-pill');
                         const seasonSelect = tr.querySelector('.asc-subj-season');
                         const refreshParams = () => {
                             const current = subjectSettings[subjModeKey(row.specialty_name, row.course, row.subject_name)] || {};
@@ -3989,17 +3980,9 @@
                             refreshParams();
                             await saveSubjectModeRow(tr, row);
                         };
-                        if (seasonPill) {
-                            seasonPill.style.cursor = 'pointer';
-                            seasonPill.onclick = ev => {
-                                ev.stopPropagation();
-                                repaintSubjectSeason(tr, row, subjectSeasonOf(row), true);
-                                if (seasonSelect) seasonSelect.focus();
-                            };
-                        }
                         if (seasonSelect) {
                             seasonSelect.onchange = () => saveSubjectModeRow(tr, row);
-                            seasonSelect.onblur = () => repaintSubjectSeason(tr, row, seasonSelect.value || subjectSeasonOf(row));
+                            repaintSubjectSeason(tr, row, subjectSeasonOf(row));
                         }
                         tr.addEventListener('change', ev => {
                             if (ev.target.classList.contains('asc-subj-group') ||

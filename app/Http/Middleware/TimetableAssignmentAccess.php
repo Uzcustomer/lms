@@ -32,6 +32,8 @@ class TimetableAssignmentAccess
 
             if (in_array($activeRole, $auditoriumAssignmentRoles, true)) {
                 $allowed = array_merge($allowed, [
+                    'admin.timetable.subjects',
+                    'admin.timetable.subject-setting.save',
                     'admin.timetable.teachers',
                     'admin.timetable.teachers.departments',
                     'admin.timetable.auditorium-teachers',

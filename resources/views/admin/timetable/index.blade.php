@@ -1739,9 +1739,36 @@
          #asgAudTable .aud-general { color: #059669; font-weight: 700; }
          #asgAudTable .aud-teacher { color: #1d4ed8; font-weight: 600; }
          #asgAudTeacher:disabled, #asgAudDepartment:disabled { background: #f8fafc; }
-         #asgTable tr { cursor: pointer; }
-        #asgTable tr:hover td { background: #eff6ff; }
-        #asgTable tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }
+         #asgTable tbody tr { cursor: pointer; }
+        #asgTable tbody tr:hover td { background: #eff6ff; }
+        #asgTable tbody tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }
+        #asgTable thead th { cursor: default; }
+        .asg-sort-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            font-weight: 700;
+            text-align: left;
+        }
+        .asg-sort-btn.asg-sort-btn-center {
+            justify-content: center;
+            text-align: center;
+        }
+        .asg-sort-btn:hover {
+            color: #1d4ed8;
+        }
+        .asg-sort-indicator {
+            min-width: 10px;
+            color: #2563eb;
+            font-size: 10px;
+            line-height: 1;
+        }
         #asgTeacher:disabled { background: #f8fafc; }
         .check-report-body {
             margin: 12px;
@@ -4825,10 +4852,91 @@
             let asgUnits = [];        // dars birliklari
             let asgSel = null;        // tanlangan birlik
             let asgTeacherTimer = null;
-             let asgAudRooms = [];
-             let asgAudSel = null;
-             let asgAudTeacherTimer = null;
-             let asgAudDepartmentsLoaded = false;
+            let asgSortKey = 'subject';
+            let asgSortDir = 'asc';
+            let asgAudRooms = [];
+            let asgAudSel = null;
+            let asgAudTeacherTimer = null;
+            let asgAudDepartmentsLoaded = false;
+
+            function asgTypeLabel(unit) {
+                return unit.training_type === 'lecture' ? "Ma'ruza" : 'Amaliy';
+            }
+
+            function asgScopeLabel(unit) {
+                return unit.training_type === 'lecture' ? (unit.oqim_label || 'oqim') : (unit.group_name || '');
+            }
+
+            function asgTeacherSortLabel(unit) {
+                if (unit.teacher_mixed) return 'turlicha';
+                return unit.teacher_name || '';
+            }
+
+            function asgSortValue(unit, key) {
+                switch (key) {
+                    case 'type': return asgTypeLabel(unit);
+                    case 'scope': return asgScopeLabel(unit);
+                    case 'department': return unit.kafedra_name || '';
+                    case 'cards': return Number(unit.cards || 0);
+                    case 'teacher': return asgTeacherSortLabel(unit);
+                    case 'subject':
+                    default: return unit.subject_name || '';
+                }
+            }
+
+            function asgCompareText(a, b) {
+                return String(a || '').localeCompare(String(b || ''), 'uz', {
+                    numeric: true,
+                    sensitivity: 'base'
+                });
+            }
+
+            function asgSortedRows(rows) {
+                const dir = asgSortDir === 'asc' ? 1 : -1;
+                return [...rows].sort((a, b) => {
+                    let diff = 0;
+                    if (asgSortKey === 'cards') {
+                        diff = asgSortValue(a, 'cards') - asgSortValue(b, 'cards');
+                    } else {
+                        diff = asgCompareText(asgSortValue(a, asgSortKey), asgSortValue(b, asgSortKey));
+                    }
+
+                    if (diff !== 0) return diff * dir;
+
+                    diff = asgCompareText(a.subject_name, b.subject_name);
+                    if (diff !== 0) return diff;
+
+                    diff = asgCompareText(asgScopeLabel(a), asgScopeLabel(b));
+                    if (diff !== 0) return diff;
+
+                    return asgCompareText(a.kafedra_name || '', b.kafedra_name || '');
+                });
+            }
+
+            function asgSortIndicator(key) {
+                if (asgSortKey !== key) return '';
+                return asgSortDir === 'asc' ? '&uarr;' : '&darr;';
+            }
+
+            function asgHeaderCell(label, key, center = false) {
+                return '<th>' +
+                    '<button type="button" class="asg-sort-btn' + (center ? ' asg-sort-btn-center' : '') + '" data-asg-sort="' + key + '">' +
+                    '<span>' + label + '</span>' +
+                    '<span class="asg-sort-indicator">' + asgSortIndicator(key) + '</span>' +
+                    '</button>' +
+                    '</th>';
+            }
+
+            function asgToggleSort(key) {
+                if (asgSortKey === key) {
+                    asgSortDir = asgSortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    asgSortKey = key;
+                    asgSortDir = 'asc';
+                }
+                renderAsgTable();
+            }
+
              function setAsgTab(tab) {
                  document.querySelectorAll('[data-asg-tab]').forEach(btn => {
                      btn.classList.toggle('active', btn.dataset.asgTab === tab);
@@ -4888,11 +4996,31 @@
             }
 
             function renderAsgTable() {
-                const rows = asgFiltered();
+                const rows = asgSortedRows(asgFiltered());
                 $('asgCount').textContent = rows.length + ' ta';
-                let h = '<thead><tr><th>Fan</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th></tr></thead><tbody>';
-                let lastSpec = null;
+                let h = '<thead><tr>' +
+                    asgHeaderCell('Fan', 'subject') +
+                    asgHeaderCell('Tur', 'type', true) +
+                    asgHeaderCell('Oqim/Guruh', 'scope') +
+                    asgHeaderCell('Kafedra', 'department') +
+                    asgHeaderCell('Karta', 'cards', true) +
+                    asgHeaderCell('O\'qituvchi', 'teacher') +
+                    '</tr></thead><tbody>';
+                if (!rows.length) h += '<tr><td colspan="6" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
                 rows.forEach((u, i) => {
+                    const scopeLabel = asgScopeLabel(u);
+                    const ttLabel = u.training_type === 'lecture'
+                        ? '<span class="text-blue-600 font-semibold">Ma\'ruza</span>'
+                        : '<span class="text-purple-600 font-semibold">Amaliy</span>';
+                    const teacherLabel = u.teacher_mixed
+                        ? '<span class="text-amber-600">⚠ turlicha</span>'
+                        : (u.teacher_name ? esc(u.teacher_name) : '<span class="text-gray-400">— biriktirilmagan —</span>');
+                    h += '<tr data-i="' + i + '"' + (asgSel === rows[i] ? ' class="sel"' : '') + '>' +
+                        '<td>' + esc(u.subject_name) + '</td><td class="text-center">' + ttLabel + '</td>' +
+                        '<td>' + esc(scopeLabel) + '</td><td>' + esc(u.kafedra_name || '—') + '</td>' +
+                        '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '✓)</span>' : '') + '</td>' +
+                        '<td>' + teacherLabel + '</td></tr>';
+                    return;
                     const sk = u.specialty_name + '·' + u.course;
                     if (sk !== lastSpec) {
                         h += '<tr class="asc-row-head"><td colspan="6">' + esc(u.specialty_name) + ' · ' + u.course + '-kurs</td></tr>';
@@ -4912,6 +5040,9 @@
                 });
                 h += '</tbody>';
                 $('asgTable').innerHTML = h;
+                $('asgTable').querySelectorAll('[data-asg-sort]').forEach(btn => {
+                    btn.onclick = () => asgToggleSort(btn.dataset.asgSort);
+                });
                 const rowsRef = rows;
                 $('asgTable').querySelectorAll('tbody tr[data-i]').forEach(tr => tr.onclick = () => {
                     asgSel = rowsRef[+tr.dataset.i];

@@ -1746,8 +1746,9 @@
         .asg-sort-btn {
             width: 100%;
             display: flex;
-            align-items: center;
-            gap: 6px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
             padding: 0;
             border: 0;
             background: transparent;
@@ -1757,17 +1758,21 @@
             text-align: left;
         }
         .asg-sort-btn.asg-sort-btn-center {
-            justify-content: center;
+            align-items: center;
             text-align: center;
         }
-        .asg-sort-btn:hover {
+        .asg-sort-btn:hover,
+        .asg-sort-btn.is-active {
             color: #1d4ed8;
         }
         .asg-sort-indicator {
-            min-width: 10px;
+            max-width: 100%;
             color: #2563eb;
             font-size: 10px;
-            line-height: 1;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         #asgTeacher:disabled { background: #f8fafc; }
         .check-report-body {
@@ -4852,12 +4857,21 @@
             let asgUnits = [];        // dars birliklari
             let asgSel = null;        // tanlangan birlik
             let asgTeacherTimer = null;
-            let asgSortKey = 'subject';
-            let asgSortDir = 'asc';
+            const ASG_HEADER_KEYS = ['subject', 'type', 'scope', 'department', 'cards', 'teacher'];
             let asgAudRooms = [];
             let asgAudSel = null;
             let asgAudTeacherTimer = null;
             let asgAudDepartmentsLoaded = false;
+
+            function newAsgHeaderFilters() {
+                return { subject: '', type: '', scope: '', department: '', cards: '', teacher: '' };
+            }
+
+            let asgHeaderFilters = newAsgHeaderFilters();
+
+            function resetAsgHeaderFilters() {
+                asgHeaderFilters = newAsgHeaderFilters();
+            }
 
             function asgTypeLabel(unit) {
                 return unit.training_type === 'lecture' ? "Ma'ruza" : 'Amaliy';
@@ -4867,20 +4881,20 @@
                 return unit.training_type === 'lecture' ? (unit.oqim_label || 'oqim') : (unit.group_name || '');
             }
 
-            function asgTeacherSortLabel(unit) {
+            function asgTeacherText(unit) {
                 if (unit.teacher_mixed) return 'turlicha';
-                return unit.teacher_name || '';
+                return unit.teacher_name || 'biriktirilmagan';
             }
 
-            function asgSortValue(unit, key) {
+            function asgHeaderValue(unit, key) {
                 switch (key) {
                     case 'type': return asgTypeLabel(unit);
-                    case 'scope': return asgScopeLabel(unit);
-                    case 'department': return unit.kafedra_name || '';
-                    case 'cards': return Number(unit.cards || 0);
-                    case 'teacher': return asgTeacherSortLabel(unit);
+                    case 'scope': return asgScopeLabel(unit) || '-';
+                    case 'department': return unit.kafedra_name || '-';
+                    case 'cards': return String(unit.cards || 0);
+                    case 'teacher': return asgTeacherText(unit);
                     case 'subject':
-                    default: return unit.subject_name || '';
+                    default: return unit.subject_name || '-';
                 }
             }
 
@@ -4891,49 +4905,70 @@
                 });
             }
 
-            function asgSortedRows(rows) {
-                const dir = asgSortDir === 'asc' ? 1 : -1;
-                return [...rows].sort((a, b) => {
-                    let diff = 0;
-                    if (asgSortKey === 'cards') {
-                        diff = asgSortValue(a, 'cards') - asgSortValue(b, 'cards');
-                    } else {
-                        diff = asgCompareText(asgSortValue(a, asgSortKey), asgSortValue(b, asgSortKey));
+            function asgMatchesHeaderFilters(unit, exceptKey = null) {
+                for (const key of ASG_HEADER_KEYS) {
+                    if (key === exceptKey) continue;
+                    const active = asgHeaderFilters[key];
+                    if (active && asgHeaderValue(unit, key) !== active) return false;
+                }
+                return true;
+            }
+
+            function asgHeaderOptions(key, baseRows) {
+                const values = [...new Set((baseRows || [])
+                    .filter(unit => asgMatchesHeaderFilters(unit, key))
+                    .map(unit => asgHeaderValue(unit, key))
+                    .filter(Boolean))];
+
+                if (key === 'cards') {
+                    values.sort((a, b) => (+a || 0) - (+b || 0));
+                } else {
+                    values.sort(asgCompareText);
+                }
+
+                return values;
+            }
+
+            function asgNormalizeHeaderFilters(baseRows) {
+                ASG_HEADER_KEYS.forEach(key => {
+                    const active = asgHeaderFilters[key];
+                    if (!active) return;
+                    if (!asgHeaderOptions(key, baseRows).includes(active)) {
+                        asgHeaderFilters[key] = '';
                     }
-
-                    if (diff !== 0) return diff * dir;
-
-                    diff = asgCompareText(a.subject_name, b.subject_name);
-                    if (diff !== 0) return diff;
-
-                    diff = asgCompareText(asgScopeLabel(a), asgScopeLabel(b));
-                    if (diff !== 0) return diff;
-
-                    return asgCompareText(a.kafedra_name || '', b.kafedra_name || '');
                 });
             }
 
-            function asgSortIndicator(key) {
-                if (asgSortKey !== key) return '';
-                return asgSortDir === 'asc' ? '&uarr;' : '&darr;';
+            function asgHeaderIndicator(key) {
+                const active = asgHeaderFilters[key];
+                return active ? '<span class="asg-sort-indicator">' + esc(active) + '</span>' : '';
             }
 
             function asgHeaderCell(label, key, center = false) {
                 return '<th>' +
-                    '<button type="button" class="asg-sort-btn' + (center ? ' asg-sort-btn-center' : '') + '" data-asg-sort="' + key + '">' +
+                    '<button type="button" class="asg-sort-btn' + (center ? ' asg-sort-btn-center' : '') + (asgHeaderFilters[key] ? ' is-active' : '') + '" data-asg-filter="' + key + '" title="Bosib filtrni almashtiring">' +
                     '<span>' + label + '</span>' +
-                    '<span class="asg-sort-indicator">' + asgSortIndicator(key) + '</span>' +
+                    asgHeaderIndicator(key) +
                     '</button>' +
                     '</th>';
             }
 
-            function asgToggleSort(key) {
-                if (asgSortKey === key) {
-                    asgSortDir = asgSortDir === 'asc' ? 'desc' : 'asc';
-                } else {
-                    asgSortKey = key;
-                    asgSortDir = 'asc';
+            function asgToggleHeaderFilter(key) {
+                const baseRows = asgFiltered();
+                const options = asgHeaderOptions(key, baseRows);
+
+                if (!options.length) {
+                    asgHeaderFilters[key] = '';
+                    renderAsgTable();
+                    return;
                 }
+
+                const current = asgHeaderFilters[key] || '';
+                const currentIndex = options.indexOf(current);
+                asgHeaderFilters[key] = currentIndex === -1
+                    ? options[0]
+                    : (currentIndex === options.length - 1 ? '' : options[currentIndex + 1]);
+
                 renderAsgTable();
             }
 
@@ -4957,7 +4992,7 @@
 
             $('assignBtn').onclick = async () => {
                 if (!board) return;
-                asgSel = null; setAsgTeacherPanel(null);
+                asgSel = null; setAsgTeacherPanel(null); resetAsgHeaderFilters();
                 setAsgTab(TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY ? 'auditoriums' : 'teachers');
                 $('assignModal').classList.remove('hidden');
                 $('asgMsg').textContent = '';
@@ -4996,7 +5031,13 @@
             }
 
             function renderAsgTable() {
-                const rows = asgSortedRows(asgFiltered());
+                const baseRows = asgFiltered();
+                asgNormalizeHeaderFilters(baseRows);
+                const rows = baseRows.filter(unit => asgMatchesHeaderFilters(unit));
+                if (asgSel && !rows.includes(asgSel)) {
+                    asgSel = null;
+                    setAsgTeacherPanel(null);
+                }
                 $('asgCount').textContent = rows.length + ' ta';
                 let h = '<thead><tr>' +
                     asgHeaderCell('Fan', 'subject') +
@@ -5040,8 +5081,8 @@
                 });
                 h += '</tbody>';
                 $('asgTable').innerHTML = h;
-                $('asgTable').querySelectorAll('[data-asg-sort]').forEach(btn => {
-                    btn.onclick = () => asgToggleSort(btn.dataset.asgSort);
+                $('asgTable').querySelectorAll('[data-asg-filter]').forEach(btn => {
+                    btn.onclick = () => asgToggleHeaderFilter(btn.dataset.asgFilter);
                 });
                 const rowsRef = rows;
                 $('asgTable').querySelectorAll('tbody tr[data-i]').forEach(tr => tr.onclick = () => {

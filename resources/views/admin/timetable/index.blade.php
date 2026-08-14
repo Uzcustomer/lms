@@ -721,6 +721,11 @@
                                 <div class="assign-toolbar flex flex-wrap items-center gap-2 px-3 py-3 border-b border-slate-200 bg-slate-50">
                                     <span class="text-sm font-semibold text-slate-700">Dars birliklari</span>
                                     <select id="asgFilter" class="rounded-md border-slate-300 text-xs py-1.5"></select>
+                                    <select id="asgTypeFilter" class="rounded-md border-slate-300 text-xs py-1.5">
+                                        <option value="">— barcha turlar —</option>
+                                        <option value="Amaliy">Amaliy</option>
+                                        <option value="Ma'ruza">Ma'ruza</option>
+                                    </select>
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgCount" class="text-xs text-slate-400"></span>
@@ -4993,7 +4998,7 @@
 
             $('assignBtn').onclick = async () => {
                 if (!board) return;
-                asgSel = null; setAsgTeacherPanel(null); resetAsgHeaderFilters();
+                asgSel = null; setAsgTeacherPanel(null); resetAsgHeaderFilters(); $('asgTypeFilter').value = '';
                 setAsgTab(TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY ? 'auditoriums' : 'teachers');
                 $('assignModal').classList.remove('hidden');
                 $('asgMsg').textContent = '';
@@ -5017,14 +5022,16 @@
                 $('assignModal').classList.add('hidden');
                 renderAll();   // grid/panel o'qituvchi o'zgarishlarini aks ettirsin
             };
-            $('asgFilter').onchange = $('asgSearch').oninput = $('asgOnlyEmpty').onchange = () => renderAsgTable();
+            $('asgFilter').onchange = $('asgSearch').oninput = $('asgOnlyEmpty').onchange = $('asgTypeFilter').onchange = () => renderAsgTable();
 
             function asgFiltered() {
                 const q = ($('asgSearch').value || '').toLowerCase().trim();
                 const fv = $('asgFilter').value;
+                const tv = $('asgTypeFilter').value;
                 const onlyEmpty = $('asgOnlyEmpty').checked;
                 return asgUnits.filter(u => {
                     if (fv && (u.specialty_name + ' · ' + u.course + '-kurs') !== fv) return false;
+                    if (tv && asgTypeLabel(u) !== tv) return false;
                     if (onlyEmpty && u.teacher_id) return false;
                     if (q && !(u.subject_name.toLowerCase().includes(q) || (u.kafedra_name || '').toLowerCase().includes(q))) return false;
                     return true;
@@ -5040,14 +5047,7 @@
                     setAsgTeacherPanel(null);
                 }
                 $('asgCount').textContent = rows.length + ' ta';
-                let h = '<thead><tr>' +
-                    asgHeaderCell('Fan', 'subject') +
-                    asgHeaderCell('Tur', 'type', true) +
-                    asgHeaderCell('Oqim/Guruh', 'scope') +
-                    asgHeaderCell('Kafedra', 'department') +
-                    asgHeaderCell('Karta', 'cards', true) +
-                    asgHeaderCell('O\'qituvchi', 'teacher') +
-                    '</tr></thead><tbody>';
+                let h = '<thead><tr><th>Fan</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th></tr></thead><tbody>';
                 if (!rows.length) h += '<tr><td colspan="6" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
                 rows.forEach((u, i) => {
                     const scopeLabel = asgScopeLabel(u);
@@ -5082,9 +5082,6 @@
                 });
                 h += '</tbody>';
                 $('asgTable').innerHTML = h;
-                $('asgTable').querySelectorAll('[data-asg-filter]').forEach(btn => {
-                    btn.onclick = () => asgToggleHeaderFilter(btn.dataset.asgFilter);
-                });
                 const rowsRef = rows;
                 $('asgTable').querySelectorAll('tbody tr[data-i]').forEach(tr => tr.onclick = () => {
                     asgSel = rowsRef[+tr.dataset.i];

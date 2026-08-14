@@ -1974,7 +1974,8 @@
                 let moved = false;
 
                 el.addEventListener('pointerdown', e => {
-                    if (e.button !== 0 || ascType === 'auditoriums' || e.target.closest?.('#asgTable tbody tr, #asgAudTable tbody tr')) return;
+                    if (e.button !== 0 || ascType === 'auditoriums') return;
+                    if (e.target.closest?.('#asgTable tbody tr, #asgAudTable tbody tr, #asgTable thead, #asgAudTable thead, button, input, select, textarea, a, label')) return;
                     startX = e.clientX;
                     startScroll = el.scrollLeft;
                     moved = false;

@@ -1,6 +1,6 @@
 {{-- Yuklangan o'quv rejalar jadvali (saralanadigan).
-     $list — ManualCurriculum kolleksiyasi (subjects_count, total_hours, total_credit bilan).
-     $emptyText — ro'yxat bo'sh bo'lganda ko'rsatiladigan matn. --}}
+     $list - ManualCurriculum kolleksiyasi (subjects_count, total_hours, total_credit bilan).
+     $emptyText - ro'yxat bo'sh bo'lganda ko'rsatiladigan matn. --}}
 <div class="overflow-x-auto">
     <table class="js-sortable-table min-w-full divide-y divide-gray-200 text-sm">
         <thead class="bg-gray-50">
@@ -25,7 +25,7 @@
                         {{ $curriculum->name }}
                     </a>
                     @if($curriculum->isPlanned())
-                        <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800" title="HEMIS'ga bog'lanmagan rejalashtirilgan reja">⏳ Rejalashtirilgan</span>
+                        <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800" title="HEMIS'ga bog'lanmagan rejalashtirilgan reja">&#9203; Rejalashtirilgan</span>
                     @endif
                 </td>
                 <td class="px-4 py-2">
@@ -41,7 +41,7 @@
                 <td class="px-4 py-2" data-sort-value="{{ $curriculum->created_at->timestamp }}">{{ $curriculum->created_at->format('d.m.Y H:i') }}</td>
                 <td class="px-4 py-2">
                     <form method="POST" action="{{ route('admin.oquv-reja.destroy', $curriculum) }}"
-                          onsubmit="return confirm('Ushbu reja va uning barcha fan qatorlari o’chirilsinmi?');">
+                          onsubmit="return confirmAndPreserveOquvRejaState('Ushbu reja va uning barcha fan qatorlari o\\'chirilsinmi?');">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="text-red-600 hover:underline text-sm">O'chirish</button>

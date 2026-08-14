@@ -1265,7 +1265,7 @@
                                                 Solishtirishni ko'rish →
                                             </a>
                                             <form method="POST" action="{{ route('admin.oquv-reja.comparisons.destroy', $comp) }}" class="inline"
-                                                  onsubmit="return confirm('Ushbu solishtirish ro\'yxatdan o\'chirilsinmi?');">
+                                                  onsubmit="return confirmAndPreserveOquvRejaState('Ushbu solishtirish ro\\'yxatdan o\\'chirilsinmi?');">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="text-red-600 hover:underline text-sm">O'chirish</button>
@@ -1345,6 +1345,34 @@
                     }
                     document.querySelectorAll('.js-sortable-table').forEach(initSortable);
 
+                    const INDEX_STATE_KEY = 'oquv_reja_index_state';
+
+                    function activeMainTab() {
+                        return document.querySelector('.main-tab.tab-active')?.dataset.tab || 'rejalar';
+                    }
+
+                    function activeSubTab() {
+                        return document.querySelector('.sub-tab.subtab-active')?.dataset.subtab
+                            || document.querySelector('.sub-tab')?.dataset.subtab
+                            || 'namunaviy';
+                    }
+
+                    function saveIndexState() {
+                        try {
+                            sessionStorage.setItem(INDEX_STATE_KEY, JSON.stringify({
+                                mainTab: activeMainTab(),
+                                subTab: activeSubTab(),
+                                scrollY: window.scrollY || window.pageYOffset || 0,
+                            }));
+                        } catch (e) {}
+                    }
+
+                    window.confirmAndPreserveOquvRejaState = function (message) {
+                        const ok = window.confirm(message);
+                        if (ok) saveIndexState();
+                        return ok;
+                    };
+
                     // ===== Asosiy vkladkalar =====
                     function activateMainTab(name) {
                         document.querySelectorAll('.main-tab').forEach(b =>
@@ -1357,21 +1385,37 @@
                         btn.addEventListener('click', () => activateMainTab(btn.dataset.tab)));
 
                     // ===== Sub-vkladkalar (Namunaviy / Ishchi) =====
+                    function activateSubTab(name) {
+                        document.querySelectorAll('.sub-tab').forEach(b =>
+                            b.classList.toggle('subtab-active', b.dataset.subtab === name));
+                        document.querySelectorAll('[data-subpanel]').forEach(p =>
+                            p.classList.toggle('hidden', p.dataset.subpanel !== name));
+                    }
                     document.querySelectorAll('.sub-tab').forEach(btn =>
-                        btn.addEventListener('click', () => {
-                            const name = btn.dataset.subtab;
-                            document.querySelectorAll('.sub-tab').forEach(b =>
-                                b.classList.toggle('subtab-active', b.dataset.subtab === name));
-                            document.querySelectorAll('[data-subpanel]').forEach(p =>
-                                p.classList.toggle('hidden', p.dataset.subpanel !== name));
-                        }));
+                        btn.addEventListener('click', () => activateSubTab(btn.dataset.subtab)));
 
                     // Boshlang'ich holat (URL hash bo'yicha)
+                    let savedState = null;
+                    try {
+                        savedState = JSON.parse(sessionStorage.getItem(INDEX_STATE_KEY) || 'null');
+                    } catch (e) {}
                     const hash = (location.hash || '').replace('#', '');
                     const validHashes = ['solishtirish', 'yonalish', 'fanlar', 'oqituvchi'];
-                    activateMainTab(validHashes.includes(hash) ? hash : 'rejalar');
+                    const initialMain = savedState?.mainTab || (validHashes.includes(hash) ? hash : 'rejalar');
+                    activateMainTab(initialMain);
                     const firstSub = document.querySelector('.sub-tab');
-                    if (firstSub) firstSub.click();
+                    const initialSub = savedState?.subTab && document.querySelector('.sub-tab[data-subtab="' + savedState.subTab + '"]')
+                        ? savedState.subTab
+                        : firstSub?.dataset.subtab;
+                    if (initialSub) activateSubTab(initialSub);
+                    if (savedState && Number.isFinite(savedState.scrollY)) {
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                window.scrollTo({ top: savedState.scrollY, left: 0, behavior: 'auto' });
+                            });
+                        });
+                        try { sessionStorage.removeItem(INDEX_STATE_KEY); } catch (e) {}
+                    }
 
                     // ===== Yo'nalish bo'yicha tab =====
                     (function () {

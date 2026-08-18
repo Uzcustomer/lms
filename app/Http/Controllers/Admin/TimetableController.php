@@ -178,33 +178,68 @@ class TimetableController extends Controller
         return $byFaculty;
     }
 
-    private function weekMaskFitsCapacity($state, int $mask, int $capacity): bool
+    private function weekMaskFitsCapacity($state, int $mask, int $capacity, ?string $subject = null): bool
     {
         $state = $this->normalizeWeekMaskCapacity($state);
+        $weeks = $state['weeks'];
+        $existingSubject = $state['subject'];
         $capacity = max(1, $capacity);
+        if ($subject !== null && $existingSubject !== null && $existingSubject !== $subject) {
+            for ($bit = 0; $bit < 60; $bit++) {
+                if (($mask & (1 << $bit)) && (($weeks[$bit] ?? 0) > 0)) {
+                    return false;
+                }
+            }
+        }
         for ($bit = 0; $bit < 60; $bit++) {
-            if (($mask & (1 << $bit)) && (($state[$bit] ?? 0) >= $capacity)) {
+            if (($mask & (1 << $bit)) && (($weeks[$bit] ?? 0) >= $capacity)) {
                 return false;
             }
         }
         return true;
     }
 
-    private function addWeekMaskCapacity($state, int $mask): array
+    private function addWeekMaskCapacity($state, int $mask, ?string $subject = null): array
     {
         $state = $this->normalizeWeekMaskCapacity($state);
+        $weeks = $state['weeks'];
         for ($bit = 0; $bit < 60; $bit++) {
             if ($mask & (1 << $bit)) {
-                $state[$bit] = ($state[$bit] ?? 0) + 1;
+                $weeks[$bit] = ($weeks[$bit] ?? 0) + 1;
             }
         }
+        $state['subject'] = $state['subject'] ?? $subject;
+        $state['weeks'] = $weeks;
         return $state;
+    }
+
+    private function weekMaskHasSubject($state, int $mask, ?string $subject): bool
+    {
+        if ($subject === null) {
+            return false;
+        }
+        $state = $this->normalizeWeekMaskCapacity($state);
+        if (($state['subject'] ?? null) !== $subject) {
+            return false;
+        }
+        foreach ($state['weeks'] as $bit => $count) {
+            if ($count > 0 && ($mask & (1 << (int) $bit))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function normalizeWeekMaskCapacity($state): array
     {
+        if (is_array($state) && array_key_exists('weeks', $state)) {
+            return [
+                'subject' => $state['subject'] ?? null,
+                'weeks' => is_array($state['weeks']) ? $state['weeks'] : [],
+            ];
+        }
         if (is_array($state)) {
-            return $state;
+            return ['subject' => null, 'weeks' => $state];
         }
         $mask = (int) $state;
         $out = [];
@@ -213,7 +248,7 @@ class TimetableController extends Controller
                 $out[$bit] = 1;
             }
         }
-        return $out;
+        return ['subject' => null, 'weeks' => $out];
     }
 
     /**
@@ -1319,30 +1354,40 @@ class TimetableController extends Controller
                 . '|lectures';
         };
         $lectureSlotsAvailable = function (TimetableCard $card, int $day, int $pair, int $len, int $mask)
-            use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey, $lectureCapacity): bool {
+            use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey, $lectureCapacity, $subjectBaseKey): bool {
             if ($card->training_type !== 'lecture') {
                 return true;
             }
             $base = $lectureScopeKey($card);
+            $subject = $subjectBaseKey($card);
             for ($i = 0; $i < $len; $i++) {
                 $key = $lectureSlotKey($base, $day, $pair + $i);
-                if (!$this->weekMaskFitsCapacity($lectureSlotBusy[$key] ?? [], $mask, $lectureCapacity)) {
+                if (!$this->weekMaskFitsCapacity($lectureSlotBusy[$key] ?? [], $mask, $lectureCapacity, $subject)) {
                     return false;
                 }
             }
             return true;
         };
-        $markLectureSlotBusy = function (TimetableCard $card) use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey, $maskOf): void {
+        $lectureParallelTeacherAllowed = function (TimetableCard $card, int $day, int $pair, int $mask)
+            use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey, $subjectBaseKey): bool {
+            if ($card->training_type !== 'lecture') {
+                return false;
+            }
+            $key = $lectureSlotKey($lectureScopeKey($card), $day, $pair);
+            return $this->weekMaskHasSubject($lectureSlotBusy[$key] ?? [], $mask, $subjectBaseKey($card));
+        };
+        $markLectureSlotBusy = function (TimetableCard $card) use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey, $maskOf, $subjectBaseKey): void {
             if ($card->training_type !== 'lecture' || !$card->day || !$card->pair) {
                 return;
             }
             $base = $lectureScopeKey($card);
+            $subject = $subjectBaseKey($card);
             $day = (int) $card->day;
             $pair = (int) $card->pair;
             $mask = $maskOf($card);
             for ($i = 0; $i < $this->parasNeeded($card); $i++) {
                 $key = $lectureSlotKey($base, $day, $pair + $i);
-                $lectureSlotBusy[$key] = $this->addWeekMaskCapacity($lectureSlotBusy[$key] ?? [], $mask);
+                $lectureSlotBusy[$key] = $this->addWeekMaskCapacity($lectureSlotBusy[$key] ?? [], $mask, $subject);
             }
         };
 
@@ -1589,6 +1634,7 @@ class TimetableController extends Controller
                         'groups' => $ucGroups,
                         'teacher' => $uc->teacher_id,
                         'lecture_key' => $uc->training_type === 'lecture' ? $lectureScopeKey($uc) : null,
+                        'lecture_subject' => $uc->training_type === 'lecture' ? $subjectBaseKey($uc) : null,
                         'room_required' => $ucNeedRoom,
                         'pool' => $ucArr,
                         'mask' => $maskOf($uc),
@@ -1733,6 +1779,7 @@ class TimetableController extends Controller
                     'teacher' => $teacherId, 'room_required' => $roomRequired,
                     'pool' => $poolArr, 'mask' => $cardMask,
                     'lecture_key' => $c->training_type === 'lecture' ? $lectureScopeKey($c) : null,
+                    'lecture_subject' => $c->training_type === 'lecture' ? $subjectBaseKey($c) : null,
                 ]];
                 $spot = $chainSpot($seg, $ch, $standIn, $days, $pairs, $scopeKey);
                 if ($spot !== null) {
@@ -1782,6 +1829,7 @@ class TimetableController extends Controller
                     'groups' => $groups,
                     'teacher' => $teacherId,
                     'lecture_key' => $c->training_type === 'lecture' ? $lectureScopeKey($c) : null,
+                    'lecture_subject' => $c->training_type === 'lecture' ? $subjectBaseKey($c) : null,
                     'room_required' => $roomRequired,
                     'pool' => $poolArr,
                     'mask' => $cardMask,
@@ -1842,7 +1890,9 @@ class TimetableController extends Controller
                                 }
                             }
                         }
-                        if ($teacherId && (($teacherBusy[$teacherId . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask)) {
+                        if ($teacherId
+                            && (($teacherBusy[$teacherId . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask)
+                            && !$lectureParallelTeacherAllowed($c, $d, $p + $i, $cardMask)) {
                             $freeAll = false;
                             break;
                         }
@@ -2261,12 +2311,15 @@ class TimetableController extends Controller
         // Bir yarim-slot shu segment uchun bo'shmi (guruh + o'qituvchi)?
         $slotFree = function (array $seg, int $d, int $p) use ($scopeKey, $groupBusy, $teacherBusy, $reservations): bool {
             $mask = $seg['mask'] ?? -1;
+            $lectureParallel = false;
             if (!empty($seg['lecture_key'])) {
                 $capacity = (int) ($reservations['lecture_capacity'] ?? 1);
                 $state = $reservations['lectures'][$seg['lecture_key'] . '|' . $d . '|' . $p] ?? [];
-                if (!$this->weekMaskFitsCapacity($state, $mask, $capacity)) {
+                $subject = $seg['lecture_subject'] ?? null;
+                if (!$this->weekMaskFitsCapacity($state, $mask, $capacity, $subject)) {
                     return false;
                 }
+                $lectureParallel = $this->weekMaskHasSubject($state, $mask, $subject);
             }
             $busy = $groupBusy[$scopeKey . '|' . $d . '|' . $p] ?? null;
             if ($busy !== null) {
@@ -2281,7 +2334,7 @@ class TimetableController extends Controller
                     return false;
                 }
             }
-            if ($seg['teacher'] && (($teacherBusy[$seg['teacher'] . '|' . $d . '|' . $p] ?? 0) & $mask)) {
+            if ($seg['teacher'] && (($teacherBusy[$seg['teacher'] . '|' . $d . '|' . $p] ?? 0) & $mask) && !$lectureParallel) {
                 return false;
             }
             return !($seg['teacher'] && (($reservations['teachers'][$seg['teacher'] . '|' . $d . '|' . $p] ?? 0) & $mask));

@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 class TestSubjectController extends Controller
 {
     private const TARGET_EDUCATION_YEAR = '2025-2026';
-    private const CURRICULUM_SUBJECT_YEAR = '2026-2027';
+    private const CURRICULUM_SUBJECT_YEARS = ['2026-2027', '2025-2026'];
 
     public function index(Request $request)
     {
@@ -27,7 +27,7 @@ class TestSubjectController extends Controller
             ->whereNotNull('department_id')
             ->whereNotNull('department_name')
             ->where('curriculum_subjects.department_name', '!=', '')
-            ->where('curricula.education_year_name', self::CURRICULUM_SUBJECT_YEAR)
+            ->whereIn('curricula.education_year_name', self::CURRICULUM_SUBJECT_YEARS)
             ->select('curriculum_subjects.department_id', 'curriculum_subjects.department_name')
             ->distinct()
             ->orderBy('curriculum_subjects.department_name')
@@ -41,7 +41,7 @@ class TestSubjectController extends Controller
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
                 ->where('cs.department_id', $selectedKafedraId)
                 ->where('cs.is_active', true)
-                ->where('c.education_year_name', self::CURRICULUM_SUBJECT_YEAR)
+                ->whereIn('c.education_year_name', self::CURRICULUM_SUBJECT_YEARS)
                 ->selectRaw('
                     cs.subject_id,
                     cs.subject_name,
@@ -91,7 +91,7 @@ class TestSubjectController extends Controller
             'kafedras' => $kafedras,
             'selectedKafedraId' => $selectedKafedraId,
             'curriculumSubjects' => $curriculumSubjects,
-            'curriculumSubjectYear' => self::CURRICULUM_SUBJECT_YEAR,
+            'curriculumSubjectYears' => self::CURRICULUM_SUBJECT_YEARS,
         ]);
     }
 

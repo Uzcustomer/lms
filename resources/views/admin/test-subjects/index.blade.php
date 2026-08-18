@@ -6,7 +6,7 @@
                 <div>
                     <div class="text-xs font-bold uppercase tracking-[0.2em] text-blue-100">Test moduli</div>
                     <h1 class="text-3xl font-extrabold mt-1">Test fanlar</h1>
-                    <p class="text-sm text-blue-50 mt-2">{{ $curriculumSubjectYear }} o'quv yilidagi kafedra fanlarini semesterlari bilan ko'ring va ulardan test fan yarating.</p>
+                    <p class="text-sm text-blue-50 mt-2">{{ implode(', ', $curriculumSubjectYears) }} o'quv yillaridagi kafedra fanlarini semesterlari bilan ko'ring va ulardan test fan yarating.</p>
                 </div>
             </div>
 
@@ -46,7 +46,7 @@
                         <div class="rounded-2xl bg-emerald-50 border border-emerald-100 px-5 py-3 text-sm text-emerald-700 min-w-[190px]">
                             <div class="text-xs font-bold uppercase tracking-wide text-emerald-500">Topildi</div>
                             <div class="text-2xl font-extrabold text-emerald-700">{{ $curriculumSubjects->total() }}</div>
-                            <div>{{ $curriculumSubjectYear }} fan/semester</div>
+                            <div>{{ implode(', ', $curriculumSubjectYears) }} fan/semester</div>
                         </div>
                     @endif
                     </div>
@@ -80,7 +80,7 @@
                                                 {{ $curriculumSubject->subject_code ?: 'Kod yo\'q' }}
                                             </span>
                                             <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
-                                                {{ $curriculumSubjectYear }}
+                                                {{ $curriculumSubject->education_year_name ?: implode(', ', $curriculumSubjectYears) }}
                                             </span>
                                         </div>
                                     </td>
@@ -123,7 +123,7 @@
                             @empty
                                 <tr>
                                     <td colspan="5" class="px-4 py-10 text-center text-slate-500">
-                                        Bu kafedra bo'yicha {{ $curriculumSubjectYear }} o'quv yilida fan topilmadi.
+                                        Bu kafedra bo'yicha {{ implode(', ', $curriculumSubjectYears) }} o'quv yillarida fan topilmadi.
                                     </td>
                                 </tr>
                             @endforelse

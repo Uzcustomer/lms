@@ -6,7 +6,7 @@
                 <div>
                     <div class="text-xs font-bold uppercase tracking-[0.2em] text-blue-100">Test moduli</div>
                     <h1 class="text-3xl font-extrabold mt-1">Test fanlar</h1>
-                    <p class="text-sm text-blue-50 mt-2">Kafedra bo'yicha o'quv rejadagi fanlarni semesterlari bilan ko'ring va ulardan test fan yarating.</p>
+                    <p class="text-sm text-blue-50 mt-2">{{ $curriculumSubjectYear }} o'quv yilidagi kafedra fanlarini semesterlari bilan ko'ring va ulardan test fan yarating.</p>
                 </div>
             </div>
 
@@ -46,7 +46,7 @@
                         <div class="rounded-2xl bg-emerald-50 border border-emerald-100 px-5 py-3 text-sm text-emerald-700 min-w-[190px]">
                             <div class="text-xs font-bold uppercase tracking-wide text-emerald-500">Topildi</div>
                             <div class="text-2xl font-extrabold text-emerald-700">{{ $curriculumSubjects->total() }}</div>
-                            <div>fan/semester</div>
+                            <div>{{ $curriculumSubjectYear }} fan/semester</div>
                         </div>
                     @endif
                     </div>
@@ -59,42 +59,57 @@
                         <div class="text-sm text-slate-500 mt-1">Tanlangan kafedraga bog'langan fanlar semesterlari bilan shu yerda chiqadi.</div>
                     </div>
                 @else
-                    <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                    <div class="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
                         <table class="min-w-full text-sm">
                             <thead class="bg-slate-100 text-slate-600 uppercase text-xs tracking-wide">
                             <tr>
                                 <th class="px-4 py-3 text-left">Fan</th>
-                                <th class="px-4 py-3 text-left">Yo'nalish</th>
-                                <th class="px-4 py-3 text-left">O'quv yili</th>
-                                <th class="px-4 py-3 text-left">Semester</th>
+                                <th class="px-4 py-3 text-left">Yo'nalish / semester</th>
                                 <th class="px-4 py-3 text-left">Kafedra</th>
-                                <th class="px-4 py-3 text-center">Soat</th>
-                                <th class="px-4 py-3 text-center">Kredit</th>
+                                <th class="px-4 py-3 text-center">Yuklama</th>
                                 <th class="px-4 py-3 text-right">Amal</th>
                             </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                             @forelse($curriculumSubjects as $curriculumSubject)
-                                <tr class="hover:bg-slate-50">
-                                    <td class="px-4 py-4">
-                                        <div class="font-semibold text-slate-900">{{ $curriculumSubject->subject_name }}</div>
-                                        <div class="text-xs text-slate-500 mt-1">{{ $curriculumSubject->subject_code ?: 'Kod yo\'q' }}</div>
+                                <tr class="hover:bg-blue-50/40 transition">
+                                    <td class="px-4 py-4 align-top">
+                                        <div class="font-bold text-slate-900 leading-5">{{ $curriculumSubject->subject_name }}</div>
+                                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                                                {{ $curriculumSubject->subject_code ?: 'Kod yo\'q' }}
+                                            </span>
+                                            <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                                                {{ $curriculumSubjectYear }}
+                                            </span>
+                                        </div>
                                     </td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $curriculumSubject->specialty_name ?: '-' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $curriculumSubject->education_year_name ?: '-' }}</td>
-                                    <td class="px-4 py-4">
-                                        <span class="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-                                            {{ $curriculumSubject->semester_name ?: $curriculumSubject->semester_code }}
-                                        </span>
+                                    <td class="px-4 py-4 align-top">
+                                        <div class="font-semibold text-slate-800">{{ $curriculumSubject->specialty_name ?: '-' }}</div>
+                                        <div class="mt-2">
+                                            <span class="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+                                                {{ $curriculumSubject->semester_name ?: $curriculumSubject->semester_code }}
+                                            </span>
+                                        </div>
                                     </td>
-                                    <td class="px-4 py-4">
+                                    <td class="px-4 py-4 align-top">
                                         <span class="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
                                             {{ $curriculumSubject->department_name ?: '-' }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ rtrim(rtrim((string) $curriculumSubject->total_acload, '0'), '.') ?: '-' }}</td>
-                                    <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ rtrim(rtrim((string) $curriculumSubject->credit, '0'), '.') ?: '-' }}</td>
-                                    <td class="px-4 py-4 text-right">
+                                    <td class="px-4 py-4 text-center align-top">
+                                        <div class="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                                            <div class="px-3 py-2 border-r border-slate-200">
+                                                <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Soat</div>
+                                                <div class="font-extrabold text-slate-900">{{ rtrim(rtrim((string) $curriculumSubject->total_acload, '0'), '.') ?: '-' }}</div>
+                                            </div>
+                                            <div class="px-3 py-2">
+                                                <div class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Kredit</div>
+                                                <div class="font-extrabold text-slate-900">{{ rtrim(rtrim((string) $curriculumSubject->credit, '0'), '.') ?: '-' }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4 text-right align-top">
                                         <a href="{{ route('admin.test-subjects.create', [
                                                 'name' => $curriculumSubject->subject_name,
                                                 'faculty_hemis_id' => $curriculumSubject->department_hemis_id,
@@ -107,8 +122,8 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="px-4 py-10 text-center text-slate-500">
-                                        Bu kafedra bo'yicha fan topilmadi.
+                                    <td colspan="5" class="px-4 py-10 text-center text-slate-500">
+                                        Bu kafedra bo'yicha {{ $curriculumSubjectYear }} o'quv yilida fan topilmadi.
                                     </td>
                                 </tr>
                             @endforelse

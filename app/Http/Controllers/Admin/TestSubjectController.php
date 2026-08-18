@@ -16,18 +16,21 @@ use Illuminate\Support\Facades\DB;
 class TestSubjectController extends Controller
 {
     private const TARGET_EDUCATION_YEAR = '2025-2026';
+    private const CURRICULUM_SUBJECT_YEAR = '2026-2027';
 
     public function index(Request $request)
     {
         $selectedKafedraId = $request->input('kafedra_id');
 
         $kafedras = DB::table('curriculum_subjects')
+            ->join('curricula', 'curricula.curricula_hemis_id', '=', 'curriculum_subjects.curricula_hemis_id')
             ->whereNotNull('department_id')
             ->whereNotNull('department_name')
-            ->where('department_name', '!=', '')
-            ->select('department_id', 'department_name')
+            ->where('curriculum_subjects.department_name', '!=', '')
+            ->where('curricula.education_year_name', self::CURRICULUM_SUBJECT_YEAR)
+            ->select('curriculum_subjects.department_id', 'curriculum_subjects.department_name')
             ->distinct()
-            ->orderBy('department_name')
+            ->orderBy('curriculum_subjects.department_name')
             ->get()
             ->mapWithKeys(fn ($department) => [(string) $department->department_id => $department->department_name]);
 
@@ -38,6 +41,7 @@ class TestSubjectController extends Controller
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
                 ->where('cs.department_id', $selectedKafedraId)
                 ->where('cs.is_active', true)
+                ->where('c.education_year_name', self::CURRICULUM_SUBJECT_YEAR)
                 ->selectRaw('
                     cs.subject_id,
                     cs.subject_name,
@@ -69,10 +73,9 @@ class TestSubjectController extends Controller
                     'sp.name',
                     'c.education_year_name'
                 )
-                ->orderBy('cs.subject_name')
                 ->orderBy('sp.name')
-                ->orderBy('c.education_year_name')
                 ->orderByRaw('CAST(cs.semester_code AS UNSIGNED), cs.semester_name')
+                ->orderBy('cs.subject_name')
                 ->paginate(80, ['*'], 'curriculum_page')
                 ->withQueryString();
         }
@@ -83,7 +86,13 @@ class TestSubjectController extends Controller
             ->paginate(20, ['*'], 'test_page')
             ->withQueryString();
 
-        return view('admin.test-subjects.index', compact('subjects', 'kafedras', 'selectedKafedraId', 'curriculumSubjects'));
+        return view('admin.test-subjects.index', [
+            'subjects' => $subjects,
+            'kafedras' => $kafedras,
+            'selectedKafedraId' => $selectedKafedraId,
+            'curriculumSubjects' => $curriculumSubjects,
+            'curriculumSubjectYear' => self::CURRICULUM_SUBJECT_YEAR,
+        ]);
     }
 
     public function create()

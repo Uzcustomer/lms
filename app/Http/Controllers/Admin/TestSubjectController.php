@@ -19,21 +19,24 @@ class TestSubjectController extends Controller
 
     public function index(Request $request)
     {
-        $selectedFacultyId = $request->input('faculty_hemis_id');
+        $selectedKafedraId = $request->input('kafedra_id');
 
-        $faculties = Department::query()
-            ->where('structure_type_code', 11)
-            ->where('active', true)
-            ->orderBy('name')
-            ->get(['department_hemis_id', 'name'])
-            ->mapWithKeys(fn (Department $department) => [(string) $department->department_hemis_id => $department->name]);
+        $kafedras = DB::table('curriculum_subjects')
+            ->whereNotNull('department_id')
+            ->whereNotNull('department_name')
+            ->where('department_name', '!=', '')
+            ->select('department_id', 'department_name')
+            ->distinct()
+            ->orderBy('department_name')
+            ->get()
+            ->mapWithKeys(fn ($department) => [(string) $department->department_id => $department->department_name]);
 
         $curriculumSubjects = collect();
-        if ($selectedFacultyId) {
+        if ($selectedKafedraId) {
             $curriculumSubjects = DB::table('curriculum_subjects as cs')
                 ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
-                ->where('c.department_hemis_id', $selectedFacultyId)
+                ->where('cs.department_id', $selectedKafedraId)
                 ->where('cs.is_active', true)
                 ->selectRaw('
                     cs.subject_id,
@@ -43,6 +46,7 @@ class TestSubjectController extends Controller
                     cs.semester_name,
                     cs.total_acload,
                     cs.credit,
+                    cs.department_id as kafedra_id,
                     cs.department_name,
                     c.department_hemis_id,
                     c.specialty_hemis_id,
@@ -58,16 +62,17 @@ class TestSubjectController extends Controller
                     'cs.semester_name',
                     'cs.total_acload',
                     'cs.credit',
+                    'cs.department_id',
                     'cs.department_name',
                     'c.department_hemis_id',
                     'c.specialty_hemis_id',
                     'sp.name',
                     'c.education_year_name'
                 )
+                ->orderBy('cs.subject_name')
                 ->orderBy('sp.name')
                 ->orderBy('c.education_year_name')
                 ->orderByRaw('CAST(cs.semester_code AS UNSIGNED), cs.semester_name')
-                ->orderBy('cs.subject_name')
                 ->paginate(80, ['*'], 'curriculum_page')
                 ->withQueryString();
         }
@@ -78,7 +83,7 @@ class TestSubjectController extends Controller
             ->paginate(20, ['*'], 'test_page')
             ->withQueryString();
 
-        return view('admin.test-subjects.index', compact('subjects', 'faculties', 'selectedFacultyId', 'curriculumSubjects'));
+        return view('admin.test-subjects.index', compact('subjects', 'kafedras', 'selectedKafedraId', 'curriculumSubjects'));
     }
 
     public function create()

@@ -24,7 +24,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Fan nomi</label>
-                            <input type="text" name="name" value="{{ old('name') }}"
+                            <input type="text" name="name" value="{{ old('name', request('name')) }}"
                                    class="w-full rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                                    placeholder="Masalan: Klinik test fan" required>
                         </div>
@@ -34,7 +34,7 @@
                                     class="w-full rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                                 <option value="">Barchasi</option>
                                 @foreach($faculties as $hemisId => $name)
-                                    <option value="{{ $hemisId }}" @selected(old('faculty_hemis_id') == $hemisId)>{{ $name }}</option>
+                                    <option value="{{ $hemisId }}" @selected(old('faculty_hemis_id', request('faculty_hemis_id')) == $hemisId)>{{ $name }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -46,7 +46,7 @@
                                 @foreach($specialties as $specialty)
                                     <option value="{{ $specialty['specialty_hemis_id'] }}"
                                             data-faculty="{{ $specialty['department_hemis_id'] }}"
-                                            @selected(old('specialty_hemis_id') == $specialty['specialty_hemis_id'])>
+                                            @selected(old('specialty_hemis_id', request('specialty_hemis_id')) == $specialty['specialty_hemis_id'])>
                                         {{ $specialty['name'] }}
                                     </option>
                                 @endforeach

@@ -17,14 +17,68 @@ class TestSubjectController extends Controller
 {
     private const TARGET_EDUCATION_YEAR = '2025-2026';
 
-    public function index()
+    public function index(Request $request)
     {
+        $selectedFacultyId = $request->input('faculty_hemis_id');
+
+        $faculties = Department::query()
+            ->where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get(['department_hemis_id', 'name'])
+            ->mapWithKeys(fn (Department $department) => [(string) $department->department_hemis_id => $department->name]);
+
+        $curriculumSubjects = collect();
+        if ($selectedFacultyId) {
+            $curriculumSubjects = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
+                ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+                ->where('c.department_hemis_id', $selectedFacultyId)
+                ->where('cs.is_active', true)
+                ->selectRaw('
+                    cs.subject_id,
+                    cs.subject_name,
+                    cs.subject_code,
+                    cs.semester_code,
+                    cs.semester_name,
+                    cs.total_acload,
+                    cs.credit,
+                    cs.department_name,
+                    c.department_hemis_id,
+                    c.specialty_hemis_id,
+                    sp.name as specialty_name,
+                    c.education_year_name,
+                    count(distinct c.curricula_hemis_id) as curricula_count
+                ')
+                ->groupBy(
+                    'cs.subject_id',
+                    'cs.subject_name',
+                    'cs.subject_code',
+                    'cs.semester_code',
+                    'cs.semester_name',
+                    'cs.total_acload',
+                    'cs.credit',
+                    'cs.department_name',
+                    'c.department_hemis_id',
+                    'c.specialty_hemis_id',
+                    'sp.name',
+                    'c.education_year_name'
+                )
+                ->orderBy('sp.name')
+                ->orderBy('c.education_year_name')
+                ->orderByRaw('CAST(cs.semester_code AS UNSIGNED), cs.semester_name')
+                ->orderBy('cs.subject_name')
+                ->paginate(80, ['*'], 'curriculum_page')
+                ->withQueryString();
+        }
+
         $subjects = TestSubject::query()
             ->with(['groups', 'lessons', 'teacher'])
             ->latest()
-            ->paginate(20);
+            ->paginate(20, ['*'], 'test_page')
+            ->withQueryString();
 
-        return view('admin.test-subjects.index', compact('subjects'));
+        return view('admin.test-subjects.index', compact('subjects', 'faculties', 'selectedFacultyId', 'curriculumSubjects'));
     }
 
     public function create()

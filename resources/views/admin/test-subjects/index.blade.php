@@ -1,17 +1,13 @@
 <x-app-layout>
     <div class="py-6">
         <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
-            <div class="rounded-2xl shadow-sm border border-blue-100 p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-white"
+            <div class="rounded-2xl shadow-sm border border-blue-100 p-6 text-white"
                  style="background: linear-gradient(135deg, #153e75 0%, #2563eb 62%, #38bdf8 100%);">
                 <div>
                     <div class="text-xs font-bold uppercase tracking-[0.2em] text-blue-100">Test moduli</div>
                     <h1 class="text-3xl font-extrabold mt-1">Test fanlar</h1>
                     <p class="text-sm text-blue-50 mt-2">Kafedra bo'yicha o'quv rejadagi fanlarni semesterlari bilan ko'ring va ulardan test fan yarating.</p>
                 </div>
-                <a href="{{ route('admin.test-subjects.create') }}"
-                   class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-white text-blue-700 font-bold hover:bg-blue-50 transition shadow-sm">
-                    + Test fan yaratish
-                </a>
             </div>
 
             @if(session('success'))
@@ -58,8 +54,7 @@
 
                 <div class="p-5">
                 @if(!$selectedKafedraId)
-                    <div class="rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 p-10 text-center">
-                        <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white text-2xl font-bold">T</div>
+                    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                         <div class="text-lg font-bold text-slate-900">Kafedra tanlang</div>
                         <div class="text-sm text-slate-500 mt-1">Tanlangan kafedraga bog'langan fanlar semesterlari bilan shu yerda chiqadi.</div>
                     </div>

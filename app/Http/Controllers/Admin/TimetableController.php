@@ -1242,28 +1242,21 @@ class TimetableController extends Controller
             . $this->specKey($c->specialty_name) . '|' . (int) $c->course
             . '|' . (string) $c->oqim_label
             . '|' . $this->normSubject((string) $c->subject_name);
-        $normGroup = static function ($value): string {
-            $value = mb_strtolower(trim((string) $value));
-            $value = str_replace(["'", '’', '`', '´', 'ʼ', 'ʻ'], '', $value);
-            return preg_replace('/\s+/u', ' ', $value) ?: '';
-        };
 
         // Exact oqim kaliti birinchi tanlov bo'lib qoladi. Agar u mos kelmasa,
         // ma'ruzaning group_names ichidan amaliy kartaning group_name'i qidiriladi.
         // Shu yo'l bilan bitta fan ichida boshqa oqim yoki tilning kartasi
         // tasodifan anchor bo'lib qolmaydi.
-        $chainForCard = function (TimetableCard $card) use (&$chain, $subjOf, $subjectBaseKey, $normGroup): ?array {
+        $chainForCard = function (TimetableCard $card) use (&$chain, $subjOf, $subjectBaseKey): ?array {
             $exactKey = $subjOf($card);
             if (isset($chain[$exactKey])) {
                 $candidate = $chain[$exactKey];
                 $group = trim((string) $card->group_name);
-                $groupKey = $normGroup($group);
                 $groups = array_map('strval', $candidate['groups'] ?? []);
-                $groupKeys = array_map($normGroup, $groups);
                 if ($card->training_type !== 'practice'
                     || $group === ''
                     || !$groups
-                    || in_array($groupKey, $groupKeys, true)) {
+                    || in_array($group, $groups, true)) {
                     return ['key' => $exactKey, 'chain' => $candidate];
                 }
             }
@@ -1281,8 +1274,7 @@ class TimetableController extends Controller
                 }
                 $baseMatches++;
                 $groups = array_map('strval', $candidate['groups'] ?? []);
-                $groupKeys = array_map($normGroup, $groups);
-                if ($group !== '' && in_array($normGroup($group), $groupKeys, true)) {
+                if ($group !== '' && in_array($group, $groups, true)) {
                     return ['key' => $key, 'chain' => $candidate];
                 }
                 if ($fallback === null && ($group === '' || !$groups)) {
@@ -1515,20 +1507,18 @@ class TimetableController extends Controller
         // ishlatadi, boshqa fanlar esa uni egallay olmaydi.
         $nextReservations = ['groups' => [], 'teachers' => [], 'lectures' => &$lectureSlotBusy, 'lecture_capacity' => $lectureCapacity];
         $reserveLectureNextSlots = function (TimetableCard $lecture) use (
-            &$nextReservations, $toPlace, $subjectBaseKey, $weeksFor, $maskOf, $boardPairs, $normGroup
+            &$nextReservations, $toPlace, $subjectBaseKey, $weeksFor, $maskOf, $boardPairs
         ): void {
             $lectureGroups = array_values(array_unique(array_map('strval', $lecture->occupiedGroups())));
             if (!$lectureGroups) {
                 return;
             }
-            $lectureGroupKeys = array_flip(array_map($normGroup, $lectureGroups));
 
-            $linked = $toPlace->filter(function (TimetableCard $card) use ($lecture, $subjectBaseKey, $lectureGroupKeys, $normGroup): bool {
-                $cardGroups = array_map($normGroup, array_map('strval', $card->occupiedGroups()));
+            $linked = $toPlace->filter(function (TimetableCard $card) use ($lecture, $subjectBaseKey, $lectureGroups): bool {
                 return $card->training_type === 'practice'
                     && (!$card->day || !$card->pair)
                     && $subjectBaseKey($card) === $subjectBaseKey($lecture)
-                    && array_intersect($cardGroups, array_keys($lectureGroupKeys));
+                    && array_intersect($lectureGroups, array_map('strval', $card->occupiedGroups()));
             });
             if ($linked->isEmpty()) {
                 return;
@@ -1541,10 +1531,8 @@ class TimetableController extends Controller
             $totalWeeks = $weeksFor($lecture->faculty_name, $lecture->specialty_name, (int) $lecture->course);
 
             foreach ($lectureGroups as $group) {
-                $groupCards = $linked->filter(function (TimetableCard $card) use ($group, $normGroup): bool {
-                    $groupKey = $normGroup($group);
-                    $cardGroups = array_map($normGroup, array_map('strval', $card->occupiedGroups()));
-                    return in_array($groupKey, $cardGroups, true);
+                $groupCards = $linked->filter(function (TimetableCard $card) use ($group): bool {
+                    return in_array($group, array_map('strval', $card->occupiedGroups()), true);
                 });
                 if ($groupCards->isEmpty()) {
                     continue;
@@ -1908,17 +1896,15 @@ class TimetableController extends Controller
                             $freeAll = false;
                             break;
                         }
-                        if ($teacherId
-                            && (($nextReservations['teachers'][$teacherId . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask)
-                            && !$lectureParallelTeacherAllowed($c, $d, $p + $i, $cardMask)) {
-                            $freeAll = false;
-                            break;
-                        }
                         foreach ($groups as $g) {
                             if (($nextReservations['groups'][$scopeKey . '|' . $d . '|' . ($p + $i) . '|' . $g] ?? 0) & $cardMask) {
                                 $freeAll = false;
                                 break 2;
                             }
+                        }
+                        if ($teacherId && (($nextReservations['teachers'][$teacherId . '|' . $d . '|' . ($p + $i)] ?? 0) & $cardMask)) {
+                            $freeAll = false;
+                            break;
                         }
                     }
                     if (!$freeAll) {

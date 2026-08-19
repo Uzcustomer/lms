@@ -1110,9 +1110,9 @@ class TimetableController extends Controller
                 return isset($lectureKeys[$placementSubjectKey($c)])
                     || isset($lectureBaseKeys[$subjectBaseKey($c)]) ? 1 : 2;
             };
-            $ka = [$a->specialty_name, (int) $a->course, $priority($a), $subjectBaseKey($a),
+            $ka = [$a->specialty_name, (int) $a->course, $priority($a),
                    (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
-            $kb = [$b->specialty_name, (int) $b->course, $priority($b), $subjectBaseKey($b),
+            $kb = [$b->specialty_name, (int) $b->course, $priority($b),
                    (int) $b->weeks, -count($b->occupiedGroups()), -(int) $b->students];
             return $ka <=> $kb;
         })->values();
@@ -1268,17 +1268,12 @@ class TimetableController extends Controller
         $lectureSlotKey = static function (string $base, int $day, int $pair): string {
             return $base . '|' . $day . '|' . $pair;
         };
-        $lectureScopeKey = function (TimetableCard $card): string {
-            return (string) ($card->faculty_name ?? '') . '|'
-                . $this->specKey($card->specialty_name) . '|' . (int) $card->course
-                . '|lectures';
-        };
         $lectureSlotsAvailable = function (TimetableCard $card, int $day, int $pair, int $len, int $mask)
-            use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey): bool {
+            use (&$lectureSlotBusy, $lectureSlotKey, $subjectBaseKey): bool {
             if ($card->training_type !== 'lecture') {
                 return true;
             }
-            $base = $lectureScopeKey($card);
+            $base = $subjectBaseKey($card);
             for ($i = 0; $i < $len; $i++) {
                 if (($lectureSlotBusy[$lectureSlotKey($base, $day, $pair + $i)] ?? 0) & $mask) {
                     return false;
@@ -1286,16 +1281,17 @@ class TimetableController extends Controller
             }
             return true;
         };
-        $markLectureSlotBusy = function (TimetableCard $card) use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey): void {
+        $markLectureSlotBusy = function (TimetableCard $card) use (&$lectureSlotBusy, $lectureSlotKey, $subjectBaseKey, $maskOf): void {
             if ($card->training_type !== 'lecture' || !$card->day || !$card->pair) {
                 return;
             }
-            $base = $lectureScopeKey($card);
+            $base = $subjectBaseKey($card);
             $day = (int) $card->day;
             $pair = (int) $card->pair;
+            $mask = $maskOf($card);
             for ($i = 0; $i < $this->parasNeeded($card); $i++) {
                 $key = $lectureSlotKey($base, $day, $pair + $i);
-                $lectureSlotBusy[$key] = -1;
+                $lectureSlotBusy[$key] = ($lectureSlotBusy[$key] ?? 0) | $mask;
             }
         };
 
@@ -1541,7 +1537,7 @@ class TimetableController extends Controller
                         'len' => $this->parasNeeded($uc),
                         'groups' => $ucGroups,
                         'teacher' => $uc->teacher_id,
-                        'lecture_key' => $uc->training_type === 'lecture' ? $lectureScopeKey($uc) : null,
+                        'lecture_key' => $uc->training_type === 'lecture' ? $subjectBaseKey($uc) : null,
                         'room_required' => $ucNeedRoom,
                         'pool' => $ucArr,
                         'mask' => $maskOf($uc),
@@ -1685,7 +1681,7 @@ class TimetableController extends Controller
                     'card' => $c, 'len' => $need, 'groups' => $groups,
                     'teacher' => $teacherId, 'room_required' => $roomRequired,
                     'pool' => $poolArr, 'mask' => $cardMask,
-                    'lecture_key' => $c->training_type === 'lecture' ? $lectureScopeKey($c) : null,
+                    'lecture_key' => $c->training_type === 'lecture' ? $subjectBaseKey($c) : null,
                 ]];
                 $spot = $chainSpot($seg, $ch, $standIn, $days, $pairs, $scopeKey);
                 if ($spot !== null) {
@@ -1734,7 +1730,7 @@ class TimetableController extends Controller
                     'len' => $need,
                     'groups' => $groups,
                     'teacher' => $teacherId,
-                    'lecture_key' => $c->training_type === 'lecture' ? $lectureScopeKey($c) : null,
+                    'lecture_key' => $c->training_type === 'lecture' ? $subjectBaseKey($c) : null,
                     'room_required' => $roomRequired,
                     'pool' => $poolArr,
                     'mask' => $cardMask,

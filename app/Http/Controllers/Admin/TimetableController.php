@@ -178,44 +178,6 @@ class TimetableController extends Controller
         return $byFaculty;
     }
 
-    private function weekMaskFitsCapacity($state, int $mask, int $capacity): bool
-    {
-        $state = $this->normalizeWeekMaskCapacity($state);
-        $capacity = max(1, $capacity);
-        for ($bit = 0; $bit < 60; $bit++) {
-            if (($mask & (1 << $bit)) && (($state[$bit] ?? 0) >= $capacity)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private function addWeekMaskCapacity($state, int $mask): array
-    {
-        $state = $this->normalizeWeekMaskCapacity($state);
-        for ($bit = 0; $bit < 60; $bit++) {
-            if ($mask & (1 << $bit)) {
-                $state[$bit] = ($state[$bit] ?? 0) + 1;
-            }
-        }
-        return $state;
-    }
-
-    private function normalizeWeekMaskCapacity($state): array
-    {
-        if (is_array($state)) {
-            return $state;
-        }
-        $mask = (int) $state;
-        $out = [];
-        for ($bit = 0; $bit < 60; $bit++) {
-            if ($mask & (1 << $bit)) {
-                $out[$bit] = 1;
-            }
-        }
-        return $out;
-    }
-
     /**
      * Guruh bandligi qamrovi kaliti: fakultet + yo'nalish + kurs.
      *
@@ -1309,7 +1271,6 @@ class TimetableController extends Controller
         };
 
         $lectureSlotBusy = [];
-        $lectureCapacity = 2;
         $lectureSlotKey = static function (string $base, int $day, int $pair): string {
             return $base . '|' . $day . '|' . $pair;
         };
@@ -1319,30 +1280,28 @@ class TimetableController extends Controller
                 . '|lectures';
         };
         $lectureSlotsAvailable = function (TimetableCard $card, int $day, int $pair, int $len, int $mask)
-            use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey, $lectureCapacity): bool {
+            use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey): bool {
             if ($card->training_type !== 'lecture') {
                 return true;
             }
             $base = $lectureScopeKey($card);
             for ($i = 0; $i < $len; $i++) {
-                $key = $lectureSlotKey($base, $day, $pair + $i);
-                if (!$this->weekMaskFitsCapacity($lectureSlotBusy[$key] ?? [], $mask, $lectureCapacity)) {
+                if (($lectureSlotBusy[$lectureSlotKey($base, $day, $pair + $i)] ?? 0) & $mask) {
                     return false;
                 }
             }
             return true;
         };
-        $markLectureSlotBusy = function (TimetableCard $card) use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey, $maskOf): void {
+        $markLectureSlotBusy = function (TimetableCard $card) use (&$lectureSlotBusy, $lectureSlotKey, $lectureScopeKey): void {
             if ($card->training_type !== 'lecture' || !$card->day || !$card->pair) {
                 return;
             }
             $base = $lectureScopeKey($card);
             $day = (int) $card->day;
             $pair = (int) $card->pair;
-            $mask = $maskOf($card);
             for ($i = 0; $i < $this->parasNeeded($card); $i++) {
                 $key = $lectureSlotKey($base, $day, $pair + $i);
-                $lectureSlotBusy[$key] = $this->addWeekMaskCapacity($lectureSlotBusy[$key] ?? [], $mask);
+                $lectureSlotBusy[$key] = -1;
             }
         };
 
@@ -1460,7 +1419,7 @@ class TimetableController extends Controller
         // keyingi slotlarni vaqtincha rezerv qilamiz. Rezerv guruh va o'qituvchi
         // bo'yicha ishlaydi: amaliy kartaning o'zi zanjir orqali shu slotni
         // ishlatadi, boshqa fanlar esa uni egallay olmaydi.
-        $nextReservations = ['groups' => [], 'teachers' => [], 'lectures' => &$lectureSlotBusy, 'lecture_capacity' => $lectureCapacity];
+        $nextReservations = ['groups' => [], 'teachers' => [], 'lectures' => &$lectureSlotBusy];
         $reserveLectureNextSlots = function (TimetableCard $lecture) use (
             &$nextReservations, $toPlace, $subjectBaseKey, $weeksFor, $maskOf, $boardPairs
         ): void {
@@ -2261,12 +2220,9 @@ class TimetableController extends Controller
         // Bir yarim-slot shu segment uchun bo'shmi (guruh + o'qituvchi)?
         $slotFree = function (array $seg, int $d, int $p) use ($scopeKey, $groupBusy, $teacherBusy, $reservations): bool {
             $mask = $seg['mask'] ?? -1;
-            if (!empty($seg['lecture_key'])) {
-                $capacity = (int) ($reservations['lecture_capacity'] ?? 1);
-                $state = $reservations['lectures'][$seg['lecture_key'] . '|' . $d . '|' . $p] ?? [];
-                if (!$this->weekMaskFitsCapacity($state, $mask, $capacity)) {
-                    return false;
-                }
+            if (!empty($seg['lecture_key'])
+                && (($reservations['lectures'][$seg['lecture_key'] . '|' . $d . '|' . $p] ?? 0) & $mask)) {
+                return false;
             }
             $busy = $groupBusy[$scopeKey . '|' . $d . '|' . $p] ?? null;
             if ($busy !== null) {

@@ -1264,37 +1264,6 @@ class TimetableController extends Controller
             $chain[$key]['nextByGroup'] = $nextByGroup;
         };
 
-        $lectureSlotBusy = [];
-        $lectureSlotKey = static function (string $base, int $day, int $pair): string {
-            return $base . '|' . $day . '|' . $pair;
-        };
-        $lectureSlotsAvailable = function (TimetableCard $card, int $day, int $pair, int $len, int $mask)
-            use (&$lectureSlotBusy, $lectureSlotKey, $subjectBaseKey): bool {
-            if ($card->training_type !== 'lecture') {
-                return true;
-            }
-            $base = $subjectBaseKey($card);
-            for ($i = 0; $i < $len; $i++) {
-                if (($lectureSlotBusy[$lectureSlotKey($base, $day, $pair + $i)] ?? 0) & $mask) {
-                    return false;
-                }
-            }
-            return true;
-        };
-        $markLectureSlotBusy = function (TimetableCard $card) use (&$lectureSlotBusy, $lectureSlotKey, $subjectBaseKey, $maskOf): void {
-            if ($card->training_type !== 'lecture' || !$card->day || !$card->pair) {
-                return;
-            }
-            $base = $subjectBaseKey($card);
-            $day = (int) $card->day;
-            $pair = (int) $card->pair;
-            $mask = $maskOf($card);
-            for ($i = 0; $i < $this->parasNeeded($card); $i++) {
-                $key = $lectureSlotKey($base, $day, $pair + $i);
-                $lectureSlotBusy[$key] = ($lectureSlotBusy[$key] ?? 0) | $mask;
-            }
-        };
-
         // Avtomatik joylash qayta ishga tushirilganda allaqachon joylashgan
         // ma'ruzalar ham fan zanjirining anchor'i bo'lishi kerak. Aks holda
         // ularga tegishli amaliy kartalar oddiy fan kabi joylashib ketadi.
@@ -1314,7 +1283,6 @@ class TimetableController extends Controller
                 'base' => $subjectBaseKey($placedCard),
                 'groups' => $placedCard->occupiedGroups(),
             ];
-            $markLectureSlotBusy($placedCard);
         }
 
         // Zanjirdagi aniq joyga qo'yishga urinish. Muvaffaqiyatsiz bo'lsa null —
@@ -1409,7 +1377,7 @@ class TimetableController extends Controller
         // keyingi slotlarni vaqtincha rezerv qilamiz. Rezerv guruh va o'qituvchi
         // bo'yicha ishlaydi: amaliy kartaning o'zi zanjir orqali shu slotni
         // ishlatadi, boshqa fanlar esa uni egallay olmaydi.
-        $nextReservations = ['groups' => [], 'teachers' => [], 'lectures' => &$lectureSlotBusy];
+        $nextReservations = ['groups' => [], 'teachers' => []];
         $reserveLectureNextSlots = function (TimetableCard $lecture) use (
             &$nextReservations, $toPlace, $subjectBaseKey, $weeksFor, $maskOf, $boardPairs
         ): void {
@@ -1537,7 +1505,6 @@ class TimetableController extends Controller
                         'len' => $this->parasNeeded($uc),
                         'groups' => $ucGroups,
                         'teacher' => $uc->teacher_id,
-                        'lecture_key' => $uc->training_type === 'lecture' ? $subjectBaseKey($uc) : null,
                         'room_required' => $ucNeedRoom,
                         'pool' => $ucArr,
                         'mask' => $maskOf($uc),
@@ -1608,7 +1575,6 @@ class TimetableController extends Controller
                         $roomsAssigned++;
                     }
                     $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $uc, $maskOf($uc));
-                    $markLectureSlotBusy($uc);
                     if ($uc->training_type === 'lecture' && (int) $uc->weeks > 0
                         && !isset($chain[$subjOf($uc)])) {
                         $chain[$subjOf($uc)] = [
@@ -1681,7 +1647,6 @@ class TimetableController extends Controller
                     'card' => $c, 'len' => $need, 'groups' => $groups,
                     'teacher' => $teacherId, 'room_required' => $roomRequired,
                     'pool' => $poolArr, 'mask' => $cardMask,
-                    'lecture_key' => $c->training_type === 'lecture' ? $subjectBaseKey($c) : null,
                 ]];
                 $spot = $chainSpot($seg, $ch, $standIn, $days, $pairs, $scopeKey);
                 if ($spot !== null) {
@@ -1730,7 +1695,6 @@ class TimetableController extends Controller
                     'len' => $need,
                     'groups' => $groups,
                     'teacher' => $teacherId,
-                    'lecture_key' => $c->training_type === 'lecture' ? $subjectBaseKey($c) : null,
                     'room_required' => $roomRequired,
                     'pool' => $poolArr,
                     'mask' => $cardMask,
@@ -1755,7 +1719,6 @@ class TimetableController extends Controller
                     $roomsAssigned++;
                 }
                 $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
-                $markLectureSlotBusy($c);
                 if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($chain[$sKey])) {
                     $chain[$sKey] = [
                         'day' => (int) $c->day, 'lec' => (int) $c->pair, 'llen' => $need,
@@ -1807,9 +1770,6 @@ class TimetableController extends Controller
                         }
                     }
                     if (!$freeAll) {
-                        continue;
-                    }
-                    if (!$lectureSlotsAvailable($c, $d, $p, $need, $cardMask)) {
                         continue;
                     }
                     // Qattiq: auditoriya (sig'im yetarli + barcha paralarda bo'sh) —
@@ -1877,7 +1837,6 @@ class TimetableController extends Controller
                 $roomsAssigned++;
             }
             $this->markBusy($groupBusy, $teacherBusy, $roomBusy, $c, $cardMask);
-            $markLectureSlotBusy($c);
             // Ma'ruza joylashdi — uni almashtiruvchi amaliy shu slotga tushsin
             if ($c->training_type === 'lecture' && (int) $c->weeks > 0 && !isset($chain[$subjOf($c)])) {
                 $chain[$subjOf($c)] = ['day' => $d, 'lec' => $p, 'llen' => $need,
@@ -2206,10 +2165,6 @@ class TimetableController extends Controller
         // Bir yarim-slot shu segment uchun bo'shmi (guruh + o'qituvchi)?
         $slotFree = function (array $seg, int $d, int $p) use ($scopeKey, $groupBusy, $teacherBusy, $reservations): bool {
             $mask = $seg['mask'] ?? -1;
-            if (!empty($seg['lecture_key'])
-                && (($reservations['lectures'][$seg['lecture_key'] . '|' . $d . '|' . $p] ?? 0) & $mask)) {
-                return false;
-            }
             $busy = $groupBusy[$scopeKey . '|' . $d . '|' . $p] ?? null;
             if ($busy !== null) {
                 foreach ($seg['groups'] as $g) {

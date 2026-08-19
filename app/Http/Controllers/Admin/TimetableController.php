@@ -1101,8 +1101,14 @@ class TimetableController extends Controller
                 $lectureBaseKeys[$subjectBaseKey($card)] = true;
             }
         }
+        $oqimRank = static function ($c): int {
+            if (preg_match('/(\d+)/', (string) ($c->oqim_label ?? ''), $m)) {
+                return (int) $m[1];
+            }
+            return 999;
+        };
 
-        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $lectureBaseKeys, $placementSubjectKey, $subjectBaseKey) {
+        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $lectureBaseKeys, $placementSubjectKey, $subjectBaseKey, $oqimRank) {
             $priority = function ($c) use ($lectureKeys, $lectureBaseKeys, $placementSubjectKey, $subjectBaseKey): int {
                 if ($c->training_type === 'lecture') {
                     return 0;
@@ -1111,9 +1117,9 @@ class TimetableController extends Controller
                     || isset($lectureBaseKeys[$subjectBaseKey($c)]) ? 1 : 2;
             };
             $ka = [$a->specialty_name, (int) $a->course, $priority($a), $subjectBaseKey($a),
-                   (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
+                   $oqimRank($a), (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
             $kb = [$b->specialty_name, (int) $b->course, $priority($b), $subjectBaseKey($b),
-                   (int) $b->weeks, -count($b->occupiedGroups()), -(int) $b->students];
+                   $oqimRank($b), (int) $b->weeks, -count($b->occupiedGroups()), -(int) $b->students];
             return $ka <=> $kb;
         })->values();
 
@@ -1838,8 +1844,12 @@ class TimetableController extends Controller
                             continue; // bu katakka mos bo'sh xona yo'q — boshqa katak
                         }
                     }
-                    // Yumshoq jarima
-                    $pen = $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask);
+                    // Ma'ruza oqimlari tartib bilan eng erta bo'sh slotlarga tushsin:
+                    // 1-oqim birinchi slotdan boshlaydi, keyingi oqimlar undan keyingi
+                    // slotlarga siljiydi. Amaliylar esa odatdagi yumshoq jarima bilan qoladi.
+                    $pen = $c->training_type === 'lecture'
+                        ? (($d - 1) * 100000 + ($p - 1))
+                        : $this->slotPenalty($c, $groups, $d, $p, $pairs, $groupBusy, $subjDay, $sameDay, $consecutive, $subjSlots, $cardMask);
 
                     // Fan YAXLIT kelsin: amaliy dars o'z fanining ma'ruzasi bilan
                     // bir kunda va yonma-yon bo'lsin. Klasterlash mukofoti (subjSlots)

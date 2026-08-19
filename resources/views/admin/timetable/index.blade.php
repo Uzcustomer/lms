@@ -832,9 +832,30 @@
         #grid th.tt-fac { background: #c7d2fe; color: #1e1b4b; font-weight: 900; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: .2px; }
         #grid th.tt-oqim { background: #e0e7ff; color: #3730a3; font-weight: 900; text-align: center; font-size: 11px; }
         #grid th.tt-oqim .tt-oqim-count { color: #16a34a; font-size: 10px; font-weight: 800; margin-top: 2px; }
+        #grid .tt-course-1 { background-color: #eef6ff; }
+        #grid .tt-course-2 { background-color: #f0fdf4; }
+        #grid .tt-course-3 { background-color: #fff7ed; }
+        #grid .tt-course-4 { background-color: #f5f3ff; }
+        #grid .tt-course-5 { background-color: #ecfeff; }
+        #grid .tt-course-6 { background-color: #fdf2f8; }
+        #grid th.tt-course-1 { background-color: #dbeafe; }
+        #grid th.tt-course-2 { background-color: #dcfce7; }
+        #grid th.tt-course-3 { background-color: #ffedd5; }
+        #grid th.tt-course-4 { background-color: #ede9fe; }
+        #grid th.tt-course-5 { background-color: #cffafe; }
+        #grid th.tt-course-6 { background-color: #fce7f3; }
+        #grid th[class*="tt-course-"] {
+            box-shadow: inset 0 3px 0 rgba(37,99,235,.28), inset 0 -1px 0 rgba(15,23,42,.08);
+        }
         /* Guruh sarlavhasi — o'ralib chiqadi (ustunni kengaytirmaydi), ustun ingichka bo'ladi */
         #grid th.tt-grp { background: #eef1f5; color: #1e293b; font-weight: 800; white-space: normal; word-break: break-word;
             text-align: center; font-size: 9px; line-height: 1.05; width: 52px; min-width: 52px; max-width: 52px; padding: 2px 1px; }
+        #grid th.tt-grp.tt-course-1 { background-color: #dbeafe; }
+        #grid th.tt-grp.tt-course-2 { background-color: #dcfce7; }
+        #grid th.tt-grp.tt-course-3 { background-color: #ffedd5; }
+        #grid th.tt-grp.tt-course-4 { background-color: #ede9fe; }
+        #grid th.tt-grp.tt-course-5 { background-color: #cffafe; }
+        #grid th.tt-grp.tt-course-6 { background-color: #fce7f3; }
         /* Oqimlar orasi — qo'sh chiziq; asos guruhlar (a/b) orasi — qalin chiziq */
         #grid td.sep-oqim, #grid th.sep-oqim { border-left: 3px double #000; }
         #grid td.sep-base, #grid th.sep-base { border-left: 2px solid #000; }
@@ -3453,6 +3474,8 @@
                 const showFac = facRuns.some(r => r.faculty);
                 const corSpan = showFac ? 3 : 2;
 
+                const courseCls = course => ' tt-course-' + (((+course || 1) - 1) % 6 + 1);
+
                 // Sarlavha: Kun | Para | [fakultet] | oqim | guruhlar
                 let h = '<thead><tr>' +
                     '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="width:26px;min-width:26px;max-width:26px">Kun</th>' +
@@ -3468,13 +3491,13 @@
                     const studentCount = flowStudents[flowKey];
                     const title = (showSpec && o.specialty ? o.specialty + ' · ' : '') +
                         (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—');
-                    h += '<th class="tt-oqim px-2 py-1' + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
+                    h += '<th class="tt-oqim px-2 py-1' + courseCls(o.course) + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
                         '<div>' + esc(title) + '</div>' +
                         (studentCount ? '<div class="tt-oqim-count">' + studentCount + ' ta</div>' : '') +
                     '</th>';
                 });
                 h += '</tr><tr>';
-                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') + '</th>'));
+                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') + '</th>'));
                 h += '</tr></thead><tbody>';
 
                 // Para ajratuvchi chiziq darajasi: shu qatorda TUGAYDIGAN katak uchun
@@ -3502,7 +3525,7 @@
                                 const occupied = o.groups.some(gr => placedIdx[gr + '|' + d + '|' + p]);
                                 if (!occupied) {
                                     const bad = conflictsAt(selected, d, p).length > 0;
-                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + colBorder(oi, 0, o.groups) + rowEndCls(p) + '" colspan="' + o.groups.length + '"' + dp +
+                                    h += '<td class="tt-cell ' + (bad ? 'tt-bad' : 'tt-ok') + courseCls(o.course) + colBorder(oi, 0, o.groups) + rowEndCls(p) + '" colspan="' + o.groups.length + '"' + dp +
                                         (bad ? '' : ' data-place="' + d + '-' + p + '"') + '></td>';
                                     return;
                                 }
@@ -3551,7 +3574,7 @@
                                     // Bir katakda bir necha almashinuvchi fan — diagonal ajratgich
                                     const lecSplit = lecEx.length ? ' tt-split' : '';
                                     const lecExtras = lecEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
-                                    h += '<td class="tt-cell tt-lec' + lecSplit + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
+                                    h += '<td class="tt-cell tt-lec' + lecSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '" colspan="' + span + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, lecEx.length ? 0 : undefined) + lecExtras + '</td>';
                                     gi += span;
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
@@ -3564,11 +3587,11 @@
                                         .filter(x => x.training_type !== 'lecture');
                                     const prcSplit = prcEx.length ? ' tt-split' : '';
                                     const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
-                                    h += '<td class="tt-cell' + prcSplit + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
+                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
                                     gi++;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
-                                    let cls = 'tt-cell' + bord + rowEndCls(p), clickable = '';
+                                    let cls = 'tt-cell' + courseCls(o.course) + bord + rowEndCls(p), clickable = '';
                                     if (selected && selected.training_type === 'practice' && cardGKeys(selected).includes(grp)) {
                                         if (conflictsAt(selected, d, p).length) cls += ' tt-bad';
                                         else { cls += ' tt-ok'; clickable = ' data-place="' + d + '-' + p + '"'; }

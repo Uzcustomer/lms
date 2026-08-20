@@ -1376,12 +1376,16 @@ class TimetableController extends Controller
         };
 
         $lectureSlotBusy = [];
-        $lectureCapacity = 2;
+        // Real resurslarda bir paytda ikki oqimga ma'ruza+amaliy zanjiri
+        // yuritish qiyin: o'qituvchi va auditoriyalar yetishmaydi. Shu sabab
+        // oqimlar fakultet/yo'nalish/kurs ichida navbatma-navbat slot oladi.
+        $lectureCapacity = 1;
         $lectureSlotKey = static function (string $base, int $day, int $pair): string {
             return $base . '|' . $day . '|' . $pair;
         };
         $lectureScopeKey = function (TimetableCard $card): string {
-            return $this->specKey($card->specialty_name) . '|' . (int) $card->course
+            return (string) ($card->faculty_name ?? '') . '|'
+                . $this->specKey($card->specialty_name) . '|' . (int) $card->course
                 . '|lecture-streams';
         };
         $lectureSubjectKey = function (TimetableCard $card): string {

@@ -1642,7 +1642,7 @@ class TimetableController extends Controller
         // ishlatadi, boshqa fanlar esa uni egallay olmaydi.
         $nextReservations = ['groups' => [], 'teachers' => [], 'lectures' => &$lectureSlotBusy, 'lecture_capacity' => $lectureCapacity];
         $reserveLectureNextSlots = function (TimetableCard $lecture) use (
-            &$nextReservations, $toPlace, $subjectBaseKey, $weeksFor, $maskOf, $boardPairs, $normGroup
+            &$nextReservations, $toPlace, $subjectBaseKey, $subjectLooseKey, $weeksFor, $maskOf, $boardPairs, $normGroup
         ): void {
             $lectureGroups = array_values(array_unique(array_map('strval', $lecture->occupiedGroups())));
             if (!$lectureGroups) {
@@ -1650,13 +1650,14 @@ class TimetableController extends Controller
             }
             $lectureGroupKeys = array_flip(array_map($normGroup, $lectureGroups));
 
-            $linked = $toPlace->filter(function (TimetableCard $card) use ($lecture, $subjectBaseKey, $lectureGroupKeys, $normGroup): bool {
+            $linked = $toPlace->filter(function (TimetableCard $card) use ($lecture, $subjectBaseKey, $subjectLooseKey, $lectureGroupKeys, $normGroup): bool {
                 $cardGroups = array_map($normGroup, array_map('strval', $card->occupiedGroups()));
                 return $card->training_type === 'practice'
                     && (!$card->day || !$card->pair)
-                    && $subjectBaseKey($card) === $subjectBaseKey($lecture)
-                    && array_intersect($cardGroups, array_keys($lectureGroupKeys));
-            });
+                    && ($subjectBaseKey($card) === $subjectBaseKey($lecture) || $subjectLooseKey($card) === $subjectLooseKey($lecture))
+                    && $cardGroups
+                    && empty(array_diff($cardGroups, array_keys($lectureGroupKeys)));
+            })->unique('id')->values();
             if ($linked->isEmpty()) {
                 return;
             }
@@ -1666,71 +1667,76 @@ class TimetableController extends Controller
             $lecturePair = (int) $lecture->pair;
             $lectureLen = $this->parasNeeded($lecture);
             $totalWeeks = $weeksFor($lecture->faculty_name, $lecture->specialty_name, (int) $lecture->course);
+            $groupOrder = array_flip(array_map($normGroup, $lectureGroups));
+            $cursorByGroup = array_fill_keys($lectureGroups, $lecturePair + $lectureLen);
 
-            foreach ($lectureGroups as $group) {
-                $groupCards = $linked->filter(function (TimetableCard $card) use ($group, $normGroup): bool {
-                    $groupKey = $normGroup($group);
-                    $cardGroups = array_map($normGroup, array_map('strval', $card->occupiedGroups()));
-                    return in_array($groupKey, $cardGroups, true);
-                });
-                if ($groupCards->isEmpty()) {
+            // Paired seminar kartasi ikki guruhga tegishli bo'lsa ham, u bitta dars:
+            // uni har guruh uchun qayta-qayta rezerv qilsak ma'ruza zanjiri sun'iy
+            // ravishda "sig'maydi" bo'lib qoladi.
+            $ordered = $linked->sort(function (TimetableCard $a, TimetableCard $b) use ($totalWeeks, $lecture, $normGroup, $groupOrder): int {
+                $aStandIn = (int) $a->weeks === $totalWeeks - (int) $lecture->weeks ? 0 : 1;
+                $bStandIn = (int) $b->weeks === $totalWeeks - (int) $lecture->weeks ? 0 : 1;
+                $firstGroupRank = function (TimetableCard $card) use ($normGroup, $groupOrder): int {
+                    $ranks = array_map(
+                        static fn($group) => $groupOrder[$normGroup($group)] ?? 999,
+                        $card->occupiedGroups()
+                    );
+                    return $ranks ? min($ranks) : 999;
+                };
+                return [$aStandIn, $firstGroupRank($a), (int) $a->id] <=> [$bStandIn, $firstGroupRank($b), (int) $b->id];
+            })->values();
+
+            foreach ($ordered as $card) {
+                $groups = array_values(array_unique(array_map('strval', $card->occupiedGroups())));
+                if (!$groups) {
+                    continue;
+                }
+                $len = $this->parasNeeded($card);
+                $isStandIn = (int) $card->weeks === $totalWeeks - (int) $lecture->weeks;
+                $start = $isStandIn
+                    ? $lecturePair + max(0, $lectureLen - $len)
+                    : max(array_map(static fn($group) => (int) ($cursorByGroup[$group] ?? ($lecturePair + $lectureLen)), $groups));
+                if (!$isStandIn) {
+                    foreach ($groups as $group) {
+                        $cursorByGroup[$group] = $start + $len;
+                    }
+                }
+                if ($start < 1 || $start + $len - 1 > $boardPairs) {
                     continue;
                 }
 
-                // Ma'ruzani almashtiruvchi karta avval ma'ruza slotiga,
-                // qolgan amaliy kartalar esa ma'ruzadan keyin ketma-ket rezerv qilinadi.
-                $standIns = $groupCards->filter(fn(TimetableCard $card): bool =>
-                    (int) $card->weeks === $totalWeeks - (int) $lecture->weeks
-                );
-                $others = $groupCards->reject(fn(TimetableCard $card): bool =>
-                    (int) $card->weeks === $totalWeeks - (int) $lecture->weeks
-                );
-                $ordered = $standIns->concat($others);
-                $cursor = $lecturePair + $lectureLen;
-
-                foreach ($ordered as $card) {
-                    $len = $this->parasNeeded($card);
-                    $isStandIn = (int) $card->weeks === $totalWeeks - (int) $lecture->weeks;
-                    $start = $isStandIn
-                        ? $lecturePair + max(0, $lectureLen - $len)
-                        : $cursor;
-                    if (!$isStandIn) {
-                        $cursor = $start + $len;
-                    }
-                    if ($start < 1 || $start + $len - 1 > $boardPairs) {
-                        continue;
-                    }
-
-                    $mask = $maskOf($card);
-                    for ($offset = 0; $offset < $len; $offset++) {
-                        $pair = $start + $offset;
+                $mask = $maskOf($card);
+                for ($offset = 0; $offset < $len; $offset++) {
+                    $pair = $start + $offset;
+                    foreach ($groups as $group) {
                         $groupKey = $scope . '|' . $lectureDay . '|' . $pair . '|' . $group;
                         $nextReservations['groups'][$groupKey] =
                             ($nextReservations['groups'][$groupKey] ?? 0) | $mask;
-                        if ($card->teacher_id) {
-                            $teacherKey = $card->teacher_id . '|' . $lectureDay . '|' . $pair;
-                            $nextReservations['teachers'][$teacherKey] =
-                                ($nextReservations['teachers'][$teacherKey] ?? 0) | $mask;
-                        }
+                    }
+                    if ($card->teacher_id) {
+                        $teacherKey = $card->teacher_id . '|' . $lectureDay . '|' . $pair;
+                        $nextReservations['teachers'][$teacherKey] =
+                            ($nextReservations['teachers'][$teacherKey] ?? 0) | $mask;
                     }
                 }
             }
         };
 
-        $lectureLinkedPracticeCards = function (TimetableCard $lecture) use ($toPlace, $subjectBaseKey, $normGroup) {
+        $lectureLinkedPracticeCards = function (TimetableCard $lecture) use ($toPlace, $subjectBaseKey, $subjectLooseKey, $normGroup) {
             $lectureGroups = array_values(array_unique(array_map('strval', $lecture->occupiedGroups())));
             if (!$lectureGroups) {
                 return collect();
             }
             $lectureGroupKeys = array_flip(array_map($normGroup, $lectureGroups));
 
-            return $toPlace->filter(function (TimetableCard $card) use ($lecture, $subjectBaseKey, $lectureGroupKeys, $normGroup): bool {
+            return $toPlace->filter(function (TimetableCard $card) use ($lecture, $subjectBaseKey, $subjectLooseKey, $lectureGroupKeys, $normGroup): bool {
                 $cardGroups = array_map($normGroup, array_map('strval', $card->occupiedGroups()));
                 return $card->training_type === 'practice'
                     && (!$card->day || !$card->pair)
-                    && $subjectBaseKey($card) === $subjectBaseKey($lecture)
-                    && array_intersect($cardGroups, array_keys($lectureGroupKeys));
-            });
+                    && ($subjectBaseKey($card) === $subjectBaseKey($lecture) || $subjectLooseKey($card) === $subjectLooseKey($lecture))
+                    && $cardGroups
+                    && empty(array_diff($cardGroups, array_keys($lectureGroupKeys)));
+            })->unique('id')->values();
         };
 
         $lectureFollowupsFit = function (TimetableCard $lecture, int $day, int $pair, int $lectureLen) use (
@@ -1752,96 +1758,93 @@ class TimetableController extends Controller
             $localTeacherBusy = [];
             $localRoomBusy = [];
 
-            foreach ($lectureGroups as $group) {
-                $groupKey = $normGroup($group);
-                $groupCards = $linked->filter(function (TimetableCard $card) use ($groupKey, $normGroup): bool {
-                    $cardGroups = array_map($normGroup, array_map('strval', $card->occupiedGroups()));
-                    return in_array($groupKey, $cardGroups, true);
-                });
-                if ($groupCards->isEmpty()) {
-                    continue;
+            $groupOrder = array_flip(array_map($normGroup, $lectureGroups));
+            $cursorByGroup = array_fill_keys($lectureGroups, $pair + $lectureLen);
+            $ordered = $linked->sort(function (TimetableCard $a, TimetableCard $b) use ($totalWeeks, $lecture, $normGroup, $groupOrder): int {
+                $aStandIn = (int) $a->weeks === $totalWeeks - (int) $lecture->weeks ? 0 : 1;
+                $bStandIn = (int) $b->weeks === $totalWeeks - (int) $lecture->weeks ? 0 : 1;
+                $firstGroupRank = function (TimetableCard $card) use ($normGroup, $groupOrder): int {
+                    $ranks = array_map(
+                        static fn($group) => $groupOrder[$normGroup($group)] ?? 999,
+                        $card->occupiedGroups()
+                    );
+                    return $ranks ? min($ranks) : 999;
+                };
+                return [$aStandIn, $firstGroupRank($a), (int) $a->id] <=> [$bStandIn, $firstGroupRank($b), (int) $b->id];
+            })->values();
+
+            foreach ($ordered as $card) {
+                $len = $this->parasNeeded($card);
+                $isStandIn = (int) $card->weeks === $totalWeeks - (int) $lecture->weeks;
+                $groups = array_values(array_unique(array_map('strval', $card->occupiedGroups())));
+                $start = $isStandIn
+                    ? $pair + max(0, $lectureLen - $len)
+                    : max(array_map(static fn($group) => (int) ($cursorByGroup[$group] ?? ($pair + $lectureLen)), $groups));
+                if (!$isStandIn) {
+                    foreach ($groups as $group) {
+                        $cursorByGroup[$group] = $start + $len;
+                    }
+                }
+                if ($start < 1 || $start + $len - 1 > $boardPairs) {
+                    return false;
                 }
 
-                $standIns = $groupCards->filter(fn(TimetableCard $card): bool =>
-                    (int) $card->weeks === $totalWeeks - (int) $lecture->weeks
-                );
-                $others = $groupCards->reject(fn(TimetableCard $card): bool =>
-                    (int) $card->weeks === $totalWeeks - (int) $lecture->weeks
-                );
-                $ordered = $standIns->concat($others);
-                $cursor = $pair + $lectureLen;
-
-                foreach ($ordered as $card) {
-                    $len = $this->parasNeeded($card);
-                    $isStandIn = (int) $card->weeks === $totalWeeks - (int) $lecture->weeks;
-                    $start = $isStandIn
-                        ? $pair + max(0, $lectureLen - $len)
-                        : $cursor;
-                    if (!$isStandIn) {
-                        $cursor = $start + $len;
-                    }
-                    if ($start < 1 || $start + $len - 1 > $boardPairs) {
-                        return false;
-                    }
-
-                    $mask = $maskOf($card);
-                    $groups = $card->occupiedGroups();
-                    for ($offset = 0; $offset < $len; $offset++) {
-                        $slot = $start + $offset;
-                        $busyMap = $groupBusy[$scope . '|' . $day . '|' . $slot] ?? [];
-                        foreach ($groups as $cardGroup) {
-                            $g = (string) $cardGroup;
-                            if ((($busyMap[$g] ?? 0) & $mask)
-                                || (($localGroupBusy[$scope . '|' . $day . '|' . $slot . '|' . $g] ?? 0) & $mask)) {
-                                return false;
-                            }
-                        }
-                        if ($card->teacher_id
-                            && ((($teacherBusy[$card->teacher_id . '|' . $day . '|' . $slot] ?? 0) & $mask)
-                                || (($localTeacherBusy[$card->teacher_id . '|' . $day . '|' . $slot] ?? 0) & $mask))) {
+                $mask = $maskOf($card);
+                for ($offset = 0; $offset < $len; $offset++) {
+                    $slot = $start + $offset;
+                    $busyMap = $groupBusy[$scope . '|' . $day . '|' . $slot] ?? [];
+                    foreach ($groups as $cardGroup) {
+                        $g = (string) $cardGroup;
+                        if ((($busyMap[$g] ?? 0) & $mask)
+                            || (($localGroupBusy[$scope . '|' . $day . '|' . $slot . '|' . $g] ?? 0) & $mask)) {
                             return false;
                         }
                     }
+                    if ($card->teacher_id
+                        && ((($teacherBusy[$card->teacher_id . '|' . $day . '|' . $slot] ?? 0) & $mask)
+                            || (($localTeacherBusy[$card->teacher_id . '|' . $day . '|' . $slot] ?? 0) & $mask))) {
+                        return false;
+                    }
+                }
 
-                    $room = null;
-                    $pool = $poolFor($card);
-                    if ($pool->isNotEmpty()) {
-                        $roomCandidates = array_values(array_filter($pool->all(), fn($r) => (int) ($r->volume ?? 0) >= $minVolFor($card)));
-                        foreach ($roomCandidates as $candidate) {
-                            $free = true;
-                            for ($offset = 0; $offset < $len; $offset++) {
-                                $slot = $start + $offset;
-                                $roomKey = $candidate->code . '|' . $day . '|' . $slot;
-                                if ((($roomBusy[$roomKey] ?? 0) & $mask) || (($localRoomBusy[$roomKey] ?? 0) & $mask)) {
-                                    $free = false;
-                                    break;
-                                }
-                            }
-                            if ($free) {
-                                $room = $candidate;
+                $room = null;
+                $pool = $poolFor($card);
+                if ($pool->isNotEmpty()) {
+                    $roomCandidates = array_values(array_filter($pool->all(), fn($r) => (int) ($r->volume ?? 0) >= $minVolFor($card)));
+                    foreach ($roomCandidates as $candidate) {
+                        $free = true;
+                        for ($offset = 0; $offset < $len; $offset++) {
+                            $slot = $start + $offset;
+                            $roomKey = $candidate->code . '|' . $day . '|' . $slot;
+                            if ((($roomBusy[$roomKey] ?? 0) & $mask) || (($localRoomBusy[$roomKey] ?? 0) & $mask)) {
+                                $free = false;
                                 break;
                             }
                         }
-                        if (!$room) {
-                            return false;
+                        if ($free) {
+                            $room = $candidate;
+                            break;
                         }
                     }
+                    if (!$room) {
+                        return false;
+                    }
+                }
 
-                    for ($offset = 0; $offset < $len; $offset++) {
-                        $slot = $start + $offset;
-                        foreach ($groups as $cardGroup) {
-                            $g = (string) $cardGroup;
-                            $localGroupBusy[$scope . '|' . $day . '|' . $slot . '|' . $g] =
-                                ($localGroupBusy[$scope . '|' . $day . '|' . $slot . '|' . $g] ?? 0) | $mask;
-                        }
-                        if ($card->teacher_id) {
-                            $teacherKey = $card->teacher_id . '|' . $day . '|' . $slot;
-                            $localTeacherBusy[$teacherKey] = ($localTeacherBusy[$teacherKey] ?? 0) | $mask;
-                        }
-                        if ($room) {
-                            $roomKey = $room->code . '|' . $day . '|' . $slot;
-                            $localRoomBusy[$roomKey] = ($localRoomBusy[$roomKey] ?? 0) | $mask;
-                        }
+                for ($offset = 0; $offset < $len; $offset++) {
+                    $slot = $start + $offset;
+                    foreach ($groups as $cardGroup) {
+                        $g = (string) $cardGroup;
+                        $localGroupBusy[$scope . '|' . $day . '|' . $slot . '|' . $g] =
+                            ($localGroupBusy[$scope . '|' . $day . '|' . $slot . '|' . $g] ?? 0) | $mask;
+                    }
+                    if ($card->teacher_id) {
+                        $teacherKey = $card->teacher_id . '|' . $day . '|' . $slot;
+                        $localTeacherBusy[$teacherKey] = ($localTeacherBusy[$teacherKey] ?? 0) | $mask;
+                    }
+                    if ($room) {
+                        $roomKey = $room->code . '|' . $day . '|' . $slot;
+                        $localRoomBusy[$roomKey] = ($localRoomBusy[$roomKey] ?? 0) | $mask;
                     }
                 }
             }

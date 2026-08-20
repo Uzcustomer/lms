@@ -145,6 +145,47 @@ class TimetableController extends Controller
         return [$kafMap, $overrides];
     }
 
+    private function practiceGroupSizeOverrides(): array
+    {
+        return DB::table('subject_kafedra_overrides')
+            ->whereNotNull('practice_group_size')
+            ->pluck('practice_group_size', 'norm_name')
+            ->map(fn($v) => (int) $v)
+            ->all();
+    }
+
+    private function defaultPracticeGroupSize(?string $subject): int
+    {
+        $t = $this->normSubject((string) $subject);
+
+        foreach (['klinik', 'kasallik', 'terapiya', 'xirurgiya', 'jarrohlik', 'pediatriya', 'akusher',
+                  'ginekolog', 'nevrolog', 'kardiolog', 'onkolog', 'urolog', 'endokrin', 'dermato',
+                  'psixiatr', 'stomatolog', 'ftiziatr', 'reanimatsiya', 'anesteziolog', 'yuqumli'] as $kw) {
+            if (str_contains($t, $kw)) {
+                return 10;
+            }
+        }
+
+        if (preg_match('/(\btil|xorijiy|ingliz|inglis)/u', $t)) {
+            return 15;
+        }
+
+        foreach (['ijtimoiy', 'gumanitar', 'tarix', 'falsafa', 'din', 'huquq', 'iqtisod', 'pedagog',
+                  'psixolog', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
+            if (str_contains($t, $kw)) {
+                return 30;
+            }
+        }
+
+        return 15;
+    }
+
+    private function practiceGroupSizeFor(array $overrides, string $subject): int
+    {
+        $k = $this->normSubject($subject);
+        return (int) ($overrides[$k] ?? $this->defaultPracticeGroupSize($subject));
+    }
+
     private function specKey(?string $name): string
     {
         return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim((string) $name)));
@@ -420,6 +461,7 @@ class TimetableController extends Controller
 
         // Kafedra xaritasi
         [$kafMap, $overrides] = $this->buildKafedraMap();
+        $practiceSizeOverrides = $this->practiceGroupSizeOverrides();
 
         // Fanlarni yo'nalish+kurs bo'yicha guruhlash.
         //
@@ -519,7 +561,8 @@ class TimetableController extends Controller
                         foreach ($subs as $s) {
                             $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
-                            $pairPracticeGroups = (float) $s->seminar > 0;
+                            $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
+                            $pairPracticeGroups = (float) $s->seminar > 0 || $practiceGroupSize >= 30;
                             // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
                             // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat

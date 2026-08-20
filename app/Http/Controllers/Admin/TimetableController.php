@@ -519,6 +519,9 @@ class TimetableController extends Controller
                         foreach ($subs as $s) {
                             $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
+                            $pairPracticeGroups = (float) $s->seminar > 0
+                                && (float) $s->practice <= 0
+                                && (float) $s->laboratory <= 0;
                             // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
                             // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat
@@ -596,13 +599,44 @@ class TimetableController extends Controller
                             }
 
                             if ($cardPlan) {
+                                $practiceRowsByName = [];
                                 foreach ($oq['rows'] ?? [] as $gr) {
                                     $gn = trim((string) ($gr['name'] ?? ''));
                                     if ($gn === '') {
                                         continue;
                                     }
+                                    if (!isset($practiceRowsByName[$gn])) {
+                                        $practiceRowsByName[$gn] = $gr;
+                                    } else {
+                                        $practiceRowsByName[$gn]['count'] = max(
+                                            (int) ($practiceRowsByName[$gn]['count'] ?? 0),
+                                            (int) ($gr['count'] ?? 0)
+                                        );
+                                    }
+                                }
+
+                                $practiceRows = array_values($practiceRowsByName);
+                                $practiceBundles = $pairPracticeGroups
+                                    ? array_chunk($practiceRows, 2)
+                                    : array_map(static fn($gr) => [$gr], $practiceRows);
+
+                                foreach ($practiceBundles as $bundle) {
+                                    $names = [];
+                                    $students = 0;
+                                    foreach ($bundle as $gr) {
+                                        $gn = trim((string) ($gr['name'] ?? ''));
+                                        if ($gn === '') {
+                                            continue;
+                                        }
+                                        $names[] = $gn;
+                                        $students += (int) ($gr['count'] ?? 0);
+                                    }
+                                    if (!$names) {
+                                        continue;
+                                    }
+                                    $groupLabel = implode(' + ', $names);
                                     // Bu guruhga shu fan bo'yicha kartalar allaqachon yaratilganmi?
-                                    $prcKey = $sk . '|' . $course . '|' . $gn . '|' . $subjKey;
+                                    $prcKey = $sk . '|' . $course . '|' . $groupLabel . '|' . $subjKey;
                                     if (isset($madePractice[$prcKey])) {
                                         continue;
                                     }
@@ -613,9 +647,10 @@ class TimetableController extends Controller
                                             'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
                                             'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
                                             'training_type' => 'practice',
-                                            'group_name' => $gn, 'group_names' => null,
+                                            'group_name' => $groupLabel,
+                                            'group_names' => count($names) > 1 ? json_encode($names, JSON_UNESCAPED_UNICODE) : null,
                                             'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
-                                            'students' => (int) ($gr['count'] ?? 0),
+                                            'students' => $students,
                                             'len_half' => $lenHalf,
                                             'weeks' => max(1, $cardWeeks),
                                             'created_at' => $now, 'updated_at' => $now,
@@ -1272,22 +1307,33 @@ class TimetableController extends Controller
             return preg_replace('/\s+/u', ' ', $value) ?: '';
         };
 
+        $cardGroupNames = static function (TimetableCard $card): array {
+            $groups = is_array($card->group_names) ? $card->group_names : [];
+            if (!$groups && trim((string) $card->group_name) !== '') {
+                $groups = [(string) $card->group_name];
+            }
+            return array_values(array_unique(array_filter(
+                array_map(static fn($value) => trim((string) $value), $groups),
+                static fn(string $value): bool => $value !== ''
+            )));
+        };
+
         // Exact oqim kaliti birinchi tanlov bo'lib qoladi. Agar u mos kelmasa,
         // ma'ruzaning group_names ichidan amaliy kartaning group_name'i qidiriladi.
         // Shu yo'l bilan bitta fan ichida boshqa oqim yoki tilning kartasi
         // tasodifan anchor bo'lib qolmaydi.
-        $chainForCard = function (TimetableCard $card) use (&$chain, $subjOf, $subjectBaseKey, $normGroup): ?array {
+        $chainForCard = function (TimetableCard $card) use (&$chain, $subjOf, $subjectBaseKey, $normGroup, $cardGroupNames): ?array {
             $exactKey = $subjOf($card);
             if (isset($chain[$exactKey])) {
                 $candidate = $chain[$exactKey];
-                $group = trim((string) $card->group_name);
-                $groupKey = $normGroup($group);
+                $cardGroups = $cardGroupNames($card);
+                $cardGroupKeys = array_map($normGroup, $cardGroups);
                 $groups = array_map('strval', $candidate['groups'] ?? []);
                 $groupKeys = array_map($normGroup, $groups);
                 if ($card->training_type !== 'practice'
-                    || $group === ''
+                    || !$cardGroupKeys
                     || !$groups
-                    || in_array($groupKey, $groupKeys, true)) {
+                    || empty(array_diff($cardGroupKeys, $groupKeys))) {
                     return ['key' => $exactKey, 'chain' => $candidate];
                 }
             }
@@ -1296,7 +1342,8 @@ class TimetableController extends Controller
             }
 
             $base = $subjectBaseKey($card);
-            $group = trim((string) $card->group_name);
+            $cardGroups = $cardGroupNames($card);
+            $cardGroupKeys = array_map($normGroup, $cardGroups);
             $fallback = null;
             $baseMatches = 0;
             foreach ($chain as $key => $candidate) {
@@ -1306,10 +1353,10 @@ class TimetableController extends Controller
                 $baseMatches++;
                 $groups = array_map('strval', $candidate['groups'] ?? []);
                 $groupKeys = array_map($normGroup, $groups);
-                if ($group !== '' && in_array($normGroup($group), $groupKeys, true)) {
+                if ($cardGroupKeys && empty(array_diff($cardGroupKeys, $groupKeys))) {
                     return ['key' => $key, 'chain' => $candidate];
                 }
-                if ($fallback === null && ($group === '' || !$groups)) {
+                if ($fallback === null && (!$cardGroupKeys || !$groups)) {
                     $fallback = ['key' => $key, 'chain' => $candidate];
                 }
             }
@@ -1323,10 +1370,10 @@ class TimetableController extends Controller
         // lekin amaliyotning keyingi sloti guruhlar o'rtasida umumiy bo'lmasligi
         // kerak. Aks holda birinchi joylashgan guruh qolgan guruhlarni ketma-ket
         // keyingi paralarga surib, ko'p kartani keraksiz joylanmagan qoldiradi.
-        $chainGroupsForCard = function (TimetableCard $card): array {
-            $group = trim((string) $card->group_name);
-            if ($group !== '') {
-                return [$group];
+        $chainGroupsForCard = function (TimetableCard $card) use ($cardGroupNames): array {
+            $cardGroups = $cardGroupNames($card);
+            if ($cardGroups) {
+                return $cardGroups;
             }
             return array_values(array_unique(array_filter(
                 array_map('strval', $card->occupiedGroups()),
@@ -3627,20 +3674,67 @@ class TimetableController extends Controller
     }
 
     /** Joylanmagan kartalar va auto-place aniqlagan sabablarni XLSX ga chiqaradi. */
-    public function unplacedExport(TimetableBoard $board)
+    public function unplacedExport(Request $request, TimetableBoard $board)
     {
         @ini_set('memory_limit', '1024M');
         @set_time_limit(300);
 
-        $cards = TimetableCard::where('board_id', $board->id)
-            ->where(function ($q) {
-                $q->whereNull('day')->orWhereNull('pair');
-            })
+        $toArray = static function ($value): array {
+            if ($value === null || $value === '') {
+                return [];
+            }
+            return is_array($value) ? $value : [$value];
+        };
+        $facultyNames = array_values(array_filter(array_map('strval', $toArray($request->input('faculty_names'))), static fn($v) => $v !== ''));
+        $specialtyNames = array_values(array_filter(array_map('strval', $toArray($request->input('specialty_names'))), static fn($v) => $v !== ''));
+        $courses = array_values(array_filter(array_map('intval', $toArray($request->input('courses'))), static fn($v) => $v > 0));
+        $type = (string) $request->input('type', 'all');
+        $week = max(0, (int) $request->input('week', 0));
+
+        $query = TimetableCard::where('board_id', $board->id)
             ->orderBy('faculty_name')
             ->orderBy('specialty_name')
             ->orderBy('course')
-            ->orderBy('subject_name')
-            ->get();
+            ->orderBy('subject_name');
+
+        if ($facultyNames) {
+            $query->whereIn('faculty_name', $facultyNames);
+        }
+        if ($specialtyNames) {
+            $query->whereIn('specialty_name', $specialtyNames);
+        }
+        if ($courses) {
+            $query->whereIn('course', $courses);
+        }
+        if (in_array($type, ['lecture', 'practice'], true)) {
+            $query->where('training_type', $type);
+        }
+
+        if (!$week) {
+            $query->where(function ($q) {
+                $q->whereNull('day')->orWhereNull('pair');
+            });
+            $cards = $query->get();
+        } else {
+            $cards = $query->get();
+            $overrides = collect();
+            if (Schema::hasTable('timetable_card_overrides') && $cards->isNotEmpty()) {
+                $overrides = TimetableCardOverride::whereIn('card_id', $cards->pluck('id'))
+                    ->where('week', $week)
+                    ->get()
+                    ->keyBy('card_id');
+            }
+            $cards = $cards->filter(function (TimetableCard $card) use ($overrides): bool {
+                $override = $overrides->get($card->id);
+                if ($override && $override->cancelled) {
+                    return false;
+                }
+                if ($override && $override->day && $override->pair) {
+                    return false;
+                }
+                return !$card->day || !$card->pair;
+            })->values();
+        }
 
         $labels = [
             'room_capacity' => 'Xona/sig\'im',

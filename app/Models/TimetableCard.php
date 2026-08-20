@@ -48,9 +48,10 @@ class TimetableCard extends Model
     /** Kartochka band qiladigan guruhchalar ro'yxati (konflikt tekshiruvi uchun). */
     public function occupiedGroups(): array
     {
-        if ($this->training_type === 'lecture') {
+        if ($this->group_names) {
             return $this->group_names ?: [];
         }
+
         return $this->group_name ? [$this->group_name] : [];
     }
 }

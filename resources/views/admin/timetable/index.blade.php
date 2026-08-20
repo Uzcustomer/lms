@@ -2609,7 +2609,7 @@
                 selectedDirs.has(c.specialty_name) &&
                 selectedCourses.has(c.course) &&
                 !isCycleCard(c));
-            const cardGroups = c => c.training_type === 'lecture' ? (c.group_names || []) : (c.group_name ? [c.group_name] : []);
+            const cardGroups = c => (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []);
             // Guruh identifikatori. Guruh NOMI fakultetlar bo'ylab takrorlanishi mumkin
             // (mas. 1-kurs "1K-01a (o'z)" ham 1-son, ham 2-son davolashda bor), shuning
             // uchun panjara/konflikt kaliti nom emas — fakultet+yo'nalish+kurs+nom.
@@ -3112,7 +3112,7 @@
                     '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>' +
                     '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
-                $('unplacedExportBtn').classList.toggle('hidden', !cards.some(c => !effPlace(c)));
+                $('unplacedExportBtn').classList.toggle('hidden', !sc.some(c => !effPlace(c)));
                 $('weekHint').classList.toggle('hidden', !curWeek);
             }
 
@@ -3123,7 +3123,14 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i> Tayyorlanmoqda...';
                 try {
-                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?_=' + Date.now(), {
+                    const params = new URLSearchParams();
+                    [...selectedFaculties].forEach(v => params.append('faculty_names[]', v));
+                    [...selectedDirs].forEach(v => params.append('specialty_names[]', v));
+                    [...selectedCourses].forEach(v => params.append('courses[]', v));
+                    params.set('type', typeFilter);
+                    if (curWeek) params.set('week', curWeek);
+                    params.set('_', Date.now());
+                    const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?' + params.toString(), {
                         headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
                         cache: 'no-store',
                     });

@@ -279,7 +279,7 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
             ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name, MAX(s.lecture) as lecture')
             ->get();
@@ -324,7 +324,7 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->groupBy('mc.specialty_name', 'mc.level_code')
             ->selectRaw('mc.specialty_name, mc.level_code')
             ->get();
@@ -395,7 +395,7 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
             ->selectRaw("mc.specialty_name, mc.level_code, s.subject_name,
                 MAX(s.lecture) as lecture,
@@ -715,7 +715,7 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->orderByDesc('s.updated_at')
             ->orderByDesc('s.id')
             ->get(['mc.specialty_name', 'mc.level_code', 's.subject_name']);
@@ -4911,7 +4911,7 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + GREATEST(CAST(mc.level_code AS UNSIGNED) - 10, 0) - 1) = ?", [$start])
+            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.semester', 's.subject_name')
             ->selectRaw("mc.specialty_name, mc.level_code, s.semester, s.subject_name,
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice,

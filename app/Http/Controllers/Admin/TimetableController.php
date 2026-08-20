@@ -1266,12 +1266,17 @@ class TimetableController extends Controller
                 . $this->specKey($c->specialty_name) . '|' . (int) $c->course
                 . '|' . $this->normSubject((string) $c->subject_name);
         };
+        $subjectLooseKey = function ($c): string {
+            return (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+        };
         $lectureKeys = [];
         $lectureBaseKeys = [];
+        $lectureLooseKeys = [];
         foreach ($all as $card) {
             if ($card->training_type === 'lecture') {
                 $lectureKeys[$placementSubjectKey($card)] = true;
                 $lectureBaseKeys[$subjectBaseKey($card)] = true;
+                $lectureLooseKeys[$subjectLooseKey($card)] = true;
             }
         }
         $oqimRank = static function ($c): int {
@@ -1281,13 +1286,14 @@ class TimetableController extends Controller
             return 999;
         };
 
-        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $lectureBaseKeys, $placementSubjectKey, $subjectBaseKey, $oqimRank) {
-            $priority = function ($c) use ($lectureKeys, $lectureBaseKeys, $placementSubjectKey, $subjectBaseKey): int {
+        $toPlace = $toPlace->sort(function ($a, $b) use ($lectureKeys, $lectureBaseKeys, $lectureLooseKeys, $placementSubjectKey, $subjectBaseKey, $subjectLooseKey, $oqimRank) {
+            $priority = function ($c) use ($lectureKeys, $lectureBaseKeys, $lectureLooseKeys, $placementSubjectKey, $subjectBaseKey, $subjectLooseKey): int {
                 if ($c->training_type === 'lecture') {
                     return 0;
                 }
                 return isset($lectureKeys[$placementSubjectKey($c)])
-                    || isset($lectureBaseKeys[$subjectBaseKey($c)]) ? 1 : 2;
+                    || isset($lectureBaseKeys[$subjectBaseKey($c)])
+                    || isset($lectureLooseKeys[$subjectLooseKey($c)]) ? 1 : 2;
             };
             $ka = [$a->specialty_name, (int) $a->course, $priority($a), $subjectBaseKey($a),
                    $oqimRank($a), (int) $a->weeks, -count($a->occupiedGroups()), -(int) $a->students];
@@ -1363,7 +1369,7 @@ class TimetableController extends Controller
         // ma'ruzaning group_names ichidan amaliy kartaning group_name'i qidiriladi.
         // Shu yo'l bilan bitta fan ichida boshqa oqim yoki tilning kartasi
         // tasodifan anchor bo'lib qolmaydi.
-        $chainForCard = function (TimetableCard $card) use (&$chain, $subjOf, $subjectBaseKey, $normGroup, $cardGroupNames): ?array {
+        $chainForCard = function (TimetableCard $card) use (&$chain, $subjOf, $subjectBaseKey, $subjectLooseKey, $normGroup, $cardGroupNames): ?array {
             $exactKey = $subjOf($card);
             if (isset($chain[$exactKey])) {
                 $candidate = $chain[$exactKey];
@@ -1383,12 +1389,13 @@ class TimetableController extends Controller
             }
 
             $base = $subjectBaseKey($card);
+            $loose = $subjectLooseKey($card);
             $cardGroups = $cardGroupNames($card);
             $cardGroupKeys = array_map($normGroup, $cardGroups);
             $fallback = null;
             $baseMatches = 0;
             foreach ($chain as $key => $candidate) {
-                if (($candidate['base'] ?? null) !== $base) {
+                if (($candidate['base'] ?? null) !== $base && ($candidate['loose'] ?? null) !== $loose) {
                     continue;
                 }
                 $baseMatches++;
@@ -1535,6 +1542,7 @@ class TimetableController extends Controller
                 'nextByGroup' => $nextByGroupFor($placedCard->occupiedGroups(), (int) $placedCard->pair + $this->parasNeeded($placedCard)),
                 'lw' => (int) $placedCard->weeks,
                 'base' => $subjectBaseKey($placedCard),
+                'loose' => $subjectLooseKey($placedCard),
                 'groups' => $placedCard->occupiedGroups(),
             ];
             $markLectureSlotBusy($placedCard);
@@ -1916,7 +1924,7 @@ class TimetableController extends Controller
                 $uChainMatch = $chainForCard($lead);
                 $uChainKey = $uChainMatch['key'] ?? null;
                 $uLinkedPractice = $lead->training_type === 'practice'
-                    && isset($lectureBaseKeys[$subjectBaseKey($lead)]);
+                    && (isset($lectureBaseKeys[$subjectBaseKey($lead)]) || isset($lectureLooseKeys[$subjectLooseKey($lead)]));
                 if ($lead->training_type === 'practice' && $uChainMatch) {
                     $uCh = $chainStateForCard($uChainMatch['chain'], $lead);
                     $uTotal = $weeksFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
@@ -1977,6 +1985,7 @@ class TimetableController extends Controller
                             'next' => (int) $uc->pair + $this->parasNeeded($uc), 'lw' => (int) $uc->weeks,
                             'nextByGroup' => $nextByGroupFor($uc->occupiedGroups(), (int) $uc->pair + $this->parasNeeded($uc)),
                             'base' => $subjectBaseKey($uc),
+                            'loose' => $subjectLooseKey($uc),
                             'groups' => $uc->occupiedGroups(),
                         ];
                     }
@@ -2032,7 +2041,7 @@ class TimetableController extends Controller
             $sKey = $chainMatch['key'] ?? $subjOf($c);
             $ch = $chainMatch['chain'] ?? null;
             $linkedPractice = $c->training_type === 'practice'
-                && isset($lectureBaseKeys[$subjectBaseKey($c)]);
+                && (isset($lectureBaseKeys[$subjectBaseKey($c)]) || isset($lectureLooseKeys[$subjectLooseKey($c)]));
             if ($c->training_type === 'practice' && $ch) {
                 $ch = $chainStateForCard($ch, $c);
                 $total = $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course);
@@ -2123,7 +2132,7 @@ class TimetableController extends Controller
                         'day' => (int) $c->day, 'lec' => (int) $c->pair, 'llen' => $need,
                         'next' => (int) $c->pair + $need, 'lw' => (int) $c->weeks,
                         'nextByGroup' => $nextByGroupFor($c->occupiedGroups(), (int) $c->pair + $need),
-                        'base' => $subjectBaseKey($c), 'groups' => $c->occupiedGroups(),
+                        'base' => $subjectBaseKey($c), 'loose' => $subjectLooseKey($c), 'groups' => $c->occupiedGroups(),
                     ];
                 }
                 if ($c->training_type === 'lecture' && (int) $c->weeks > 0) {
@@ -2256,7 +2265,7 @@ class TimetableController extends Controller
                 $chain[$subjOf($c)] = ['day' => $d, 'lec' => $p, 'llen' => $need,
                     'next' => $p + $need, 'lw' => (int) $c->weeks,
                     'nextByGroup' => $nextByGroupFor($c->occupiedGroups(), $p + $need),
-                    'base' => $subjectBaseKey($c), 'groups' => $c->occupiedGroups()];
+                    'base' => $subjectBaseKey($c), 'loose' => $subjectLooseKey($c), 'groups' => $c->occupiedGroups()];
                 $reserveLectureNextSlots($c);
             }
             $skBase = $this->spreadKey($c);

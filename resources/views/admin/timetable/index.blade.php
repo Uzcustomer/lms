@@ -4910,6 +4910,15 @@
                 return unit.training_type === 'lecture' ? (unit.oqim_label || 'oqim') : (unit.group_name || '');
             }
 
+            function asgSpecLabel(unit) {
+                return (unit.faculty_name ? unit.faculty_name + ' / ' : '') + unit.specialty_name + ' · ' + unit.course + '-kurs';
+            }
+
+            function asgSpecHtml(unit) {
+                const faculty = unit.faculty_name ? '<b>' + esc(unit.faculty_name) + '</b><br>' : '';
+                return faculty + '<span class="text-slate-500">' + esc(unit.specialty_name + ' · ' + unit.course + '-kurs') + '</span>';
+            }
+
             function asgTeacherText(unit) {
                 if (unit.teacher_mixed) return 'turlicha';
                 return unit.teacher_name || 'biriktirilmagan';
@@ -5039,6 +5048,9 @@
                 const specs = [...new Set(asgUnits.map(u => u.specialty_name + ' · ' + u.course + '-kurs'))].sort();
                 $('asgFilter').innerHTML = '<option value="">— barcha yo\'nalishlar —</option>' +
                     specs.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+                const scopedSpecs = [...new Set(asgUnits.map(u => asgSpecLabel(u)))].sort();
+                $('asgFilter').innerHTML = '<option value="">-- barcha yo\'nalishlar --</option>' +
+                    scopedSpecs.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
                 renderAsgTable();
             };
             $('asgClose').onclick = $('asgCloseBtn').onclick = () => {
@@ -5061,8 +5073,22 @@
                 });
             }
 
+            function asgFilteredScoped() {
+                const q = ($('asgSearch').value || '').toLowerCase().trim();
+                const fv = $('asgFilter').value;
+                const tv = $('asgTypeFilter').value;
+                const onlyEmpty = $('asgOnlyEmpty').checked;
+                return asgUnits.filter(u => {
+                    if (fv && asgSpecLabel(u) !== fv) return false;
+                    if (tv && asgTypeLabel(u) !== tv) return false;
+                    if (onlyEmpty && u.teacher_id) return false;
+                    if (q && !(u.subject_name.toLowerCase().includes(q) || (u.kafedra_name || '').toLowerCase().includes(q))) return false;
+                    return true;
+                });
+            }
+
             function renderAsgTable() {
-                const baseRows = asgFiltered();
+                const baseRows = asgFilteredScoped();
                 asgNormalizeHeaderFilters(baseRows);
                 const rows = baseRows.filter(unit => asgMatchesHeaderFilters(unit));
                 if (asgSel && !rows.includes(asgSel)) {
@@ -5070,8 +5096,8 @@
                     setAsgTeacherPanel(null);
                 }
                 $('asgCount').textContent = rows.length + ' ta';
-                let h = '<thead><tr><th>Fan</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th></tr></thead><tbody>';
-                if (!rows.length) h += '<tr><td colspan="6" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
+                let h = '<thead><tr><th>Fan</th><th>Fakultet / yo\'nalish</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th></tr></thead><tbody>';
+                if (!rows.length) h += '<tr><td colspan="7" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
                 rows.forEach((u, i) => {
                     const scopeLabel = asgScopeLabel(u);
                     const ttLabel = u.training_type === 'lecture'
@@ -5081,7 +5107,7 @@
                         ? '<span class="text-amber-600">⚠ turlicha</span>'
                         : (u.teacher_name ? esc(u.teacher_name) : '<span class="text-gray-400">— biriktirilmagan —</span>');
                     h += '<tr data-i="' + i + '"' + (asgSel === rows[i] ? ' class="sel"' : '') + '>' +
-                        '<td>' + esc(u.subject_name) + '</td><td class="text-center">' + ttLabel + '</td>' +
+                        '<td>' + esc(u.subject_name) + '</td><td>' + asgSpecHtml(u) + '</td><td class="text-center">' + ttLabel + '</td>' +
                         '<td>' + esc(scopeLabel) + '</td><td>' + esc(u.kafedra_name || '—') + '</td>' +
                         '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '✓)</span>' : '') + '</td>' +
                         '<td>' + teacherLabel + '</td></tr>';
@@ -5118,6 +5144,7 @@
                 const u = asgSel;
                 setAsgTeacherPanel(u);
                 $('asgUnitInfo').innerHTML = '<b>' + esc(u.subject_name) + '</b><br>' +
+                    '<span class="text-slate-600">' + asgSpecHtml(u) + '</span><br>' +
                     (u.training_type === 'lecture' ? "Ma'ruza · " + esc(u.oqim_label || '') : 'Amaliy · ' + esc(u.group_name || '')) +
                     ' · ' + u.cards + ' karta' + (u.kafedra_name ? '<br><span class="text-gray-400">' + esc(u.kafedra_name) + '</span>' : '');
                 await loadAsgTeachers('');
@@ -5156,7 +5183,7 @@
                 $('asgApply').disabled = $('asgClear').disabled = true;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/assign-teacher', 'POST', {
-                        specialty_name: asgSel.specialty_name, course: asgSel.course,
+                        faculty_name: asgSel.faculty_name || '', specialty_name: asgSel.specialty_name, course: asgSel.course,
                         subject_name: asgSel.subject_name, training_type: asgSel.training_type,
                         oqim_label: asgSel.oqim_label || '', group_name: asgSel.group_name || '',
                         teacher_id: teacherId || '',
@@ -5168,7 +5195,7 @@
                     cards.forEach(c => {
                         const sameScope = asgSel.training_type === 'lecture'
                             ? (c.oqim_label === asgSel.oqim_label) : (c.group_name === asgSel.group_name);
-                        if (c.specialty_name === asgSel.specialty_name && c.course === asgSel.course &&
+                        if ((c.faculty_name || '') === (asgSel.faculty_name || '') && c.specialty_name === asgSel.specialty_name && c.course === asgSel.course &&
                             c.subject_name === asgSel.subject_name && c.training_type === asgSel.training_type && sameScope) {
                             c.teacher_id = asgSel.teacher_id; c.teacher_name = j.teacher_name;
                         }

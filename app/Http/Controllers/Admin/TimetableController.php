@@ -5393,6 +5393,7 @@ class TimetableController extends Controller
     private function unitKey(TimetableCard $c): string
     {
         $scope = $c->training_type === 'lecture' ? ('L|' . $c->oqim_label) : ('P|' . $c->group_name);
+        $scope = ($c->faculty_name ?? '') . '|F|' . $scope;
         return implode('¦', [$c->specialty_name, $c->course, $c->subject_name, $c->training_type, $scope]);
     }
 
@@ -5405,6 +5406,7 @@ class TimetableController extends Controller
             $k = $this->unitKey($c);
             if (!isset($units[$k])) {
                 $units[$k] = [
+                    'faculty_name'   => $c->faculty_name,
                     'specialty_name' => $c->specialty_name, 'course' => (int) $c->course,
                     'subject_name'   => $c->subject_name, 'training_type' => $c->training_type,
                     'oqim_label'     => $c->oqim_label, 'group_name' => $c->group_name,
@@ -5424,8 +5426,8 @@ class TimetableController extends Controller
             }
         }
         $out = array_values($units);
-        usort($out, fn($a, $b) => [$a['specialty_name'], $a['course'], $b['training_type'], $a['subject_name'], (string) $a['oqim_label'], (string) $a['group_name']]
-            <=> [$b['specialty_name'], $b['course'], $a['training_type'], $b['subject_name'], (string) $b['oqim_label'], (string) $b['group_name']]);
+        usort($out, fn($a, $b) => [(string) ($a['faculty_name'] ?? ''), $a['specialty_name'], $a['course'], $b['training_type'], $a['subject_name'], (string) $a['oqim_label'], (string) $a['group_name']]
+            <=> [(string) ($b['faculty_name'] ?? ''), $b['specialty_name'], $b['course'], $a['training_type'], $b['subject_name'], (string) $b['oqim_label'], (string) $b['group_name']]);
 
         return response()->json(['units' => $out]);
     }
@@ -5434,6 +5436,7 @@ class TimetableController extends Controller
     public function assignTeacher(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([
+            'faculty_name'   => 'nullable|string|max:255',
             'specialty_name' => 'required|string|max:255',
             'course'         => 'required|integer|min:1|max:7',
             'subject_name'   => 'required|string|max:255',
@@ -5448,6 +5451,9 @@ class TimetableController extends Controller
             ->where('course', $data['course'])
             ->where('subject_name', $data['subject_name'])
             ->where('training_type', $data['training_type']);
+        array_key_exists('faculty_name', $data) && $data['faculty_name'] !== null && $data['faculty_name'] !== ''
+            ? $q->where('faculty_name', $data['faculty_name'])
+            : $q->whereNull('faculty_name');
         if ($data['training_type'] === 'lecture') {
             isset($data['oqim_label']) ? $q->where('oqim_label', $data['oqim_label']) : $q->whereNull('oqim_label');
         } else {

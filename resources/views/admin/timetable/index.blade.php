@@ -3586,16 +3586,26 @@
                                 } else if (c) {
                                     // Vertikal: karta o'z uzunligini (yarim-slotlar) egallaydi;
                                     // ketma-ket bir xil fan amaliyotlari ham bitta katakka birlashtiriladi.
+                                    let span = 1;
+                                    while (gi + span < o.groups.length) {
+                                        const c2 = placedIdx[o.groups[gi + span] + '|' + d + '|' + p];
+                                        const c2Place = c2 ? effPlace(c2) : null;
+                                        if (c2 && c2Place && +c2Place.pair === p && c2.id === c.id) span++;
+                                        else break;
+                                    }
                                     const chain = vChain(grp, d, p, c);
                                     const vs = chain.span, ids = chain.ids;
-                                    for (let k = 1; k < vs; k++) vConsumed[grp + '|' + d + '|' + (p + k)] = 1;
+                                    for (let k = 1; k < vs; k++)
+                                        for (let gg = gi; gg < gi + span; gg++)
+                                            vConsumed[o.groups[gg] + '|' + d + '|' + (p + k)] = 1;
                                     const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
                                     const prcEx = stackExtras(grp, d, p, ids)
                                         .filter(x => x.training_type !== 'lecture');
                                     const prcSplit = prcEx.length ? ' tt-split' : '';
                                     const prcExtras = prcEx.map((x, xi) => chipHtml(x, [x.id], xi + 1)).join('');
-                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
-                                    gi++;
+                                    const cs = span > 1 ? ' colspan="' + span + '"' : '';
+                                    h += '<td class="tt-cell' + prcSplit + courseCls(o.course) + bord + rowEndCls(p + vs - 1) + '"' + cs + rs + dp + ' style="' + subjStyle(c) + '">' + chipHtml(c, ids, prcEx.length ? 0 : undefined) + prcExtras + '</td>';
+                                    gi += span;
                                 } else {
                                     // Bo'sh katak — tanlangan amaliy uchun nishon bo'lishi mumkin
                                     let cls = 'tt-cell' + courseCls(o.course) + bord + rowEndCls(p), clickable = '';

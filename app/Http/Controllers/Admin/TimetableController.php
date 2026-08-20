@@ -519,9 +519,7 @@ class TimetableController extends Controller
                         foreach ($subs as $s) {
                             $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
-                            $pairPracticeGroups = (float) $s->seminar > 0
-                                && (float) $s->practice <= 0
-                                && (float) $s->laboratory <= 0;
+                            $pairPracticeGroups = (float) $s->seminar > 0;
                             // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
                             // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat

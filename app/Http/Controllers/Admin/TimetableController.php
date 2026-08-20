@@ -150,6 +150,22 @@ class TimetableController extends Controller
         return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim((string) $name)));
     }
 
+    /**
+     * Ba'zi yangi ishchi rejalarda fakultet nomi yo'nalish nomiga qo'shilib keladi
+     * (masalan: "1-son Davolash ishi"). Snapshotda esa fakultet alohida, yo'nalish
+     * "Davolash ishi" bo'lib turadi. Kartochka yaratishda ikkalasini juftlash uchun
+     * shunday reja nomlaridan fakultet va sof yo'nalish aliasini ajratamiz.
+     */
+    private function curriculumScopeAlias(string $specialtyName): array
+    {
+        $name = trim($specialtyName);
+        if (preg_match('/^(\d+)\s*-\s*son\s+davolash\s+ishi$/iu', $name, $m)) {
+            return [$m[1] . '-son davolash', 'Davolash ishi'];
+        }
+
+        return [null, $name];
+    }
+
     /** Tasdiqlangan oqim snapshotlari (fakultet kontekstida dedup — eng so'nggisi). */
     private function boardSnapshots(TimetableBoard $board): array
     {
@@ -415,6 +431,7 @@ class TimetableController extends Controller
         // bir necha barobar oshib ketardi. Endi (yo'nalish|kurs|fan) bo'yicha
         // birlashtiramiz: soatlarning eng kattasi olinadi.
         $subjBySpec = [];
+        $subjByScopeSpec = [];
         $seenSubj = [];   // "specKey|course|normSubject" => $subjBySpec dagi indeks
         foreach ($subjects as $s) {
             $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
@@ -431,6 +448,12 @@ class TimetableController extends Controller
             }
             $subjBySpec[$sk][$course][] = $s;
             $seenSubj[$key] = count($subjBySpec[$sk][$course]) - 1;
+
+            [$facultyAlias, $specialtyAlias] = $this->curriculumScopeAlias((string) $s->specialty_name);
+            if ($facultyAlias !== null) {
+                $scopedKey = $this->specKey($facultyAlias) . '|' . $this->specKey($specialtyAlias);
+                $subjByScopeSpec[$scopedKey][$course][] = $s;
+            }
         }
 
         // Har yo'nalish+kurs uchun hafta soni (alohida sozlama yoki doska sukut qiymati)
@@ -471,7 +494,8 @@ class TimetableController extends Controller
                         || ($filterFaculty !== null && $blockFac !== $filterFaculty))) {
                         continue;
                     }
-                    $subs = $subjBySpec[$sk][$course] ?? null;
+                    $scopedSk = $this->specKey((string) $blockFac) . '|' . $sk;
+                    $subs = $subjByScopeSpec[$scopedSk][$course] ?? $subjBySpec[$sk][$course] ?? null;
                     if (!$subs) {
                         continue;
                     }

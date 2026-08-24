@@ -159,6 +159,33 @@ class AcademicMobilityController extends Controller
         return back()->with('success', "Talabaning o'tish joyi saqlandi.");
     }
 
+    public function destroy(AkademikMobillikAriza $application): RedirectResponse
+    {
+        abort_unless(
+            in_array($this->activeRole(), ['superadmin', 'admin', 'registrator_ofisi'], true),
+            403
+        );
+
+        $documentPaths = array_values(array_filter([
+            $application->document_path,
+            $application->curriculum_document_path,
+        ]));
+
+        DB::transaction(function () use ($application) {
+            // Tasdiqlar foreign key cascade orqali birga o'chiriladi.
+            $application->delete();
+        });
+
+        foreach ($documentPaths as $path) {
+            Storage::delete($path);
+        }
+
+        Storage::deleteDirectory("academic-mobility-applications/{$application->id}");
+        Storage::deleteDirectory("academic-mobility-curriculum/{$application->id}");
+
+        return back()->with('success', 'Akademik mobillik arizasi butunlay o\'chirildi.');
+    }
+
     public function downloadDocument(AkademikMobillikAriza $application): BinaryFileResponse
     {
         abort_if(

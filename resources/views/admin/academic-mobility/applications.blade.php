@@ -129,6 +129,9 @@
                                     <th class="am-review-heading">O'quv reja mosligi</th>
                                 @endif
                                 <th class="{{ $showReviewColumn ? 'am-status-heading' : '' }}">Holat</th>
+                                @if($isRegistrar)
+                                    <th class="am-actions-heading">Amal</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -278,9 +281,22 @@
                                             <span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span>
                                         @endif
                                     </td>
+                                    @if($isRegistrar)
+                                        <td class="am-actions-cell">
+                                            <form method="POST" action="{{ route('admin.academic-mobility.destroy', $application) }}" onsubmit="return confirm('Bu arizani barcha hujjatlari va tasdiqlari bilan butunlay o\'chirasizmi?')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="am-delete-btn" title="Arizani o'chirish" aria-label="Arizani o'chirish">
+                                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12m-10 0v12h8V7M9 7V4h6v3m-7 4v5m4-5v5"/>
+                                                    </svg>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    @endif
                                 </tr>
                             @empty
-                                <tr><td colspan="{{ 7 + ($showReviewColumn ? 1 : 0) }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
+                                <tr><td colspan="{{ 7 + ($showReviewColumn ? 1 : 0) + ($isRegistrar ? 1 : 0) }}" class="am-empty">Ism-familiya bo'yicha arizalar topilmadi.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -363,6 +379,11 @@
         .am-review-heading { min-width:265px; }
         .am-review-cell { min-width:265px;background:#f8fbff; }
         .am-status-heading,.am-status-cell { min-width:235px; }
+        .am-actions-heading,.am-actions-cell { width:62px;min-width:62px;text-align:center!important; }
+        .am-actions-cell form { display:inline-flex;margin:0; }
+        .am-delete-btn { width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #fecaca;border-radius:7px;background:#fff;color:#dc2626;cursor:pointer;transition:.15s; }
+        .am-delete-btn svg { width:16px;height:16px; }
+        .am-delete-btn:hover { border-color:#dc2626;background:#fee2e2;transform:translateY(-1px); }
         .am-review-file-row { display:flex;align-items:center;justify-content:flex-start;gap:5px; }
         .am-review-delete { display:flex;flex:0 0 auto;margin:0; }
         .am-review-delete button { width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #fecaca;border-radius:50%;background:#fff;color:#dc2626;font-size:16px;font-weight:700;line-height:1;cursor:pointer;transition:.15s; }

@@ -195,8 +195,17 @@
                                                 Yuklash
                                             </a>
                                             <div class="am-file-name" title="{{ $application->document_name }}">{{ $application->document_name }}</div>
-                                        @else
+                                        @elseif(!$application->basis_document_path)
                                             <span class="am-no-document">Hujjat yo'q</span>
+                                        @endif
+                                        @if($application->basis_document_path && $application->basis_document_path !== 'pending')
+                                            <a href="{{ route('admin.academic-mobility.basis-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-document-btn am-document-btn-green" title="{{ $application->basis_document_name }}">
+                                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/>
+                                                </svg>
+                                                Asos hujjati
+                                            </a>
+                                            <div class="am-file-name" title="{{ $application->basis_document_name }}">{{ $application->basis_document_name }}</div>
                                         @endif
                                     </td>
                                     @if($showReviewColumn)
@@ -374,6 +383,7 @@
         .am-destination-text { max-width:320px;white-space:normal;overflow-wrap:anywhere;font-weight:600;color:#334155; }
         .am-document-btn { display:inline-flex;align-items:center;gap:5px;border-radius:6px;background:#e0f2fe;padding:5px 9px;font-size:11px;font-weight:700;color:#0369a1;text-decoration:none; }
         .am-document-btn:hover { background:#bae6fd; }.am-document-btn svg { width:15px;height:15px; }
+        .am-document-btn-green { background:#dcfce7;color:#15803d; }.am-document-btn-green:hover { background:#bbf7d0; }
         .am-file-name { max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;font-size:10px;color:#94a3b8; }
         .am-no-document { display:inline-block;border-radius:6px;background:#f1f5f9;padding:5px 8px;font-size:10.5px;font-weight:600;color:#94a3b8; }
         .am-review-heading { min-width:265px; }

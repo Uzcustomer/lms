@@ -6,6 +6,11 @@
                 <ul class="space-y-1">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
             </div>
         @endif
+        @if(session('error'))
+            <div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {{ session('error') }}
+            </div>
+        @endif
 
         <div class="mb-4 rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4 shadow-sm">
             <div class="flex items-center gap-3">
@@ -37,7 +42,7 @@
                     </div>
                     <div>
                         <p class="text-sm font-bold text-emerald-800">Arizangiz yuborildi</p>
-                        <p class="mt-1 text-sm leading-6 text-emerald-700">Transfer.edu.uz saytiga bergan arizangiz tasdiqlanganda va bizga bergan arizangiz ko'rib chiqilganda sizga ma'lumot beriladi. Arizangiz uchun rahmat.</p>
+                        <p class="mt-1 text-sm leading-6 text-emerald-700">Hurmatli talaba, sizning arizangiz qabul qilindi. Arizangiz ko'rib chiqilgach, natija haqida sizga ma'lumot beriladi.</p>
                     </div>
                 </div>
             </div>

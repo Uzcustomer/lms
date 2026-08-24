@@ -168,6 +168,7 @@ class AcademicMobilityController extends Controller
 
         $documentPaths = array_values(array_filter([
             $application->document_path,
+            $application->basis_document_path,
             $application->curriculum_document_path,
         ]));
 
@@ -198,6 +199,22 @@ class AcademicMobilityController extends Controller
             [
                 'Content-Type' => $application->document_mime ?: 'application/octet-stream',
                 'Content-Disposition' => 'inline; filename="' . basename($application->document_path) . '"',
+            ]
+        );
+    }
+
+    public function basisDocument(AkademikMobillikAriza $application): BinaryFileResponse
+    {
+        abort_if(
+            !$application->basis_document_path || !Storage::exists($application->basis_document_path),
+            404
+        );
+
+        return response()->file(
+            Storage::path($application->basis_document_path),
+            [
+                'Content-Type' => $application->basis_document_mime ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="' . basename($application->basis_document_name) . '"',
             ]
         );
     }

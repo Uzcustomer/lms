@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\AkademikMobillikAriza;
 use App\Models\StudentTransferApplication;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class StudentTransferApplicationController extends Controller
@@ -17,12 +20,17 @@ class StudentTransferApplicationController extends Controller
 
         abort_unless($student, 401);
 
-        $applications = StudentTransferApplication::where('student_id', $student->id)
+        $applications = AkademikMobillikAriza::where('student_id', $student->id)
             ->latest()
             ->get();
 
-        $latest = $applications->first();
-        $canSubmit = !$latest || $latest->status === 'rejected';
+        // Eski jadvaldagi ariza ham hisobga olinadi: talaba bir marta topshirgach,
+        // ariza rad etilgan bo'lsa ham qayta yubora olmaydi.
+        $legacyApplication = StudentTransferApplication::where('student_id', $student->id)
+            ->latest()
+            ->first();
+        $latest = $applications->first() ?? $legacyApplication;
+        $canSubmit = !$latest;
 
         return view('student.transfer-application.create', [
             'student' => $student,
@@ -37,6 +45,15 @@ class StudentTransferApplicationController extends Controller
         $student = auth('student')->user();
 
         abort_unless($student, 401);
+
+        if (
+            AkademikMobillikAriza::where('student_id', $student->id)->exists()
+            || StudentTransferApplication::where('student_id', $student->id)->exists()
+        ) {
+            return redirect()
+                ->route('student.transfer-application.create')
+                ->with('error', 'Hurmatli talaba, siz arizani avval yuborgansiz. Bir talabaga faqat bitta ariza yuborish mumkin.');
+        }
 
         $validated = $request->validate([
             'phone' => ['required', 'string', 'max:50'],
@@ -62,23 +79,45 @@ class StudentTransferApplicationController extends Controller
         $basisFile = $validated['basis_document'];
         $extension = strtolower($file->getClientOriginalExtension()) ?: 'bin';
         $basisExtension = strtolower($basisFile->getClientOriginalExtension()) ?: 'bin';
-        $application = StudentTransferApplication::create([
-            'student_id' => $student->id,
-            'phone' => trim($validated['phone']),
-            'target_institution' => trim($validated['target_institution']),
-            'reason' => trim((string) ($validated['reason'] ?? '')),
-            'order_path' => 'pending',
-            'order_name' => $file->getClientOriginalName(),
-            'order_mime' => $file->getMimeType(),
-            'order_size' => $file->getSize(),
-            'basis_document_path' => 'pending',
-            'basis_document_name' => $basisFile->getClientOriginalName(),
-            'basis_document_mime' => $basisFile->getMimeType(),
-            'basis_document_size' => $basisFile->getSize(),
-            'status' => 'pending',
-        ]);
+        try {
+            $application = DB::transaction(function () use ($student, $validated, $file, $basisFile) {
+                DB::table('students')
+                    ->where('id', $student->id)
+                    ->lockForUpdate()
+                    ->first();
 
-        $directory = "student-transfer-applications/{$application->id}";
+                if (
+                    AkademikMobillikAriza::where('student_id', $student->id)->exists()
+                    || StudentTransferApplication::where('student_id', $student->id)->exists()
+                ) {
+                    throw ValidationException::withMessages([
+                        'application' => 'Hurmatli talaba, siz arizani avval yuborgansiz. Bir talabaga faqat bitta ariza yuborish mumkin.',
+                    ]);
+                }
+
+                return AkademikMobillikAriza::create([
+                    'student_id' => $student->id,
+                    'phone' => trim($validated['phone']),
+                    'transfer_destination' => trim($validated['target_institution']),
+                    'reason' => trim((string) ($validated['reason'] ?? '')),
+                    'document_path' => 'pending',
+                    'document_name' => $file->getClientOriginalName(),
+                    'document_mime' => $file->getMimeType(),
+                    'document_size' => $file->getSize(),
+                    'basis_document_path' => 'pending',
+                    'basis_document_name' => $basisFile->getClientOriginalName(),
+                    'basis_document_mime' => $basisFile->getMimeType(),
+                    'basis_document_size' => $basisFile->getSize(),
+                    'status' => 'pending',
+                    'created_by_id' => $student->id,
+                    'created_by_name' => $student->full_name,
+                ]);
+            });
+        } catch (ValidationException $exception) {
+            return back()->withInput()->withErrors($exception->errors());
+        }
+
+        $directory = "academic-mobility-applications/{$application->id}";
         $path = $file->storeAs($directory, "transfer-tasdiq.{$extension}");
         $basisPath = $basisFile->storeAs($directory, "asos-hujjati.{$basisExtension}");
 
@@ -97,29 +136,29 @@ class StudentTransferApplicationController extends Controller
         }
 
         $application->update([
-            'order_path' => $path,
+            'document_path' => $path,
             'basis_document_path' => $basisPath,
         ]);
 
         return redirect()
             ->route('student.transfer-application.create')
-            ->with('success', "O'qishni ko'chirish arizangiz muvaffaqiyatli yuborildi.");
+            ->with('success', 'Hurmatli talaba, sizning arizangiz qabul qilindi. Arizangiz ko\'rib chiqilgach, natija haqida sizga ma\'lumot beriladi.');
     }
 
     public function document(int $id)
     {
         $student = auth('student')->user();
 
-        $application = StudentTransferApplication::where('id', $id)
+        $application = AkademikMobillikAriza::where('id', $id)
             ->where('student_id', $student->id)
             ->firstOrFail();
 
-        abort_if(!$application->order_path || $application->order_path === 'pending'
-            || !Storage::exists($application->order_path), 404);
+        abort_if(!$application->document_path || $application->document_path === 'pending'
+            || !Storage::exists($application->document_path), 404);
 
-        return response()->file(Storage::path($application->order_path), [
-            'Content-Type' => $application->order_mime ?: 'application/octet-stream',
-            'Content-Disposition' => 'inline; filename="' . basename($application->order_name) . '"',
+        return response()->file(Storage::path($application->document_path), [
+            'Content-Type' => $application->document_mime ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="' . basename($application->document_name) . '"',
         ]);
     }
 }

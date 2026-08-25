@@ -1,6 +1,6 @@
 <x-app-layout>
     <div class="py-4 sm:py-5">
-        <div class="w-full px-3 sm:px-5 lg:px-7 space-y-4">
+        <div class="w-full space-y-3 px-3 sm:px-5 lg:px-7">
             <section class="relative overflow-hidden rounded-2xl border border-blue-900/20 px-4 py-4 text-white shadow-lg shadow-blue-950/10 sm:px-5 sm:py-5"
                      style="background: linear-gradient(115deg, #102f5b 0%, #1d4ed8 58%, #0ea5e9 100%);">
                 <div class="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full bg-white/10"></div>
@@ -37,7 +37,7 @@
             @endif
 
             <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-2.5">
                         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
@@ -56,7 +56,7 @@
                         </span>
                     @endif
                 </div>
-                <div class="border-b border-slate-100 bg-slate-50/70 px-3 py-3 sm:px-4">
+                <div class="border-b border-slate-100 bg-slate-50/70 px-3 py-2.5 sm:px-4">
                     <form method="GET" action="{{ route('admin.test-subjects.index') }}" class="flex flex-col gap-2 sm:flex-row sm:items-end">
                         <div class="min-w-0 flex-1">
                             <label for="kafedra_id" class="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-500">Kafedra</label>
@@ -82,9 +82,9 @@
                     </form>
                 </div>
 
-                <div class="p-3 sm:p-4">
+                <div class="p-3">
                 @if(!$selectedKafedraId)
-                    <div class="flex items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
+                    <div class="flex items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
                         <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-400 shadow-sm ring-1 ring-slate-200">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 3h.01M10.3 4.3L2.9 17.1A2 2 0 004.6 20h14.8a2 2 0 001.7-2.9L13.7 4.3a2 2 0 00-3.4 0z"/></svg>
                         </span>
@@ -176,7 +176,7 @@
             </div>
 
             <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="flex flex-col gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-sm font-extrabold text-slate-900">Yaratilgan test fanlar</h2>
                         <p class="mt-0.5 text-[11px] text-slate-500">Mavjud test modullarini ko'ring yoki boshqaring.</p>
@@ -185,6 +185,21 @@
                         {{ $subjects->total() }} ta modul
                     </span>
                 </div>
+                @if($subjects->count() === 0)
+                    <div class="px-4 py-4 sm:px-5">
+                        <div class="flex items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-500 shadow-sm ring-1 ring-slate-200">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 3.75h7l3 3v13.5H7A1.5 1.5 0 015.5 18.75v-13A1.5 1.5 0 017 3.75zM13.5 3.75v3H17M8.5 11h6m-6 3h5m-5 3h3"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <div class="text-sm font-extrabold text-slate-900">Hozircha test fan yaratilmagan</div>
+                                <div class="mt-0.5 text-xs text-slate-500">Yuqoridan kafedrani tanlab, katalogdagi fanlardan biriga test yarating.</div>
+                            </div>
+                        </div>
+                    </div>
+                @else
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-[12px]">
                         <thead class="bg-slate-50 text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-500">
@@ -199,7 +214,7 @@
                         </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                        @forelse($subjects as $subject)
+                        @foreach($subjects as $subject)
                             <tr class="group transition hover:bg-slate-50">
                                 <td class="px-3 py-3">
                                     <div class="font-extrabold text-slate-900">{{ $subject->name }}</div>
@@ -241,13 +256,7 @@
                                     </div>
                                 </td>
                             </tr>
-                        @empty
-                            <tr>
-                                <td colspan="7" class="px-4 py-8 text-center text-slate-500">
-                                    Hozircha test fan yaratilmagan.
-                                </td>
-                            </tr>
-                        @endforelse
+                        @endforeach
                         </tbody>
                     </table>
                 </div>
@@ -255,6 +264,7 @@
                 <div class="px-4 py-4 border-t border-slate-100">
                     {{ $subjects->links() }}
                 </div>
+                @endif
             </section>
         </div>
     </div>

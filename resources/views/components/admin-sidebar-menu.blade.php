@@ -58,9 +58,20 @@
     $switchRoleRoute = $useTeacherRoutes ? route('teacher.switch-role') : route('admin.switch-role');
     $profileRoute = $useTeacherRoutes ? route('teacher.info-me') : null;
     $teacherTestSubjectCount = 0;
+    $canCreateFanTestlari = false;
 
     if ($isTeacher && $user && !in_array($activeRole, $adminRoles)) {
         $teacherTestSubjectCount = \App\Models\TestSubject::where('teacher_id', $user->id)->count();
+        if ($activeRole === 'kafedra_mudiri') {
+            $allowedDepartment = 'patalogik anatomiya, sud tibbiyoti, tibbiyot huquqi kafedrasi';
+            $teacherDepartment = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', ($user->department ?? ''))));
+            if ($teacherDepartment === $allowedDepartment) {
+                $canCreateFanTestlari = true;
+            } elseif ($user->department_hemis_id) {
+                $departmentName = \App\Models\Department::where('department_hemis_id', $user->department_hemis_id)->value('name');
+                $canCreateFanTestlari = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $departmentName))) === $allowedDepartment;
+            }
+        }
     }
 
     // Rol labellarini olish
@@ -1300,8 +1311,17 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || ($isTeacher && !in_array($activeRole, $adminRoles) && $teacherTestSubjectCount > 0))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || ($isTeacher && !in_array($activeRole, $adminRoles) && $teacherTestSubjectCount > 0) || $canCreateFanTestlari)
         <div class="sidebar-section">Test Moduli</div>
+        @if($canCreateFanTestlari)
+        <a href="{{ route('teacher.fan-testlari.index') }}"
+           class="sidebar-link {{ request()->routeIs('teacher.fan-testlari.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6m-6 4h6m-6 4h6m-9 6h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Test yaratish
+        </a>
+        @else
         <a href="{{ $r('admin.test-subjects.index', 'teacher.test-subjects.index') }}"
            class="sidebar-link {{ $isActive('admin.test-subjects.*', 'teacher.test-subjects.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1309,6 +1329,7 @@
             </svg>
             Test fanlar
         </a>
+        @endif
         @endif
 
         @endif {{-- end if !javobgar_firma --}}

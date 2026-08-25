@@ -27,6 +27,7 @@ use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Teacher\TestSubjectLessonTestController;
 use App\Http\Controllers\Teacher\TestSubjectController as TeacherTestSubjectController;
+use App\Http\Controllers\Teacher\FanTestiController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\TestSubjectQuestionImageController;
@@ -1581,6 +1582,20 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::post('/{testSubject}/lessons/{lesson}/test/questions', [TestSubjectLessonTestController::class, 'storeQuestion'])->name('tests.questions.store');
                 Route::put('/{testSubject}/lessons/{lesson}/test/questions/{question}', [TestSubjectLessonTestController::class, 'updateQuestion'])->name('tests.questions.update');
                 Route::delete('/{testSubject}/lessons/{lesson}/test/questions/{question}', [TestSubjectLessonTestController::class, 'destroyQuestion'])->name('tests.questions.destroy');
+            });
+
+        Route::prefix('test-collections')->name('fan-testlari.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':kafedra_mudiri')
+            ->group(function () {
+                Route::get('/', [FanTestiController::class, 'index'])->name('index');
+                Route::get('/create', [FanTestiController::class, 'create'])->name('create');
+                Route::post('/', [FanTestiController::class, 'store'])->name('store');
+                Route::get('/{fanTesti}/edit', [FanTestiController::class, 'edit'])->name('edit');
+                Route::put('/{fanTesti}', [FanTestiController::class, 'update'])->name('update');
+                Route::post('/{fanTesti}/questions', [FanTestiController::class, 'storeQuestion'])->name('questions.store');
+                Route::put('/{fanTesti}/questions/{question}', [FanTestiController::class, 'updateQuestion'])->name('questions.update');
+                Route::delete('/{fanTesti}/questions/{question}', [FanTestiController::class, 'destroyQuestion'])->name('questions.destroy');
+                Route::delete('/{fanTesti}', [FanTestiController::class, 'destroy'])->name('destroy');
             });
 
         // Role switching

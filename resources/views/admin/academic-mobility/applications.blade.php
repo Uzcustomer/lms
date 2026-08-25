@@ -146,9 +146,11 @@
                                     $approvals = $application->approvals->keyBy('role');
                                     $departmentApproval = $approvals->get('oquv_bolimi');
                                     $viceRectorApproval = $approvals->get('oquv_prorektori');
-                                    $departmentApproved = $departmentApproval?->status === 'approved';
-                                    $viceRectorEnabled = $departmentApproved && (bool) $application->curriculum_document_path;
-                                @endphp
+                                     $departmentApproved = $departmentApproval?->status === 'approved';
+                                     $viceRectorEnabled = $departmentApproved && (bool) $application->curriculum_document_path;
+                                     $rejectedApprovals = collect([$departmentApproval, $viceRectorApproval])
+                                         ->filter(fn ($approval) => $approval?->status === 'rejected' && filled($approval?->rejection_comment));
+                                 @endphp
                                 <tr>
                                     <td class="am-number-cell">{{ ($applications->firstItem() ?? 1) + $loop->index }}</td>
                                     <td>
@@ -243,15 +245,21 @@
                                             @endif
                                         </td>
                                     @endif
-                                    <td class="{{ $showReviewColumn ? 'am-status-cell' : '' }}">
-                                        @if($showReviewColumn)
-                                            <div class="am-stage-list">
+                                     <td class="{{ $showReviewColumn ? 'am-status-cell' : '' }}">
+                                         @if($showReviewColumn)
+                                             <div class="am-status-summary">
+                                                 <span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span>
+                                             </div>
+                                             <div class="am-stage-list">
                                                 <div class="am-stage">
                                                     <span>O'quv bo'limi</span>
                                                     @if($departmentApproval?->status === 'approved')
                                                         <b class="am-stage-approved">Qabul</b>
-                                                    @elseif($departmentApproval?->status === 'rejected')
-                                                        <b class="am-stage-rejected">Rad</b>
+                                                     @elseif($departmentApproval?->status === 'rejected')
+                                                         <b class="am-stage-rejected">Rad</b>
+                                                         @if($departmentApproval->rejection_comment)
+                                                             <div class="am-rejection-note"><strong>Izoh:</strong> {{ $departmentApproval->rejection_comment }}</div>
+                                                         @endif
                                                     @else
                                                         <b class="am-stage-pending">Kutilmoqda</b>
                                                     @endif
@@ -260,8 +268,11 @@
                                                     <span>O'quv prorektori</span>
                                                     @if($viceRectorApproval?->status === 'approved')
                                                         <b class="am-stage-approved">Qabul</b>
-                                                    @elseif($viceRectorApproval?->status === 'rejected')
-                                                        <b class="am-stage-rejected">Rad</b>
+                                                     @elseif($viceRectorApproval?->status === 'rejected')
+                                                         <b class="am-stage-rejected">Rad</b>
+                                                         @if($viceRectorApproval->rejection_comment)
+                                                             <div class="am-rejection-note"><strong>Izoh:</strong> {{ $viceRectorApproval->rejection_comment }}</div>
+                                                         @endif
                                                     @else
                                                         <b class="am-stage-pending">Kutilmoqda</b>
                                                     @endif
@@ -277,18 +288,27 @@
                                                     <input type="hidden" name="decision" value="approved">
                                                     <button type="submit" class="am-approve-btn" @disabled($decisionDisabled || !$application->curriculum_document_path)>Qabul</button>
                                                 </form>
-                                                <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}" onsubmit="return confirm('Arizani rad etasizmi?')">
-                                                    @csrf
-                                                    <input type="hidden" name="decision" value="rejected">
-                                                    <button type="submit" class="am-reject-btn" @disabled(!$application->curriculum_document_path || ($isViceRector && !$departmentApproved))>Rad</button>
+                                                 <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}" onsubmit="return confirm('Arizani rad etasizmi?')">
+                                                     @csrf
+                                                     <input type="hidden" name="decision" value="rejected">
+                                                     <textarea name="rejection_comment" rows="2" maxlength="2000" required placeholder="Rad etish izohini yozing...">{{ old('rejection_comment') }}</textarea>
+                                                     <button type="submit" class="am-reject-btn" @disabled(!$application->curriculum_document_path || ($isViceRector && !$departmentApproved))>Rad</button>
                                                 </form>
                                             </div>
                                             @if($isViceRector && !$departmentApproved)
                                                 <div class="am-stage-note">O'quv bo'limi tasdig'i kutilmoqda.</div>
                                             @endif
-                                        @else
-                                            <span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span>
-                                        @endif
+                                         @else
+                                             <span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span>
+                                             @if($application->status === 'rejected')
+                                                 @foreach($rejectedApprovals as $rejectedApproval)
+                                                     <div class="am-rejection-note am-rejection-note-global">
+                                                         <strong>{{ $rejectedApproval->role === 'oquv_bolimi' ? "O'quv bo'limi" : "O'quv prorektori" }} izohi:</strong>
+                                                         {{ $rejectedApproval->rejection_comment }}
+                                                     </div>
+                                                 @endforeach
+                                             @endif
+                                         @endif
                                     </td>
                                     @if($isRegistrar)
                                         <td class="am-actions-cell">
@@ -410,9 +430,11 @@
         .am-stage { display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;color:#475569; }
         .am-stage b { border-radius:999px;padding:3px 7px;font-size:9.5px;white-space:nowrap; }
         .am-stage-approved { background:#dcfce7;color:#15803d; }.am-stage-rejected { background:#fee2e2;color:#b91c1c; }.am-stage-pending { background:#fef3c7;color:#b45309; }
+        .am-status-summary { margin-bottom:8px; }.am-rejection-note { width:100%; margin-top:6px; padding:7px 9px; border:1px solid #fecaca; border-radius:8px; background:#fff1f2; color:#991b1b; font-size:11px; line-height:1.45; }.am-rejection-note strong { font-weight:800; }.am-rejection-note-global { max-width:260px; }
         .am-decision-actions { display:flex;align-items:center;gap:6px;margin-top:8px; }
         .am-decision-actions form { flex:1; }.am-decision-actions button { width:100%;border:0;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:800;color:#fff;cursor:pointer; }
         .am-approve-btn { background:#059669; }.am-reject-btn { background:#dc2626; }
+        .am-decision-actions form:last-child { display:flex; flex-direction:column; gap:5px; min-width:150px; }.am-decision-actions textarea { width:100%; min-height:54px; resize:vertical; padding:7px 8px; border:1px solid #fecaca; border-radius:8px; background:#fffafa; color:#7f1d1d; font-size:11px; line-height:1.35; }.am-decision-actions textarea:focus { outline:none; border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.12); }
         .am-decision-actions button:disabled { background:#cbd5e1;color:#64748b;cursor:not-allowed; }
         .am-stage-note { margin-top:5px;font-size:9.5px;color:#b45309; }
         .am-creator { font-weight:600;color:#334155; }.am-status { display:inline-block;border-radius:999px;padding:4px 9px;font-size:10.5px;font-weight:700;white-space:nowrap; }

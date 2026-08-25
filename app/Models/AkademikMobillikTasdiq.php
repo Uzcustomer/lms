@@ -13,6 +13,7 @@ class AkademikMobillikTasdiq extends Model
         'application_id',
         'role',
         'status',
+        'rejection_comment',
         'reviewed_by_id',
         'reviewed_by_name',
         'reviewed_at',

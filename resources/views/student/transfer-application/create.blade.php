@@ -33,6 +33,25 @@
         </div>
 
         @if(!$canSubmit && $latest)
+            @if($latest instanceof \App\Models\AkademikMobillikAriza && $latest->status === 'rejected')
+            <div class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 shadow-sm">
+                <div class="flex items-start gap-3">
+                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 font-black text-red-700">!</div>
+                    <div>
+                        <p class="text-sm font-bold text-red-800">Ariza rad etilgan</p>
+                        <p class="mt-1 text-sm leading-6 text-red-700">Arizangiz ko'rib chiqish jarayonida rad etildi.</p>
+                        @foreach($latest->approvals->where('status', 'rejected') as $approval)
+                            @if($approval->rejection_comment)
+                                <div class="mt-3 rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-sm text-red-800">
+                                    <span class="font-bold">{{ $approval->role === 'oquv_bolimi' ? "O'quv bo'limi" : "O'quv prorektori" }} izohi:</span>
+                                    {{ $approval->rejection_comment }}
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+            @else
             <div class="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm">
                 <div class="flex items-start gap-3">
                     <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
@@ -46,6 +65,7 @@
                     </div>
                 </div>
             </div>
+            @endif
         @endif
 
         @if($canSubmit)

@@ -322,6 +322,24 @@ class AcademicMobilityController extends Controller
             'decision' => ['required', 'in:approved,rejected'],
         ]);
 
+        if ($validated['decision'] === 'rejected') {
+            $commentData = $request->validate([
+                'rejection_comment' => ['required', 'string', 'max:2000'],
+            ], [
+                'rejection_comment.required' => 'Arizani rad etish uchun izoh yozing.',
+                'rejection_comment.max' => 'Rad etish izohi 2000 ta belgidan oshmasligi kerak.',
+            ]);
+
+            $validated['rejection_comment'] = trim($commentData['rejection_comment']);
+            if ($validated['rejection_comment'] === '') {
+                throw ValidationException::withMessages([
+                    'rejection_comment' => 'Arizani rad etish uchun izoh yozing.',
+                ]);
+            }
+        } else {
+            $validated['rejection_comment'] = null;
+        }
+
         if (!$application->curriculum_document_path) {
             throw ValidationException::withMessages([
                 'decision' => "Avval o'quv reja mosligi hujjatini yuklang.",
@@ -364,6 +382,7 @@ class AcademicMobilityController extends Controller
                 ],
                 [
                     'status' => $validated['decision'],
+                    'rejection_comment' => $validated['rejection_comment'],
                     'reviewed_by_id' => $user?->id,
                     'reviewed_by_name' => $user?->name ?? $user?->full_name ?? $user?->short_name,
                     'reviewed_at' => now(),

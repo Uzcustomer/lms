@@ -21,6 +21,7 @@ class StudentTransferApplicationController extends Controller
         abort_unless($student, 401);
 
         $applications = AkademikMobillikAriza::where('student_id', $student->id)
+            ->with('approvals')
             ->latest()
             ->get();
 

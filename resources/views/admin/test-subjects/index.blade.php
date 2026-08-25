@@ -1,14 +1,14 @@
 <x-app-layout>
     <div class="py-4 sm:py-5">
-        <div class="w-full space-y-3 px-3 sm:px-5 lg:px-7">
+        <div class="mx-auto w-full max-w-[1540px] space-y-3 px-3 sm:px-5 lg:px-6">
             <section class="relative overflow-hidden rounded-2xl border border-blue-900/20 px-4 py-4 text-white shadow-lg shadow-blue-950/10 sm:px-5 sm:py-5"
                      style="background: linear-gradient(115deg, #102f5b 0%, #1d4ed8 58%, #0ea5e9 100%);">
                 <div class="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full bg-white/10"></div>
                 <div class="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full border-[18px] border-white/10"></div>
                 <div class="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex min-w-0 items-center gap-3">
-                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
-                            <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                        <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                         </span>
@@ -40,7 +40,7 @@
                 <div class="flex flex-col gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-2.5">
                         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5A2.5 2.5 0 016.5 3H20v15.5A2.5 2.5 0 0117.5 21H6.5A2.5 2.5 0 014 18.5v-13zM4 6h13.5A2.5 2.5 0 0120 8.5M8 10h8m-8 4h5"/>
                             </svg>
                         </span>
@@ -95,8 +95,15 @@
                     </div>
                 @else
                     <div class="overflow-x-auto rounded-xl border border-slate-200">
-                        <table class="min-w-full text-[12px]">
-                            <thead class="bg-slate-100 text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-500">
+                        <table class="w-full min-w-[900px] table-fixed text-[12px]">
+                            <colgroup>
+                                <col class="w-[23%]">
+                                <col class="w-[20%]">
+                                <col class="w-[29%]">
+                                <col class="w-[14%]">
+                                <col class="w-[14%]">
+                            </colgroup>
+                            <thead class="bg-slate-100 text-[11px] font-extrabold uppercase tracking-[0.06em] text-slate-500">
                             <tr>
                                 <th class="px-3 py-2.5 text-left">Fan</th>
                                 <th class="px-3 py-2.5 text-left">Yo'nalish / semester</th>
@@ -120,7 +127,7 @@
                                         </div>
                                     </td>
                                     <td class="px-3 py-3 align-top">
-                                        <div class="max-w-[240px] font-semibold leading-5 text-slate-800">{{ $curriculumSubject->specialty_name ?: '-' }}</div>
+                                        <div class="max-w-[260px] truncate font-semibold leading-5 text-slate-800" title="{{ $curriculumSubject->specialty_name ?: '-' }}">{{ $curriculumSubject->specialty_name ?: '-' }}</div>
                                         <div class="mt-1.5">
                                             <span class="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-extrabold text-indigo-700">
                                                 {{ $curriculumSubject->semester_name ?: $curriculumSubject->semester_code }}
@@ -128,7 +135,7 @@
                                         </div>
                                     </td>
                                     <td class="px-3 py-3 align-top">
-                                        <span class="inline-flex max-w-[200px] items-center rounded-md bg-amber-50 px-2 py-1 text-[10px] font-bold leading-4 text-amber-700">
+                                        <span class="inline-flex max-w-full items-center rounded-md bg-amber-50 px-2 py-1 text-[10px] font-bold leading-4 text-amber-700">
                                             {{ $curriculumSubject->department_name ?: '-' }}
                                         </span>
                                     </td>
@@ -201,8 +208,17 @@
                     </div>
                 @else
                 <div class="overflow-x-auto">
-                    <table class="min-w-full text-[12px]">
-                        <thead class="bg-slate-50 text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-500">
+                    <table class="w-full min-w-[960px] table-fixed text-[12px]">
+                        <colgroup>
+                            <col class="w-[23%]">
+                            <col class="w-[15%]">
+                            <col class="w-[25%]">
+                            <col class="w-[8%]">
+                            <col class="w-[8%]">
+                            <col class="w-[11%]">
+                            <col class="w-[10%]">
+                        </colgroup>
+                        <thead class="bg-slate-50 text-[11px] font-extrabold uppercase tracking-[0.06em] text-slate-500">
                         <tr>
                             <th class="px-3 py-2.5 text-left">Fan</th>
                             <th class="px-3 py-2.5 text-left">O'qituvchi</th>
@@ -223,7 +239,7 @@
                                 <td class="px-3 py-3 text-slate-700">{{ $subject->teacher_name ?: '-' }}</td>
                                 <td class="px-3 py-3">
                                     <div class="font-semibold text-slate-800">{{ $subject->level_name ?: '-' }}</div>
-                                    <div class="mt-0.5 max-w-[220px] truncate text-[10px] text-slate-500">{{ $subject->specialty_name ?: '-' }}</div>
+                                    <div class="mt-0.5 max-w-[260px] truncate text-[10px] text-slate-500" title="{{ $subject->specialty_name ?: '-' }}">{{ $subject->specialty_name ?: '-' }}</div>
                                 </td>
                                 <td class="px-3 py-3 text-center">
                                     <span class="inline-flex min-w-7 justify-center rounded-md bg-blue-50 px-2 py-1 font-extrabold text-blue-700">{{ $subject->groups->count() }}</span>

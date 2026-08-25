@@ -282,19 +282,37 @@
                                             @php
                                                 $decisionDisabled = $isViceRector && !$viceRectorEnabled;
                                             @endphp
-                                            <div class="am-decision-actions">
-                                                <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}">
-                                                    @csrf
-                                                    <input type="hidden" name="decision" value="approved">
-                                                    <button type="submit" class="am-approve-btn" @disabled($decisionDisabled || !$application->curriculum_document_path)>Qabul</button>
-                                                </form>
-                                                 <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}" onsubmit="return confirm('Arizani rad etasizmi?')">
+                                             <div class="am-decision-actions">
+                                                 <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}">
                                                      @csrf
-                                                     <input type="hidden" name="decision" value="rejected">
-                                                     <textarea name="rejection_comment" rows="2" maxlength="2000" required placeholder="Rad etish izohini yozing...">{{ old('rejection_comment') }}</textarea>
-                                                     <button type="submit" class="am-reject-btn" @disabled(!$application->curriculum_document_path || ($isViceRector && !$departmentApproved))>Rad</button>
-                                                </form>
-                                            </div>
+                                                     <input type="hidden" name="decision" value="approved">
+                                                     <button type="submit" class="am-approve-btn" @disabled($decisionDisabled || !$application->curriculum_document_path)>Qabul</button>
+                                                 </form>
+                                                 <div x-data="{ rejectOpen: false }" @keydown.escape.window="rejectOpen = false">
+                                                     <button type="button" class="am-reject-btn" @click="rejectOpen = true" @disabled(!$application->curriculum_document_path || ($isViceRector && !$departmentApproved))>Rad</button>
+                                                     <div x-show="rejectOpen" x-cloak x-transition.opacity class="am-rejection-modal" role="dialog" aria-modal="true" aria-label="Arizani rad etish">
+                                                         <div class="am-rejection-modal-backdrop" @click="rejectOpen = false"></div>
+                                                         <div class="am-rejection-modal-card" @click.stop>
+                                                             <div class="am-rejection-modal-head">
+                                                                 <div>
+                                                                     <strong>Arizani rad etish</strong>
+                                                                     <span>Rad etish sababini kiriting</span>
+                                                                 </div>
+                                                                 <button type="button" class="am-rejection-modal-close" @click="rejectOpen = false" aria-label="Yopish">&times;</button>
+                                                             </div>
+                                                             <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}">
+                                                                 @csrf
+                                                                 <input type="hidden" name="decision" value="rejected">
+                                                                 <textarea name="rejection_comment" rows="4" maxlength="2000" required placeholder="Rad etish izohini yozing..." x-ref="rejectionComment">{{ old('rejection_comment') }}</textarea>
+                                                                 <div class="am-rejection-modal-actions">
+                                                                     <button type="button" class="am-rejection-cancel" @click="rejectOpen = false">Bekor qilish</button>
+                                                                     <button type="submit" class="am-rejection-submit">Rad etish</button>
+                                                                 </div>
+                                                             </form>
+                                                         </div>
+                                                     </div>
+                                                 </div>
+                                             </div>
                                             @if($isViceRector && !$departmentApproved)
                                                 <div class="am-stage-note">O'quv bo'limi tasdig'i kutilmoqda.</div>
                                             @endif
@@ -431,10 +449,10 @@
         .am-stage b { border-radius:999px;padding:3px 7px;font-size:9.5px;white-space:nowrap; }
         .am-stage-approved { background:#dcfce7;color:#15803d; }.am-stage-rejected { background:#fee2e2;color:#b91c1c; }.am-stage-pending { background:#fef3c7;color:#b45309; }
         .am-status-summary { margin-bottom:8px; }.am-rejection-note { width:100%; margin-top:6px; padding:7px 9px; border:1px solid #fecaca; border-radius:8px; background:#fff1f2; color:#991b1b; font-size:11px; line-height:1.45; }.am-rejection-note strong { font-weight:800; }.am-rejection-note-global { max-width:260px; }
-        .am-decision-actions { display:flex;align-items:center;gap:6px;margin-top:8px; }
+        .am-decision-actions { display:flex;align-items:center;gap:6px;margin-top:8px; }.am-decision-actions > div { flex:1; }
         .am-decision-actions form { flex:1; }.am-decision-actions button { width:100%;border:0;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:800;color:#fff;cursor:pointer; }
         .am-approve-btn { background:#059669; }.am-reject-btn { background:#dc2626; }
-        .am-decision-actions form:last-child { display:flex; flex-direction:column; gap:5px; min-width:150px; }.am-decision-actions textarea { width:100%; min-height:54px; resize:vertical; padding:7px 8px; border:1px solid #fecaca; border-radius:8px; background:#fffafa; color:#7f1d1d; font-size:11px; line-height:1.35; }.am-decision-actions textarea:focus { outline:none; border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.12); }
+        .am-rejection-modal { position:fixed; inset:0; z-index:120; display:flex; align-items:center; justify-content:center; padding:16px; }.am-rejection-modal-backdrop { position:absolute; inset:0; background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }.am-rejection-modal-card { position:relative; z-index:1; width:min(100%,420px); overflow:hidden; border:1px solid #dbe4ef; border-radius:16px; background:#fff; box-shadow:0 24px 70px rgba(15,23,42,.28); }.am-rejection-modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:16px 18px; border-bottom:1px solid #e2e8f0; background:linear-gradient(135deg,#fff7f7,#fff); }.am-rejection-modal-head strong { display:block; color:#991b1b; font-size:14px; }.am-rejection-modal-head span { display:block; margin-top:3px; color:#64748b; font-size:11px; }.am-rejection-modal-close { width:28px!important; height:28px; padding:0!important; border:1px solid #fecaca!important; border-radius:50%!important; background:#fff!important; color:#dc2626!important; font-size:20px!important; line-height:1!important; }.am-rejection-modal-card form { display:block!important; padding:16px 18px 18px; }.am-rejection-modal-card textarea { width:100%; min-height:100px; resize:vertical; padding:10px 11px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; color:#334155; font-size:13px; line-height:1.45; }.am-rejection-modal-card textarea:focus { outline:none; border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.12); }.am-rejection-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }.am-rejection-modal-actions button { width:auto!important; padding:8px 14px!important; border-radius:9px!important; font-size:12px!important; }.am-rejection-cancel { border:1px solid #cbd5e1!important; background:#fff!important; color:#475569!important; }.am-rejection-submit { border:0!important; background:#dc2626!important; color:#fff!important; }.am-rejection-submit:hover { background:#b91c1c!important; }
         .am-decision-actions button:disabled { background:#cbd5e1;color:#64748b;cursor:not-allowed; }
         .am-stage-note { margin-top:5px;font-size:9.5px;color:#b45309; }
         .am-creator { font-weight:600;color:#334155; }.am-status { display:inline-block;border-radius:999px;padding:4px 9px;font-size:10.5px;font-weight:700;white-space:nowrap; }

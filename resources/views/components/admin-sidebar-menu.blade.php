@@ -62,14 +62,22 @@
 
     if ($isTeacher && $user && !in_array($activeRole, $adminRoles)) {
         $teacherTestSubjectCount = \App\Models\TestSubject::where('teacher_id', $user->id)->count();
-        if ($activeRole === 'kafedra_mudiri') {
-            $allowedDepartment = 'patologik anatomiya, sud tibbiyoti huquqi kafedrasi';
+        if (in_array($activeRole, ['kafedra_mudiri', 'oqituvchi'], true)) {
+            $matchesAllowedDepartment = function ($name) {
+                $normalized = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $name)));
+                $normalized = str_replace('x', 'h', $normalized);
+                $normalized = str_replace('patalogik', 'patologik', $normalized);
+
+                return str_contains($normalized, 'patologik anatomiya')
+                    && str_contains($normalized, 'sud tibbiyoti')
+                    && str_contains($normalized, 'huquqi');
+            };
             $teacherDepartment = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', ($user->department ?? ''))));
-            if ($teacherDepartment === $allowedDepartment) {
+            if ($matchesAllowedDepartment($teacherDepartment)) {
                 $canCreateFanTestlari = true;
             } elseif ($user->department_hemis_id) {
                 $departmentName = \App\Models\Department::where('department_hemis_id', $user->department_hemis_id)->value('name');
-                $canCreateFanTestlari = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $departmentName))) === $allowedDepartment;
+                $canCreateFanTestlari = $matchesAllowedDepartment($departmentName);
             }
         }
     }

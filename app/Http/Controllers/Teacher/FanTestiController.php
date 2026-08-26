@@ -180,11 +180,13 @@ class FanTestiController extends Controller
     {
         abort_unless($this->isAllowedDepartment($teacher), 403);
 
-        $departmentTeacherHemisIds = Teacher::query()
-            ->where('department_hemis_id', $teacher->department_hemis_id)
-            ->where('is_active', true)
-            ->whereNotNull('hemis_id')
-            ->pluck('hemis_id');
+        $departmentTeacherHemisIds = session('active_role') === 'kafedra_mudiri'
+            ? Teacher::query()
+                ->where('department_hemis_id', $teacher->department_hemis_id)
+                ->where('is_active', true)
+                ->whereNotNull('hemis_id')
+                ->pluck('hemis_id')
+            : collect($teacher->hemis_id ? [$teacher->hemis_id] : []);
 
         $assignments = CurriculumSubjectTeacher::query()
             ->whereIn('employee_id', $departmentTeacherHemisIds)
@@ -209,7 +211,7 @@ class FanTestiController extends Controller
     private function isAllowedDepartment($teacher): bool
     {
         $teacherDepartment = trim((string) ($teacher->department ?? ''));
-        if ($this->normalizeDepartment($teacherDepartment) === $this->normalizeDepartment(self::ALLOWED_DEPARTMENT)) {
+        if ($this->matchesAllowedDepartment($teacherDepartment)) {
             return true;
         }
 
@@ -221,12 +223,23 @@ class FanTestiController extends Controller
             ->where('department_hemis_id', $teacher->department_hemis_id)
             ->value('name');
 
-        return $this->normalizeDepartment((string) $departmentName) === $this->normalizeDepartment(self::ALLOWED_DEPARTMENT);
+        return $this->matchesAllowedDepartment((string) $departmentName);
     }
 
     private function normalizeDepartment(string $name): string
     {
         return mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $name)));
+    }
+
+    private function matchesAllowedDepartment(string $name): bool
+    {
+        $normalized = $this->normalizeDepartment($name);
+        $normalized = str_replace('x', 'h', $normalized);
+        $normalized = str_replace('patalogik', 'patologik', $normalized);
+
+        return str_contains($normalized, 'patologik anatomiya')
+            && str_contains($normalized, 'sud tibbiyoti')
+            && str_contains($normalized, 'huquqi');
     }
 
     private function authorizeCollection(FanTesti $fanTesti): void

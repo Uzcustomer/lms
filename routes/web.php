@@ -1585,7 +1585,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             });
 
         Route::prefix('test-collections')->name('fan-testlari.')
-            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':kafedra_mudiri')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':kafedra_mudiri|oqituvchi')
             ->group(function () {
                 Route::get('/', [FanTestiController::class, 'index'])->name('index');
                 Route::get('/create', [FanTestiController::class, 'create'])->name('create');

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
+use App\Models\CurriculumSubjectTeacher;
 use App\Models\FanTesti;
+use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -178,9 +180,24 @@ class FanTestiController extends Controller
     {
         abort_unless($this->isAllowedDepartment($teacher), 403);
 
+        $departmentTeacherHemisIds = Teacher::query()
+            ->where('department_hemis_id', $teacher->department_hemis_id)
+            ->where('is_active', true)
+            ->whereNotNull('hemis_id')
+            ->pluck('hemis_id');
+
+        $assignments = CurriculumSubjectTeacher::query()
+            ->whereIn('employee_id', $departmentTeacherHemisIds)
+            ->where('active', true)
+            ->whereNotNull('subject_id')
+            ->get(['subject_id']);
+
+        $assignedSubjectIds = $assignments->pluck('subject_id')->unique()->values();
+
         return CurriculumSubject::query()
             ->where('is_active', true)
             ->where('department_id', $teacher->department_hemis_id)
+            ->whereIn('subject_id', $assignedSubjectIds)
             ->orderBy('subject_name')
             ->orderBy('semester_name')
             ->get([

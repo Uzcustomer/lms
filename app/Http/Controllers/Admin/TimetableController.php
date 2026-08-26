@@ -11,6 +11,7 @@ use App\Models\Teacher;
 use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
 use App\Models\TimetableCardOverride;
+use App\Models\TimetableCyclePlacement;
 use App\Models\TimetableGridSetting;
 use App\Models\TimetableRule;
 use App\Models\TimetableSubjectSetting;
@@ -3523,6 +3524,8 @@ class TimetableController extends Controller
             'specialty_names.*' => 'string|max:255',
             'courses'           => 'nullable|array',
             'courses.*'         => 'integer|min:1|max:7',
+            'auto'              => 'nullable|boolean',
+            'clear'             => 'nullable|boolean',
         ]);
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
@@ -3611,12 +3614,13 @@ class TimetableController extends Controller
                     continue;
                 }
                 $base = $this->baseGroup($c->group_name);
-                if (!isset($byGroup[$base])) {
-                    $byGroup[$base] = ['name' => $base, 'subs' => [], 'members' => [],
+                $groupKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($base);
+                if (!isset($byGroup[$groupKey])) {
+                    $byGroup[$groupKey] = ['name' => $base, 'subs' => [], 'members' => [],
                         'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
                 }
-                $byGroup[$base]['subs'][$c->subject_name] = $cycleKey[$ck];
-                $byGroup[$base]['members'][$c->group_name] = true;
+                $byGroup[$groupKey]['subs'][$c->subject_name] = $cycleKey[$ck];
+                $byGroup[$groupKey]['members'][$c->group_name] = true;
             }
         }
 
@@ -3633,7 +3637,9 @@ class TimetableController extends Controller
         $groups = array_values($byGroup);
         usort($groups, fn($a, $b) => strnatcmp($a['name'], $b['name']));
 
-        $rows = [];
+        $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
+        $subjectKey = fn($g, $subject) => $rowKey($g) . '|' . (string) $subject;
+        $autoRows = [];
         foreach ($groups as $gi => $g) {
             // Shu guruh fanlari, global tartibda, guruh indeksi bo'yicha aylantirilgan
             $order = array_merge(array_slice($subOrder, $gi % max(1, count($subOrder))),
@@ -3649,18 +3655,108 @@ class TimetableController extends Controller
                 }
                 $days = max(1, (int) $g['subs'][$sn]);
                 $to = min($idx + $days - 1, $totalDays - 1);
-                $blocks[] = ['subject' => $sn, 'from' => $idx, 'to' => $to, 'days' => $to - $idx + 1];
+                $blocks[] = ['key' => $subjectKey($g, $sn), 'subject' => $sn, 'from' => $idx, 'to' => $to, 'days' => $to - $idx + 1];
                 $idx = $to + 1;
             }
             $members = array_keys($g['members']);
             sort($members, SORT_NATURAL);
-            $rows[] = [
+            $autoRows[] = [
+                'row_key'   => $rowKey($g),
                 'group'     => $g['name'],
                 'subgroups' => $members,
                 'faculty'   => $g['faculty'],
                 'specialty' => $g['specialty'],
                 'course'    => $g['course'],
                 'blocks'    => $blocks,
+            ];
+        }
+
+        // Sikl joylashuvlari alohida saqlanadi: oddiy place endpointi haftalik
+        // kartalarning day/pair maydonlarini buzmasligi kerak.
+        $hasCyclePlacements = Schema::hasTable('timetable_cycle_placements');
+        if ($hasCyclePlacements && ($request->boolean('clear') || $request->boolean('auto'))) {
+            DB::transaction(function () use ($autoRows, $board, $request) {
+                foreach ($autoRows as $row) {
+                    TimetableCyclePlacement::where('board_id', $board->id)
+                        ->where('specialty_name', $row['specialty'])
+                        ->where('course', $row['course'])
+                        ->where('group_name', $row['group'])
+                        ->delete();
+                    if (!$request->boolean('auto')) {
+                        continue;
+                    }
+                    foreach ($row['blocks'] as $block) {
+                        TimetableCyclePlacement::create([
+                            'board_id' => $board->id,
+                            'specialty_name' => $row['specialty'],
+                            'course' => $row['course'],
+                            'group_name' => $row['group'],
+                            'subject_name' => $block['subject'],
+                            'start_index' => $block['from'],
+                        ]);
+                    }
+                }
+            });
+        }
+
+        $saved = $hasCyclePlacements
+            ? TimetableCyclePlacement::where('board_id', $board->id)->get()
+            : collect();
+        $savedByRow = [];
+        foreach ($saved as $placement) {
+            $key = (string) $placement->specialty_name . '|' . (int) $placement->course . '|' . (string) $placement->group_name;
+            $savedByRow[$key][] = $placement;
+        }
+
+        $rows = [];
+        $cycleCards = [];
+        foreach ($groups as $g) {
+            $rk = $rowKey($g);
+            $savedBlocks = collect($savedByRow[$rk] ?? [])->sortBy('start_index');
+            $blocks = [];
+            foreach ($savedBlocks as $placement) {
+                $days = max(1, (int) ($g['subs'][$placement->subject_name] ?? 1));
+                if (!array_key_exists($placement->subject_name, $g['subs'])) {
+                    continue;
+                }
+                $from = max(0, (int) $placement->start_index);
+                if ($from >= $totalDays) {
+                    continue;
+                }
+                $to = min($from + $days - 1, $totalDays - 1);
+                $blocks[] = [
+                    'key' => $subjectKey($g, $placement->subject_name),
+                    'subject' => $placement->subject_name,
+                    'from' => $from,
+                    'to' => $to,
+                    'days' => $to - $from + 1,
+                ];
+            }
+            $placedSubjects = collect($blocks)->keyBy('subject');
+            foreach ($g['subs'] as $subject => $days) {
+                $block = $placedSubjects->get($subject);
+                $cycleCards[] = [
+                    'key' => $subjectKey($g, $subject),
+                    'row_key' => $rk,
+                    'group' => $g['name'],
+                    'specialty' => $g['specialty'],
+                    'course' => $g['course'],
+                    'subject' => $subject,
+                    'days' => (int) $days,
+                    'placed' => (bool) $block,
+                    'start_index' => $block['from'] ?? null,
+                ];
+            }
+            $members = array_keys($g['members']);
+            sort($members, SORT_NATURAL);
+            $rows[] = [
+                'row_key' => $rk,
+                'group' => $g['name'],
+                'subgroups' => $members,
+                'faculty' => $g['faculty'],
+                'specialty' => $g['specialty'],
+                'course' => $g['course'],
+                'blocks' => $blocks,
             ];
         }
 
@@ -3671,7 +3767,125 @@ class TimetableController extends Controller
             'dates'      => array_map(fn($d) => ['d' => $d->format('d.m'), 'iso' => $d->toDateString(), 'dow' => (int) $d->dayOfWeekIso], $dates),
             'subjects'   => array_map(fn($sn) => ['name' => $sn, 'days' => $allSubs[$sn]], $subOrder),
             'rows'       => $rows,
+            'cycle_cards' => $cycleCards,
         ]);
+    }
+
+    /**
+     * Bitta sikl fan blokini kalendarning o'quv kuni indeksiga joylaydi.
+     * Bayramlar indekslar ro'yxatidan chiqarilgani uchun mavjud bloklar ham
+     * bayramdan keyingi birinchi o'quv kuniga avtomatik siljiydi.
+     */
+    public function cyclePlace(Request $request, TimetableBoard $board)
+    {
+        if (!Schema::hasTable('timetable_cycle_placements')) {
+            return response()->json(['error' => 'Sikl joylashuv jadvali hali yaratilmagan.'], 422);
+        }
+
+        $data = $request->validate([
+            'specialty_name' => 'required|string|max:255',
+            'course' => 'required|integer|min:1|max:7',
+            'group_name' => 'required|string|max:255',
+            'subject_name' => 'required|string|max:255',
+            'start_index' => 'nullable|integer|min:0',
+            'action' => 'required|in:place,remove',
+            'start_date' => 'nullable|date',
+            'holidays' => 'nullable|array',
+            'holidays.*' => 'nullable|date',
+        ]);
+
+        $norm = fn($value) => mb_strtolower(trim((string) $value));
+        $setting = TimetableSubjectSetting::where('board_id', $board->id)
+            ->where('course', (int) $data['course'])
+            ->get()
+            ->first(fn($s) => $norm($s->specialty_name) === $norm($data['specialty_name'])
+                && $norm($s->subject_name) === $norm($data['subject_name'])
+                && $s->mode === 'cycle');
+        if (!$setting) {
+            return response()->json(['error' => 'Bu fan sikl rejimida topilmadi.'], 422);
+        }
+
+        $cards = TimetableCard::where('board_id', $board->id)
+            ->where('course', (int) $data['course'])
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('training_type', 'practice')
+            ->get()
+            ->filter(fn($card) => $this->baseGroup($card->group_name) === $data['group_name']
+                && $norm($card->subject_name) === $norm($data['subject_name']));
+        if ($cards->isEmpty()) {
+            return response()->json(['error' => 'Tanlangan guruh va fan kartasi topilmadi.'], 422);
+        }
+
+        $set = $board->settings ?? [];
+        $start = $data['start_date'] ?? ($set['semester_start'] ?? null);
+        if (!$start) {
+            $yearStart = (int) preg_replace('/\D.*$/', '', (string) $board->academic_year);
+            if ($yearStart < 2000) $yearStart = (int) date('Y');
+            $start = $board->semester_parity === 'bahorgi'
+                ? sprintf('%04d-02-01', $yearStart + 1)
+                : sprintf('%04d-09-01', $yearStart);
+        }
+        $startC = Carbon::parse($start)->startOfDay();
+        $holSet = [];
+        foreach ((array) ($data['holidays'] ?? ($set['holidays'] ?? [])) as $holiday) {
+            try { $holSet[Carbon::parse($holiday)->toDateString()] = true; } catch (\Exception $e) { }
+        }
+        $dates = [];
+        $cur = $startC->copy();
+        $guard = 0;
+        $requiredDays = max(1, (int) $setting->cycle_days);
+        $maxDays = max(1, (int) $board->weeks) * max(1, (int) $board->days);
+        while (count($dates) < $maxDays && $guard < $maxDays * 7 + count($holSet) * 2 + 60) {
+            if ((int) $cur->dayOfWeekIso <= max(1, (int) $board->days)
+                && !isset($holSet[$cur->toDateString()])) {
+                $dates[] = $cur->copy();
+            }
+            $cur->addDay();
+            $guard++;
+        }
+
+        if ($data['action'] === 'remove') {
+            TimetableCyclePlacement::where('board_id', $board->id)
+                ->where('specialty_name', $data['specialty_name'])
+                ->where('course', (int) $data['course'])
+                ->where('group_name', $data['group_name'])
+                ->where('subject_name', $data['subject_name'])
+                ->delete();
+            return response()->json(['ok' => true, 'removed' => true]);
+        }
+
+        $from = (int) ($data['start_index'] ?? -1);
+        if ($from < 0 || $from + $requiredDays > count($dates)) {
+            return response()->json(['error' => 'Fan bloki semestr kalendariga sig‘maydi.'], 422);
+        }
+
+        $settings = TimetableSubjectSetting::where('board_id', $board->id)
+            ->where('course', (int) $data['course'])->get()
+            ->keyBy(fn($s) => $norm($s->specialty_name) . '|' . $norm($s->subject_name));
+        $others = TimetableCyclePlacement::where('board_id', $board->id)
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('course', (int) $data['course'])
+            ->where('group_name', $data['group_name'])
+            ->get();
+        foreach ($others as $other) {
+            if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
+            $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
+            $otherDays = max(1, (int) ($otherSetting->cycle_days ?? 1));
+            $otherFrom = (int) $other->start_index;
+            if ($from < $otherFrom + $otherDays && $otherFrom < $from + $requiredDays) {
+                return response()->json(['error' => 'Bu sana oralig‘ida boshqa fan bloki bor.'], 422);
+            }
+        }
+
+        TimetableCyclePlacement::updateOrCreate([
+            'board_id' => $board->id,
+            'specialty_name' => $data['specialty_name'],
+            'course' => (int) $data['course'],
+            'group_name' => $data['group_name'],
+            'subject_name' => $data['subject_name'],
+        ], ['start_index' => $from]);
+
+        return response()->json(['ok' => true, 'start_index' => $from, 'days' => $requiredDays]);
     }
 
     /**

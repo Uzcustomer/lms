@@ -207,7 +207,8 @@
                 <div class="bg-white shadow-sm sm:rounded-lg mt-2" style="flex: 0 0 auto; box-shadow: 0 -6px 12px -4px rgba(0,0,0,.15);">
                     <div class="px-3 py-1 border-b border-gray-100 flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <span class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
+                            <span id="cardPanelTitle" class="text-xs font-semibold text-gray-700">Joylashmagan kartalar</span>
+                            <span id="cardPanelHint" class="hidden text-[10px] text-slate-500"></span>
                             {{-- Hafta ko'rinishida shu haftada o'tilmaydigan kartalar panelga
                                  tushmaydi; kerak bo'lsa shu tugma orqali ko'rsatiladi. --}}
                             <button type="button" id="skipToggle"
@@ -984,6 +985,18 @@
         #cycleGrid .cyc-wend { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
+        #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
+        #cycleGrid [data-cycle-index].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
+        #cycleGrid .cyc-block[draggable="true"] { cursor: grab; }
+        #cycleGrid .cyc-block[draggable="true"]:active { cursor: grabbing; }
+        .cycle-pn-card { width: 220px; min-height: 54px; padding: 8px 10px; border: 1px solid #bfdbfe;
+            border-left: 4px solid #2563eb; border-radius: 9px; background: linear-gradient(135deg,#eff6ff,#f8fafc);
+            cursor: grab; box-shadow: 0 2px 5px rgba(30,64,175,.08); }
+        .cycle-pn-card:hover { border-color: #60a5fa; box-shadow: 0 5px 12px rgba(30,64,175,.14); transform: translateY(-1px); }
+        .cycle-pn-card:active { cursor: grabbing; }
+        .cycle-pn-card .cycle-pn-subject { display: block; color: #1e3a8a; font-size: 11px; font-weight: 700; line-height: 1.25; }
+        .cycle-pn-card .cycle-pn-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; color: #64748b; font-size: 10px; }
+        .cycle-pn-card .cycle-pn-days { color: #0369a1; font-weight: 800; white-space: nowrap; }
         /* ── Qoidalar (aSc "Взаимосвязи") ── */
         .tt-rules-table th { background: #e8eef7; border: 1px solid #c7d2e0; padding: 4px 6px; text-align: left;
             font-weight: 700; color: #1e3a5f; position: sticky; top: 0; z-index: 1; }
@@ -2578,11 +2591,39 @@
                 }
                 $('autoBtn').disabled = false;
             }
-            $('autoBtn').onclick = doAutoPlace;
+            async function doCycleAutoPlace() {
+                if (!board || !curSpec) return;
+                $('autoBtn').disabled = true;
+                $('autoMsg').textContent = 'Sikl fanlari joylashtirilmoqda...';
+                try {
+                    await loadCyclePlan({ auto: true });
+                    const total = (cyclePlanData && cyclePlanData.cycle_cards) ? cyclePlanData.cycle_cards.length : 0;
+                    $('autoMsg').textContent = 'Sikl avtomatik joylandi: ' + total + ' ta fan kartasi.';
+                } catch (e) {
+                    $('autoMsg').textContent = '';
+                    alert('Siklni avtomatik joylab bo‘lmadi: ' + e.message);
+                }
+                $('autoBtn').disabled = false;
+            }
+            $('autoBtn').onclick = () => viewMode === 'cycle' ? doCycleAutoPlace() : doAutoPlace();
 
             // Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatish (panelga qaytarish)
             $('unplaceBtn').onclick = async function () {
                 if (!board || !curSpec) return;
+                if (viewMode === 'cycle') {
+                    if (!confirm('Tanlangan guruhlarning sikl bloklari panelga qaytarilsinmi?')) return;
+                    this.disabled = true;
+                    $('autoMsg').textContent = 'Sikl bloklari bo‘shatilmoqda...';
+                    try {
+                        await loadCyclePlan({ clear: true });
+                        $('autoMsg').textContent = 'Sikl bloklari panelga qaytarildi.';
+                    } catch (e) {
+                        $('autoMsg').textContent = '';
+                        alert('Sikl bloklarini bo‘shatib bo‘lmadi: ' + e.message);
+                    }
+                    this.disabled = false;
+                    return;
+                }
                 const whole = $('autoScope').checked;
                 const scopeLabel = whole ? 'Butun doska' : scopeLabelText();
                 if (!confirm(scopeLabel + ' bo\'yicha barcha joylashuvlar bo\'shatilib, kartochkalar panelga qaytariladi. Davom etamizmi?')) return;
@@ -2675,6 +2716,7 @@
 
             // ===== Sikl (4-6 kurs) kalendar ko'rinishi =====
             let cyclePlanData = null;
+            let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
             // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
             function renderHolChips() {
@@ -2684,11 +2726,13 @@
                     esc(d.split('-').reverse().join('.')) +
                     '<button type="button" class="cyc-hol-x text-amber-500 hover:text-red-600 font-bold" data-d="' + esc(d) + '">×</button></span>').join('');
             }
-            async function loadCyclePlan() {
+            async function loadCyclePlan(options = {}) {
                 if (!board) return;
                 const body = scopeBody();
-                if ($('cycleStart').value) body.start_date = $('cycleStart').value;
+               if ($('cycleStart').value) body.start_date = $('cycleStart').value;
                 body.holidays = cycleHolidays;
+                if (options.auto) body.auto = 1;
+                if (options.clear) body.clear = 1;
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
@@ -2697,6 +2741,9 @@
                     cycleHolidays = j.holidays || [];   // server — yagona manba (saqlangandan keyin)
                     renderHolChips();
                     renderCyclePlan(j);
+                    renderCycleCards(j);
+                    $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' guruh, ' +
+                        ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
                     $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' guruh · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
                         (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
                         (cycleHolidays.length ? (' · ' + cycleHolidays.length + ' bayram') : '');
@@ -2705,7 +2752,7 @@
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-3 text-sm text-red-600">Xatolik: ' + esc(e.message) + '</td></tr></tbody>';
                 }
             }
-            function renderCyclePlan(j) {
+            function renderCyclePlanLegacy(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki guruh topilmadi. Fan sozlamasida 4-6 kurs fanlarini <b>Sikl</b> qilib, sikl uzunligini (kun) kiriting, so\'ng shu yerni Yangilang.</td></tr></tbody>';
@@ -2732,7 +2779,119 @@
                 h += '</tbody>';
                 $('cycleGrid').innerHTML = h;
             }
-            if ($('cycleRefresh')) $('cycleRefresh').onclick = loadCyclePlan;
+            // Sikl panjarasi interaktiv ko'rinishda chiziladi: bo'sh katakka fan
+            // kartasini sudrash uning start indeksini saqlaydi.
+            function renderCyclePlan(j) {
+                const dates = j.dates || [], rows = j.rows || [];
+                if (!rows.length) {
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki guruh topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
+                    renderCycleCards(j);
+                    return;
+                }
+                let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
+                dates.forEach(d => h += '<th class="cyc-dcol' + (d.dow >= 6 ? ' cyc-wend' : '') + '">' + esc(d.d) + '</th>');
+                h += '</tr></thead><tbody>';
+                rows.forEach(row => {
+                    const sub = (row.subgroups || []).join(', ');
+                    h += '<tr><td class="cyc-gcol"><div class="font-semibold text-gray-800">' + esc(row.group) + '</div>' +
+                        (sub ? '<div class="text-[9px] text-gray-400">' + esc(sub) + '</div>' : '') + '</td>';
+                    let col = 0;
+                    (row.blocks || []).forEach(block => {
+                        while (col < block.from) {
+                            h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                            col++;
+                        }
+                        const color = subjColor(block.subject);
+                        h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun">' +
+                            '<span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span></td>';
+                        col = block.to + 1;
+                    });
+                    while (col < dates.length) {
+                        h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                        col++;
+                    }
+                    h += '</tr>';
+                });
+                h += '</tbody>';
+                $('cycleGrid').innerHTML = h;
+                $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {
+                    cell.addEventListener('dragover', ev => {
+                        if (!cycleDragKey) return;
+                        ev.preventDefault();
+                        cell.classList.add('cycle-drop-target');
+                    });
+                    cell.addEventListener('dragleave', () => cell.classList.remove('cycle-drop-target'));
+                    cell.addEventListener('drop', async ev => {
+                        ev.preventDefault();
+                        cell.classList.remove('cycle-drop-target');
+                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
+                        const rowKey = cell.dataset.cycleRow;
+                        const index = +cell.dataset.cycleIndex;
+                        cycleDragKey = null;
+                        if (!card || card.row_key !== rowKey) {
+                            alert('Fan kartasini faqat o‘z guruhining qatoriga joylang.');
+                            return;
+                        }
+                        try {
+                            await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                                action: 'place', specialty_name: card.specialty, course: card.course,
+                                group_name: card.group, subject_name: card.subject, start_index: index,
+                                start_date: $('cycleStart').value, holidays: cycleHolidays,
+                            });
+                            await loadCyclePlan();
+                        } catch (e) { alert('Sikl blokini joylab bo‘lmadi: ' + e.message); }
+                    });
+                });
+                $('cycleGrid').querySelectorAll('.cyc-block[data-cycle-key]').forEach(block => {
+                    block.addEventListener('dragstart', ev => {
+                        cycleDragKey = block.dataset.cycleKey;
+                        ev.dataTransfer.effectAllowed = 'move';
+                        ev.dataTransfer.setData('text/plain', cycleDragKey);
+                    });
+                    block.addEventListener('dragend', () => { cycleDragKey = null; });
+                });
+                renderCycleCards(j);
+            }
+            function renderCycleCards(j) {
+                const cycleCards = (j && j.cycle_cards) || [];
+                $('skipToggle').classList.add('hidden');
+                $('unplacedExportBtn').classList.add('hidden');
+                $('cardPanelTitle').textContent = 'Sikl fan kartalari';
+                $('cardPanelHint').textContent = 'Kartani o‘z guruh qatoridagi boshlanish kuniga sudrang';
+                $('cardPanelHint').classList.remove('hidden');
+                const unplaced = cycleCards.filter(card => !card.placed).sort((a, b) =>
+                    (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
+                $('unplacedCount').textContent = unplaced.length + ' ta';
+                $('cardPanel').innerHTML = unplaced.map(card =>
+                    '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) + '" title="' + esc(card.subject) + '">' +
+                    '<span class="cycle-pn-subject">' + esc(card.subject) + '</span>' +
+                    '<span class="cycle-pn-meta"><span>' + esc(card.group) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>'
+                ).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
+                $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
+                    card.addEventListener('dragstart', ev => {
+                        cycleDragKey = card.dataset.cycleKey;
+                        ev.dataTransfer.effectAllowed = 'move';
+                        ev.dataTransfer.setData('text/plain', cycleDragKey);
+                    });
+                    card.addEventListener('dragend', () => { cycleDragKey = null; });
+                });
+                $('cardPanel').ondragover = ev => { if (cycleDragKey) ev.preventDefault(); };
+                $('cardPanel').ondrop = async ev => {
+                    ev.preventDefault();
+                    if (!cycleDragKey) return;
+                    const card = cycleCards.find(item => item.key === cycleDragKey);
+                    cycleDragKey = null;
+                    if (!card || !card.placed) return;
+                    try {
+                        await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                            action: 'remove', specialty_name: card.specialty, course: card.course,
+                            group_name: card.group, subject_name: card.subject,
+                        });
+                        await loadCyclePlan();
+                    } catch (e) { alert('Sikl blokini olib bo‘lmadi: ' + e.message); }
+                };
+            }
+            if ($('cycleRefresh')) $('cycleRefresh').onclick = () => loadCyclePlan();
             if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
             // Bayram qo'shish
             if ($('cycleHolAddBtn')) $('cycleHolAddBtn').onclick = () => {
@@ -3167,6 +3326,12 @@
             // ravishda ketma-ket chiqadi (fan bo'yicha saralangan, guruhlash chizig'i yo'q).
             // Hafta ko'rinishida shu haftada o'tilmaydigan kartalar bu yerga tushmaydi.
             function renderPanel() {
+                if (viewMode === 'cycle') {
+                    renderCycleCards(cyclePlanData);
+                    return;
+                }
+                $('cardPanelTitle').textContent = 'Joylashmagan kartalar';
+                $('cardPanelHint').classList.add('hidden');
                 const bySubject = (a, b) => a.subject_name.localeCompare(b.subject_name, 'uz');
                 const un = weekActiveCards().filter(c => !effPlace(c)).sort(bySubject);
                 // Shu haftada o'tilmaydigan kartalar — odatda yashirin. Ular joylashgan,

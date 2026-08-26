@@ -1,5 +1,161 @@
 <x-app-layout>
-    @php
+<style>
+    form[action*='test-collections']:not([x-data]) {
+        overflow: hidden;
+        border: 1px solid #d7e2f2 !important;
+        border-radius: 24px !important;
+        background: #ffffff;
+        box-shadow: 0 18px 45px rgba(37, 83, 146, 0.09) !important;
+    }
+
+    form[action*='test-collections']:not([x-data]) > div:first-of-type {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-height: 96px;
+        padding: 22px 28px 22px 96px !important;
+        border-bottom: 1px solid #dbe7f7 !important;
+        background: linear-gradient(110deg, #f7faff 0%, #eef5ff 58%, #f8fbff 100%) !important;
+    }
+
+    form[action*='test-collections']:not([x-data]) > div:first-of-type::before {
+        content: '01';
+        position: absolute;
+        left: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: #2563eb;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 900;
+        box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
+    }
+
+    form[action*='test-collections']:not([x-data]) > div:nth-of-type(2) {
+        gap: 24px !important;
+        padding: 28px !important;
+        background: #ffffff;
+    }
+
+    form[action*='test-collections'] label {
+        color: #3d506d !important;
+        font-size: 11px !important;
+        font-weight: 800 !important;
+        letter-spacing: .02em !important;
+        text-transform: none !important;
+    }
+
+    form[action*='test-collections'] input:not([type='hidden']):not([type='checkbox']):not([type='radio']),
+    form[action*='test-collections'] select,
+    form[action*='test-collections'] textarea {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid #c7d7ee !important;
+        border-radius: 9px !important;
+        background: #ffffff !important;
+        color: #172b4d !important;
+        box-shadow: inset 0 1px 2px rgba(31, 61, 101, 0.03);
+        transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+
+    form[action*='test-collections'] textarea {
+        min-height: 82px;
+        padding-top: 11px;
+    }
+
+    form[action*='test-collections'] input:not([type='hidden']):not([type='checkbox']):not([type='radio']):focus,
+    form[action*='test-collections'] select:focus,
+    form[action*='test-collections'] textarea:focus {
+        border-color: #4d83f1 !important;
+        background: #fbfdff !important;
+        box-shadow: 0 0 0 3px rgba(77, 131, 241, 0.13) !important;
+        outline: none;
+    }
+
+    form[action*='test-collections']:not([x-data]) > div:nth-of-type(2) > div:last-child label {
+        min-height: 42px;
+        padding: 10px 13px !important;
+        border: 1px solid #dbe6f5 !important;
+        border-radius: 10px !important;
+        background: #f8fbff !important;
+    }
+
+    form[action*='test-collections']:not([x-data]) > div:last-of-type {
+        padding: 18px 28px !important;
+        border-top: 1px solid #e5edf8 !important;
+        background: #fbfdff !important;
+    }
+
+    form[action*='test-collections'] button[type='submit'] {
+        min-height: 44px;
+        border-radius: 10px !important;
+        background: #2563eb !important;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.2) !important;
+        transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+
+    form[action*='test-collections'] button[type='submit']:hover {
+        background: #1d4ed8 !important;
+        box-shadow: 0 11px 22px rgba(37, 99, 235, 0.26) !important;
+        transform: translateY(-1px);
+    }
+
+    form[x-data^='fanQuestionBuilder'] {
+        padding: 28px !important;
+        background: #ffffff;
+    }
+
+    form[x-data^='fanQuestionBuilder'] > div:first-of-type {
+        padding: 22px;
+        border: 1px solid #e0eafa;
+        border-radius: 16px;
+        background: #fbfdff;
+    }
+
+    form[x-data^='fanQuestionBuilder'] > div:first-of-type > div:first-child {
+        padding-right: 8px;
+    }
+
+    form[x-data^='fanQuestionBuilder'] > div[x-show*='single_choice'],
+    form[x-data^='fanQuestionBuilder'] > div[x-show*='fill_in_blank'] {
+        border-radius: 16px !important;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6);
+    }
+
+    form[x-data^='fanQuestionBuilder'] input[type='file'] {
+        min-height: 46px;
+        padding: 10px !important;
+        border-radius: 9px !important;
+        background: #f8fbff !important;
+    }
+
+    form[x-data^='fanQuestionBuilder'] > div:last-of-type {
+        padding-top: 20px;
+        border-top: 1px solid #e4ecf8;
+    }
+
+    @media (max-width: 640px) {
+        form[action*='test-collections']:not([x-data]) > div:first-of-type {
+            padding: 18px 18px 18px 78px !important;
+        }
+
+        form[action*='test-collections']:not([x-data]) > div:first-of-type::before {
+            left: 18px;
+        }
+
+        form[action*='test-collections']:not([x-data]) > div:nth-of-type(2),
+        form[x-data^='fanQuestionBuilder'] {
+            padding: 18px !important;
+        }
+    }
+</style>
+
+@php
         $questions = $collection?->questions ?? [];
         $isEdit = (bool) $collection;
         $optionDefaults = [

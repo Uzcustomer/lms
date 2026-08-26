@@ -63,7 +63,7 @@
     if ($isTeacher && $user && !in_array($activeRole, $adminRoles)) {
         $teacherTestSubjectCount = \App\Models\TestSubject::where('teacher_id', $user->id)->count();
         if ($activeRole === 'kafedra_mudiri') {
-            $allowedDepartment = 'patalogik anatomiya, sud tibbiyoti, tibbiyot xuquqi kafedrasi';
+            $allowedDepartment = 'patologik anatomiya, sud tibbiyoti huquqi kafedrasi';
             $teacherDepartment = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', ($user->department ?? ''))));
             if ($teacherDepartment === $allowedDepartment) {
                 $canCreateFanTestlari = true;

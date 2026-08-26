@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class FanTestiController extends Controller
 {
-    private const ALLOWED_DEPARTMENT = 'Patalogik anatomiya, sud tibbiyoti, tibbiyot huquqi kafedrasi';
+    private const ALLOWED_DEPARTMENT = 'Patalogik anatomiya, sud tibbiyoti, tibbiyot xuquqi kafedrasi';
 
     public function index(Request $request)
     {

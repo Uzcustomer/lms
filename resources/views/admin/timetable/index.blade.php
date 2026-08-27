@@ -994,8 +994,8 @@
         #cycleGrid .cyc-shift-btn { width: 19px; height: 19px; padding: 0; border: 1px solid rgba(30,64,175,.35); border-radius: 5px;
             background: rgba(255,255,255,.94); color: #1d4ed8; font-size: 15px; font-weight: 800; line-height: 16px; cursor: pointer; }
         #cycleGrid .cyc-shift-btn:hover { background: #dbeafe; border-color: #2563eb; }
-        #cycleGrid .cyc-weekend { background: #e5e7eb; }
-        #cycleGrid .cyc-holiday { background: #fde68a !important; color: #92400e; }
+        #cycleGrid .cyc-weekend { background: #fef08a; color: #854d0e; }
+        #cycleGrid .cyc-holiday { background: #fecaca !important; color: #991b1b; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
         #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
         #cycleGrid [data-cycle-index].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
@@ -2998,18 +2998,6 @@
                 if (date.holiday) return ' cyc-off cyc-holiday';
                 return date.sunday ? ' cyc-off cyc-weekend' : '';
             }
-            function cycleBlockStyle(base, dates, from, to) {
-                const span = Math.max(1, to - from + 1);
-                const stops = [];
-                for (let index = from; index <= to; index++) {
-                    const date = dates[index] || {};
-                    const fill = date.holiday ? '#fbbf24' : (date.sunday ? '#cbd5e1' : base);
-                    const start = ((index - from) / span) * 100;
-                    const end = ((index - from + 1) / span) * 100;
-                    stops.push(fill + ' ' + start + '%', fill + ' ' + end + '%');
-                }
-                return 'linear-gradient(90deg,' + stops.join(',') + ')';
-            }
             function renderCyclePlan(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
@@ -3033,7 +3021,6 @@
                             col++;
                         }
                         const color = subjColor(block.subject);
-                        color.bg = cycleBlockStyle(color.bg, dates, block.from, block.to);
                         h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun">' +
                             '<span class="cyc-shift-actions">' +
                             '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +

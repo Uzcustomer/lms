@@ -180,6 +180,9 @@
                                 <x-dropdown-link :href="route('admin.students.index')">
                                     Talabalar
                                 </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.student-distribution.index')">
+                                    Talabalarni taqsimlash
+                                </x-dropdown-link>
                                 <div class="border-t border-gray-200 my-1"></div>
                                 <x-dropdown-link :href="route('admin.reports.jn')">
                                     JN o'zlashtirish
@@ -584,6 +587,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.students.index')">
                     Talabalar
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.student-distribution.index')">
+                    Talabalarni taqsimlash
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.jn')">
                     JN o'zlashtirish

@@ -49,6 +49,7 @@ use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\Admin\ClosingFormController;
 use App\Http\Controllers\Admin\StaffRegistrationController;
+use App\Http\Controllers\Admin\StudentDistributionController;
 use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\Admin\VedomostTekshirishController;
@@ -452,6 +453,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
         // Registrator ofisi bo'linmalari
+        Route::prefix('student-distribution')->name('student-distribution.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
+            ->group(function () {
+                Route::get('/', [StudentDistributionController::class, 'index'])->name('index');
+                Route::post('/upload', [StudentDistributionController::class, 'upload'])->name('upload');
+            });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');
             Route::post('/', [StaffRegistrationController::class, 'store'])->name('store');

@@ -985,6 +985,15 @@
         #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
+        #cycleGrid .cyc-block { position: relative; }
+        #cycleGrid .cyc-shift-actions { position: absolute; top: 2px; left: 3px; right: 3px; z-index: 3; display: flex;
+            justify-content: space-between; opacity: 0; pointer-events: none; transition: opacity .12s; }
+        #cycleGrid .cyc-block:hover .cyc-shift-actions, #cycleGrid .cyc-block:focus-within .cyc-shift-actions { opacity: 1; pointer-events: auto; }
+        #cycleGrid .cyc-shift-btn { width: 19px; height: 19px; padding: 0; border: 1px solid rgba(30,64,175,.35); border-radius: 5px;
+            background: rgba(255,255,255,.94); color: #1d4ed8; font-size: 15px; font-weight: 800; line-height: 16px; cursor: pointer; }
+        #cycleGrid .cyc-shift-btn:hover { background: #dbeafe; border-color: #2563eb; }
+        #cycleGrid .cyc-weekend { background: #e5e7eb; }
+        #cycleGrid .cyc-holiday { background: #fde68a !important; color: #92400e; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
         #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
         #cycleGrid [data-cycle-index].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
@@ -2979,6 +2988,23 @@
                     alert('Sikl blokini joylab bo\u2018lmadi: ' + e.message);
                 }
             }
+            function cycleDateClass(date) {
+                if (!date) return '';
+                if (date.holiday) return ' cyc-off cyc-holiday';
+                return date.sunday ? ' cyc-off cyc-weekend' : '';
+            }
+            function cycleBlockStyle(base, dates, from, to) {
+                const span = Math.max(1, to - from + 1);
+                const stops = [];
+                for (let index = from; index <= to; index++) {
+                    const date = dates[index] || {};
+                    const fill = date.holiday ? '#fbbf24' : (date.sunday ? '#cbd5e1' : base);
+                    const start = ((index - from) / span) * 100;
+                    const end = ((index - from + 1) / span) * 100;
+                    stops.push(fill + ' ' + start + '%', fill + ' ' + end + '%');
+                }
+                return 'linear-gradient(90deg,' + stops.join(',') + ')';
+            }
             function renderCyclePlan(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
@@ -2987,7 +3013,7 @@
                     return;
                 }
                 let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
-                dates.forEach(d => h += '<th class="cyc-dcol' + ((d.sunday || d.holiday) ? ' cyc-off' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
+                dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
                     const sub = (row.subgroups || []).join(', ');
@@ -2996,16 +3022,20 @@
                     let col = 0;
                     (row.blocks || []).forEach(block => {
                         while (col < block.from) {
-                            h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                            h += '<td class="cyc-cell' + cycleDateClass(dates[col]) + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
                             col++;
                         }
                         const color = subjColor(block.subject);
+                        color.bg = cycleBlockStyle(color.bg, dates, block.from, block.to);
                         h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun">' +
-                            '<span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span></td>';
+                            '<span class="cyc-shift-actions">' +
+                            '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
+                            '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
+                            '</span><span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span></td>';
                         col = block.to + 1;
                     });
                     while (col < dates.length) {
-                        h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                        h += '<td class="cyc-cell' + cycleDateClass(dates[col]) + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
                         col++;
                     }
                     h += '</tr>';
@@ -3061,6 +3091,31 @@
                         ev.dataTransfer.setData('text/plain', cycleDragKey);
                     });
                     block.addEventListener('dragend', () => { cycleDragKey = null; });
+                });
+                $('cycleGrid').querySelectorAll('[data-cycle-shift]').forEach(button => {
+                    button.addEventListener('click', async ev => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        const block = button.closest('.cyc-block');
+                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === (block && block.dataset.cycleKey));
+                        if (!card || !card.placed) return;
+                        const direction = +button.dataset.cycleShift;
+                        button.disabled = true;
+                        try {
+                            const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                                action: 'shift_all', specialty_name: card.specialty, course: card.course,
+                                group_name: card.group, subject_name: card.subject, start_index: card.start_index,
+                                direction: direction, start_date: $('cycleStart').value, holidays: cycleHolidays,
+                            });
+                            await loadCyclePlan();
+                            $('cycleMsg').textContent = (result.shifted || 0) + ' ta sikl karta ' +
+                                (direction < 0 ? '1 o\'quv kuni orqaga' : '1 o\'quv kuni oldinga') + ' surildi.';
+                        } catch (e) {
+                            alert('Sikl kartalarini surib bo\'lmadi: ' + e.message);
+                        } finally {
+                            button.disabled = false;
+                        }
+                    });
                 });
                 renderCycleCards(j);
             }

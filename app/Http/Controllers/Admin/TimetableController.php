@@ -3672,7 +3672,7 @@ class TimetableController extends Controller
                 $toPosition = min($idx + $days - 1, count($workIndices) - 1);
                 $from = $workIndices[$idx];
                 $to = $workIndices[$toPosition];
-                $blocks[] = ['key' => $subjectKey($g, $sn), 'subject' => $sn, 'from' => $from, 'to' => $to, 'days' => $toPosition - $idx + 1];
+                $blocks[] = ['key' => $subjectKey($g, $sn), 'subject' => $sn, 'from' => $from, 'to' => $to, 'days' => $days];
                 // Sikllar orasida yakshanbani hisoblamagan holda 2 ta o'quv kuni bo'sh qoladi.
                 $idx = $toPosition + 1 + 2;
             }
@@ -3772,7 +3772,7 @@ class TimetableController extends Controller
                     'subject' => $placement->subject_name,
                     'from' => $from,
                     'to' => $to,
-                    'days' => $to - $from + 1,
+                    'days' => (int) $days,
                 ];
             }
             $placedSubjects = collect($blocks)->keyBy('subject');
@@ -3839,7 +3839,8 @@ class TimetableController extends Controller
             'group_name' => 'required|string|max:255',
             'subject_name' => 'required|string|max:255',
             'start_index' => 'nullable|integer|min:0',
-            'action' => 'required|in:place,remove',
+            'action' => 'required|in:place,remove,shift_all',
+            'direction' => 'nullable|integer|in:-1,1',
             'start_date' => 'nullable|date',
             'holidays' => 'nullable|array',
             'holidays.*' => 'nullable|date',
@@ -3915,6 +3916,63 @@ class TimetableController extends Controller
             }
             return null;
         };
+        if ($data['action'] === 'shift_all') {
+            $direction = (int) ($data['direction'] ?? 0);
+            if (!in_array($direction, [-1, 1], true)) {
+                return response()->json(['error' => 'Siljitish yo\'nalishi noto\'g\'ri.'], 422);
+            }
+
+            $shiftStart = function (int $index, int $direction) use ($workIndices): ?int {
+                if ($direction > 0) {
+                    foreach ($workIndices as $calendarIndex) {
+                        if ($calendarIndex > $index) return $calendarIndex;
+                    }
+                    return null;
+                }
+                for ($position = count($workIndices) - 1; $position >= 0; $position--) {
+                    if ($workIndices[$position] < $index) return $workIndices[$position];
+                }
+                return null;
+            };
+            $cycleSettings = TimetableSubjectSetting::where('board_id', $board->id)
+                ->where('mode', 'cycle')->get()
+                ->keyBy(fn($item) => $norm($item->specialty_name) . '|' . (int) $item->course . '|' . $norm($item->subject_name));
+            $shiftedStart = function ($placement) use ($cycleSettings, $norm, $shiftStart, $positionFor, $workIndices, $direction): ?int {
+                $specialty = data_get($placement, 'specialty_name');
+                $course = (int) data_get($placement, 'course');
+                $subject = data_get($placement, 'subject_name');
+                $setting = $cycleSettings->get($norm($specialty) . '|' . $course . '|' . $norm($subject));
+                if (!$setting) return null;
+                $newStart = $shiftStart((int) data_get($placement, 'start_index'), $direction);
+                $newPosition = $newStart === null ? null : $positionFor($newStart);
+                $days = max(1, (int) $setting->cycle_days);
+                if ($newPosition === null || $newPosition + $days > count($workIndices)) return null;
+                return $newStart;
+            };
+            $shifted = 0;
+            if ($hasCyclePlacements) {
+                $placements = TimetableCyclePlacement::where('board_id', $board->id)->get();
+                DB::transaction(function () use ($placements, $shiftedStart, &$shifted) {
+                    foreach ($placements as $placement) {
+                        $newStart = $shiftedStart($placement);
+                        if ($newStart === null) continue;
+                        $placement->update(['start_index' => $newStart]);
+                        $shifted++;
+                    }
+                });
+            } else {
+                $fallback = collect($set['cycle_placements'] ?? [])->map(function ($placement) use ($shiftedStart, &$shifted) {
+                    $newStart = $shiftedStart($placement);
+                    if ($newStart === null) return $placement;
+                    $placement['start_index'] = $newStart;
+                    $shifted++;
+                    return $placement;
+                });
+                $set['cycle_placements'] = $fallback->values()->all();
+                $board->update(['settings' => $set]);
+            }
+            return response()->json(['ok' => true, 'shifted' => $shifted, 'direction' => $direction]);
+        }
 
         if ($data['action'] === 'remove') {
             if ($hasCyclePlacements) {

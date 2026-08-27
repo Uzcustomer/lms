@@ -2714,7 +2714,60 @@
                 }
             }
 
-            // ===== Sikl (4-6 kurs) kalendar ko'rinishi =====
+            async function autoCycleSubjects() {
+                if (!board || ascType !== 'subjects') return;
+                const candidates = ascData.filter(row => [4, 5, 6].includes(+row.course))
+                    .map(row => {
+                        const total = (+row.lecture || 0) + (+row.practice || 0)
+                            + (+row.laboratory || 0) + (+row.seminar || 0);
+                        return { row, total, days: Math.max(1, Math.ceil(total / 6)) };
+                    })
+                    .filter(item => item.total > 0);
+                if (!candidates.length) {
+                    $('ascFootMsg').textContent = '4-6 kurslar uchun soatli fan topilmadi.';
+                    return;
+                }
+                if (!confirm('4-6 kursdagi ' + candidates.length + ' ta fan Sikl rejimiga o‘tkaziladi. Kunlar jami soat / 6 bo‘yicha yuqoriga yaxlitlanadi. Davom etamizmi?')) {
+                    return;
+                }
+                const button = $('aBtnAutoCycle');
+                if (button) button.disabled = true;
+                let savedCount = 0;
+                const failed = [];
+                try {
+                    for (const item of candidates) {
+                        const row = item.row;
+                        const body = {
+                            specialty_name: row.specialty_name,
+                            course: +row.course,
+                            subject_name: row.subject_name,
+                            mode: 'cycle',
+                            cycle_days: item.days,
+                            season: subjectSeasonOf(row),
+                        };
+                        try {
+                            const saved = await api(BASE + '/boards/' + board.id + '/subject-setting', 'POST', body);
+                            const key = subjModeKey(row.specialty_name, row.course, row.subject_name);
+                            const season = (saved && saved.season) || body.season;
+                            subjectSettings[key] = { ...subjectSettingOf(row), ...body, season };
+                            savedCount++;
+                        } catch (e) {
+                            failed.push(row.subject_name + ' (' + row.course + '-kurs): ' + e.message);
+                        }
+                        $('ascFootMsg').textContent = 'Sikl sozlanmoqda: ' + savedCount + '/' + candidates.length;
+                    }
+                    renderAscTable();
+                    $('ascFootMsg').textContent = 'Avtomatik sikl sozlandi: ' + savedCount + ' ta fan' +
+                        (failed.length ? '; xato: ' + failed.length : '') + '. 6 soat = 1 kun.';
+                    if (failed.length) {
+                        alert('Ba’zi fanlar saqlanmadi:\\n' + failed.slice(0, 5).join('\\n'));
+                    }
+                } finally {
+                    if (button) button.disabled = false;
+                }
+            }
+
+            // ===== Sikl (4-6 kurs) kalendar ko‘rinishi =====
             let cyclePlanData = null;
             let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
@@ -4350,6 +4403,15 @@
                     $('aBtnDel').onclick = () => hasSel && deleteAud();
                     $('aBtnImport').onclick = () => $('audImportFile').click();
                     $('aBtnTemplate').onclick = downloadAudTemplate;
+                } else if (ascType === 'subjects') {
+                    // Fan rejimlari manba jadvalini o'zgartirmaydi, faqat doska
+                    // uchun saqlanadigan Sikl sozlamalarini yaratadi.
+                    b.innerHTML =
+                        '<button class="asc-btn primary asc-action-btn" id="aBtnAutoCycle" title="4-6 kurs fanlarini jami soat / 6 bo‘yicha Sikl qilish">' +
+                        '<i class="bi bi-magic" aria-hidden="true"></i> 4-6 kursni avtomatik Sikl</button>' +
+                        '<button class="asc-btn asc-action-btn" id="aBtnCsv" title="CSV ga eksport">' + actionIcon('export') + 'CSV ga eksport</button>';
+                    $('aBtnAutoCycle').onclick = autoCycleSubjects;
+                    $('aBtnCsv').onclick = exportAscCsv;
                 } else {
                     // Faqat o'qish (manba HEMIS/o'quv reja) — eksport imkoniyati
                     b.innerHTML =

@@ -491,6 +491,16 @@
         {{-- Registrator ofisi / Dekan: YN jadvali (faqat ko'rish) + YN kunini belgilash (sozlamalardan ruxsat berilgan bo'lsa) --}}
         <div class="sidebar-section">Qo'shimcha</div>
 
+        @if($hasActiveRole('registrator_ofisi'))
+        <a href="{{ route('admin.student-distribution.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.student-distribution.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a2 2 0 012-2h8l4 4v12a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm10-2v5h4M8 12h8M8 16h8"></path>
+            </svg>
+            Talabalarni taqsimlash
+        </a>
+        @endif
+
         <a href="{{ route('admin.group-test-schedule.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.group-test-schedule*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

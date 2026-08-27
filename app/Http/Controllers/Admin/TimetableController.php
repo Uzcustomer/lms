@@ -3839,7 +3839,7 @@ class TimetableController extends Controller
             'group_name' => 'required|string|max:255',
             'subject_name' => 'required|string|max:255',
             'start_index' => 'nullable|integer|min:0',
-            'action' => 'required|in:place,remove,shift_all',
+            'action' => 'required|in:place,remove,shift',
             'direction' => 'nullable|integer|in:-1,1',
             'start_date' => 'nullable|date',
             'holidays' => 'nullable|array',
@@ -3916,10 +3916,14 @@ class TimetableController extends Controller
             }
             return null;
         };
-        if ($data['action'] === 'shift_all') {
+        if ($data['action'] === 'shift') {
             $direction = (int) ($data['direction'] ?? 0);
             if (!in_array($direction, [-1, 1], true)) {
                 return response()->json(['error' => 'Siljitish yo\'nalishi noto\'g\'ri.'], 422);
+            }
+            $currentStart = (int) ($data['start_index'] ?? -1);
+            if ($currentStart < 0) {
+                return response()->json(['error' => 'Sikl kartasining boshlanish kuni topilmadi.'], 422);
             }
 
             $shiftStart = function (int $index, int $direction) use ($workIndices): ?int {
@@ -3951,7 +3955,12 @@ class TimetableController extends Controller
             };
             $shifted = 0;
             if ($hasCyclePlacements) {
-                $placements = TimetableCyclePlacement::where('board_id', $board->id)->get();
+                $placements = TimetableCyclePlacement::where('board_id', $board->id)
+                    ->where('specialty_name', $data['specialty_name'])
+                    ->where('course', (int) $data['course'])
+                    ->where('group_name', $data['group_name'])
+                    ->where('subject_name', $data['subject_name'])
+                    ->where('start_index', $currentStart)->get();
                 DB::transaction(function () use ($placements, $shiftedStart, &$shifted) {
                     foreach ($placements as $placement) {
                         $newStart = $shiftedStart($placement);
@@ -3961,7 +3970,13 @@ class TimetableController extends Controller
                     }
                 });
             } else {
-                $fallback = collect($set['cycle_placements'] ?? [])->map(function ($placement) use ($shiftedStart, &$shifted) {
+                $fallback = collect($set['cycle_placements'] ?? [])->map(function ($placement) use ($shiftedStart, $data, $norm, $currentStart, &$shifted) {
+                    $isTarget = $norm(data_get($placement, 'specialty_name')) === $norm($data['specialty_name'])
+                        && (int) data_get($placement, 'course') === (int) $data['course']
+                        && $norm(data_get($placement, 'group_name')) === $norm($data['group_name'])
+                        && $norm(data_get($placement, 'subject_name')) === $norm($data['subject_name'])
+                        && (int) data_get($placement, 'start_index') === $currentStart;
+                    if (!$isTarget) return $placement;
                     $newStart = $shiftedStart($placement);
                     if ($newStart === null) return $placement;
                     $placement['start_index'] = $newStart;

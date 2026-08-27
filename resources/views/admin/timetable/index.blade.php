@@ -3097,7 +3097,7 @@
                         button.disabled = true;
                         try {
                             const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                                action: 'shift_all', specialty_name: card.specialty, course: card.course,
+                                action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
                                 direction: direction, start_date: $('cycleStart').value, holidays: cycleHolidays,
                             });

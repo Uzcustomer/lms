@@ -3953,33 +3953,61 @@ class TimetableController extends Controller
                 if ($newPosition === null || $newPosition + $days > count($workIndices)) return null;
                 return $newStart;
             };
+            $isTarget = function ($placement) use ($data, $norm, $currentStart): bool {
+                return $norm(data_get($placement, 'specialty_name')) === $norm($data['specialty_name'])
+                    && (int) data_get($placement, 'course') === (int) $data['course']
+                    && $norm(data_get($placement, 'group_name')) === $norm($data['group_name'])
+                    && $norm(data_get($placement, 'subject_name')) === $norm($data['subject_name'])
+                    && (int) data_get($placement, 'start_index') === $currentStart;
+            };
+            $isRow = function ($placement) use ($data, $norm): bool {
+                return $norm(data_get($placement, 'specialty_name')) === $norm($data['specialty_name'])
+                    && (int) data_get($placement, 'course') === (int) $data['course']
+                    && $norm(data_get($placement, 'group_name')) === $norm($data['group_name']);
+            };
             $shifted = 0;
             if ($hasCyclePlacements) {
                 $placements = TimetableCyclePlacement::where('board_id', $board->id)
                     ->where('specialty_name', $data['specialty_name'])
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
-                    ->where('subject_name', $data['subject_name'])
-                    ->where('start_index', $currentStart)->get();
-                DB::transaction(function () use ($placements, $shiftedStart, &$shifted) {
-                    foreach ($placements as $placement) {
-                        $newStart = $shiftedStart($placement);
-                        if ($newStart === null) continue;
+                    ->orderBy('start_index')->get();
+                $toShift = [];
+                $targetFound = false;
+                foreach ($placements as $placement) {
+                    if (!$targetFound) {
+                        if (!$isTarget($placement)) continue;
+                        $targetFound = true;
+                    }
+                    $newStart = $shiftedStart($placement);
+                    if ($newStart === null) {
+                        return response()->json(['error' => 'Sikl kartasini bu tomonga siljitib bo\'lmaydi.'], 422);
+                    }
+                    $toShift[] = [$placement, $newStart];
+                }
+                if (!$targetFound) {
+                    return response()->json(['error' => 'Siljitiladigan sikl kartasi topilmadi.'], 422);
+                }
+                DB::transaction(function () use ($toShift, &$shifted) {
+                    foreach ($toShift as [$placement, $newStart]) {
                         $placement->update(['start_index' => $newStart]);
                         $shifted++;
                     }
                 });
             } else {
-                $fallback = collect($set['cycle_placements'] ?? [])->map(function ($placement) use ($shiftedStart, $data, $norm, $currentStart, &$shifted) {
-                    $isTarget = $norm(data_get($placement, 'specialty_name')) === $norm($data['specialty_name'])
-                        && (int) data_get($placement, 'course') === (int) $data['course']
-                        && $norm(data_get($placement, 'group_name')) === $norm($data['group_name'])
-                        && $norm(data_get($placement, 'subject_name')) === $norm($data['subject_name'])
-                        && (int) data_get($placement, 'start_index') === $currentStart;
-                    if (!$isTarget) return $placement;
-                    $newStart = $shiftedStart($placement);
-                    if ($newStart === null) return $placement;
-                    $placement['start_index'] = $newStart;
+                $fallback = collect($set['cycle_placements'] ?? []);
+                if (!$fallback->contains($isTarget)) {
+                    return response()->json(['error' => 'Siljitiladigan sikl kartasi topilmadi.'], 422);
+                }
+                foreach ($fallback as $placement) {
+                    if (!$isRow($placement) || (int) data_get($placement, 'start_index') < $currentStart) continue;
+                    if ($shiftedStart($placement) === null) {
+                        return response()->json(['error' => 'Sikl kartasini bu tomonga siljitib bo\'lmaydi.'], 422);
+                    }
+                }
+                $fallback = $fallback->map(function ($placement) use ($shiftedStart, $isRow, $currentStart, &$shifted) {
+                    if (!$isRow($placement) || (int) data_get($placement, 'start_index') < $currentStart) return $placement;
+                    $placement['start_index'] = $shiftedStart($placement);
                     $shifted++;
                     return $placement;
                 });

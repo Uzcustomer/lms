@@ -3017,7 +3017,7 @@
                     let col = 0;
                     (row.blocks || []).forEach(block => {
                         while (col < block.from) {
-                            h += '<td class="cyc-cell' + cycleDateClass(dates[col]) + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                            h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
                             col++;
                         }
                         const color = subjColor(block.subject);
@@ -3029,7 +3029,7 @@
                         col = block.to + 1;
                     });
                     while (col < dates.length) {
-                        h += '<td class="cyc-cell' + cycleDateClass(dates[col]) + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                        h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
                         col++;
                     }
                     h += '</tr>';

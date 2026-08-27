@@ -14,6 +14,7 @@
     $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead;
+    $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableCanUseManager = $timetableAuditoriumAssignmentOnly;
 @endphp
 
@@ -1912,6 +1913,7 @@
             const CSRF = @json(csrf_token());
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
+            const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
             const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
@@ -1992,6 +1994,7 @@
                     'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
                 ];
                 restrictedIds.forEach(id => {
+                    if (TIMETABLE_CAN_PLACE && ['autoBtn', 'unplaceBtn', 'cycleHolAddBtn', 'cycleRefresh'].includes(id)) return;
                     if (id === 'managerBtn' && TIMETABLE_CAN_USE_MANAGER) return;
                     const el = $(id);
                     if (!el) return;

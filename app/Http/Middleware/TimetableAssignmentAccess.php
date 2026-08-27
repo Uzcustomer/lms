@@ -21,6 +21,7 @@ class TimetableAssignmentAccess
         }
 
         $auditoriumAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];
+        $placementRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi'];
         $teacherAssignmentRoles = ['kafedra_mudiri'];
         $assignmentRoles = $auditoriumAssignmentRoles;
 
@@ -40,6 +41,18 @@ class TimetableAssignmentAccess
                     'admin.timetable.auditorium-teachers.destroy',
                     'admin.timetable.assign-auditorium-teacher',
                     'admin.timetable.auditoriums',
+                ]);
+            }
+
+            if (in_array($activeRole, $placementRoles, true)) {
+                $allowed = array_merge($allowed, [
+                    'admin.timetable.boards.auto-place',
+                    'admin.timetable.boards.unplace',
+                    'admin.timetable.cards.place',
+                    'admin.timetable.cards.week-override',
+                    'admin.timetable.boards.compact-week',
+                    'admin.timetable.cycle-plan',
+                    'admin.timetable.cycle-place',
                 ]);
             }
 

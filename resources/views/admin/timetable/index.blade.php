@@ -2826,7 +2826,7 @@
 
             // ===== Sikl (4-6 kurs) kalendar ko‘rinishi =====
             async function toggleAutoCycleSubjects() {
-                if (autoCycleApplied && autoCycleBackup) {
+                if (autoCycleApplied) {
                     await restoreAutoCycleSubjects();
                     return;
                 }
@@ -4520,6 +4520,10 @@
             function renderAscButtons() {
                 const b = $('ascButtons');
                 if (ascType === 'subjects' && ascData.length) syncAutoCycleState();
+                if (ascType === 'subjects' && ascData.length &&
+                    autoCycleCandidates().some(item => (subjectSettingOf(item.row).mode || 'normal') === 'cycle')) {
+                    autoCycleApplied = true;
+                }
                 const hasSel = ascSelId !== null;
                 if (ascType === 'auditoriums') {
                     b.innerHTML =

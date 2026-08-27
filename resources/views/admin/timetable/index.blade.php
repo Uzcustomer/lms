@@ -215,6 +215,7 @@
                                 class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50"></button>
                         </div>
                         <div class="flex items-center gap-2">
+                            <select id="cycleGroupFilter" class="hidden text-[11px] rounded border-gray-300 py-1 pl-2 pr-7 text-gray-600" aria-label="Guruh bo'yicha filtr"><option value="">Barcha guruhlar</option></select>
                             <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                             <button type="button" id="unplacedExportBtn"
                                 class="hidden text-[11px] rounded px-2 py-1 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -1923,6 +1924,7 @@
             let subjectSettings = {};  // "spec|course|subject" => {mode, season, rotation_group, occurrences, cycle_days}
             let autoCycleBackup = null;
             let autoCycleApplied = false;
+            let cycleGroupFilter = '';
             const SUBJ_MODE_LABELS = { normal: 'Har hafta', alternate: 'Hafta almashinuvi', cycle: 'Sikl (blok)' };
             const SUBJ_SEASON_LABELS = { kuzgi: 'Kuzgi', bahorgi: 'Bahorgi' };
             // Fan-rejim kaliti — katta-kichik harf/bo'shliqqa befarq (reja nomi
@@ -3064,12 +3066,26 @@
             }
             function renderCycleCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];
+                const groups = [...new Set(cycleCards.map(card => card.group).filter(Boolean))]
+                    .sort((a, b) => a.localeCompare(b, 'uz', { numeric: true }));
+                const groupFilter = $('cycleGroupFilter');
+                groupFilter.innerHTML = '<option value="">Barcha guruhlar</option>' + groups.map(group =>
+                    '<option value="' + esc(group) + '">' + esc(group) + '</option>'
+                ).join('');
+                if (!groups.includes(cycleGroupFilter)) cycleGroupFilter = '';
+                groupFilter.value = cycleGroupFilter;
+                groupFilter.classList.toggle('hidden', !groups.length);
+                groupFilter.onchange = () => {
+                    cycleGroupFilter = groupFilter.value;
+                    renderCycleCards(j);
+                };
                 $('skipToggle').classList.add('hidden');
                 $('unplacedExportBtn').classList.add('hidden');
                 $('cardPanelTitle').textContent = 'Sikl fan kartalari';
                 $('cardPanelHint').textContent = 'Kartani o‘z guruh qatoridagi boshlanish kuniga sudrang';
                 $('cardPanelHint').classList.remove('hidden');
-                const unplaced = cycleCards.filter(card => !card.placed).sort((a, b) =>
+                const unplaced = cycleCards.filter(card => !card.placed &&
+                    (!cycleGroupFilter || card.group === cycleGroupFilter)).sort((a, b) =>
                     (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
                 $('unplacedCount').textContent = unplaced.length + ' ta';
                 $('cardPanel').innerHTML = unplaced.map(card =>
@@ -3544,6 +3560,7 @@
                     renderCycleCards(cyclePlanData);
                     return;
                 }
+                $('cycleGroupFilter').classList.add('hidden');
                 $('cardPanelTitle').textContent = 'Joylashmagan kartalar';
                 $('cardPanelHint').classList.add('hidden');
                 const bySubject = (a, b) => a.subject_name.localeCompare(b.subject_name, 'uz');

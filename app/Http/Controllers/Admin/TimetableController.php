@@ -3697,11 +3697,33 @@ class TimetableController extends Controller
                     }
                 }
             });
+        } elseif (!$hasCyclePlacements && ($request->boolean('clear') || $request->boolean('auto'))) {
+            // Eski deploylarda migration keyinroq ishlashi mumkin. Jadval paydo
+            // bo'lguncha joylashuvlarni doska settings JSONida yo'qotmaymiz.
+            $fallback = collect($set['cycle_placements'] ?? []);
+            foreach ($autoRows as $row) {
+                $fallback = $fallback->reject(fn($item) => ($item['specialty_name'] ?? '') === $row['specialty']
+                    && (int) ($item['course'] ?? 0) === (int) $row['course']
+                    && ($item['group_name'] ?? '') === $row['group'])->values();
+                if ($request->boolean('auto')) {
+                    foreach ($row['blocks'] as $block) {
+                        $fallback->push([
+                            'specialty_name' => $row['specialty'],
+                            'course' => $row['course'],
+                            'group_name' => $row['group'],
+                            'subject_name' => $block['subject'],
+                            'start_index' => $block['from'],
+                        ]);
+                    }
+                }
+            }
+            $set['cycle_placements'] = $fallback->values()->all();
+            $board->update(['settings' => $set]);
         }
 
         $saved = $hasCyclePlacements
             ? TimetableCyclePlacement::where('board_id', $board->id)->get()
-            : collect();
+            : collect($set['cycle_placements'] ?? [])->map(fn($item) => (object) $item);
         $savedByRow = [];
         foreach ($saved as $placement) {
             $key = (string) $placement->specialty_name . '|' . (int) $placement->course . '|' . (string) $placement->group_name;
@@ -3778,9 +3800,7 @@ class TimetableController extends Controller
      */
     public function cyclePlace(Request $request, TimetableBoard $board)
     {
-        if (!Schema::hasTable('timetable_cycle_placements')) {
-            return response()->json(['error' => 'Sikl joylashuv jadvali hali yaratilmagan.'], 422);
-        }
+        $hasCyclePlacements = Schema::hasTable('timetable_cycle_placements');
 
         $data = $request->validate([
             'specialty_name' => 'required|string|max:255',
@@ -3845,12 +3865,22 @@ class TimetableController extends Controller
         }
 
         if ($data['action'] === 'remove') {
-            TimetableCyclePlacement::where('board_id', $board->id)
-                ->where('specialty_name', $data['specialty_name'])
-                ->where('course', (int) $data['course'])
-                ->where('group_name', $data['group_name'])
-                ->where('subject_name', $data['subject_name'])
-                ->delete();
+            if ($hasCyclePlacements) {
+                TimetableCyclePlacement::where('board_id', $board->id)
+                    ->where('specialty_name', $data['specialty_name'])
+                    ->where('course', (int) $data['course'])
+                    ->where('group_name', $data['group_name'])
+                    ->where('subject_name', $data['subject_name'])
+                    ->delete();
+            } else {
+                $set['cycle_placements'] = collect($set['cycle_placements'] ?? [])
+                    ->reject(fn($item) => ($item['specialty_name'] ?? '') === $data['specialty_name']
+                        && (int) ($item['course'] ?? 0) === (int) $data['course']
+                        && ($item['group_name'] ?? '') === $data['group_name']
+                        && ($item['subject_name'] ?? '') === $data['subject_name'])
+                    ->values()->all();
+                $board->update(['settings' => $set]);
+            }
             return response()->json(['ok' => true, 'removed' => true]);
         }
 
@@ -3862,11 +3892,17 @@ class TimetableController extends Controller
         $settings = TimetableSubjectSetting::where('board_id', $board->id)
             ->where('course', (int) $data['course'])->get()
             ->keyBy(fn($s) => $norm($s->specialty_name) . '|' . $norm($s->subject_name));
-        $others = TimetableCyclePlacement::where('board_id', $board->id)
-            ->where('specialty_name', $data['specialty_name'])
-            ->where('course', (int) $data['course'])
-            ->where('group_name', $data['group_name'])
-            ->get();
+        $others = $hasCyclePlacements
+            ? TimetableCyclePlacement::where('board_id', $board->id)
+                ->where('specialty_name', $data['specialty_name'])
+                ->where('course', (int) $data['course'])
+                ->where('group_name', $data['group_name'])
+                ->get()
+            : collect($set['cycle_placements'] ?? [])
+                ->filter(fn($item) => ($item['specialty_name'] ?? '') === $data['specialty_name']
+                    && (int) ($item['course'] ?? 0) === (int) $data['course']
+                    && ($item['group_name'] ?? '') === $data['group_name'])
+                ->map(fn($item) => (object) $item);
         foreach ($others as $other) {
             if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
@@ -3877,13 +3913,31 @@ class TimetableController extends Controller
             }
         }
 
-        TimetableCyclePlacement::updateOrCreate([
-            'board_id' => $board->id,
-            'specialty_name' => $data['specialty_name'],
-            'course' => (int) $data['course'],
-            'group_name' => $data['group_name'],
-            'subject_name' => $data['subject_name'],
-        ], ['start_index' => $from]);
+        if ($hasCyclePlacements) {
+            TimetableCyclePlacement::updateOrCreate([
+                'board_id' => $board->id,
+                'specialty_name' => $data['specialty_name'],
+                'course' => (int) $data['course'],
+                'group_name' => $data['group_name'],
+                'subject_name' => $data['subject_name'],
+            ], ['start_index' => $from]);
+        } else {
+            $fallback = collect($set['cycle_placements'] ?? [])
+                ->reject(fn($item) => ($item['specialty_name'] ?? '') === $data['specialty_name']
+                    && (int) ($item['course'] ?? 0) === (int) $data['course']
+                    && ($item['group_name'] ?? '') === $data['group_name']
+                    && ($item['subject_name'] ?? '') === $data['subject_name'])
+                ->values();
+            $fallback->push([
+                'specialty_name' => $data['specialty_name'],
+                'course' => (int) $data['course'],
+                'group_name' => $data['group_name'],
+                'subject_name' => $data['subject_name'],
+                'start_index' => $from,
+            ]);
+            $set['cycle_placements'] = $fallback->all();
+            $board->update(['settings' => $set]);
+        }
 
         return response()->json(['ok' => true, 'start_index' => $from, 'days' => $requiredDays]);
     }

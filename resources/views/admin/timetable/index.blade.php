@@ -975,7 +975,7 @@
         .tt-dd-tools button:hover { text-decoration: underline; }
         .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
-        #cycleGrid { border-collapse: collapse; }
+        #cycleGrid { border-collapse: collapse; table-layout: fixed; }
         #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
         #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; background: #eff6ff; min-width: 96px; max-width: 130px;
             padding: 2px 6px; text-align: left; font-size: 10px; line-height: 1.15; }
@@ -983,6 +983,8 @@
         #cycleGrid .cyc-dcol { width: 24px; min-width: 24px; font-size: 9px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
         #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
+        #cycleGrid .cyc-group-col { width: 130px; }
+        #cycleGrid .cyc-date-col { width: 24px; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
         #cycleGrid .cyc-block { position: relative; }
@@ -3015,7 +3017,9 @@
                     renderCycleCards(j);
                     return;
                 }
-                let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
+                let h = '<colgroup><col class="cyc-group-col">';
+                dates.forEach(() => h += '<col class="cyc-date-col">');
+                h += '</colgroup><thead><tr><th class="cyc-gcol">Guruh</th>';
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {

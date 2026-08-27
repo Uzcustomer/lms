@@ -3673,7 +3673,8 @@ class TimetableController extends Controller
                 $from = $workIndices[$idx];
                 $to = $workIndices[$toPosition];
                 $blocks[] = ['key' => $subjectKey($g, $sn), 'subject' => $sn, 'from' => $from, 'to' => $to, 'days' => $toPosition - $idx + 1];
-                $idx = $toPosition + 1;
+                // Sikllar orasida yakshanbani hisoblamagan holda 2 ta o'quv kuni bo'sh qoladi.
+                $idx = $toPosition + 1 + 2;
             }
             $members = array_keys($g['members']);
             sort($members, SORT_NATURAL);

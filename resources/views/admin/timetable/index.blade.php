@@ -2750,6 +2750,7 @@
                 } catch (e) {
                     $('cycleMsg').textContent = '';
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-3 text-sm text-red-600">Xatolik: ' + esc(e.message) + '</td></tr></tbody>';
+                    throw e;
                 }
             }
             function renderCyclePlanLegacy(j) {
@@ -2781,6 +2782,19 @@
             }
             // Sikl panjarasi interaktiv ko'rinishda chiziladi: bo'sh katakka fan
             // kartasini sudrash uning start indeksini saqlaydi.
+            async function placeCycleCardAt(card, index) {
+                if (!card) return;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                        action: 'place', specialty_name: card.specialty, course: card.course,
+                        group_name: card.group, subject_name: card.subject, start_index: index,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                    });
+                    await loadCyclePlan();
+                } catch (e) {
+                    alert('Sikl blokini joylab bo\u2018lmadi: ' + e.message);
+                }
+            }
             function renderCyclePlan(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
@@ -2842,6 +2856,20 @@
                         } catch (e) { alert('Sikl blokini joylab bo‘lmadi: ' + e.message); }
                     });
                 });
+                $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {
+                    cell.addEventListener('click', () => {
+                        if (!cycleDragKey) return;
+                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
+                        const rowKey = cell.dataset.cycleRow;
+                        const index = +cell.dataset.cycleIndex;
+                        cycleDragKey = null;
+                        if (!card || card.row_key !== rowKey) {
+                            alert('Fan kartasini faqat o\u2018z guruhining qatoriga joylang.');
+                            return;
+                        }
+                        placeCycleCardAt(card, index);
+                    });
+                });
                 $('cycleGrid').querySelectorAll('.cyc-block[data-cycle-key]').forEach(block => {
                     block.addEventListener('dragstart', ev => {
                         cycleDragKey = block.dataset.cycleKey;
@@ -2868,6 +2896,10 @@
                     '<span class="cycle-pn-meta"><span>' + esc(card.group) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>'
                 ).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
+                    card.addEventListener('click', () => {
+                        cycleDragKey = card.dataset.cycleKey;
+                        $('cycleMsg').textContent = 'Endi shu guruh qatoridagi boshlanish kunini bosing.';
+                    });
                     card.addEventListener('dragstart', ev => {
                         cycleDragKey = card.dataset.cycleKey;
                         ev.dataTransfer.effectAllowed = 'move';

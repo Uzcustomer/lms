@@ -3907,6 +3907,14 @@ class TimetableController extends Controller
             }
             return null;
         };
+        $positionFor = function (int $index) use ($workIndices): ?int {
+            foreach ($workIndices as $position => $calendarIndex) {
+                if ($calendarIndex >= $index) {
+                    return $position;
+                }
+            }
+            return null;
+        };
 
         if ($data['action'] === 'remove') {
             if ($hasCyclePlacements) {
@@ -3929,8 +3937,7 @@ class TimetableController extends Controller
         }
 
         $from = (int) ($data['start_index'] ?? -1);
-        $to = $from >= 0 ? $endIndexFor($from, $requiredDays) : null;
-        if ($from < 0 || $to === null) {
+        if ($from < 0 || $positionFor($from) === null) {
             return response()->json(['error' => 'Fan bloki semestr kalendariga sig‘maydi.'], 422);
         }
 
@@ -3948,6 +3955,31 @@ class TimetableController extends Controller
                     && (int) ($item['course'] ?? 0) === (int) $data['course']
                     && ($item['group_name'] ?? '') === $data['group_name'])
                 ->map(fn($item) => (object) $item);
+        $startPosition = (int) $positionFor($from);
+        $cycleGapDays = 2;
+        $wasShifted = false;
+        foreach ($others->sortBy('start_index') as $other) {
+            if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
+            $otherStartPosition = $positionFor((int) $other->start_index);
+            if ($otherStartPosition === null) continue;
+            $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
+            $otherDays = max(1, (int) ($otherSetting->cycle_days ?? 1));
+            $otherEndPosition = $otherStartPosition + $otherDays - 1;
+            $candidateEndPosition = $startPosition + $requiredDays - 1;
+            $fitsBefore = $candidateEndPosition + $cycleGapDays < $otherStartPosition;
+            $alreadyAfter = $startPosition > $otherEndPosition + $cycleGapDays;
+            if (!$fitsBefore && !$alreadyAfter) {
+                $startPosition = $otherEndPosition + $cycleGapDays + 1;
+                $wasShifted = true;
+            }
+        }
+        if ($wasShifted) {
+            $from = $workIndices[$startPosition] ?? -1;
+        }
+        $to = $from >= 0 ? $endIndexFor($from, $requiredDays) : null;
+        if ($from < 0 || $to === null) {
+            return response()->json(['error' => 'Fan bloki semestr kalendariga sig\'maydi.'], 422);
+        }
         foreach ($others as $other) {
             if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));

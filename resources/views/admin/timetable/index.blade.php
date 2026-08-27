@@ -2088,7 +2088,10 @@
                     subjectColors[n] = { bg: hslToHex(h, 70, 88), border: hslToHex(h, 62, 45) };
                 });
             }
-            const subjColor = name => subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8' };
+            const subjColor = name => {
+                const color = subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8' };
+                return { ...color };
+            };
             // Ma'ruza — bir xil sariq (class'dagi tt-lec/.lec fonida qoladi,
             // inline rang bermaymiz). Amaliy — har fan o'z rangida.
             const subjStyle = c => {

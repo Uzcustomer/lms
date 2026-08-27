@@ -2716,6 +2716,54 @@
                 }
             }
 
+            function autoCycleStorageKey() {
+                return board ? 'lms:auto-cycle-backup:' + board.id : '';
+            }
+
+            function loadAutoCycleState() {
+                if (!board || autoCycleBackup !== null) return;
+                try {
+                    const raw = localStorage.getItem(autoCycleStorageKey());
+                    if (!raw) return;
+                    const saved = JSON.parse(raw);
+                    if (Array.isArray(saved.backup) && saved.backup.length) {
+                        autoCycleBackup = saved.backup;
+                        autoCycleApplied = !!saved.applied;
+                    }
+                } catch (e) {
+                    localStorage.removeItem(autoCycleStorageKey());
+                }
+            }
+
+            function persistAutoCycleState() {
+                if (!board) return;
+                try {
+                    if (autoCycleApplied && autoCycleBackup && autoCycleBackup.length) {
+                        localStorage.setItem(autoCycleStorageKey(), JSON.stringify({
+                            applied: true,
+                            backup: autoCycleBackup,
+                        }));
+                    } else {
+                        localStorage.removeItem(autoCycleStorageKey());
+                    }
+                } catch (e) { }
+            }
+
+            function syncAutoCycleState() {
+                loadAutoCycleState();
+                const candidates = autoCycleCandidates();
+                if (!candidates.length) return;
+                const hasCycle = candidates.some(item =>
+                    (subjectSettingOf(item.row).mode || 'normal') === 'cycle');
+                if (hasCycle) {
+                    autoCycleApplied = true;
+                } else if (autoCycleBackup) {
+                    autoCycleApplied = false;
+                    autoCycleBackup = null;
+                    persistAutoCycleState();
+                }
+            }
+
             async function autoCycleSubjects() {
                 if (!board || ascType !== 'subjects') return;
                 const candidates = ascData.filter(row => [4, 5, 6].includes(+row.course))
@@ -2764,6 +2812,7 @@
                     }
                     renderAscTable();
                     autoCycleApplied = savedCount > 0;
+                    persistAutoCycleState();
                     renderAscButtons();
                     $('ascFootMsg').textContent = 'Avtomatik sikl sozlandi: ' + savedCount + ' ta fan' +
                         (failed.length ? '; xato: ' + failed.length : '') + '. 6 soat = 1 kun.';
@@ -2785,14 +2834,22 @@
             }
 
             async function restoreAutoCycleSubjects() {
-                if (!autoCycleBackup || !autoCycleBackup.length) return;
+                const restoreItems = (autoCycleBackup && autoCycleBackup.length)
+                    ? autoCycleBackup
+                    : autoCycleCandidates()
+                        .filter(item => (subjectSettingOf(item.row).mode || 'normal') === 'cycle')
+                        .map(item => ({
+                            row: item.row,
+                            previous: { mode: 'normal', season: ((board && board.semester_parity) || 'kuzgi') },
+                        }));
+                if (!restoreItems.length) return;
                 if (!confirm('4-6 kurs fanlarining avtomatik Sikldan oldingi rejimi va kunlari tiklansinmi?')) return;
                 const button = $('aBtnAutoCycle');
                 if (button) button.disabled = true;
                 let restoredCount = 0;
                 const failed = [];
                 try {
-                    for (const item of autoCycleBackup) {
+                    for (const item of restoreItems) {
                         const row = item.row;
                         const previous = item.previous || {};
                         const mode = previous.mode || 'normal';
@@ -2821,12 +2878,13 @@
                         } catch (e) {
                             failed.push(row.subject_name + ' (' + row.course + '-kurs): ' + e.message);
                         }
-                        $('ascFootMsg').textContent = 'Avvalgi holat tiklanmoqda: ' + restoredCount + '/' + autoCycleBackup.length;
+                        $('ascFootMsg').textContent = 'Avvalgi holat tiklanmoqda: ' + restoredCount + '/' + restoreItems.length;
                     }
                     if (!failed.length) {
                         autoCycleApplied = false;
                         autoCycleBackup = null;
                     }
+                    persistAutoCycleState();
                     renderAscTable();
                     renderAscButtons();
                     $('ascFootMsg').textContent = 'Avtomatik Sikldan oldingi holatga ' + restoredCount + ' ta fan qaytarildi.' +
@@ -4444,6 +4502,7 @@
                         if (row) openAudEdit(row);
                     };
                 });
+                if (ascType === 'subjects') renderAscButtons();
             }
             const rowTag = (i, id) => '<tr data-idx="' + i + '"' + (id != null ? ' data-id="' + id + '"' : '') + '>';
             const fmt = v => { v = +v || 0; return Number.isInteger(v) ? v : v.toFixed(1); };
@@ -4460,6 +4519,7 @@
 
             function renderAscButtons() {
                 const b = $('ascButtons');
+                if (ascType === 'subjects' && ascData.length) syncAutoCycleState();
                 const hasSel = ascSelId !== null;
                 if (ascType === 'auditoriums') {
                     b.innerHTML =

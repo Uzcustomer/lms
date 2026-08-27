@@ -3571,21 +3571,36 @@ class TimetableController extends Controller
             $board->update(['settings' => $set]);
         }
 
-        // O'quv kunlari kalendari: haftasiga board->days ta ish kuni (Dush=1..),
-        // yakshanba (va board->days dan keyingi kunlar) hamda bayram kunlari o'tkaziladi.
+        // Kalendar barcha kunlarni ko'rsatadi. Yakshanba va bayramlar blokka
+        // kiritiladi, ammo sikl kuniga kirmaydi: shuning uchun blok ularni kesib
+        // o'tsa, ekranda shuncha kalendar kuni uzunroq ko'rinadi.
         $D = max(1, (int) $board->days);
         $W = max(1, (int) $board->weeks);
         $dates = [];
+        $workIndices = [];
         $cur = $startC->copy();
         $guard = 0;
-        while (count($dates) < $W * $D && $guard < $W * 7 + count($holSet) * 2 + 60) {
-            if ((int) $cur->dayOfWeekIso <= $D && !isset($holSet[$cur->toDateString()])) {
-                $dates[] = $cur->copy();
+        $targetWorkDays = $W * $D;
+        while (count($workIndices) < $targetWorkDays && $guard < $targetWorkDays * 8 + count($holSet) * 2 + 60) {
+            $dow = (int) $cur->dayOfWeekIso;
+            $isHoliday = isset($holSet[$cur->toDateString()]);
+            $isTeachingDay = $dow <= $D && $dow < 7 && !$isHoliday;
+            $dates[] = $cur->copy();
+            if ($isTeachingDay) {
+                $workIndices[] = count($dates) - 1;
             }
             $cur->addDay();
             $guard++;
         }
         $totalDays = count($dates);
+        $endIndexFor = function (int $from, int $needed) use ($workIndices): ?int {
+            foreach ($workIndices as $position => $calendarIndex) {
+                if ($calendarIndex >= $from) {
+                    return $workIndices[$position + max(1, $needed) - 1] ?? null;
+                }
+            }
+            return null;
+        };
 
         // Nomlarni normallashtiramiz — reja (mc) va karta/snapshot nomlari katta-kichik
         // harf/bo'shliqda farq qilishi mumkin (mas. "Davolash ishi" ↔ "davolash ishi").
@@ -3650,13 +3665,15 @@ class TimetableController extends Controller
                 if (!isset($g['subs'][$sn])) {
                     continue;
                 }
-                if ($idx >= $totalDays) {
+                if ($idx >= count($workIndices)) {
                     break;
                 }
                 $days = max(1, (int) $g['subs'][$sn]);
-                $to = min($idx + $days - 1, $totalDays - 1);
-                $blocks[] = ['key' => $subjectKey($g, $sn), 'subject' => $sn, 'from' => $idx, 'to' => $to, 'days' => $to - $idx + 1];
-                $idx = $to + 1;
+                $toPosition = min($idx + $days - 1, count($workIndices) - 1);
+                $from = $workIndices[$idx];
+                $to = $workIndices[$toPosition];
+                $blocks[] = ['key' => $subjectKey($g, $sn), 'subject' => $sn, 'from' => $from, 'to' => $to, 'days' => $toPosition - $idx + 1];
+                $idx = $toPosition + 1;
             }
             $members = array_keys($g['members']);
             sort($members, SORT_NATURAL);
@@ -3745,7 +3762,10 @@ class TimetableController extends Controller
                 if ($from >= $totalDays) {
                     continue;
                 }
-                $to = min($from + $days - 1, $totalDays - 1);
+                $to = $endIndexFor($from, $days);
+                if ($to === null) {
+                    continue;
+                }
                 $blocks[] = [
                     'key' => $subjectKey($g, $placement->subject_name),
                     'subject' => $placement->subject_name,
@@ -3785,8 +3805,18 @@ class TimetableController extends Controller
         return response()->json([
             'start_date' => $startC->toDateString(),
             'holidays'   => $holidays,
-            'total_days' => $totalDays,
-            'dates'      => array_map(fn($d) => ['d' => $d->format('d.m'), 'iso' => $d->toDateString(), 'dow' => (int) $d->dayOfWeekIso], $dates),
+            'total_days' => count($workIndices),
+            'calendar_days' => $totalDays,
+            'total_work_days' => count($workIndices),
+            'dates'      => array_map(function ($d) use ($holSet, $D) {
+                $dow = (int) $d->dayOfWeekIso;
+                $holiday = isset($holSet[$d->toDateString()]);
+                return [
+                    'd' => $d->format('d.m'), 'iso' => $d->toDateString(), 'dow' => $dow,
+                    'sunday' => $dow === 7, 'holiday' => $holiday,
+                    'off' => $dow === 7 || $holiday || $dow > $D,
+                ];
+            }, $dates),
             'subjects'   => array_map(fn($sn) => ['name' => $sn, 'days' => $allSubs[$sn]], $subOrder),
             'rows'       => $rows,
             'cycle_cards' => $cycleCards,
@@ -3851,18 +3881,31 @@ class TimetableController extends Controller
             try { $holSet[Carbon::parse($holiday)->toDateString()] = true; } catch (\Exception $e) { }
         }
         $dates = [];
+        $workIndices = [];
         $cur = $startC->copy();
         $guard = 0;
         $requiredDays = max(1, (int) $setting->cycle_days);
-        $maxDays = max(1, (int) $board->weeks) * max(1, (int) $board->days);
-        while (count($dates) < $maxDays && $guard < $maxDays * 7 + count($holSet) * 2 + 60) {
-            if ((int) $cur->dayOfWeekIso <= max(1, (int) $board->days)
-                && !isset($holSet[$cur->toDateString()])) {
-                $dates[] = $cur->copy();
+        $daysPerWeek = max(1, (int) $board->days);
+        $maxDays = max(1, (int) $board->weeks) * $daysPerWeek;
+        while (count($workIndices) < $maxDays && $guard < $maxDays * 8 + count($holSet) * 2 + 60) {
+            $dow = (int) $cur->dayOfWeekIso;
+            $isHoliday = isset($holSet[$cur->toDateString()]);
+            $isTeachingDay = $dow <= $daysPerWeek && $dow < 7 && !$isHoliday;
+            $dates[] = $cur->copy();
+            if ($isTeachingDay) {
+                $workIndices[] = count($dates) - 1;
             }
             $cur->addDay();
             $guard++;
         }
+        $endIndexFor = function (int $from, int $needed) use ($workIndices): ?int {
+            foreach ($workIndices as $position => $calendarIndex) {
+                if ($calendarIndex >= $from) {
+                    return $workIndices[$position + max(1, $needed) - 1] ?? null;
+                }
+            }
+            return null;
+        };
 
         if ($data['action'] === 'remove') {
             if ($hasCyclePlacements) {
@@ -3885,7 +3928,8 @@ class TimetableController extends Controller
         }
 
         $from = (int) ($data['start_index'] ?? -1);
-        if ($from < 0 || $from + $requiredDays > count($dates)) {
+        $to = $from >= 0 ? $endIndexFor($from, $requiredDays) : null;
+        if ($from < 0 || $to === null) {
             return response()->json(['error' => 'Fan bloki semestr kalendariga sig‘maydi.'], 422);
         }
 
@@ -3908,7 +3952,8 @@ class TimetableController extends Controller
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
             $otherDays = max(1, (int) ($otherSetting->cycle_days ?? 1));
             $otherFrom = (int) $other->start_index;
-            if ($from < $otherFrom + $otherDays && $otherFrom < $from + $requiredDays) {
+            $otherTo = $endIndexFor($otherFrom, $otherDays);
+            if ($otherTo !== null && $from <= $otherTo && $otherFrom <= $to) {
                 return response()->json(['error' => 'Bu sana oralig‘ida boshqa fan bloki bor.'], 422);
             }
         }

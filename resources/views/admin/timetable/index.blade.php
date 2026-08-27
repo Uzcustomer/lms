@@ -982,7 +982,7 @@
         #cycleGrid .cyc-dcol { width: 24px; min-width: 24px; font-size: 9px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
         #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
-        #cycleGrid .cyc-wend { background: #eef2f7; }
+        #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
         #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
@@ -2760,7 +2760,7 @@
                     return;
                 }
                 let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
-                dates.forEach(d => h += '<th class="cyc-dcol' + (d.dow >= 6 ? ' cyc-wend' : '') + '">' + esc(d.d) + '</th>');
+                dates.forEach(d => h += '<th class="cyc-dcol' + ((d.sunday || d.holiday) ? ' cyc-off' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(r => {
                     const sub = (r.subgroups && r.subgroups.length) ? r.subgroups.join(', ') : '';
@@ -2768,13 +2768,13 @@
                         (sub ? '<div class="text-[9px] text-gray-400">' + esc(sub) + '</div>' : '') + '</td>';
                     let col = 0;
                     (r.blocks || []).forEach(b => {
-                        while (col < b.from) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
+                        while (col < b.from) { h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '"></td>'; col++; }
                         const c = subjColor(b.subject);
                         h += '<td class="cyc-cell cyc-block" colspan="' + (b.to - b.from + 1) + '" style="background:' + c.bg + ';border-color:' + c.border + ';" title="' + esc(b.subject) + ' — ' + b.days + ' kun">' +
                             '<span class="cyc-lbl">' + esc(b.subject) + ' <b>' + b.days + '</b></span></td>';
                         col = b.to + 1;
                     });
-                    while (col < dates.length) { h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '"></td>'; col++; }
+                    while (col < dates.length) { h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '"></td>'; col++; }
                     h += '</tr>';
                 });
                 h += '</tbody>';
@@ -2803,7 +2803,7 @@
                     return;
                 }
                 let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
-                dates.forEach(d => h += '<th class="cyc-dcol' + (d.dow >= 6 ? ' cyc-wend' : '') + '">' + esc(d.d) + '</th>');
+                dates.forEach(d => h += '<th class="cyc-dcol' + ((d.sunday || d.holiday) ? ' cyc-off' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
                     const sub = (row.subgroups || []).join(', ');
@@ -2812,7 +2812,7 @@
                     let col = 0;
                     (row.blocks || []).forEach(block => {
                         while (col < block.from) {
-                            h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                            h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
                             col++;
                         }
                         const color = subjColor(block.subject);
@@ -2821,7 +2821,7 @@
                         col = block.to + 1;
                     });
                     while (col < dates.length) {
-                        h += '<td class="cyc-cell' + (dates[col] && dates[col].dow >= 6 ? ' cyc-wend' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                        h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
                         col++;
                     }
                     h += '</tr>';

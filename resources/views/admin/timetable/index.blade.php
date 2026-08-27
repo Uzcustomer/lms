@@ -4338,6 +4338,9 @@
             function weekLoadHtml(r) {
                 const w = r.week_plan;
                 if (!w || !w.total_hours) return '<span class="text-slate-400">—</span>';
+                if ((subjectSettingOf(r).mode || 'normal') === 'cycle') {
+                    return '<b>6</b> s<div class="text-[10px] text-slate-400">' + hrs(w.total_hours) + ' s jami</div>';
+                }
                 return '<b>' + hrs(w.per_week_hours) + '</b> s'
                     + '<div class="text-[10px] text-slate-400">' + hrs(w.total_hours) + ' s jami</div>';
             }
@@ -4345,6 +4348,9 @@
             function weekSplitHtml(r) {
                 const w = r.week_plan;
                 if (!w || !w.total_hours) return '<span class="text-slate-400">—</span>';
+                if ((subjectSettingOf(r).mode || 'normal') === 'cycle') {
+                    return '';
+                }
                 const parts = [];
                 if (w.lecture_weeks > 0) {
                     parts.push('<div><b>' + w.lecture_weeks + '</b> hafta: 2 s ma\'ruza'

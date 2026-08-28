@@ -124,25 +124,64 @@ class StudentDistributionController extends Controller
     public function storeSourceGroups(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'group_ids' => 'present|array|max:5000',
-            'group_ids.*' => 'integer|exists:student_distribution_groups,id',
+            'groups' => 'present|array|max:5000',
+            'groups.*.key' => 'required|string|max:64',
+            'groups.*.student_count' => 'required|integer|min:0|max:1000',
         ]);
 
-        $ids = collect($data['group_ids'])->map(fn ($id) => (int) $id)->unique()->values();
-        DB::transaction(function () use ($ids) {
+        $catalog = $this->catalogGroups()->keyBy('key');
+        $selected = collect($data['groups'])->unique('key')->values();
+        $invalid = $selected->first(fn (array $row) => !$catalog->has($row['key']));
+        if ($invalid) {
+            return response()->json(['message' => 'Tanlangan source guruhlardan biri LMS katalogida topilmadi.'], 422);
+        }
+
+        $importKey = (string) Str::uuid();
+        DB::transaction(function () use ($selected, $catalog, $importKey) {
             StudentDistributionGroup::query()->where('is_active', true)->update(['is_source' => false]);
-            if ($ids->isNotEmpty()) {
-                StudentDistributionGroup::query()->where('is_active', true)
-                    ->whereIn('id', $ids)->update(['is_source' => true]);
+
+            foreach ($selected as $row) {
+                $source = $catalog->get($row['key']);
+                $base = [
+                    'faculty_name' => $source['faculty_name'],
+                    'specialty_name' => $source['specialty_name'],
+                    'course' => $source['course'],
+                    'group_name' => $source['group_name'],
+                ];
+                $scopeHash = $this->groupScopeHash($base);
+                $studentCount = (int) $row['student_count'];
+                $record = StudentDistributionGroup::query()
+                    ->where('is_active', true)
+                    ->where('scope_hash', $scopeHash)
+                    ->first();
+
+                $values = $base + [
+                    'group_hemis_id' => $source['group_hemis_id'],
+                    'capacity' => $studentCount,
+                    'occupied_count' => $studentCount,
+                    'free_places' => 0,
+                    'source_file' => null,
+                    'uploaded_by' => Auth::id(),
+                    'scope_hash' => $scopeHash,
+                    'is_source' => true,
+                    'is_active' => true,
+                ];
+
+                if ($record) {
+                    $record->update($values);
+                } else {
+                    StudentDistributionGroup::query()->create($values + [
+                        'import_key' => $importKey,
+                    ]);
+                }
             }
         });
 
         return response()->json([
-            'message' => $ids->count() . ' ta guruh talabalari taqsimlanadigan guruh sifatida saqlandi.',
+            'message' => $selected->count() . ' ta source guruh talabalar soni bilan draftga saqlandi.',
             'groups' => $this->activeGroupPayloads(),
         ]);
     }
-
     public function groups(Request $request): JsonResponse
     {
         $groups = $this->filteredGroups($request)

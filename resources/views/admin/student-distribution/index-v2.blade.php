@@ -86,7 +86,7 @@
         <div class="sd-modal" role="dialog" aria-modal="true">
             <div class="sd-modal-head"><div><h2>Talabalari taqsimlanadigan guruhlar</h2><p>Faqat belgilangan guruh talabalarini boshqa guruhga o'tkazish mumkin.</p></div><button class="sd-close" type="button" data-close="sourcesModal">&times;</button></div>
                 <div class="sd-paste-box">
-                    <div><span class="sd-paste-help">Talabalari ko'chiriladigan guruh nomlarini copy-paste qiling.</span><textarea class="sd-paste" id="sourcePaste" placeholder="p24-06a&#10;p24-06b"></textarea></div>
+                    <div><span class="sd-paste-help">Guruh nomi va ko'chiriladigan talabalar sonini ikki ustun qilib copy-paste qiling.</span><textarea class="sd-paste" id="sourcePaste" placeholder="d1/23-09a    10&#10;d1/23-09b    10"></textarea></div>
                     <button class="sd-btn sd-btn-green" id="applySourcePaste" type="button">Ro'yxatni qo'llash</button>
                 </div>
             <div class="sd-config-body">
@@ -96,7 +96,7 @@
                     <div class="sd-field"><label class="sd-label">Kurs</label><select class="sd-select" id="sourceCourse"></select></div>
                     <div class="sd-field"><label class="sd-label">Qidirish</label><input class="sd-input" id="sourceSearch" placeholder="Guruh nomi"></div>
                 </div>
-                <div class="sd-config-scroll"><table class="sd-config-table"><thead><tr><th></th><th>Guruh</th><th>Sig'im</th><th>Bo'sh joy</th><th>Holat</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+                <div class="sd-config-scroll"><table class="sd-config-table"><thead><tr><th></th><th>Guruh</th><th>LMS talabalari</th><th>Ko'chiriladigan son</th><th>Holat</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
             </div>
             <div class="sd-config-foot"><span id="sourceSelectedCount">0 ta tanlandi</span><button class="sd-btn sd-btn-green" id="saveSources" type="button">Ro'yxatni saqlash</button></div>
         </div>
@@ -143,7 +143,8 @@
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
             let groups = initialGroups, selectedGroup = null, selectedStudent = null;
-            const catalogSelected = new Set(catalog.filter(item => item.is_saved).map(item => item.key)), sourceSelected = new Set(groups.filter(item => item.is_source).map(item => item.id)), studentCache = new Map(), catalogDraft = new Map(catalog.map(item => [item.key, {capacity:item.capacity, free_places:item.free_places}]));
+            const catalogSelected = new Set(catalog.filter(item => item.is_saved).map(item => item.key)), sourceSelected = new Set(catalog.filter(item => item.is_source).map(item => item.key)), studentCache = new Map(), catalogDraft = new Map(catalog.map(item => [item.key, {capacity:item.capacity, free_places:item.free_places}]));
+            const sourceDraft = new Map(catalog.map(item => [item.key, item.is_source ? item.capacity : item.student_count]));
 
             const $ = id => document.getElementById(id);
             const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
@@ -205,12 +206,15 @@
                 $('catalogCount').textContent = catalogSelected.size+' ta tanlandi';
             }
             function renderSources() {
-                const list = configFiltered(groups, 'source');
-                $('sourceRows').innerHTML = list.length ? list.map(group => '<tr data-id="'+group.id+'"><td><input class="sd-check source-check" type="checkbox" '+(sourceSelected.has(group.id)?'checked':'')+'></td><td class="sd-row-title"><b>'+esc(group.group_name)+'</b><span>'+esc(group.faculty_name)+' / '+esc(group.specialty_name)+' / '+group.course+'-kurs</span></td><td>'+group.capacity+'</td><td>'+group.free_places+'</td><td>'+(group.is_source?'<span class="sd-pill sd-pill-red">Taqsimlanadi</span>':'<span class="sd-pill sd-pill-green">Qabul qiluvchi</span>')+'</td></tr>').join('') : '<tr><td colspan="5" class="sd-muted">Avval guruhlarni DB ga yuklang.</td></tr>';
+                const list = configFiltered(catalog, 'source');
+                $('sourceRows').innerHTML = list.length ? list.map(item => {
+                    const count = sourceDraft.get(item.key) ?? item.student_count;
+                    return '<tr data-key="'+item.key+'"><td><input class="sd-check source-check" type="checkbox" '+(sourceSelected.has(item.key)?'checked':'')+'></td><td class="sd-row-title"><b>'+esc(item.group_name)+'</b><span>'+esc(item.faculty_name)+' / '+esc(item.specialty_name)+' / '+item.course+'-kurs</span></td><td>'+item.student_count+'</td><td><input class="sd-number source-count-input" type="number" min="0" max="1000" value="'+count+'"></td><td>'+(item.is_source?'<span class="sd-pill sd-pill-red">Taqsimlanadi</span>':'<span class="sd-pill">Yangi</span>')+'</td></tr>';
+                }).join('') : '<tr><td colspan="5" class="sd-muted">Mos LMS guruhi topilmadi.</td></tr>';
                 $('sourceSelectedCount').textContent = sourceSelected.size+' ta tanlandi';
             }
             function openCatalog() { configOptions(catalog,'catalog'); renderCatalog(); $('catalogModal').classList.add('is-open'); }
-            function openSources() { configOptions(groups,'source'); renderSources(); $('sourcesModal').classList.add('is-open'); }
+            function openSources() { configOptions(catalog,'source'); renderSources(); $('sourcesModal').classList.add('is-open'); }
             const normalizeGroupName = value => {
                 return String(value || '').trim().toLowerCase()
                     .replace(/\s+/g,'')
@@ -259,15 +263,42 @@
                 alert(message);
             }
             function applySourcePaste() {
-                const names = $('sourcePaste').value.split(/[\t\r\n]+/).map(normalizeGroupName).filter(Boolean);
-                if (!names.length) return alert('Guruh nomlarini kiriting.');
-                const wanted = new Set(names);
+                const text = $('sourcePaste').value.trim();
+                if (!text) return alert('Guruh nomi va talabalar sonini kiriting.');
+                const byName = new Map(catalog.map(item => [normalizeGroupName(item.group_name), item]));
+                const matched = new Set();
+                const unmatched = new Set();
                 sourceSelected.clear();
-                groups.forEach(group => { if (wanted.has(normalizeGroupName(group.group_name))) sourceSelected.add(group.id); });
-                renderSources();
-                alert(sourceSelected.size ? sourceSelected.size+' ta guruh topildi. Endi "Ro\'yxatni saqlash"ni bosing.' : 'DB dagi guruhlarga mos nom topilmadi.');
-            }
 
+                text.split(/\r?\n/).forEach(line => {
+                    const cells = line.includes('\t') ? line.split('\t') : line.trim().split(/\s{2,}/);
+                    for (let index = 0; index + 1 < cells.length; index++) {
+                        const name = String(cells[index] || '').trim();
+                        const studentCount = Number(String(cells[index + 1] || '').replace(',','.'));
+                        if (!name || !Number.isFinite(studentCount)) continue;
+
+                        const item = byName.get(normalizeGroupName(name));
+                        if (item) {
+                            sourceSelected.add(item.key);
+                            sourceDraft.set(item.key, Math.max(0,Math.trunc(studentCount)));
+                            matched.add(item.key);
+                        } else {
+                            unmatched.add(name);
+                        }
+                        index += 1;
+                    }
+                });
+
+                renderSources();
+                const total = matched.size + unmatched.size;
+                let message = matched.size+'/'+total+' ta source guruh topildi.';
+                if (unmatched.size) {
+                    message += '\n\nTopilmagan guruhlar:\n- '+[...unmatched].join('\n- ');
+                } else {
+                    message += '\nEndi "Ro\'yxatni saqlash"ni bosing.';
+                }
+                alert(message);
+            }
             async function saveCatalog() {
                 const rows = [...catalogSelected].map(key => ({key, ...catalogDraft.get(key)}));
                 if (!rows.length) return alert('Kamida bitta guruhni tanlang.');
@@ -275,7 +306,9 @@
                 try { const data = await postJson(urls.storeGroups,{groups:rows}); alert(data.message); location.reload(); } catch (error) { alert(error.message); }
             }
             async function saveSources() {
-                try { const data = await postJson(urls.storeSources,{group_ids:[...sourceSelected]}); alert(data.message); location.reload(); } catch (error) { alert(error.message); }
+                const rows = [...sourceSelected].map(key => ({key,student_count:Number(sourceDraft.get(key) || 0)}));
+                if (!rows.length) return alert('Kamida bitta source guruhni tanlang.');
+                try { const data = await postJson(urls.storeSources,{groups:rows}); alert(data.message); location.reload(); } catch (error) { alert(error.message); }
             }
 
             function openFill(id) {
@@ -343,7 +376,7 @@
             $('applyCatalogPaste').addEventListener('click', applyCatalogPaste);
             $('applySourcePaste').addEventListener('click', applySourcePaste);
             ['catalogFaculty','catalogSpecialty','catalogCourse'].forEach(id => $(id).addEventListener('change', () => { configOptions(catalog,'catalog'); renderCatalog(); }));
-            ['sourceFaculty','sourceSpecialty','sourceCourse'].forEach(id => $(id).addEventListener('change', () => { configOptions(groups,'source'); renderSources(); }));
+            ['sourceFaculty','sourceSpecialty','sourceCourse'].forEach(id => $(id).addEventListener('change', () => { configOptions(catalog,'source'); renderSources(); }));
             $('catalogSearch').addEventListener('input', renderCatalog);
             $('sourceSearch').addEventListener('input', renderSources);
             document.addEventListener('change', event => {
@@ -356,8 +389,11 @@
                     catalogDraft.set(row.dataset.key, {capacity:Number(row.querySelector('.capacity-input').value),free_places:Number(row.querySelector('.free-input').value)});
                 }
                 if (event.target.matches('.source-check')) {
-                    event.target.checked ? sourceSelected.add(Number(row.dataset.id)) : sourceSelected.delete(Number(row.dataset.id));
+                    event.target.checked ? sourceSelected.add(row.dataset.key) : sourceSelected.delete(row.dataset.key);
                     $('sourceSelectedCount').textContent = sourceSelected.size+' ta tanlandi';
+                }
+                if (event.target.matches('.source-count-input')) {
+                    sourceDraft.set(row.dataset.key, Math.max(0,Math.trunc(Number(event.target.value) || 0)));
                 }
             });
 

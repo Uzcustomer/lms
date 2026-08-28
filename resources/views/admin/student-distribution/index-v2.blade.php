@@ -1,6 +1,6 @@
 <x-app-layout>
     <style>
-        .sd-page{max-width:1540px;margin:0 auto;padding:18px 14px 34px;color:#0f172a}
+        .sd-page{width:100%;max-width:none;margin:0;padding:18px 14px 34px;color:#0f172a}
         .sd-hero{position:relative;overflow:hidden;border-radius:20px;padding:22px 24px;color:#fff;background:linear-gradient(120deg,#123766,#1d4ed8 60%,#0ea5e9);box-shadow:0 14px 30px rgba(30,64,175,.18)}
         .sd-hero:after{content:"";position:absolute;right:-70px;top:-100px;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.1)}
         .sd-hero-content{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:18px}

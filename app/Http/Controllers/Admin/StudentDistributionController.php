@@ -102,10 +102,15 @@ class StudentDistributionController extends Controller
         $parsedGroups = [];
         foreach ($rows as $row) {
             $group = $this->parseGroupRow($this->normalizeRow($row, $columnCount), $mapping);
-            if ($group !== null) $parsedGroups[] = $group + [
-                'source_file' => $fileName, 'uploaded_by' => Auth::id(), 'is_active' => true,
-                'import_key' => $importKey,
-            ];
+            if ($group !== null) {
+                $parsedGroups[] = $group + [
+                    'source_file' => $fileName,
+                    'uploaded_by' => Auth::id(),
+                    'import_key' => $importKey,
+                    'scope_hash' => $this->groupScopeHash($group),
+                    'is_active' => true,
+                ];
+            }
         }
         if (!$parsedGroups) {
             return back()->withInput()->withErrors(['student_file' => 'Exceldan yaroqli guruh qatorlari topilmadi.']);
@@ -287,6 +292,16 @@ class StudentDistributionController extends Controller
             'capacity' => (int) $group->capacity, 'occupied_count' => (int) $group->occupied_count,
             'free_places' => (int) $group->free_places,
         ];
+    }
+
+    private function groupScopeHash(array $group): string
+    {
+        return hash('sha256', implode("\x1F", [
+            mb_strtolower(trim((string) $group['faculty_name'])),
+            mb_strtolower(trim((string) $group['specialty_name'])),
+            (string) $group['course'],
+            mb_strtolower(trim((string) $group['group_name'])),
+        ]));
     }
 
     private function parseGroupRow(array $values, array $mapping): ?array

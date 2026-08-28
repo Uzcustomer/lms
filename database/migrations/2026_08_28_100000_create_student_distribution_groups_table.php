@@ -21,10 +21,11 @@ return new class extends Migration
             $table->string('source_file')->nullable();
             $table->unsignedBigInteger('uploaded_by')->nullable();
             $table->uuid('import_key');
+            $table->char('scope_hash', 64);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->unique(['import_key', 'faculty_name', 'specialty_name', 'course', 'group_name'], 'sd_groups_scope_unique');
+            $table->unique(['import_key', 'scope_hash'], 'sd_groups_scope_unique');
             $table->index(['faculty_name', 'specialty_name', 'course']);
             $table->index('free_places');
         });

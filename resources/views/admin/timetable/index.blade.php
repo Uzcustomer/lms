@@ -216,7 +216,7 @@
                                 class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50"></button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <select id="cycleGroupFilter" class="hidden text-[11px] rounded border-gray-300 py-1 pl-2 pr-7 text-gray-600" aria-label="Guruh bo'yicha filtr"><option value="">Barcha guruhlar</option></select>
+                            <select id="cycleGroupFilter" class="hidden text-[11px] rounded border-gray-300 py-1 pl-2 pr-7 text-gray-600" aria-label="Oqim bo'yicha filtr"><option value="">Barcha oqimlar</option></select>
                             <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                             <button type="button" id="unplacedExportBtn"
                                 class="hidden text-[11px] rounded px-2 py-1 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -2943,9 +2943,9 @@
                     renderHolChips();
                     renderCyclePlan(j);
                     renderCycleCards(j);
-                    $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' guruh, ' +
+                    $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
                         ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
-                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' guruh · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
+                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' oqim · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
                         (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
                         (cycleHolidays.length ? (' · ' + cycleHolidays.length + ' bayram') : '');
                 } catch (e) {
@@ -2957,10 +2957,10 @@
             function renderCyclePlanLegacy(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
-                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki guruh topilmadi. Fan sozlamasida 4-6 kurs fanlarini <b>Sikl</b> qilib, sikl uzunligini (kun) kiriting, so\'ng shu yerni Yangilang.</td></tr></tbody>';
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Fan sozlamasida 4-6 kurs fanlarini <b>Sikl</b> qilib, sikl uzunligini (kun) kiriting, so\'ng shu yerni Yangilang.</td></tr></tbody>';
                     return;
                 }
-                let h = '<thead><tr><th class="cyc-gcol">Guruh</th>';
+                let h = '<thead><tr><th class="cyc-gcol">Oqim</th>';
                 dates.forEach(d => h += '<th class="cyc-dcol' + ((d.sunday || d.holiday) ? ' cyc-off' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(r => {
@@ -3004,13 +3004,13 @@
             function renderCyclePlan(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
-                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki guruh topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
                     renderCycleCards(j);
                     return;
                 }
                 let h = '<colgroup><col class="cyc-group-col">';
                 dates.forEach(() => h += '<col class="cyc-date-col">');
-                h += '</colgroup><thead><tr><th class="cyc-gcol">Guruh</th>';
+                h += '</colgroup><thead><tr><th class="cyc-gcol">Oqim</th>';
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
@@ -3054,7 +3054,7 @@
                         const index = +cell.dataset.cycleIndex;
                         cycleDragKey = null;
                         if (!card || card.row_key !== rowKey) {
-                            alert('Fan kartasini faqat o‘z guruhining qatoriga joylang.');
+                            alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
                             return;
                         }
                         try {
@@ -3075,7 +3075,7 @@
                         const index = +cell.dataset.cycleIndex;
                         cycleDragKey = null;
                         if (!card || card.row_key !== rowKey) {
-                            alert('Fan kartasini faqat o\u2018z guruhining qatoriga joylang.');
+                            alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
                             return;
                         }
                         placeCycleCardAt(card, index);
@@ -3121,7 +3121,7 @@
                 const groups = [...new Set(cycleCards.map(card => card.group).filter(Boolean))]
                     .sort((a, b) => a.localeCompare(b, 'uz', { numeric: true }));
                 const groupFilter = $('cycleGroupFilter');
-                groupFilter.innerHTML = '<option value="">Barcha guruhlar</option>' + groups.map(group =>
+                groupFilter.innerHTML = '<option value="">Barcha oqimlar</option>' + groups.map(group =>
                     '<option value="' + esc(group) + '">' + esc(group) + '</option>'
                 ).join('');
                 if (!groups.includes(cycleGroupFilter)) cycleGroupFilter = '';
@@ -3134,7 +3134,7 @@
                 $('skipToggle').classList.add('hidden');
                 $('unplacedExportBtn').classList.add('hidden');
                 $('cardPanelTitle').textContent = 'Sikl fan kartalari';
-                $('cardPanelHint').textContent = 'Kartani o‘z guruh qatoridagi boshlanish kuniga sudrang';
+                $('cardPanelHint').textContent = 'Kartani o‘z oqim qatoridagi boshlanish kuniga sudrang';
                 $('cardPanelHint').classList.remove('hidden');
                 const unplaced = cycleCards.filter(card => !card.placed &&
                     (!cycleGroupFilter || card.group === cycleGroupFilter)).sort((a, b) =>
@@ -3148,7 +3148,7 @@
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     card.addEventListener('click', () => {
                         cycleDragKey = card.dataset.cycleKey;
-                        $('cycleMsg').textContent = 'Endi shu guruh qatoridagi boshlanish kunini bosing.';
+                        $('cycleMsg').textContent = 'Endi shu oqim qatoridagi boshlanish kunini bosing.';
                     });
                     card.addEventListener('dragstart', ev => {
                         cycleDragKey = card.dataset.cycleKey;

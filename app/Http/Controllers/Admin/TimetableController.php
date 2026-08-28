@@ -3617,8 +3617,9 @@ class TimetableController extends Controller
             }
         }
 
-        // Guruhlar (asosiy guruh bo'yicha) va ularning sikl fanlari — kartalardan
-        $byGroup = [];
+        // Oqimlar va ularning sikl fanlari kartalardan yig'iladi. Har bir qator
+        // shu oqim tarkibidagi barcha amaliy guruhlarni birga qamrab oladi.
+        $byFlow = [];
         if (!empty($cycleKey)) {
             foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
                 if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)) {
@@ -3628,20 +3629,23 @@ class TimetableController extends Controller
                 if (!isset($cycleKey[$ck])) {
                     continue;
                 }
-                $base = $this->baseGroup($c->group_name);
-                $groupKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($base);
-                if (!isset($byGroup[$groupKey])) {
-                    $byGroup[$groupKey] = ['name' => $base, 'subs' => [], 'members' => [],
+                $flow = trim((string) $c->oqim_label);
+                if ($flow === '') {
+                    $flow = $this->baseGroup($c->group_name);
+                }
+                $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
+                if (!isset($byFlow[$flowKey])) {
+                    $byFlow[$flowKey] = ['name' => $flow, 'subs' => [], 'members' => [],
                         'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
                 }
-                $byGroup[$groupKey]['subs'][$c->subject_name] = $cycleKey[$ck];
-                $byGroup[$groupKey]['members'][$c->group_name] = true;
+                $byFlow[$flowKey]['subs'][$c->subject_name] = $cycleKey[$ck];
+                $byFlow[$flowKey]['members'][$c->group_name] = true;
             }
         }
 
         // Fanlar global tartibi (nomi bo'yicha) — rotatsiya uchun
         $allSubs = [];
-        foreach ($byGroup as $g) {
+        foreach ($byFlow as $g) {
             foreach ($g['subs'] as $sn => $dd) {
                 $allSubs[$sn] = $dd;
             }
@@ -3649,14 +3653,15 @@ class TimetableController extends Controller
         ksort($allSubs);
         $subOrder = array_keys($allSubs);
 
-        $groups = array_values($byGroup);
+        $groups = array_values($byFlow);
         usort($groups, fn($a, $b) => strnatcmp($a['name'], $b['name']));
 
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
         $subjectKey = fn($g, $subject) => $rowKey($g) . '|' . (string) $subject;
         $autoRows = [];
+        $subjectBusy = [];
         foreach ($groups as $gi => $g) {
-            // Shu guruh fanlari, global tartibda, guruh indeksi bo'yicha aylantirilgan
+            // Oqim fanlari aylantiriladi va bir fan ikki oqimda bir sanaga tushmaydi.
             $order = array_merge(array_slice($subOrder, $gi % max(1, count($subOrder))),
                                  array_slice($subOrder, 0, $gi % max(1, count($subOrder))));
             $blocks = [];
@@ -3669,10 +3674,26 @@ class TimetableController extends Controller
                     break;
                 }
                 $days = max(1, (int) $g['subs'][$sn]);
+                $busyKey = $normKey($g['specialty'], $g['course'], $sn);
+                do {
+                    $moved = false;
+                    $candidateEnd = $idx + $days - 1;
+                    foreach ($subjectBusy[$busyKey] ?? [] as [$busyFrom, $busyTo]) {
+                        if ($idx <= $busyTo && $busyFrom <= $candidateEnd) {
+                            $idx = $busyTo + 1;
+                            $moved = true;
+                            break;
+                        }
+                    }
+                } while ($moved && $idx < count($workIndices));
+                if ($idx >= count($workIndices)) {
+                    break;
+                }
                 $toPosition = min($idx + $days - 1, count($workIndices) - 1);
                 $from = $workIndices[$idx];
                 $to = $workIndices[$toPosition];
                 $blocks[] = ['key' => $subjectKey($g, $sn), 'subject' => $sn, 'from' => $from, 'to' => $to, 'days' => $days];
+                $subjectBusy[$busyKey][] = [$idx, $toPosition];
                 // Sikllar orasida yakshanbani hisoblamagan holda 2 ta o'quv kuni bo'sh qoladi.
                 $idx = $toPosition + 1 + 2;
             }
@@ -3857,15 +3878,25 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu fan sikl rejimida topilmadi.'], 422);
         }
 
-        $cards = TimetableCard::where('board_id', $board->id)
+        $scopeCards = TimetableCard::where('board_id', $board->id)
             ->where('course', (int) $data['course'])
             ->where('specialty_name', $data['specialty_name'])
             ->where('training_type', 'practice')
-            ->get()
-            ->filter(fn($card) => $this->baseGroup($card->group_name) === $data['group_name']
-                && $norm($card->subject_name) === $norm($data['subject_name']));
+            ->get();
+        $activeFlows = $scopeCards->map(function ($card) use ($norm) {
+            $flow = trim((string) $card->oqim_label);
+            $flow = $flow !== '' ? $flow : $this->baseGroup($card->group_name);
+            return $norm($flow);
+        })->filter()->flip()->all();
+        $cards = $scopeCards
+            ->filter(function ($card) use ($data, $norm) {
+                $flow = trim((string) $card->oqim_label);
+                $flow = $flow !== '' ? $flow : $this->baseGroup($card->group_name);
+                return $norm($flow) === $norm($data['group_name'])
+                    && $norm($card->subject_name) === $norm($data['subject_name']);
+            });
         if ($cards->isEmpty()) {
-            return response()->json(['error' => 'Tanlangan guruh va fan kartasi topilmadi.'], 422);
+            return response()->json(['error' => 'Tanlangan oqim va fan kartasi topilmadi.'], 422);
         }
 
         $set = $board->settings ?? [];
@@ -3916,6 +3947,32 @@ class TimetableController extends Controller
             }
             return null;
         };
+        $allCyclePlacements = $hasCyclePlacements
+            ? TimetableCyclePlacement::where('board_id', $board->id)->get()
+            : collect($set['cycle_placements'] ?? [])->map(fn($item) => (object) $item);
+        $hasFlowSubjectConflict = function (string $subject, string $flow, int $from, int $days) use (
+            $allCyclePlacements, $activeFlows, $data, $norm, $endIndexFor
+        ): bool {
+            $to = $endIndexFor($from, $days);
+            if ($to === null) {
+                return true;
+            }
+            foreach ($allCyclePlacements as $placement) {
+                if ($norm(data_get($placement, 'specialty_name')) !== $norm($data['specialty_name'])
+                    || (int) data_get($placement, 'course') !== (int) $data['course']
+                    || $norm(data_get($placement, 'subject_name')) !== $norm($subject)
+                    || $norm(data_get($placement, 'group_name')) === $norm($flow)
+                    || !isset($activeFlows[$norm(data_get($placement, 'group_name'))])) {
+                    continue;
+                }
+                $otherFrom = (int) data_get($placement, 'start_index');
+                $otherTo = $endIndexFor($otherFrom, $days);
+                if ($otherTo !== null && $from <= $otherTo && $otherFrom <= $to) {
+                    return true;
+                }
+            }
+            return false;
+        };
         if ($data['action'] === 'shift') {
             $direction = (int) ($data['direction'] ?? 0);
             if (!in_array($direction, [-1, 1], true)) {
@@ -3953,6 +4010,13 @@ class TimetableController extends Controller
                 if ($newPosition === null || $newPosition + $days > count($workIndices)) return null;
                 return $newStart;
             };
+            $placementConflicts = function ($placement, int $newStart) use ($cycleSettings, $norm, $hasFlowSubjectConflict, $data): bool {
+                $setting = $cycleSettings->get(
+                    $norm(data_get($placement, 'specialty_name')) . '|' . (int) data_get($placement, 'course') . '|' . $norm(data_get($placement, 'subject_name'))
+                );
+                $days = max(1, (int) ($setting->cycle_days ?? 1));
+                return $hasFlowSubjectConflict((string) data_get($placement, 'subject_name'), $data['group_name'], $newStart, $days);
+            };
             $isTarget = function ($placement) use ($data, $norm, $currentStart): bool {
                 return $norm(data_get($placement, 'specialty_name')) === $norm($data['specialty_name'])
                     && (int) data_get($placement, 'course') === (int) $data['course']
@@ -3983,6 +4047,9 @@ class TimetableController extends Controller
                     if ($newStart === null) {
                         return response()->json(['error' => 'Sikl kartasini bu tomonga siljitib bo\'lmaydi.'], 422);
                     }
+                    if ($placementConflicts($placement, $newStart)) {
+                        return response()->json(['error' => 'Bu fan shu sanalarda boshqa oqimga joylangan.'], 422);
+                    }
                     $toShift[] = [$placement, $newStart];
                 }
                 if (!$targetFound) {
@@ -4001,8 +4068,12 @@ class TimetableController extends Controller
                 }
                 foreach ($fallback as $placement) {
                     if (!$isRow($placement) || (int) data_get($placement, 'start_index') < $currentStart) continue;
-                    if ($shiftedStart($placement) === null) {
+                    $newStart = $shiftedStart($placement);
+                    if ($newStart === null) {
                         return response()->json(['error' => 'Sikl kartasini bu tomonga siljitib bo\'lmaydi.'], 422);
+                    }
+                    if ($placementConflicts($placement, $newStart)) {
+                        return response()->json(['error' => 'Bu fan shu sanalarda boshqa oqimga joylangan.'], 422);
                     }
                 }
                 $fallback = $fallback->map(function ($placement) use ($shiftedStart, $isRow, $currentStart, &$shifted) {
@@ -4092,6 +4163,9 @@ class TimetableController extends Controller
             }
         }
 
+        if ($hasFlowSubjectConflict($data['subject_name'], $data['group_name'], $from, $requiredDays)) {
+            return response()->json(['error' => 'Bu fan shu sanalarda boshqa oqimga joylangan.'], 422);
+        }
         if ($hasCyclePlacements) {
             TimetableCyclePlacement::updateOrCreate([
                 'board_id' => $board->id,

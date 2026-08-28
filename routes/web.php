@@ -461,6 +461,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/groups', [StudentDistributionController::class, 'storeGroups'])->name('groups.store');
                 Route::post('/source-groups', [StudentDistributionController::class, 'storeSourceGroups'])->name('source-groups.store');
                 Route::get('/groups', [StudentDistributionController::class, 'groups'])->name('groups');
+                Route::delete('/groups/{group}', [StudentDistributionController::class, 'destroyGroup'])->name('groups.destroy');
                 Route::get('/students', [StudentDistributionController::class, 'students'])->name('students');
                 Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');
                 Route::post('/group-change-permission', [StudentDistributionController::class, 'setGroupChangePermission'])->name('group-change-permission');

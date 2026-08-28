@@ -197,6 +197,68 @@ class StudentDistributionController extends Controller
         return response()->json(['groups' => $groups]);
     }
 
+    public function destroyGroup(int $group): JsonResponse
+    {
+        $deletedName = DB::transaction(function () use ($group) {
+            $record = StudentDistributionGroup::query()
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->findOrFail($group);
+
+            $assignments = StudentDistributionAssignment::query()
+                ->where(function (Builder $query) use ($record) {
+                    $query->where('source_group_id', $record->id)
+                        ->orWhere('target_group_id', $record->id);
+                })
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($assignments as $assignment) {
+                if ((int) $assignment->source_group_id === (int) $record->id) {
+                    $target = StudentDistributionGroup::query()
+                        ->lockForUpdate()
+                        ->find($assignment->target_group_id);
+                    if ($target) {
+                        $target->update([
+                            'occupied_count' => max(0, (int) $target->occupied_count - 1),
+                            'free_places' => min((int) $target->capacity, (int) $target->free_places + 1),
+                        ]);
+                    }
+                } else {
+                    $source = StudentDistributionGroup::query()
+                        ->lockForUpdate()
+                        ->find($assignment->source_group_id);
+                    if ($source) {
+                        $source->update([
+                            'occupied_count' => min((int) $source->capacity, (int) $source->occupied_count + 1),
+                            'free_places' => max(0, (int) $source->free_places - 1),
+                        ]);
+                    }
+                }
+                $assignment->delete();
+            }
+
+            if ($record->is_source && Schema::hasTable('student_group_change_permissions')) {
+                $studentIds = $this->studentsForDistributionGroup($record)->pluck('id');
+                if ($studentIds->isNotEmpty()) {
+                    StudentGroupChangePermission::query()
+                        ->whereIn('student_id', $studentIds)
+                        ->update(['enabled' => false]);
+                }
+            }
+
+            $name = $record->group_name;
+            $record->delete();
+
+            return $name;
+        }, 3);
+
+        return response()->json([
+            'message' => $deletedName . ' draft guruhi o\'chirildi.',
+            'groups' => $this->activeGroupPayloads(),
+        ]);
+    }
+
     public function students(Request $request): JsonResponse
     {
         $request->validate([

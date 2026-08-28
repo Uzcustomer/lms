@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\StudentDistributionGroup;
+use App\Models\StudentDistributionAssignment;
 use App\Models\StudentGroupChangePermission;
-use App\Models\StudentGroupHistory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -186,7 +186,19 @@ class StudentDistributionController extends Controller
             });
         });
 
-        $students = $query->orderBy('full_name')->limit(500)->get()->map(function (Student $student) {
+        $studentRows = $query->orderBy('full_name')->limit(500)->get();
+        $drafts = collect();
+        if (Schema::hasTable('student_distribution_assignments') && $studentRows->isNotEmpty()) {
+            $drafts = StudentDistributionAssignment::query()
+                ->with('targetGroup:id,group_name')
+                ->whereIn('student_id', $studentRows->pluck('id'))
+                ->get()
+                ->keyBy('student_id');
+        }
+
+        $students = $studentRows->map(function (Student $student) use ($drafts) {
+            $draft = $drafts->get($student->id);
+
             return [
                 'id' => $student->id,
                 'name' => $student->full_name,
@@ -197,6 +209,8 @@ class StudentDistributionController extends Controller
                 'specialty' => $student->specialty_name,
                 'course' => $this->courseNumber($student->level_code, $student->level_name),
                 'group_name' => $student->group_name,
+                'draft_target_group_id' => $draft?->target_group_id,
+                'draft_target_group_name' => $draft?->targetGroup?->group_name,
                 'permission_enabled' => StudentGroupChangePermission::query()
                     ->where('student_id', $student->id)->where('enabled', true)->exists(),
             ];
@@ -214,8 +228,14 @@ class StudentDistributionController extends Controller
 
         try {
             $result = DB::transaction(function () use ($data) {
-                $student = Student::query()->lockForUpdate()->findOrFail($data['student_id']);
-                $target = StudentDistributionGroup::query()->where('is_active', true)->lockForUpdate()
+                $student = Student::query()->findOrFail($data['student_id']);
+                $draft = StudentDistributionAssignment::query()
+                    ->where('student_id', $student->id)
+                    ->lockForUpdate()
+                    ->first();
+                $target = StudentDistributionGroup::query()
+                    ->where('is_active', true)
+                    ->lockForUpdate()
                     ->findOrFail($data['distribution_group_id']);
 
                 if ($target->is_source) {
@@ -224,59 +244,79 @@ class StudentDistributionController extends Controller
                 if (!$this->studentMatchesGroup($student, $target)) {
                     abort(422, 'Talaba tanlangan guruhning fakultet, yo\'nalish yoki kursiga mos emas.');
                 }
-                if ($target->free_places < 1) {
-                    abort(422, 'Tanlangan guruhda bo\'sh joy qolmagan.');
-                }
 
-                $oldGroup = StudentDistributionGroup::query()->where('is_active', true)
+                $source = StudentDistributionGroup::query()
+                    ->where('is_active', true)
                     ->where('faculty_name', $target->faculty_name)
                     ->where('specialty_name', $target->specialty_name)
                     ->where('course', $target->course)
                     ->where('group_name', $student->group_name)
-                    ->lockForUpdate()->first();
+                    ->lockForUpdate()
+                    ->first();
 
-                if (!$oldGroup || !$oldGroup->is_source) {
+                if (!$source || !$source->is_source) {
                     abort(422, 'Bu talabaning guruhi taqsimlanadigan guruhlar ro\'yxatida yo\'q.');
                 }
-                if ($oldGroup->id === $target->id) {
-                    abort(422, 'Talaba ayni guruhning o\'ziga o\'tkazilmaydi.');
+                if ($source->id === $target->id) {
+                    abort(422, 'Talaba ayni guruhning o\'ziga biriktirilmaydi.');
+                }
+                if ($draft && (int) $draft->target_group_id === (int) $target->id) {
+                    abort(422, 'Talaba bu guruhga draftda allaqachon biriktirilgan.');
+                }
+                if ($target->free_places < 1) {
+                    abort(422, 'Tanlangan guruhning draft bo\'sh joyi qolmagan.');
                 }
 
-                $oldGroup->update([
-                    'occupied_count' => max(0, $oldGroup->occupied_count - 1),
-                    'free_places' => min($oldGroup->capacity, $oldGroup->free_places + 1),
-                ]);
+                if ($draft) {
+                    $previousTarget = StudentDistributionGroup::query()
+                        ->lockForUpdate()
+                        ->find($draft->target_group_id);
+                    if ($previousTarget) {
+                        $previousTarget->update([
+                            'occupied_count' => max(0, $previousTarget->occupied_count - 1),
+                            'free_places' => min($previousTarget->capacity, $previousTarget->free_places + 1),
+                        ]);
+                    }
+                } else {
+                    $source->update([
+                        'occupied_count' => max(0, $source->occupied_count - 1),
+                        'free_places' => min($source->capacity, $source->free_places + 1),
+                    ]);
+                }
+
                 $target->update([
                     'occupied_count' => $target->occupied_count + 1,
                     'free_places' => max(0, $target->free_places - 1),
                 ]);
 
-                if ($student->group_name) {
-                    StudentGroupHistory::query()->where('student_id', $student->id)
-                        ->whereNull('ended_at')->update(['ended_at' => now()]);
-                }
-                $student->update([
-                    'group_id' => $this->numericGroupId($target->group_hemis_id),
-                    'group_name' => $target->group_name,
-                ]);
-                StudentGroupHistory::create([
-                    'student_id' => $student->id,
-                    'group_hemis_id' => $target->group_hemis_id,
-                    'group_name' => $target->group_name,
-                    'specialty_name' => $student->specialty_name,
-                    'education_year_name' => $student->education_year_name,
-                    'started_at' => now(),
-                ]);
+                $assignment = StudentDistributionAssignment::updateOrCreate(
+                    ['student_id' => $student->id],
+                    [
+                        'source_group_id' => $source->id,
+                        'target_group_id' => $target->id,
+                        'original_group_hemis_id' => $student->group_id ? (string) $student->group_id : null,
+                        'original_group_name' => $student->group_name,
+                        'student_name' => $student->full_name,
+                        'student_id_number' => $student->student_id_number,
+                        'assigned_by' => Auth::id(),
+                    ]
+                );
 
-                return $this->groupPayload($target->fresh());
+                return [
+                    'group' => $this->groupPayload($target->fresh()),
+                    'assignment_id' => $assignment->id,
+                ];
             });
 
-            return response()->json(['message' => 'Talaba guruhga muvaffaqiyatli o\'tkazildi.', 'group' => $result]);
+            return response()->json([
+                'message' => 'Talaba faqat draft taqsimotga biriktirildi. LMS guruhi o\'zgarmadi.',
+                'group' => $result['group'],
+                'assignment_id' => $result['assignment_id'],
+            ]);
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
     }
-
     public function setGroupChangePermission(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -416,10 +456,5 @@ class StudentDistributionController extends Controller
         }
 
         return null;
-    }
-
-    private function numericGroupId($value): ?int
-    {
-        return ctype_digit((string) $value) ? (int) $value : null;
     }
 }

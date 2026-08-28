@@ -284,7 +284,11 @@
             }
             function studentRows(students, canMove) {
                 if (!students.length) return '<div class="sd-muted">Talabalar topilmadi.</div>';
-                return students.map(student => '<div class="sd-student-row"><div class="sd-student-info"><b>'+esc(student.name)+'</b><span>'+esc(student.student_id_number)+' / '+esc(student.course ? student.course+'-kurs' : '-')+' / '+esc(student.group_name || '-')+'</span></div>'+(canMove ? '<button class="sd-btn sd-btn-green move-trigger" type="button" data-student="'+student.id+'">Guruhga o\'tkazish</button>' : '<span class="sd-permission">Biriktirilgan</span>')+'</div>').join('');
+                return students.map(student => {
+                    const draft = student.draft_target_group_name ? '<span class="sd-pill">Draft: '+esc(student.draft_target_group_name)+'</span>' : '';
+                    const buttonText = student.draft_target_group_name ? 'Draftni o\'zgartirish' : 'Draft guruhga biriktirish';
+                    return '<div class="sd-student-row"><div class="sd-student-info"><b>'+esc(student.name)+'</b><span>'+esc(student.student_id_number)+' / haqiqiy guruh: '+esc(student.group_name || '-')+'</span>'+draft+'</div>'+(canMove ? '<button class="sd-btn sd-btn-green move-trigger" type="button" data-student="'+student.id+'">'+buttonText+'</button>' : '<span class="sd-permission">Biriktirilgan</span>')+'</div>';
+                }).join('');
             }
             async function loadPermissions() {
                 const f = filterValues('modal');

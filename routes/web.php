@@ -458,6 +458,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->group(function () {
                 Route::get('/', [StudentDistributionController::class, 'index'])->name('index');
                 Route::post('/upload', [StudentDistributionController::class, 'upload'])->name('upload');
+                Route::get('/groups', [StudentDistributionController::class, 'groups'])->name('groups');
+                Route::get('/students', [StudentDistributionController::class, 'students'])->name('students');
+                Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');
+                Route::post('/group-change-permission', [StudentDistributionController::class, 'setGroupChangePermission'])->name('group-change-permission');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');
@@ -1435,7 +1439,10 @@ Route::prefix('student')->name('student.')->group(function () {
 
         // Xizmatlar sahifasi
         Route::get('/services', function () {
-            return view('student.services');
+            $student = Auth::guard('student')->user();
+            $groupChangeServiceEnabled = \App\Models\StudentGroupChangePermission::query()
+                ->where('student_id', $student->id)->where('enabled', true)->exists();
+            return view('student.services', compact('groupChangeServiceEnabled'));
         })->name('services');
         Route::get('/documents', [\App\Http\Controllers\Student\StudentDocumentController::class, 'index'])->name('documents.index');
         Route::get('/documents/{file}/download', [\App\Http\Controllers\Student\StudentDocumentController::class, 'download'])->name('documents.download');
@@ -1453,6 +1460,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/transfer-application', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'create'])->name('transfer-application.create');
         Route::post('/transfer-application', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'store'])->name('transfer-application.store');
         Route::get('/transfer-application/{id}/document', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'document'])->name('transfer-application.document');
+        Route::get('/group-change-application', [\App\Http\Controllers\Student\GroupChangeApplicationController::class, 'create'])->name('group-change-application.create');
 
         // Ish e'lonlari
         Route::get('/job-listings', function () {

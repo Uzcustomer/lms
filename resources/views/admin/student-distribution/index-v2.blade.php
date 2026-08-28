@@ -27,6 +27,7 @@
         @media(max-width:760px){.sd-hero-content{align-items:flex-start;flex-direction:column}.sd-hero-stat{width:100%}.sd-upload,.sd-filters,.sd-modal-filters{display:block}.sd-upload .sd-btn,.sd-filter-actions{width:100%;margin-top:9px}.sd-filter-actions .sd-btn{flex:1}.sd-groups{grid-template-columns:1fr}.sd-student-row{align-items:flex-start;flex-direction:column}.sd-student-row .sd-btn{width:100%}}
         .sd-group-tabs{display:flex;gap:8px;padding:13px 18px 0;border-bottom:1px solid #edf2f7;background:#fff}.sd-group-tab{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid transparent;border-bottom:3px solid transparent;border-radius:10px 10px 0 0;background:transparent;color:#64748b;font-size:12px;font-weight:800;cursor:pointer}.sd-group-tab:hover{background:#f8fafc;color:#1e40af}.sd-group-tab.active{border-color:#dbeafe;border-bottom-color:#2563eb;background:#eff6ff;color:#1d4ed8}.sd-group-tab[data-view="source"].active{border-color:#fecdd3;border-bottom-color:#e11d48;background:#fff1f2;color:#be123c}.sd-group-tab-count{display:inline-grid;place-items:center;min-width:23px;height:20px;padding:0 6px;border-radius:999px;background:#fff;font-size:10px}@media(max-width:600px){.sd-group-tabs{display:grid;grid-template-columns:1fr 1fr}.sd-group-tab{justify-content:center;padding:9px 6px}}
         .sd-group-tab[data-view="applications"].active{border-color:#fde68a;border-bottom-color:#d97706;background:#fffbeb;color:#92400e}.sd-application{grid-column:span 2;padding:15px;border:1px solid #dbe5ef;border-left:4px solid #d97706;border-radius:13px;background:linear-gradient(145deg,#fff,#fffbeb)}.sd-application-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.sd-application h3{margin:0;color:#123766;font-size:13px;font-weight:900}.sd-application-meta{margin-top:4px;color:#64748b;font-size:10px}.sd-application-route{display:inline-flex;margin-top:10px;padding:6px 9px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:900}.sd-application-reason{margin:10px 0 0;color:#475569;font-size:11px;line-height:1.55}.sd-permission-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:10px 12px;border:1px solid #dbe5f0;border-radius:11px;background:#f8fafc}.sd-permission-toolbar label{display:flex;align-items:center;gap:8px;color:#334155;font-size:11px;font-weight:800}.sd-permission-buttons{display:flex;gap:8px}.sd-permission-group{display:flex;align-items:center;gap:11px;padding:12px 13px;border-bottom:1px solid #edf2f7;cursor:pointer}.sd-permission-group:last-child{border-bottom:0}.sd-permission-group:hover{background:#f8fbff}.sd-permission-group-info{flex:1;min-width:0}.sd-permission-group-info b{display:block;color:#1e3a5f;font-size:12px}.sd-permission-group-info span{display:block;margin-top:3px;color:#64748b;font-size:10px}@media(max-width:760px){.sd-group-tabs{grid-template-columns:repeat(3,1fr)}.sd-application{grid-column:span 1}.sd-permission-toolbar{align-items:stretch;flex-direction:column}.sd-permission-buttons{display:grid;grid-template-columns:1fr 1fr}.sd-permission-buttons .sd-btn{padding:0 8px}}
+        .sd-application-side{display:flex;align-items:flex-end;flex-direction:column;gap:8px}.sd-application-actions{display:flex;align-items:center;gap:6px}.sd-app-action{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:31px;border:0;border-radius:8px;padding:0 10px;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.sd-app-action svg{width:14px;height:14px}.sd-app-approve{background:#059669}.sd-app-approve:hover{background:#047857}.sd-app-delete{width:31px;padding:0;background:#dc2626}.sd-app-delete:hover{background:#b91c1c}@media(max-width:600px){.sd-application-head{align-items:stretch;flex-direction:column}.sd-application-side{align-items:flex-start}}
     </style>
 
     <div class="sd-page">
@@ -185,7 +186,8 @@
                     $('groupsGrid').innerHTML = scopedApplications.length ? scopedApplications.map(application => {
                         const statusLabel = application.status === 'approved' ? 'Qabul qilingan' : (application.status === 'rejected' ? 'Rad etilgan' : 'Kutilmoqda');
                         const statusClass = application.status === 'approved' ? 'sd-pill-green' : (application.status === 'rejected' ? 'sd-pill-red' : '');
-                        return '<article class="sd-application"><div class="sd-application-head"><div><h3>'+esc(application.student_name)+'</h3><div class="sd-application-meta">'+esc(application.student_id_number || '-')+' / '+esc(application.specialty_name)+' / '+application.course+'-kurs / '+esc(application.created_at || '')+'</div></div><span class="sd-pill '+statusClass+'">'+statusLabel+'</span></div><div class="sd-application-route">'+esc(application.source_group_name)+' &rarr; '+esc(application.target_group_name)+'</div><p class="sd-application-reason"><b>Sabab:</b> '+esc(application.reason)+'</p></article>';
+                        const actions = application.status === 'pending' ? '<div class="sd-application-actions"><button class="sd-app-action sd-app-approve approve-application" type="button" data-id="'+application.id+'" title="Arizaga ruxsat berish"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6"/></svg>Ruxsat</button><button class="sd-app-action sd-app-delete delete-application" type="button" data-id="'+application.id+'" title="Arizani o\'chirish" aria-label="Arizani o\'chirish"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></div>' : '';
+                        return '<article class="sd-application"><div class="sd-application-head"><div><h3>'+esc(application.student_name)+'</h3><div class="sd-application-meta">'+esc(application.student_id_number || '-')+' / '+esc(application.specialty_name)+' / '+application.course+'-kurs / '+esc(application.created_at || '')+'</div></div><div class="sd-application-side"><span class="sd-pill '+statusClass+'">'+statusLabel+'</span>'+actions+'</div></div><div class="sd-application-route">'+esc(application.source_group_name)+' &rarr; '+esc(application.target_group_name)+'</div><p class="sd-application-reason"><b>Sabab:</b> '+esc(application.reason)+'</p></article>';
                     }).join('') : '<div class="sd-empty" style="grid-column:1/-1"><strong>Ariza topilmadi</strong>Tanlangan filtr bo\'yicha ariza mavjud emas.</div>';
                     return;
                 }
@@ -419,6 +421,32 @@
                 loadPermissionGroups();
             }
 
+            async function approveApplication(button) {
+                button.disabled = true;
+                try {
+                    const response = await fetch(urls.applications+'/'+button.dataset.id+'/approve', {method:'POST',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json'}});
+                    const data = await response.json();
+                    if (!response.ok) return alert(data.message || 'Arizaga ruxsat berib bo\'lmadi.');
+                    alert(data.message);
+                    await reloadGroups();
+                } finally {
+                    button.disabled = false;
+                }
+            }
+
+            async function deleteApplication(button) {
+                if (!confirm('Arizani o\'chirishni tasdiqlaysizmi?')) return;
+                button.disabled = true;
+                try {
+                    const response = await fetch(urls.applications+'/'+button.dataset.id, {method:'DELETE',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json'}});
+                    const data = await response.json();
+                    if (!response.ok) return alert(data.message || 'Arizani o\'chirib bo\'lmadi.');
+                    await reloadGroups();
+                } finally {
+                    button.disabled = false;
+                }
+            }
+
             async function openMove(id) {
                 selectedStudent = id; const student = studentCache.get(id);
                 $('moveStudentName').textContent = student ? student.name+' / '+student.student_id_number+' / '+student.group_name : '';
@@ -491,6 +519,8 @@
             $('modalFaculty').addEventListener('change', fillModalOptions); $('modalSpecialty').addEventListener('change', fillModalOptions);
             $('reloadStudents').addEventListener('click', () => { loadManual(); loadPermissionGroups(); });
             document.addEventListener('click', event => {
+                const approveButton = event.target.closest('.approve-application'); if (approveButton) approveApplication(approveButton);
+                const deleteButton = event.target.closest('.delete-application'); if (deleteButton) deleteApplication(deleteButton);
                 const moveButton = event.target.closest('.move-trigger'); if (moveButton) openMove(Number(moveButton.dataset.student));
                 const assignButton = event.target.closest('.assign-trigger'); if (assignButton) assign(Number(assignButton.dataset.group));
                 const closeButton = event.target.closest('[data-close]'); if (closeButton) closeModal(closeButton.dataset.close);

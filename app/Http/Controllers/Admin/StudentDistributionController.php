@@ -472,6 +472,119 @@ class StudentDistributionController extends Controller
         return response()->json(['applications' => $applications]);
     }
 
+    public function approveApplication(int $application): JsonResponse
+    {
+        try {
+            $result = DB::transaction(function () use ($application) {
+                $record = StudentGroupChangeApplication::query()->lockForUpdate()->findOrFail($application);
+                if ($record->status !== 'pending') {
+                    abort(422, "Faqat kutilayotgan arizaga ruxsat berish mumkin.");
+                }
+
+                $student = Student::query()->findOrFail($record->student_id);
+                $source = StudentDistributionGroup::query()
+                    ->where('is_active', true)
+                    ->lockForUpdate()
+                    ->findOrFail($record->source_group_id);
+                $target = StudentDistributionGroup::query()
+                    ->where('is_active', true)
+                    ->where('is_source', false)
+                    ->lockForUpdate()
+                    ->findOrFail($record->target_group_id);
+
+                if (!$source->is_source) {
+                    abort(422, "Talabaning source guruhi faol taqsimlash ro'yxatida emas.");
+                }
+
+                $draft = StudentDistributionAssignment::query()
+                    ->where('student_id', $student->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$draft || (int) $draft->target_group_id !== (int) $target->id) {
+                    if ($target->free_places < 1) {
+                        abort(422, "Tanlangan guruhda bo'sh joy qolmagan.");
+                    }
+
+                    if ($draft) {
+                        $previousTarget = StudentDistributionGroup::query()
+                            ->lockForUpdate()
+                            ->find($draft->target_group_id);
+                        if ($previousTarget) {
+                            $previousTarget->update([
+                                'occupied_count' => max(0, $previousTarget->occupied_count - 1),
+                                'free_places' => min($previousTarget->capacity, $previousTarget->free_places + 1),
+                            ]);
+                        }
+                    } else {
+                        $source->update([
+                            'occupied_count' => max(0, $source->occupied_count - 1),
+                            'free_places' => min($source->capacity, $source->free_places + 1),
+                        ]);
+                    }
+
+                    $target->update([
+                        'occupied_count' => $target->occupied_count + 1,
+                        'free_places' => max(0, $target->free_places - 1),
+                    ]);
+
+                    StudentDistributionAssignment::query()->updateOrCreate(
+                        ['student_id' => $student->id],
+                        [
+                            'source_group_id' => $source->id,
+                            'target_group_id' => $target->id,
+                            'original_group_hemis_id' => $student->group_id ? (string) $student->group_id : null,
+                            'original_group_name' => $student->group_name,
+                            'student_name' => $student->full_name,
+                            'student_id_number' => $student->student_id_number,
+                            'assigned_by' => Auth::id(),
+                        ]
+                    );
+                }
+
+                $record->update([
+                    'status' => 'approved',
+                    'reviewed_by_id' => Auth::id(),
+                    'reviewed_at' => now(),
+                ]);
+                StudentGroupChangePermission::query()
+                    ->where('student_id', $student->id)
+                    ->update(['enabled' => false]);
+
+                return [
+                    'application' => $this->applicationPayload($record->fresh()),
+                    'group' => $this->groupPayload($target->fresh()),
+                ];
+            }, 3);
+
+            return response()->json([
+                'message' => "Arizaga ruxsat berildi. Talaba draft guruhga qo'shildi.",
+                'application' => $result['application'],
+                'group' => $result['group'],
+            ]);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            return response()->json(['message' => $exception->getMessage()], $exception->getStatusCode());
+        }
+    }
+
+    public function destroyApplication(int $application): JsonResponse
+    {
+        try {
+            DB::transaction(function () use ($application) {
+                $record = StudentGroupChangeApplication::query()->lockForUpdate()->findOrFail($application);
+                if ($record->status !== 'pending') {
+                    abort(422, "Faqat kutilayotgan arizani o'chirish mumkin.");
+                }
+                $record->delete();
+            });
+
+            return response()->json(['message' => "Ariza o'chirildi."]);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            return response()->json(['message' => $exception->getMessage()], $exception->getStatusCode());
+        }
+    }
+
+
 
     private function catalogGroups(?Collection $savedGroups = null): Collection
     {

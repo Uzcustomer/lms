@@ -467,6 +467,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/permission-groups', [StudentDistributionController::class, 'permissionGroups'])->name('permission-groups');
                 Route::post('/group-change-permissions', [StudentDistributionController::class, 'setGroupChangePermissions'])->name('group-change-permissions');
                 Route::get('/applications', [StudentDistributionController::class, 'applications'])->name('applications');
+                Route::post('/applications/{application}/approve', [StudentDistributionController::class, 'approveApplication'])->name('applications.approve');
+                Route::delete('/applications/{application}', [StudentDistributionController::class, 'destroyApplication'])->name('applications.destroy');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');

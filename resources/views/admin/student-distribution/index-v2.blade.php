@@ -205,7 +205,12 @@
             }
             function openCatalog() { configOptions(catalog,'catalog'); renderCatalog(); $('catalogModal').classList.add('is-open'); }
             function openSources() { configOptions(groups,'source'); renderSources(); $('sourcesModal').classList.add('is-open'); }
-            const normalizeGroupName = value => String(value || '').trim().toLowerCase().replace(/\s+/g,'');
+            const normalizeGroupName = value => {
+                return String(value || '').trim().toLowerCase()
+                    .replace(/\s+/g,'')
+                    .replace(/^(d1|d2|p)\/[dp](?=\d)/, '$1/')
+                    .replace(/\(([a-z])\)$/i, '$1');
+            };
             function applyCatalogPaste() {
                 const text = $('catalogPaste').value.trim();
                 if (!text) return alert('Exceldan nusxalangan kataklarni kiriting.');

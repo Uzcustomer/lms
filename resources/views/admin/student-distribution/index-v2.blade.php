@@ -17,6 +17,11 @@
         .sd-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:16px 18px 20px}.sd-group{padding:14px;border:1px solid #dbe5f0;border-left:4px solid #2563eb;border-radius:12px;background:linear-gradient(145deg,#fff,#f8fbff);transition:.16s}.sd-group:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(37,99,235,.1)}.sd-group h3{margin:0;color:#123766;font-size:13px;font-weight:800}.sd-group-meta{margin:5px 0 11px;color:#64748b;font-size:10px;line-height:1.45}.sd-group-foot{display:flex;align-items:center;justify-content:space-between;gap:7px}.sd-free{color:#047857;font-size:11px;font-weight:800}.sd-full{color:#b91c1c;font-size:11px;font-weight:800}.sd-empty{padding:34px 20px;text-align:center;color:#64748b;font-size:12px}.sd-empty strong{display:block;margin-bottom:4px;color:#334155;font-size:14px}
         .sd-modal-backdrop{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.58)}.sd-modal-backdrop.is-open{display:flex}.sd-modal{width:min(1080px,100%);max-height:calc(100vh - 36px);overflow:hidden;border-radius:18px;background:#fff;box-shadow:0 25px 70px rgba(15,23,42,.28)}.sd-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;padding:17px 20px;color:#fff;background:linear-gradient(120deg,#123766,#2563eb)}.sd-modal-head h2{margin:0;font-size:17px;font-weight:800}.sd-modal-head p{margin:4px 0 0;color:#dbeafe;font-size:11px}.sd-close{display:grid;place-items:center;width:30px;height:30px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:transparent;color:#fff;font-size:20px;cursor:pointer}.sd-tabs{display:flex;gap:4px;padding:10px 18px 0;border-bottom:1px solid #e2e8f0}.sd-tab{padding:10px 13px;border:0;border-bottom:3px solid transparent;background:transparent;color:#64748b;font-size:12px;font-weight:800;cursor:pointer}.sd-tab.active{border-color:#2563eb;color:#1d4ed8}.sd-panel{display:none;padding:15px 18px 18px}.sd-panel.active{display:block}.sd-modal-filters{display:grid;grid-template-columns:1.5fr 1.5fr .7fr auto;gap:9px;align-items:end;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}.sd-scroll{max-height:390px;overflow:auto;margin-top:12px;border:1px solid #e2e8f0;border-radius:11px}.sd-accordion{border-bottom:1px solid #e2e8f0}.sd-accordion:last-child{border-bottom:0}.sd-accordion summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;cursor:pointer;list-style:none;color:#1e3a5f;font-size:12px;font-weight:800;background:#fff}.sd-accordion summary::-webkit-details-marker{display:none}.sd-accordion summary:hover{background:#f8fbff}.sd-accordion-body{padding:0 12px 10px;background:#fbfdff}.sd-student-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 2px;border-top:1px solid #edf2f7}.sd-student-info{min-width:0}.sd-student-info b{display:block;overflow:hidden;color:#334155;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.sd-student-info span{display:block;margin-top:2px;color:#94a3b8;font-size:10px}.sd-muted{padding:14px;color:#94a3b8;font-size:11px;text-align:center}.sd-permission{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:7px;background:#ecfdf5;color:#047857;font-size:10px;font-weight:800}
         .sd-choice-list{display:grid;gap:8px;max-height:390px;overflow:auto;margin-top:12px}.sd-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;border:1px solid #dbe5f0;border-radius:10px;background:#fff}.sd-choice b{display:block;color:#1e3a5f;font-size:12px}.sd-choice span{display:block;margin-top:3px;color:#64748b;font-size:10px}.sd-move-copy{padding:12px;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:11px}
+        .sd-setup{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 18px}.sd-setup-box{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;border:1px solid #dbeafe;border-radius:13px;background:linear-gradient(135deg,#f8fbff,#eff6ff)}.sd-setup-box h3{margin:0;font-size:13px;font-weight:800}.sd-setup-box p{margin:4px 0 0;color:#64748b;font-size:10px}
+        .sd-config-body{padding:15px 18px}.sd-config-filters{display:grid;grid-template-columns:1.3fr 1.3fr .65fr 1fr;gap:9px;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}.sd-config-scroll{max-height:430px;overflow:auto;margin-top:12px;border:1px solid #e2e8f0;border-radius:11px}.sd-config-table{width:100%;border-collapse:collapse;font-size:11px}.sd-config-table th{position:sticky;top:0;z-index:2;padding:9px;background:#eff6ff;color:#1e3a5f;text-align:left}.sd-config-table td{padding:8px 9px;border-top:1px solid #edf2f7}.sd-config-table tr:hover td{background:#f8fbff}.sd-config-foot{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid #e2e8f0;background:#f8fafc}.sd-check{width:16px;height:16px;accent-color:#2563eb}.sd-number{width:82px;height:33px;border:1px solid #cbd5e1;border-radius:8px;padding:0 8px;font-size:11px}
+        .sd-group.is-source{border-color:#fecdd3;border-left-color:#e11d48;background:#fff1f2}.sd-pill-red{background:#fff1f2;color:#be123c}
+        .sd-row-title b{display:block;color:#1e3a5f}.sd-row-title span{display:block;margin-top:2px;color:#94a3b8;font-size:9px}
+        @media(max-width:760px){.sd-setup{grid-template-columns:1fr}.sd-setup-box{align-items:flex-start;flex-direction:column}.sd-config-filters{grid-template-columns:1fr}}
         @media(max-width:760px){.sd-hero-content{align-items:flex-start;flex-direction:column}.sd-hero-stat{width:100%}.sd-upload,.sd-filters,.sd-modal-filters{display:block}.sd-upload .sd-btn,.sd-filter-actions{width:100%;margin-top:9px}.sd-filter-actions .sd-btn{flex:1}.sd-groups{grid-template-columns:1fr}.sd-student-row{align-items:flex-start;flex-direction:column}.sd-student-row .sd-btn{width:100%}}
     </style>
 
@@ -35,13 +40,11 @@
         @if($errors->any())<div class="sd-alert sd-alert-error">{{ $errors->first() }}</div>@endif
 
         <section class="sd-card">
-            <div class="sd-card-head"><div><h2>1. Excel sig'im jadvalini yuklash</h2><p>Excelning birinchi qatorida: Fakultet, Yo'nalish, Kurs, Guruh, Sig'im yoki Bo'sh joy ustunlari bo'lsin.</p></div></div>
-            <form class="sd-upload" method="POST" action="{{ route('admin.student-distribution.upload') }}" enctype="multipart/form-data">
-                @csrf
-                <div class="sd-field"><label class="sd-label" for="student_file">Excel fayl</label><input class="sd-file" id="student_file" name="student_file" type="file" accept=".xlsx,.xls,.csv,.txt" required></div>
-                <button class="sd-btn" type="submit"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0-4 4m4-4 4 4M5 20h14"/></svg>Excelni saqlash</button>
-            </form>
-            <div class="sd-help">Yangi fayl eski importni o'chirmaydi: yangi import faol bo'ladi, eski import tarixda saqlanadi.</div>
+            <div class="sd-card-head"><div><h2>Taqsimlashni sozlash</h2><p>Excel kerak emas. Guruhlarni LMS bazasidan tanlab, to'g'ridan-to'g'ri DB ga saqlang.</p></div></div>
+            <div class="sd-setup">
+                <div class="sd-setup-box"><div><h3>1. Guruhlarni yuklash</h3><p>Guruh sig'imi va bo'sh joyini kiritib saqlang.</p></div><button class="sd-btn" id="openCatalog" type="button">Guruhlarni ochish</button></div>
+                <div class="sd-setup-box"><div><h3>2. Taqsimlanadigan guruhlar</h3><p>Faqat talabalari ko'chiriladigan guruhlarni belgilang.</p></div><button class="sd-btn sd-btn-green" id="openSources" type="button">Guruhlarni belgilash</button></div>
+            </div>
         </section>
 
         <section class="sd-card">
@@ -55,6 +58,38 @@
             <div class="sd-summary"><span class="sd-pill sd-pill-green" id="availableCount">0 ta bo'sh joyli</span><span id="capacitySummary"></span></div>
             <div class="sd-groups" id="groupsGrid"></div>
         </section>
+    </div>
+
+    <div class="sd-modal-backdrop" id="catalogModal">
+        <div class="sd-modal" role="dialog" aria-modal="true">
+            <div class="sd-modal-head"><div><h2>Guruhlarni DB ga yuklash</h2><p>LMS dagi guruhlarni tanlang, sig'im va bo'sh joyni kiriting.</p></div><button class="sd-close" type="button" data-close="catalogModal">&times;</button></div>
+            <div class="sd-config-body">
+                <div class="sd-config-filters">
+                    <div class="sd-field"><label class="sd-label">Fakultet</label><select class="sd-select" id="catalogFaculty"></select></div>
+                    <div class="sd-field"><label class="sd-label">Yo'nalish</label><select class="sd-select" id="catalogSpecialty"></select></div>
+                    <div class="sd-field"><label class="sd-label">Kurs</label><select class="sd-select" id="catalogCourse"></select></div>
+                    <div class="sd-field"><label class="sd-label">Qidirish</label><input class="sd-input" id="catalogSearch" placeholder="Guruh nomi"></div>
+                </div>
+                <div class="sd-config-scroll"><table class="sd-config-table"><thead><tr><th></th><th>Guruh</th><th>Talaba</th><th>Sig'im</th><th>Bo'sh joy</th><th>Holat</th></tr></thead><tbody id="catalogRows"></tbody></table></div>
+            </div>
+            <div class="sd-config-foot"><span id="catalogCount">0 ta tanlandi</span><button class="sd-btn" id="saveCatalog" type="button">Tanlanganlarni saqlash</button></div>
+        </div>
+    </div>
+
+    <div class="sd-modal-backdrop" id="sourcesModal">
+        <div class="sd-modal" role="dialog" aria-modal="true">
+            <div class="sd-modal-head"><div><h2>Talabalari taqsimlanadigan guruhlar</h2><p>Faqat belgilangan guruh talabalarini boshqa guruhga o'tkazish mumkin.</p></div><button class="sd-close" type="button" data-close="sourcesModal">&times;</button></div>
+            <div class="sd-config-body">
+                <div class="sd-config-filters">
+                    <div class="sd-field"><label class="sd-label">Fakultet</label><select class="sd-select" id="sourceFaculty"></select></div>
+                    <div class="sd-field"><label class="sd-label">Yo'nalish</label><select class="sd-select" id="sourceSpecialty"></select></div>
+                    <div class="sd-field"><label class="sd-label">Kurs</label><select class="sd-select" id="sourceCourse"></select></div>
+                    <div class="sd-field"><label class="sd-label">Qidirish</label><input class="sd-input" id="sourceSearch" placeholder="Guruh nomi"></div>
+                </div>
+                <div class="sd-config-scroll"><table class="sd-config-table"><thead><tr><th></th><th>Guruh</th><th>Sig'im</th><th>Bo'sh joy</th><th>Holat</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+            </div>
+            <div class="sd-config-foot"><span id="sourceSelectedCount">0 ta tanlandi</span><button class="sd-btn sd-btn-green" id="saveSources" type="button">Ro'yxatni saqlash</button></div>
+        </div>
     </div>
 
     <div class="sd-modal-backdrop" id="fillModal">
@@ -87,14 +122,18 @@
     <script>
         (() => {
             const initialGroups = @json($groupPayloads);
+            const catalog = @json($catalogPayloads);
             const urls = {
                 groups: @json(url('/admin/student-distribution/groups')),
+                storeGroups: @json(url('/admin/student-distribution/groups')),
+                storeSources: @json(url('/admin/student-distribution/source-groups')),
                 students: @json(url('/admin/student-distribution/students')),
                 assign: @json(url('/admin/student-distribution/assign-student')),
                 permission: @json(url('/admin/student-distribution/group-change-permission'))
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
             let groups = initialGroups, selectedGroup = null, selectedStudent = null;
+            const catalogSelected = new Set(catalog.filter(item => item.is_saved).map(item => item.key)), sourceSelected = new Set(groups.filter(item => item.is_source).map(item => item.id)), studentCache = new Map(), catalogDraft = new Map(catalog.map(item => [item.key, {capacity:item.capacity, free_places:item.free_places}]));
 
             const $ = id => document.getElementById(id);
             const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
@@ -106,9 +145,9 @@
                 const filtered = groups.filter(group => (!faculty || group.faculty_name === faculty) && (!specialty || group.specialty_name === specialty) && (!course || String(group.course) === course));
                 $('groupCount').textContent = filtered.length + ' ta guruh';
                 $('heroGroupCount').textContent = filtered.length;
-                $('availableCount').textContent = filtered.filter(group => group.free_places > 0).length + ' ta bo\'sh joyli';
-                $('capacitySummary').textContent = filtered.reduce((sum, group) => sum + group.free_places, 0) + ' ta bo\'sh o\'rin';
-                $('groupsGrid').innerHTML = filtered.length ? filtered.map(group => '<article class="sd-group"><h3>'+esc(group.group_name)+'</h3><div class="sd-group-meta">'+esc(group.faculty_name)+'<br>'+esc(group.specialty_name)+' ? '+group.course+'-kurs</div><div class="sd-group-foot"><span class="'+(group.free_places > 0 ? 'sd-free' : 'sd-full')+'">'+(group.free_places > 0 ? group.free_places+' ta bo\'sh joy' : 'Joy qolmagan')+'</span>'+(group.free_places > 0 ? '<button class="sd-btn sd-btn-green fill-trigger" type="button" data-group="'+group.id+'">To\'ldirish</button>' : '')+'</div></article>').join('') : '<div class="sd-empty" style="grid-column:1/-1"><strong>Guruh topilmadi</strong>Filtrni o\'zgartirib ko\'ring yoki avval Excel yuklang.</div>';
+                $('availableCount').textContent = filtered.filter(group => !group.is_source && group.free_places > 0).length + ' ta bo\'sh joyli';
+                $('capacitySummary').textContent = filtered.filter(group => !group.is_source).reduce((sum, group) => sum + group.free_places, 0) + ' ta bo\'sh o\'rin';
+                $('groupsGrid').innerHTML = filtered.length ? filtered.map(group => '<article class="sd-group '+(group.is_source ? 'is-source' : '')+'"><h3>'+esc(group.group_name)+'</h3><div class="sd-group-meta">'+esc(group.faculty_name)+'<br>'+esc(group.specialty_name)+' / '+group.course+'-kurs / sig\'im '+group.capacity+'</div><div class="sd-group-foot">'+(group.is_source ? '<span class="sd-pill sd-pill-red">Talabalari ko\'chiriladi</span>' : '<span class="'+(group.free_places > 0 ? 'sd-free' : 'sd-full')+'">'+(group.free_places > 0 ? group.free_places+' ta bo\'sh joy' : 'Joy qolmagan')+'</span>')+(!group.is_source && group.free_places > 0 ? '<button class="sd-btn sd-btn-green fill-trigger" type="button" data-group="'+group.id+'">To\'ldirish</button>' : '')+'</div></article>').join('') : '<div class="sd-empty" style="grid-column:1/-1"><strong>Guruh topilmadi</strong>Avval guruhlarni DB ga yuklang.</div>';
                 document.querySelectorAll('.fill-trigger').forEach(button => button.addEventListener('click', () => openFill(Number(button.dataset.group))));
             }
 
@@ -124,6 +163,47 @@
             async function reloadGroups() {
                 const response = await fetch(urls.groups);
                 const data = await response.json(); groups = data.groups; renderGroups();
+            }
+
+            function configOptions(items, prefix) {
+                const faculty = $(prefix+'Faculty').value, specialty = $(prefix+'Specialty').value;
+                setOptions($(prefix+'Faculty'), items.map(item => item.faculty_name), 'Barcha fakultetlar'); $(prefix+'Faculty').value = faculty;
+                setOptions($(prefix+'Specialty'), items.filter(item => !faculty || item.faculty_name === faculty).map(item => item.specialty_name), 'Barcha yo\'nalishlar'); $(prefix+'Specialty').value = specialty;
+                setOptions($(prefix+'Course'), items.filter(item => (!faculty || item.faculty_name === faculty) && (!specialty || item.specialty_name === specialty)).map(item => item.course), 'Barcha kurslar');
+            }
+            function configFiltered(items, prefix) {
+                const f = filterValues(prefix), search = $(prefix+'Search').value.trim().toLowerCase();
+                return items.filter(item => (!f.faculty || item.faculty_name === f.faculty) && (!f.specialty || item.specialty_name === f.specialty) && (!f.course || String(item.course) === f.course) && (!search || item.group_name.toLowerCase().includes(search)));
+            }
+            async function postJson(url, payload) {
+                const response = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},body:JSON.stringify(payload)});
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || 'Amalni bajarib bo\'lmadi.');
+                return data;
+            }
+            function renderCatalog() {
+                const list = configFiltered(catalog, 'catalog');
+                $('catalogRows').innerHTML = list.length ? list.map(item => {
+                    const draft = catalogDraft.get(item.key);
+                    return '<tr data-key="'+item.key+'"><td><input class="sd-check catalog-check" type="checkbox" '+(catalogSelected.has(item.key)?'checked':'')+'></td><td class="sd-row-title"><b>'+esc(item.group_name)+'</b><span>'+esc(item.faculty_name)+' / '+esc(item.specialty_name)+' / '+item.course+'-kurs</span></td><td>'+item.student_count+'</td><td><input class="sd-number capacity-input" type="number" min="0" value="'+draft.capacity+'"></td><td><input class="sd-number free-input" type="number" min="0" value="'+draft.free_places+'"></td><td>'+(item.is_saved?'<span class="sd-pill sd-pill-green">DB da</span>':'<span class="sd-pill">Yangi</span>')+'</td></tr>';
+                }).join('') : '<tr><td colspan="6" class="sd-muted">Guruh topilmadi.</td></tr>';
+                $('catalogCount').textContent = catalogSelected.size+' ta tanlandi';
+            }
+            function renderSources() {
+                const list = configFiltered(groups, 'source');
+                $('sourceRows').innerHTML = list.length ? list.map(group => '<tr data-id="'+group.id+'"><td><input class="sd-check source-check" type="checkbox" '+(sourceSelected.has(group.id)?'checked':'')+'></td><td class="sd-row-title"><b>'+esc(group.group_name)+'</b><span>'+esc(group.faculty_name)+' / '+esc(group.specialty_name)+' / '+group.course+'-kurs</span></td><td>'+group.capacity+'</td><td>'+group.free_places+'</td><td>'+(group.is_source?'<span class="sd-pill sd-pill-red">Taqsimlanadi</span>':'<span class="sd-pill sd-pill-green">Qabul qiluvchi</span>')+'</td></tr>').join('') : '<tr><td colspan="5" class="sd-muted">Avval guruhlarni DB ga yuklang.</td></tr>';
+                $('sourceSelectedCount').textContent = sourceSelected.size+' ta tanlandi';
+            }
+            function openCatalog() { configOptions(catalog,'catalog'); renderCatalog(); $('catalogModal').classList.add('is-open'); }
+            function openSources() { configOptions(groups,'source'); renderSources(); $('sourcesModal').classList.add('is-open'); }
+            async function saveCatalog() {
+                const rows = [...catalogSelected].map(key => ({key, ...catalogDraft.get(key)}));
+                if (!rows.length) return alert('Kamida bitta guruhni tanlang.');
+                if (rows.some(row => row.free_places > row.capacity)) return alert('Bo\'sh joy sig\'imdan katta bo\'lmaydi.');
+                try { const data = await postJson(urls.storeGroups,{groups:rows}); alert(data.message); location.reload(); } catch (error) { alert(error.message); }
+            }
+            async function saveSources() {
+                try { const data = await postJson(urls.storeSources,{group_ids:[...sourceSelected]}); alert(data.message); location.reload(); } catch (error) { alert(error.message); }
             }
 
             function openFill(id) {
@@ -145,18 +225,17 @@
             async function loadManual() {
                 const f = filterValues('modal');
                 const base = query(f);
-                const filtered = groups.filter(group => (!f.faculty || group.faculty_name === f.faculty) && (!f.specialty || group.specialty_name === f.specialty) && (!f.course || String(group.course) === f.course));
-                $('accordionList').innerHTML = '<details class="sd-accordion" open><summary>Taqsimlanmagan talabalar <span class="sd-pill sd-pill-green">yuklanmoqda...</span></summary><div class="sd-accordion-body" id="unassignedRows"></div></details>'+filtered.map(group => '<details class="sd-accordion"><summary>'+esc(group.group_name)+' <span class="'+(group.free_places > 0 ? 'sd-free' : 'sd-full')+'">'+group.free_places+' bo\'sh joy</span></summary><div class="sd-accordion-body" id="groupRows'+group.id+'"><div class="sd-muted">Talabalar yuklanmoqda...</div></div></details>').join('');
-                const unassigned = await fetch(urls.students+'?'+base+'&unassigned=1').then(response => response.json());
-                $('unassignedRows').innerHTML = studentRows(unassigned.students, true);
+                const filtered = groups.filter(group => group.is_source && (!f.faculty || group.faculty_name === f.faculty) && (!f.specialty || group.specialty_name === f.specialty) && (!f.course || String(group.course) === f.course));
+                $('accordionList').innerHTML = filtered.length ? filtered.map((group,index) => '<details class="sd-accordion" '+(index===0?'open':'')+'><summary>'+esc(group.group_name)+' <span class="sd-pill sd-pill-red">Talabalari ko\'chiriladi</span></summary><div class="sd-accordion-body" id="groupRows'+group.id+'"><div class="sd-muted">Talabalar yuklanmoqda...</div></div></details>').join('') : '<div class="sd-muted">Taqsimlanadigan guruh belgilanmagan.</div>';
                 filtered.forEach(async group => {
                     const data = await fetch(urls.students+'?'+base+'&group_id='+group.id).then(response => response.json());
-                    const target = $('groupRows'+group.id); if (target) target.innerHTML = studentRows(data.students, false);
+                    data.students.forEach(student => studentCache.set(student.id, student));
+                    const target = $('groupRows'+group.id); if (target) target.innerHTML = studentRows(data.students, true);
                 });
             }
             function studentRows(students, canMove) {
                 if (!students.length) return '<div class="sd-muted">Talabalar topilmadi.</div>';
-                return students.map(student => '<div class="sd-student-row"><div class="sd-student-info"><b>'+esc(student.name)+'</b><span>'+esc(student.student_id_number)+' ? '+esc(student.course ? student.course+'-kurs' : '-')+' ? '+esc(student.group_name || 'Taqsimlanmagan')+'</span></div>'+(canMove ? '<button class="sd-btn sd-btn-green move-trigger" type="button" data-student="'+student.id+'">Guruhga o\'tkazish</button>' : '<span class="sd-permission">Biriktirilgan</span>')+'</div>').join('');
+                return students.map(student => '<div class="sd-student-row"><div class="sd-student-info"><b>'+esc(student.name)+'</b><span>'+esc(student.student_id_number)+' / '+esc(student.course ? student.course+'-kurs' : '-')+' / '+esc(student.group_name || '-')+'</span></div>'+(canMove ? '<button class="sd-btn sd-btn-green move-trigger" type="button" data-student="'+student.id+'">Guruhga o\'tkazish</button>' : '<span class="sd-permission">Biriktirilgan</span>')+'</div>').join('');
             }
             async function loadPermissions() {
                 const f = filterValues('modal');
@@ -165,11 +244,10 @@
                 $('permissionList').innerHTML = data.students.length ? data.students.map(student => '<div class="sd-student-row"><div class="sd-student-info"><b>'+esc(student.name)+'</b><span>'+esc(student.student_id_number)+' ? '+esc(student.course ? student.course+'-kurs' : '-')+'</span></div>'+(student.permission_enabled ? '<button class="sd-btn sd-btn-light permission-trigger" data-student="'+student.id+'" data-enabled="0" type="button">Xizmatni yopish</button>' : '<button class="sd-btn sd-btn-green permission-trigger" data-student="'+student.id+'" data-enabled="1" type="button">Arizaga ruxsat</button>')+'</div>').join('') : '<div class="sd-muted">Taqsimlanmagan talabalar topilmadi.</div>';
             }
             async function openMove(id) {
-                selectedStudent = id; const f = filterValues('modal');
-                const students = await fetch(urls.students+'?'+query({...f,unassigned:1})).then(response => response.json());
-                const student = students.students.find(item => item.id === id); $('moveStudentName').textContent = student ? student.name+' ? '+student.student_id_number : '';
-                const available = groups.filter(group => group.free_places > 0 && (!f.faculty || group.faculty_name === f.faculty) && (!f.specialty || group.specialty_name === f.specialty) && (!f.course || String(group.course) === f.course));
-                $('moveChoices').innerHTML = available.length ? available.map(group => '<div class="sd-choice"><div><b>'+esc(group.group_name)+'</b><span>'+esc(group.specialty_name)+' ? '+group.course+'-kurs ? '+group.free_places+' ta bo\'sh joy</span></div><button class="sd-btn sd-btn-green assign-trigger" type="button" data-group="'+group.id+'">Tanlash</button></div>').join('') : '<div class="sd-muted">Mos bo\'sh joyli guruh topilmadi.</div>';
+                selectedStudent = id; const student = studentCache.get(id);
+                $('moveStudentName').textContent = student ? student.name+' / '+student.student_id_number+' / '+student.group_name : '';
+                const available = groups.filter(group => !group.is_source && group.free_places > 0 && student && group.faculty_name === student.faculty && group.specialty_name === student.specialty && Number(group.course) === Number(student.course));
+                $('moveChoices').innerHTML = available.length ? available.map(group => '<div class="sd-choice"><div><b>'+esc(group.group_name)+'</b><span>'+esc(group.specialty_name)+' / '+group.course+'-kurs / '+group.free_places+' ta bo\'sh joy</span></div><button class="sd-btn sd-btn-green assign-trigger" type="button" data-group="'+group.id+'">Tanlash</button></div>').join('') : '<div class="sd-muted">Mos bo\'sh joyli guruh topilmadi.</div>';
                 $('moveModal').classList.add('is-open');
             }
             async function assign(groupId) {
@@ -181,6 +259,29 @@
                 const response = await fetch(urls.permission, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},body:JSON.stringify({student_id:studentId,enabled:Boolean(Number(enabled))})});
                 const data = await response.json(); if (!response.ok) return alert(data.message || 'Amalni bajarib bo\'lmadi.'); loadPermissions();
             }
+
+            $('openCatalog').addEventListener('click', openCatalog);
+            $('openSources').addEventListener('click', openSources);
+            $('saveCatalog').addEventListener('click', saveCatalog);
+            $('saveSources').addEventListener('click', saveSources);
+            ['catalogFaculty','catalogSpecialty','catalogCourse'].forEach(id => $(id).addEventListener('change', () => { configOptions(catalog,'catalog'); renderCatalog(); }));
+            ['sourceFaculty','sourceSpecialty','sourceCourse'].forEach(id => $(id).addEventListener('change', () => { configOptions(groups,'source'); renderSources(); }));
+            $('catalogSearch').addEventListener('input', renderCatalog);
+            $('sourceSearch').addEventListener('input', renderSources);
+            document.addEventListener('change', event => {
+                const row = event.target.closest('tr');
+                if (event.target.matches('.catalog-check')) {
+                    event.target.checked ? catalogSelected.add(row.dataset.key) : catalogSelected.delete(row.dataset.key);
+                    $('catalogCount').textContent = catalogSelected.size+' ta tanlandi';
+                }
+                if (event.target.matches('.capacity-input,.free-input')) {
+                    catalogDraft.set(row.dataset.key, {capacity:Number(row.querySelector('.capacity-input').value),free_places:Number(row.querySelector('.free-input').value)});
+                }
+                if (event.target.matches('.source-check')) {
+                    event.target.checked ? sourceSelected.add(Number(row.dataset.id)) : sourceSelected.delete(Number(row.dataset.id));
+                    $('sourceSelectedCount').textContent = sourceSelected.size+' ta tanlandi';
+                }
+            });
 
             $('facultyFilter').addEventListener('change', () => { refreshFilterOptions(); renderGroups(); });
             $('specialtyFilter').addEventListener('change', () => { refreshFilterOptions(); renderGroups(); });

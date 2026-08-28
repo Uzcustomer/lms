@@ -10,16 +10,14 @@ use App\Models\StudentGroupHistory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class StudentDistributionController extends Controller
 {
-    private const MAX_DISPLAY_ROWS = 10000;
-
     public function index()
     {
         $groups = collect();
@@ -32,103 +30,118 @@ class StudentDistributionController extends Controller
                 ->orderBy('course')->orderBy('group_name')->get();
         }
 
+        $catalog = $this->catalogGroups($groups);
+
         return view('admin.student-distribution.index-v2', [
             'groups' => $groups,
             'groupPayloads' => $groups->map(fn (StudentDistributionGroup $group) => $this->groupPayload($group))->values(),
+            'catalogPayloads' => $catalog,
             'faculties' => $groups->pluck('faculty_name')->filter()->unique()->values(),
             'specialties' => $groups->pluck('specialty_name')->filter()->unique()->values(),
             'courses' => $groups->pluck('course')->filter()->unique()->sort()->values(),
         ]);
     }
 
-    public function upload(Request $request)
+    public function catalog(): JsonResponse
     {
-        $request->validate([
-            'student_file' => 'required|file|mimes:xlsx,xls,csv,txt|max:20480',
-        ], [
-            'student_file.required' => 'Excel faylni tanlang.',
-            'student_file.file' => 'Yuklangan faylni o\'qib bo\'lmadi.',
-            'student_file.mimes' => 'Faqat XLSX, XLS yoki CSV fayl yuklang.',
-            'student_file.max' => 'Fayl hajmi 20 MB dan oshmasligi kerak.',
+        $saved = Schema::hasTable('student_distribution_groups')
+            ? StudentDistributionGroup::query()->where('is_active', true)->get()
+            : collect();
+
+        return response()->json(['groups' => $this->catalogGroups($saved)]);
+    }
+
+    public function storeGroups(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'groups' => 'required|array|min:1|max:5000',
+            'groups.*.key' => 'required|string|max:64',
+            'groups.*.capacity' => 'required|integer|min:0|max:1000',
+            'groups.*.free_places' => 'required|integer|min:0|max:1000',
         ]);
 
-        $file = $request->file('student_file');
+        $catalog = $this->catalogGroups()->keyBy('key');
+        $selected = collect($data['groups']);
+        $invalid = $selected->first(fn (array $row) => !$catalog->has($row['key']));
+        if ($invalid) {
+            return response()->json(['message' => 'Tanlangan guruhlardan biri LMS bazasida topilmadi.'], 422);
+        }
 
-        try {
-            $reader = IOFactory::createReaderForFile($file->getRealPath());
-            $reader->setReadDataOnly(true);
-            $spreadsheet = $reader->load($file->getRealPath());
-            $sheet = $spreadsheet->getSheet(0);
-            $rawRows = $sheet->toArray(null, true, true, true);
-            $nonEmptyRows = array_values(array_filter($rawRows, function ($row) {
-                foreach ($row as $value) {
-                    if ($this->cellText($value) !== '') return true;
-                }
-                return false;
-            }));
-
-            if (!$nonEmptyRows) {
-                return back()->withInput()->withErrors(['student_file' => 'Excel faylda to\'ldirilgan qator topilmadi.']);
+        foreach ($selected as $row) {
+            if ((int) $row['free_places'] > (int) $row['capacity']) {
+                return response()->json(['message' => 'Bo\'sh joy guruh sig\'imidan katta bo\'lishi mumkin emas.'], 422);
             }
-
-            $headers = array_values(array_shift($nonEmptyRows));
-            $columnCount = count($headers);
-            foreach ($nonEmptyRows as $row) $columnCount = max($columnCount, count($row));
-            $headers = $this->normalizeRow($headers, $columnCount, true);
-
-            $totalRows = count($nonEmptyRows);
-            $truncated = $totalRows > self::MAX_DISPLAY_ROWS;
-            $rows = array_map(
-                fn ($row) => $this->normalizeRow($row, $columnCount),
-                array_slice($nonEmptyRows, 0, self::MAX_DISPLAY_ROWS)
-            );
-
-            return $this->importGroups($headers, $nonEmptyRows, $columnCount, $file->getClientOriginalName());
-        } catch (\Throwable $e) {
-            report($e);
-            return back()->withInput()->withErrors(['student_file' => 'Excel faylni o\'qishda xatolik yuz berdi. Fayl formatini tekshiring.']);
         }
-    }
 
-    private function importGroups(array $headers, array $rows, int $columnCount, string $fileName)
-    {
-        $mapping = $this->mapHeaders($headers);
-        $missing = array_values(array_filter([
-            'fakultet' => $mapping['faculty_name'] === null,
-            'yonalish' => $mapping['specialty_name'] === null,
-            'kurs' => $mapping['course'] === null,
-            'guruh' => $mapping['group_name'] === null,
-            'sigim yoki bosh joy' => $mapping['capacity'] === null && $mapping['free_places'] === null,
-        ], fn ($missing) => $missing));
-        if ($missing) {
-            return back()->withInput()->withErrors([
-                'student_file' => 'Excel ustunlari yetishmayapti: ' . implode(', ', array_keys($missing)) . '.',
-            ]);
-        }
         $importKey = (string) Str::uuid();
-        $parsedGroups = [];
-        foreach ($rows as $row) {
-            $group = $this->parseGroupRow($this->normalizeRow($row, $columnCount), $mapping);
-            if ($group !== null) {
-                $parsedGroups[] = $group + [
-                    'source_file' => $fileName,
+        DB::transaction(function () use ($selected, $catalog, $importKey) {
+            foreach ($selected as $row) {
+                $source = $catalog->get($row['key']);
+                $group = [
+                    'faculty_name' => $source['faculty_name'],
+                    'specialty_name' => $source['specialty_name'],
+                    'course' => $source['course'],
+                    'group_name' => $source['group_name'],
+                ];
+                $scopeHash = $this->groupScopeHash($group);
+                $capacity = (int) $row['capacity'];
+                $freePlaces = (int) $row['free_places'];
+
+                $record = StudentDistributionGroup::query()
+                    ->where('is_active', true)
+                    ->where('scope_hash', $scopeHash)
+                    ->first();
+
+                $values = $group + [
+                    'group_hemis_id' => $source['group_hemis_id'],
+                    'capacity' => $capacity,
+                    'occupied_count' => max(0, $capacity - $freePlaces),
+                    'free_places' => $freePlaces,
+                    'source_file' => null,
                     'uploaded_by' => Auth::id(),
-                    'import_key' => $importKey,
-                    'scope_hash' => $this->groupScopeHash($group),
+                    'scope_hash' => $scopeHash,
                     'is_active' => true,
                 ];
+
+                if ($record) {
+                    $record->update($values);
+                } else {
+                    StudentDistributionGroup::query()->create($values + [
+                        'import_key' => $importKey,
+                        'is_source' => false,
+                    ]);
+                }
             }
-        }
-        if (!$parsedGroups) {
-            return back()->withInput()->withErrors(['student_file' => 'Exceldan yaroqli guruh qatorlari topilmadi.']);
-        }
-        DB::transaction(function () use ($parsedGroups) {
-            StudentDistributionGroup::query()->where('is_active', true)->update(['is_active' => false]);
-            foreach (array_chunk($parsedGroups, 500) as $chunk) StudentDistributionGroup::query()->insert($chunk);
         });
-        return redirect()->route('admin.student-distribution.index')
-            ->with('success', count($parsedGroups) . ' ta guruh malumoti saqlandi.');
+
+        return response()->json([
+            'message' => $selected->count() . ' ta guruh DB ga saqlandi.',
+            'groups' => $this->activeGroupPayloads(),
+        ]);
     }
+
+    public function storeSourceGroups(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'group_ids' => 'present|array|max:5000',
+            'group_ids.*' => 'integer|exists:student_distribution_groups,id',
+        ]);
+
+        $ids = collect($data['group_ids'])->map(fn ($id) => (int) $id)->unique()->values();
+        DB::transaction(function () use ($ids) {
+            StudentDistributionGroup::query()->where('is_active', true)->update(['is_source' => false]);
+            if ($ids->isNotEmpty()) {
+                StudentDistributionGroup::query()->where('is_active', true)
+                    ->whereIn('id', $ids)->update(['is_source' => true]);
+            }
+        });
+
+        return response()->json([
+            'message' => $ids->count() . ' ta guruh talabalari taqsimlanadigan guruh sifatida saqlandi.',
+            'groups' => $this->activeGroupPayloads(),
+        ]);
+    }
+
     public function groups(Request $request): JsonResponse
     {
         $groups = $this->filteredGroups($request)
@@ -175,9 +188,12 @@ class StudentDistributionController extends Controller
 
         $students = $query->orderBy('full_name')->limit(500)->get()->map(function (Student $student) {
             return [
-                'id' => $student->id, 'name' => $student->full_name,
-                'student_id_number' => $student->student_id_number, 'hemis_id' => $student->hemis_id,
-                'image' => $student->image, 'faculty' => $student->department_name,
+                'id' => $student->id,
+                'name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'hemis_id' => $student->hemis_id,
+                'image' => $student->image,
+                'faculty' => $student->department_name,
                 'specialty' => $student->specialty_name,
                 'course' => $this->courseNumber($student->level_code, $student->level_name),
                 'group_name' => $student->group_name,
@@ -202,28 +218,38 @@ class StudentDistributionController extends Controller
                 $target = StudentDistributionGroup::query()->where('is_active', true)->lockForUpdate()
                     ->findOrFail($data['distribution_group_id']);
 
-                if (!$this->studentMatchesGroup($student, $target)) {
-                    abort(422, 'Talaba tanlangan guruhning fakultet, yonalish yoki kursiga mos emas.');
+                if ($target->is_source) {
+                    abort(422, 'Talabalarni ko\'chiriladigan guruhga joylab bo\'lmaydi.');
                 }
-                if ($target->free_places < 1) abort(422, 'Tanlangan guruhda bosh joy qolmagan.');
+                if (!$this->studentMatchesGroup($student, $target)) {
+                    abort(422, 'Talaba tanlangan guruhning fakultet, yo\'nalish yoki kursiga mos emas.');
+                }
+                if ($target->free_places < 1) {
+                    abort(422, 'Tanlangan guruhda bo\'sh joy qolmagan.');
+                }
 
                 $oldGroup = StudentDistributionGroup::query()->where('is_active', true)
-                    ->where('faculty_name', $target->faculty_name)->where('specialty_name', $target->specialty_name)
-                    ->where('course', $target->course)->where('group_name', $student->group_name)
+                    ->where('faculty_name', $target->faculty_name)
+                    ->where('specialty_name', $target->specialty_name)
+                    ->where('course', $target->course)
+                    ->where('group_name', $student->group_name)
                     ->lockForUpdate()->first();
 
-                if ($oldGroup && $oldGroup->id !== $target->id) {
-                    $oldGroup->update([
-                        'occupied_count' => max(0, $oldGroup->occupied_count - 1),
-                        'free_places' => min($oldGroup->capacity, $oldGroup->free_places + 1),
-                    ]);
+                if (!$oldGroup || !$oldGroup->is_source) {
+                    abort(422, 'Bu talabaning guruhi taqsimlanadigan guruhlar ro\'yxatida yo\'q.');
                 }
-                if (!$oldGroup || $oldGroup->id !== $target->id) {
-                    $target->update([
-                        'occupied_count' => $target->occupied_count + 1,
-                        'free_places' => max(0, $target->free_places - 1),
-                    ]);
+                if ($oldGroup->id === $target->id) {
+                    abort(422, 'Talaba ayni guruhning o\'ziga o\'tkazilmaydi.');
                 }
+
+                $oldGroup->update([
+                    'occupied_count' => max(0, $oldGroup->occupied_count - 1),
+                    'free_places' => min($oldGroup->capacity, $oldGroup->free_places + 1),
+                ]);
+                $target->update([
+                    'occupied_count' => $target->occupied_count + 1,
+                    'free_places' => max(0, $target->free_places - 1),
+                ]);
 
                 if ($student->group_name) {
                     StudentGroupHistory::query()->where('student_id', $student->id)
@@ -234,15 +260,18 @@ class StudentDistributionController extends Controller
                     'group_name' => $target->group_name,
                 ]);
                 StudentGroupHistory::create([
-                    'student_id' => $student->id, 'group_hemis_id' => $target->group_hemis_id,
-                    'group_name' => $target->group_name, 'specialty_name' => $student->specialty_name,
-                    'education_year_name' => $student->education_year_name, 'started_at' => now(),
+                    'student_id' => $student->id,
+                    'group_hemis_id' => $target->group_hemis_id,
+                    'group_name' => $target->group_name,
+                    'specialty_name' => $student->specialty_name,
+                    'education_year_name' => $student->education_year_name,
+                    'started_at' => now(),
                 ]);
 
                 return $this->groupPayload($target->fresh());
             });
 
-            return response()->json(['message' => 'Talaba guruhga muvaffaqiyatli otkazildi.', 'group' => $result]);
+            return response()->json(['message' => 'Talaba guruhga muvaffaqiyatli o\'tkazildi.', 'group' => $result]);
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             return response()->json(['message' => $e->getMessage()], $e->getStatusCode());
         }
@@ -260,9 +289,65 @@ class StudentDistributionController extends Controller
         );
 
         return response()->json([
-            'message' => $data['enabled'] ? 'Talabaga guruhni ozgartirish arizasiga ruxsat berildi.' : 'Talaba uchun xizmat yopildi.',
+            'message' => $data['enabled'] ? 'Talabaga guruhni o\'zgartirish arizasiga ruxsat berildi.' : 'Talaba uchun xizmat yopildi.',
             'enabled' => (bool) $permission->enabled,
         ]);
+    }
+
+    private function catalogGroups(?Collection $savedGroups = null): Collection
+    {
+        $savedGroups ??= Schema::hasTable('student_distribution_groups')
+            ? StudentDistributionGroup::query()->where('is_active', true)->get()
+            : collect();
+        $savedByScope = $savedGroups->keyBy(fn (StudentDistributionGroup $group) => $group->scope_hash);
+
+        return Student::query()
+            ->whereNotNull('group_name')->where('group_name', '<>', '')
+            ->whereNotNull('department_name')->whereNotNull('specialty_name')
+            ->select([
+                'department_name', 'specialty_name', 'level_code', 'level_name', 'group_id', 'group_name',
+                DB::raw('COUNT(*) as student_count'),
+            ])
+            ->groupBy('department_name', 'specialty_name', 'level_code', 'level_name', 'group_id', 'group_name')
+            ->orderBy('department_name')->orderBy('specialty_name')->orderBy('group_name')
+            ->get()
+            ->map(function ($row) use ($savedByScope) {
+                $course = $this->courseNumber($row->level_code, $row->level_name);
+                if (!$course) {
+                    return null;
+                }
+
+                $base = [
+                    'faculty_name' => trim((string) $row->department_name),
+                    'specialty_name' => trim((string) $row->specialty_name),
+                    'course' => $course,
+                    'group_name' => trim((string) $row->group_name),
+                ];
+                $scopeHash = $this->groupScopeHash($base);
+                $saved = $savedByScope->get($scopeHash);
+
+                return $base + [
+                    'key' => $scopeHash,
+                    'group_hemis_id' => $row->group_id ? (string) $row->group_id : null,
+                    'student_count' => (int) $row->student_count,
+                    'saved_id' => $saved?->id,
+                    'capacity' => $saved ? (int) $saved->capacity : (int) $row->student_count,
+                    'free_places' => $saved ? (int) $saved->free_places : 0,
+                    'is_saved' => (bool) $saved,
+                    'is_source' => (bool) ($saved?->is_source),
+                ];
+            })
+            ->filter()
+            ->unique('key')
+            ->values();
+    }
+
+    private function activeGroupPayloads(): Collection
+    {
+        return StudentDistributionGroup::query()->where('is_active', true)
+            ->orderBy('faculty_name')->orderBy('specialty_name')
+            ->orderBy('course')->orderBy('group_name')->get()
+            ->map(fn (StudentDistributionGroup $group) => $this->groupPayload($group))->values();
     }
 
     private function filteredGroups(Request $request): Builder
@@ -271,7 +356,8 @@ class StudentDistributionController extends Controller
             ->when($request->filled('faculty'), fn (Builder $q) => $q->where('faculty_name', $request->string('faculty')))
             ->when($request->filled('specialty'), fn (Builder $q) => $q->where('specialty_name', $request->string('specialty')))
             ->when($request->filled('course'), fn (Builder $q) => $q->where('course', $request->integer('course')))
-            ->when($request->boolean('available_only'), fn (Builder $q) => $q->where('free_places', '>', 0));
+            ->when($request->boolean('available_only'), fn (Builder $q) => $q->where('free_places', '>', 0)->where('is_source', false))
+            ->when($request->boolean('source_only'), fn (Builder $q) => $q->where('is_source', true));
     }
 
     private function whereCourse(Builder $query, int $course): Builder
@@ -293,11 +379,16 @@ class StudentDistributionController extends Controller
     private function groupPayload(StudentDistributionGroup $group): array
     {
         return [
-            'id' => $group->id, 'faculty_name' => $group->faculty_name,
-            'specialty_name' => $group->specialty_name, 'course' => (int) $group->course,
-            'group_name' => $group->group_name, 'group_hemis_id' => $group->group_hemis_id,
-            'capacity' => (int) $group->capacity, 'occupied_count' => (int) $group->occupied_count,
+            'id' => $group->id,
+            'faculty_name' => $group->faculty_name,
+            'specialty_name' => $group->specialty_name,
+            'course' => (int) $group->course,
+            'group_name' => $group->group_name,
+            'group_hemis_id' => $group->group_hemis_id,
+            'capacity' => (int) $group->capacity,
+            'occupied_count' => (int) $group->occupied_count,
             'free_places' => (int) $group->free_places,
+            'is_source' => (bool) $group->is_source,
         ];
     }
 
@@ -311,98 +402,24 @@ class StudentDistributionController extends Controller
         ]));
     }
 
-    private function parseGroupRow(array $values, array $mapping): ?array
-    {
-        $value = fn (string $key): string => $this->cellText($values[$mapping[$key]] ?? '');
-        $faculty = $value('faculty_name'); $specialty = $value('specialty_name');
-        $groupName = $value('group_name'); $course = $this->extractInteger($value('course'));
-        $capacity = $this->extractInteger($value('capacity')); $freePlaces = $this->extractInteger($value('free_places'));
-        $occupied = $this->extractInteger($value('occupied_count'));
-
-        if ($faculty === '' || $specialty === '' || $groupName === '' || !$course) return null;
-        if ($capacity === null && $freePlaces !== null) $capacity = $freePlaces + ($occupied ?? 0);
-        if ($capacity === null || $capacity < 0) return null;
-        if ($freePlaces === null) $freePlaces = max(0, $capacity - ($occupied ?? 0));
-        if ($occupied === null) $occupied = max(0, $capacity - $freePlaces);
-
-        return [
-            'faculty_name' => $faculty, 'specialty_name' => $specialty, 'course' => $course,
-            'group_name' => $groupName, 'group_hemis_id' => $value('group_hemis_id') ?: null,
-            'capacity' => $capacity, 'occupied_count' => max(0, min($capacity, $occupied)),
-            'free_places' => max(0, min($capacity, $freePlaces)),
-            'created_at' => now(), 'updated_at' => now(),
-        ];
-    }
-
-    private function mapHeaders(array $headers): array
-    {
-        $aliases = [
-            'faculty_name' => ['fakultet', 'faculty', 'faculty name'],
-            'specialty_name' => ['yonalish', 'yonalish nomi', 'mutaxassislik', 'specialty', 'direction'],
-            'course' => ['kurs', 'course'],
-            'group_name' => ['guruh', 'guruh nomi', 'group', 'group name'],
-            'group_hemis_id' => ['guruh id', 'group id', 'group hemis id', 'hemis group'],
-            'capacity' => ['sigim', 'sigimi', 'jami joy', 'capacity', 'total places', 'jami'],
-            'occupied_count' => ['band', 'band joy', 'occupied', 'students', 'talabalar soni'],
-            'free_places' => ['bosh joy', 'bosh urin', 'bosh orin', 'free', 'available', 'qoldiq'],
-        ];
-        $normalized = array_map(fn ($header) => $this->normalizeHeader($header), $headers);
-        $mapping = [];
-        foreach ($aliases as $key => $headerAliases) {
-            $mapping[$key] = null;
-            foreach ($normalized as $index => $header) {
-                foreach ($headerAliases as $alias) {
-                    $normalizedAlias = $this->normalizeHeader($alias);
-                    if ($header === $normalizedAlias || str_contains($header, $normalizedAlias)) {
-                        $mapping[$key] = $index;
-                        break 2;
-                    }
-                }
-            }
-        }
-        return $mapping;
-    }
-
-    private function normalizeHeader(string $value): string
-    {
-        $value = str_replace(["'", '"', '?', '?'], '', mb_strtolower(trim($value)));
-        return trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value));
-    }
-
-    private function extractInteger(string $value): ?int
-    {
-        if ($value === '') return null;
-        return preg_match('/-?\d+/', str_replace(',', '.', $value), $match) ? (int) $match[0] : null;
-    }
-
     private function courseNumber($levelCode, $levelName): ?int
     {
         $code = (int) $levelCode;
-        if ($code >= 11 && $code <= 16) return $code - 10;
-        if ($code >= 1 && $code <= 6) return $code;
-        if (preg_match('/([1-6])\s*[- ]?\s*kurs/i', (string) $levelName, $match)) return (int) $match[1];
+        if ($code >= 11 && $code <= 16) {
+            return $code - 10;
+        }
+        if ($code >= 1 && $code <= 6) {
+            return $code;
+        }
+        if (preg_match('/([1-6])\s*[- ]?\s*kurs/i', (string) $levelName, $match)) {
+            return (int) $match[1];
+        }
+
         return null;
     }
 
     private function numericGroupId($value): ?int
     {
         return ctype_digit((string) $value) ? (int) $value : null;
-    }
-
-    private function normalizeRow(array $row, int $columnCount, bool $header = false): array
-    {
-        $values = array_values($row);
-        $normalized = [];
-        for ($index = 0; $index < $columnCount; $index++) {
-            $value = $this->cellText($values[$index] ?? '');
-            $normalized[] = $value !== '' || !$header ? $value : 'Ustun ' . ($index + 1);
-        }
-        return $normalized;
-    }
-
-    private function cellText($value): string
-    {
-        if ($value instanceof \DateTimeInterface) return $value->format('d.m.Y H:i');
-        return trim((string) $value);
     }
 }

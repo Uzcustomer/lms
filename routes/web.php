@@ -457,7 +457,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
             ->group(function () {
                 Route::get('/', [StudentDistributionController::class, 'index'])->name('index');
-                Route::post('/upload', [StudentDistributionController::class, 'upload'])->name('upload');
+                Route::get('/catalog', [StudentDistributionController::class, 'catalog'])->name('catalog');
+                Route::post('/groups', [StudentDistributionController::class, 'storeGroups'])->name('groups.store');
+                Route::post('/source-groups', [StudentDistributionController::class, 'storeSourceGroups'])->name('source-groups.store');
                 Route::get('/groups', [StudentDistributionController::class, 'groups'])->name('groups');
                 Route::get('/students', [StudentDistributionController::class, 'students'])->name('students');
                 Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');

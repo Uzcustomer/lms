@@ -25,6 +25,7 @@
         .sd-paste{min-height:150px}.sd-config-scroll{max-height:300px}
         @media(max-width:760px){.sd-setup{grid-template-columns:1fr}.sd-setup-box{align-items:flex-start;flex-direction:column}.sd-config-filters{grid-template-columns:1fr}}
         @media(max-width:760px){.sd-hero-content{align-items:flex-start;flex-direction:column}.sd-hero-stat{width:100%}.sd-upload,.sd-filters,.sd-modal-filters{display:block}.sd-upload .sd-btn,.sd-filter-actions{width:100%;margin-top:9px}.sd-filter-actions .sd-btn{flex:1}.sd-groups{grid-template-columns:1fr}.sd-student-row{align-items:flex-start;flex-direction:column}.sd-student-row .sd-btn{width:100%}}
+        .sd-group-tabs{display:flex;gap:8px;padding:13px 18px 0;border-bottom:1px solid #edf2f7;background:#fff}.sd-group-tab{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid transparent;border-bottom:3px solid transparent;border-radius:10px 10px 0 0;background:transparent;color:#64748b;font-size:12px;font-weight:800;cursor:pointer}.sd-group-tab:hover{background:#f8fafc;color:#1e40af}.sd-group-tab.active{border-color:#dbeafe;border-bottom-color:#2563eb;background:#eff6ff;color:#1d4ed8}.sd-group-tab[data-view="source"].active{border-color:#fecdd3;border-bottom-color:#e11d48;background:#fff1f2;color:#be123c}.sd-group-tab-count{display:inline-grid;place-items:center;min-width:23px;height:20px;padding:0 6px;border-radius:999px;background:#fff;font-size:10px}@media(max-width:600px){.sd-group-tabs{display:grid;grid-template-columns:1fr 1fr}.sd-group-tab{justify-content:center;padding:9px 6px}}
     </style>
 
     <div class="sd-page">
@@ -56,6 +57,10 @@
                 <div class="sd-field"><label class="sd-label" for="specialtyFilter">Yo'nalish</label><select class="sd-select" id="specialtyFilter"><option value="">Barcha yo'nalishlar</option>@foreach($specialties as $specialty)<option value="{{ $specialty }}">{{ $specialty }}</option>@endforeach</select></div>
                 <div class="sd-field"><label class="sd-label" for="courseFilter">Kurs</label><select class="sd-select" id="courseFilter"><option value="">Barchasi</option>@foreach($courses as $course)<option value="{{ $course }}">{{ $course }}-kurs</option>@endforeach</select></div>
                 <div class="sd-filter-actions"><button type="button" class="sd-btn sd-btn-light" id="resetFilters">Tozalash</button><button type="button" class="sd-btn" id="refreshGroups">Yangilash</button></div>
+            </div>
+            <div class="sd-group-tabs">
+                <button class="sd-group-tab active" id="targetGroupsTab" data-view="target" type="button">To'ldiriladigan guruhlar <span class="sd-group-tab-count" id="targetTabCount">0</span></button>
+                <button class="sd-group-tab" id="sourceGroupsTab" data-view="source" type="button">Taqsimlanadigan guruhlar <span class="sd-group-tab-count" id="sourceTabCount">0</span></button>
             </div>
             <div class="sd-summary"><span class="sd-pill sd-pill-green" id="availableCount">0 ta bo'sh joyli</span><span id="capacitySummary"></span></div>
             <div class="sd-groups" id="groupsGrid"></div>
@@ -142,7 +147,7 @@
                 permission: @json(url('/admin/student-distribution/group-change-permission'))
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
-            let groups = initialGroups, selectedGroup = null, selectedStudent = null;
+            let groups = initialGroups, selectedGroup = null, selectedStudent = null, groupView = 'target';
             const catalogSelected = new Set(catalog.filter(item => item.is_saved).map(item => item.key)), sourceSelected = new Set(catalog.filter(item => item.is_source).map(item => item.key)), studentCache = new Map(), catalogDraft = new Map(catalog.map(item => [item.key, {capacity:item.capacity, free_places:item.free_places}]));
             const sourceDraft = new Map(catalog.map(item => [item.key, item.is_source ? item.capacity : item.student_count]));
 
@@ -153,12 +158,30 @@
 
             function renderGroups() {
                 const faculty = $('facultyFilter').value, specialty = $('specialtyFilter').value, course = $('courseFilter').value;
-                const filtered = groups.filter(group => (!faculty || group.faculty_name === faculty) && (!specialty || group.specialty_name === specialty) && (!course || String(group.course) === course));
+                const scoped = groups.filter(group => (!faculty || group.faculty_name === faculty) && (!specialty || group.specialty_name === specialty) && (!course || String(group.course) === course));
+                const targets = scoped.filter(group => !group.is_source);
+                const sources = scoped.filter(group => group.is_source);
+                const filtered = groupView === 'source' ? sources : targets;
+
+                $('targetTabCount').textContent = targets.length;
+                $('sourceTabCount').textContent = sources.length;
                 $('groupCount').textContent = filtered.length + ' ta guruh';
-                $('heroGroupCount').textContent = filtered.length;
-                $('availableCount').textContent = filtered.filter(group => !group.is_source && group.free_places > 0).length + ' ta bo\'sh joyli';
-                $('capacitySummary').textContent = filtered.filter(group => !group.is_source).reduce((sum, group) => sum + group.free_places, 0) + ' ta bo\'sh o\'rin';
-                $('groupsGrid').innerHTML = filtered.length ? filtered.map(group => '<article class="sd-group '+(group.is_source ? 'is-source' : '')+'"><h3>'+esc(group.group_name)+'</h3><div class="sd-group-meta">'+esc(group.faculty_name)+'<br>'+esc(group.specialty_name)+' / '+group.course+'-kurs / sig\'im '+group.capacity+'</div><div class="sd-group-foot">'+(group.is_source ? '<span class="sd-pill sd-pill-red">Talabalari ko\'chiriladi</span>' : '<span class="'+(group.free_places > 0 ? 'sd-free' : 'sd-full')+'">'+(group.free_places > 0 ? group.free_places+' ta bo\'sh joy' : 'Joy qolmagan')+'</span>')+(!group.is_source && group.free_places > 0 ? '<button class="sd-btn sd-btn-green fill-trigger" type="button" data-group="'+group.id+'">To\'ldirish</button>' : '')+'</div></article>').join('') : '<div class="sd-empty" style="grid-column:1/-1"><strong>Guruh topilmadi</strong>Avval guruhlarni DB ga yuklang.</div>';
+                $('heroGroupCount').textContent = scoped.length;
+
+                if (groupView === 'source') {
+                    $('availableCount').textContent = sources.length + ' ta taqsimlanadigan';
+                    $('availableCount').classList.remove('sd-pill-green');
+                    $('availableCount').classList.add('sd-pill-red');
+                    $('capacitySummary').textContent = sources.reduce((sum, group) => sum + Number(group.occupied_count || group.capacity || 0), 0) + ' ta talaba qolgan';
+                } else {
+                    $('availableCount').textContent = targets.filter(group => group.free_places > 0).length + ' ta bo\'sh joyli';
+                    $('availableCount').classList.add('sd-pill-green');
+                    $('availableCount').classList.remove('sd-pill-red');
+                    $('capacitySummary').textContent = targets.reduce((sum, group) => sum + group.free_places, 0) + ' ta bo\'sh o\'rin';
+                }
+
+                const emptyTitle = groupView === 'source' ? 'Taqsimlanadigan guruh topilmadi' : 'To\'ldiriladigan guruh topilmadi';
+                $('groupsGrid').innerHTML = filtered.length ? filtered.map(group => '<article class="sd-group '+(group.is_source ? 'is-source' : '')+'"><h3>'+esc(group.group_name)+'</h3><div class="sd-group-meta">'+esc(group.faculty_name)+'<br>'+esc(group.specialty_name)+' / '+group.course+'-kurs / sig\'im '+group.capacity+'</div><div class="sd-group-foot">'+(group.is_source ? '<span class="sd-pill sd-pill-red">Talabalari ko\'chiriladi</span>' : '<span class="'+(group.free_places > 0 ? 'sd-free' : 'sd-full')+'">'+(group.free_places > 0 ? group.free_places+' ta bo\'sh joy' : 'Joy qolmagan')+'</span>')+(!group.is_source && group.free_places > 0 ? '<button class="sd-btn sd-btn-green fill-trigger" type="button" data-group="'+group.id+'">To\'ldirish</button>' : '')+'</div></article>').join('') : '<div class="sd-empty" style="grid-column:1/-1"><strong>'+emptyTitle+'</strong>Filtrni o\'zgartiring yoki guruhlarni DB ga yuklang.</div>';
                 document.querySelectorAll('.fill-trigger').forEach(button => button.addEventListener('click', () => openFill(Number(button.dataset.group))));
             }
 
@@ -396,6 +419,15 @@
                     sourceDraft.set(row.dataset.key, Math.max(0,Math.trunc(Number(event.target.value) || 0)));
                 }
             });
+
+            function setGroupView(view) {
+                groupView = view;
+                document.querySelectorAll('.sd-group-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.view === view));
+                renderGroups();
+            }
+
+            $('targetGroupsTab').addEventListener('click', () => setGroupView('target'));
+            $('sourceGroupsTab').addEventListener('click', () => setGroupView('source'));
 
             $('facultyFilter').addEventListener('change', () => { refreshFilterOptions(); renderGroups(); });
             $('specialtyFilter').addEventListener('change', () => { refreshFilterOptions(); renderGroups(); });

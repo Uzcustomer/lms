@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\Group;
 use App\Models\StudentDistributionGroup;
 use App\Models\StudentDistributionAssignment;
+use App\Models\StudentGroupChangeApplication;
 use App\Models\StudentGroupChangePermission;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -32,11 +33,15 @@ class StudentDistributionController extends Controller
         }
 
         $catalog = $this->catalogGroups($groups);
+        $applications = Schema::hasTable('student_group_change_applications')
+            ? StudentGroupChangeApplication::query()->latest()->limit(500)->get()
+            : collect();
 
         return view('admin.student-distribution.index-v2', [
             'groups' => $groups,
             'groupPayloads' => $groups->map(fn (StudentDistributionGroup $group) => $this->groupPayload($group))->values(),
             'catalogPayloads' => $catalog,
+            'applicationPayloads' => $applications->map(fn (StudentGroupChangeApplication $application) => $this->applicationPayload($application))->values(),
             'faculties' => $groups->pluck('faculty_name')->filter()->unique()->values(),
             'specialties' => $groups->pluck('specialty_name')->filter()->unique()->values(),
             'courses' => $groups->pluck('course')->filter()->unique()->sort()->values(),
@@ -368,11 +373,105 @@ class StudentDistributionController extends Controller
             ['enabled' => $data['enabled'], 'enabled_by_id' => Auth::id(), 'enabled_at' => $data['enabled'] ? now() : null]
         );
 
+
         return response()->json([
             'message' => $data['enabled'] ? 'Talabaga guruhni o\'zgartirish arizasiga ruxsat berildi.' : 'Talaba uchun xizmat yopildi.',
             'enabled' => (bool) $permission->enabled,
         ]);
     }
+    public function permissionGroups(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'target_group_id' => 'required|integer|exists:student_distribution_groups,id',
+        ]);
+        $target = StudentDistributionGroup::query()
+            ->where('is_active', true)
+            ->where('is_source', false)
+            ->findOrFail($data['target_group_id']);
+
+        $groups = StudentDistributionGroup::query()
+            ->where('is_active', true)
+            ->where('is_source', true)
+            ->where('faculty_name', $target->faculty_name)
+            ->where('specialty_name', $target->specialty_name)
+            ->where('course', $target->course)
+            ->orderBy('group_name')
+            ->get()
+            ->map(fn (StudentDistributionGroup $group) => $this->permissionGroupPayload($group))
+            ->values();
+
+        return response()->json(['groups' => $groups]);
+    }
+
+    public function setGroupChangePermissions(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'distribution_group_ids' => 'required|array|min:1|max:500',
+            'distribution_group_ids.*' => 'required|integer|distinct|exists:student_distribution_groups,id',
+            'enabled' => 'required|boolean',
+        ]);
+        $groupIds = collect($data['distribution_group_ids'])->map(fn ($id) => (int) $id)->unique()->values();
+        $groups = StudentDistributionGroup::query()
+            ->whereIn('id', $groupIds)
+            ->where('is_active', true)
+            ->where('is_source', true)
+            ->get();
+
+        if ($groups->count() !== $groupIds->count()) {
+            return response()->json(['message' => 'Faqat taqsimlanadigan faol guruhlarga ruxsat berish mumkin.'], 422);
+        }
+
+        $studentIds = $groups->flatMap(fn (StudentDistributionGroup $group) => $this->studentsForDistributionGroup($group)->pluck('id'))
+            ->unique()->values();
+        if ($studentIds->isEmpty()) {
+            return response()->json(['message' => 'Tanlangan guruhlarda talaba topilmadi.'], 422);
+        }
+
+        $now = now();
+        $rows = $studentIds->map(fn (int $studentId) => [
+            'student_id' => $studentId,
+            'enabled' => (bool) $data['enabled'],
+            'enabled_by_id' => Auth::id(),
+            'enabled_at' => $data['enabled'] ? $now : null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->all();
+        StudentGroupChangePermission::query()->upsert(
+            $rows,
+            ['student_id'],
+            ['enabled', 'enabled_by_id', 'enabled_at', 'updated_at']
+        );
+
+        return response()->json([
+            'message' => $data['enabled']
+                ? $groups->count() . ' ta guruhdagi ' . $studentIds->count() . ' ta talabaga ariza xizmati ochildi.'
+                : $groups->count() . ' ta guruhdagi ' . $studentIds->count() . ' ta talaba uchun xizmat yopildi.',
+            'student_count' => $studentIds->count(),
+        ]);
+    }
+
+    public function applications(Request $request): JsonResponse
+    {
+        abort_unless(Schema::hasTable('student_group_change_applications'), 503, 'Arizalar jadvali hali migratsiya qilinmagan.');
+        $request->validate([
+            'faculty' => 'nullable|string|max:255',
+            'specialty' => 'nullable|string|max:255',
+            'course' => 'nullable|integer|min:1|max:6',
+        ]);
+
+        $applications = StudentGroupChangeApplication::query()
+            ->when($request->filled('faculty'), fn (Builder $query) => $query->where('faculty_name', $request->string('faculty')))
+            ->when($request->filled('specialty'), fn (Builder $query) => $query->where('specialty_name', $request->string('specialty')))
+            ->when($request->filled('course'), fn (Builder $query) => $query->where('course', $request->integer('course')))
+            ->latest()
+            ->limit(500)
+            ->get()
+            ->map(fn (StudentGroupChangeApplication $application) => $this->applicationPayload($application))
+            ->values();
+
+        return response()->json(['applications' => $applications]);
+    }
+
 
     private function catalogGroups(?Collection $savedGroups = null): Collection
     {
@@ -526,6 +625,52 @@ class StudentDistributionController extends Controller
                 ->orWhere('level_name', 'like', $course . '-kurs%')
                 ->orWhere('level_name', 'like', $course . ' kurs%');
         });
+    }
+
+    private function studentsForDistributionGroup(StudentDistributionGroup $group): Builder
+    {
+        return Student::query()
+            ->where('department_name', $group->faculty_name)
+            ->where('specialty_name', $group->specialty_name)
+            ->where(fn (Builder $query) => $this->whereCourse($query, (int) $group->course))
+            ->where(function (Builder $query) use ($group) {
+                $query->where('group_name', $group->group_name);
+                if ($group->group_hemis_id !== null && ctype_digit((string) $group->group_hemis_id)) {
+                    $query->orWhere('group_id', (int) $group->group_hemis_id);
+                }
+            });
+    }
+
+    private function permissionGroupPayload(StudentDistributionGroup $group): array
+    {
+        $studentIds = $this->studentsForDistributionGroup($group)->pluck('id');
+        $enabledCount = $studentIds->isEmpty() ? 0 : StudentGroupChangePermission::query()
+            ->whereIn('student_id', $studentIds)
+            ->where('enabled', true)
+            ->count();
+
+        return $this->groupPayload($group) + [
+            'student_count' => $studentIds->count(),
+            'permission_count' => $enabledCount,
+            'all_enabled' => $studentIds->isNotEmpty() && $enabledCount === $studentIds->count(),
+        ];
+    }
+
+    private function applicationPayload(StudentGroupChangeApplication $application): array
+    {
+        return [
+            'id' => $application->id,
+            'student_name' => $application->student_name,
+            'student_id_number' => $application->student_id_number,
+            'faculty_name' => $application->faculty_name,
+            'specialty_name' => $application->specialty_name,
+            'course' => (int) $application->course,
+            'source_group_name' => $application->source_group_name,
+            'target_group_name' => $application->target_group_name,
+            'reason' => $application->reason,
+            'status' => $application->status,
+            'created_at' => optional($application->created_at)->format('d.m.Y H:i'),
+        ];
     }
 
     private function studentMatchesGroup(Student $student, StudentDistributionGroup $group): bool

@@ -26,6 +26,7 @@
         @media(max-width:760px){.sd-setup{grid-template-columns:1fr}.sd-setup-box{align-items:flex-start;flex-direction:column}.sd-config-filters{grid-template-columns:1fr}}
         @media(max-width:760px){.sd-hero-content{align-items:flex-start;flex-direction:column}.sd-hero-stat{width:100%}.sd-upload,.sd-filters,.sd-modal-filters{display:block}.sd-upload .sd-btn,.sd-filter-actions{width:100%;margin-top:9px}.sd-filter-actions .sd-btn{flex:1}.sd-groups{grid-template-columns:1fr}.sd-student-row{align-items:flex-start;flex-direction:column}.sd-student-row .sd-btn{width:100%}}
         .sd-group-tabs{display:flex;gap:8px;padding:13px 18px 0;border-bottom:1px solid #edf2f7;background:#fff}.sd-group-tab{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid transparent;border-bottom:3px solid transparent;border-radius:10px 10px 0 0;background:transparent;color:#64748b;font-size:12px;font-weight:800;cursor:pointer}.sd-group-tab:hover{background:#f8fafc;color:#1e40af}.sd-group-tab.active{border-color:#dbeafe;border-bottom-color:#2563eb;background:#eff6ff;color:#1d4ed8}.sd-group-tab[data-view="source"].active{border-color:#fecdd3;border-bottom-color:#e11d48;background:#fff1f2;color:#be123c}.sd-group-tab-count{display:inline-grid;place-items:center;min-width:23px;height:20px;padding:0 6px;border-radius:999px;background:#fff;font-size:10px}@media(max-width:600px){.sd-group-tabs{display:grid;grid-template-columns:1fr 1fr}.sd-group-tab{justify-content:center;padding:9px 6px}}
+        .sd-group-tab[data-view="applications"].active{border-color:#fde68a;border-bottom-color:#d97706;background:#fffbeb;color:#92400e}.sd-application{grid-column:span 2;padding:15px;border:1px solid #dbe5ef;border-left:4px solid #d97706;border-radius:13px;background:linear-gradient(145deg,#fff,#fffbeb)}.sd-application-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.sd-application h3{margin:0;color:#123766;font-size:13px;font-weight:900}.sd-application-meta{margin-top:4px;color:#64748b;font-size:10px}.sd-application-route{display:inline-flex;margin-top:10px;padding:6px 9px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:900}.sd-application-reason{margin:10px 0 0;color:#475569;font-size:11px;line-height:1.55}.sd-permission-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:10px 12px;border:1px solid #dbe5f0;border-radius:11px;background:#f8fafc}.sd-permission-toolbar label{display:flex;align-items:center;gap:8px;color:#334155;font-size:11px;font-weight:800}.sd-permission-buttons{display:flex;gap:8px}.sd-permission-group{display:flex;align-items:center;gap:11px;padding:12px 13px;border-bottom:1px solid #edf2f7;cursor:pointer}.sd-permission-group:last-child{border-bottom:0}.sd-permission-group:hover{background:#f8fbff}.sd-permission-group-info{flex:1;min-width:0}.sd-permission-group-info b{display:block;color:#1e3a5f;font-size:12px}.sd-permission-group-info span{display:block;margin-top:3px;color:#64748b;font-size:10px}@media(max-width:760px){.sd-group-tabs{grid-template-columns:repeat(3,1fr)}.sd-application{grid-column:span 1}.sd-permission-toolbar{align-items:stretch;flex-direction:column}.sd-permission-buttons{display:grid;grid-template-columns:1fr 1fr}.sd-permission-buttons .sd-btn{padding:0 8px}}
     </style>
 
     <div class="sd-page">
@@ -61,6 +62,7 @@
             <div class="sd-group-tabs">
                 <button class="sd-group-tab active" id="targetGroupsTab" data-view="target" type="button">To'ldiriladigan guruhlar <span class="sd-group-tab-count" id="targetTabCount">0</span></button>
                 <button class="sd-group-tab" id="sourceGroupsTab" data-view="source" type="button">Taqsimlanadigan guruhlar <span class="sd-group-tab-count" id="sourceTabCount">0</span></button>
+                <button class="sd-group-tab" id="applicationsTab" data-view="applications" type="button">Arizalar <span class="sd-group-tab-count" id="applicationsTabCount">0</span></button>
             </div>
             <div class="sd-summary"><span class="sd-pill sd-pill-green" id="availableCount">0 ta bo'sh joyli</span><span id="capacitySummary"></span></div>
             <div class="sd-groups" id="groupsGrid"></div>
@@ -121,7 +123,8 @@
                 <div class="sd-scroll" id="accordionList"></div>
             </div>
             <div class="sd-panel" id="permissionPanel">
-                <div class="sd-move-copy">Bu tab guruhga hali taqsimlanmagan talabalar uchun student profilidagi xizmatni ochadi. Talaba keyin xizmatlar bo'limidan ariza yuborishi mumkin.</div>
+                <div class="sd-move-copy">Taqsimlanadigan guruhlarni belgilang. Ruxsat berilgach, shu guruh talabalarining xizmatlar bo'limida guruhni o'zgartirish arizasi ochiladi.</div>
+                <div class="sd-permission-toolbar"><label><input class="sd-check" id="permissionSelectAll" type="checkbox"> Hammasini belgilash</label><div class="sd-permission-buttons"><button class="sd-btn sd-btn-light" id="disableGroupPermissions" type="button">Xizmatni yopish</button><button class="sd-btn sd-btn-green" id="enableGroupPermissions" type="button">Ruxsat berish</button></div></div>
                 <div class="sd-scroll" id="permissionList"></div>
             </div>
         </div>
@@ -137,6 +140,7 @@
     <script>
         (() => {
             const initialGroups = @json($groupPayloads);
+            let applications = @json($applicationPayloads);
             const catalog = @json($catalogPayloads);
             const urls = {
                 groups: @json(url('/admin/student-distribution/groups')),
@@ -144,10 +148,13 @@
                 storeSources: @json(url('/admin/student-distribution/source-groups')),
                 students: @json(url('/admin/student-distribution/students')),
                 assign: @json(url('/admin/student-distribution/assign-student')),
-                permission: @json(url('/admin/student-distribution/group-change-permission'))
+                permissionGroups: @json(url('/admin/student-distribution/permission-groups')),
+                groupPermissions: @json(url('/admin/student-distribution/group-change-permissions')),
+                applications: @json(url('/admin/student-distribution/applications'))
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
             let groups = initialGroups, selectedGroup = null, selectedStudent = null, groupView = 'target';
+            const permissionSelected = new Set();
             const catalogSelected = new Set(catalog.filter(item => item.is_saved).map(item => item.key)), sourceSelected = new Set(catalog.filter(item => item.is_source).map(item => item.key)), studentCache = new Map(), catalogDraft = new Map(catalog.map(item => [item.key, {capacity:item.capacity, free_places:item.free_places}]));
             const sourceDraft = new Map(catalog.map(item => [item.key, item.is_source ? item.capacity : item.student_count]));
 
@@ -167,6 +174,22 @@
                 $('sourceTabCount').textContent = sources.length;
                 $('groupCount').textContent = filtered.length + ' ta guruh';
                 $('heroGroupCount').textContent = scoped.length;
+                const scopedApplications = applications.filter(application => (!faculty || application.faculty_name === faculty) && (!specialty || application.specialty_name === specialty) && (!course || String(application.course) === course));
+                $('applicationsTabCount').textContent = scopedApplications.length;
+                if (groupView === 'applications') {
+                    const pendingCount = scopedApplications.filter(application => application.status === 'pending').length;
+                    $('groupCount').textContent = scopedApplications.length + ' ta ariza';
+                    $('availableCount').textContent = pendingCount + ' ta kutilmoqda';
+                    $('availableCount').classList.remove('sd-pill-green', 'sd-pill-red');
+                    $('capacitySummary').textContent = scopedApplications.length + ' ta jami ariza';
+                    $('groupsGrid').innerHTML = scopedApplications.length ? scopedApplications.map(application => {
+                        const statusLabel = application.status === 'approved' ? 'Qabul qilingan' : (application.status === 'rejected' ? 'Rad etilgan' : 'Kutilmoqda');
+                        const statusClass = application.status === 'approved' ? 'sd-pill-green' : (application.status === 'rejected' ? 'sd-pill-red' : '');
+                        return '<article class="sd-application"><div class="sd-application-head"><div><h3>'+esc(application.student_name)+'</h3><div class="sd-application-meta">'+esc(application.student_id_number || '-')+' / '+esc(application.specialty_name)+' / '+application.course+'-kurs / '+esc(application.created_at || '')+'</div></div><span class="sd-pill '+statusClass+'">'+statusLabel+'</span></div><div class="sd-application-route">'+esc(application.source_group_name)+' &rarr; '+esc(application.target_group_name)+'</div><p class="sd-application-reason"><b>Sabab:</b> '+esc(application.reason)+'</p></article>';
+                    }).join('') : '<div class="sd-empty" style="grid-column:1/-1"><strong>Ariza topilmadi</strong>Tanlangan filtr bo\'yicha ariza mavjud emas.</div>';
+                    return;
+                }
+
 
                 if (groupView === 'source') {
                     $('availableCount').textContent = sources.length + ' ta taqsimlanadigan';
@@ -196,7 +219,11 @@
             }
             async function reloadGroups() {
                 const response = await fetch(urls.groups);
-                const data = await response.json(); groups = data.groups; renderGroups();
+                const data = await response.json(); groups = data.groups;
+                const applicationResponse = await fetch(urls.applications, {headers:{'Accept':'application/json'}});
+                const applicationData = await applicationResponse.json();
+                if (applicationResponse.ok) applications = applicationData.applications;
+                renderGroups();
             }
 
             function configOptions(items, prefix) {
@@ -339,7 +366,7 @@
                 $('fillTitle').textContent = selectedGroup.group_name + ' guruhini to\'ldirish';
                 $('fillSubtitle').textContent = selectedGroup.faculty_name+' ? '+selectedGroup.specialty_name+' ? '+selectedGroup.course+'-kurs ? '+selectedGroup.free_places+' ta bo\'sh joy';
                 $('modalFaculty').value = selectedGroup.faculty_name; $('modalSpecialty').value = selectedGroup.specialty_name; $('modalCourse').value = String(selectedGroup.course);
-                fillModalOptions(); $('fillModal').classList.add('is-open'); loadManual(); loadPermissions();
+                fillModalOptions(); $('fillModal').classList.add('is-open'); loadManual(); loadPermissionGroups();
             }
             function fillModalOptions() {
                 setOptions($('modalFaculty'), groups.map(group => group.faculty_name), 'Fakultet tanlang');
@@ -369,12 +396,29 @@
                     return '<div class="sd-student-row"><div class="sd-student-info"><b>'+esc(student.name)+'</b><span>'+esc(student.student_id_number)+' / haqiqiy guruh: '+esc(student.group_name || '-')+'</span>'+draft+'</div>'+(canMove ? '<button class="sd-btn sd-btn-green move-trigger" type="button" data-student="'+student.id+'">'+buttonText+'</button>' : '<span class="sd-permission">Biriktirilgan</span>')+'</div>';
                 }).join('');
             }
-            async function loadPermissions() {
-                const f = filterValues('modal');
-                $('permissionList').innerHTML = '<div class="sd-muted">Talabalar yuklanmoqda...</div>';
-                const data = await fetch(urls.students+'?'+query({...f, unassigned:1})).then(response => response.json());
-                $('permissionList').innerHTML = data.students.length ? data.students.map(student => '<div class="sd-student-row"><div class="sd-student-info"><b>'+esc(student.name)+'</b><span>'+esc(student.student_id_number)+' ? '+esc(student.course ? student.course+'-kurs' : '-')+'</span></div>'+(student.permission_enabled ? '<button class="sd-btn sd-btn-light permission-trigger" data-student="'+student.id+'" data-enabled="0" type="button">Xizmatni yopish</button>' : '<button class="sd-btn sd-btn-green permission-trigger" data-student="'+student.id+'" data-enabled="1" type="button">Arizaga ruxsat</button>')+'</div>').join('') : '<div class="sd-muted">Taqsimlanmagan talabalar topilmadi.</div>';
+            async function loadPermissionGroups() {
+                permissionSelected.clear();
+                $('permissionSelectAll').checked = false;
+                $('permissionList').innerHTML = '<div class="sd-muted">Guruhlar yuklanmoqda...</div>';
+                if (!selectedGroup) return;
+                const response = await fetch(urls.permissionGroups+'?'+query({target_group_id:selectedGroup.id}), {headers:{'Accept':'application/json'}});
+                const data = await response.json();
+                if (!response.ok) {
+                    $('permissionList').innerHTML = '<div class="sd-muted">'+esc(data.message || 'Guruhlarni yuklab bo\'lmadi.')+'</div>';
+                    return;
+                }
+                $('permissionList').innerHTML = data.groups.length ? data.groups.map(group => '<label class="sd-permission-group"><input class="sd-check permission-group-check" type="checkbox" data-id="'+group.id+'"><span class="sd-permission-group-info"><b>'+esc(group.group_name)+'</b><span>'+group.student_count+' ta talaba / '+group.permission_count+' tasida xizmat ochiq</span></span><span class="sd-pill '+(group.all_enabled ? 'sd-pill-green' : 'sd-pill-red')+'">'+(group.all_enabled ? 'Ruxsat berilgan' : 'Yopiq yoki qisman')+'</span></label>').join('') : '<div class="sd-muted">Bu yo\'nalishda taqsimlanadigan guruh topilmadi.</div>';
             }
+
+            async function setGroupPermissions(enabled) {
+                if (!permissionSelected.size) return alert('Kamida bitta guruhni belgilang.');
+                const response = await fetch(urls.groupPermissions, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},body:JSON.stringify({distribution_group_ids:[...permissionSelected],enabled})});
+                const data = await response.json();
+                if (!response.ok) return alert(data.message || 'Amalni bajarib bo\'lmadi.');
+                alert(data.message);
+                loadPermissionGroups();
+            }
+
             async function openMove(id) {
                 selectedStudent = id; const student = studentCache.get(id);
                 $('moveStudentName').textContent = student ? student.name+' / '+student.student_id_number+' / '+student.group_name : '';
@@ -385,11 +429,7 @@
             async function assign(groupId) {
                 const response = await fetch(urls.assign, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},body:JSON.stringify({student_id:selectedStudent,distribution_group_id:groupId})});
                 const data = await response.json(); if (!response.ok) return alert(data.message || 'Amalni bajarib bo\'lmadi.');
-                closeModal('moveModal'); await reloadGroups(); if ($('fillModal').classList.contains('is-open')) { loadManual(); loadPermissions(); }
-            }
-            async function setPermission(studentId, enabled) {
-                const response = await fetch(urls.permission, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},body:JSON.stringify({student_id:studentId,enabled:Boolean(Number(enabled))})});
-                const data = await response.json(); if (!response.ok) return alert(data.message || 'Amalni bajarib bo\'lmadi.'); loadPermissions();
+                closeModal('moveModal'); await reloadGroups(); if ($('fillModal').classList.contains('is-open')) { loadManual(); loadPermissionGroups(); }
             }
 
             $('openCatalog').addEventListener('click', openCatalog);
@@ -418,6 +458,10 @@
                 if (event.target.matches('.source-count-input')) {
                     sourceDraft.set(row.dataset.key, Math.max(0,Math.trunc(Number(event.target.value) || 0)));
                 }
+                if (event.target.matches('.permission-group-check')) {
+                    const id = Number(event.target.dataset.id);
+                    event.target.checked ? permissionSelected.add(id) : permissionSelected.delete(id);
+                }
             });
 
             function setGroupView(view) {
@@ -429,17 +473,26 @@
             $('targetGroupsTab').addEventListener('click', () => setGroupView('target'));
             $('sourceGroupsTab').addEventListener('click', () => setGroupView('source'));
 
+            $('applicationsTab').addEventListener('click', () => setGroupView('applications'));
+            $('permissionSelectAll').addEventListener('change', event => {
+                permissionSelected.clear();
+                document.querySelectorAll('.permission-group-check').forEach(checkbox => {
+                    checkbox.checked = event.target.checked;
+                    if (checkbox.checked) permissionSelected.add(Number(checkbox.dataset.id));
+                });
+            });
+            $('enableGroupPermissions').addEventListener('click', () => setGroupPermissions(true));
+            $('disableGroupPermissions').addEventListener('click', () => setGroupPermissions(false));
             $('facultyFilter').addEventListener('change', () => { refreshFilterOptions(); renderGroups(); });
             $('specialtyFilter').addEventListener('change', () => { refreshFilterOptions(); renderGroups(); });
             $('courseFilter').addEventListener('change', renderGroups);
             $('resetFilters').addEventListener('click', () => { $('facultyFilter').value=''; $('specialtyFilter').value=''; $('courseFilter').value=''; refreshFilterOptions(); renderGroups(); });
             $('refreshGroups').addEventListener('click', reloadGroups);
             $('modalFaculty').addEventListener('change', fillModalOptions); $('modalSpecialty').addEventListener('change', fillModalOptions);
-            $('reloadStudents').addEventListener('click', () => { loadManual(); loadPermissions(); });
+            $('reloadStudents').addEventListener('click', () => { loadManual(); loadPermissionGroups(); });
             document.addEventListener('click', event => {
                 const moveButton = event.target.closest('.move-trigger'); if (moveButton) openMove(Number(moveButton.dataset.student));
                 const assignButton = event.target.closest('.assign-trigger'); if (assignButton) assign(Number(assignButton.dataset.group));
-                const permissionButton = event.target.closest('.permission-trigger'); if (permissionButton) setPermission(Number(permissionButton.dataset.student), permissionButton.dataset.enabled);
                 const closeButton = event.target.closest('[data-close]'); if (closeButton) closeModal(closeButton.dataset.close);
                 const tab = event.target.closest('.sd-tab'); if (tab) { document.querySelectorAll('.sd-tab').forEach(item=>item.classList.remove('active')); document.querySelectorAll('.sd-panel').forEach(item=>item.classList.remove('active')); tab.classList.add('active'); $(tab.dataset.tab).classList.add('active'); }
             });

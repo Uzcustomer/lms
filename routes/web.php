@@ -464,6 +464,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/students', [StudentDistributionController::class, 'students'])->name('students');
                 Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');
                 Route::post('/group-change-permission', [StudentDistributionController::class, 'setGroupChangePermission'])->name('group-change-permission');
+                Route::get('/permission-groups', [StudentDistributionController::class, 'permissionGroups'])->name('permission-groups');
+                Route::post('/group-change-permissions', [StudentDistributionController::class, 'setGroupChangePermissions'])->name('group-change-permissions');
+                Route::get('/applications', [StudentDistributionController::class, 'applications'])->name('applications');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');
@@ -1463,6 +1466,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/transfer-application', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'store'])->name('transfer-application.store');
         Route::get('/transfer-application/{id}/document', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'document'])->name('transfer-application.document');
         Route::get('/group-change-application', [\App\Http\Controllers\Student\GroupChangeApplicationController::class, 'create'])->name('group-change-application.create');
+        Route::post('/group-change-application', [\App\Http\Controllers\Student\GroupChangeApplicationController::class, 'store'])->name('group-change-application.store');
 
         // Ish e'lonlari
         Route::get('/job-listings', function () {

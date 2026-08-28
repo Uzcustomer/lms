@@ -22,6 +22,7 @@
         .sd-group.is-source{border-color:#fecdd3;border-left-color:#e11d48;background:#fff1f2}.sd-pill-red{background:#fff1f2;color:#be123c}
         .sd-row-title b{display:block;color:#1e3a5f}.sd-row-title span{display:block;margin-top:2px;color:#94a3b8;font-size:9px}
         .sd-paste-box{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:12px;padding:12px;border:1px dashed #93c5fd;border-radius:12px;background:#eff6ff}.sd-paste{width:100%;min-height:72px;resize:vertical;border:1px solid #bfdbfe;border-radius:9px;padding:9px 10px;background:#fff;font:11px/1.45 monospace;color:#334155;outline:none}.sd-paste:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}.sd-paste-help{display:block;margin-bottom:6px;color:#1e40af;font-size:10px;font-weight:700}@media(max-width:760px){.sd-paste-box{grid-template-columns:1fr}}
+        .sd-paste{min-height:150px}.sd-config-scroll{max-height:300px}
         @media(max-width:760px){.sd-setup{grid-template-columns:1fr}.sd-setup-box{align-items:flex-start;flex-direction:column}.sd-config-filters{grid-template-columns:1fr}}
         @media(max-width:760px){.sd-hero-content{align-items:flex-start;flex-direction:column}.sd-hero-stat{width:100%}.sd-upload,.sd-filters,.sd-modal-filters{display:block}.sd-upload .sd-btn,.sd-filter-actions{width:100%;margin-top:9px}.sd-filter-actions .sd-btn{flex:1}.sd-groups{grid-template-columns:1fr}.sd-student-row{align-items:flex-start;flex-direction:column}.sd-student-row .sd-btn{width:100%}}
     </style>

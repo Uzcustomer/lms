@@ -21,6 +21,7 @@
         .sd-config-body{padding:15px 18px}.sd-config-filters{display:grid;grid-template-columns:1.3fr 1.3fr .65fr 1fr;gap:9px;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}.sd-config-scroll{max-height:430px;overflow:auto;margin-top:12px;border:1px solid #e2e8f0;border-radius:11px}.sd-config-table{width:100%;border-collapse:collapse;font-size:11px}.sd-config-table th{position:sticky;top:0;z-index:2;padding:9px;background:#eff6ff;color:#1e3a5f;text-align:left}.sd-config-table td{padding:8px 9px;border-top:1px solid #edf2f7}.sd-config-table tr:hover td{background:#f8fbff}.sd-config-foot{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid #e2e8f0;background:#f8fafc}.sd-check{width:16px;height:16px;accent-color:#2563eb}.sd-number{width:82px;height:33px;border:1px solid #cbd5e1;border-radius:8px;padding:0 8px;font-size:11px}
         .sd-group.is-source{border-color:#fecdd3;border-left-color:#e11d48;background:#fff1f2}.sd-pill-red{background:#fff1f2;color:#be123c}
         .sd-row-title b{display:block;color:#1e3a5f}.sd-row-title span{display:block;margin-top:2px;color:#94a3b8;font-size:9px}
+        .sd-paste-box{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:12px;padding:12px;border:1px dashed #93c5fd;border-radius:12px;background:#eff6ff}.sd-paste{width:100%;min-height:72px;resize:vertical;border:1px solid #bfdbfe;border-radius:9px;padding:9px 10px;background:#fff;font:11px/1.45 monospace;color:#334155;outline:none}.sd-paste:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}.sd-paste-help{display:block;margin-bottom:6px;color:#1e40af;font-size:10px;font-weight:700}@media(max-width:760px){.sd-paste-box{grid-template-columns:1fr}}
         @media(max-width:760px){.sd-setup{grid-template-columns:1fr}.sd-setup-box{align-items:flex-start;flex-direction:column}.sd-config-filters{grid-template-columns:1fr}}
         @media(max-width:760px){.sd-hero-content{align-items:flex-start;flex-direction:column}.sd-hero-stat{width:100%}.sd-upload,.sd-filters,.sd-modal-filters{display:block}.sd-upload .sd-btn,.sd-filter-actions{width:100%;margin-top:9px}.sd-filter-actions .sd-btn{flex:1}.sd-groups{grid-template-columns:1fr}.sd-student-row{align-items:flex-start;flex-direction:column}.sd-student-row .sd-btn{width:100%}}
     </style>
@@ -63,6 +64,10 @@
     <div class="sd-modal-backdrop" id="catalogModal">
         <div class="sd-modal" role="dialog" aria-modal="true">
             <div class="sd-modal-head"><div><h2>Guruhlarni DB ga yuklash</h2><p>LMS dagi guruhlarni tanlang, sig'im va bo'sh joyni kiriting.</p></div><button class="sd-close" type="button" data-close="catalogModal">&times;</button></div>
+                <div class="sd-paste-box">
+                    <div><span class="sd-paste-help">Exceldagi guruh, sig'im va bo'sh joy kataklarini copy qilib shu yerga paste qiling.</span><textarea class="sd-paste" id="catalogPaste" placeholder="d1/24-03(a)    15    3"></textarea></div>
+                    <button class="sd-btn" id="applyCatalogPaste" type="button">Ro'yxatni qo'llash</button>
+                </div>
             <div class="sd-config-body">
                 <div class="sd-config-filters">
                     <div class="sd-field"><label class="sd-label">Fakultet</label><select class="sd-select" id="catalogFaculty"></select></div>
@@ -79,6 +84,10 @@
     <div class="sd-modal-backdrop" id="sourcesModal">
         <div class="sd-modal" role="dialog" aria-modal="true">
             <div class="sd-modal-head"><div><h2>Talabalari taqsimlanadigan guruhlar</h2><p>Faqat belgilangan guruh talabalarini boshqa guruhga o'tkazish mumkin.</p></div><button class="sd-close" type="button" data-close="sourcesModal">&times;</button></div>
+                <div class="sd-paste-box">
+                    <div><span class="sd-paste-help">Talabalari ko'chiriladigan guruh nomlarini copy-paste qiling.</span><textarea class="sd-paste" id="sourcePaste" placeholder="p24-06a&#10;p24-06b"></textarea></div>
+                    <button class="sd-btn sd-btn-green" id="applySourcePaste" type="button">Ro'yxatni qo'llash</button>
+                </div>
             <div class="sd-config-body">
                 <div class="sd-config-filters">
                     <div class="sd-field"><label class="sd-label">Fakultet</label><select class="sd-select" id="sourceFaculty"></select></div>
@@ -196,6 +205,40 @@
             }
             function openCatalog() { configOptions(catalog,'catalog'); renderCatalog(); $('catalogModal').classList.add('is-open'); }
             function openSources() { configOptions(groups,'source'); renderSources(); $('sourcesModal').classList.add('is-open'); }
+            const normalizeGroupName = value => String(value || '').trim().toLowerCase().replace(/\s+/g,'');
+            function applyCatalogPaste() {
+                const text = $('catalogPaste').value.trim();
+                if (!text) return alert('Exceldan nusxalangan kataklarni kiriting.');
+                const byName = new Map(catalog.map(item => [normalizeGroupName(item.group_name), item]));
+                catalogSelected.clear();
+                let found = 0;
+                text.split(/\r?\n/).forEach(line => {
+                    const cells = line.includes('\t') ? line.split('\t') : line.trim().split(/\s{2,}/);
+                    for (let index = 0; index + 2 < cells.length; index++) {
+                        const name = String(cells[index] || '').trim();
+                        const capacity = Number(String(cells[index + 1] || '').replace(',','.'));
+                        const freePlaces = Number(String(cells[index + 2] || '').replace(',','.'));
+                        const item = byName.get(normalizeGroupName(name));
+                        if (item && Number.isFinite(capacity) && Number.isFinite(freePlaces)) {
+                            catalogSelected.add(item.key);
+                            catalogDraft.set(item.key, {capacity:Math.max(0,Math.trunc(capacity)),free_places:Math.max(0,Math.trunc(freePlaces))});
+                            found++; index += 2;
+                        }
+                    }
+                });
+                renderCatalog();
+                alert(found ? found+' ta guruh topildi. Endi "Tanlanganlarni saqlash"ni bosing.' : 'LMS bazasiga mos guruh topilmadi.');
+            }
+            function applySourcePaste() {
+                const names = $('sourcePaste').value.split(/[\t\r\n]+/).map(normalizeGroupName).filter(Boolean);
+                if (!names.length) return alert('Guruh nomlarini kiriting.');
+                const wanted = new Set(names);
+                sourceSelected.clear();
+                groups.forEach(group => { if (wanted.has(normalizeGroupName(group.group_name))) sourceSelected.add(group.id); });
+                renderSources();
+                alert(sourceSelected.size ? sourceSelected.size+' ta guruh topildi. Endi "Ro\'yxatni saqlash"ni bosing.' : 'DB dagi guruhlarga mos nom topilmadi.');
+            }
+
             async function saveCatalog() {
                 const rows = [...catalogSelected].map(key => ({key, ...catalogDraft.get(key)}));
                 if (!rows.length) return alert('Kamida bitta guruhni tanlang.');
@@ -264,6 +307,8 @@
             $('openSources').addEventListener('click', openSources);
             $('saveCatalog').addEventListener('click', saveCatalog);
             $('saveSources').addEventListener('click', saveSources);
+            $('applyCatalogPaste').addEventListener('click', applyCatalogPaste);
+            $('applySourcePaste').addEventListener('click', applySourcePaste);
             ['catalogFaculty','catalogSpecialty','catalogCourse'].forEach(id => $(id).addEventListener('change', () => { configOptions(catalog,'catalog'); renderCatalog(); }));
             ['sourceFaculty','sourceSpecialty','sourceCourse'].forEach(id => $(id).addEventListener('change', () => { configOptions(groups,'source'); renderSources(); }));
             $('catalogSearch').addEventListener('input', renderCatalog);

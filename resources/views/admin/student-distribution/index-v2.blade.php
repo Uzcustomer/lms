@@ -86,12 +86,12 @@
 
     <script>
         (() => {
-            const initialGroups = @json($groups->map(fn($g) => ['id'=>$g->id,'faculty_name'=>$g->faculty_name,'specialty_name'=>$g->specialty_name,'course'=>(int)$g->course,'group_name'=>$g->group_name,'capacity'=>(int)$g->capacity,'occupied_count'=>(int)$g->occupied_count,'free_places'=>(int)$g->free_places])->values());
+            const initialGroups = @json($groupPayloads);
             const urls = {
-                groups: @json(route('admin.student-distribution.groups')),
-                students: @json(route('admin.student-distribution.students')),
-                assign: @json(route('admin.student-distribution.assign-student')),
-                permission: @json(route('admin.student-distribution.group-change-permission'))
+                groups: @json(url('/admin/student-distribution/groups')),
+                students: @json(url('/admin/student-distribution/students')),
+                assign: @json(url('/admin/student-distribution/assign-student')),
+                permission: @json(url('/admin/student-distribution/group-change-permission'))
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
             let groups = initialGroups, selectedGroup = null, selectedStudent = null;

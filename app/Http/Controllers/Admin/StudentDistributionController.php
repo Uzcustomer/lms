@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -21,13 +22,19 @@ class StudentDistributionController extends Controller
 
     public function index()
     {
-        $groups = StudentDistributionGroup::query()
-            ->where('is_active', true)
-            ->orderBy('faculty_name')->orderBy('specialty_name')
-            ->orderBy('course')->orderBy('group_name')->get();
+        $groups = collect();
+        if (Schema::hasTable('student_distribution_groups')) {
+            $query = StudentDistributionGroup::query();
+            if (Schema::hasColumn('student_distribution_groups', 'is_active')) {
+                $query->where('is_active', true);
+            }
+            $groups = $query->orderBy('faculty_name')->orderBy('specialty_name')
+                ->orderBy('course')->orderBy('group_name')->get();
+        }
 
         return view('admin.student-distribution.index-v2', [
             'groups' => $groups,
+            'groupPayloads' => $groups->map(fn (StudentDistributionGroup $group) => $this->groupPayload($group))->values(),
             'faculties' => $groups->pluck('faculty_name')->filter()->unique()->values(),
             'specialties' => $groups->pluck('specialty_name')->filter()->unique()->values(),
             'courses' => $groups->pluck('course')->filter()->unique()->sort()->values(),

@@ -176,10 +176,15 @@
             }
 
             function configOptions(items, prefix) {
-                const faculty = $(prefix+'Faculty').value, specialty = $(prefix+'Specialty').value;
-                setOptions($(prefix+'Faculty'), items.map(item => item.faculty_name), 'Barcha fakultetlar'); $(prefix+'Faculty').value = faculty;
-                setOptions($(prefix+'Specialty'), items.filter(item => !faculty || item.faculty_name === faculty).map(item => item.specialty_name), 'Barcha yo\'nalishlar'); $(prefix+'Specialty').value = specialty;
-                setOptions($(prefix+'Course'), items.filter(item => (!faculty || item.faculty_name === faculty) && (!specialty || item.specialty_name === specialty)).map(item => item.course), 'Barcha kurslar');
+                const facultySelect = $(prefix+'Faculty');
+                const specialtySelect = $(prefix+'Specialty');
+                const courseSelect = $(prefix+'Course');
+
+                setOptions(facultySelect, items.map(item => item.faculty_name), 'Barcha fakultetlar');
+                const faculty = facultySelect.value;
+                setOptions(specialtySelect, items.filter(item => !faculty || item.faculty_name === faculty).map(item => item.specialty_name), 'Barcha yo\'nalishlar');
+                const specialty = specialtySelect.value;
+                setOptions(courseSelect, items.filter(item => (!faculty || item.faculty_name === faculty) && (!specialty || item.specialty_name === specialty)).map(item => item.course), 'Barcha kurslar');
             }
             function configFiltered(items, prefix) {
                 const f = filterValues(prefix), search = $(prefix+'Search').value.trim().toLowerCase();
@@ -216,24 +221,42 @@
                 const text = $('catalogPaste').value.trim();
                 if (!text) return alert('Exceldan nusxalangan kataklarni kiriting.');
                 const byName = new Map(catalog.map(item => [normalizeGroupName(item.group_name), item]));
+                const matched = new Set();
+                const unmatched = new Set();
                 catalogSelected.clear();
-                let found = 0;
+
                 text.split(/\r?\n/).forEach(line => {
                     const cells = line.includes('\t') ? line.split('\t') : line.trim().split(/\s{2,}/);
                     for (let index = 0; index + 2 < cells.length; index++) {
                         const name = String(cells[index] || '').trim();
                         const capacity = Number(String(cells[index + 1] || '').replace(',','.'));
                         const freePlaces = Number(String(cells[index + 2] || '').replace(',','.'));
+                        if (!name || !Number.isFinite(capacity) || !Number.isFinite(freePlaces)) continue;
+
                         const item = byName.get(normalizeGroupName(name));
-                        if (item && Number.isFinite(capacity) && Number.isFinite(freePlaces)) {
+                        if (item) {
                             catalogSelected.add(item.key);
-                            catalogDraft.set(item.key, {capacity:Math.max(0,Math.trunc(capacity)),free_places:Math.max(0,Math.trunc(freePlaces))});
-                            found++; index += 2;
+                            catalogDraft.set(item.key, {
+                                capacity:Math.max(0,Math.trunc(capacity)),
+                                free_places:Math.max(0,Math.trunc(freePlaces)),
+                            });
+                            matched.add(item.key);
+                        } else {
+                            unmatched.add(name);
                         }
+                        index += 2;
                     }
                 });
+
                 renderCatalog();
-                alert(found ? found+' ta guruh topildi. Endi "Tanlanganlarni saqlash"ni bosing.' : 'LMS bazasiga mos guruh topilmadi.');
+                const total = matched.size + unmatched.size;
+                let message = matched.size+'/'+total+' ta guruh topildi.';
+                if (unmatched.size) {
+                    message += '\n\nTopilmagan guruhlar:\n- '+[...unmatched].join('\n- ');
+                } else {
+                    message += '\nEndi "Tanlanganlarni saqlash"ni bosing.';
+                }
+                alert(message);
             }
             function applySourcePaste() {
                 const names = $('sourcePaste').value.split(/[\t\r\n]+/).map(normalizeGroupName).filter(Boolean);

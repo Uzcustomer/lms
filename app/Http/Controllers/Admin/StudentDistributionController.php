@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Student;
+use App\Models\Group;
 use App\Models\StudentDistributionGroup;
 use App\Models\StudentDistributionAssignment;
 use App\Models\StudentGroupChangePermission;
@@ -341,7 +342,7 @@ class StudentDistributionController extends Controller
             : collect();
         $savedByScope = $savedGroups->keyBy(fn (StudentDistributionGroup $group) => $group->scope_hash);
 
-        return Student::query()
+        $studentGroups = Student::query()
             ->whereNotNull('group_name')->where('group_name', '<>', '')
             ->whereNotNull('department_name')->whereNotNull('specialty_name')
             ->select([
@@ -349,39 +350,118 @@ class StudentDistributionController extends Controller
                 DB::raw('COUNT(*) as student_count'),
             ])
             ->groupBy('department_name', 'specialty_name', 'level_code', 'level_name', 'group_id', 'group_name')
-            ->orderBy('department_name')->orderBy('specialty_name')->orderBy('group_name')
             ->get()
-            ->map(function ($row) use ($savedByScope) {
+            ->map(function ($row) {
                 $course = $this->courseNumber($row->level_code, $row->level_name);
                 if (!$course) {
                     return null;
                 }
 
-                $base = [
+                return [
                     'faculty_name' => trim((string) $row->department_name),
                     'specialty_name' => trim((string) $row->specialty_name),
                     'course' => $course,
                     'group_name' => trim((string) $row->group_name),
+                    'group_hemis_id' => $row->group_id ? (string) $row->group_id : null,
+                    'student_count' => (int) $row->student_count,
                 ];
+            })
+            ->filter()
+            ->values();
+
+        $studentByHemisId = $studentGroups->filter(fn (array $group) => $group['group_hemis_id'])
+            ->keyBy(fn (array $group) => (string) $group['group_hemis_id']);
+        $studentByName = $studentGroups->keyBy(fn (array $group) => $this->catalogNameKey(
+            $group['faculty_name'], $group['specialty_name'], $group['group_name']
+        ));
+        $courseByCohort = $studentGroups->mapWithKeys(function (array $group) {
+            $key = $this->catalogCohortKey(
+                $group['faculty_name'], $group['specialty_name'], $group['group_name']
+            );
+
+            return $key ? [$key => $group['course']] : [];
+        });
+
+        $lmsQuery = Group::query();
+        if (Schema::hasColumn('groups', 'active')) {
+            $lmsQuery->where('active', true);
+        }
+
+        $lmsGroups = $lmsQuery->get([
+            'group_hemis_id', 'name', 'department_name', 'specialty_name',
+        ])->map(function (Group $group) use ($studentByHemisId, $studentByName, $courseByCohort) {
+            $match = $studentByHemisId->get((string) $group->group_hemis_id)
+                ?? $studentByName->get($this->catalogNameKey(
+                    $group->department_name, $group->specialty_name, $group->name
+                ));
+            $course = $match['course'] ?? null;
+            if (!$course) {
+                $cohortKey = $this->catalogCohortKey(
+                    $group->department_name, $group->specialty_name, $group->name
+                );
+                $course = $cohortKey ? $courseByCohort->get($cohortKey) : null;
+            }
+            $course ??= $this->inferCourseFromGroupName($group->name);
+            if (!$course) {
+                return null;
+            }
+
+            return [
+                'faculty_name' => trim((string) $group->department_name),
+                'specialty_name' => trim((string) $group->specialty_name),
+                'course' => (int) $course,
+                'group_name' => trim((string) $group->name),
+                'group_hemis_id' => (string) $group->group_hemis_id,
+                'student_count' => (int) ($match['student_count'] ?? 0),
+            ];
+        })->filter();
+
+        return $studentGroups->concat($lmsGroups)
+            ->map(function (array $base) use ($savedByScope) {
                 $scopeHash = $this->groupScopeHash($base);
                 $saved = $savedByScope->get($scopeHash);
 
                 return $base + [
                     'key' => $scopeHash,
-                    'group_hemis_id' => $row->group_id ? (string) $row->group_id : null,
-                    'student_count' => (int) $row->student_count,
                     'saved_id' => $saved?->id,
-                    'capacity' => $saved ? (int) $saved->capacity : (int) $row->student_count,
+                    'capacity' => $saved ? (int) $saved->capacity : (int) $base['student_count'],
                     'free_places' => $saved ? (int) $saved->free_places : 0,
                     'is_saved' => (bool) $saved,
                     'is_source' => (bool) ($saved?->is_source),
                 ];
             })
-            ->filter()
             ->unique('key')
+            ->sortBy(fn (array $group) => implode('|', [
+                $group['faculty_name'], $group['specialty_name'], $group['course'], $group['group_name'],
+            ]))
             ->values();
     }
 
+    private function catalogNameKey($faculty, $specialty, $groupName): string
+    {
+        return mb_strtolower(trim((string) $faculty) . '|' . trim((string) $specialty) . '|' . trim((string) $groupName));
+    }
+
+    private function catalogCohortKey($faculty, $specialty, $groupName): ?string
+    {
+        if (!preg_match('/(?:^|\/)[a-z]?(\d{2})-/i', (string) $groupName, $match)) {
+            return null;
+        }
+
+        return mb_strtolower(trim((string) $faculty) . '|' . trim((string) $specialty) . '|' . $match[1]);
+    }
+
+    private function inferCourseFromGroupName($groupName): ?int
+    {
+        if (!preg_match('/(?:^|\/)[a-z]?(\d{2})-/i', (string) $groupName, $match)) {
+            return null;
+        }
+
+        $academicStartYear = now()->month >= 7 ? now()->year : now()->year - 1;
+        $course = ((int) substr((string) $academicStartYear, -2)) - (int) $match[1] + 1;
+
+        return $course >= 1 && $course <= 6 ? $course : null;
+    }
     private function activeGroupPayloads(): Collection
     {
         return StudentDistributionGroup::query()->where('is_active', true)

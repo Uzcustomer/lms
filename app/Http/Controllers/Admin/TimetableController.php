@@ -3500,11 +3500,32 @@ class TimetableController extends Controller
         return $out;
     }
 
-    /** Guruhcha nomidan asosiy guruh (oxirgi kichik harf — a/b/c — olib tashlanadi). */
+    /** Guruhcha nomidan asosiy oqim kodi olinadi: d1/22-01a (rus) -> d1/22-01. */
     private function baseGroup(string $gn): string
     {
-        // "p22-02a" → "p22-02", "d1/23 10a" → "d1/23 10" (raqamdan keyingi bitta harf)
-        return preg_replace('/([0-9])\s*[a-z]$/iu', '$1', trim($gn));
+        $clean = preg_replace(
+            "/\\s*\\((?:rus|ru|рус|russ|ing|eng|engl|ang|angl|англ|o['’‘]?z|oz|uz|ўз|узб)[^)]*\\)\\s*$/ui",
+            '',
+            trim($gn)
+        );
+
+        return preg_replace('/([0-9])\s*[a-eа-е]$/iu', '$1', trim($clean ?? $gn));
+    }
+
+    /** Karta ichidagi birlashtirilgan nomlarni haqiqiy a/b/c guruhlarga yoyadi. */
+    private function cycleCardGroups(TimetableCard $card): array
+    {
+        $groups = [];
+        foreach ($card->occupiedGroups() as $name) {
+            foreach (preg_split('/\s+\+\s+/u', trim((string) $name)) ?: [] as $member) {
+                $member = trim($member);
+                if ($member !== '') {
+                    $groups[$member] = true;
+                }
+            }
+        }
+
+        return array_keys($groups);
     }
 
     /**
@@ -3629,17 +3650,16 @@ class TimetableController extends Controller
                 if (!isset($cycleKey[$ck])) {
                     continue;
                 }
-                $flow = trim((string) $c->oqim_label);
-                if ($flow === '') {
-                    $flow = $this->baseGroup($c->group_name);
+                foreach ($this->cycleCardGroups($c) as $member) {
+                    $flow = $this->baseGroup($member);
+                    $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
+                    if (!isset($byFlow[$flowKey])) {
+                        $byFlow[$flowKey] = ['name' => $flow, 'subs' => [], 'members' => [],
+                            'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
+                    }
+                    $byFlow[$flowKey]['subs'][$c->subject_name] = $cycleKey[$ck];
+                    $byFlow[$flowKey]['members'][$member] = true;
                 }
-                $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
-                if (!isset($byFlow[$flowKey])) {
-                    $byFlow[$flowKey] = ['name' => $flow, 'subs' => [], 'members' => [],
-                        'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
-                }
-                $byFlow[$flowKey]['subs'][$c->subject_name] = $cycleKey[$ck];
-                $byFlow[$flowKey]['members'][$c->group_name] = true;
             }
         }
 
@@ -3883,16 +3903,14 @@ class TimetableController extends Controller
             ->where('specialty_name', $data['specialty_name'])
             ->where('training_type', 'practice')
             ->get();
-        $activeFlows = $scopeCards->map(function ($card) use ($norm) {
-            $flow = trim((string) $card->oqim_label);
-            $flow = $flow !== '' ? $flow : $this->baseGroup($card->group_name);
-            return $norm($flow);
-        })->filter()->flip()->all();
+        $activeFlows = $scopeCards->flatMap(fn($card) => $this->cycleCardGroups($card))
+            ->map(fn($group) => $norm($this->baseGroup($group)))
+            ->filter()->flip()->all();
         $cards = $scopeCards
             ->filter(function ($card) use ($data, $norm) {
-                $flow = trim((string) $card->oqim_label);
-                $flow = $flow !== '' ? $flow : $this->baseGroup($card->group_name);
-                return $norm($flow) === $norm($data['group_name'])
+                $inFlow = collect($this->cycleCardGroups($card))
+                    ->contains(fn($group) => $norm($this->baseGroup($group)) === $norm($data['group_name']));
+                return $inFlow
                     && $norm($card->subject_name) === $norm($data['subject_name']);
             });
         if ($cards->isEmpty()) {

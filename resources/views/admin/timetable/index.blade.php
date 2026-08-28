@@ -978,13 +978,20 @@
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
         #cycleGrid { border-collapse: collapse; table-layout: fixed; }
         #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
-        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; background: #eff6ff; min-width: 96px; max-width: 130px;
+        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; background: #eff6ff; min-width: 150px; max-width: 180px;
             padding: 2px 6px; text-align: left; font-size: 10px; line-height: 1.15; }
         #cycleGrid thead .cyc-gcol { background: #dbeafe; }
+        #cycleGrid .cyc-members { display: grid; gap: 2px; padding: 1px 0; }
+        #cycleGrid .cyc-member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch;
+            overflow: hidden; border: 1px solid #93c5fd; border-radius: 3px; background: #eff6ff; }
+        #cycleGrid .cyc-member-row span { overflow: hidden; padding: 4px 6px; color: #1e3a8a; font-size: 10px;
+            font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+        #cycleGrid .cyc-member-row b { display: flex; align-items: center; min-width: 38px; padding: 4px 6px;
+            border-left: 1px solid #60a5fa; background: #0ea5e9; color: #fff; font-size: 10px; justify-content: center; }
         #cycleGrid .cyc-dcol { width: 24px; min-width: 24px; font-size: 9px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
         #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
-        #cycleGrid .cyc-group-col { width: 130px; }
+        #cycleGrid .cyc-group-col { width: 170px; }
         #cycleGrid .cyc-date-col { width: 24px; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
@@ -2947,12 +2954,40 @@
                         ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
                     $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' oqim · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
                         (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
+
                         (cycleHolidays.length ? (' · ' + cycleHolidays.length + ' bayram') : '');
                 } catch (e) {
                     $('cycleMsg').textContent = '';
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-3 text-sm text-red-600">Xatolik: ' + esc(e.message) + '</td></tr></tbody>';
                     throw e;
                 }
+            }
+            function cycleMemberParts(name) {
+                const clean = String(name || '')
+                    .replace(/\s*\((?:rus|ru|рус|russ|ing|eng|engl|ang|angl|англ|o['’‘]?z|oz|uz|ўз|узб)[^)]*\)\s*$/iu, '')
+                    .trim();
+                const match = clean.match(/^(.*?\d)\s*([a-eа-е])$/iu);
+                if (!match) return {base: clean, letter: ''};
+                const cyrillic = {а: 'a', б: 'b', в: 'c', г: 'd', д: 'e'};
+                const letter = match[2].toLowerCase();
+                return {base: match[1].trim(), letter: cyrillic[letter] || letter};
+            }
+
+            function cycleMembersHtml(flow, members) {
+                const grouped = new Map();
+                (members || []).flatMap(name => String(name).split(/\s+\+\s+/u)).forEach(name => {
+                    const part = cycleMemberParts(name);
+                    const base = part.base || flow;
+                    if (!grouped.has(base)) grouped.set(base, new Set());
+                    if (part.letter) grouped.get(base).add(part.letter);
+                });
+                if (!grouped.size) grouped.set(flow, new Set());
+
+                return '<div class="cyc-members">' + Array.from(grouped.entries()).map(([base, letters]) => {
+                    const suffixes = Array.from(letters).sort().join(',');
+                    return '<div class="cyc-member-row"><span>' + esc(base) + '</span>' +
+                        '<b>' + esc(suffixes || '—') + '</b></div>';
+                }).join('') + '</div>';
             }
             function renderCyclePlanLegacy(j) {
                 const dates = j.dates || [], rows = j.rows || [];
@@ -2964,9 +2999,7 @@
                 dates.forEach(d => h += '<th class="cyc-dcol' + ((d.sunday || d.holiday) ? ' cyc-off' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(r => {
-                    const sub = (r.subgroups && r.subgroups.length) ? r.subgroups.join(', ') : '';
-                    h += '<tr><td class="cyc-gcol"><div class="font-semibold text-gray-800">' + esc(r.group) + '</div>' +
-                        (sub ? '<div class="text-[9px] text-gray-400">' + esc(sub) + '</div>' : '') + '</td>';
+                    h += '<tr><td class="cyc-gcol">' + cycleMembersHtml(r.group, r.subgroups) + '</td>';
                     let col = 0;
                     (r.blocks || []).forEach(b => {
                         while (col < b.from) { h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '"></td>'; col++; }
@@ -3014,9 +3047,7 @@
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
-                    const sub = (row.subgroups || []).join(', ');
-                    h += '<tr><td class="cyc-gcol"><div class="font-semibold text-gray-800">' + esc(row.group) + '</div>' +
-                        (sub ? '<div class="text-[9px] text-gray-400">' + esc(sub) + '</div>' : '') + '</td>';
+                    h += '<tr><td class="cyc-gcol">' + cycleMembersHtml(row.group, row.subgroups) + '</td>';
                     let col = 0;
                     (row.blocks || []).forEach(block => {
                         while (col < block.from) {

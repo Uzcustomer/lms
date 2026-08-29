@@ -352,8 +352,6 @@
                 const byName = new Map(catalog.map(item => [normalizeGroupName(item.group_name), item]));
                 const matched = new Set();
                 const unmatched = new Set();
-                sourceSelected.clear();
-
                 text.split(/\r?\n/).forEach(line => {
                     const cells = line.includes('\t') ? line.split('\t') : line.trim().split(/\s{2,}/);
                     for (let index = 0; index + 1 < cells.length; index++) {
@@ -381,6 +379,7 @@
                 } else {
                     message += '\nEndi "Ro\'yxatni saqlash"ni bosing.';
                 }
+                message += '\nJami '+sourceSelected.size+' ta guruh tanlandi.';
                 alert(message);
             }
             async function saveCatalog() {

@@ -11305,6 +11305,48 @@ class ReportController extends Controller
     }
 
     /**
+     * AJAX: HEMISdan guruhlar/talabalarni tortish (fon rejimida) — "Qo'lda tuzatish"
+     * vkladkasidagi tugmalar uchun. Faqat registrator ofisi / admin.
+     */
+    public function oqimHemisPull(Request $request)
+    {
+        $user = auth()->user();
+        $canApprove = $user && $user->hasAnyRole(['superadmin', 'admin', 'registrator_ofisi']);
+        if (!$canApprove) {
+            return response()->json(['ok' => false, 'error' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $what = (string) $request->get('what', 'groups');
+        if (!in_array($what, ['groups', 'students'], true)) {
+            return response()->json(['ok' => false, 'error' => 'Noto\'g\'ri so\'rov'], 422);
+        }
+
+        if ($what === 'groups') {
+            \Illuminate\Support\Facades\Artisan::queue('import:groups');
+            $message = 'Guruhlar HEMISdan tortilmoqda (fon rejimida). Bir necha daqiqadan so\'ng "Hisoblash" ni qayta bosing.';
+            \App\Services\ActivityLogService::log('import', 'group', 'Oqim sahifasidan guruhlar sinxronizatsiyasi boshlandi');
+        } else {
+            \Illuminate\Support\Facades\Artisan::queue('students:import');
+            $message = 'Talabalar HEMISdan tortilmoqda (fon rejimida). Bu jarayon uzoqroq davom etadi — keyinroq "Hisoblash" ni qayta bosing.';
+            \App\Services\ActivityLogService::log('import', 'student', 'Oqim sahifasidan talabalar sinxronizatsiyasi boshlandi');
+        }
+
+        // Joriy holat statistikasi — foydalanuvchi oxirgi sinxron qachon bo'lganini ko'rsin
+        $stats = [];
+        try {
+            $maxUpdated = \App\Models\Group::max('updated_at');
+            $stats = [
+                'groups_total'   => \App\Models\Group::count(),
+                'groups_updated' => $maxUpdated ? Carbon::parse($maxUpdated)->format('d.m.Y H:i') : null,
+            ];
+        } catch (\Throwable $e) {
+            // Statistika bo'lmasa ham import baribir navbatga qo'yilgan
+        }
+
+        return response()->json(['ok' => true, 'message' => $message] + $stats);
+    }
+
+    /**
      * Tasdiqlangan oqimlar tarixi (versiyalar ro'yxati — real va reja).
      */
     public function oqimHistory(Request $request)

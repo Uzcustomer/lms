@@ -192,6 +192,9 @@
                             <button type="button" class="oq-tab" data-tab="after" onclick="switchTab('after')" title="Optimizatsiya qo'llangandan keyingi to'liq holat">
                                 Optimizatsiyadan keyingi holat
                             </button>
+                            <button type="button" class="oq-tab" data-tab="manual" onclick="switchTab('manual')" title="Guruhlarni oqimlar orasida drag & drop bilan qo'lda ko'chirish va HEMISdan guruh/talabalarni tortish">
+                                🖐 Qo'lda tuzatish
+                            </button>
                             <span id="time-badge" style="font-size:12px;color:#94a3b8;margin-left:auto;"></span>
                         </div>
 
@@ -228,6 +231,29 @@
                                 <span id="snap-status" style="font-size:12px;font-weight:700;"></span>
                             </div>
                             <div id="opt-body" style="padding:16px 20px;max-height:calc(100vh - 420px);overflow:auto;"></div>
+                        </div>
+
+                        <!-- QO'LDA TUZATISH (drag & drop) tab -->
+                        <div id="tab-manual" style="display:none;">
+                            <div style="padding:8px 20px;background:#fdf4ff;border-bottom:1px solid #f0abfc;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <span id="mn-total-badge" class="badge" style="background:#a21caf;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                                <span style="font-size:11.5px;color:#86198f;">Guruhni ushlab (⠿) boshqa oqimga yoki "Yangi oqim" maydoniga tashlang — jami avtomatik yangilanadi. Boshqa fakultetga tashlansa, guruh "mehmon" deb belgilanadi.</span>
+                            </div>
+                            <div id="mn-actions" style="display:none;padding:8px 20px;background:#fbfdff;border-bottom:1px solid #e2e8f0;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <button type="button" id="mn-hemis-groups" class="af-btn af-load" onclick="hemisPull('groups')" title="HEMISdan guruhlar ro'yxatini yangilash (fon rejimida ishlaydi)">⇩ Guruhlarni HEMISdan tortish</button>
+                                <button type="button" id="mn-hemis-students" class="af-btn af-load" onclick="hemisPull('students')" title="HEMISdan talabalarni yangilash (fon rejimida, uzoqroq davom etadi)">⇩ Talabalarni HEMISdan tortish</button>
+                                <span id="mn-hemis-status" style="font-size:11.5px;font-weight:600;"></span>
+                                <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
+                                    <button type="button" class="af-btn af-draft" onclick="manualSource('opt')" title="Optimizatsiyalangan holatdan boshlab qo'lda tuzatish">⟲ Optimizatsiyadan</button>
+                                    <button type="button" class="af-btn af-load" onclick="loadSnapshot()" title="Oldin saqlangan/tasdiqlangan holatni yuklash">↺ Saqlangan holat</button>
+                                    <button type="button" id="mn-undo" class="af-btn af-draft" onclick="manualUndo()" disabled>↶ Bekor qilish</button>
+                                    <button type="button" class="af-btn af-draft" onclick="saveSnapshot('draft')">💾 Qoralama saqlash</button>
+                                    <button type="button" class="af-btn af-approve" onclick="saveSnapshot('approve')">✓ Tasdiqlash</button>
+                                    <span id="mn-save-status" style="font-size:12px;font-weight:700;"></span>
+                                </span>
+                            </div>
+                            <div id="mn-body" style="padding:16px 20px;max-height:calc(100vh - 420px);overflow:auto;"></div>
                         </div>
                     </div>
                 </div>
@@ -370,6 +396,8 @@
             $('#tab-joriy').toggle(tab === 'joriy');
             $('#tab-taklif').toggle(tab === 'taklif');
             $('#tab-after').toggle(tab === 'after');
+            $('#tab-manual').toggle(tab === 'manual');
+            if (tab === 'manual') renderManual();
         }
 
         function loadReport() {
@@ -387,6 +415,10 @@
                 $.get(url, getFilters(true))
             ).done(function(r0, r1) {
                 var joriy = r0[0], opt = r1[0];
+                // Qo'lda tuzatish vkladkasi uchun manba holatlarni saqlab qo'yamiz
+                joriyState = JSON.parse(JSON.stringify(joriy.blocks || []));
+                optState = JSON.parse(JSON.stringify(opt.blocks || []));
+                MN_UNDO = [];
                 var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                 $('#loading-state').hide();
                 $('#btn-calculate').prop('disabled', false).css('opacity', '1');
@@ -574,7 +606,7 @@
         });
 
         function saveSnapshot(action) {
-            var $status = $('#snap-status');
+            var $status = $('#snap-status, #mn-save-status');
             $status.css('color', '#94a3b8').text('saqlanmoqda...');
             $.ajax({
                 url: SNAP_SAVE_URL, method: 'POST',
@@ -607,7 +639,10 @@
                     afterState = res.data;
                     editMode = false;
                     renderAfterBody();
-                    $('#snap-status').css('color', '#2b5ea7').text('Saqlangan holat yuklandi');
+                    if (activeTab === 'manual') { MN_UNDO = []; renderManual(); }
+                    $('#snap-status, #mn-save-status').css('color', '#2b5ea7').text('Saqlangan holat yuklandi');
+                } else if (activeTab === 'manual') {
+                    mnFlash('Saqlangan holat topilmadi.');
                 }
             });
         }
@@ -926,6 +961,254 @@
             });
         }
 
+        // ===== Qo'lda tuzatish (drag & drop) vkladkasi =====
+        var HEMIS_PULL_URL = '{{ route("admin.reports.oqim.hemis.pull") }}';
+        var joriyState = [];   // oxirgi hisoblangan joriy holat (manba sifatida)
+        var optState = [];     // oxirgi hisoblangan optimizatsiyalangan holat (manba sifatida)
+        var MN_UNDO = [];      // bekor qilish uchun holatlar to'plami
+        var dragSrc = null;    // hozir sudralayotgan guruh manzili {b,c,o,r}
+
+        var MN_LANG_LBL = { uz: "o'z", rus: 'rus', ing: 'ing' };
+
+        function mnFlash(msg) {
+            var $f = $('#mn-flash');
+            if (!$f.length) $f = $('<div id="mn-flash"></div>').appendTo('body');
+            $f.text(msg).stop(true, true).fadeIn(120).delay(2000).fadeOut(300);
+        }
+
+        // Barcha jami (oqim/kurs) qiymatlarini afterState bo'yicha qayta hisoblaydi
+        function mnRecalc() {
+            for (var b = 0; b < afterState.length; b++) {
+                var courses = afterState[b].courses || [];
+                for (var c = 0; c < courses.length; c++) {
+                    var ct = 0;
+                    var oqims = courses[c].oqims || [];
+                    for (var o = 0; o < oqims.length; o++) {
+                        var ot = (oqims[o].rows || []).reduce(function(s, r){ return s + (+r.count || 0); }, 0);
+                        oqims[o].total = ot;
+                        ct += ot;
+                    }
+                    courses[c].total = ct;
+                }
+            }
+        }
+
+        function renderManual() {
+            $('#mn-actions').css('display', CAN_APPROVE ? 'flex' : 'none');
+            if (!afterState || !afterState.length) {
+                $('#mn-body').html('<div style="padding:48px 20px;text-align:center;color:#94a3b8;font-size:14px;font-weight:600;">' +
+                    'Avval filtrlarni tanlab <b>"Hisoblash"</b> tugmasini bosing — natija shu yerda drag &amp; drop bilan tuzatish uchun ochiladi.</div>');
+                $('#mn-total-badge').text('');
+                return;
+            }
+            var grand = 0, html = '';
+            for (var b = 0; b < afterState.length; b++) {
+                var block = afterState[b];
+                html += '<div class="mn-block"><div class="oqim-block-title">' + esc(block.title) + '</div><div class="mn-courses">';
+                var courses = block.courses || [];
+                for (var c = 0; c < courses.length; c++) {
+                    var course = courses[c];
+                    grand += (+course.total || 0);
+                    var oqims = course.oqims || [];
+                    var subN = 0;
+                    for (var i = 0; i < oqims.length; i++) subN += (oqims[i].rows || []).length;
+                    html += '<div class="mn-course" data-b="' + b + '" data-c="' + c + '" data-lvl="' + ctLevelNum(course) + '">';
+                    html += '<div class="mn-course-head">' + esc(course.level_name)
+                          + ' <span class="crs-stats">' + oqims.length + ' oqim · ' + subN + ' grch · <b data-mnct="' + b + '-' + c + '">' + esc(course.total) + '</b> ta</span></div>';
+                    for (var o = 0; o < oqims.length; o++) {
+                        var oq = oqims[o];
+                        var rows = oq.rows || [];
+                        var baseLang = rows.length ? (rows[0].lang || oq.lang || 'uz') : (oq.lang || 'uz');
+                        var mixed = false;
+                        for (var r = 0; r < rows.length; r++) {
+                            if ((rows[r].lang || oq.lang || 'uz') !== baseLang) { mixed = true; break; }
+                        }
+                        html += '<div class="mn-oqim lang-' + esc(oq.lang || 'uz') + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '">';
+                        html += '<div class="mn-oqim-head">'
+                              + (CAN_APPROVE
+                                    ? '<input class="mn-label" value="' + esc(oq.label) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" title="Oqim nomi — tahrirlash mumkin">'
+                                    : '<span class="mn-label-ro">' + esc(oq.label) + '</span>')
+                              + (mixed ? '<span class="mn-mixed" title="Diqqat: bir oqimda har xil tildagi guruhlar bor!">⚠ aralash til</span>' : '')
+                              + '<span class="mn-oqim-total" data-mnot="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span></div>';
+                        for (var r2 = 0; r2 < rows.length; r2++) {
+                            var row = rows[r2];
+                            var rl = row.lang || oq.lang || 'uz';
+                            html += '<div class="mn-row lang-' + esc(rl) + '" draggable="' + (CAN_APPROVE ? 'true' : 'false') + '"'
+                                  + ' data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
+                                  + '<span class="mn-handle" title="Ushlab suring">⠿</span>'
+                                  + '<span class="mn-name" title="' + esc(row.name) + '">' + esc(row.name)
+                                  + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from || 'mehmon') + '</span>' : '') + '</span>'
+                                  + (CAN_APPROVE
+                                        ? '<input class="mn-cnt" type="number" min="0" value="' + esc(row.count) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
+                                        : '<span class="mn-cnt-ro">' + esc(row.count) + '</span>')
+                                  + '<span class="mn-lang mn-lang-' + esc(rl) + '">' + (MN_LANG_LBL[rl] || rl) + '</span>'
+                                  + '</div>';
+                        }
+                        html += '</div>';
+                    }
+                    if (CAN_APPROVE) {
+                        html += '<div class="mn-new" data-b="' + b + '" data-c="' + c + '">＋ Yangi oqim — guruhni shu yerga tashlang</div>';
+                    }
+                    html += '</div>';
+                }
+                html += '</div></div>';
+            }
+            $('#mn-body').html(html);
+            $('#mn-total-badge').text(rejaPrefix() + 'Jami talaba: ' + grand + ' ta · qo\'lda tuzatish');
+            $('#mn-undo').prop('disabled', !MN_UNDO.length);
+        }
+
+        function mnPushUndo() {
+            MN_UNDO.push(JSON.stringify(afterState));
+            if (MN_UNDO.length > 30) MN_UNDO.shift();
+            $('#mn-undo').prop('disabled', false);
+        }
+
+        function manualUndo() {
+            if (!MN_UNDO.length) return;
+            afterState = JSON.parse(MN_UNDO.pop());
+            renderManual();
+            renderAfterBody();
+        }
+
+        // Manba tanlash: joriy (HEMIS) yoki optimizatsiyalangan holatdan boshlash
+        function manualSource(src) {
+            var base = src === 'joriy' ? joriyState : optState;
+            if (!base || !base.length) { mnFlash('Avval "Hisoblash" tugmasini bosing.'); return; }
+            afterState = JSON.parse(JSON.stringify(base));
+            MN_UNDO = [];
+            mnRecalc();
+            renderManual();
+            renderAfterBody();
+            mnFlash(src === 'joriy' ? "Joriy (HEMIS) holat yuklandi — endi qo'lda tuzating." : 'Optimizatsiyalangan holat yuklandi.');
+        }
+
+        // Guruhni bir oqimdan boshqasiga ko'chirish.
+        // to === -1 bo'lsa yangi oqim ochiladi; tr — nishon qator (shu o'ringa qo'yiladi).
+        function mnMove(src, tb, tc, to, tr) {
+            var srcCourse = afterState[src.b].courses[src.c];
+            var tgtCourse = afterState[tb].courses[tc];
+            if (ctLevelNum(srcCourse) !== ctLevelNum(tgtCourse)) {
+                mnFlash("Har xil kurslar orasida guruh ko'chirib bo'lmaydi.");
+                return;
+            }
+            var sameOqim = (src.b === tb && src.c === tc && src.o === to);
+            if (sameOqim && (tr === undefined || tr === src.r)) return;
+
+            mnPushUndo();
+            var row = srcCourse.oqims[src.o].rows.splice(src.r, 1)[0];
+            if (src.b !== tb) {
+                row.visitor = true;
+                row.from = row.from || afterState[src.b].title;
+            }
+            if (to === -1) {
+                tgtCourse.oqims.push({
+                    label: 'Oqim-' + (tgtCourse.oqims.length + 1),
+                    lang: row.lang || 'uz',
+                    total: 0,
+                    rows: [row]
+                });
+            } else {
+                var rows = tgtCourse.oqims[to].rows;
+                if (sameOqim && tr !== undefined && tr > src.r) tr--;
+                if (tr === undefined || tr === null || tr > rows.length) rows.push(row);
+                else rows.splice(tr, 0, row);
+                if ((row.lang || 'uz') !== (tgtCourse.oqims[to].lang || 'uz')) {
+                    mnFlash("Diqqat: guruh tili oqim tilidan farq qiladi — oqim \"aralash til\" deb belgilandi.");
+                }
+            }
+            // Bo'shab qolgan oqimni olib tashlaymiz
+            if (!srcCourse.oqims[src.o].rows.length) srcCourse.oqims.splice(src.o, 1);
+            mnRecalc();
+            renderManual();
+            renderAfterBody();
+        }
+
+        // Drag & drop hodisalari
+        $(document).on('dragstart', '#mn-body .mn-row', function(e) {
+            if (!CAN_APPROVE) return false;
+            dragSrc = { b: +$(this).data('b'), c: +$(this).data('c'), o: +$(this).data('o'), r: +$(this).data('r') };
+            $(this).addClass('mn-dragging');
+            var dt = e.originalEvent.dataTransfer;
+            if (dt) { dt.effectAllowed = 'move'; try { dt.setData('text/plain', 'mn'); } catch (err) {} }
+        });
+        $(document).on('dragend', '#mn-body .mn-row', function() {
+            $(this).removeClass('mn-dragging');
+            $('#mn-body .mn-over').removeClass('mn-over');
+            dragSrc = null;
+        });
+        $(document).on('dragover', '#mn-body .mn-oqim, #mn-body .mn-new', function(e) {
+            if (!dragSrc) return;
+            var lvl = +$(this).closest('.mn-course').data('lvl');
+            var srcLvl = ctLevelNum(afterState[dragSrc.b].courses[dragSrc.c]);
+            if (lvl !== srcLvl) return; // boshqa kursga tashlash taqiqlanadi
+            e.preventDefault();
+            if (e.originalEvent.dataTransfer) e.originalEvent.dataTransfer.dropEffect = 'move';
+            $(this).addClass('mn-over');
+        });
+        $(document).on('dragleave', '#mn-body .mn-oqim, #mn-body .mn-new', function() {
+            $(this).removeClass('mn-over');
+        });
+        $(document).on('drop', '#mn-body .mn-oqim', function(e) {
+            $(this).removeClass('mn-over');
+            if (!dragSrc) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var tb = +$(this).data('b'), tc = +$(this).data('c'), to = +$(this).data('o');
+            var tr;
+            var $row = $(e.target).closest('.mn-row');
+            if ($row.length) tr = +$row.data('r');
+            var s = dragSrc; dragSrc = null;
+            mnMove(s, tb, tc, to, tr);
+        });
+        $(document).on('drop', '#mn-body .mn-new', function(e) {
+            $(this).removeClass('mn-over');
+            if (!dragSrc) return;
+            e.preventDefault();
+            var tb = +$(this).data('b'), tc = +$(this).data('c');
+            var s = dragSrc; dragSrc = null;
+            mnMove(s, tb, tc, -1);
+        });
+
+        // Talaba sonini tahrirlash — jami qiymatlar joyida yangilanadi
+        $(document).on('input', '#mn-body .mn-cnt', function() {
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o'), r = +$(this).data('r');
+            var v = parseInt(this.value, 10); if (isNaN(v) || v < 0) v = 0;
+            afterState[b].courses[c].oqims[o].rows[r].count = v;
+            mnRecalc();
+            $('#mn-body [data-mnot="' + b + '-' + c + '-' + o + '"]').text(afterState[b].courses[c].oqims[o].total + ' ta');
+            $('#mn-body [data-mnct="' + b + '-' + c + '"]').text(afterState[b].courses[c].total);
+            var grand = 0;
+            for (var i = 0; i < afterState.length; i++)
+                for (var j = 0; j < afterState[i].courses.length; j++) grand += (+afterState[i].courses[j].total || 0);
+            $('#mn-total-badge').text(rejaPrefix() + 'Jami talaba: ' + grand + ' ta · qo\'lda tuzatish');
+        });
+        // Oqim nomini tahrirlash
+        $(document).on('input', '#mn-body .mn-label', function() {
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o');
+            afterState[b].courses[c].oqims[o].label = this.value;
+        });
+
+        // HEMISdan guruh/talabalarni tortish (fon rejimida import)
+        function hemisPull(what) {
+            var label = what === 'groups' ? 'Guruhlar' : 'Talabalar';
+            if (!confirm(label + " HEMISdan tortilsinmi? Jarayon fon rejimida ishlaydi va bir necha daqiqa davom etishi mumkin.")) return;
+            var $btn = $(what === 'groups' ? '#mn-hemis-groups' : '#mn-hemis-students').prop('disabled', true).css('opacity', 0.6);
+            $('#mn-hemis-status').css('color', '#0369a1').text("So'rov yuborilmoqda...");
+            $.ajax({ url: HEMIS_PULL_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { what: what } })
+                .done(function(res) {
+                    var extra = res.groups_total
+                        ? ' Bazada ' + res.groups_total + ' ta guruh' + (res.groups_updated ? ' (oxirgi yangilanish: ' + res.groups_updated + ')' : '') + '.'
+                        : '';
+                    $('#mn-hemis-status').css('color', '#16a34a').text('✓ ' + (res.message || 'Boshlandi.') + extra);
+                })
+                .fail(function(xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : ('Xatolik (HTTP ' + xhr.status + ')');
+                    $('#mn-hemis-status').css('color', '#dc2626').text(msg);
+                })
+                .always(function() { $btn.prop('disabled', false).css('opacity', 1); });
+        }
+
         // ===== Tasdiqlangan oqimlar tarixi =====
         var HISTORY_URL = '{{ route("admin.reports.oqim.history") }}';
         var HISTORY_SHOW_URL = '{{ url("admin/reports/oqim/history") }}';
@@ -1215,5 +1498,43 @@
         .opt-arrow { color:#94a3b8; font-weight:800; }
         .opt-move-note { font-size:12px; color:#475569; margin-top:6px; line-height:1.45; }
         .opt-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 20px; border-top:1px solid #f1f5f9; background:#fbfdff; }
+
+        /* ===== Qo'lda tuzatish (drag & drop) vkladkasi ===== */
+        .mn-block { margin-bottom:26px; }
+        .mn-courses { display:flex; gap:12px; flex-wrap:nowrap; overflow-x:auto; align-items:flex-start; padding:12px; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 8px 8px; background:#fbfdff; }
+        .mn-course { flex:0 0 auto; width:258px; }
+        .mn-course-head { font-size:12px; font-weight:800; color:#1e3a5f; background:linear-gradient(135deg,#dbe4ef,#cbd7e8); border:1px solid #b8c6dc; border-radius:8px; padding:6px 8px; text-align:center; }
+        .mn-oqim { border:1px solid #e2e8f0; border-left-width:3px; border-radius:8px; margin-top:6px; background:#fff; overflow:hidden; transition:box-shadow .12s, border-color .12s, background .12s; }
+        .mn-oqim.lang-uz  { border-left-color:#3b82f6; }
+        .mn-oqim.lang-rus { border-left-color:#f43f5e; }
+        .mn-oqim.lang-ing { border-left-color:#8b5cf6; }
+        .mn-oqim.mn-over { border-color:#a21caf; box-shadow:0 0 0 2px rgba(162,28,175,0.25); background:#fdf4ff; }
+        .mn-oqim-head { display:flex; align-items:center; gap:6px; padding:5px 8px; background:#f0f6ff; border-bottom:1px solid #e2e8f0; }
+        .mn-label { width:70px; font-weight:800; font-size:11px; color:#2b5ea7; border:1px solid transparent; background:transparent; border-radius:4px; padding:1px 3px; }
+        .mn-label:hover, .mn-label:focus { border-color:#cbd5e1; background:#fff; outline:none; }
+        .mn-label-ro { font-weight:800; font-size:11px; color:#2b5ea7; }
+        .mn-oqim-total { margin-left:auto; font-size:10.5px; font-weight:800; color:#16a34a; white-space:nowrap; }
+        .mn-mixed { font-size:9.5px; font-weight:800; color:#b45309; background:#fef3c7; border-radius:999px; padding:1px 6px; white-space:nowrap; }
+        .mn-row { display:flex; align-items:center; gap:6px; padding:3px 8px; border-top:1px solid #f1f5f9; font-size:12px; background:#fff; }
+        .mn-row:first-of-type { border-top:none; }
+        .mn-row[draggable="true"] { cursor:grab; }
+        .mn-row[draggable="true"]:active { cursor:grabbing; }
+        .mn-row.mn-dragging { opacity:0.45; }
+        .mn-row.lang-rus { background:#fffafa; }
+        .mn-row.lang-ing { background:#fbfaff; }
+        .mn-handle { color:#cbd5e1; font-size:13px; flex-shrink:0; }
+        .mn-row[draggable="true"] .mn-handle { color:#94a3b8; }
+        .mn-name { flex:1; min-width:0; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .mn-cnt { width:48px; height:22px; border:1px solid #e2e8f0; border-radius:5px; text-align:center; font-size:11.5px; font-weight:700; color:#0f172a; -moz-appearance:textfield; flex-shrink:0; }
+        .mn-cnt::-webkit-outer-spin-button, .mn-cnt::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+        .mn-cnt:focus { outline:none; border-color:#a21caf; box-shadow:0 0 0 2px rgba(162,28,175,0.15); }
+        .mn-cnt-ro { width:40px; text-align:center; font-weight:700; color:#334155; font-size:11.5px; flex-shrink:0; }
+        .mn-lang { font-size:9.5px; font-weight:800; border-radius:999px; padding:1px 6px; flex-shrink:0; }
+        .mn-lang-uz  { color:#1d4ed8; background:#eff6ff; }
+        .mn-lang-rus { color:#be123c; background:#fff1f2; }
+        .mn-lang-ing { color:#6d28d9; background:#f5f3ff; }
+        .mn-new { border:2px dashed #cbd5e1; border-radius:8px; margin-top:6px; padding:10px 8px; text-align:center; font-size:11.5px; font-weight:700; color:#94a3b8; transition:all .12s; }
+        .mn-new.mn-over { border-color:#a21caf; color:#a21caf; background:#fdf4ff; }
+        #mn-flash { display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; font-size:13px; font-weight:700; padding:10px 18px; border-radius:10px; z-index:2000; box-shadow:0 8px 24px rgba(0,0,0,0.35); max-width:80vw; text-align:center; }
     </style>
 </x-app-layout>

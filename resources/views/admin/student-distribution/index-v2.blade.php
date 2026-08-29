@@ -51,6 +51,10 @@
         .sd-seg-btn:hover{color:#1d4ed8}.sd-seg-btn.is-active{background:#2563eb;color:#fff}
         .sd-summary-export{margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:31px;padding:0 12px;font-size:10px}
         .sd-summary-export svg{width:14px;height:14px}.sd-summary-export[hidden]{display:none}
+        .sd-match-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 7px}.sd-match-bar b{color:#be123c;font-size:12px}
+        .sd-match-bar .sd-btn{height:31px;padding:0 12px;font-size:11px}
+        .sd-match-list{width:100%;height:230px;resize:vertical;border:1px solid #fecdd3;border-radius:10px;padding:10px 12px;background:#fff7f7;color:#9f1239;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:1.65;outline:none}
+        .sd-match-list:focus{border-color:#f43f5e;box-shadow:0 0 0 3px rgba(244,63,94,.12)}
         @media(max-width:980px){.sd-groups{grid-template-columns:1fr}.sd-application{grid-column:span 1}}
         @media(max-width:760px){.sd-group-tabs{grid-template-columns:repeat(2,1fr)}}
         @media(max-width:600px){.sd-card-head{align-items:flex-start;flex-direction:column}.sd-card-tools{width:100%;justify-content:space-between}.sd-group-row{grid-template-columns:minmax(120px,1fr) 52px auto}.sd-group-row .sd-row-stat:nth-of-type(3){display:none}.sd-row-actions .sd-btn{padding:0 8px}}
@@ -160,6 +164,19 @@
         <div class="sd-modal" style="width:min(650px,100%)" role="dialog" aria-modal="true">
             <div class="sd-modal-head"><div><h2>Talabani guruhga o'tkazish</h2><p id="moveStudentName"></p></div><button class="sd-close" type="button" data-close="moveModal">&times;</button></div>
             <div style="padding:16px 18px 18px"><div class="sd-move-copy">Talabaga mos fakultet, yo'nalish va kursdagi bo'sh joyli guruhlardan birini tanlang.</div><div class="sd-choice-list" id="moveChoices"></div></div>
+        </div>
+    </div>
+
+    <div class="sd-modal-backdrop" id="matchModal" style="z-index:90">
+        <div class="sd-modal" style="width:min(620px,100%)" role="dialog" aria-modal="true">
+            <div class="sd-modal-head"><div><h2 id="matchTitle">Natija</h2><p id="matchSummary"></p></div><button class="sd-close" type="button" data-close="matchModal">&times;</button></div>
+            <div style="padding:16px 18px 18px">
+                <div id="matchHint" class="sd-move-copy"></div>
+                <div id="matchMissingBox" hidden>
+                    <div class="sd-match-bar"><b id="matchMissingCount"></b><button class="sd-btn sd-btn-light" id="copyMissing" type="button">Nusxalash</button></div>
+                    <textarea class="sd-match-list" id="matchMissing" readonly spellcheck="false"></textarea>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -348,6 +365,39 @@
                     .replace(/^(d1|d2|p)\/[dp](?=\d)/, '$1/')
                     .replace(/\(([a-z])\)$/i, '$1');
             };
+            function showMatchResult({title, matched, unmatched, okHint, extra}) {
+                const total = matched + unmatched.length;
+                const parts = [matched+'/'+total+' ta guruh topildi.'];
+                if (!unmatched.length && okHint) parts.push(okHint);
+                if (extra) parts.push(extra);
+
+                $('matchTitle').textContent = title;
+                $('matchSummary').textContent = parts.join(' ');
+                $('matchHint').textContent = unmatched.length
+                    ? 'Quyidagi nomlar LMS katalogidan topilmadi. Ro\'yxatni nusxalab, nomlarni tekshirib qayta urinib ko\'ring.'
+                    : 'Barcha guruhlar muvaffaqiyatli moslashtirildi.';
+                $('matchMissingBox').hidden = unmatched.length === 0;
+                $('matchMissing').value = unmatched.join('\n');
+                $('matchMissingCount').textContent = unmatched.length+' ta topilmadi';
+                $('copyMissing').textContent = 'Nusxalash';
+                $('matchModal').classList.add('is-open');
+            }
+
+            async function copyMissingGroups() {
+                const field = $('matchMissing');
+                const button = $('copyMissing');
+                if (!field.value) return;
+                try {
+                    await navigator.clipboard.writeText(field.value);
+                } catch (error) {
+                    field.focus();
+                    field.select();
+                    document.execCommand('copy');
+                }
+                button.textContent = 'Nusxalandi';
+                setTimeout(() => { button.textContent = 'Nusxalash'; }, 1600);
+            }
+
             function applyCatalogPaste() {
                 const text = $('catalogPaste').value.trim();
                 if (!text) return alert('Exceldan nusxalangan kataklarni kiriting.');
@@ -380,14 +430,12 @@
                 });
 
                 renderCatalog();
-                const total = matched.size + unmatched.size;
-                let message = matched.size+'/'+total+' ta guruh topildi.';
-                if (unmatched.size) {
-                    message += '\n\nTopilmagan guruhlar:\n- '+[...unmatched].join('\n- ');
-                } else {
-                    message += '\nEndi "Tanlanganlarni saqlash"ni bosing.';
-                }
-                alert(message);
+                showMatchResult({
+                    title: 'Guruhlarni moslashtirish',
+                    matched: matched.size,
+                    unmatched: [...unmatched],
+                    okHint: 'Endi "Tanlanganlarni saqlash"ni bosing.',
+                });
             }
             function applySourcePaste() {
                 const text = $('sourcePaste').value.trim();
@@ -415,15 +463,13 @@
                 });
 
                 renderSources();
-                const total = matched.size + unmatched.size;
-                let message = matched.size+'/'+total+' ta source guruh topildi.';
-                if (unmatched.size) {
-                    message += '\n\nTopilmagan guruhlar:\n- '+[...unmatched].join('\n- ');
-                } else {
-                    message += '\nEndi "Ro\'yxatni saqlash"ni bosing.';
-                }
-                message += '\nJami '+sourceSelected.size+' ta guruh tanlandi.';
-                alert(message);
+                showMatchResult({
+                    title: 'Taqsimlanadigan guruhlarni moslashtirish',
+                    matched: matched.size,
+                    unmatched: [...unmatched],
+                    okHint: 'Endi "Ro\'yxatni saqlash"ni bosing.',
+                    extra: 'Jami '+sourceSelected.size+' ta guruh tanlandi.',
+                });
             }
             async function saveCatalog() {
                 const rows = [...catalogSelected].map(key => ({key, ...catalogDraft.get(key)}));
@@ -638,6 +684,7 @@
             $('courseFilter').addEventListener('change', renderGroups);
             $('resetFilters').addEventListener('click', () => { $('facultyFilter').value=''; $('specialtyFilter').value=''; $('courseFilter').value=''; refreshFilterOptions(); renderGroups(); });
             $('refreshGroups').addEventListener('click', reloadGroups);
+            $('copyMissing').addEventListener('click', copyMissingGroups);
             $('exportAssignments').addEventListener('click', () => {
                 const scope = query({faculty: $('facultyFilter').value, specialty: $('specialtyFilter').value, course: $('courseFilter').value});
                 window.location.href = urls.exportAssignments + (scope ? '?'+scope : '');

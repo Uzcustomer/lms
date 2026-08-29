@@ -43,6 +43,12 @@
         .sd-row-stat{padding-left:9px;border-left:1px solid #e2e8f0}.sd-row-stat span{display:block;color:#94a3b8;font-size:8px;font-weight:700;text-transform:uppercase}.sd-row-stat b{display:block;margin-top:2px;color:#1e3a5f;font-size:12px}
         .sd-row-stat.is-free b{color:#047857}.sd-list-panel.is-source .sd-row-stat:last-of-type b{color:#be123c}.sd-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}.sd-row-actions .sd-btn{height:31px;padding:0 10px;font-size:10px}
         .sd-row-actions .sd-group-delete{width:31px;height:31px;flex-basis:31px}.sd-list-empty{padding:38px 16px;text-align:center;color:#94a3b8;font-size:11px}
+        .sd-list-head{flex-wrap:wrap}.sd-list-tools{display:flex;align-items:center;gap:8px;width:100%;flex-wrap:wrap}
+        .sd-list-search{flex:1;min-width:150px;height:32px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;background:#fff;color:#334155;font-size:11px;outline:none}
+        .sd-list-search:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+        .sd-seg{display:inline-flex;gap:2px;padding:2px;border:1px solid #cbd5e1;border-radius:9px;background:#fff}
+        .sd-seg-btn{padding:5px 10px;border:0;border-radius:7px;background:transparent;color:#64748b;font-size:10px;font-weight:800;white-space:nowrap;cursor:pointer}
+        .sd-seg-btn:hover{color:#1d4ed8}.sd-seg-btn.is-active{background:#2563eb;color:#fff}
         @media(max-width:980px){.sd-groups{grid-template-columns:1fr}.sd-application{grid-column:span 1}}
         @media(max-width:760px){.sd-group-tabs{grid-template-columns:repeat(2,1fr)}}
         @media(max-width:600px){.sd-card-head{align-items:flex-start;flex-direction:column}.sd-card-tools{width:100%;justify-content:space-between}.sd-group-row{grid-template-columns:minmax(120px,1fr) 52px auto}.sd-group-row .sd-row-stat:nth-of-type(3){display:none}.sd-row-actions .sd-btn{padding:0 8px}}
@@ -173,6 +179,7 @@
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
             let groups = initialGroups, selectedGroup = null, selectedStudent = null, groupView = 'groups';
+            let targetView = 'free', targetSearch = '';
             const permissionSelected = new Set();
             const catalogSelected = new Set(catalog.filter(item => item.is_saved).map(item => item.key)), sourceSelected = new Set(catalog.filter(item => item.is_source).map(item => item.key)), studentCache = new Map(), catalogDraft = new Map(catalog.map(item => [item.key, {capacity:item.capacity, free_places:item.free_places}]));
             const sourceDraft = new Map(catalog.map(item => [item.key, item.is_source ? item.capacity : item.student_count]));
@@ -197,11 +204,19 @@
                     '<div class="sd-row-actions">'+fillButton+deleteButton+'</div></div>';
             }
 
-            function groupPanel(title, description, items, isSource) {
+            function groupPanel(title, description, items, isSource, tools) {
                 const rows = items.length
                     ? items.map(group => groupRow(group, isSource)).join('')
                     : '<div class="sd-list-empty">Tanlangan filtr bo\'yicha guruh topilmadi.</div>';
-                return '<section class="sd-list-panel '+(isSource ? 'is-source' : '')+'"><div class="sd-list-head"><div><h3>'+title+'</h3><p>'+description+'</p></div><span class="sd-pill '+(isSource ? 'sd-pill-red' : 'sd-pill-green')+'">'+items.length+' ta</span></div><div class="sd-list-rows">'+rows+'</div></section>';
+                return '<section class="sd-list-panel '+(isSource ? 'is-source' : '')+'"><div class="sd-list-head"><div><h3>'+title+'</h3><p>'+description+'</p></div><span class="sd-pill '+(isSource ? 'sd-pill-red' : 'sd-pill-green')+'">'+items.length+' ta</span>'+(tools || '')+'</div><div class="sd-list-rows">'+rows+'</div></section>';
+            }
+
+            function targetTools(freeCount, fullCount) {
+                const tab = (value, label, count) => '<button class="sd-seg-btn target-tab'+(targetView === value ? ' is-active' : '')+'" type="button" data-view="'+value+'">'+label+' ('+count+')</button>';
+                return '<div class="sd-list-tools">' +
+                    '<input class="sd-list-search" id="targetSearch" type="search" placeholder="Guruh nomi yoki yo\'nalish bo\'yicha qidirish" value="'+esc(targetSearch)+'">' +
+                    '<div class="sd-seg">'+tab('free', 'Bo\'sh joy bor', freeCount)+tab('full', 'To\'lgan', fullCount)+'</div>' +
+                    '</div>';
             }
 
             function renderGroups() {
@@ -236,10 +251,34 @@
                 $('availableCount').classList.remove('sd-pill-red');
                 $('capacitySummary').textContent = targets.reduce((sum, group) => sum + Number(group.free_places || 0), 0) + ' ta bo\'sh o\'rin / ' +
                     sources.reduce((sum, group) => sum + Number(group.occupied_count || group.capacity || 0), 0) + ' ta taqsimlanadigan talaba';
+                const search = targetSearch.trim().toLowerCase();
+                const searched = targets.filter(group => !search ||
+                    String(group.group_name || '').toLowerCase().includes(search) ||
+                    String(group.specialty_name || '').toLowerCase().includes(search));
+                const freeTargets = searched.filter(group => Number(group.free_places || 0) > 0);
+                const fullTargets = searched.filter(group => Number(group.free_places || 0) <= 0);
+                const shownTargets = targetView === 'full' ? fullTargets : freeTargets;
+                const targetDescription = targetView === 'full' ? 'Bo\'sh joyi qolmagan guruhlar' : 'Bo\'sh joy mavjud bo\'lgan guruhlar';
+
                 $('groupsGrid').innerHTML =
-                    groupPanel('To\'ldiriladigan guruhlar', 'Bo\'sh joy mavjud bo\'lgan guruhlar', targets, false) +
+                    groupPanel('To\'ldiriladigan guruhlar', targetDescription, shownTargets, false, targetTools(freeTargets.length, fullTargets.length)) +
                     groupPanel('Taqsimlanadigan guruhlar', 'Talabalari boshqa guruhga ko\'chiriladi', sources, true);
                 document.querySelectorAll('.fill-trigger').forEach(button => button.addEventListener('click', () => openFill(Number(button.dataset.group))));
+                document.querySelectorAll('.target-tab').forEach(button => button.addEventListener('click', () => {
+                    if (targetView === button.dataset.view) return;
+                    targetView = button.dataset.view;
+                    renderGroups();
+                }));
+                const searchInput = $('targetSearch');
+                if (searchInput) {
+                    searchInput.addEventListener('input', () => {
+                        targetSearch = searchInput.value;
+                        const caret = searchInput.selectionStart;
+                        renderGroups();
+                        const next = $('targetSearch');
+                        if (next) { next.focus(); next.setSelectionRange(caret, caret); }
+                    });
+                }
             }
 
             function setOptions(select, values, empty) {

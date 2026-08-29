@@ -1046,6 +1046,11 @@
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
         #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
         #cycleGrid [data-cycle-index].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
+        /* Karta tanlanganda uning oqim qatori ajralib turadi */
+        #cycleGrid .cyc-cell.cycle-row-target:not(.cyc-block) { background: #ecfeff; box-shadow: inset 0 -2px 0 #06b6d4; cursor: copy; }
+        #cycleGrid .cyc-cell.cycle-row-muted { opacity: .45; }
+        .cycle-pn-card.cycle-pn-selected { outline: 2px solid #0ea5e9; outline-offset: 1px;
+            box-shadow: 0 6px 16px rgba(14,165,233,.28); }
         #cycleGrid .cyc-block[draggable="true"] { cursor: grab; }
         #cycleGrid .cyc-block[draggable="true"]:active { cursor: grabbing; }
         .cycle-pn-card { width: 220px; min-height: 54px; padding: 8px 10px; border: 1px solid #bfdbfe;
@@ -3128,6 +3133,19 @@
                     alert('Sikl blokini joylab bo\u2018lmadi: ' + e.message);
                 }
             }
+            // Tanlangan karta qaysi oqim qatoriga tushishi mumkinligini ko'rsatadi:
+            // o'sha qatorning bo'sh kataklari ajratiladi, qolganlari so'niq bo'ladi.
+            function highlightCycleRow(cardKey) {
+                const card = cardKey
+                    ? ((cyclePlanData && cyclePlanData.cycle_cards) || []).find(item => item.key === cardKey)
+                    : null;
+                $('cycleGrid').querySelectorAll('[data-cycle-row]').forEach(cell => {
+                    cell.classList.remove('cycle-row-target', 'cycle-row-muted');
+                    if (!card) return;
+                    cell.classList.add(cell.dataset.cycleRow === card.row_key
+                        ? 'cycle-row-target' : 'cycle-row-muted');
+                });
+            }
             function cycleDateClass(date) {
                 if (!date) return '';
                 if (date.holiday) return ' cyc-off cyc-holiday';
@@ -3170,21 +3188,29 @@
                 h += '</tbody>';
                 $('cycleGrid').innerHTML = h;
                 $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {
+                    // dragover'da preventDefault bo'lmasa brauzer drop'ni umuman
+                    // bermaydi, shuning uchun katak har qanday sudrashni qabul qiladi;
+                    // karta o'zi drop'da tekshiriladi.
+                    cell.addEventListener('dragenter', ev => ev.preventDefault());
                     cell.addEventListener('dragover', ev => {
-                        if (!cycleDragKey) return;
                         ev.preventDefault();
+                        if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
                         cell.classList.add('cycle-drop-target');
                     });
                     cell.addEventListener('dragleave', () => cell.classList.remove('cycle-drop-target'));
                     cell.addEventListener('drop', async ev => {
                         ev.preventDefault();
                         cell.classList.remove('cycle-drop-target');
-                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
+                        // Kalit sudrash boshlanganda saqlanadi; ba'zi brauzerlarda
+                        // u yo'qolsa, dataTransfer'dagi nusxadan olinadi.
+                        const key = cycleDragKey || (ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '';
+                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
                         const rowKey = cell.dataset.cycleRow;
                         const index = +cell.dataset.cycleIndex;
                         cycleDragKey = null;
-                        if (!card || card.row_key !== rowKey) {
-                            console.warn('Sikl: qator mos kelmadi', {kartaQatori: card && card.row_key, katakQatori: rowKey});
+                        if (!card) return;
+                        if (card.row_key !== rowKey) {
+                            console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
                             alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
                             return;
                         }
@@ -3208,6 +3234,7 @@
                         const rowKey = cell.dataset.cycleRow;
                         const index = +cell.dataset.cycleIndex;
                         cycleDragKey = null;
+                        highlightCycleRow(null);
                         if (!card || card.row_key !== rowKey) {
                             alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
                             return;
@@ -3220,8 +3247,9 @@
                         cycleDragKey = block.dataset.cycleKey;
                         ev.dataTransfer.effectAllowed = 'move';
                         ev.dataTransfer.setData('text/plain', cycleDragKey);
+                        highlightCycleRow(cycleDragKey);
                     });
-                    block.addEventListener('dragend', () => { cycleDragKey = null; });
+                    block.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); });
                 });
                 $('cycleGrid').querySelectorAll('[data-cycle-shift]').forEach(button => {
                     button.addEventListener('click', async ev => {
@@ -3269,7 +3297,7 @@
                 $('unplacedExportBtn').classList.add('hidden');
                 $('subjectColorsBtn').classList.toggle('hidden', !cycleCards.length);
                 $('cardPanelTitle').textContent = 'Sikl fan kartalari';
-                $('cardPanelHint').textContent = 'Kartani o‘z oqim qatoridagi boshlanish kuniga sudrang';
+                $('cardPanelHint').textContent = 'Kartani bosing, so‘ng o‘z oqim qatoridagi boshlanish kunini bosing (yoki sudrab tashlang)';
                 $('cardPanelHint').classList.remove('hidden');
                 const unplaced = cycleCards.filter(card => !card.placed &&
                     (!cycleGroupFilter || card.group === cycleGroupFilter)).sort((a, b) =>
@@ -3286,16 +3314,26 @@
                         '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
+                    // Bosib tanlash: sudrash ishlamagan holatlarda ham karta
+                    // joylanadi — tanlangan karta belgilanib turadi, keyin
+                    // jadvaldan boshlanish kuni bosiladi.
                     card.addEventListener('click', () => {
-                        cycleDragKey = card.dataset.cycleKey;
-                        $('cycleMsg').textContent = 'Endi shu oqim qatoridagi boshlanish kunini bosing.';
+                        const already = cycleDragKey === card.dataset.cycleKey;
+                        $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(other =>
+                            other.classList.remove('cycle-pn-selected'));
+                        cycleDragKey = already ? null : card.dataset.cycleKey;
+                        card.classList.toggle('cycle-pn-selected', !already);
+                        highlightCycleRow(already ? null : card.dataset.cycleKey);
+                        $('cycleMsg').textContent = already ? ''
+                            : 'Endi shu oqim qatoridagi boshlanish kunini bosing.';
                     });
                     card.addEventListener('dragstart', ev => {
                         cycleDragKey = card.dataset.cycleKey;
                         ev.dataTransfer.effectAllowed = 'move';
                         ev.dataTransfer.setData('text/plain', cycleDragKey);
+                        highlightCycleRow(cycleDragKey);
                     });
-                    card.addEventListener('dragend', () => { cycleDragKey = null; });
+                    card.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); });
                 });
                 $('cardPanel').ondragover = ev => { if (cycleDragKey) ev.preventDefault(); };
                 $('cardPanel').ondrop = async ev => {

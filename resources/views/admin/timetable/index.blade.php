@@ -976,22 +976,23 @@
         .tt-dd-tools button:hover { text-decoration: underline; }
         .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
-        #cycleGrid { border-collapse: collapse; table-layout: fixed; }
+        #cycleGrid { --cycle-group-width: 170px; border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
         #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
-        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; background: #eff6ff; min-width: 150px; max-width: 180px;
-            padding: 2px 6px; text-align: left; font-size: 10px; line-height: 1.15; }
+        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; box-sizing: border-box; overflow: hidden;
+            width: var(--cycle-group-width); min-width: var(--cycle-group-width); max-width: var(--cycle-group-width);
+            padding: 2px 6px; background: #eff6ff; text-align: left; font-size: 10px; line-height: 1.15; }
         #cycleGrid thead .cyc-gcol { background: #dbeafe; }
         #cycleGrid .cyc-members { display: grid; gap: 2px; padding: 1px 0; }
-        #cycleGrid .cyc-member-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch;
+        #cycleGrid .cyc-member-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: stretch;
             overflow: hidden; border: 1px solid #93c5fd; border-radius: 3px; background: #eff6ff; }
         #cycleGrid .cyc-member-row span { overflow: hidden; padding: 4px 6px; color: #1e3a8a; font-size: 10px;
             font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-        #cycleGrid .cyc-member-row b { display: flex; align-items: center; min-width: 38px; padding: 4px 6px;
+        #cycleGrid .cyc-member-row b { display: flex; align-items: center; box-sizing: border-box; width: 48px; min-width: 48px; padding: 4px 6px;
             border-left: 1px solid #60a5fa; background: #0ea5e9; color: #fff; font-size: 10px; justify-content: center; }
         #cycleGrid .cyc-dcol { width: 24px; min-width: 24px; font-size: 9px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
         #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
-        #cycleGrid .cyc-group-col { width: 170px; }
+        #cycleGrid .cyc-group-col { width: var(--cycle-group-width); min-width: var(--cycle-group-width); }
         #cycleGrid .cyc-date-col { width: 24px; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }

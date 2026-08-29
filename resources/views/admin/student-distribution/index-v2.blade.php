@@ -49,6 +49,8 @@
         .sd-seg{display:inline-flex;gap:2px;padding:2px;border:1px solid #cbd5e1;border-radius:9px;background:#fff}
         .sd-seg-btn{padding:5px 10px;border:0;border-radius:7px;background:transparent;color:#64748b;font-size:10px;font-weight:800;white-space:nowrap;cursor:pointer}
         .sd-seg-btn:hover{color:#1d4ed8}.sd-seg-btn.is-active{background:#2563eb;color:#fff}
+        .sd-summary-export{margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:31px;padding:0 12px;font-size:10px}
+        .sd-summary-export svg{width:14px;height:14px}.sd-summary-export[hidden]{display:none}
         @media(max-width:980px){.sd-groups{grid-template-columns:1fr}.sd-application{grid-column:span 1}}
         @media(max-width:760px){.sd-group-tabs{grid-template-columns:repeat(2,1fr)}}
         @media(max-width:600px){.sd-card-head{align-items:flex-start;flex-direction:column}.sd-card-tools{width:100%;justify-content:space-between}.sd-group-row{grid-template-columns:minmax(120px,1fr) 52px auto}.sd-group-row .sd-row-stat:nth-of-type(3){display:none}.sd-row-actions .sd-btn{padding:0 8px}}
@@ -88,7 +90,7 @@
                 <button class="sd-group-tab active" id="groupsTab" data-view="groups" type="button">Guruhlar <span class="sd-group-tab-count" id="groupsTabCount">0</span></button>
                 <button class="sd-group-tab" id="applicationsTab" data-view="applications" type="button">Arizalar <span class="sd-group-tab-count" id="applicationsTabCount">0</span></button>
             </div>
-            <div class="sd-summary"><span class="sd-pill sd-pill-green" id="availableCount">0 ta bo'sh joyli</span><span id="capacitySummary"></span></div>
+            <div class="sd-summary"><span class="sd-pill sd-pill-green" id="availableCount">0 ta bo'sh joyli</span><span id="capacitySummary"></span><button class="sd-btn sd-btn-green sd-summary-export" id="exportAssignments" type="button" hidden><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v10m0 0 3.5-3.5M12 14l-3.5-3.5M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg>Excel yuklab olish</button></div>
             <div class="sd-groups" id="groupsGrid"></div>
         </section>
     </div>
@@ -175,6 +177,7 @@
                 permissionGroups: @json(url('/admin/student-distribution/permission-groups')),
                 groupPermissions: @json(url('/admin/student-distribution/group-change-permissions')),
                 applications: @json(url('/admin/student-distribution/applications')),
+                exportAssignments: @json(url('/admin/student-distribution/applications/export')),
                 deleteAllGroups: @json(url('/admin/student-distribution/groups'))
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
@@ -230,6 +233,7 @@
                 $('heroGroupCount').textContent = scoped.length;
                 const scopedApplications = applications.filter(application => (!faculty || application.faculty_name === faculty) && (!specialty || application.specialty_name === specialty) && (!course || String(application.course) === course));
                 $('applicationsTabCount').textContent = scopedApplications.length;
+                $('exportAssignments').hidden = groupView !== 'applications';
                 if (groupView === 'applications') {
                     const pendingCount = scopedApplications.filter(application => application.status === 'pending').length;
                     $('groupCount').textContent = scopedApplications.length + ' ta ariza';
@@ -634,6 +638,10 @@
             $('courseFilter').addEventListener('change', renderGroups);
             $('resetFilters').addEventListener('click', () => { $('facultyFilter').value=''; $('specialtyFilter').value=''; $('courseFilter').value=''; refreshFilterOptions(); renderGroups(); });
             $('refreshGroups').addEventListener('click', reloadGroups);
+            $('exportAssignments').addEventListener('click', () => {
+                const scope = query({faculty: $('facultyFilter').value, specialty: $('specialtyFilter').value, course: $('courseFilter').value});
+                window.location.href = urls.exportAssignments + (scope ? '?'+scope : '');
+            });
             $('modalFaculty').addEventListener('change', fillModalOptions); $('modalSpecialty').addEventListener('change', fillModalOptions);
             $('reloadStudents').addEventListener('click', () => { loadManual(); loadPermissionGroups(); });
             document.addEventListener('click', event => {

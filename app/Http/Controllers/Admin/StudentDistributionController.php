@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\StudentDistributionAssignmentsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\Group;
@@ -677,6 +678,21 @@ class StudentDistributionController extends Controller
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
             return response()->json(['message' => $exception->getMessage()], $exception->getStatusCode());
         }
+    }
+
+    public function exportAssignments(Request $request)
+    {
+        abort_unless(Schema::hasTable('student_distribution_assignments'), 503, 'Taqsimot jadvali hali migratsiya qilinmagan.');
+
+        $filters = $request->validate([
+            'faculty' => 'nullable|string|max:255',
+            'specialty' => 'nullable|string|max:255',
+            'course' => 'nullable|integer|min:1|max:6',
+        ]);
+
+        $fileName = 'talabalar-taqsimoti-' . now()->format('Y-m-d-Hi') . '.xlsx';
+
+        return (new StudentDistributionAssignmentsExport($filters))->download($fileName);
     }
 
     public function destroyApplication(int $application): JsonResponse

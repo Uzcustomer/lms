@@ -3512,6 +3512,42 @@ class TimetableController extends Controller
         return preg_replace('/([0-9])\s*[a-eа-е]$/iu', '$1', trim($clean ?? $gn));
     }
 
+    /**
+     * Sikl kalendarida bitta qator = bitta OQIM (ma'ruzaga birga boradigan
+     * guruhlar to'plami), guruh emas. Oqim nomi kartaning `oqim_label` ustunidan
+     * olinadi — u karta generatsiyasida tasdiqlangan snapshotdan yoziladi.
+     *
+     * MUHIM: `oqim_label` ("1-oqim") faqat bitta fakultet+yo'nalish+kurs+til
+     * ichida unikal. Joylashuvlar jadvalining kaliti esa faqat yo'nalish+kurs+
+     * `group_name` — shu sabab nomga fakultet va til qo'shiladi, aks holda ikki
+     * fakultetning "1-oqim"i bitta qatorga qo'shilib ketardi.
+     *
+     * Eski (label'siz) kartalarda label bo'sh bo'lishi mumkin: u holda avvalgi
+     * xatti-harakat saqlanadi va qator asosiy guruh bo'yicha quriladi.
+     */
+    private function cycleFlowName(TimetableCard $card, ?string $member = null): string
+    {
+        $label = trim((string) ($card->oqim_label ?? ''));
+        if ($label !== '') {
+            $parts = [];
+            $faculty = trim((string) ($card->faculty_name ?? ''));
+            if ($faculty !== '') {
+                $parts[] = $faculty;
+            }
+            $parts[] = $label;
+            $lang = trim((string) ($card->lang ?? ''));
+            if ($lang !== '' && mb_strtolower($lang) !== 'uz') {
+                $parts[] = mb_strtolower($lang);
+            }
+
+            return implode(' · ', $parts);
+        }
+
+        $fallback = $member !== null ? $member : (string) ($card->group_name ?? '');
+
+        return $this->baseGroup($fallback);
+    }
+
     /** Karta ichidagi birlashtirilgan nomlarni haqiqiy a/b/c guruhlarga yoyadi. */
     private function cycleCardGroups(TimetableCard $card): array
     {
@@ -3651,7 +3687,7 @@ class TimetableController extends Controller
                     continue;
                 }
                 foreach ($this->cycleCardGroups($c) as $member) {
-                    $flow = $this->baseGroup($member);
+                    $flow = $this->cycleFlowName($c, $member);
                     $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
                     if (!isset($byFlow[$flowKey])) {
                         $byFlow[$flowKey] = ['name' => $flow, 'subs' => [], 'members' => [],
@@ -3673,8 +3709,13 @@ class TimetableController extends Controller
         ksort($allSubs);
         $subOrder = array_keys($allSubs);
 
+        // Qatorlar yo'nalish → kurs → oqim tartibida. Oqim nomi "1-oqim" ko'rinishida
+        // bo'lgani uchun raqami bo'yicha (10-oqim 2-oqimdan keyin) tartiblanadi.
         $groups = array_values($byFlow);
-        usort($groups, fn($a, $b) => strnatcmp($a['name'], $b['name']));
+        usort($groups, function ($a, $b) {
+            return [$a['specialty'], (int) $a['course']] <=> [$b['specialty'], (int) $b['course']]
+                ?: strnatcasecmp($a['name'], $b['name']);
+        });
 
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
         $subjectKey = fn($g, $subject) => $rowKey($g) . '|' . (string) $subject;
@@ -3903,13 +3944,22 @@ class TimetableController extends Controller
             ->where('specialty_name', $data['specialty_name'])
             ->where('training_type', 'practice')
             ->get();
-        $activeFlows = $scopeCards->flatMap(fn($card) => $this->cycleCardGroups($card))
-            ->map(fn($group) => $norm($this->baseGroup($group)))
-            ->filter()->flip()->all();
+        // Qator identifikatori — OQIM (cyclePlan bilan bir xil mantiq): karta
+        // `oqim_label` bo'yicha, label'siz eski kartalarda asosiy guruh bo'yicha.
+        $cardFlows = function (TimetableCard $card) use ($norm): array {
+            $flows = [];
+            foreach ($this->cycleCardGroups($card) as $member) {
+                $flow = $norm($this->cycleFlowName($card, $member));
+                if ($flow !== '') {
+                    $flows[$flow] = true;
+                }
+            }
+            return array_keys($flows);
+        };
+        $activeFlows = $scopeCards->flatMap($cardFlows)->filter()->flip()->all();
         $cards = $scopeCards
-            ->filter(function ($card) use ($data, $norm) {
-                $inFlow = collect($this->cycleCardGroups($card))
-                    ->contains(fn($group) => $norm($this->baseGroup($group)) === $norm($data['group_name']));
+            ->filter(function ($card) use ($data, $norm, $cardFlows) {
+                $inFlow = in_array($norm($data['group_name']), $cardFlows($card), true);
                 return $inFlow
                     && $norm($card->subject_name) === $norm($data['subject_name']);
             });

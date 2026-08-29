@@ -983,6 +983,12 @@
             padding: 2px 6px; background: #eff6ff; text-align: left; font-size: 10px; line-height: 1.15; }
         #cycleGrid thead .cyc-gcol { background: #dbeafe; }
         #cycleGrid .cyc-members { display: grid; gap: 2px; padding: 1px 0; }
+        #cycleGrid .cyc-flow-head { display: flex; align-items: center; justify-content: space-between; gap: 4px;
+            overflow: hidden; padding: 3px 6px; border: 1px solid #1d4ed8; border-radius: 3px;
+            background: #1d4ed8; color: #fff; font-size: 10px; font-weight: 700;
+            text-overflow: ellipsis; white-space: nowrap; }
+        #cycleGrid .cyc-flow-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #cycleGrid .cyc-flow-head i { flex: none; font-style: normal; font-weight: 500; font-size: 9px; opacity: .85; }
         #cycleGrid .cyc-member-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: stretch;
             overflow: hidden; border: 1px solid #93c5fd; border-radius: 3px; background: #eff6ff; }
         #cycleGrid .cyc-member-row span { overflow: hidden; padding: 4px 6px; color: #1e3a8a; font-size: 10px;
@@ -2974,6 +2980,17 @@
                 return {base: match[1].trim(), letter: cyrillic[letter] || letter};
             }
 
+            // Oqim to'liq nomi "Fakultet · 1-oqim · ru" ko'rinishida saqlanadi.
+            // Tor ustunlarda faqat oqim (va til) bo'lagi ko'rsatiladi.
+            function cycleFlowShort(flow) {
+                const name = String(flow || '').trim();
+                const parts = name.split(' · ');
+                const tail = parts.slice(-2).filter(part => /-oqim$/i.test(part) || part.length <= 3);
+                return tail.join(' · ') || name;
+            }
+
+            // Chap ustun: bitta qator = bitta OQIM. Sarlavhada oqim nomi, ostida
+            // shu oqim tarkibidagi guruhlar (guruhcha harflari bilan).
             function cycleMembersHtml(flow, members) {
                 const grouped = new Map();
                 (members || []).flatMap(name => String(name).split(/\s+\+\s+/u)).forEach(name => {
@@ -2982,13 +2999,28 @@
                     if (!grouped.has(base)) grouped.set(base, new Set());
                     if (part.letter) grouped.get(base).add(part.letter);
                 });
-                if (!grouped.size) grouped.set(flow, new Set());
 
-                return '<div class="cyc-members">' + Array.from(grouped.entries()).map(([base, letters]) => {
-                    const suffixes = Array.from(letters).sort().join(',');
-                    return '<div class="cyc-member-row"><span>' + esc(base) + '</span>' +
-                        '<b>' + esc(suffixes || '—') + '</b></div>';
-                }).join('') + '</div>';
+                // Oqim nomi guruh nomining o'zi bo'lsa (label'siz eski kartalar),
+                // sarlavha takrorlanmasin — faqat guruh qatorlari ko'rsatiladi.
+                //
+                // Ustunga faqat oqim bo'lagi sig'adi, to'liq nomi tooltipda.
+                const flowName = String(flow || '').trim();
+                const isFlowLabel = flowName !== '' && !grouped.has(flowName);
+                const shortName = cycleFlowShort(flowName);
+                const head = isFlowLabel
+                    ? '<div class="cyc-flow-head" title="' + esc(flowName) + '">' +
+                      '<span>' + esc(shortName) + '</span>' +
+                      '<i>' + grouped.size + ' guruh</i></div>'
+                    : '';
+
+                if (!grouped.size) grouped.set(flowName, new Set());
+
+                return '<div class="cyc-members">' + head +
+                    Array.from(grouped.entries()).map(([base, letters]) => {
+                        const suffixes = Array.from(letters).sort().join(',');
+                        return '<div class="cyc-member-row"><span>' + esc(base) + '</span>' +
+                            '<b>' + esc(suffixes || '—') + '</b></div>';
+                    }).join('') + '</div>';
             }
             function renderCyclePlanLegacy(j) {
                 const dates = j.dates || [], rows = j.rows || [];
@@ -3154,7 +3186,7 @@
                     .sort((a, b) => a.localeCompare(b, 'uz', { numeric: true }));
                 const groupFilter = $('cycleGroupFilter');
                 groupFilter.innerHTML = '<option value="">Barcha oqimlar</option>' + groups.map(group =>
-                    '<option value="' + esc(group) + '">' + esc(group) + '</option>'
+                    '<option value="' + esc(group) + '" title="' + esc(group) + '">' + esc(group) + '</option>'
                 ).join('');
                 if (!groups.includes(cycleGroupFilter)) cycleGroupFilter = '';
                 groupFilter.value = cycleGroupFilter;
@@ -3173,9 +3205,9 @@
                     (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
                 $('unplacedCount').textContent = unplaced.length + ' ta';
                 $('cardPanel').innerHTML = unplaced.map(card =>
-                    '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) + '" title="' + esc(card.subject) + '">' +
+                    '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) + '" title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
                     '<span class="cycle-pn-subject">' + esc(card.subject) + '</span>' +
-                    '<span class="cycle-pn-meta"><span>' + esc(card.group) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>'
+                    '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>'
                 ).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     card.addEventListener('click', () => {

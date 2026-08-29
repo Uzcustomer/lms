@@ -38,12 +38,13 @@ class GroupChangeApplicationController extends Controller
             $availableGroups = StudentDistributionGroup::query()
                 ->where('is_active', true)
                 ->where('is_source', false)
-                ->where('faculty_name', $sourceGroup->faculty_name)
                 ->where('specialty_name', $sourceGroup->specialty_name)
                 ->where('course', $sourceGroup->course)
                 ->where('free_places', '>', 0)
                 ->orderBy('group_name')
-                ->get();
+                ->get()
+                ->filter(fn (StudentDistributionGroup $target) => $this->distributionFacultiesCompatible($sourceGroup, $target))
+                ->values();
         }
 
         return view('student.group-change-application.create', [
@@ -92,7 +93,7 @@ class GroupChangeApplicationController extends Controller
                     ->findOrFail($data['target_group_id']);
 
                 if ($target->free_places < 1
-                    || $target->faculty_name !== $sourceGroup->faculty_name
+                    || !$this->distributionFacultiesCompatible($sourceGroup, $target)
                     || $target->specialty_name !== $sourceGroup->specialty_name
                     || (int) $target->course !== (int) $sourceGroup->course) {
                     abort(422, "Tanlangan guruh sizga mos emas yoki uning bo'sh joyi qolmagan.");
@@ -151,6 +152,18 @@ class GroupChangeApplicationController extends Controller
                 }
             })
             ->first();
+    }
+
+    private function distributionFacultiesCompatible(
+        StudentDistributionGroup $source,
+        StudentDistributionGroup $target
+    ): bool {
+        if (mb_strtolower(trim((string) $source->faculty_name)) === mb_strtolower(trim((string) $target->faculty_name))) {
+            return true;
+        }
+
+        return preg_match('/^d[12](?:\\/|$)/i', trim((string) $source->group_name)) === 1
+            && preg_match('/^d[12](?:\\/|$)/i', trim((string) $target->group_name)) === 1;
     }
 
     private function courseNumber($levelCode, $levelName): ?int

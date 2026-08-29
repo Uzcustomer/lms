@@ -404,7 +404,7 @@ class StudentDistributionController extends Controller
 
                 $source = StudentDistributionGroup::query()
                     ->where('is_active', true)
-                    ->where('faculty_name', $target->faculty_name)
+                    ->where('faculty_name', $student->department_name)
                     ->where('specialty_name', $target->specialty_name)
                     ->where('course', $target->course)
                     ->where('group_name', $student->group_name)
@@ -898,9 +898,28 @@ class StudentDistributionController extends Controller
         ];
     }
 
+    private function distributionFacultiesCompatible(
+        ?string $sourceFaculty,
+        ?string $sourceGroup,
+        ?string $targetFaculty,
+        ?string $targetGroup
+    ): bool {
+        if (mb_strtolower(trim((string) $sourceFaculty)) === mb_strtolower(trim((string) $targetFaculty))) {
+            return true;
+        }
+
+        return preg_match('/^d[12](?:\\/|$)/i', trim((string) $sourceGroup)) === 1
+            && preg_match('/^d[12](?:\\/|$)/i', trim((string) $targetGroup)) === 1;
+    }
+
     private function studentMatchesGroup(Student $student, StudentDistributionGroup $group): bool
     {
-        return trim((string) $student->department_name) === trim((string) $group->faculty_name)
+        return $this->distributionFacultiesCompatible(
+            $student->department_name,
+            $student->group_name,
+            $group->faculty_name,
+            $group->group_name
+        )
             && trim((string) $student->specialty_name) === trim((string) $group->specialty_name)
             && $this->courseNumber($student->level_code, $student->level_name) === (int) $group->course;
     }

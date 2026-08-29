@@ -259,6 +259,56 @@ class StudentDistributionController extends Controller
         ]);
     }
 
+    public function destroyAllGroups(): JsonResponse
+    {
+        $deletedCount = DB::transaction(function () {
+            $records = StudentDistributionGroup::query()
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->get();
+
+            if ($records->isEmpty()) {
+                return 0;
+            }
+
+            if (Schema::hasTable('student_group_change_permissions')) {
+                $studentIds = $records
+                    ->where('is_source', true)
+                    ->flatMap(fn (StudentDistributionGroup $group) => $this->studentsForDistributionGroup($group)->pluck('id'))
+                    ->unique()
+                    ->values();
+
+                if ($studentIds->isNotEmpty()) {
+                    StudentGroupChangePermission::query()
+                        ->whereIn('student_id', $studentIds)
+                        ->update(['enabled' => false]);
+                }
+            }
+
+            $ids = $records->pluck('id');
+            if (Schema::hasTable('student_distribution_assignments')) {
+                StudentDistributionAssignment::query()
+                    ->whereIn('source_group_id', $ids)
+                    ->orWhereIn('target_group_id', $ids)
+                    ->delete();
+            }
+            if (Schema::hasTable('student_group_change_applications')) {
+                StudentGroupChangeApplication::query()
+                    ->whereIn('source_group_id', $ids)
+                    ->orWhereIn('target_group_id', $ids)
+                    ->delete();
+            }
+
+            StudentDistributionGroup::query()->whereIn('id', $ids)->delete();
+            return $records->count();
+        }, 3);
+
+        return response()->json([
+            'message' => $deletedCount . ' ta yuklangan draft guruh o\'chirildi.',
+            'groups' => [],
+        ]);
+    }
+
     public function students(Request $request): JsonResponse
     {
         $request->validate([

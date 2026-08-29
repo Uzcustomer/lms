@@ -29,6 +29,20 @@
         .sd-group-tabs{display:flex;gap:8px;padding:13px 18px 0;border-bottom:1px solid #edf2f7;background:#fff}.sd-group-tab{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid transparent;border-bottom:3px solid transparent;border-radius:10px 10px 0 0;background:transparent;color:#64748b;font-size:12px;font-weight:800;cursor:pointer}.sd-group-tab:hover{background:#f8fafc;color:#1e40af}.sd-group-tab.active{border-color:#dbeafe;border-bottom-color:#2563eb;background:#eff6ff;color:#1d4ed8}.sd-group-tab[data-view="source"].active{border-color:#fecdd3;border-bottom-color:#e11d48;background:#fff1f2;color:#be123c}.sd-group-tab-count{display:inline-grid;place-items:center;min-width:23px;height:20px;padding:0 6px;border-radius:999px;background:#fff;font-size:10px}@media(max-width:600px){.sd-group-tabs{display:grid;grid-template-columns:1fr 1fr}.sd-group-tab{justify-content:center;padding:9px 6px}}
         .sd-group-tab[data-view="applications"].active{border-color:#fde68a;border-bottom-color:#d97706;background:#fffbeb;color:#92400e}.sd-application{grid-column:span 2;padding:15px;border:1px solid #dbe5ef;border-left:4px solid #d97706;border-radius:13px;background:linear-gradient(145deg,#fff,#fffbeb)}.sd-application-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.sd-application h3{margin:0;color:#123766;font-size:13px;font-weight:900}.sd-application-meta{margin-top:4px;color:#64748b;font-size:10px}.sd-application-route{display:inline-flex;margin-top:10px;padding:6px 9px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:900}.sd-application-reason{margin:10px 0 0;color:#475569;font-size:11px;line-height:1.55}.sd-permission-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:10px 12px;border:1px solid #dbe5f0;border-radius:11px;background:#f8fafc}.sd-permission-toolbar label{display:flex;align-items:center;gap:8px;color:#334155;font-size:11px;font-weight:800}.sd-permission-buttons{display:flex;gap:8px}.sd-permission-group{display:flex;align-items:center;gap:11px;padding:12px 13px;border-bottom:1px solid #edf2f7;cursor:pointer}.sd-permission-group:last-child{border-bottom:0}.sd-permission-group:hover{background:#f8fbff}.sd-permission-group-info{flex:1;min-width:0}.sd-permission-group-info b{display:block;color:#1e3a5f;font-size:12px}.sd-permission-group-info span{display:block;margin-top:3px;color:#64748b;font-size:10px}@media(max-width:760px){.sd-group-tabs{grid-template-columns:repeat(3,1fr)}.sd-application{grid-column:span 1}.sd-permission-toolbar{align-items:stretch;flex-direction:column}.sd-permission-buttons{display:grid;grid-template-columns:1fr 1fr}.sd-permission-buttons .sd-btn{padding:0 8px}}
         .sd-application-side{display:flex;align-items:flex-end;flex-direction:column;gap:8px}.sd-application-actions{display:flex;align-items:center;gap:6px}.sd-app-action{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:31px;border:0;border-radius:8px;padding:0 10px;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.sd-app-action svg{width:14px;height:14px}.sd-app-approve{background:#059669}.sd-app-approve:hover{background:#047857}.sd-app-delete{width:31px;padding:0;background:#dc2626}.sd-app-delete:hover{background:#b91c1c}@media(max-width:600px){.sd-application-head{align-items:stretch;flex-direction:column}.sd-application-side{align-items:flex-start}}
+        .sd-card-tools{display:flex;align-items:center;gap:9px}.sd-btn:disabled{cursor:not-allowed;opacity:.5}
+        .sd-groups{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:14px;padding:16px 18px 20px}
+        .sd-list-panel{overflow:hidden;border:1px solid #dbe5f0;border-radius:14px;background:#fff;box-shadow:0 5px 15px rgba(15,23,42,.045)}
+        .sd-list-panel.is-source{border-color:#fecdd3}.sd-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#eff6ff,#f8fbff)}
+        .sd-list-panel.is-source .sd-list-head{background:linear-gradient(135deg,#fff1f2,#fff7f7)}.sd-list-head h3{margin:0;color:#163966;font-size:13px;font-weight:900}.sd-list-head p{margin:3px 0 0;color:#64748b;font-size:10px}
+        .sd-list-rows{max-height:560px;overflow:auto}.sd-group-row{display:grid;grid-template-columns:minmax(145px,1fr) 62px 72px auto;align-items:center;gap:9px;min-height:58px;padding:9px 11px;border-bottom:1px solid #edf2f7;background:#fff}
+        .sd-group-row:last-child{border-bottom:0}.sd-group-row:hover{background:#f8fbff}.sd-list-panel.is-source .sd-group-row:hover{background:#fff7f7}
+        .sd-group-info{min-width:0}.sd-group-info b{display:block;overflow:hidden;color:#123766;font-size:11px;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.sd-group-info span{display:block;overflow:hidden;margin-top:3px;color:#64748b;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+        .sd-row-stat{padding-left:9px;border-left:1px solid #e2e8f0}.sd-row-stat span{display:block;color:#94a3b8;font-size:8px;font-weight:700;text-transform:uppercase}.sd-row-stat b{display:block;margin-top:2px;color:#1e3a5f;font-size:12px}
+        .sd-row-stat.is-free b{color:#047857}.sd-list-panel.is-source .sd-row-stat:last-of-type b{color:#be123c}.sd-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}.sd-row-actions .sd-btn{height:31px;padding:0 10px;font-size:10px}
+        .sd-row-actions .sd-group-delete{width:31px;height:31px;flex-basis:31px}.sd-list-empty{padding:38px 16px;text-align:center;color:#94a3b8;font-size:11px}
+        @media(max-width:980px){.sd-groups{grid-template-columns:1fr}.sd-application{grid-column:span 1}}
+        @media(max-width:760px){.sd-group-tabs{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:600px){.sd-card-head{align-items:flex-start;flex-direction:column}.sd-card-tools{width:100%;justify-content:space-between}.sd-group-row{grid-template-columns:minmax(120px,1fr) 52px auto}.sd-group-row .sd-row-stat:nth-of-type(3){display:none}.sd-row-actions .sd-btn{padding:0 8px}}
     </style>
 
     <div class="sd-page">
@@ -54,7 +68,7 @@
         </section>
 
         <section class="sd-card">
-            <div class="sd-card-head"><div><h2>2. Fakultet bo'yicha guruhlar</h2><p>Bo'sh joyi bor guruhni tanlang va talabalarni to'ldiring.</p></div><span class="sd-pill" id="groupCount">{{ $groups->count() }} ta guruh</span></div>
+            <div class="sd-card-head"><div><h2>2. Fakultet bo'yicha guruhlar</h2><p>Chapda to'ldiriladigan, o'ngda talabalari taqsimlanadigan guruhlar.</p></div><div class="sd-card-tools"><span class="sd-pill" id="groupCount">{{ $groups->count() }} ta guruh</span><button class="sd-btn sd-btn-danger" id="deleteAllGroups" type="button" @disabled($groups->isEmpty())>Barchasini o'chirish</button></div></div>
             <div class="sd-filters">
                 <div class="sd-field"><label class="sd-label" for="facultyFilter">Fakultet</label><select class="sd-select" id="facultyFilter"><option value="">Barcha fakultetlar</option>@foreach($faculties as $faculty)<option value="{{ $faculty }}">{{ $faculty }}</option>@endforeach</select></div>
                 <div class="sd-field"><label class="sd-label" for="specialtyFilter">Yo'nalish</label><select class="sd-select" id="specialtyFilter"><option value="">Barcha yo'nalishlar</option>@foreach($specialties as $specialty)<option value="{{ $specialty }}">{{ $specialty }}</option>@endforeach</select></div>
@@ -62,8 +76,7 @@
                 <div class="sd-filter-actions"><button type="button" class="sd-btn sd-btn-light" id="resetFilters">Tozalash</button><button type="button" class="sd-btn" id="refreshGroups">Yangilash</button></div>
             </div>
             <div class="sd-group-tabs">
-                <button class="sd-group-tab active" id="targetGroupsTab" data-view="target" type="button">To'ldiriladigan guruhlar <span class="sd-group-tab-count" id="targetTabCount">0</span></button>
-                <button class="sd-group-tab" id="sourceGroupsTab" data-view="source" type="button">Taqsimlanadigan guruhlar <span class="sd-group-tab-count" id="sourceTabCount">0</span></button>
+                <button class="sd-group-tab active" id="groupsTab" data-view="groups" type="button">Guruhlar <span class="sd-group-tab-count" id="groupsTabCount">0</span></button>
                 <button class="sd-group-tab" id="applicationsTab" data-view="applications" type="button">Arizalar <span class="sd-group-tab-count" id="applicationsTabCount">0</span></button>
             </div>
             <div class="sd-summary"><span class="sd-pill sd-pill-green" id="availableCount">0 ta bo'sh joyli</span><span id="capacitySummary"></span></div>
@@ -152,10 +165,11 @@
                 assign: @json(url('/admin/student-distribution/assign-student')),
                 permissionGroups: @json(url('/admin/student-distribution/permission-groups')),
                 groupPermissions: @json(url('/admin/student-distribution/group-change-permissions')),
-                applications: @json(url('/admin/student-distribution/applications'))
+                applications: @json(url('/admin/student-distribution/applications')),
+                deleteAllGroups: @json(url('/admin/student-distribution/groups'))
             };
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
-            let groups = initialGroups, selectedGroup = null, selectedStudent = null, groupView = 'target';
+            let groups = initialGroups, selectedGroup = null, selectedStudent = null, groupView = 'groups';
             const permissionSelected = new Set();
             const catalogSelected = new Set(catalog.filter(item => item.is_saved).map(item => item.key)), sourceSelected = new Set(catalog.filter(item => item.is_source).map(item => item.key)), studentCache = new Map(), catalogDraft = new Map(catalog.map(item => [item.key, {capacity:item.capacity, free_places:item.free_places}]));
             const sourceDraft = new Map(catalog.map(item => [item.key, item.is_source ? item.capacity : item.student_count]));
@@ -164,17 +178,34 @@
             const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
             const query = params => Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined).map(([key,value]) => encodeURIComponent(key)+'='+encodeURIComponent(value)).join('&');
             const filterValues = (prefix) => ({faculty: $(prefix+'Faculty').value, specialty: $(prefix+'Specialty').value, course: $(prefix+'Course').value});
+            function groupRow(group, isSource) {
+                const deleteButton = '<button class="sd-group-delete delete-group" type="button" data-group="'+group.id+'" data-name="'+esc(group.group_name)+'" title="Draft guruhni o\'chirish" aria-label="Draft guruhni o\'chirish"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button>';
+                const fillButton = !isSource && group.free_places > 0
+                    ? '<button class="sd-btn sd-btn-green fill-trigger" type="button" data-group="'+group.id+'">To\'ldirish</button>'
+                    : '';
+                const secondLabel = isSource ? 'Talabalar' : 'Bo\'sh joy';
+                const secondValue = isSource ? Number(group.occupied_count || group.capacity || 0) : Number(group.free_places || 0);
+                return '<div class="sd-group-row"><div class="sd-group-info"><b>'+esc(group.group_name)+'</b><span>'+esc(group.specialty_name)+' / '+group.course+'-kurs</span></div>' +
+                    '<div class="sd-row-stat"><span>Sig\'im</span><b>'+group.capacity+'</b></div>' +
+                    '<div class="sd-row-stat '+(!isSource ? 'is-free' : '')+'"><span>'+secondLabel+'</span><b>'+secondValue+'</b></div>' +
+                    '<div class="sd-row-actions">'+fillButton+deleteButton+'</div></div>';
+            }
+
+            function groupPanel(title, description, items, isSource) {
+                const rows = items.length
+                    ? items.map(group => groupRow(group, isSource)).join('')
+                    : '<div class="sd-list-empty">Tanlangan filtr bo\'yicha guruh topilmadi.</div>';
+                return '<section class="sd-list-panel '+(isSource ? 'is-source' : '')+'"><div class="sd-list-head"><div><h3>'+title+'</h3><p>'+description+'</p></div><span class="sd-pill '+(isSource ? 'sd-pill-red' : 'sd-pill-green')+'">'+items.length+' ta</span></div><div class="sd-list-rows">'+rows+'</div></section>';
+            }
 
             function renderGroups() {
                 const faculty = $('facultyFilter').value, specialty = $('specialtyFilter').value, course = $('courseFilter').value;
                 const scoped = groups.filter(group => (!faculty || group.faculty_name === faculty) && (!specialty || group.specialty_name === specialty) && (!course || String(group.course) === course));
                 const targets = scoped.filter(group => !group.is_source);
                 const sources = scoped.filter(group => group.is_source);
-                const filtered = groupView === 'source' ? sources : targets;
-
-                $('targetTabCount').textContent = targets.length;
-                $('sourceTabCount').textContent = sources.length;
-                $('groupCount').textContent = filtered.length + ' ta guruh';
+                $('groupsTabCount').textContent = scoped.length;
+                $('groupCount').textContent = scoped.length + ' ta guruh';
+                $('deleteAllGroups').disabled = groups.length === 0;
                 $('heroGroupCount').textContent = scoped.length;
                 const scopedApplications = applications.filter(application => (!faculty || application.faculty_name === faculty) && (!specialty || application.specialty_name === specialty) && (!course || String(application.course) === course));
                 $('applicationsTabCount').textContent = scopedApplications.length;
@@ -194,20 +225,14 @@
                 }
 
 
-                if (groupView === 'source') {
-                    $('availableCount').textContent = sources.length + ' ta taqsimlanadigan';
-                    $('availableCount').classList.remove('sd-pill-green');
-                    $('availableCount').classList.add('sd-pill-red');
-                    $('capacitySummary').textContent = sources.reduce((sum, group) => sum + Number(group.occupied_count || group.capacity || 0), 0) + ' ta talaba qolgan';
-                } else {
-                    $('availableCount').textContent = targets.filter(group => group.free_places > 0).length + ' ta bo\'sh joyli';
-                    $('availableCount').classList.add('sd-pill-green');
-                    $('availableCount').classList.remove('sd-pill-red');
-                    $('capacitySummary').textContent = targets.reduce((sum, group) => sum + group.free_places, 0) + ' ta bo\'sh o\'rin';
-                }
-
-                const emptyTitle = groupView === 'source' ? 'Taqsimlanadigan guruh topilmadi' : 'To\'ldiriladigan guruh topilmadi';
-                $('groupsGrid').innerHTML = filtered.length ? filtered.map(group => '<article class="sd-group '+(group.is_source ? 'is-source' : '')+'"><div class="sd-group-head"><h3>'+esc(group.group_name)+'</h3><button class="sd-group-delete delete-group" type="button" data-group="'+group.id+'" data-name="'+esc(group.group_name)+'" title="Draft guruhni o\'chirish" aria-label="Draft guruhni o\'chirish"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></div><div class="sd-group-meta">'+esc(group.faculty_name)+'<br>'+esc(group.specialty_name)+' / '+group.course+'-kurs / sig\'im '+group.capacity+'</div><div class="sd-group-foot">'+(group.is_source ? '<span class="sd-pill sd-pill-red">Talabalari ko\'chiriladi</span>' : '<span class="'+(group.free_places > 0 ? 'sd-free' : 'sd-full')+'">'+(group.free_places > 0 ? group.free_places+' ta bo\'sh joy' : 'Joy qolmagan')+'</span>')+(!group.is_source && group.free_places > 0 ? '<button class="sd-btn sd-btn-green fill-trigger" type="button" data-group="'+group.id+'">To\'ldirish</button>' : '')+'</div></article>').join('') : '<div class="sd-empty" style="grid-column:1/-1"><strong>'+emptyTitle+'</strong>Filtrni o\'zgartiring yoki guruhlarni DB ga yuklang.</div>';
+                $('availableCount').textContent = targets.filter(group => group.free_places > 0).length + ' ta bo\'sh joyli';
+                $('availableCount').classList.add('sd-pill-green');
+                $('availableCount').classList.remove('sd-pill-red');
+                $('capacitySummary').textContent = targets.reduce((sum, group) => sum + Number(group.free_places || 0), 0) + ' ta bo\'sh o\'rin / ' +
+                    sources.reduce((sum, group) => sum + Number(group.occupied_count || group.capacity || 0), 0) + ' ta taqsimlanadigan talaba';
+                $('groupsGrid').innerHTML =
+                    groupPanel('To\'ldiriladigan guruhlar', 'Bo\'sh joy mavjud bo\'lgan guruhlar', targets, false) +
+                    groupPanel('Taqsimlanadigan guruhlar', 'Talabalari boshqa guruhga ko\'chiriladi', sources, true);
                 document.querySelectorAll('.fill-trigger').forEach(button => button.addEventListener('click', () => openFill(Number(button.dataset.group))));
             }
 
@@ -466,6 +491,31 @@
                 }
             }
 
+            async function deleteAllGroups(button) {
+                if (!groups.length) return;
+                if (!confirm(groups.length+' ta yuklangan draft guruhning barchasi o\'chiriladi. Davom etasizmi?')) return;
+                button.disabled = true;
+                try {
+                    const response = await fetch(urls.deleteAllGroups, {method:'DELETE',headers:{'X-CSRF-TOKEN':csrf,'Accept':'application/json'}});
+                    const data = await response.json();
+                    if (!response.ok) return alert(data.message || 'Draft guruhlarni o\'chirib bo\'lmadi.');
+                    catalogSelected.clear();
+                    sourceSelected.clear();
+                    permissionSelected.clear();
+                    selectedGroup = null;
+                    selectedStudent = null;
+                    catalog.forEach(item => { item.is_saved = false; item.is_source = false; });
+                    closeModal('fillModal');
+                    closeModal('moveModal');
+                    await reloadGroups();
+                    refreshFilterOptions();
+                    renderCatalog();
+                    renderSources();
+                    alert(data.message);
+                } finally {
+                    button.disabled = groups.length === 0;
+                }
+            }
             async function openMove(id) {
                 selectedStudent = id; const student = studentCache.get(id);
                 $('moveStudentName').textContent = student ? student.name+' / '+student.student_id_number+' / '+student.group_name : '';
@@ -479,6 +529,7 @@
                 closeModal('moveModal'); await reloadGroups(); if ($('fillModal').classList.contains('is-open')) { loadManual(); loadPermissionGroups(); }
             }
 
+            $('deleteAllGroups').addEventListener('click', event => deleteAllGroups(event.currentTarget));
             $('openCatalog').addEventListener('click', openCatalog);
             $('openSources').addEventListener('click', openSources);
             $('saveCatalog').addEventListener('click', saveCatalog);
@@ -517,8 +568,7 @@
                 renderGroups();
             }
 
-            $('targetGroupsTab').addEventListener('click', () => setGroupView('target'));
-            $('sourceGroupsTab').addEventListener('click', () => setGroupView('source'));
+            $('groupsTab').addEventListener('click', () => setGroupView('groups'));
 
             $('applicationsTab').addEventListener('click', () => setGroupView('applications'));
             $('permissionSelectAll').addEventListener('change', event => {

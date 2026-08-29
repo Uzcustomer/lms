@@ -217,6 +217,11 @@
                         </div>
                         <div class="flex items-center gap-2">
                             <select id="cycleGroupFilter" class="hidden text-[11px] rounded border-gray-300 py-1 pl-2 pr-7 text-gray-600" aria-label="Oqim bo'yicha filtr"><option value="">Barcha oqimlar</option></select>
+                            <button type="button" id="subjectColorsBtn"
+                                class="hidden text-[11px] rounded px-2 py-1 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                                title="Har bir fan uchun rang tanlash">
+                                <i class="bi bi-palette" aria-hidden="true"></i> Ranglar
+                            </button>
                             <span id="unplacedCount" class="text-xs font-bold text-amber-600"></span>
                             <button type="button" id="unplacedExportBtn"
                                 class="hidden text-[11px] rounded px-2 py-1 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -226,6 +231,33 @@
                         </div>
                     </div>
                     <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
+                </div>
+            </div>
+
+            {{-- Fan ranglari modali --}}
+            <div id="subjectColorsModal" class="hidden tt-modal">
+                <div class="tt-modal-body">
+                    <div class="tt-modal-win asc-small-modal bg-white rounded-xl shadow-xl w-full max-w-lg">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-palette"></i></span>
+                                <div>
+                                    <div>Fan ranglari</div>
+                                    <div class="text-xs text-white/70">Rangni tanlang — sikl jadvalida shu rang ishlatiladi</div>
+                                </div>
+                            </div>
+                            <button type="button" id="scClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div id="scList" class="p-4 overflow-y-auto" style="max-height: 60vh;"></div>
+                        <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+                            <button type="button" id="scReset"
+                                class="text-[11px] rounded px-2 py-1 border border-gray-200 text-gray-600 hover:bg-gray-50">
+                                Hammasini avtomatik rangga qaytarish
+                            </button>
+                            <button type="button" id="scSave"
+                                class="text-xs rounded px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700">Saqlash</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2107,7 +2139,40 @@
                     subjectColors[n] = { bg: hslToHex(h, 70, 88), border: hslToHex(h, 62, 45) };
                 });
             }
+            // Foydalanuvchi tanlagan ranglar doska sozlamalarida saqlanadi va
+            // avtomatik (golden-angle) rangdan ustun turadi.
+            let subjectColorOverrides = {};
+            function loadSubjectColorOverrides() {
+                const stored = (board && board.settings && board.settings.subject_colors) || {};
+                subjectColorOverrides = (stored && typeof stored === 'object') ? { ...stored } : {};
+            }
+            async function saveSubjectColorOverrides() {
+                if (!board) return;
+                const settings = { ...(board.settings || {}), subject_colors: subjectColorOverrides };
+                await api(BASE + '/boards/' + board.id + '/subject-colors', 'POST', {
+                    subject_colors: JSON.stringify(subjectColorOverrides),
+                });
+                board.settings = settings;
+            }
+            // Fon rangidan mos chegara rangi: bir xil tusda, to'yingan va qoraroq.
+            function borderFromBg(hex) {
+                const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+                if (!m) return '#94a3b8';
+                const n = parseInt(m[1], 16);
+                const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => v / 255);
+                const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+                let h = 0;
+                if (d) {
+                    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+                    else if (max === g) h = (b - r) / d + 2;
+                    else h = (r - g) / d + 4;
+                    h *= 60;
+                }
+                return hslToHex(Math.round(h), 62, 45);
+            }
             const subjColor = name => {
+                const custom = subjectColorOverrides[name];
+                if (custom) return { bg: custom, border: borderFromBg(custom) };
                 const color = subjectColors[name] || { bg: '#f1f5f9', border: '#94a3b8' };
                 return { ...color };
             };
@@ -2215,6 +2280,7 @@
                 board = j.board; cards = j.cards;
                 missingGroups = j.missing_groups || [];
                 buildSubjectColors();
+                loadSubjectColorOverrides();
                 grids = {};
                 (j.grids || []).forEach(g => { grids[gridKey(g.faculty_name, g.specialty_name, g.course)] = g; });
                 // Hafta bo'yicha istisnolar
@@ -3201,6 +3267,7 @@
                 };
                 $('skipToggle').classList.add('hidden');
                 $('unplacedExportBtn').classList.add('hidden');
+                $('subjectColorsBtn').classList.toggle('hidden', !cycleCards.length);
                 $('cardPanelTitle').textContent = 'Sikl fan kartalari';
                 $('cardPanelHint').textContent = 'Kartani o‘z oqim qatoridagi boshlanish kuniga sudrang';
                 $('cardPanelHint').classList.remove('hidden');
@@ -3208,11 +3275,16 @@
                     (!cycleGroupFilter || card.group === cycleGroupFilter)).sort((a, b) =>
                     (a.group + a.subject).localeCompare(b.group + b.subject, 'uz', { numeric: true }));
                 $('unplacedCount').textContent = unplaced.length + ' ta';
-                $('cardPanel').innerHTML = unplaced.map(card =>
-                    '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) + '" title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
-                    '<span class="cycle-pn-subject">' + esc(card.subject) + '</span>' +
-                    '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>'
-                ).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
+                $('cardPanel').innerHTML = unplaced.map(card => {
+                    // Panel kartasi jadvaldagi blok bilan bir xil rangda — qaysi fan
+                    // qayerga tushishi ko'rinib tursin.
+                    const color = subjColor(card.subject);
+                    return '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) +
+                        '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
+                        'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
+                        '<span class="cycle-pn-subject">' + esc(card.subject) + '</span>' +
+                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>';
+                }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     card.addEventListener('click', () => {
                         cycleDragKey = card.dataset.cycleKey;
@@ -3241,6 +3313,61 @@
                     } catch (e) { alert('Sikl blokini olib bo‘lmadi: ' + e.message); }
                 };
             }
+            // ── Fan ranglari modali ──
+            // Ro'yxat modal ochilganda quriladi; tanlangan ranglar Saqlashda
+            // doska sozlamalariga yoziladi va jadval qayta chiziladi.
+            let scDraft = {};
+            function openSubjectColorsModal() {
+                const names = [...new Set(((cyclePlanData && cyclePlanData.cycle_cards) || [])
+                    .map(card => card.subject).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'uz'));
+                if (!names.length) {
+                    alert('Sikl fanlari topilmadi.');
+                    return;
+                }
+                scDraft = { ...subjectColorOverrides };
+                $('scList').innerHTML = names.map(name => {
+                    const color = subjColor(name);
+                    const custom = scDraft[name] ? ' checked' : '';
+                    return '<label class="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-0">' +
+                        '<input type="color" class="sc-input w-9 h-8 p-0 border border-gray-200 rounded cursor-pointer" ' +
+                            'data-subject="' + esc(name) + '" value="' + esc(color.bg) + '">' +
+                        '<span class="flex-1 text-xs text-gray-700">' + esc(name) + '</span>' +
+                        '<span class="text-[10px] text-gray-400 flex items-center gap-1">' +
+                            '<input type="checkbox" class="sc-auto" data-subject="' + esc(name) + '"' +
+                            (custom ? '' : ' checked') + '> avtomatik</span></label>';
+                }).join('');
+                $('scList').querySelectorAll('.sc-input').forEach(input => {
+                    input.oninput = () => {
+                        scDraft[input.dataset.subject] = input.value.toLowerCase();
+                        const auto = $('scList').querySelector('.sc-auto[data-subject="' + CSS.escape(input.dataset.subject) + '"]');
+                        if (auto) auto.checked = false;
+                    };
+                });
+                $('scList').querySelectorAll('.sc-auto').forEach(box => {
+                    box.onchange = () => {
+                        if (box.checked) delete scDraft[box.dataset.subject];
+                        else scDraft[box.dataset.subject] = subjColor(box.dataset.subject).bg;
+                    };
+                });
+                $('subjectColorsModal').classList.remove('hidden');
+            }
+            if ($('subjectColorsBtn')) $('subjectColorsBtn').onclick = openSubjectColorsModal;
+            if ($('scClose')) $('scClose').onclick = () => $('subjectColorsModal').classList.add('hidden');
+            if ($('scReset')) $('scReset').onclick = () => { scDraft = {}; openSubjectColorsModalRefresh(); };
+            function openSubjectColorsModalRefresh() {
+                subjectColorOverrides = { ...scDraft };
+                $('subjectColorsModal').classList.add('hidden');
+                openSubjectColorsModal();
+            }
+            if ($('scSave')) $('scSave').onclick = async () => {
+                subjectColorOverrides = { ...scDraft };
+                try {
+                    await saveSubjectColorOverrides();
+                    $('subjectColorsModal').classList.add('hidden');
+                    if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
+                } catch (e) { alert('Ranglarni saqlab bo‘lmadi: ' + e.message); }
+            };
+
             if ($('cycleRefresh')) $('cycleRefresh').onclick = () => loadCyclePlan();
             if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
             // Bayram qo'shish
@@ -3681,6 +3808,7 @@
                     return;
                 }
                 $('cycleGroupFilter').classList.add('hidden');
+                $('subjectColorsBtn').classList.add('hidden');
                 $('cardPanelTitle').textContent = 'Joylashmagan kartalar';
                 $('cardPanelHint').classList.add('hidden');
                 const bySubject = (a, b) => a.subject_name.localeCompare(b.subject_name, 'uz');

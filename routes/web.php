@@ -938,6 +938,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Umumiy sozlamalar (qo'ng'iroqlar jadvali, kunlar)
                 Route::get('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'settings'])->name('settings');
                 Route::post('/boards/{board}/settings', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSettings'])->name('settings.save');
+                // Fan ranglari (foydalanuvchi tanlagan)
+                Route::post('/boards/{board}/subject-colors', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectColors'])->name('subject-colors.save');
                 // Fan bo'yicha jadval rejimi (hafta almashinuvi / sikl)
                 Route::post('/boards/{board}/subject-setting', [\App\Http\Controllers\Admin\TimetableController::class, 'saveSubjectSetting'])->name('subject-setting.save');
                 // Sikl (4-6 kurs) kalendar rejasi

@@ -4202,9 +4202,16 @@ class TimetableController extends Controller
                     && (int) ($item['course'] ?? 0) === (int) $data['course']
                     && ($item['group_name'] ?? '') === $data['group_name'])
                 ->map(fn($item) => (object) $item);
+        // Qo'lda joylashda blok AYNAN bosilgan kunga tushadi — hech qayerga
+        // surilmaydi. Qo'shni sikl bilan to'qnashsa yoki oraliq yetmasa, xato
+        // qaytariladi va foydalanuvchi boshqa kun tanlaydi.
         $startPosition = (int) $positionFor($from);
         $cycleGapDays = 2;
-        $wasShifted = false;
+        $to = $endIndexFor($from, $requiredDays);
+        if ($to === null) {
+            return response()->json(['error' => 'Fan bloki semestr kalendariga sig\'maydi.'], 422);
+        }
+        $endPosition = $startPosition + $requiredDays - 1;
         foreach ($others->sortBy('start_index') as $other) {
             if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);
@@ -4212,29 +4219,18 @@ class TimetableController extends Controller
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
             $otherDays = max(1, (int) ($otherSetting->cycle_days ?? 1));
             $otherEndPosition = $otherStartPosition + $otherDays - 1;
-            $candidateEndPosition = $startPosition + $requiredDays - 1;
-            $fitsBefore = $candidateEndPosition + $cycleGapDays < $otherStartPosition;
-            $alreadyAfter = $startPosition > $otherEndPosition + $cycleGapDays;
-            if (!$fitsBefore && !$alreadyAfter) {
-                $startPosition = $otherEndPosition + $cycleGapDays + 1;
-                $wasShifted = true;
+
+            if ($startPosition <= $otherEndPosition && $otherStartPosition <= $endPosition) {
+                return response()->json(['error' => 'Bu sana oralig‘ida "' . $other->subject_name
+                    . '" sikli bor. Boshqa kunni tanlang.'], 422);
             }
-        }
-        if ($wasShifted) {
-            $from = $workIndices[$startPosition] ?? -1;
-        }
-        $to = $from >= 0 ? $endIndexFor($from, $requiredDays) : null;
-        if ($from < 0 || $to === null) {
-            return response()->json(['error' => 'Fan bloki semestr kalendariga sig\'maydi.'], 422);
-        }
-        foreach ($others as $other) {
-            if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
-            $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
-            $otherDays = max(1, (int) ($otherSetting->cycle_days ?? 1));
-            $otherFrom = (int) $other->start_index;
-            $otherTo = $endIndexFor($otherFrom, $otherDays);
-            if ($otherTo !== null && $from <= $otherTo && $otherFrom <= $to) {
-                return response()->json(['error' => 'Bu sana oralig‘ida boshqa fan bloki bor.'], 422);
+            // Sikllar orasida kamida 2 o'quv kuni bo'sh qolishi kerak.
+            $gapBefore = $otherStartPosition - $endPosition - 1;
+            $gapAfter = $startPosition - $otherEndPosition - 1;
+            $gap = $startPosition > $otherEndPosition ? $gapAfter : $gapBefore;
+            if ($gap < $cycleGapDays) {
+                return response()->json(['error' => '"' . $other->subject_name . '" sikli bilan orasida kamida '
+                    . $cycleGapDays . ' o‘quv kuni bo‘sh qolishi kerak (hozir ' . max(0, $gap) . ').'], 422);
             }
         }
 
@@ -6252,6 +6248,35 @@ class TimetableController extends Controller
      * soni kuniga para soni sifatida saqlanadi; panjaradan tashqarida qolgan
      * joylashuvlar bo'shatiladi.
      */
+    /**
+     * Fan ranglarini saqlaydi (fan nomi => #rrggbb). Bo'sh qiymat — avtomatik
+     * (golden-angle) rangga qaytarish.
+     */
+    public function saveSubjectColors(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate(['subject_colors' => 'nullable|string']);
+        $input = json_decode((string) ($data['subject_colors'] ?? '{}'), true);
+        if (!is_array($input)) {
+            return response()->json(['error' => 'Ranglar ro\'yxati noto\'g\'ri.'], 422);
+        }
+
+        $colors = [];
+        foreach ($input as $subject => $hex) {
+            $subject = trim((string) $subject);
+            $hex = strtolower(trim((string) $hex));
+            if ($subject === '' || !preg_match('/^#[0-9a-f]{6}$/', $hex)) {
+                continue;
+            }
+            $colors[$subject] = $hex;
+        }
+
+        $set = $board->settings ?? [];
+        $set['subject_colors'] = $colors;
+        $board->update(['settings' => $set]);
+
+        return response()->json(['ok' => true, 'subject_colors' => $colors]);
+    }
+
     public function saveSettings(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([

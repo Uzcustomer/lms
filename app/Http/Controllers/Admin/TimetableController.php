@@ -3540,7 +3540,9 @@ class TimetableController extends Controller
                 $parts[] = mb_strtolower($lang);
             }
 
-            return implode(' · ', $parts);
+            // Ajratgich ASCII: nom HTML data-atributi, FormData va SQL kaliti
+            // sifatida aylanib yuradi — kodlanishga bog'liq belgi ishlatilmaydi.
+            return implode(' / ', $parts);
         }
 
         $fallback = $member !== null ? $member : (string) ($card->group_name ?? '');
@@ -3964,7 +3966,12 @@ class TimetableController extends Controller
                     && $norm($card->subject_name) === $norm($data['subject_name']);
             });
         if ($cards->isEmpty()) {
-            return response()->json(['error' => 'Tanlangan oqim va fan kartasi topilmadi.'], 422);
+            // Xabarda mavjud oqimlar sanaladi: nom mos kelmasa (mas. eski jadval
+            // yoki qayta generatsiya qilingan kartalar) sabab darrov ko'rinadi.
+            $known = collect(array_keys($activeFlows))->take(8)->implode(', ');
+
+            return response()->json(['error' => 'Tanlangan oqim va fan kartasi topilmadi. So\'ralgan oqim: "'
+                . $data['group_name'] . '"' . ($known !== '' ? '; mavjud oqimlar: ' . $known : '')], 422);
         }
 
         $set = $board->settings ?? [];

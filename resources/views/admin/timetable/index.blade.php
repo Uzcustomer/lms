@@ -2980,13 +2980,13 @@
                 return {base: match[1].trim(), letter: cyrillic[letter] || letter};
             }
 
-            // Oqim to'liq nomi "Fakultet · 1-oqim · ru" ko'rinishida saqlanadi.
+            // Oqim to'liq nomi "Fakultet / 1-oqim / ru" ko'rinishida saqlanadi.
             // Tor ustunlarda faqat oqim (va til) bo'lagi ko'rsatiladi.
             function cycleFlowShort(flow) {
                 const name = String(flow || '').trim();
-                const parts = name.split(' · ');
+                const parts = name.split(' / ');
                 const tail = parts.slice(-2).filter(part => /-oqim$/i.test(part) || part.length <= 3);
-                return tail.join(' · ') || name;
+                return tail.join(' / ') || name;
             }
 
             // Chap ustun: bitta qator = bitta OQIM. Sarlavhada oqim nomi, ostida
@@ -3118,6 +3118,7 @@
                         const index = +cell.dataset.cycleIndex;
                         cycleDragKey = null;
                         if (!card || card.row_key !== rowKey) {
+                            console.warn('Sikl: qator mos kelmadi', {kartaQatori: card && card.row_key, katakQatori: rowKey});
                             alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
                             return;
                         }
@@ -3128,7 +3129,10 @@
                                 start_date: $('cycleStart').value, holidays: cycleHolidays,
                             });
                             await loadCyclePlan();
-                        } catch (e) { alert('Sikl blokini joylab bo‘lmadi: ' + e.message); }
+                        } catch (e) {
+                            console.error('Sikl joylash xatosi', {karta: card, index: index, xato: e.message});
+                            alert('Sikl blokini joylab bo‘lmadi: ' + e.message);
+                        }
                     });
                 });
                 $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {

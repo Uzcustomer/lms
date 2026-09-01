@@ -105,38 +105,113 @@
         transform: translateY(-1px);
     }
 
-    form[x-data^='fanQuestionBuilder'] {
-        padding: 28px !important;
-        background: #ffffff;
+    /* ---- Savol formasi ---- */
+    .qf { padding: 16px 18px 18px; background: #fff; }
+    .qf [x-cloak] { display: none !important; }
+    .qf label { color: #47597a; font-size: 11px; font-weight: 800; }
+    .qf input:not([type='checkbox']):not([type='radio']):not([type='file']),
+    .qf select, .qf textarea {
+        width: 100%; border: 1px solid #ccdaee; border-radius: 8px;
+        background: #fff; color: #17253d; font-size: 13px;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .qf input:not([type='checkbox']):not([type='radio']):not([type='file']), .qf select { height: 38px; padding: 0 10px; }
+    .qf textarea { padding: 9px 10px; line-height: 1.5; resize: vertical; }
+    .qf input:focus, .qf select:focus, .qf textarea:focus {
+        border-color: #4d83f1; box-shadow: 0 0 0 3px rgba(77,131,241,.12); outline: none;
     }
 
-    form[x-data^='fanQuestionBuilder'] > div:first-of-type {
-        padding: 22px;
-        border: 1px solid #e0eafa;
-        border-radius: 16px;
-        background: #fbfdff;
+    .qf-toolbar {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+        padding-bottom: 14px; border-bottom: 1px solid #eaf0f9;
     }
+    .qf-type { flex: 1 1 190px; max-width: 240px; font-weight: 700 !important; }
 
-    form[x-data^='fanQuestionBuilder'] > div:first-of-type > div:first-child {
-        padding-right: 8px;
+    .qf-langs { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid #d3e0f2; border-radius: 9px; background: #f6f9fe; }
+    .qf-lang {
+        min-width: 40px; padding: 6px 10px; border: 0; border-radius: 7px;
+        background: transparent; color: #64748b; font-size: 11px; font-weight: 800; cursor: pointer;
     }
+    .qf-lang:hover { color: #1d4ed8; }
+    .qf-lang.is-on { background: #2563eb; color: #fff; }
 
-    form[x-data^='fanQuestionBuilder'] > div[x-show*='single_choice'],
-    form[x-data^='fanQuestionBuilder'] > div[x-show*='fill_in_blank'] {
-        border-radius: 16px !important;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6);
+    .qf-points { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
+    .qf-points input { width: 68px !important; text-align: center; }
+    .qf-active { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .qf-toolbar input[type='checkbox'] { width: 15px; height: 15px; accent-color: #2563eb; }
+
+    .qf-body { display: grid; grid-template-columns: minmax(0,1fr) 210px; gap: 16px; padding-top: 14px; }
+    .qf-main { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+    .qf-field label { display: block; margin-bottom: 5px; }
+    .qf-field b { color: #dc2626; }
+
+    .qf-more { border: 1px solid #e4ecf8; border-radius: 10px; background: #fafcff; }
+    .qf-more summary {
+        padding: 9px 12px; color: #47597a; font-size: 11px; font-weight: 800;
+        cursor: pointer; list-style: none;
     }
+    .qf-more summary::-webkit-details-marker { display: none; }
+    .qf-more summary::before { content: '+ '; color: #2563eb; font-weight: 900; }
+    .qf-more[open] summary::before { content: '− '; }
+    .qf-more summary:hover { color: #1d4ed8; }
+    .qf-more-body { display: grid; gap: 10px; padding: 0 12px 12px; }
 
-    form[x-data^='fanQuestionBuilder'] input[type='file'] {
-        min-height: 46px;
-        padding: 10px !important;
-        border-radius: 9px !important;
-        background: #f8fbff !important;
+    .qf-side { display: flex; flex-direction: column; gap: 10px; }
+    .qf-drop {
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+        min-height: 108px; padding: 12px; border: 1px dashed #bfd3ee; border-radius: 11px;
+        background: #f8fbff; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
     }
+    .qf-drop:hover { border-color: #4d83f1; background: #f2f7ff; }
+    .qf-drop input[type='file'] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .qf-drop-icon { font-size: 20px; }
+    .qf-drop-text { overflow: hidden; max-width: 100%; color: #2f4468; font-size: 11px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    .qf-drop-hint { color: #93a5bf; font-size: 10px; font-weight: 600; }
 
-    form[x-data^='fanQuestionBuilder'] > div:last-of-type {
-        padding-top: 20px;
-        border-top: 1px solid #e4ecf8;
+    .qf-thumb { padding: 8px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
+    .qf-thumb img { display: block; width: 100%; max-height: 110px; border-radius: 7px; object-fit: contain; }
+    .qf-thumb label { display: flex; align-items: center; gap: 6px; margin-top: 7px; color: #dc2626; }
+
+    .qf-answers, .qf-blank { margin-top: 14px; padding: 13px; border-radius: 12px; }
+    .qf-answers { border: 1px solid #dce9fb; background: #f7faff; }
+    .qf-blank { display: grid; gap: 9px; border: 1px solid #fbe7c2; background: #fffcf5; }
+    .qf-answers-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; color: #21375c; font-size: 12px; font-weight: 900; }
+    .qf-answers-head em { color: #8296b5; font-size: 10px; font-style: normal; font-weight: 700; }
+    .qf-add { padding: 6px 11px; border: 1px solid #c9dcf7; border-radius: 8px; background: #fff; color: #1d4ed8; font-size: 11px; font-weight: 800; cursor: pointer; }
+    .qf-add:hover { background: #eaf2ff; }
+
+    .qf-option {
+        display: grid; grid-template-columns: 42px minmax(0,1fr) 30px; align-items: center; gap: 8px;
+        margin-bottom: 7px; padding: 7px 9px; border: 1px solid #e6eefb; border-radius: 9px; background: #fff;
+        transition: border-color .15s, background .15s;
+    }
+    .qf-option:last-child { margin-bottom: 0; }
+    .qf-option.is-correct { border-color: #86e0b4; background: #f4fdf8; }
+    .qf-pick { display: inline-flex; align-items: center; gap: 6px; color: #47597a; }
+    .qf-pick input[type='radio'] { width: 15px; height: 15px; accent-color: #059669; }
+    .qf-pick span { font-size: 12px; font-weight: 900; }
+    .qf-option.is-correct .qf-pick span { color: #047857; }
+    .qf-del {
+        width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent;
+        color: #cbd5e1; font-size: 19px; line-height: 1; cursor: pointer; transition: background .15s, color .15s;
+    }
+    .qf-del:hover:not(:disabled) { background: #fef2f2; color: #dc2626; }
+    .qf-del:disabled { cursor: not-allowed; opacity: .35; }
+    .qf-case { display: inline-flex; align-items: center; gap: 6px; }
+    .qf-case input[type='checkbox'] { width: 15px; height: 15px; accent-color: #d97706; }
+
+    .qf-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 14px; padding-top: 13px; border-top: 1px solid #eaf0f9; }
+    .qf-note { color: #93a5bf; font-size: 11px; font-weight: 600; }
+    .qf-save {
+        height: 38px; padding: 0 18px; border: 0; border-radius: 9px; background: #2563eb;
+        color: #fff; font-size: 12px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 6px 14px rgba(37,99,235,.2); transition: background .15s, transform .15s;
+    }
+    .qf-save:hover { background: #1d4ed8; transform: translateY(-1px); }
+
+    @media (max-width: 860px) {
+        .qf-body { grid-template-columns: 1fr; }
+        .qf-drop { min-height: 84px; }
     }
 
     @media (max-width: 640px) {
@@ -148,10 +223,13 @@
             left: 18px;
         }
 
-        form[action*='test-collections']:not([x-data]) > div:nth-of-type(2),
-        form[x-data^='fanQuestionBuilder'] {
+        form[action*='test-collections']:not([x-data]) > div:nth-of-type(2) {
             padding: 18px !important;
         }
+
+        .qf { padding: 14px; }
+        .qf-points { margin-left: 0; }
+        .qf-option { grid-template-columns: 42px minmax(0,1fr) 30px; }
     }
 </style>
 
@@ -253,14 +331,9 @@
 
             @if($isEdit)
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-cyan-50 px-5 py-4 sm:px-6">
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <h2 class="font-black text-slate-900">Yangi savol qo'shish</h2>
-                                <p class="mt-1 text-xs text-slate-500">Mavjud test yaratish tartibidagi barcha asosiy maydonlar shu yerda.</p>
-                            </div>
-                            <span class="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">2 xil savol turi</span>
-                        </div>
+                    <div class="flex items-center gap-2.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-cyan-50 px-5 py-3">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-sm font-black text-white">+</span>
+                        <h2 class="font-black text-slate-900">Yangi savol qo'shish</h2>
                     </div>
                     @include('teacher.fan-testlari._question-form', ['action' => route('teacher.fan-testlari.questions.store', $collection), 'method' => null, 'question' => null, 'questionIndex' => null, 'optionDefaults' => $optionDefaults])
                 </div>
@@ -385,6 +458,8 @@
                 correct_answer_text: source.correct_answer_text || '', correct_answer_text_ru: source.correct_answer_text_ru || '', correct_answer_text_en: source.correct_answer_text_en || '',
                 case_sensitive: Boolean(source.case_sensitive), points: source.points || 1, is_active: source.is_active !== false,
                 options: options, correctOption: correctIndex + 1,
+                lang: 'uz', imageName: '',
+                pickImage(event) { this.imageName = event.target.files?.[0]?.name || ''; },
                 addOption() { this.options.push({text: '', text_ru: '', text_en: ''}); },
                 removeOption(index) {
                     if (this.options.length <= 2) return;

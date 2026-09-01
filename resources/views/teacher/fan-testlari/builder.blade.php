@@ -179,8 +179,10 @@
 
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <a href="{{ route('teacher.fan-testlari.index') }}" class="text-sm font-bold text-blue-600 hover:text-blue-800">← Test yaratish</a>
-                    <h1 class="mt-2 text-2xl font-black tracking-tight text-slate-900">{{ $isEdit ? 'Test to\'plamini tahrirlash' : 'Yangi test to\'plami' }}</h1>
+                    @if($isEdit)
+                        <a href="{{ route('teacher.fan-testlari.index') }}" class="text-sm font-bold text-blue-600 hover:text-blue-800">← Test yaratish</a>
+                    @endif
+                    <h1 class="{{ $isEdit ? 'mt-2' : '' }} text-2xl font-black tracking-tight text-slate-900">{{ $isEdit ? 'Test to\'plamini tahrirlash' : 'Yangi test to\'plami' }}</h1>
                     <p class="mt-1 text-sm text-slate-500">Dars jadvali tayyor bo'lmasdan test savollarini oldindan yig'ing.</p>
                 </div>
                 @if($isEdit)
@@ -300,6 +302,66 @@
                 <div class="rounded-2xl border border-dashed border-blue-200 bg-blue-50/60 px-6 py-10 text-center">
                     <h2 class="font-black text-blue-900">Avval test to'plamini saqlang</h2>
                     <p class="mt-1 text-sm text-blue-700">To'plam yaratilgach, shu sahifada savol qo'shish va sozlash oynalari ochiladi.</p>
+                </div>
+            @endif
+
+            @if(($collections ?? collect())->isNotEmpty())
+                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                        <div>
+                            <h2 class="font-black text-slate-900">Yaratilgan test to'plamlari</h2>
+                            <p class="mt-1 text-xs text-slate-500">Keyinchalik bu to'plamlardan dars testiga biriktiriladi.</p>
+                        </div>
+                        <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{{ $collections->count() }} ta to'plam</span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-slate-50 text-left text-[11px] font-black uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-5 py-4">Test to'plami</th>
+                                <th class="px-5 py-4">Fan</th>
+                                <th class="px-5 py-4 text-center">Savollar</th>
+                                <th class="px-5 py-4 text-center">Vaqt</th>
+                                <th class="px-5 py-4">Holat</th>
+                                <th class="px-5 py-4 text-right">Amal</th>
+                            </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                            @foreach($collections as $item)
+                                <tr class="transition hover:bg-blue-50/40 {{ $isEdit && $item->id === $collection->id ? 'bg-blue-50/60' : '' }}">
+                                    <td class="px-5 py-4">
+                                        <div class="font-bold text-slate-900">{{ $item->name }}</div>
+                                        @if($item->description)
+                                            <div class="mt-1 max-w-sm truncate text-xs text-slate-500">{{ $item->description }}</div>
+                                        @endif
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <div class="font-semibold text-slate-800">{{ $item->subject?->subject_name ?? '-' }}</div>
+                                        <div class="mt-1 text-xs text-slate-500">{{ $item->subject?->semester_name ?? $item->subject?->subject_code ?? '-' }}</div>
+                                    </td>
+                                    <td class="px-5 py-4 text-center font-black text-slate-800">{{ $item->questionCount() }}</td>
+                                    <td class="px-5 py-4 text-center text-slate-700">{{ $item->duration_minutes }} daqiqa</td>
+                                    <td class="px-5 py-4">
+                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $item->is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">
+                                            {{ $item->is_active ? 'Faol' : 'Nofaol' }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-4 text-right">
+                                        <div class="inline-flex items-center gap-2">
+                                            <a href="{{ route('teacher.fan-testlari.edit', $item) }}" class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Tahrirlash</a>
+                                            <form method="POST" action="{{ route('teacher.fan-testlari.destroy', $item) }}" onsubmit="return confirm('Bu test to\'plami va savollarini o\'chirishni tasdiqlaysizmi?')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100">O'chirish</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             @endif
         </div>

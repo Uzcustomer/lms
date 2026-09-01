@@ -16,41 +16,20 @@ class FanTestiController extends Controller
 {
     private const ALLOWED_DEPARTMENT = 'Patologik anatomiya, sud tibbiyoti huquqi kafedrasi';
 
-    public function index(Request $request)
+    public function index()
     {
-        $teacher = $this->teacher();
-        $subjects = $this->subjectsFor($teacher);
-
-        $query = FanTesti::query()
-            ->with('subject')
-            ->whereIn('curriculum_subject_id', $subjects->pluck('id'))
-            ->latest();
-
-        if ($request->filled('subject_id') && $subjects->contains('id', (int) $request->integer('subject_id'))) {
-            $query->where('curriculum_subject_id', $request->integer('subject_id'));
-        }
-
-        if ($request->filled('search')) {
-            $search = trim((string) $request->input('search'));
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhereHas('subject', fn ($subject) => $subject->where('subject_name', 'like', "%{$search}%"));
-            });
-        }
-
-        return view('teacher.fan-testlari.index', [
-            'collections' => $query->paginate(15)->withQueryString(),
-            'subjects' => $subjects,
-        ]);
+        return $this->create();
     }
 
     public function create()
     {
-        $subjects = $this->subjectsFor($this->teacher());
+        $teacher = $this->teacher();
+        $subjects = $this->subjectsFor($teacher);
 
         return view('teacher.fan-testlari.builder', [
             'collection' => null,
             'subjects' => $subjects,
+            'collections' => $this->collectionsFor($subjects),
         ]);
     }
 
@@ -78,10 +57,12 @@ class FanTestiController extends Controller
     public function edit(FanTesti $fanTesti)
     {
         $this->authorizeCollection($fanTesti);
+        $subjects = $this->subjectsFor($this->teacher());
 
         return view('teacher.fan-testlari.builder', [
             'collection' => $fanTesti->load('subject'),
-            'subjects' => $this->subjectsFor($this->teacher()),
+            'subjects' => $subjects,
+            'collections' => $this->collectionsFor($subjects),
         ]);
     }
 
@@ -206,6 +187,15 @@ class FanTestiController extends Controller
                 'id', 'subject_name', 'subject_code', 'semester_name',
                 'department_id', 'department_name',
             ]);
+    }
+
+    private function collectionsFor($subjects)
+    {
+        return FanTesti::query()
+            ->with('subject')
+            ->whereIn('curriculum_subject_id', $subjects->pluck('id'))
+            ->latest()
+            ->get();
     }
 
     private function isAllowedDepartment($teacher): bool

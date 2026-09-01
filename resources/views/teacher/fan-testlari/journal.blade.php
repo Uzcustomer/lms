@@ -1,85 +1,207 @@
 <x-app-layout>
+<link rel="preconnect" href="https://fonts.bunny.net">
+<link href="https://fonts.bunny.net/css?family=roboto:300,400,500,700|roboto-slab:400,600,700&display=swap" rel="stylesheet">
 <style>
-    .j-filters { display: grid; grid-template-columns: 2fr 1fr auto; gap: 10px; align-items: end; }
-    .j-filters label { display: block; margin-bottom: 5px; color: #47597a; font-size: 11px; font-weight: 800; }
-    .j-filters select {
-        width: 100%; height: 38px; padding: 0 10px;
-        border: 1px solid #ccdaee; border-radius: 8px; background: #fff; font-size: 13px;
+    .jr {
+        --navy: #0f2748; --navy-soft: #1b3a63; --gold: #c9a227;
+        --ink: #17233a; --ink-soft: #4d6180; --muted: #8798b1;
+        --line: #dde5ef; --line-soft: #eef2f8;
+        --ok: #0f7a52; --ok-bg: #e9f7f0; --bad: #b3261e; --bad-bg: #fdeceb;
+        --warn: #a35a06; --warn-bg: #fdf3e4;
+        font-family: 'Roboto', system-ui, sans-serif; color: var(--ink);
     }
-    .j-filters button { height: 38px; padding: 0 18px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font-size: 12px; font-weight: 800; cursor: pointer; }
-    .j-filters button:hover { background: #1d4ed8; }
+    .jr h1, .jr h2, .jr .slab { font-family: 'Roboto Slab', Georgia, serif; }
 
-    .j-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-    .j-stat { padding: 13px 15px; border: 1px solid #e2eaf6; border-radius: 12px; background: #fff; }
-    .j-stat b { display: block; color: #16263f; font-size: 21px; font-weight: 900; }
-    .j-stat span { color: #93a5bf; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
-
-    .j-group { overflow: hidden; margin-bottom: 14px; border: 1px solid #dde7f5; border-radius: 14px; background: #fff; }
-    .j-group-head {
-        display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
-        padding: 12px 16px; border-bottom: 1px solid #eaf0f9;
-        background: linear-gradient(120deg, #f6f9fe, #eef5ff);
+    /* ---- Sarlavha ---- */
+    .jr-head {
+        padding: 24px 28px;
+        border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 6px;
+        background: linear-gradient(180deg, #fbfcfe, #f5f8fc);
     }
-    .j-group-head b { color: #16263f; font-size: 14px; font-weight: 900; }
-    .j-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-    .j-badge { padding: 4px 9px; border-radius: 999px; background: #eef4fd; color: #2f4468; font-size: 10px; font-weight: 800; }
-    .j-badge.ok { background: #ecfdf5; color: #047857; }
-
-    .j-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .j-table th {
-        padding: 9px 14px; border-bottom: 1px solid #eaf0f9; background: #fafcff;
-        color: #7e91ad; font-size: 10px; font-weight: 900; letter-spacing: .05em; text-align: left; text-transform: uppercase;
+    .jr-eyebrow {
+        margin-bottom: 7px; color: var(--gold);
+        font-size: 10px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
     }
-    .j-table td { padding: 10px 14px; border-bottom: 1px solid #f2f6fc; color: #21375c; vertical-align: top; }
-    .j-table tr:last-child td { border-bottom: 0; }
-    .j-name { font-weight: 800; }
-    .j-id { display: block; margin-top: 2px; color: #93a5bf; font-size: 11px; font-weight: 600; }
-    .j-pill { display: inline-flex; padding: 3px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; }
-    .j-pill.ok { background: #ecfdf5; color: #047857; }
-    .j-pill.no { background: #fef2f2; color: #b91c1c; }
-    .j-pill.wait { background: #fff7ed; color: #c2410c; }
-    .j-score { font-weight: 900; }
+    .jr-head h1 { margin: 0; color: var(--navy); font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+    .jr-head p { margin: 6px 0 0; color: var(--ink-soft); font-size: 14px; }
 
-    .j-answers { padding: 0; }
-    .j-answers summary {
-        padding: 6px 0; color: #2563eb; font-size: 11px; font-weight: 800; cursor: pointer; list-style: none;
+    /* ---- Filtr ---- */
+    .jr-panel {
+        padding: 16px 20px;
+        border: 1px solid var(--line); border-radius: 6px; background: #fff;
     }
-    .j-answers summary::-webkit-details-marker { display: none; }
-    .j-answers summary::before { content: '▸ '; }
-    .j-answers[open] summary::before { content: '▾ '; }
-    .j-answer { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid #f2f6fc; }
-    .j-mark { flex: none; display: grid; place-items: center; width: 19px; height: 19px; border-radius: 5px; color: #fff; font-size: 11px; font-weight: 900; }
-    .j-mark.ok { background: #059669; }
-    .j-mark.no { background: #dc2626; }
-    .j-answer-text { font-size: 12px; line-height: 1.5; }
-    .j-answer-text i { font-style: normal; color: #93a5bf; }
-    .j-answer-text em { font-style: normal; color: #047857; font-weight: 800; }
+    .jr-filters { display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: end; }
+    .jr-filters label {
+        display: block; margin-bottom: 6px;
+        color: var(--ink-soft); font-size: 11px; font-weight: 500; letter-spacing: .05em;
+    }
+    .jr-filters select {
+        width: 100%; height: 40px; padding: 0 11px;
+        border: 1px solid #c4d0e0; border-radius: 5px; background: #fcfdff;
+        color: var(--ink); font-family: 'Roboto', sans-serif; font-size: 13.5px; outline: none;
+    }
+    .jr-filters select:focus { border-color: var(--navy-soft); box-shadow: 0 0 0 3px rgba(27,58,99,.1); }
+    .jr-btn {
+        height: 40px; padding: 0 22px; border: 0; border-radius: 5px;
+        background: var(--navy); color: #fff;
+        font-family: 'Roboto', sans-serif; font-size: 13.5px; font-weight: 500;
+        letter-spacing: .04em; cursor: pointer; transition: background .16s;
+    }
+    .jr-btn:hover { background: var(--navy-soft); }
 
-    .j-empty { padding: 44px 20px; color: #93a5bf; font-size: 13px; text-align: center; }
-    @media (max-width: 860px) { .j-stats { grid-template-columns: repeat(2, 1fr); } .j-filters { grid-template-columns: 1fr; } }
+    /* ---- Statistika ---- */
+    .jr-stats {
+        display: grid; grid-template-columns: repeat(5, 1fr);
+        border: 1px solid var(--line); border-radius: 6px; background: #fff; overflow: hidden;
+    }
+    .jr-stat { padding: 16px 18px; border-right: 1px solid var(--line-soft); }
+    .jr-stat:last-child { border-right: 0; }
+    .jr-stat b {
+        display: block; color: var(--navy);
+        font-family: 'Roboto Slab', serif; font-size: 24px; font-weight: 600; line-height: 1.1;
+    }
+    .jr-stat span {
+        display: block; margin-top: 4px; color: var(--muted);
+        font-size: 9.5px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase;
+    }
+    .jr-stat.is-ok b { color: var(--ok); }
+
+    /* ---- Havola ---- */
+    .jr-link {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+        padding: 13px 20px;
+        border: 1px solid var(--line); border-left: 3px solid var(--navy); border-radius: 6px;
+        background: #f8fafd; font-size: 13px; color: var(--ink-soft);
+    }
+    .jr-link code {
+        padding: 4px 10px; border: 1px solid var(--line); border-radius: 4px;
+        background: #fff; color: var(--navy); font-size: 12.5px;
+    }
+    .jr-copy {
+        padding: 6px 13px; border: 1px solid #c4d0e0; border-radius: 4px;
+        background: #fff; color: var(--navy);
+        font-family: 'Roboto', sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;
+    }
+    .jr-copy:hover { background: #f1f5fa; }
+
+    /* ---- Guruh bloki ---- */
+    .jr-group {
+        overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: #fff;
+    }
+    .jr-group-head {
+        display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 13px 20px; border-bottom: 1px solid var(--line-soft);
+        background: linear-gradient(180deg, #fbfcfe, #f5f8fc);
+    }
+    .jr-group-head b {
+        color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600;
+    }
+    .jr-tags { display: flex; flex-wrap: wrap; gap: 16px; }
+    .jr-tag { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; }
+    .jr-tag b { color: var(--navy); font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 700; }
+    .jr-tag.is-ok b { color: var(--ok); }
+
+    /* ---- Jadval ---- */
+    .jr-table { width: 100%; border-collapse: collapse; }
+    .jr-table th {
+        padding: 10px 18px; border-bottom: 1px solid var(--line);
+        background: #fafcfe; color: var(--muted);
+        font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-align: left; text-transform: uppercase;
+    }
+    .jr-table td {
+        padding: 13px 18px; border-bottom: 1px solid var(--line-soft);
+        font-size: 13.5px; vertical-align: top;
+    }
+    .jr-table tbody tr:last-child td { border-bottom: 0; }
+    .jr-table tbody tr:hover { background: #fafcfe; }
+
+    .jr-student { color: var(--ink); font-weight: 500; }
+    .jr-sid { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+
+    .jr-pill {
+        display: inline-flex; padding: 3px 11px; border-radius: 3px;
+        font-size: 11px; font-weight: 500; letter-spacing: .03em;
+    }
+    .jr-pill.ok { background: var(--ok-bg); color: var(--ok); }
+    .jr-pill.no { background: var(--bad-bg); color: var(--bad); }
+    .jr-pill.wait { background: var(--warn-bg); color: var(--warn); }
+    .jr-mini { display: block; margin-top: 3px; color: var(--muted); font-size: 10.5px; }
+
+    .jr-num { color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 14px; font-weight: 600; }
+    .jr-num.is-bad { color: var(--bad); }
+    .jr-when { color: var(--ink-soft); font-size: 12.5px; }
+
+    /* ---- Javoblar ---- */
+    .jr-answers > summary {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border: 1px solid #c9d5e4; border-radius: 4px;
+        color: var(--navy); font-size: 11.5px; font-weight: 500;
+        cursor: pointer; list-style: none;
+    }
+    .jr-answers > summary::-webkit-details-marker { display: none; }
+    .jr-answers > summary::before { content: '▸'; color: var(--muted); font-size: 9px; }
+    .jr-answers[open] > summary::before { content: '▾'; }
+    .jr-answers > summary:hover { background: #f1f5fa; }
+    .jr-answer-list { margin-top: 10px; padding-left: 2px; }
+    .jr-answer {
+        display: flex; gap: 9px; padding: 8px 0; border-top: 1px solid var(--line-soft);
+    }
+    .jr-mark {
+        flex: none; display: grid; place-items: center;
+        width: 17px; height: 17px; margin-top: 2px; border-radius: 50%;
+        color: #fff; font-size: 10px; font-weight: 700;
+    }
+    .jr-mark.ok { background: var(--ok); }
+    .jr-mark.no { background: var(--bad); }
+    .jr-atext { font-size: 12.5px; line-height: 1.6; }
+    .jr-atext i { font-style: normal; color: var(--muted); }
+    .jr-atext em { font-style: normal; color: var(--ok); font-weight: 500; }
+
+    /* ---- Bo'sh holat ---- */
+    .jr-empty {
+        padding: 56px 24px; border: 1px dashed #c9d5e4; border-radius: 6px;
+        background: #fff; text-align: center;
+    }
+    .jr-empty b { display: block; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; }
+    .jr-empty span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+
+    .jr-alert {
+        padding: 14px 18px; border: 1px solid #edd0a0; border-left: 3px solid var(--warn);
+        border-radius: 5px; background: var(--warn-bg); color: #8a4c05; font-size: 13.5px;
+    }
+    .jr-alert code { padding: 2px 7px; border-radius: 3px; background: rgba(0,0,0,.06); }
+
+    @media (max-width: 900px) {
+        .jr-stats { grid-template-columns: repeat(2, 1fr); }
+        .jr-stat { border-bottom: 1px solid var(--line-soft); }
+        .jr-filters { grid-template-columns: 1fr; }
+        .jr-table thead { display: none; }
+        .jr-table td { display: block; padding: 6px 16px; border-bottom: 0; }
+        .jr-table tbody tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+    }
 </style>
 
-    <div class="py-6">
-        <div class="w-full px-4 sm:px-6 lg:px-8 space-y-4">
+    <div class="jr py-6">
+        <div class="w-full px-4 sm:px-6 lg:px-8" style="display:flex;flex-direction:column;gap:14px">
 
-            <div class="rounded-[20px] bg-gradient-to-r from-slate-950 via-blue-900 to-cyan-700 px-6 py-6 text-white shadow-xl">
-                <div class="mb-1 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200">Test moduli</div>
-                <h1 class="text-2xl font-black tracking-tight">Test jurnali</h1>
-                <p class="mt-1 text-sm text-blue-100">Har bir guruh qaysi test to'plamidan qanday natija ko'rsatganini ko'ring.</p>
+            <div class="jr-head">
+                <div class="jr-eyebrow">Test moduli</div>
+                <h1>Test jurnali</h1>
+                <p>Har bir guruh qaysi test to'plamidan qanday natija ko'rsatganini ko'ring.</p>
             </div>
 
             @if($migrationPending)
-                <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+                <div class="jr-alert">
                     Test natijalari jadvali hali yaratilmagan. Serverda <code>php artisan migrate</code> ni ishga tushiring.
                 </div>
             @elseif($collections->isEmpty())
-                <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-                    <h3 class="font-black text-slate-800">Hali test to'plami yo'q</h3>
-                    <p class="mt-1 text-sm text-slate-500">Avval "Test yaratish" bo'limida to'plam tuzing.</p>
+                <div class="jr-empty">
+                    <b>Hali test to'plami yo'q</b>
+                    <span>Avval "Test yaratish" bo'limida to'plam tuzing.</span>
                 </div>
             @else
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <form method="GET" class="j-filters">
+                <div class="jr-panel">
+                    <form method="GET" class="jr-filters">
                         <div>
                             <label for="test_id">Test to'plami</label>
                             <select name="test_id" id="test_id">
@@ -99,45 +221,46 @@
                                 @endforeach
                             </select>
                         </div>
-                        <button type="submit">Ko'rsatish</button>
+                        <button class="jr-btn" type="submit">Ko'rsatish</button>
                     </form>
                 </div>
 
                 @if($selected)
-                    <div class="j-stats">
-                        <div class="j-stat"><b>{{ $summary['total'] }}</b><span>JAMI TALABA</span></div>
-                        <div class="j-stat"><b>{{ $summary['submitted'] }}</b><span>TOPSHIRGAN</span></div>
-                        <div class="j-stat"><b>{{ $summary['in_progress'] }}</b><span>ISHLAMOQDA</span></div>
-                        <div class="j-stat"><b>{{ $summary['passed'] }}</b><span>O'TGAN</span></div>
-                        <div class="j-stat"><b>{{ $summary['average_percent'] }}%</b><span>O'RTACHA</span></div>
+                    <div class="jr-stats">
+                        <div class="jr-stat"><b>{{ $summary['total'] }}</b><span>Jami talaba</span></div>
+                        <div class="jr-stat"><b>{{ $summary['submitted'] }}</b><span>Topshirgan</span></div>
+                        <div class="jr-stat"><b>{{ $summary['in_progress'] }}</b><span>Ishlamoqda</span></div>
+                        <div class="jr-stat is-ok"><b>{{ $summary['passed'] }}</b><span>O'tgan</span></div>
+                        <div class="jr-stat"><b>{{ $summary['average_percent'] }}%</b><span>O'rtacha natija</span></div>
                     </div>
 
-                    <div class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-xs font-bold text-slate-600 shadow-sm">
-                        Talaba havolasi:
-                        <a href="{{ route('kiosk.fan-testi.show', $selected) }}" target="_blank"
-                           class="text-blue-600 hover:text-blue-800">{{ route('kiosk.fan-testi.show', $selected) }}</a>
-                        — shu havolani sinf kompyuterlarida oching.
+                    @php $kioskUrl = route('kiosk.fan-testi.show', $selected); @endphp
+                    <div class="jr-link">
+                        <span>Talaba havolasi:</span>
+                        <code id="kioskUrl">{{ $kioskUrl }}</code>
+                        <button type="button" class="jr-copy" id="copyUrl" data-url="{{ $kioskUrl }}">Nusxalash</button>
+                        <span style="color:var(--muted)">— shu havolani sinf kompyuterlarida oching.</span>
                     </div>
 
                     @forelse($groups as $group)
-                        <div class="j-group">
-                            <div class="j-group-head">
+                        <div class="jr-group">
+                            <div class="jr-group-head">
                                 <b>{{ $group['name'] }}</b>
-                                <div class="j-badges">
-                                    <span class="j-badge">{{ $group['submitted_count'] }} ta topshirgan</span>
-                                    <span class="j-badge ok">{{ $group['passed_count'] }} ta o'tgan</span>
-                                    <span class="j-badge">O'rtacha {{ $group['average_percent'] }}%</span>
+                                <div class="jr-tags">
+                                    <span class="jr-tag"><b>{{ $group['submitted_count'] }}</b> topshirgan</span>
+                                    <span class="jr-tag is-ok"><b>{{ $group['passed_count'] }}</b> o'tgan</span>
+                                    <span class="jr-tag">o'rtacha <b>{{ $group['average_percent'] }}%</b></span>
                                 </div>
                             </div>
 
-                            <table class="j-table">
+                            <table class="jr-table">
                                 <thead>
                                 <tr>
-                                    <th style="width:30%">Talaba</th>
-                                    <th style="width:12%">Holat</th>
-                                    <th style="width:10%">Ball</th>
-                                    <th style="width:10%">Foiz</th>
-                                    <th style="width:14%">Topshirgan vaqti</th>
+                                    <th style="width:26%">Talaba</th>
+                                    <th style="width:11%">Holat</th>
+                                    <th style="width:9%">Ball</th>
+                                    <th style="width:8%">Foiz</th>
+                                    <th style="width:15%">Topshirgan vaqti</th>
                                     <th>Javoblari</th>
                                 </tr>
                                 </thead>
@@ -145,46 +268,53 @@
                                 @foreach($group['attempts'] as $attempt)
                                     <tr>
                                         <td>
-                                            <span class="j-name">{{ $attempt->student_name }}</span>
-                                            <span class="j-id">{{ $attempt->student_id_number }}</span>
+                                            <span class="jr-student">{{ $attempt->student_name }}</span>
+                                            <span class="jr-sid">{{ $attempt->student_id_number }}</span>
                                         </td>
                                         <td>
                                             @if($attempt->status === 'in_progress')
-                                                <span class="j-pill wait">Ishlamoqda</span>
+                                                <span class="jr-pill wait">Ishlamoqda</span>
                                             @else
-                                                <span class="j-pill {{ $attempt->is_passed ? 'ok' : 'no' }}">
+                                                <span class="jr-pill {{ $attempt->is_passed ? 'ok' : 'no' }}">
                                                     {{ $attempt->is_passed ? 'O\'tdi' : 'O\'tmadi' }}
                                                 </span>
                                                 @if($attempt->status === 'expired')
-                                                    <span class="j-id">vaqt tugagan</span>
+                                                    <span class="jr-mini">vaqt tugagan</span>
                                                 @endif
                                             @endif
                                         </td>
-                                        <td class="j-score">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</td>
-                                        <td class="j-score">{{ $attempt->percent !== null ? rtrim(rtrim(number_format((float) $attempt->percent, 1, '.', ''), '0'), '.') . '%' : '—' }}</td>
-                                        <td>{{ $attempt->submitted_at?->format('d.m.Y H:i') ?? '—' }}</td>
+                                        <td><span class="jr-num">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</span></td>
+                                        <td>
+                                            <span class="jr-num {{ !$attempt->is_passed && $attempt->status !== 'in_progress' ? 'is-bad' : '' }}">
+                                                {{ $attempt->percent !== null ? rtrim(rtrim(number_format((float) $attempt->percent, 1, '.', ''), '0'), '.') . '%' : '—' }}
+                                            </span>
+                                        </td>
+                                        <td><span class="jr-when">{{ $attempt->submitted_at?->format('d.m.Y H:i') ?? '—' }}</span></td>
                                         <td>
                                             @if($attempt->answers->isEmpty())
-                                                <span class="j-id">javob yo'q</span>
+                                                <span class="jr-mini">javob yo'q</span>
                                             @else
-                                                <details class="j-answers">
+                                                <details class="jr-answers">
                                                     <summary>{{ $attempt->correct_count }} / {{ $attempt->questions_count }} to'g'ri</summary>
-                                                    @foreach($attempt->answers as $answer)
-                                                        <div class="j-answer">
-                                                            <span class="j-mark {{ $answer->is_correct ? 'ok' : 'no' }}">{{ $answer->is_correct ? '✓' : '✕' }}</span>
-                                                            <div class="j-answer-text">
-                                                                {{ $answer->question_index + 1 }}. {{ \Illuminate\Support\Str::limit($answer->question_prompt, 90) }}
-                                                                <br>
-                                                                <i>Javobi:</i>
-                                                                {{ $answer->question_type === 'fill_in_blank'
-                                                                    ? ($answer->answer_text ?: '—')
-                                                                    : ($answer->selected_option_text ?: '—') }}
-                                                                @unless($answer->is_correct)
-                                                                    · <i>to'g'risi:</i> <em>{{ $answer->correct_answer_text }}</em>
-                                                                @endunless
+                                                    <div class="jr-answer-list">
+                                                        @foreach($attempt->answers as $answer)
+                                                            @php
+                                                                $given = $answer->question_type === 'fill_in_blank'
+                                                                    ? $answer->answer_text
+                                                                    : $answer->selected_option_text;
+                                                            @endphp
+                                                            <div class="jr-answer">
+                                                                <span class="jr-mark {{ $answer->is_correct ? 'ok' : 'no' }}">{{ $answer->is_correct ? '✓' : '✕' }}</span>
+                                                                <div class="jr-atext">
+                                                                    {{ $answer->question_index + 1 }}. {{ \Illuminate\Support\Str::limit($answer->question_prompt, 90) }}<br>
+                                                                    <i>javobi:</i> {{ $given ?: '—' }}
+                                                                    @unless($answer->is_correct)
+                                                                        &nbsp;·&nbsp; <i>to'g'risi:</i> <em>{{ $answer->correct_answer_text }}</em>
+                                                                    @endunless
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    @endforeach
+                                                        @endforeach
+                                                    </div>
                                                 </details>
                                             @endif
                                         </td>
@@ -194,13 +324,35 @@
                             </table>
                         </div>
                     @empty
-                        <div class="j-group"><div class="j-empty">
-                            <strong style="display:block;color:#5b7091;font-size:14px">Hali hech kim topshirmagan</strong>
-                            Talabalar havola orqali testni topshirgach, natijalar shu yerda guruhlar bo'yicha chiqadi.
-                        </div></div>
+                        <div class="jr-empty">
+                            <b>Hali hech kim topshirmagan</b>
+                            <span>Talabalar havola orqali testni topshirgach, natijalar shu yerda guruhlar bo'yicha chiqadi.</span>
+                        </div>
                     @endforelse
                 @endif
             @endif
         </div>
     </div>
+
+    <script>
+    (() => {
+        const button = document.getElementById('copyUrl');
+        if (!button) return;
+        button.addEventListener('click', async () => {
+            const url = button.dataset.url;
+            try {
+                await navigator.clipboard.writeText(url);
+            } catch (error) {
+                const field = document.createElement('textarea');
+                field.value = url;
+                document.body.appendChild(field);
+                field.select();
+                document.execCommand('copy');
+                field.remove();
+            }
+            button.textContent = 'Nusxalandi';
+            setTimeout(() => { button.textContent = 'Nusxalash'; }, 1600);
+        });
+    })();
+    </script>
 </x-app-layout>

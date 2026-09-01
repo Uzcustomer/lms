@@ -15,7 +15,6 @@
             --navy:        #0f2748;
             --navy-soft:   #1b3a63;
             --gold:        #c9a227;
-            --gold-soft:   #e3c964;
             --ink:         #17233a;
             --ink-soft:    #4d6180;
             --muted:       #8798b1;
@@ -24,7 +23,6 @@
             --paper:       #ffffff;
             --bg:          #eef1f6;
             --ok:          #0f7a52;
-            --ok-bg:       #e9f7f0;
             --bad:         #b3261e;
             --bad-bg:      #fdeceb;
             --warn:        #a35a06;
@@ -50,35 +48,8 @@
 
         h1, h2, .serif { font-family: 'Roboto Slab', Georgia, serif; }
 
-        /* ---------- Sarlavha (universitet identifikatsiyasi) ---------- */
-        .k-top {
-            border-bottom: 3px solid var(--gold);
-            background: linear-gradient(180deg, var(--navy), var(--navy-soft));
-        }
-        .k-top-in {
-            display: flex; align-items: center; gap: 14px;
-            max-width: 1040px; margin: 0 auto; padding: 15px 20px;
-        }
-        .k-seal {
-            flex: none; display: grid; place-items: center;
-            width: 42px; height: 42px; border-radius: 50%;
-            border: 2px solid var(--gold-soft);
-            background: rgba(255, 255, 255, .06);
-            color: var(--gold-soft);
-            font-family: 'Roboto Slab', serif; font-size: 15px; font-weight: 700;
-            letter-spacing: .02em;
-        }
-        .k-org b {
-            display: block; color: #fff; font-size: 14px; font-weight: 500; letter-spacing: .01em;
-        }
-        .k-org span {
-            display: block; margin-top: 1px;
-            color: rgba(255, 255, 255, .62); font-size: 11px; font-weight: 400;
-            letter-spacing: .16em; text-transform: uppercase;
-        }
-
-        .k-wrap { max-width: 720px; margin: 0 auto; padding: 30px 20px 64px; }
-        .k-wide { max-width: 1040px; }
+        .k-wrap { max-width: 880px; margin: 0 auto; padding: 34px 22px 64px; }
+        .k-wide { max-width: 1140px; }
 
         /* ---------- Karta ---------- */
         .k-card {
@@ -169,7 +140,7 @@
             color: var(--muted); font-size: 12.5px; text-align: center; line-height: 1.75;
         }
         .k-foot {
-            max-width: 1040px; margin: 26px auto 0; padding: 0 20px;
+            max-width: 1140px; margin: 26px auto 0; padding: 0 20px;
             color: #9dabc0; font-size: 11px; text-align: center; letter-spacing: .03em;
         }
 
@@ -184,16 +155,6 @@
     </style>
 </head>
 <body>
-    <header class="k-top">
-        <div class="k-top-in">
-            <div class="k-seal">TTA</div>
-            <div class="k-org">
-                <b>Toshkent tibbiyot akademiyasi</b>
-                <span>Termiz filiali</span>
-            </div>
-        </div>
-    </header>
-
     <div class="k-wrap @yield('wrap-class')">
         @yield('content')
     </div>

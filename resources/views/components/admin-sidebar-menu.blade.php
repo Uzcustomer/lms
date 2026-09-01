@@ -1333,11 +1333,18 @@
         <div class="sidebar-section">Test Moduli</div>
         @if($canCreateFanTestlari)
         <a href="{{ route('teacher.fan-testlari.index') }}"
-           class="sidebar-link {{ request()->routeIs('teacher.fan-testlari.*') ? 'sidebar-active' : '' }}">
+           class="sidebar-link {{ request()->routeIs('teacher.fan-testlari.*') && !request()->routeIs('teacher.fan-testlari.journal') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6m-6 4h6m-6 4h6m-9 6h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
             Test yaratish
+        </a>
+        <a href="{{ route('teacher.fan-testlari.journal') }}"
+           class="sidebar-link {{ request()->routeIs('teacher.fan-testlari.journal') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            Test jurnali
         </a>
         @else
         <a href="{{ $r('admin.test-subjects.index', 'teacher.test-subjects.index') }}"

@@ -89,6 +89,17 @@ Route::get('/refresh-csrf', function () {
 // konfiguratsiyasi (nginx allow/deny) orqali qilinadi.
 Route::get('/tv/jadval', [AcademicScheduleController::class, 'tvJadval'])->name('tv.jadval');
 
+// Fan testi kioski: o'qituvchi havolani sinf kompyuterlarida ochib qo'yadi,
+// talaba faqat o'z ID raqamini kiritadi. Login talab qilinmaydi — /tv/jadval
+// kabi, tashqi kirish veb-server (nginx allow/deny) darajasida cheklanadi.
+Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\FanTestiKioskController::class, 'show'])->name('show');
+    Route::post('/start', [\App\Http\Controllers\FanTestiKioskController::class, 'start'])->name('start');
+    Route::get('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'take'])->name('take');
+    Route::post('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'submit'])->name('submit');
+    Route::get('/attempt/{attempt}/natija', [\App\Http\Controllers\FanTestiKioskController::class, 'result'])->name('result');
+});
+
 // Sababli ariza tekshirish (QR kod orqali, public)
 Route::get('/absence-excuse/verify/{token}', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'verify'])->name('absence-excuse.verify');
 Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'viewPdf'])->name('absence-excuse.verify.pdf');
@@ -1618,6 +1629,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':kafedra_mudiri|oqituvchi')
             ->group(function () {
                 Route::get('/', [FanTestiController::class, 'index'])->name('index');
+                Route::get('/journal', [FanTestiController::class, 'journal'])->name('journal');
                 Route::get('/create', [FanTestiController::class, 'create'])->name('create');
                 Route::post('/', [FanTestiController::class, 'store'])->name('store');
                 Route::get('/{fanTesti}/edit', [FanTestiController::class, 'edit'])->name('edit');

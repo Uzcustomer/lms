@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
 use App\Models\FanTesti;
+use App\Models\FanTestiAttempt;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -146,6 +148,78 @@ class FanTestiController extends Controller
         return redirect()
             ->route('teacher.fan-testlari.index')
             ->with('success', 'Test to\'plami o\'chirildi.');
+    }
+
+    /** Test jurnali: guruhlar kesimida topshirilgan testlar va javoblar. */
+    public function journal(Request $request)
+    {
+        $subjects = $this->subjectsFor($this->teacher());
+
+        if (!Schema::hasTable('fan_testi_attempts')) {
+            return view('teacher.fan-testlari.journal', [
+                'collections' => collect(),
+                'selected' => null,
+                'groups' => collect(),
+                'summary' => null,
+                'migrationPending' => true,
+            ]);
+        }
+
+        $collections = $this->collectionsFor($subjects);
+        $selected = $request->filled('test_id')
+            ? $collections->firstWhere('id', (int) $request->integer('test_id'))
+            : $collections->first();
+
+        if (!$selected) {
+            return view('teacher.fan-testlari.journal', [
+                'collections' => $collections,
+                'selected' => null,
+                'groups' => collect(),
+                'summary' => null,
+                'migrationPending' => false,
+            ]);
+        }
+
+        $attempts = FanTestiAttempt::query()
+            ->with('answers')
+            ->where('fan_testi_id', $selected->id)
+            ->when($request->filled('group'), fn ($query) => $query->where('group_name', $request->string('group')))
+            ->orderBy('student_name')
+            ->get();
+
+        $groups = $attempts
+            ->groupBy(fn (FanTestiAttempt $attempt) => $attempt->group_name ?: 'Guruhsiz')
+            ->map(fn ($rows, $name) => [
+                'name' => $name,
+                'attempts' => $rows,
+                'submitted_count' => $rows->where('status', '!=', 'in_progress')->count(),
+                'passed_count' => $rows->where('is_passed', true)->count(),
+                'average_percent' => round((float) $rows->where('status', '!=', 'in_progress')->avg('percent'), 1),
+            ])
+            ->sortKeys()
+            ->values();
+
+        $finished = $attempts->where('status', '!=', 'in_progress');
+
+        return view('teacher.fan-testlari.journal', [
+            'collections' => $collections,
+            'selected' => $selected,
+            'groups' => $groups,
+            'allGroups' => FanTestiAttempt::query()
+                ->where('fan_testi_id', $selected->id)
+                ->whereNotNull('group_name')
+                ->distinct()
+                ->orderBy('group_name')
+                ->pluck('group_name'),
+            'summary' => [
+                'total' => $attempts->count(),
+                'submitted' => $finished->count(),
+                'in_progress' => $attempts->where('status', 'in_progress')->count(),
+                'passed' => $attempts->where('is_passed', true)->count(),
+                'average_percent' => round((float) $finished->avg('percent'), 1),
+            ],
+            'migrationPending' => false,
+        ]);
     }
 
     private function teacher()

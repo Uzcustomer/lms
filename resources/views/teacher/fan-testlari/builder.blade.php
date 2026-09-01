@@ -422,6 +422,13 @@
                                     </td>
                                     <td class="px-5 py-4 text-right">
                                         <div class="inline-flex items-center gap-2">
+                                            @if($item->is_active && $item->questionCount() > 0)
+                                                <a href="{{ route('kiosk.fan-testi.show', $item) }}" target="_blank"
+                                                   class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700"
+                                                   title="Talabalar uchun test sahifasini ochish">
+                                                    <span class="text-sm leading-none">▶</span> Faol
+                                                </a>
+                                            @endif
                                             <a href="{{ route('teacher.fan-testlari.edit', $item) }}" class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Tahrirlash</a>
                                             <form method="POST" action="{{ route('teacher.fan-testlari.destroy', $item) }}" onsubmit="return confirm('Bu test to\'plami va savollarini o\'chirishni tasdiqlaysizmi?')">
                                                 @csrf

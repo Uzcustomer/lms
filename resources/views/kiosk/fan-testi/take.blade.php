@@ -202,7 +202,7 @@
                     @endif
 
                     @if(!empty($question['image_path']))
-                        <img class="q-img" src="{{ asset('storage/' . ltrim($question['image_path'], '/')) }}" alt="Savol rasmi">
+                        <img class="q-img" src="{{ route('fan-testi.attempt-image', [$attempt, $index]) }}" alt="Savol rasmi" loading="lazy">
                     @endif
 
                     <div class="q-options">

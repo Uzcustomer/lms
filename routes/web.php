@@ -117,6 +117,12 @@ Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->n
 Route::get('/test-subject-question-images/{question}', [TestSubjectQuestionImageController::class, 'show'])
     ->name('test-subject-questions.image');
 
+// Fan testi savol rasmlari — public/storage symlinkiga tayanmaydi.
+Route::get('/fan-testi-images/{fanTesti}/{question}', [\App\Http\Controllers\FanTestiQuestionImageController::class, 'show'])
+    ->whereNumber('question')->name('fan-testi.question-image');
+Route::get('/fan-testi-attempt-images/{attempt}/{question}', [\App\Http\Controllers\FanTestiQuestionImageController::class, 'attemptImage'])
+    ->whereNumber('question')->name('fan-testi.attempt-image');
+
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
         Route::post('/login', [AdminAuthController::class, 'login'])->name('login.post');

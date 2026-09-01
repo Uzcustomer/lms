@@ -70,9 +70,9 @@
                 <span class="qf-drop-text" x-text="imageName || 'Savol rasmi'"></span>
                 <span class="qf-drop-hint">JPG, PNG, WEBP, GIF · 4 MB gacha</span>
             </label>
-            @if($editingQuestion && !empty($question['image_path']))
+            @if($editingQuestion && !empty($question['image_path']) && $questionIndex !== null)
                 <div class="qf-thumb">
-                    <img src="{{ asset('storage/' . ltrim($question['image_path'], '/')) }}" alt="Savol rasmi">
+                    <img src="{{ route('fan-testi.question-image', [$collection, $questionIndex]) }}" alt="Savol rasmi">
                     <label>
                         <input type="hidden" name="remove_question_image" value="0">
                         <input type="checkbox" name="remove_question_image" value="1"> Rasmni olib tashlash

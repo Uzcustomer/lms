@@ -8,11 +8,31 @@
         color:var(--ink); font-family:'Figtree',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
     }
     .sd-head {
+        display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap;
         padding:20px 24px; border-radius:6px;
         border-bottom:3px solid var(--gold);
         background:linear-gradient(115deg,#0f2748,#1b3a63 62%,#22497a);
         box-shadow:0 2px 10px rgba(15,39,72,.16);
     }
+    .sd-head-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .sd-voting-status { color:#e3c964; font-size:11.5px; font-weight:700; }
+    .sd-head-btn {
+        height:34px; padding:0 14px; border:1px solid rgba(255,255,255,.35); border-radius:5px;
+        background:rgba(255,255,255,.1); color:#fff; font-family:inherit;
+        font-size:12.5px; font-weight:600; cursor:pointer; transition:background .14s;
+    }
+    .sd-head-btn:hover { background:rgba(255,255,255,.22); }
+    .sd-head-btn b { margin-left:6px; padding:1px 8px; border-radius:999px; background:var(--gold); color:#0f2748; }
+    .sd-btn-outline { border:1px solid var(--navy); background:#fff; color:var(--navy); }
+    .sd-btn-outline:hover { background:#f1f5fa; }
+    .sd-vote-row {
+        display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:11px; align-items:center;
+        padding:10px 20px; border-bottom:1px solid var(--line-soft); font-size:13px;
+    }
+    .sd-vote-row:last-child { border-bottom:0; }
+    .sd-vote-row .sd-meta { display:block; }
+    .sd-vote-route { color:var(--ink-soft); font-size:12px; text-align:right; }
+    .sd-vote-route b { color:var(--navy); }
     .sd-head h1 { margin:0; color:#fff; font-size:21px; font-weight:700; letter-spacing:-.01em; }
     .sd-head p { margin:5px 0 0; color:rgba(255,255,255,.72); font-size:13px; }
 
@@ -263,8 +283,15 @@
         <div class="w-full px-4 sm:px-6 lg:px-8" style="display:flex;flex-direction:column;gap:14px">
 
             <div class="sd-head">
-                <h1>Talabalarni taqsimlash</h1>
-                <p>Chapda bo'sh joyli guruhlar to'ldiriladi, o'ngda talabalari taqsimlanadigan guruhlar belgilanadi. Faqat bakalavr, faol guruhlar va o'qiyotgan talabalar.</p>
+                <div>
+                    <h1>Talabalarni taqsimlash</h1>
+                    <p>Chapda bo'sh joyli guruhlar to'ldiriladi, o'ngda talabalari taqsimlanadigan guruhlar belgilanadi. Faqat bakalavr, faol guruhlar va o'qiyotgan talabalar.</p>
+                </div>
+                <div class="sd-head-tools">
+                    <span class="sd-voting-status" id="votingStatus" hidden></span>
+                    <button class="sd-head-btn" id="closeVotingBtn" type="button" hidden>Ovoz berishni yopish</button>
+                    <button class="sd-head-btn" id="votesBtn" type="button">Talabalar ovozlari <b id="votesCount">0</b></button>
+                </div>
             </div>
 
             <div class="sd-cols">
@@ -335,14 +362,19 @@
                     </div>
 
                     <div class="sd-colhead sd-grid">
-                        <span>#</span><span></span><span>Guruh</span>
+                        <span>#</span>
+                        <input type="checkbox" id="rightCheckAll" title="Hammasini belgilash" style="width:14px;height:14px;accent-color:var(--navy);cursor:pointer;">
+                        <span>Guruh</span>
                         <input data-f="minStudents" type="number" min="0" placeholder="Talaba" title="Shu sondan kam bo'lmagan talabali guruhlar">
                     </div>
                     <div class="sd-rows" id="rightRows"></div>
 
                     <div class="sd-actions">
                         <span class="sd-hint"><b id="pickedTotal">0</b><span id="footLabel"> ta guruh belgilangan</span></span>
-                        <button class="sd-btn" id="saveSources" type="button">O'tqazish</button>
+                        <span style="display:flex;gap:8px;">
+                            <button class="sd-btn sd-btn-outline" id="openVotingBtn" type="button" hidden>Ovoz berishga ruxsat</button>
+                            <button class="sd-btn" id="saveSources" type="button">O'tqazish</button>
+                        </span>
                     </div>
                 </section>
             </div>
@@ -369,6 +401,29 @@
                         <b>Ikkalasi</b>
                         <span>Bitta faylda ketma-ket ikkita bo'lim</span>
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sd-modal" id="votesModal">
+            <div class="sd-modal-box" style="width:min(640px,100%)" role="dialog" aria-modal="true">
+                <div class="sd-modal-head">
+                    <div>
+                        <h3>Talabalar ovozlari</h3>
+                        <p id="votesMeta"></p>
+                    </div>
+                    <button class="sd-close" type="button" id="votesClose" aria-label="Yopish">&times;</button>
+                </div>
+                <div class="sd-modal-body" id="votesBody"></div>
+                <div class="sd-modal-foot">
+                    <label class="sd-hint" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+                        <input type="checkbox" id="votesCheckAll" style="width:15px;height:15px;accent-color:var(--navy);">
+                        Hammasini belgilash
+                    </label>
+                    <span style="display:flex;align-items:center;gap:12px;">
+                        <span class="sd-hint"><b id="votesPicked">0</b> ta tanlandi</span>
+                        <button class="sd-btn" id="approveVotesBtn" type="button" disabled>Tasdiqlash</button>
+                    </span>
                 </div>
             </div>
         </div>
@@ -407,6 +462,10 @@
         const targetsUrl  = @json(route('admin.student-distribution.target-groups'));
         const assignUrl   = @json(route('admin.student-distribution.assign-student'));
         const unassignUrl = @json(route('admin.student-distribution.unassign-student'));
+        const votesUrl        = @json(route('admin.student-distribution.votes'));
+        const openVotingUrl   = @json(route('admin.student-distribution.voting.open'));
+        const closeVotingUrl  = @json(route('admin.student-distribution.voting.close'));
+        const approveVotesUrl = @json(route('admin.student-distribution.votes.approve'));
 
         let groups = @json($groupPayloads);
         // sources — saqlangan taqsimlanadigan guruhlar (server holati).
@@ -571,6 +630,9 @@
                 button.textContent = "O'tqazish";
                 button.disabled = pendingAdd.size === 0;
             }
+
+            const currentPending = rightView === 'picked' ? pendingRemove : pendingAdd;
+            $('openVotingBtn').hidden = currentPending.size === 0;
         }
 
         function render() {
@@ -663,6 +725,7 @@
 
         function setRightView(view) {
             rightView = view;
+            $('rightCheckAll').checked = false;
             document.querySelectorAll('.sd-tab').forEach(t => t.classList.toggle('is-on', t.dataset.view === view));
             renderPanel('right');
             renderTabs();
@@ -866,6 +929,138 @@
             document.querySelectorAll('.sd-modal.is-open').forEach(m => m.classList.remove('is-open'));
         });
 
+        // --- Hammasini belgilash (o'ng panel) ---
+        function rightVisibleList() {
+            const list = applyFilters(readFilters(panels.right));
+            return rightView === 'picked'
+                ? list.filter(g => sources.has(g.group_hemis_id))
+                : list.filter(g => !sources.has(g.group_hemis_id));
+        }
+
+        $('rightCheckAll').addEventListener('change', event => {
+            const pendingSet = rightView === 'picked' ? pendingRemove : pendingAdd;
+            const list = rightVisibleList();
+            if (event.target.checked) {
+                list.forEach(g => pendingSet.add(g.group_hemis_id));
+            } else {
+                list.forEach(g => pendingSet.delete(g.group_hemis_id));
+            }
+            render();
+        });
+
+        // --- Talabalar ovozlari ---
+        const votesModal = $('votesModal');
+        let votesData = [];
+        let votePicked = new Set();
+
+        async function loadVotes() {
+            try {
+                const response = await fetch(votesUrl, {headers:{'Accept':'application/json'}});
+                const data = await response.json();
+                if (!response.ok) return;
+                votesData = data.votes;
+                $('votesCount').textContent = votesData.filter(v => v.status === 'pending').length;
+                const open = data.voting_open_count || 0;
+                $('votingStatus').hidden = open === 0;
+                $('votingStatus').textContent = 'Ovoz berish ' + open + ' ta guruhda ochiq';
+                $('closeVotingBtn').hidden = open === 0;
+            } catch (error) { /* jim */ }
+        }
+
+        function renderVotes() {
+            votePicked = new Set([...votePicked].filter(id =>
+                votesData.some(v => v.id === id && v.status === 'pending')));
+
+            const pending = votesData.filter(v => v.status === 'pending').length;
+            $('votesMeta').textContent = pending + ' ta kutilmoqda \u00b7 ' + (votesData.length - pending) + ' ta tasdiqlangan';
+
+            $('votesBody').innerHTML = votesData.length
+                ? votesData.map(v => {
+                    const mark = v.status === 'pending'
+                        ? '<input type="checkbox" data-vote="' + v.id + '"' + (votePicked.has(v.id) ? ' checked' : '') + ' style="width:15px;height:15px;accent-color:var(--navy);cursor:pointer;">'
+                        : '<span style="color:#0f7a52;font-weight:800;">&#10003;</span>';
+
+                    return '<label class="sd-vote-row">' + mark +
+                        '<span><b>' + esc(v.student_name) + '</b>' +
+                        '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
+                        '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b></span>' +
+                        '</label>';
+                }).join('')
+                : '<div class="sd-modal-note">Hali ovoz berilmagan.</div>';
+
+            $('votesPicked').textContent = votePicked.size;
+            $('approveVotesBtn').disabled = votePicked.size === 0;
+        }
+
+        $('votesBtn').addEventListener('click', async () => {
+            votesModal.classList.add('is-open');
+            $('votesBody').innerHTML = '<div class="sd-modal-note">Yuklanmoqda...</div>';
+            await loadVotes();
+            renderVotes();
+        });
+
+        $('votesBody').addEventListener('change', event => {
+            const box = event.target.closest('input[data-vote]');
+            if (!box) return;
+            const id = Number(box.dataset.vote);
+            if (box.checked) votePicked.add(id); else votePicked.delete(id);
+            renderVotes();
+        });
+
+        $('votesCheckAll').addEventListener('change', event => {
+            if (event.target.checked) {
+                votesData.filter(v => v.status === 'pending').forEach(v => votePicked.add(v.id));
+            } else {
+                votePicked.clear();
+            }
+            renderVotes();
+        });
+
+        $('approveVotesBtn').addEventListener('click', async () => {
+            if (!confirm(votePicked.size + " ta ovozni tasdiqlaysizmi? Talabalar tanlagan guruhlariga rejalashtiriladi va joylari band qilinadi.")) return;
+            $('approveVotesBtn').disabled = true;
+            try {
+                const data = await postJson(approveVotesUrl, {vote_ids: [...votePicked]});
+                groups = data.groups;
+                render();
+                await loadVotes();
+                renderVotes();
+                alert(data.message + (data.failed && data.failed.length ? '\n\n' + data.failed.join('\n') : ''));
+            } catch (error) {
+                alert(error.message);
+                $('approveVotesBtn').disabled = false;
+            }
+        });
+
+        $('openVotingBtn').addEventListener('click', async () => {
+            const pendingSet = rightView === 'picked' ? pendingRemove : pendingAdd;
+            if (!pendingSet.size) return;
+            if (!confirm(pendingSet.size + " ta guruh talabalariga ovoz berish ochilsinmi? Ular LMS ga kirganda guruh tanlash oynasi chiqadi.")) return;
+            try {
+                const data = await postJson(openVotingUrl, {group_hemis_ids: [...pendingSet]});
+                alert(data.message);
+                await loadVotes();
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        $('closeVotingBtn').addEventListener('click', async () => {
+            if (!confirm("Ovoz berish barcha guruhlar uchun yopilsinmi?")) return;
+            try {
+                const data = await postJson(closeVotingUrl, {});
+                alert(data.message);
+                await loadVotes();
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        $('votesClose').addEventListener('click', () => votesModal.classList.remove('is-open'));
+        votesModal.addEventListener('click', event => {
+            if (event.target === votesModal) votesModal.classList.remove('is-open');
+        });
+
         // --- Eksport tanlovi ---
         const exportModal = $('exportModal');
         let exportSide = 'left';
@@ -993,6 +1188,7 @@
         }
         window.addEventListener('resize', sizePanels);
         sizePanels();
+        loadVotes();
 
         Object.values(panels).forEach(refreshOptions);
         render();

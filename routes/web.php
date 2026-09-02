@@ -479,6 +479,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/export', [StudentDistributionController::class, 'exportStudents'])->name('export');
                 Route::get('/group-students', [StudentDistributionController::class, 'groupStudents'])->name('group-students');
                 Route::get('/search-students', [StudentDistributionController::class, 'searchStudents'])->name('search-students');
+                Route::post('/voting/open', [StudentDistributionController::class, 'openVoting'])->name('voting.open');
+                Route::post('/voting/close', [StudentDistributionController::class, 'closeVoting'])->name('voting.close');
+                Route::get('/votes', [StudentDistributionController::class, 'votes'])->name('votes');
+                Route::post('/votes/approve', [StudentDistributionController::class, 'approveVotes'])->name('votes.approve');
                 Route::post('/source-groups', [StudentDistributionController::class, 'storeSourceGroups'])->name('source-groups.store');
                 Route::post('/capacity', [StudentDistributionController::class, 'updateCapacity'])->name('capacity.update');
                 Route::get('/target-groups', [StudentDistributionController::class, 'targetGroups'])->name('target-groups');
@@ -1501,6 +1505,9 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/bulk-delete', [\App\Http\Controllers\Student\NotificationController::class, 'bulkDelete'])->name('bulk-delete');
             Route::post('/delete-all', [\App\Http\Controllers\Student\NotificationController::class, 'deleteAll'])->name('delete-all');
         });
+
+        // Guruh tanlash ovozi (taqsimlash popupi)
+        Route::post('/group-vote', [\App\Http\Controllers\Student\GroupVoteController::class, 'store'])->name('group-vote.store');
 
         // Qayta o'qish arizalari
         Route::prefix('retake')->name('retake.')->group(function () {

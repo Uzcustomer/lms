@@ -8,7 +8,10 @@ use App\Models\DistributionDraftAssignment;
 use App\Models\DistributionGroupCapacity;
 use App\Models\DistributionSourceGroup;
 use App\Models\Group;
+use App\Models\DistributionVote;
+use App\Models\DistributionVotingGroup;
 use App\Models\Student;
+use App\Services\DistributionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -30,6 +33,10 @@ use Illuminate\Support\Facades\Schema;
  */
 class StudentDistributionController extends Controller
 {
+    public function __construct(private DistributionCatalog $catalog)
+    {
+    }
+
     public function index()
     {
         $groups = $this->groupCatalog();
@@ -272,63 +279,9 @@ class StudentDistributionController extends Controller
         return response()->json(['groups' => $targets]);
     }
 
-    /**
-     * Ikki guruh bir-biriga mos keladimi.
-     *
-     * Yo'nalish va kurs har doim bir xil bo'lishi shart. Ta'lim tili oddiy
-     * rejimda bir xil bo'lishi kerak; "to'liq guruh" rejimida esa maqsad
-     * ingliz guruhi bo'lsa, o'zbek/rus guruhidan ham o'tish mumkin. Teskari
-     * yo'nalish (ingliz → o'zbek/rus) va o'zbek ↔ rus o'tishlariga ruxsat yo'q.
-     */
     private function groupsCompatible(?array $source, array $target, bool $fullMode = false): bool
     {
-        if (!$source) {
-            return false;
-        }
-
-        if ($source['specialty_name'] !== $target['specialty_name']
-            || $source['course'] !== $target['course']) {
-            return false;
-        }
-
-        if ($this->languageKey($source) === $this->languageKey($target)) {
-            return true;
-        }
-
-        return $fullMode && $this->isEnglish($target);
-    }
-
-    /**
-     * Guruh ingliz tilida o'qiydimi.
-     *
-     * HEMIS ta'lim tilini ham harfli (en), ham raqamli (14) kod bilan beradi;
-     * nomi esa "Ingliz" yoki "English" bo'ladi. Ishonchli bo'lishi uchun
-     * avval nom, keyin kod tekshiriladi.
-     */
-    private function isEnglish(array $group): bool
-    {
-        $name = mb_strtolower(trim((string) ($group['language_name'] ?? '')));
-        if ($name !== '' && (str_contains($name, 'ingliz') || str_contains($name, 'english') || str_contains($name, 'англ'))) {
-            return true;
-        }
-
-        $code = mb_strtolower(trim((string) ($group['language_code'] ?? '')));
-
-        return in_array($code, ['en', 'eng', 'en-us', '14'], true);
-    }
-
-    /**
-     * Ta'lim tilini solishtirish uchun kalit.
-     *
-     * HEMIS kodi (uz, ru, en) bo'lsa — shu, bo'lmasa nomi olinadi. Ikkala
-     * guruhda ham til ko'rsatilmagan bo'lsa, bo'sh kalitlar teng chiqadi va
-     * til bo'yicha cheklov qo'yilmaydi.
-     */
-    private function languageKey(array $group): string
-    {
-        $value = $group['language_code'] ?: ($group['language_name'] ?? '');
-
-        return mb_strtolower(trim((string) $value));
+        return $this->catalog->compatible($source, $target, $fullMode);
     }
 
     /** O'ng tomondagi checkboxlar holatini saqlaydi. */
@@ -425,6 +378,167 @@ class StudentDistributionController extends Controller
         ]);
     }
 
+    /** Tanlangan guruhlar talabalariga ovoz berishni ochadi. */
+    public function openVoting(Request $request): JsonResponse
+    {
+        abort_unless(Schema::hasTable('distribution_voting_groups'), 503, 'Ovoz berish jadvali hali migratsiya qilinmagan.');
+
+        $data = $request->validate([
+            'group_hemis_ids' => ['required', 'array', 'min:1', 'max:1000'],
+            'group_hemis_ids.*' => ['required', 'integer'],
+        ]);
+
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+        $opened = 0;
+
+        foreach (collect($data['group_hemis_ids'])->unique() as $id) {
+            $group = $catalog->get((int) $id);
+            if (!$group) {
+                continue;
+            }
+
+            DistributionVotingGroup::updateOrCreate(
+                ['group_hemis_id' => (int) $id],
+                ['group_name' => $group['group_name'], 'opened_by' => Auth::id()]
+            );
+            $opened++;
+        }
+
+        return response()->json([
+            'message' => $opened . ' ta guruh talabalariga ovoz berish ochildi.',
+            'voting_open_count' => DistributionVotingGroup::query()->count(),
+        ]);
+    }
+
+    /** Ovoz berishni butunlay yopadi (barcha guruhlar uchun). */
+    public function closeVoting(): JsonResponse
+    {
+        abort_unless(Schema::hasTable('distribution_voting_groups'), 503, 'Ovoz berish jadvali hali migratsiya qilinmagan.');
+
+        DistributionVotingGroup::query()->delete();
+
+        return response()->json([
+            'message' => 'Ovoz berish yopildi.',
+            'voting_open_count' => 0,
+        ]);
+    }
+
+    /** Berilgan ovozlar ro'yxati va ochiq guruhlar soni. */
+    public function votes(): JsonResponse
+    {
+        if (!Schema::hasTable('distribution_votes')) {
+            return response()->json(['votes' => [], 'voting_open_count' => 0]);
+        }
+
+        $votes = DistributionVote::query()
+            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (DistributionVote $vote) => [
+                'id' => $vote->id,
+                'student_id' => $vote->student_id,
+                'student_name' => $vote->student_name,
+                'student_id_number' => $vote->student_id_number,
+                'from_group_name' => $vote->from_group_name,
+                'to_group_name' => $vote->to_group_name,
+                'to_group_hemis_id' => $vote->to_group_hemis_id,
+                'status' => $vote->status,
+                'voted_at' => optional($vote->created_at)->format('d.m.Y H:i'),
+            ])
+            ->values();
+
+        return response()->json([
+            'votes' => $votes,
+            'voting_open_count' => Schema::hasTable('distribution_voting_groups')
+                ? DistributionVotingGroup::query()->count()
+                : 0,
+        ]);
+    }
+
+    /**
+     * Tanlangan ovozlarni tasdiqlaydi: har biri rejaga (draft) aylanadi va
+     * joy band qilinadi. Sig'im yetmagan ovozlar tasdiqlashsiz qoladi va
+     * natijada sabab bilan qaytariladi. LMS dagi guruhga tegilmaydi.
+     */
+    public function approveVotes(Request $request): JsonResponse
+    {
+        abort_unless(Schema::hasTable('distribution_votes'), 503, 'Ovozlar jadvali hali migratsiya qilinmagan.');
+        abort_unless(Schema::hasTable('distribution_draft_assignments'), 503, 'Taqsimot rejasi jadvali hali migratsiya qilinmagan.');
+
+        $data = $request->validate([
+            'vote_ids' => ['required', 'array', 'min:1', 'max:2000'],
+            'vote_ids.*' => ['required', 'integer'],
+        ]);
+
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+        // Tasdiqlash davomida band qilingan joylarni xotirada kuzatamiz —
+        // har ovozdan keyin katalogni qayta hisoblamaslik uchun.
+        $taken = [];
+        $approved = 0;
+        $failed = [];
+
+        foreach (collect($data['vote_ids'])->unique() as $voteId) {
+            $vote = DistributionVote::query()->find((int) $voteId);
+            if (!$vote || $vote->status !== 'pending') {
+                continue;
+            }
+
+            $target = $catalog->get((int) $vote->to_group_hemis_id);
+            if (!$target) {
+                $failed[] = $vote->student_name . ' — tanlangan guruh topilmadi';
+                continue;
+            }
+
+            $free = $target['free_places'];
+            $used = $taken[$target['group_hemis_id']] ?? 0;
+            if ($free === null || $free - $used < 1) {
+                $failed[] = $vote->student_name . ' — ' . $target['group_name'] . " guruhida bo'sh joy qolmadi";
+                continue;
+            }
+
+            $student = Student::query()->find($vote->student_id);
+            if (!$student) {
+                $failed[] = $vote->student_name . ' — talaba topilmadi';
+                continue;
+            }
+
+            DB::transaction(function () use ($vote, $student, $target) {
+                DistributionDraftAssignment::updateOrCreate(
+                    ['student_id' => $student->id],
+                    [
+                        'from_group_hemis_id' => (int) $vote->from_group_hemis_id,
+                        'to_group_hemis_id' => (int) $target['group_hemis_id'],
+                        'student_name' => $student->full_name,
+                        'student_id_number' => $student->student_id_number,
+                        'from_group_name' => $vote->from_group_name,
+                        'to_group_name' => $target['group_name'],
+                        'assigned_by' => Auth::id(),
+                    ]
+                );
+
+                $vote->update([
+                    'status' => 'approved',
+                    'approved_by' => Auth::id(),
+                    'approved_at' => now(),
+                ]);
+            });
+
+            $taken[$target['group_hemis_id']] = $used + 1;
+            $approved++;
+        }
+
+        $message = $approved . ' ta ovoz tasdiqlandi va joylar band qilindi.';
+        if ($failed) {
+            $message .= ' ' . count($failed) . " ta ovoz o'tmadi.";
+        }
+
+        return response()->json([
+            'message' => $message,
+            'failed' => $failed,
+            'groups' => $this->groupCatalog()->values(),
+        ]);
+    }
+
     /**
      * Filtrga mos guruhlar va ulardagi talabalarni Excelga chiqaradi.
      *
@@ -488,107 +602,7 @@ class StudentDistributionController extends Controller
      */
     private function groupCatalog(): Collection
     {
-        $sourceIds = Schema::hasTable('distribution_source_groups')
-            ? DistributionSourceGroup::query()->pluck('group_hemis_id')->map(fn ($id) => (int) $id)->flip()
-            : collect();
-
-        // Faol guruhlar va ularning ta'lim tili — til faqat `groups` da bor.
-        $activeGroups = Group::query()
-            ->where('active', true)
-            ->get(['group_hemis_id', 'education_lang_code', 'education_lang_name'])
-            ->keyBy(fn ($group) => (int) $group->group_hemis_id);
-
-        $overrides = Schema::hasTable('distribution_group_capacities')
-            ? DistributionGroupCapacity::query()->pluck('capacity', 'group_hemis_id')
-            : collect();
-
-        // Reja bo'yicha kelgan va ketgan talabalar soni. LMS ma'lumoti
-        // o'zgarmagani uchun guruh sig'imi shu yerda hisoblab qo'shiladi.
-        $incoming = collect();
-        $outgoing = collect();
-        if (Schema::hasTable('distribution_draft_assignments')) {
-            $incoming = DistributionDraftAssignment::query()
-                ->selectRaw('to_group_hemis_id, COUNT(*) as total')
-                ->groupBy('to_group_hemis_id')
-                ->pluck('total', 'to_group_hemis_id');
-            $outgoing = DistributionDraftAssignment::query()
-                ->selectRaw('from_group_hemis_id, COUNT(*) as total')
-                ->groupBy('from_group_hemis_id')
-                ->pluck('total', 'from_group_hemis_id');
-        }
-
-        return Student::query()
-            ->where('student_status_code', 11)
-            ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
-            ->whereIn('group_id', $activeGroups->keys())
-            ->whereNotNull('group_id')
-            ->whereNotNull('group_name')
-            ->select([
-                'group_id',
-                'group_name',
-                'department_name',
-                'specialty_name',
-                'level_code',
-                'level_name',
-                DB::raw('COUNT(*) as student_count'),
-            ])
-            ->groupBy('group_id', 'group_name', 'department_name', 'specialty_name', 'level_code', 'level_name')
-            ->orderBy('department_name')
-            ->orderBy('specialty_name')
-            ->orderBy('level_code')
-            ->orderBy('group_name')
-            ->get()
-            ->map(function ($row) use ($sourceIds, $activeGroups, $overrides, $incoming, $outgoing) {
-                $groupId = (int) $row->group_id;
-                $course = $this->toCourse($row->level_code);
-                $lmsCount = (int) $row->student_count;
-                $active = $activeGroups->get($groupId);
-
-                $movedIn = (int) $incoming->get($groupId, 0);
-                $movedOut = (int) $outgoing->get($groupId, 0);
-                $students = max(0, $lmsCount + $movedIn - $movedOut);
-
-                $default = DistributionGroupCapacity::defaultFor($course);
-                $capacity = $overrides->has($groupId) ? (int) $overrides->get($groupId) : $default;
-
-                return [
-                    'group_hemis_id' => $groupId,
-                    'group_name' => $row->group_name,
-                    'faculty_name' => $row->department_name,
-                    'specialty_name' => $row->specialty_name,
-                    'level_code' => (string) $row->level_code,
-                    'course' => $course,
-                    'level_name' => $row->level_name,
-                    'language_code' => $active?->education_lang_code ?: null,
-                    'language_name' => $active?->education_lang_name ?: null,
-                    'lms_student_count' => $lmsCount,
-                    'student_count' => $students,
-                    'moved_in' => $movedIn,
-                    'moved_out' => $movedOut,
-                    'capacity' => $capacity,
-                    'is_custom_capacity' => $overrides->has($groupId),
-                    // Musbat — bo'sh joy, manfiy — ortiqcha talaba.
-                    'free_places' => $capacity === null ? null : $capacity - $students,
-                    'is_source' => $sourceIds->has($groupId),
-                ];
-            });
+        return $this->catalog->groups();
     }
 
-    /**
-     * HEMIS level_code ni kurs raqamiga aylantiradi.
-     *
-     * HEMIS odatda 11..16 beradi (11 = 1-kurs ... 16 = 6-kurs), lekin toza
-     * 1..8 ko'rinishi ham uchraydi — StudentController dagi bilan bir xil
-     * mantiq, ikkala ko'rinish ham qo'llab-quvvatlanadi.
-     */
-    private function toCourse($raw): ?int
-    {
-        $number = (int) $raw;
-
-        if ($number >= 11 && $number <= 20) {
-            $number -= 10;
-        }
-
-        return $number >= 1 && $number <= 8 ? $number : null;
-    }
 }

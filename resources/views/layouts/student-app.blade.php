@@ -754,5 +754,6 @@
         console.groupEnd();
     </script>
     @endif
+    @include('student.partials.group-vote-popup')
 </body>
 </html>

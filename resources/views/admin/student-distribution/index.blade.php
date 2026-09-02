@@ -200,6 +200,37 @@
     .sd-student b { color:var(--ink); font-size:13px; font-weight:600; }
     .sd-student span { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
     .sd-modal-note { padding:34px 20px; color:var(--muted); font-size:12.5px; text-align:center; }
+    .sd-student { grid-template-columns:30px minmax(0,1fr) auto auto; }
+    .sd-move {
+        height:26px; padding:0 6px; max-width:150px;
+        border:1px solid #cfd9e6; border-radius:4px; background:#fff; color:var(--navy);
+        font-family:inherit; font-size:11px; font-weight:600; outline:none; cursor:pointer;
+    }
+    .sd-move:focus { border-color:var(--navy-soft); box-shadow:0 0 0 2px rgba(27,58,99,.1); }
+    .sd-move:disabled { background:#f3f6fa; color:var(--muted); cursor:not-allowed; }
+    .sd-moved {
+        display:inline-flex; align-items:center; gap:6px;
+        padding:3px 9px; border-radius:4px; background:#e9f7f0; color:#0f7a52;
+        font-size:11px; font-weight:700;
+    }
+    .sd-undo {
+        border:0; background:transparent; color:#b3261e;
+        font-size:13px; line-height:1; cursor:pointer; padding:0 2px;
+    }
+    .sd-undo:hover { color:#8f1d17; }
+    .sd-modal-foot {
+        display:flex; align-items:center; justify-content:space-between; gap:12px;
+        padding:12px 20px; border-top:1px solid var(--line-soft); background:#fbfcfe;
+    }
+    .sd-choice { display:grid; gap:8px; padding:18px 20px; }
+    .sd-choice button {
+        display:block; width:100%; padding:12px 14px; text-align:left;
+        border:1px solid #cfd9e6; border-radius:6px; background:#fff; cursor:pointer;
+        font-family:inherit; transition:border-color .14s, background .14s;
+    }
+    .sd-choice button:hover { border-color:var(--navy-soft); background:#f6f9fd; }
+    .sd-choice b { display:block; color:var(--navy); font-size:13px; font-weight:700; }
+    .sd-choice span { display:block; margin-top:3px; color:var(--muted); font-size:11.5px; }
 
     @media (max-width:1100px) { .sd-cols { grid-template-columns:1fr; } }
     @media (max-width:560px) { .sd-filters { grid-template-columns:1fr 1fr; } }
@@ -292,6 +323,32 @@
                 </section>
             </div>
         </div>
+        <div class="sd-modal" id="exportModal">
+            <div class="sd-modal-box" style="width:min(430px,100%)" role="dialog" aria-modal="true">
+                <div class="sd-modal-head">
+                    <div>
+                        <h3>Excelga yuklab olish</h3>
+                        <p>Qaysi holatni chiqaramiz?</p>
+                    </div>
+                    <button class="sd-close" type="button" data-close="exportModal" aria-label="Yopish">&times;</button>
+                </div>
+                <div class="sd-choice">
+                    <button type="button" data-mode="old">
+                        <b>Eski holat</b>
+                        <span>LMS dagi hozirgi guruhlar — reja hisobga olinmaydi</span>
+                    </button>
+                    <button type="button" data-mode="new">
+                        <b>Yangi holat</b>
+                        <span>Reja qo'llangan — ko'chirilgan talabalar yangi guruhida</span>
+                    </button>
+                    <button type="button" data-mode="both">
+                        <b>Ikkalasi</b>
+                        <span>Bitta faylda ketma-ket ikkita bo'lim</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="sd-modal" id="studentsModal">
             <div class="sd-modal-box" role="dialog" aria-modal="true">
                 <div class="sd-modal-head">
@@ -302,6 +359,9 @@
                     <button class="sd-close" type="button" id="modalClose" aria-label="Yopish">&times;</button>
                 </div>
                 <div class="sd-modal-body" id="modalBody"></div>
+                <div class="sd-modal-foot">
+                    <span class="sd-hint" id="modalHint"></span>
+                </div>
             </div>
         </div>
     </div>
@@ -315,6 +375,9 @@
         const exportUrl = @json(route('admin.student-distribution.export'));
         const capacityUrl = @json(route('admin.student-distribution.capacity.update'));
         const studentsUrl = @json(route('admin.student-distribution.group-students'));
+        const targetsUrl  = @json(route('admin.student-distribution.target-groups'));
+        const assignUrl   = @json(route('admin.student-distribution.assign-student'));
+        const unassignUrl = @json(route('admin.student-distribution.unassign-student'));
 
         let groups = @json($groupPayloads);
         let picked = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
@@ -497,33 +560,125 @@
 
         // --- Talabalar modali ---
         const modal = $('studentsModal');
+        let modalGroupId = null;
+        let modalTargets = [];
 
         function closeModal() { modal.classList.remove('is-open'); }
 
+        async function postJson(url, payload) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || "Amalni bajarib bo'lmadi.");
+            return data;
+        }
+
+        function studentRow(st, index) {
+            if (st.moved_to) {
+                return '<div class="sd-student"><i>' + (index + 1) + '.</i>' +
+                    '<b>' + esc(st.full_name) + '</b>' +
+                    '<span>' + esc(st.student_id_number) + '</span>' +
+                    '<span class="sd-moved">&rarr; ' + esc(st.moved_to) +
+                        '<button class="sd-undo" type="button" data-undo="' + st.student_id + '" title="Bekor qilish">&times;</button>' +
+                    '</span></div>';
+            }
+
+            const options = modalTargets.length
+                ? modalTargets.map(g => '<option value="' + g.group_hemis_id + '">' +
+                    esc(g.group_name) + ' (' + g.free_places + " bo'sh)" + '</option>').join('')
+                : '';
+
+            const select = modalTargets.length
+                ? '<select class="sd-move" data-student="' + st.student_id + '">' +
+                    "<option value=\"\">Ko'chirish...</option>" + options + '</select>'
+                : "<select class=\"sd-move\" disabled><option>Bo'sh guruh yo'q</option></select>";
+
+            return '<div class="sd-student"><i>' + (index + 1) + '.</i>' +
+                '<b>' + esc(st.full_name) + '</b>' +
+                '<span>' + esc(st.student_id_number) + '</span>' +
+                select + '</div>';
+        }
+
+        function renderStudents(students) {
+            $('modalBody').innerHTML = students.length
+                ? students.map(studentRow).join('')
+                : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>';
+
+            const moved = students.filter(st => st.moved_to).length;
+            $('modalHint').innerHTML = modalTargets.length
+                ? '<b>' + modalTargets.length + "</b> ta mos guruhda bo'sh joy bor" +
+                  (moved ? ' &nbsp;&middot;&nbsp; <b>' + moved + '</b> ta talaba rejalashtirilgan' : '')
+                : "Bu kurs va yo'nalishda bo'sh joyli guruh yo'q";
+        }
+
+        async function loadStudents() {
+            const [studentsResponse, targetsResponse] = await Promise.all([
+                fetch(studentsUrl + '?group_hemis_id=' + modalGroupId, {headers:{'Accept':'application/json'}}),
+                fetch(targetsUrl + '?group_hemis_id=' + modalGroupId, {headers:{'Accept':'application/json'}}),
+            ]);
+            const studentsData = await studentsResponse.json();
+            const targetsData = await targetsResponse.json();
+            if (!studentsResponse.ok) throw new Error(studentsData.message || "Yuklab bo'lmadi.");
+
+            modalTargets = targetsResponse.ok ? targetsData.groups : [];
+            renderStudents(studentsData.students);
+        }
+
         async function openStudents(groupId) {
+            modalGroupId = groupId;
             const group = groups.find(g => g.group_hemis_id === groupId);
             $('modalGroup').textContent = group ? group.group_name : 'Guruh';
             $('modalMeta').textContent = group
-                ? [group.faculty_name, group.specialty_name, courseLabel(group)].filter(Boolean).join(' · ')
+                ? [group.faculty_name, group.specialty_name, courseLabel(group)].filter(Boolean).join(' \u00b7 ')
                 : '';
             $('modalBody').innerHTML = '<div class="sd-modal-note">Yuklanmoqda...</div>';
+            $('modalHint').textContent = '';
             modal.classList.add('is-open');
 
             try {
-                const response = await fetch(studentsUrl + '?group_hemis_id=' + groupId, {headers:{'Accept':'application/json'}});
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.message || "Yuklab bo'lmadi.");
-
-                $('modalBody').innerHTML = data.students.length
-                    ? data.students.map((st, i) =>
-                        '<div class="sd-student"><i>' + (i + 1) + '.</i>' +
-                        '<b>' + esc(st.full_name) + '</b>' +
-                        '<span>' + esc(st.student_id_number) + '</span></div>').join('')
-                    : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>';
+                await loadStudents();
             } catch (error) {
                 $('modalBody').innerHTML = '<div class="sd-modal-note">' + esc(error.message) + '</div>';
             }
         }
+
+        // Ko'chirish va bekor qilish
+        $('modalBody').addEventListener('change', async event => {
+            const select = event.target.closest('select[data-student]');
+            if (!select || !select.value) return;
+            select.disabled = true;
+            try {
+                const data = await postJson(assignUrl, {
+                    student_id: Number(select.dataset.student),
+                    to_group_hemis_id: Number(select.value),
+                });
+                groups = data.groups;
+                render();
+                await loadStudents();
+            } catch (error) {
+                alert(error.message);
+                select.disabled = false;
+                select.value = '';
+            }
+        });
+
+        $('modalBody').addEventListener('click', async event => {
+            const button = event.target.closest('button[data-undo]');
+            if (!button) return;
+            button.disabled = true;
+            try {
+                const data = await postJson(unassignUrl, {student_id: Number(button.dataset.undo)});
+                groups = data.groups;
+                render();
+                await loadStudents();
+            } catch (error) {
+                alert(error.message);
+                button.disabled = false;
+            }
+        });
 
         Object.values(panels).forEach(panel => {
             panel.rows.addEventListener('click', event => {
@@ -537,7 +692,33 @@
         $('modalClose').addEventListener('click', closeModal);
         modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
         document.addEventListener('keydown', event => {
-            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+            if (event.key !== 'Escape') return;
+            document.querySelectorAll('.sd-modal.is-open').forEach(m => m.classList.remove('is-open'));
+        });
+
+        // --- Eksport tanlovi ---
+        const exportModal = $('exportModal');
+        let exportSide = 'left';
+
+        exportModal.querySelectorAll('button[data-mode]').forEach(button => {
+            button.addEventListener('click', () => {
+                exportModal.classList.remove('is-open');
+                const f = readFilters(panels[exportSide]);
+                const params = new URLSearchParams();
+                if (f.faculty) params.set('faculty', f.faculty);
+                if (f.specialty) params.set('specialty', f.specialty);
+                if (f.course) params.set('course', f.course);
+                if (f.search) params.set('search', f.search);
+                params.set('side', exportSide);
+                params.set('mode', button.dataset.mode);
+                if (exportSide === 'right' && rightView === 'picked') params.set('only_sources', '1');
+                window.location.href = exportUrl + '?' + params.toString();
+            });
+        });
+
+        exportModal.querySelector('[data-close]').addEventListener('click', () => exportModal.classList.remove('is-open'));
+        exportModal.addEventListener('click', event => {
+            if (event.target === exportModal) exportModal.classList.remove('is-open');
         });
 
         // Sig'im: input <label> ichida bo'lgani uchun bosilganda checkbox
@@ -585,20 +766,10 @@
             });
         });
 
-        // Excel: panel filtrlari qanday bo'lsa, faylda ham o'sha guruhlar chiqadi.
+        // Excel: avval qaysi holat kerakligini so'raymiz.
         document.querySelectorAll('.sd-xls').forEach(button => button.addEventListener('click', () => {
-            const key = button.dataset.export;
-            const f = readFilters(panels[key]);
-            const params = new URLSearchParams();
-
-            if (f.faculty) params.set('faculty', f.faculty);
-            if (f.specialty) params.set('specialty', f.specialty);
-            if (f.course) params.set('course', f.course);
-            if (f.search) params.set('search', f.search);
-            params.set('side', key);
-            if (key === 'right' && rightView === 'picked') params.set('only_sources', '1');
-
-            window.location.href = exportUrl + '?' + params.toString();
+            exportSide = button.dataset.export;
+            exportModal.classList.add('is-open');
         }));
 
         $('saveSources').addEventListener('click', async () => {

@@ -25,6 +25,15 @@
     .sd-side.is-right .sd-side-head { background:linear-gradient(180deg,#fffcf7,#fdf7ec); }
     .sd-side-head h2 { margin:0; color:var(--navy); font-size:14.5px; font-weight:700; }
     .sd-side-head p { margin:3px 0 0; color:var(--muted); font-size:11.5px; }
+    .sd-side-tools { display:flex; align-items:center; gap:8px; }
+    .sd-xls {
+        display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 11px;
+        border:1px solid #bcd9c9; border-radius:4px; background:#f2fbf6; color:#0f7a52;
+        font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer;
+        transition:background .14s, border-color .14s;
+    }
+    .sd-xls:hover { background:#e6f7ee; border-color:#8fc9ac; }
+    .sd-xls svg { width:13px; height:13px; }
     .sd-count {
         padding:4px 10px; border-radius:999px; background:#eef4fd; color:var(--navy);
         font-size:11px; font-weight:700; white-space:nowrap;
@@ -119,7 +128,13 @@
                             <h2>Bo'sh guruhlarni to'ldirish</h2>
                             <p>Talabalar shu guruhlarga ko'chiriladi</p>
                         </div>
-                        <span class="sd-count" id="leftCount">0 ta</span>
+                        <span class="sd-side-tools">
+                            <button class="sd-xls" data-export="left" type="button" title="Filtrga mos guruhlar talabalarini yuklab olish">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v10m0 0 3.5-3.5M12 14l-3.5-3.5M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg>
+                                Excel
+                            </button>
+                            <span class="sd-count" id="leftCount">0 ta</span>
+                        </span>
                     </div>
 
                     <div class="sd-filters">
@@ -139,7 +154,13 @@
                             <h2>Taqsimlanadigan guruhlar</h2>
                             <p>Talabalari ko'chiriladigan guruhlarni belgilang</p>
                         </div>
-                        <span class="sd-count" id="rightCount">0 ta</span>
+                        <span class="sd-side-tools">
+                            <button class="sd-xls" data-export="right" type="button" title="Filtrga mos guruhlar talabalarini yuklab olish">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v10m0 0 3.5-3.5M12 14l-3.5-3.5M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg>
+                                Excel
+                            </button>
+                            <span class="sd-count" id="rightCount">0 ta</span>
+                        </span>
                     </div>
 
                     <div class="sd-filters">
@@ -171,6 +192,7 @@
         const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const saveUrl = @json(route('admin.student-distribution.source-groups.store'));
+        const exportUrl = @json(route('admin.student-distribution.export'));
 
         let groups = @json($groupPayloads);
         let picked = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
@@ -297,6 +319,22 @@
             document.querySelectorAll('.sd-tab').forEach(t => t.classList.toggle('is-on', t === tab));
             renderPanel('right');
             renderTabs();
+        }));
+
+        // Excel: panel filtrlari qanday bo'lsa, faylda ham o'sha guruhlar chiqadi.
+        document.querySelectorAll('.sd-xls').forEach(button => button.addEventListener('click', () => {
+            const key = button.dataset.export;
+            const f = readFilters(panels[key]);
+            const params = new URLSearchParams();
+
+            if (f.faculty) params.set('faculty', f.faculty);
+            if (f.specialty) params.set('specialty', f.specialty);
+            if (f.course) params.set('course', f.course);
+            if (f.search) params.set('search', f.search);
+            params.set('side', key);
+            if (key === 'right' && rightView === 'picked') params.set('only_sources', '1');
+
+            window.location.href = exportUrl + '?' + params.toString();
         }));
 
         $('saveSources').addEventListener('click', async () => {

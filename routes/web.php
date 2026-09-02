@@ -476,6 +476,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->group(function () {
                 Route::get('/', [StudentDistributionController::class, 'index'])->name('index');
                 Route::get('/groups', [StudentDistributionController::class, 'groups'])->name('groups');
+                Route::get('/export', [StudentDistributionController::class, 'exportStudents'])->name('export');
                 Route::post('/source-groups', [StudentDistributionController::class, 'storeSourceGroups'])->name('source-groups.store');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {

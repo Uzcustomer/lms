@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\DistributionGroupStudentsExport;
 use App\Http\Controllers\Controller;
 use App\Models\DistributionSourceGroup;
 use App\Models\Group;
@@ -92,6 +93,54 @@ class StudentDistributionController extends Controller
             'message' => $selected->count() . ' ta guruh taqsimlanadigan sifatida belgilandi.',
             'groups' => $this->groupCatalog()->values(),
         ]);
+    }
+
+    /**
+     * Filtrga mos guruhlar va ulardagi talabalarni Excelga chiqaradi.
+     *
+     * Filtrlar sahifadagi panel bilan bir xil ishlaydi, shuning uchun
+     * o'qituvchi ekranda nimani ko'rsa, faylda ham o'sha chiqadi.
+     */
+    public function exportStudents(Request $request)
+    {
+        $filters = $request->validate([
+            'faculty' => ['nullable', 'string', 'max:255'],
+            'specialty' => ['nullable', 'string', 'max:255'],
+            'course' => ['nullable', 'string', 'max:32'],
+            'search' => ['nullable', 'string', 'max:255'],
+            'only_sources' => ['nullable', 'boolean'],
+            'side' => ['nullable', 'string', 'in:left,right'],
+        ]);
+
+        $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
+
+        $groups = $this->groupCatalog()
+            ->when(!empty($filters['faculty']), fn ($rows) => $rows->where('faculty_name', $filters['faculty']))
+            ->when(!empty($filters['specialty']), fn ($rows) => $rows->where('specialty_name', $filters['specialty']))
+            ->when(!empty($filters['course']), fn ($rows) => $rows->where('level_code', (string) $filters['course']))
+            ->when($search !== '', fn ($rows) => $rows->filter(
+                fn ($row) => str_contains(mb_strtolower((string) $row['group_name']), $search)
+            ))
+            ->when(!empty($filters['only_sources']), fn ($rows) => $rows->where('is_source', true))
+            ->values();
+
+        $heading = ($filters['side'] ?? 'left') === 'right'
+            ? 'Taqsimlanadigan guruhlar'
+            : 'Bo\'sh guruhlarni to\'ldirish';
+
+        $scope = collect([
+            $filters['faculty'] ?? null,
+            $filters['specialty'] ?? null,
+            !empty($filters['course']) ? $filters['course'] . '-kurs' : null,
+        ])->filter()->implode(' · ');
+
+        if ($scope !== '') {
+            $heading .= '   (' . $scope . ')';
+        }
+
+        $fileName = 'guruh-talabalari-' . now()->format('Y-m-d-Hi') . '.xlsx';
+
+        return (new DistributionGroupStudentsExport($groups, $heading))->download($fileName);
     }
 
     /**

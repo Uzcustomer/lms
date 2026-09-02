@@ -21,7 +21,7 @@
 @endphp
 
 @if($gvShow)
-<div id="gvBackdrop" style="position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,39,72,.6);">
+<div id="gvBackdrop" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,39,72,.6);">
     <div style="display:flex;flex-direction:column;width:min(480px,100%);max-height:calc(100vh - 40px);overflow:hidden;border-radius:12px;background:#fff;box-shadow:0 24px 64px rgba(15,39,72,.35);font-family:inherit;">
         <div style="padding:18px 20px;background:#0f2748;color:#fff;">
             <h3 style="margin:0;font-size:16px;font-weight:800;">Guruh tanlash</h3>
@@ -48,7 +48,7 @@
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;border-top:1px solid #eef2f8;background:#fbfcfe;">
-            <button type="button" id="gvLater" style="border:0;background:transparent;color:#8798b1;font-size:12.5px;cursor:pointer;">Keyinroq</button>
+            <span style="color:#b3261e;font-size:11.5px;font-weight:600;">Ovoz bermasdan tizimdan foydalanib bo'lmaydi</span>
             <button type="button" id="gvSubmit" disabled style="height:40px;padding:0 20px;border:0;border-radius:7px;background:#0f2748;color:#fff;font-size:13.5px;font-weight:700;cursor:pointer;opacity:.5;">Ovoz berish</button>
         </div>
     </div>
@@ -60,7 +60,8 @@
     const submit = document.getElementById('gvSubmit');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
-    document.getElementById('gvLater').addEventListener('click', () => backdrop.remove());
+    // Popup majburiy: yopib bo'lmaydi, orqadagi sahifa qulflanadi.
+    document.body.style.overflow = 'hidden';
 
     document.getElementById('gvList').addEventListener('change', () => {
         submit.disabled = false;
@@ -82,6 +83,7 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || "Ovoz berib bo'lmadi.");
             alert(data.message);
+            document.body.style.overflow = '';
             backdrop.remove();
         } catch (error) {
             alert(error.message);

@@ -46,6 +46,37 @@ class StudentDistributionController extends Controller
         return response()->json(['groups' => $this->groupCatalog()->values()]);
     }
 
+    /** Bitta guruhdagi talabalar — qatorga bosilganda modalda ko'rsatiladi. */
+    public function groupStudents(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'group_hemis_id' => ['required', 'integer'],
+        ]);
+
+        $groupId = (int) $data['group_hemis_id'];
+        $group = $this->groupCatalog()->firstWhere('group_hemis_id', $groupId);
+
+        if (!$group) {
+            return response()->json(['message' => 'Guruh ro\'yxatda topilmadi.'], 404);
+        }
+
+        $students = Student::query()
+            ->where('student_status_code', 11)
+            ->where('group_id', $groupId)
+            ->orderBy('full_name')
+            ->get(['id', 'full_name', 'student_id_number'])
+            ->map(fn ($student) => [
+                'full_name' => $student->full_name,
+                'student_id_number' => (string) $student->student_id_number,
+            ])
+            ->values();
+
+        return response()->json([
+            'group' => $group,
+            'students' => $students,
+        ]);
+    }
+
     /** O'ng tomondagi checkboxlar holatini saqlaydi. */
     public function storeSourceGroups(Request $request): JsonResponse
     {

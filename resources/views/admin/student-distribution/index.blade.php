@@ -79,20 +79,38 @@
         grid-template-columns:28px 20px minmax(0,1fr) 74px 92px 88px;
         align-items:center; gap:8px;
     }
+    /* O'ng panelda faqat talabalar soni ko'rsatiladi. */
+    .is-right .sd-grid { grid-template-columns:28px 20px minmax(0,1fr) 74px; }
     .sd-colhead {
-        padding:7px 16px; border-bottom:1px solid var(--line);
-        background:#f7f9fc;
+        padding:6px 16px; border-bottom:1px solid var(--line); background:#f7f9fc;
+    }
+    .sd-colhead > span {
         color:var(--muted); font-size:9.5px; font-weight:700;
         letter-spacing:.09em; text-transform:uppercase;
     }
-    .sd-colhead span:nth-child(4), .sd-colhead span:nth-child(5), .sd-colhead span:nth-child(6) {
-        text-align:center;
+    .sd-colhead input, .sd-colhead select {
+        width:100%; height:24px; padding:0 4px;
+        border:1px solid #cfd9e6; border-radius:3px; background:#fff; color:var(--navy);
+        font-family:inherit; font-size:10.5px; font-weight:600; text-align:center;
+        outline:none; -moz-appearance:textfield;
+    }
+    .sd-colhead select { text-align:left; padding:0 2px; font-weight:600; }
+    .sd-colhead input::-webkit-outer-spin-button,
+    .sd-colhead input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+    .sd-colhead input::placeholder { color:#a9b7ca; font-weight:600; }
+    .sd-colhead input:focus, .sd-colhead select:focus {
+        border-color:var(--navy-soft); box-shadow:0 0 0 2px rgba(27,58,99,.1);
+    }
+    .sd-colhead input.is-on, .sd-colhead select.is-on {
+        border-color:var(--gold); background:#fffdf5;
     }
     .sd-row {
         padding:9px 16px; border-bottom:1px solid var(--line-soft); transition:background .12s;
     }
     .sd-row:last-child { border-bottom:0; }
     .sd-row:hover { background:#fafcfe; }
+    .sd-name { cursor:pointer; }
+    .sd-name:hover { text-decoration:underline; }
     .sd-row.is-picked { background:#fffbf2; }
     .sd-idx { color:var(--muted); font-size:11px; font-weight:600; text-align:right; font-variant-numeric:tabular-nums; }
     .sd-row input[type=checkbox] { width:15px; height:15px; accent-color:var(--navy); cursor:pointer; }
@@ -146,6 +164,43 @@
     .sd-btn:hover { background:var(--navy-soft); }
     .sd-btn:disabled { background:#9aa9bd; cursor:not-allowed; }
 
+    /* ---- Talabalar modali ---- */
+    .sd-modal {
+        position:fixed; inset:0; z-index:80; display:none;
+        align-items:center; justify-content:center; padding:20px;
+        background:rgba(15,39,72,.55);
+    }
+    .sd-modal.is-open { display:flex; }
+    .sd-modal-box {
+        display:flex; flex-direction:column;
+        width:min(560px,100%); max-height:calc(100vh - 48px);
+        overflow:hidden; border-radius:8px; background:#fff;
+        box-shadow:0 22px 60px rgba(15,39,72,.32);
+    }
+    .sd-modal-head {
+        display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
+        padding:16px 20px; background:#1b3a63; color:#fff;
+    }
+    .sd-modal-head h3 { margin:0; font-size:16px; font-weight:700; }
+    .sd-modal-head p { margin:4px 0 0; color:rgba(255,255,255,.7); font-size:11.5px; }
+    .sd-close {
+        flex:none; width:26px; height:26px; border:1px solid rgba(255,255,255,.32);
+        border-radius:50%; background:transparent; color:#fff;
+        font-size:16px; line-height:1; cursor:pointer;
+    }
+    .sd-close:hover { background:rgba(255,255,255,.16); }
+    .sd-modal-body { overflow-y:auto; }
+    .sd-student {
+        display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:10px;
+        padding:9px 20px; border-bottom:1px solid var(--line-soft);
+    }
+    .sd-student:last-child { border-bottom:0; }
+    .sd-student:hover { background:#fafcfe; }
+    .sd-student i { font-style:normal; color:var(--muted); font-size:11px; font-weight:600; text-align:right; }
+    .sd-student b { color:var(--ink); font-size:13px; font-weight:600; }
+    .sd-student span { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
+    .sd-modal-note { padding:34px 20px; color:var(--muted); font-size:12.5px; text-align:center; }
+
     @media (max-width:1100px) { .sd-cols { grid-template-columns:1fr; } }
     @media (max-width:560px) { .sd-filters { grid-template-columns:1fr 1fr; } }
 </style>
@@ -184,7 +239,14 @@
 
                     <div class="sd-colhead sd-grid">
                         <span>#</span><span></span><span>Guruh</span>
-                        <span>Talaba</span><span>Sig'im</span><span>Holat</span>
+                        <input data-f="minStudents" type="number" min="0" placeholder="Talaba" title="Shu sondan kam bo'lmagan talabali guruhlar">
+                        <input data-f="minCapacity" type="number" min="0" placeholder="Sig'im" title="Shu sondan kam bo'lmagan sig'imli guruhlar">
+                        <select data-f="status" title="Holat bo'yicha">
+                            <option value="">Holat</option>
+                            <option value="free">Bo'sh joy bor</option>
+                            <option value="full">To'la</option>
+                            <option value="over">Ortiqcha</option>
+                        </select>
                     </div>
                     <div class="sd-rows" id="leftRows"></div>
                 </section>
@@ -219,7 +281,7 @@
 
                     <div class="sd-colhead sd-grid">
                         <span>#</span><span></span><span>Guruh</span>
-                        <span>Talaba</span><span>Sig'im</span><span>Holat</span>
+                        <input data-f="minStudents" type="number" min="0" placeholder="Talaba" title="Shu sondan kam bo'lmagan talabali guruhlar">
                     </div>
                     <div class="sd-rows" id="rightRows"></div>
 
@@ -228,6 +290,18 @@
                         <button class="sd-btn" id="saveSources" type="button">Saqlash</button>
                     </div>
                 </section>
+            </div>
+        </div>
+        <div class="sd-modal" id="studentsModal">
+            <div class="sd-modal-box" role="dialog" aria-modal="true">
+                <div class="sd-modal-head">
+                    <div>
+                        <h3 id="modalGroup">Guruh</h3>
+                        <p id="modalMeta"></p>
+                    </div>
+                    <button class="sd-close" type="button" id="modalClose" aria-label="Yopish">&times;</button>
+                </div>
+                <div class="sd-modal-body" id="modalBody"></div>
             </div>
         </div>
     </div>
@@ -240,6 +314,7 @@
         const saveUrl = @json(route('admin.student-distribution.source-groups.store'));
         const exportUrl = @json(route('admin.student-distribution.export'));
         const capacityUrl = @json(route('admin.student-distribution.capacity.update'));
+        const studentsUrl = @json(route('admin.student-distribution.group-students'));
 
         let groups = @json($groupPayloads);
         let picked = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
@@ -262,20 +337,37 @@
         };
 
         const readFilters = panel => {
-            const get = key => panel.root.querySelector('.sd-filters [data-f="' + key + '"]').value;
+            const get = key => {
+                const field = panel.root.querySelector('[data-f="' + key + '"]');
+                return field ? field.value : '';
+            };
             return {
                 faculty: get('faculty'),
                 specialty: get('specialty'),
                 course: get('course'),
                 search: get('search').trim().toLowerCase(),
+                minStudents: get('minStudents'),
+                minCapacity: get('minCapacity'),
+                status: get('status'),
             };
         };
+
+        // Guruh holati: bo'sh joy bor / to'la / ortiqcha
+        function statusOf(g) {
+            if (g.free_places === null || g.free_places === undefined) return null;
+            if (g.free_places > 0) return 'free';
+            if (g.free_places === 0) return 'full';
+            return 'over';
+        }
 
         const applyFilters = f => groups.filter(g =>
             (!f.faculty || g.faculty_name === f.faculty) &&
             (!f.specialty || g.specialty_name === f.specialty) &&
             (!f.course || String(g.course) === f.course) &&
-            (!f.search || String(g.group_name).toLowerCase().includes(f.search))
+            (!f.search || String(g.group_name).toLowerCase().includes(f.search)) &&
+            (f.minStudents === '' || g.student_count >= Number(f.minStudents)) &&
+            (f.minCapacity === '' || (g.capacity !== null && g.capacity >= Number(f.minCapacity))) &&
+            (!f.status || statusOf(g) === f.status)
         );
 
         function rowHtml(g, index, withCheckbox) {
@@ -288,14 +380,15 @@
             return '<label class="sd-row sd-grid' + (withCheckbox && isPicked ? ' is-picked' : '') + '">' +
                 '<span class="sd-idx">' + index + '.</span>' +
                 check +
-                '<span><span class="sd-name">' + esc(g.group_name) + tag + '</span>' +
+                '<span><span class="sd-name" data-group="' + g.group_hemis_id + '">' + esc(g.group_name) + '</span>' + tag +
                 '<span class="sd-meta">' + esc(g.faculty_name || '—') + ' · ' + esc(g.specialty_name || '—') +
                 (courseLabel(g) ? ' · ' + esc(courseLabel(g)) : '') + '</span></span>' +
                 '<span class="sd-num">' + g.student_count + '</span>' +
-                '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + "\" title=\"Sig'im - o'zgartirish mumkin\">" +
-                    '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-cap="' + g.group_hemis_id + '">' +
-                '</span>' +
-                freeHtml(g) +
+                (withCheckbox ? '' :
+                    '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + "\" title=\"Sig'im - o'zgartirish mumkin\">" +
+                        '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-cap="' + g.group_hemis_id + '">' +
+                    '</span>' +
+                    freeHtml(g)) +
                 '</label>';
         }
 
@@ -353,6 +446,23 @@
         }
 
         // Filtrlar: tugma yo'q — tanlangan/yozilgan zahoti chiqadi.
+        // Ustun sarlavhasidagi filtrlar
+        Object.entries(panels).forEach(([key, panel]) => {
+            const head = panel.root.querySelector('.sd-colhead');
+            if (!head) return;
+
+            const react = event => {
+                const field = event.target;
+                if (!field.dataset.f) return;
+                field.classList.toggle('is-on', field.value !== '');
+                renderPanel(key);
+                if (key === 'right') renderTabs();
+            };
+
+            head.addEventListener('input', react);
+            head.addEventListener('change', react);
+        });
+
         Object.entries(panels).forEach(([key, panel]) => {
             const box = panel.root.querySelector('.sd-filters');
 
@@ -384,6 +494,51 @@
             renderPanel('right');
             renderTabs();
         }));
+
+        // --- Talabalar modali ---
+        const modal = $('studentsModal');
+
+        function closeModal() { modal.classList.remove('is-open'); }
+
+        async function openStudents(groupId) {
+            const group = groups.find(g => g.group_hemis_id === groupId);
+            $('modalGroup').textContent = group ? group.group_name : 'Guruh';
+            $('modalMeta').textContent = group
+                ? [group.faculty_name, group.specialty_name, courseLabel(group)].filter(Boolean).join(' · ')
+                : '';
+            $('modalBody').innerHTML = '<div class="sd-modal-note">Yuklanmoqda...</div>';
+            modal.classList.add('is-open');
+
+            try {
+                const response = await fetch(studentsUrl + '?group_hemis_id=' + groupId, {headers:{'Accept':'application/json'}});
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || "Yuklab bo'lmadi.");
+
+                $('modalBody').innerHTML = data.students.length
+                    ? data.students.map((st, i) =>
+                        '<div class="sd-student"><i>' + (i + 1) + '.</i>' +
+                        '<b>' + esc(st.full_name) + '</b>' +
+                        '<span>' + esc(st.student_id_number) + '</span></div>').join('')
+                    : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>';
+            } catch (error) {
+                $('modalBody').innerHTML = '<div class="sd-modal-note">' + esc(error.message) + '</div>';
+            }
+        }
+
+        Object.values(panels).forEach(panel => {
+            panel.rows.addEventListener('click', event => {
+                const name = event.target.closest('.sd-name');
+                if (!name) return;
+                event.preventDefault();
+                openStudents(Number(name.dataset.group));
+            });
+        });
+
+        $('modalClose').addEventListener('click', closeModal);
+        modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        });
 
         // Sig'im: input <label> ichida bo'lgani uchun bosilganda checkbox
         // almashmasligi kerak — shuning uchun hodisa to'xtatiladi.

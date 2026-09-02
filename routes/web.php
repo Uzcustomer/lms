@@ -483,6 +483,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/voting/close', [StudentDistributionController::class, 'closeVoting'])->name('voting.close');
                 Route::get('/votes', [StudentDistributionController::class, 'votes'])->name('votes');
                 Route::post('/votes/approve', [StudentDistributionController::class, 'approveVotes'])->name('votes.approve');
+                Route::post('/votes/delete', [StudentDistributionController::class, 'deleteVotes'])->name('votes.delete');
                 Route::post('/source-groups', [StudentDistributionController::class, 'storeSourceGroups'])->name('source-groups.store');
                 Route::post('/capacity', [StudentDistributionController::class, 'updateCapacity'])->name('capacity.update');
                 Route::get('/target-groups', [StudentDistributionController::class, 'targetGroups'])->name('target-groups');

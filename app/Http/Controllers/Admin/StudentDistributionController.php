@@ -456,6 +456,48 @@ class StudentDistributionController extends Controller
     }
 
     /**
+     * Tanlangan ovozlarni o'chiradi (test va tozalash uchun).
+     * Tasdiqlangan ovoz o'chirilsa, unga mos reja (draft) ham bekor bo'ladi
+     * va band qilingan joy qaytadi.
+     */
+    public function deleteVotes(Request $request): JsonResponse
+    {
+        abort_unless(Schema::hasTable('distribution_votes'), 503, 'Ovozlar jadvali hali migratsiya qilinmagan.');
+
+        $data = $request->validate([
+            'vote_ids' => ['required', 'array', 'min:1', 'max:2000'],
+            'vote_ids.*' => ['required', 'integer'],
+        ]);
+
+        $deleted = 0;
+
+        foreach (collect($data['vote_ids'])->unique() as $id) {
+            $vote = DistributionVote::query()->find((int) $id);
+            if (!$vote) {
+                continue;
+            }
+
+            DB::transaction(function () use ($vote) {
+                if ($vote->status === 'approved' && Schema::hasTable('distribution_draft_assignments')) {
+                    DistributionDraftAssignment::query()
+                        ->where('student_id', $vote->student_id)
+                        ->where('to_group_hemis_id', $vote->to_group_hemis_id)
+                        ->delete();
+                }
+
+                $vote->delete();
+            });
+
+            $deleted++;
+        }
+
+        return response()->json([
+            'message' => $deleted . " ta ovoz o'chirildi.",
+            'groups' => $this->groupCatalog()->values(),
+        ]);
+    }
+
+    /**
      * Tanlangan ovozlarni tasdiqlaydi: har biri rejaga (draft) aylanadi va
      * joy band qilinadi. Sig'im yetmagan ovozlar tasdiqlashsiz qoladi va
      * natijada sabab bilan qaytariladi. LMS dagi guruhga tegilmaydi.

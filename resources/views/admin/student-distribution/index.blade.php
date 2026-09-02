@@ -23,6 +23,8 @@
     }
     .sd-head-btn:hover { background:rgba(255,255,255,.22); }
     .sd-head-btn b { margin-left:6px; padding:1px 8px; border-radius:999px; background:var(--gold); color:#0f2748; }
+    .sd-btn-danger { background:var(--bad); }
+    .sd-btn-danger:hover { background:#8f1d17; }
     .sd-btn-outline { border:1px solid var(--navy); background:#fff; color:var(--navy); }
     .sd-btn-outline:hover { background:#f1f5fa; }
     .sd-vote-row {
@@ -406,7 +408,7 @@
         </div>
 
         <div class="sd-modal" id="votesModal">
-            <div class="sd-modal-box" style="width:min(640px,100%)" role="dialog" aria-modal="true">
+            <div class="sd-modal-box" style="width:min(880px,100%);height:calc(100vh - 90px);" role="dialog" aria-modal="true">
                 <div class="sd-modal-head">
                     <div>
                         <h3>Talabalar ovozlari</h3>
@@ -422,6 +424,7 @@
                     </label>
                     <span style="display:flex;align-items:center;gap:12px;">
                         <span class="sd-hint"><b id="votesPicked">0</b> ta tanlandi</span>
+                        <button class="sd-btn sd-btn-danger" id="deleteVotesBtn" type="button" disabled>O'chirish</button>
                         <button class="sd-btn" id="approveVotesBtn" type="button" disabled>Tasdiqlash</button>
                     </span>
                 </div>
@@ -466,6 +469,7 @@
         const openVotingUrl   = @json(route('admin.student-distribution.voting.open'));
         const closeVotingUrl  = @json(route('admin.student-distribution.voting.close'));
         const approveVotesUrl = @json(route('admin.student-distribution.votes.approve'));
+        const deleteVotesUrl  = @json(route('admin.student-distribution.votes.delete'));
 
         let groups = @json($groupPayloads);
         // sources — saqlangan taqsimlanadigan guruhlar (server holati).
@@ -968,20 +972,20 @@
         }
 
         function renderVotes() {
-            votePicked = new Set([...votePicked].filter(id =>
-                votesData.some(v => v.id === id && v.status === 'pending')));
+            votePicked = new Set([...votePicked].filter(id => votesData.some(v => v.id === id)));
 
             const pending = votesData.filter(v => v.status === 'pending').length;
             $('votesMeta').textContent = pending + ' ta kutilmoqda \u00b7 ' + (votesData.length - pending) + ' ta tasdiqlangan';
 
             $('votesBody').innerHTML = votesData.length
                 ? votesData.map(v => {
-                    const mark = v.status === 'pending'
-                        ? '<input type="checkbox" data-vote="' + v.id + '"' + (votePicked.has(v.id) ? ' checked' : '') + ' style="width:15px;height:15px;accent-color:var(--navy);cursor:pointer;">'
-                        : '<span style="color:#0f7a52;font-weight:800;">&#10003;</span>';
+                    const badge = v.status === 'approved'
+                        ? '<span style="margin-left:8px;padding:2px 8px;border-radius:999px;background:#e9f7f0;color:#0f7a52;font-size:10px;font-weight:700;">Tasdiqlangan</span>'
+                        : '';
 
-                    return '<label class="sd-vote-row">' + mark +
-                        '<span><b>' + esc(v.student_name) + '</b>' +
+                    return '<label class="sd-vote-row">' +
+                        '<input type="checkbox" data-vote="' + v.id + '"' + (votePicked.has(v.id) ? ' checked' : '') + ' style="width:15px;height:15px;accent-color:var(--navy);cursor:pointer;">' +
+                        '<span><b>' + esc(v.student_name) + '</b>' + badge +
                         '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
                         '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b></span>' +
                         '</label>';
@@ -989,7 +993,9 @@
                 : '<div class="sd-modal-note">Hali ovoz berilmagan.</div>';
 
             $('votesPicked').textContent = votePicked.size;
-            $('approveVotesBtn').disabled = votePicked.size === 0;
+            const pendingPicked = votesData.some(v => votePicked.has(v.id) && v.status === 'pending');
+            $('approveVotesBtn').disabled = !pendingPicked;
+            $('deleteVotesBtn').disabled = votePicked.size === 0;
         }
 
         $('votesBtn').addEventListener('click', async () => {
@@ -1009,7 +1015,7 @@
 
         $('votesCheckAll').addEventListener('change', event => {
             if (event.target.checked) {
-                votesData.filter(v => v.status === 'pending').forEach(v => votePicked.add(v.id));
+                votesData.forEach(v => votePicked.add(v.id));
             } else {
                 votePicked.clear();
             }
@@ -1029,6 +1035,23 @@
             } catch (error) {
                 alert(error.message);
                 $('approveVotesBtn').disabled = false;
+            }
+        });
+
+        $('deleteVotesBtn').addEventListener('click', async () => {
+            if (!confirm(votePicked.size + " ta ovoz o'chirilsinmi? Tasdiqlangan ovozning rejasi ham bekor bo'ladi va joyi qaytadi.")) return;
+            $('deleteVotesBtn').disabled = true;
+            try {
+                const data = await postJson(deleteVotesUrl, {vote_ids: [...votePicked]});
+                groups = data.groups;
+                render();
+                votePicked.clear();
+                await loadVotes();
+                renderVotes();
+                alert(data.message);
+            } catch (error) {
+                alert(error.message);
+                $('deleteVotesBtn').disabled = false;
             }
         });
 

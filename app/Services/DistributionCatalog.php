@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DistributionDraftAssignment;
 use App\Models\DistributionGroupCapacity;
+use App\Models\Curriculum;
 use App\Models\DistributionSourceGroup;
 use App\Models\Group;
 use App\Models\Student;
@@ -32,7 +33,7 @@ class DistributionCatalog
         // Faol guruhlar va ularning ta'lim tili — til faqat `groups` da bor.
         $activeGroups = Group::query()
             ->where('active', true)
-            ->get(['group_hemis_id', 'name', 'department_name', 'specialty_name', 'education_lang_code', 'education_lang_name'])
+            ->get(['group_hemis_id', 'name', 'department_name', 'specialty_name', 'curriculum_hemis_id', 'education_lang_code', 'education_lang_name'])
             ->keyBy(fn ($group) => (int) $group->group_hemis_id);
 
         $overrides = Schema::hasTable('distribution_group_capacities')
@@ -122,9 +123,29 @@ class DistributionCatalog
             ->map(fn ($row) => $nameKeyOf($row['group_name'], $row['specialty_name']))
             ->flip();
 
+        // Bo'sh guruhlar faqat joriy qabul yili (1-kurs) va bakalavr bo'lsa
+        // qo'shiladi — aks holda eskirgan, talabasi allaqachon chiqib ketgan
+        // guruhlar ham ro'yxatga kirib qoladi.
+        $bachelorCurricula = Schema::hasTable('curricula')
+            ? Curriculum::query()
+                ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
+                ->pluck('curricula_hemis_id')
+                ->map(fn ($id) => (int) $id)
+                ->flip()
+            : collect();
+
         $candidates = [];
         foreach ($activeGroups as $groupId => $active) {
             if ($known->has($groupId)) {
+                continue;
+            }
+
+            if ($this->courseFromName((string) $active->name) !== 1) {
+                continue;
+            }
+
+            if ($bachelorCurricula->isNotEmpty()
+                && !$bachelorCurricula->has((int) $active->curriculum_hemis_id)) {
                 continue;
             }
 

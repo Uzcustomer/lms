@@ -23,14 +23,23 @@
     }
     .sd-head-btn:hover { background:rgba(255,255,255,.22); }
     .sd-head-btn b { margin-left:6px; padding:1px 8px; border-radius:999px; background:var(--gold); color:#0f2748; }
+    .sd-btn-ok { background:var(--ok); }
+    .sd-btn-ok:hover { background:#0a5c3d; }
     .sd-btn-danger { background:var(--bad); }
     .sd-btn-danger:hover { background:#8f1d17; }
     .sd-btn-outline { border:1px solid var(--navy); background:#fff; color:var(--navy); }
     .sd-btn-outline:hover { background:#f1f5fa; }
     .sd-vote-row {
-        display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:11px; align-items:center;
+        display:grid; grid-template-columns:24px minmax(0,1fr) auto 30px; gap:11px; align-items:center;
         padding:10px 20px; border-bottom:1px solid var(--line-soft); font-size:13px;
     }
+    .sd-vote-del {
+        display:grid; place-items:center; width:28px; height:28px;
+        border:1px solid #f2c9c6; border-radius:5px; background:#fdf3f2; color:var(--bad);
+        cursor:pointer; transition:background .14s;
+    }
+    .sd-vote-del:hover { background:#fbe3e1; }
+    .sd-vote-del svg { width:14px; height:14px; }
     .sd-vote-row:last-child { border-bottom:0; }
     .sd-vote-row .sd-meta { display:block; }
     .sd-vote-route { color:var(--ink-soft); font-size:12px; text-align:right; }
@@ -425,7 +434,7 @@
                     <span style="display:flex;align-items:center;gap:12px;">
                         <span class="sd-hint"><b id="votesPicked">0</b> ta tanlandi</span>
                         <button class="sd-btn sd-btn-danger" id="deleteVotesBtn" type="button" disabled>O'chirish</button>
-                        <button class="sd-btn" id="approveVotesBtn" type="button" disabled>Tasdiqlash</button>
+                        <button class="sd-btn sd-btn-ok" id="approveVotesBtn" type="button" disabled>Tasdiqlash</button>
                     </span>
                 </div>
             </div>
@@ -988,6 +997,9 @@
                         '<span><b>' + esc(v.student_name) + '</b>' + badge +
                         '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
                         '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b></span>' +
+                        '<button class="sd-vote-del" type="button" data-del-vote="' + v.id + '" title="Ovozni o’chirish">' +
+                            '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>' +
+                        '</button>' +
                         '</label>';
                 }).join('')
                 : '<div class="sd-modal-note">Hali ovoz berilmagan.</div>';
@@ -1003,6 +1015,26 @@
             $('votesBody').innerHTML = '<div class="sd-modal-note">Yuklanmoqda...</div>';
             await loadVotes();
             renderVotes();
+        });
+
+        $('votesBody').addEventListener('click', async event => {
+            const button = event.target.closest('button[data-del-vote]');
+            if (!button) return;
+            event.preventDefault();
+            const vote = votesData.find(v => v.id === Number(button.dataset.delVote));
+            const label = vote ? vote.student_name : 'Bu';
+            if (!confirm(label + " ovozi o'chirilsinmi?" + (vote && vote.status === 'approved' ? " Rejasi ham bekor bo'ladi va joyi qaytadi." : ''))) return;
+            button.disabled = true;
+            try {
+                const data = await postJson(deleteVotesUrl, {vote_ids: [Number(button.dataset.delVote)]});
+                groups = data.groups;
+                render();
+                await loadVotes();
+                renderVotes();
+            } catch (error) {
+                alert(error.message);
+                button.disabled = false;
+            }
         });
 
         $('votesBody').addEventListener('change', event => {

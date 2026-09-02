@@ -489,6 +489,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/capacity', [StudentDistributionController::class, 'updateCapacity'])->name('capacity.update');
                 Route::get('/target-groups', [StudentDistributionController::class, 'targetGroups'])->name('target-groups');
                 Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');
+                Route::post('/assign-students', [StudentDistributionController::class, 'assignStudents'])->name('assign-students');
                 Route::post('/unassign-student', [StudentDistributionController::class, 'unassignStudent'])->name('unassign-student');
                 Route::post('/reset-drafts', [StudentDistributionController::class, 'resetDrafts'])->name('drafts.reset');
                 Route::post('/sync-groups', [StudentDistributionController::class, 'syncGroups'])->name('groups.sync');

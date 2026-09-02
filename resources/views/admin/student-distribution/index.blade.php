@@ -334,8 +334,8 @@
                     <div class="sd-rows" id="rightRows"></div>
 
                     <div class="sd-actions">
-                        <span class="sd-hint"><b id="pickedTotal">0</b> ta guruh belgilangan</span>
-                        <button class="sd-btn" id="saveSources" type="button">Saqlash</button>
+                        <span class="sd-hint"><b id="pickedTotal">0</b><span id="footLabel"> ta guruh belgilangan</span></span>
+                        <button class="sd-btn" id="saveSources" type="button">O'tqazish</button>
                     </div>
                 </section>
             </div>
@@ -401,7 +401,12 @@
         const unassignUrl = @json(route('admin.student-distribution.unassign-student'));
 
         let groups = @json($groupPayloads);
-        let picked = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
+        // sources — saqlangan taqsimlanadigan guruhlar (server holati).
+        // pendingAdd — "Barcha guruhlar" tabida hozir belgilanganlar (hali saqlanmagan).
+        // pendingRemove — "Belgilanganlar" tabida qaytarish uchun tanlanganlar.
+        let sources = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
+        let pendingAdd = new Set();
+        let pendingRemove = new Set();
         let rightView = 'all';
 
         const courseLabel = g => g.course ? g.course + '-kurs' : (g.level_name || '');
@@ -458,16 +463,16 @@
         );
 
         function rowHtml(g, index, withCheckbox) {
-            const isPicked = picked.has(g.group_hemis_id);
+            const pendingSet = rightView === 'picked' ? pendingRemove : pendingAdd;
+            const isChecked = withCheckbox && pendingSet.has(g.group_hemis_id);
             const check = withCheckbox
-                ? '<input type="checkbox" data-id="' + g.group_hemis_id + '"' + (isPicked ? ' checked' : '') + '>'
+                ? '<input type="checkbox" data-id="' + g.group_hemis_id + '"' + (isChecked ? ' checked' : '') + '>'
                 : '<span></span>';
-            const tag = !withCheckbox && isPicked ? '<span class="sd-tag">Taqsimlanadi</span>' : '';
 
-            return '<label class="sd-row sd-grid' + (withCheckbox && isPicked ? ' is-picked' : '') + '">' +
+            return '<label class="sd-row sd-grid' + (isChecked ? ' is-picked' : '') + '">' +
                 '<span class="sd-idx">' + index + '.</span>' +
                 check +
-                '<span><span class="sd-name" data-group="' + g.group_hemis_id + '">' + esc(g.group_name) + '</span>' + tag +
+                '<span><span class="sd-name" data-group="' + g.group_hemis_id + '">' + esc(g.group_name) + '</span>' +
                 '<span class="sd-meta">' + esc(metaLabel(g)) + '</span></span>' +
                 '<span class="sd-num">' + g.student_count + '</span>' +
                 (withCheckbox ? '' :
@@ -482,8 +487,13 @@
             const panel = panels[key];
             let list = applyFilters(readFilters(panel));
 
-            if (key === 'right' && rightView === 'picked') {
-                list = list.filter(g => picked.has(g.group_hemis_id));
+            if (key === 'left') {
+                // Taqsimlanadigan guruhlar chap ro'yxatda ko'rinmaydi.
+                list = list.filter(g => !sources.has(g.group_hemis_id));
+            } else if (rightView === 'picked') {
+                list = list.filter(g => sources.has(g.group_hemis_id));
+            } else {
+                list = list.filter(g => !sources.has(g.group_hemis_id));
             }
 
             panel.rows.innerHTML = list.length
@@ -494,9 +504,21 @@
 
         function renderTabs() {
             const inRight = applyFilters(readFilters(panels.right));
-            $('tabAll').textContent = inRight.length;
-            $('tabPicked').textContent = inRight.filter(g => picked.has(g.group_hemis_id)).length;
-            $('pickedTotal').textContent = picked.size;
+            $('tabAll').textContent = inRight.filter(g => !sources.has(g.group_hemis_id)).length;
+            $('tabPicked').textContent = inRight.filter(g => sources.has(g.group_hemis_id)).length;
+
+            const button = $('saveSources');
+            if (rightView === 'picked') {
+                $('pickedTotal').textContent = pendingRemove.size;
+                $('footLabel').textContent = ' ta guruh qaytarish uchun tanlandi';
+                button.textContent = 'Tanlanganlarni qaytarish';
+                button.disabled = pendingRemove.size === 0;
+            } else {
+                $('pickedTotal').textContent = pendingAdd.size;
+                $('footLabel').textContent = ' ta guruh belgilangan';
+                button.textContent = "O'tqazish";
+                button.disabled = pendingAdd.size === 0;
+            }
         }
 
         function render() {
@@ -569,16 +591,20 @@
             const box = event.target.closest('input[type=checkbox]');
             if (!box) return;
             const id = Number(box.dataset.id);
-            if (box.checked) picked.add(id); else picked.delete(id);
+            const pendingSet = rightView === 'picked' ? pendingRemove : pendingAdd;
+            if (box.checked) pendingSet.add(id); else pendingSet.delete(id);
             render();
         });
 
-        document.querySelectorAll('.sd-tab').forEach(tab => tab.addEventListener('click', () => {
-            if (rightView === tab.dataset.view) return;
-            rightView = tab.dataset.view;
-            document.querySelectorAll('.sd-tab').forEach(t => t.classList.toggle('is-on', t === tab));
+        function setRightView(view) {
+            rightView = view;
+            document.querySelectorAll('.sd-tab').forEach(t => t.classList.toggle('is-on', t.dataset.view === view));
             renderPanel('right');
             renderTabs();
+        }
+
+        document.querySelectorAll('.sd-tab').forEach(tab => tab.addEventListener('click', () => {
+            if (rightView !== tab.dataset.view) setRightView(tab.dataset.view);
         }));
 
         // --- Talabalar modali ---
@@ -854,23 +880,38 @@
 
         $('saveSources').addEventListener('click', async () => {
             const button = $('saveSources');
+            const removing = rightView === 'picked';
+
+            // O'tqazish: saqlanganlarga yangilarini qo'shamiz.
+            // Qaytarish: tanlanganlarni saqlanganlardan chiqaramiz.
+            const next = new Set(sources);
+            if (removing) {
+                pendingRemove.forEach(id => next.delete(id));
+            } else {
+                pendingAdd.forEach(id => next.add(id));
+            }
+
             button.disabled = true;
             try {
                 const response = await fetch(saveUrl, {
                     method: 'POST',
                     headers: {'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},
-                    body: JSON.stringify({group_hemis_ids: [...picked]}),
+                    body: JSON.stringify({group_hemis_ids: [...next]}),
                 });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.message || 'Saqlab bo\'lmadi.');
+                if (!response.ok) throw new Error(data.message || "Saqlab bo'lmadi.");
+
                 groups = data.groups;
-                picked = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
-                render();
-                alert(data.message);
+                sources = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
+                pendingAdd.clear();
+                pendingRemove.clear();
+
+                // O'tqazishdan keyin "Belgilanganlar" tabiga o'tamiz.
+                renderPanel('left');
+                setRightView('picked');
             } catch (error) {
                 alert(error.message);
-            } finally {
-                button.disabled = false;
+                renderTabs();
             }
         });
 

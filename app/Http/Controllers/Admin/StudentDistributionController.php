@@ -82,6 +82,7 @@ class StudentDistributionController extends Controller
                     'student_id_number' => (string) $student->student_id_number,
                     'moved_to' => $draft ? $draft->to_group_name : null,
                     'moved_to_id' => $draft ? (int) $draft->to_group_hemis_id : null,
+                    'full_group_mode' => $draft ? (bool) $draft->full_group_mode : false,
                 ];
             })
             ->values();
@@ -98,6 +99,11 @@ class StudentDistributionController extends Controller
      * LMS dagi students.group_id o'zgartirilmaydi — bu faqat reja. Maqsadli
      * guruh talabaning yo'nalishi, kursi va ta'lim tiliga mos bo'lishi hamda
      * bo'sh joyi qolgan bo'lishi shart.
+     *
+     * "To'liq guruh" rejimida (full_group_mode) ikki cheklov yumshaydi:
+     * bo'sh joyi yo'q guruhga ham ko'chirish mumkin (guruh "ortiqcha" bo'lib
+     * qoladi) va o'zbek/rus guruhidan ingliz guruhiga o'tishga ruxsat beriladi.
+     * Boshqa yo'nalish yoki kursga bu rejimda ham o'tib bo'lmaydi.
      */
     public function assignStudent(Request $request): JsonResponse
     {
@@ -110,7 +116,10 @@ class StudentDistributionController extends Controller
         $data = $request->validate([
             'student_id' => ['required', 'integer'],
             'to_group_hemis_id' => ['required', 'integer'],
+            'full_group_mode' => ['nullable', 'boolean'],
         ]);
+
+        $fullMode = (bool) ($data['full_group_mode'] ?? false);
 
         $student = Student::query()
             ->where('student_status_code', 11)
@@ -135,13 +144,15 @@ class StudentDistributionController extends Controller
             return response()->json(['message' => 'Talaba allaqachon shu guruhda.'], 422);
         }
 
-        if (!$this->groupsCompatible($source, $target)) {
+        if (!$this->groupsCompatible($source, $target, $fullMode)) {
             return response()->json([
-                'message' => 'Maqsadli guruh talabaning yo\'nalishi, kursi yoki ta\'lim tiliga mos emas.',
+                'message' => $fullMode
+                    ? 'Maqsadli guruh talabaning yo\'nalishi yoki kursiga mos emas, yoki ta\'lim tili boshqa (faqat ingliz guruhiga o\'tish mumkin).'
+                    : 'Maqsadli guruh talabaning yo\'nalishi, kursi yoki ta\'lim tiliga mos emas.',
             ], 422);
         }
 
-        if ($target['free_places'] === null || $target['free_places'] < 1) {
+        if (!$fullMode && ($target['free_places'] === null || $target['free_places'] < 1)) {
             return response()->json(['message' => 'Tanlangan guruhda bo\'sh joy qolmagan.'], 422);
         }
 
@@ -154,6 +165,7 @@ class StudentDistributionController extends Controller
                 'student_id_number' => $student->student_id_number,
                 'from_group_name' => $source['group_name'] ?? $student->group_name,
                 'to_group_name' => $target['group_name'],
+                'full_group_mode' => $fullMode,
                 'assigned_by' => Auth::id(),
             ]
         );
@@ -190,10 +202,20 @@ class StudentDistributionController extends Controller
      * Fakultet shart emas: bitta yo'nalish bir nechta fakultetga (1-son,
      * 2-son davolash) bo'lingan bo'lishi mumkin, talaba ularning istalgan
      * guruhiga o'tishi mumkin.
+     *
+     * "To'liq guruh" rejimida (full_group_mode=1) to'la va ortiqcha guruhlar
+     * ham chiqadi, ingliz guruhlari esa tilidan qat'i nazar ko'rsatiladi.
+     * Taqsimlanadigan guruh bu rejimda ham maqsad bo'la olmaydi — u
+     * bo'shatilayotgan guruh.
      */
     public function targetGroups(Request $request): JsonResponse
     {
-        $data = $request->validate(['group_hemis_id' => ['required', 'integer']]);
+        $data = $request->validate([
+            'group_hemis_id' => ['required', 'integer'],
+            'full_group_mode' => ['nullable', 'boolean'],
+        ]);
+
+        $fullMode = (bool) ($data['full_group_mode'] ?? false);
 
         $catalog = $this->groupCatalog();
         $source = $catalog->firstWhere('group_hemis_id', (int) $data['group_hemis_id']);
@@ -205,23 +227,56 @@ class StudentDistributionController extends Controller
         $targets = $catalog
             ->filter(fn ($group) => $group['group_hemis_id'] !== $source['group_hemis_id']
                 && !$group['is_source']
-                && $group['free_places'] !== null
-                && $group['free_places'] > 0
-                && $this->groupsCompatible($source, $group))
+                && ($fullMode || ($group['free_places'] !== null && $group['free_places'] > 0))
+                && $this->groupsCompatible($source, $group, $fullMode))
             ->values();
 
         return response()->json(['groups' => $targets]);
     }
 
-    private function groupsCompatible(?array $source, array $target): bool
+    /**
+     * Ikki guruh bir-biriga mos keladimi.
+     *
+     * Yo'nalish va kurs har doim bir xil bo'lishi shart. Ta'lim tili oddiy
+     * rejimda bir xil bo'lishi kerak; "to'liq guruh" rejimida esa maqsad
+     * ingliz guruhi bo'lsa, o'zbek/rus guruhidan ham o'tish mumkin. Teskari
+     * yo'nalish (ingliz → o'zbek/rus) va o'zbek ↔ rus o'tishlariga ruxsat yo'q.
+     */
+    private function groupsCompatible(?array $source, array $target, bool $fullMode = false): bool
     {
         if (!$source) {
             return false;
         }
 
-        return $source['specialty_name'] === $target['specialty_name']
-            && $source['course'] === $target['course']
-            && $this->languageKey($source) === $this->languageKey($target);
+        if ($source['specialty_name'] !== $target['specialty_name']
+            || $source['course'] !== $target['course']) {
+            return false;
+        }
+
+        if ($this->languageKey($source) === $this->languageKey($target)) {
+            return true;
+        }
+
+        return $fullMode && $this->isEnglish($target);
+    }
+
+    /**
+     * Guruh ingliz tilida o'qiydimi.
+     *
+     * HEMIS ta'lim tilini ham harfli (en), ham raqamli (14) kod bilan beradi;
+     * nomi esa "Ingliz" yoki "English" bo'ladi. Ishonchli bo'lishi uchun
+     * avval nom, keyin kod tekshiriladi.
+     */
+    private function isEnglish(array $group): bool
+    {
+        $name = mb_strtolower(trim((string) ($group['language_name'] ?? '')));
+        if ($name !== '' && (str_contains($name, 'ingliz') || str_contains($name, 'english') || str_contains($name, 'англ'))) {
+            return true;
+        }
+
+        $code = mb_strtolower(trim((string) ($group['language_code'] ?? '')));
+
+        return in_array($code, ['en', 'eng', 'en-us', '14'], true);
     }
 
     /**

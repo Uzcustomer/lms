@@ -1229,7 +1229,7 @@
             }
         });
 
-        // Panellarni oyna balandligiga tenglashtiramiz — pastdan 100px qoladi.
+        // Panellarni oyna balandligiga tenglashtiramiz — pastdan 20px qoladi.
         function sizePanels() {
             const cols = document.querySelector('.sd-cols');
             if (!cols) return;
@@ -1238,7 +1238,7 @@
                 return;
             }
             const top = cols.getBoundingClientRect().top + window.scrollY;
-            const height = Math.max(360, window.innerHeight - top - 100);
+            const height = Math.max(360, window.innerHeight - top - 20);
             cols.querySelectorAll('.sd-side').forEach(el => { el.style.height = height + 'px'; });
         }
         window.addEventListener('resize', sizePanels);

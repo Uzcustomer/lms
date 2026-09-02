@@ -109,8 +109,13 @@
     }
     .sd-row:last-child { border-bottom:0; }
     .sd-row:hover { background:#fafcfe; }
-    .sd-name { cursor:pointer; }
-    .sd-name:hover { text-decoration:underline; }
+    .is-right .sd-name { cursor:pointer; }
+    .is-right .sd-name:hover { text-decoration:underline; }
+    .is-right .sd-filters { grid-template-columns:1fr 1fr 60px 1fr 1fr; }
+    .sd-moved-mini {
+        display:inline-block; margin-left:6px; padding:1px 6px; border-radius:3px;
+        background:#e9f7f0; color:#0f7a52; font-size:10px; font-weight:700;
+    }
     .sd-row.is-picked { background:#fffbf2; }
     .sd-idx { color:var(--muted); font-size:11px; font-weight:600; text-align:right; font-variant-numeric:tabular-nums; }
     .sd-row input[type=checkbox] { width:15px; height:15px; accent-color:var(--navy); cursor:pointer; }
@@ -320,6 +325,7 @@
                         <select data-f="specialty"><option value="">Barcha yo'nalishlar</option></select>
                         <select data-f="course"><option value="">Kurs</option></select>
                         <input data-f="search" type="search" placeholder="Guruh nomi">
+                        <input data-f="student" type="search" placeholder="Talaba ismi">
                     </div>
 
                     <div class="sd-tabs">
@@ -396,6 +402,7 @@
         const exportUrl = @json(route('admin.student-distribution.export'));
         const capacityUrl = @json(route('admin.student-distribution.capacity.update'));
         const studentsUrl = @json(route('admin.student-distribution.group-students'));
+        const searchUrl   = @json(route('admin.student-distribution.search-students'));
         const targetsUrl  = @json(route('admin.student-distribution.target-groups'));
         const assignUrl   = @json(route('admin.student-distribution.assign-student'));
         const unassignUrl = @json(route('admin.student-distribution.unassign-student'));
@@ -483,8 +490,52 @@
                 '</label>';
         }
 
+        // --- Talaba ismi bo'yicha qidiruv (o'ng panel) ---
+        let studentQuery = '';
+        let studentResults = [];
+        let studentSearchTimer = null;
+
+        function studentSearchRow(st, index) {
+            const moved = st.moved_to
+                ? '<span class="sd-moved-mini">&rarr; ' + esc(st.moved_to) + '</span>'
+                : '';
+
+            return '<div class="sd-row sd-grid">' +
+                '<span class="sd-idx">' + (index + 1) + '.</span>' +
+                '<span></span>' +
+                '<span><span class="sd-name" data-group="' + st.group_hemis_id + '">' + esc(st.full_name) + '</span>' + moved +
+                '<span class="sd-meta">' + esc(st.student_id_number) + '</span></span>' +
+                '<span class="sd-num" title="Guruhi">' + esc(st.group_name) + '</span>' +
+                '</div>';
+        }
+
+        function renderStudentSearch() {
+            panels.right.rows.innerHTML = studentResults.length
+                ? studentResults.map(studentSearchRow).join('')
+                : '<div class="sd-empty"><b>Talaba topilmadi</b>' + "Boshqa ism bilan urinib ko'ring." + '</div>';
+            panels.right.count.textContent = studentResults.length + ' ta';
+        }
+
+        async function runStudentSearch() {
+            try {
+                const response = await fetch(searchUrl + '?q=' + encodeURIComponent(studentQuery), {headers:{'Accept':'application/json'}});
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || "Qidirib bo'lmadi.");
+                studentResults = data.students;
+            } catch (error) {
+                studentResults = [];
+            }
+            renderStudentSearch();
+        }
+
         function renderPanel(key) {
             const panel = panels[key];
+
+            if (key === 'right' && studentQuery.length >= 2) {
+                renderStudentSearch();
+                return;
+            }
+
             let list = applyFilters(readFilters(panel));
 
             if (key === 'left') {
@@ -581,6 +632,19 @@
             });
 
             box.addEventListener('input', event => {
+                if (event.target.dataset.f === 'student') {
+                    studentQuery = event.target.value.trim();
+                    event.target.classList.toggle('is-on', studentQuery !== '');
+                    clearTimeout(studentSearchTimer);
+                    if (studentQuery.length >= 2) {
+                        studentSearchTimer = setTimeout(runStudentSearch, 300);
+                    } else {
+                        studentResults = [];
+                        renderPanel('right');
+                        renderTabs();
+                    }
+                    return;
+                }
                 if (event.target.dataset.f !== 'search') return;
                 renderPanel(key);
                 if (key === 'right') renderTabs();
@@ -777,13 +841,12 @@
             }
         });
 
-        Object.values(panels).forEach(panel => {
-            panel.rows.addEventListener('click', event => {
-                const name = event.target.closest('.sd-name');
-                if (!name) return;
-                event.preventDefault();
-                openStudents(Number(name.dataset.group));
-            });
+        // Modal faqat o'ng paneldan ochiladi.
+        panels.right.rows.addEventListener('click', event => {
+            const name = event.target.closest('.sd-name');
+            if (!name) return;
+            event.preventDefault();
+            openStudents(Number(name.dataset.group));
         });
 
         $('modalClose').addEventListener('click', closeModal);

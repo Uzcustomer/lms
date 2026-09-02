@@ -94,6 +94,44 @@ class StudentDistributionController extends Controller
     }
 
     /**
+     * Talaba ismi bo'yicha qidiruv — o'ng paneldagi filtr uchun.
+     * Har bir natijada talabaning guruhi ham qaytariladi.
+     */
+    public function searchStudents(Request $request): JsonResponse
+    {
+        $data = $request->validate(['q' => ['required', 'string', 'min:2', 'max:100']]);
+
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+        $drafts = Schema::hasTable('distribution_draft_assignments')
+            ? DistributionDraftAssignment::query()->get()->keyBy('student_id')
+            : collect();
+
+        $students = Student::query()
+            ->where('student_status_code', 11)
+            ->whereIn('group_id', $catalog->keys()->all())
+            ->where('full_name', 'like', '%' . trim($data['q']) . '%')
+            ->orderBy('full_name')
+            ->limit(50)
+            ->get(['id', 'group_id', 'full_name', 'student_id_number'])
+            ->map(function ($student) use ($catalog, $drafts) {
+                $group = $catalog->get((int) $student->group_id);
+                $draft = $drafts->get($student->id);
+
+                return [
+                    'student_id' => $student->id,
+                    'full_name' => $student->full_name,
+                    'student_id_number' => (string) $student->student_id_number,
+                    'group_hemis_id' => (int) $student->group_id,
+                    'group_name' => $group['group_name'] ?? '',
+                    'moved_to' => $draft ? $draft->to_group_name : null,
+                ];
+            })
+            ->values();
+
+        return response()->json(['students' => $students]);
+    }
+
+    /**
      * Talabani boshqa guruhga ko'chirish rejasi.
      *
      * LMS dagi students.group_id o'zgartirilmaydi — bu faqat reja. Maqsadli

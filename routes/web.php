@@ -49,7 +49,6 @@ use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\Admin\ClosingFormController;
 use App\Http\Controllers\Admin\StaffRegistrationController;
-use App\Http\Controllers\Admin\StudentDistributionController;
 use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\Admin\VedomostTekshirishController;
@@ -470,25 +469,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
         // Registrator ofisi bo'linmalari
+        // Talabalarni taqsimlash — modul qaytadan quriladi.
+        // Hozircha faqat bo'sh sahifa qoldirilgan.
         Route::prefix('student-distribution')->name('student-distribution.')
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
             ->group(function () {
-                Route::get('/', [StudentDistributionController::class, 'index'])->name('index');
-                Route::get('/catalog', [StudentDistributionController::class, 'catalog'])->name('catalog');
-                Route::post('/groups', [StudentDistributionController::class, 'storeGroups'])->name('groups.store');
-                Route::post('/source-groups', [StudentDistributionController::class, 'storeSourceGroups'])->name('source-groups.store');
-                Route::get('/groups', [StudentDistributionController::class, 'groups'])->name('groups');
-                Route::delete('/groups', [StudentDistributionController::class, 'destroyAllGroups'])->name('groups.destroy-all');
-                Route::delete('/groups/{group}', [StudentDistributionController::class, 'destroyGroup'])->name('groups.destroy');
-                Route::get('/students', [StudentDistributionController::class, 'students'])->name('students');
-                Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');
-                Route::post('/group-change-permission', [StudentDistributionController::class, 'setGroupChangePermission'])->name('group-change-permission');
-                Route::get('/permission-groups', [StudentDistributionController::class, 'permissionGroups'])->name('permission-groups');
-                Route::post('/group-change-permissions', [StudentDistributionController::class, 'setGroupChangePermissions'])->name('group-change-permissions');
-                Route::get('/applications', [StudentDistributionController::class, 'applications'])->name('applications');
-                Route::get('/applications/export', [StudentDistributionController::class, 'exportAssignments'])->name('applications.export');
-                Route::post('/applications/{application}/approve', [StudentDistributionController::class, 'approveApplication'])->name('applications.approve');
-                Route::delete('/applications/{application}', [StudentDistributionController::class, 'destroyApplication'])->name('applications.destroy');
+                Route::get('/', fn () => view('admin.student-distribution.index'))->name('index');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');
@@ -1468,12 +1454,7 @@ Route::prefix('student')->name('student.')->group(function () {
             ->name('exam.start');
 
         // Xizmatlar sahifasi
-        Route::get('/services', function () {
-            $student = Auth::guard('student')->user();
-            $groupChangeServiceEnabled = \App\Models\StudentGroupChangePermission::query()
-                ->where('student_id', $student->id)->where('enabled', true)->exists();
-            return view('student.services', compact('groupChangeServiceEnabled'));
-        })->name('services');
+        Route::get('/services', fn () => view('student.services'))->name('services');
         Route::get('/documents', [\App\Http\Controllers\Student\StudentDocumentController::class, 'index'])->name('documents.index');
         Route::get('/documents/{file}/download', [\App\Http\Controllers\Student\StudentDocumentController::class, 'download'])->name('documents.download');
 
@@ -1490,8 +1471,6 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/transfer-application', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'create'])->name('transfer-application.create');
         Route::post('/transfer-application', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'store'])->name('transfer-application.store');
         Route::get('/transfer-application/{id}/document', [\App\Http\Controllers\Student\StudentTransferApplicationController::class, 'document'])->name('transfer-application.document');
-        Route::get('/group-change-application', [\App\Http\Controllers\Student\GroupChangeApplicationController::class, 'create'])->name('group-change-application.create');
-        Route::post('/group-change-application', [\App\Http\Controllers\Student\GroupChangeApplicationController::class, 'store'])->name('group-change-application.store');
 
         // Ish e'lonlari
         Route::get('/job-listings', function () {

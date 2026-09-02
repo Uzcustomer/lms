@@ -8,20 +8,6 @@
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3">
         <div class="grid grid-cols-2 gap-3">
 
-            @if($groupChangeServiceEnabled ?? false)
-                <a href="{{ route('student.group-change-application.create') }}"
-                   class="flex flex-col items-center bg-white rounded-xl border border-emerald-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
-                   style="padding:16px 10px; box-shadow:0 4px 14px rgba(16,185,129,.22);">
-                    <div class="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
-                        <svg class="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h15m0 0-5.25-5.25M19.5 12l-5.25 5.25M4.5 6.75v10.5"/>
-                        </svg>
-                    </div>
-                    <span class="text-sm font-bold text-gray-800 text-center leading-tight">Guruhni o'zgartirish</span>
-                    <span class="text-[11px] text-gray-400 mt-1 text-center">Bo'sh joyli guruhga o'tish arizasi</span>
-                </a>
-            @endif
-
             {{-- 1. Sababli ariza --}}
             <a href="{{ route('student.absence-excuses.index') }}"
                class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"

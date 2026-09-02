@@ -358,7 +358,7 @@
 
                     <div class="sd-tabs">
                         <button class="sd-tab is-on" data-view="all" type="button">Barcha guruhlar <span id="tabAll">0</span></button>
-                        <button class="sd-tab" data-view="picked" type="button">Belgilanganlar <span id="tabPicked">0</span></button>
+                        <button class="sd-tab" data-view="picked" type="button">Taqsimlanadigan guruhlar <span id="tabPicked">0</span></button>
                     </div>
 
                     <div class="sd-colhead sd-grid">
@@ -631,8 +631,8 @@
                 button.disabled = pendingAdd.size === 0;
             }
 
-            const currentPending = rightView === 'picked' ? pendingRemove : pendingAdd;
-            $('openVotingBtn').hidden = currentPending.size === 0;
+            // Ovoz berish tugmasi faqat "Taqsimlanadigan guruhlar" tabida.
+            $('openVotingBtn').hidden = rightView !== 'picked' || pendingRemove.size === 0;
         }
 
         function render() {

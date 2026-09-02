@@ -72,9 +72,24 @@
 
     /* ---- Ro'yxat ---- */
     .sd-rows { max-height:600px; overflow-y:auto; }
+    /* Ustunlar: № | checkbox | guruh | talaba | sig'im | holat
+       Sarlavha va qatorlar bir xil grid ishlatadi — shunda ular tekislanadi. */
+    .sd-grid {
+        display:grid;
+        grid-template-columns:28px 20px minmax(0,1fr) 74px 92px 88px;
+        align-items:center; gap:8px;
+    }
+    .sd-colhead {
+        padding:7px 16px; border-bottom:1px solid var(--line);
+        background:#f7f9fc;
+        color:var(--muted); font-size:9.5px; font-weight:700;
+        letter-spacing:.09em; text-transform:uppercase;
+    }
+    .sd-colhead span:nth-child(4), .sd-colhead span:nth-child(5), .sd-colhead span:nth-child(6) {
+        text-align:center;
+    }
     .sd-row {
-        display:grid; grid-template-columns:26px auto minmax(0,1fr) auto; align-items:center; gap:10px;
-        padding:10px 16px; border-bottom:1px solid var(--line-soft); transition:background .12s;
+        padding:9px 16px; border-bottom:1px solid var(--line-soft); transition:background .12s;
     }
     .sd-row:last-child { border-bottom:0; }
     .sd-row:hover { background:#fafcfe; }
@@ -84,18 +99,17 @@
     .sd-name { color:var(--ink); font-size:13px; font-weight:600; }
     .sd-meta { margin-top:2px; color:var(--muted); font-size:11px; }
     .sd-num {
-        padding:3px 9px; border-radius:4px; background:#f2f6fc; color:var(--navy);
-        font-size:11.5px; font-weight:700; white-space:nowrap;
+        display:flex; align-items:center; justify-content:center;
+        height:26px; border-radius:4px; background:#f2f6fc; color:var(--navy);
+        font-size:12px; font-weight:700;
     }
-    .sd-num em { font-style:normal; color:var(--muted); font-weight:500; }
-    .sd-stats { display:flex; align-items:center; gap:6px; }
     .sd-cap {
-        display:inline-flex; align-items:center; gap:3px;
-        padding:2px 6px; border:1px solid #d5dfec; border-radius:4px; background:#fff;
+        display:flex; align-items:center; justify-content:center;
+        height:26px; border:1px solid #d5dfec; border-radius:4px; background:#fff;
     }
     .sd-cap input {
-        width:32px; padding:0; border:0; background:transparent; color:var(--navy);
-        font-family:inherit; font-size:11.5px; font-weight:700; text-align:center; outline:none;
+        width:100%; height:100%; padding:0; border:0; background:transparent; color:var(--navy);
+        font-family:inherit; font-size:12px; font-weight:700; text-align:center; outline:none;
         -moz-appearance:textfield;
     }
     .sd-cap input::-webkit-outer-spin-button, .sd-cap input::-webkit-inner-spin-button {
@@ -103,9 +117,9 @@
     }
     .sd-cap input:focus { background:#eef4fd; border-radius:3px; }
     .sd-cap.is-custom { border-color:#c9a227; background:#fffdf5; }
-    .sd-cap b { color:var(--muted); font-size:9.5px; font-weight:600; letter-spacing:.04em; }
     .sd-free {
-        padding:3px 8px; border-radius:4px; font-size:11px; font-weight:700; white-space:nowrap;
+        display:flex; align-items:center; justify-content:center;
+        height:26px; border-radius:4px; font-size:11px; font-weight:700; white-space:nowrap;
     }
     .sd-free.free { background:#e9f7f0; color:#0f7a52; }
     .sd-free.full { background:#f2f6fc; color:var(--muted); }
@@ -168,6 +182,10 @@
                         <input data-f="search" type="search" placeholder="Guruh nomi">
                     </div>
 
+                    <div class="sd-colhead sd-grid">
+                        <span>#</span><span></span><span>Guruh</span>
+                        <span>Talaba</span><span>Sig'im</span><span>Holat</span>
+                    </div>
                     <div class="sd-rows" id="leftRows"></div>
                 </section>
 
@@ -199,6 +217,10 @@
                         <button class="sd-tab" data-view="picked" type="button">Belgilanganlar <span id="tabPicked">0</span></button>
                     </div>
 
+                    <div class="sd-colhead sd-grid">
+                        <span>#</span><span></span><span>Guruh</span>
+                        <span>Talaba</span><span>Sig'im</span><span>Holat</span>
+                    </div>
                     <div class="sd-rows" id="rightRows"></div>
 
                     <div class="sd-actions">
@@ -227,7 +249,7 @@
 
         // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
         function freeHtml(g) {
-            if (g.free_places === null || g.free_places === undefined) return '';
+            if (g.free_places === null || g.free_places === undefined) return '<span></span>';
             if (g.free_places > 0) return '<span class="sd-free free">+' + g.free_places + " bo'sh</span>";
             if (g.free_places === 0) return "<span class=\"sd-free full\">to'la</span>";
             return '<span class="sd-free over">' + Math.abs(g.free_places) + ' ortiqcha</span>';
@@ -263,20 +285,17 @@
                 : '<span></span>';
             const tag = !withCheckbox && isPicked ? '<span class="sd-tag">Taqsimlanadi</span>' : '';
 
-            return '<label class="sd-row' + (withCheckbox && isPicked ? ' is-picked' : '') + '">' +
+            return '<label class="sd-row sd-grid' + (withCheckbox && isPicked ? ' is-picked' : '') + '">' +
                 '<span class="sd-idx">' + index + '.</span>' +
                 check +
                 '<span><span class="sd-name">' + esc(g.group_name) + tag + '</span>' +
                 '<span class="sd-meta">' + esc(g.faculty_name || '—') + ' · ' + esc(g.specialty_name || '—') +
                 (courseLabel(g) ? ' · ' + esc(courseLabel(g)) : '') + '</span></span>' +
-                '<span class="sd-stats">' +
-                    '<span class="sd-num">' + g.student_count + ' <em>talaba</em></span>' +
-                    '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + "\" title=\"Sig'im - o'zgartirish mumkin\">" +
-                        "<b>SIG'IM</b>" +
-                        '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-cap="' + g.group_hemis_id + '">' +
-                    '</span>' +
-                    freeHtml(g) +
+                '<span class="sd-num">' + g.student_count + '</span>' +
+                '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + "\" title=\"Sig'im - o'zgartirish mumkin\">" +
+                    '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-cap="' + g.group_hemis_id + '">' +
                 '</span>' +
+                freeHtml(g) +
                 '</label>';
         }
 

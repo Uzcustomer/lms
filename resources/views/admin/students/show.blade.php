@@ -397,6 +397,7 @@
                                             <tr style="background:#f1f5f9;">
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Guruh</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Yo'nalish</th>
+                                                <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Semestr</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">To'lov shakli</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Boshlangan</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Tugagan</th>
@@ -414,6 +415,7 @@
                                                         @endif
                                                     </td>
                                                     <td style="padding:8px;color:#475569;">{{ $gh->specialty_name ?? '-' }}</td>
+                                                    <td style="padding:8px;color:#475569;">{{ $gh->semester_name ?: '—' }}</td>
                                                     <td style="padding:8px;">
                                                         @if($kind)
                                                             <span title="{{ $gh->payment_form_name }}" style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;{{ $kind === 'grant' ? 'background:#d1fae5;color:#065f46;' : 'background:#dbeafe;color:#1e40af;' }}">

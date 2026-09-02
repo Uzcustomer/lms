@@ -94,18 +94,18 @@ class HemisService
     }
 
     /**
-     * Talabaning guruhi yoki to'lov shakli o'zgarganda uni tarixga yozib boradi.
+     * Talabaning guruhi, to'lov shakli yoki semestri o'zgarganda tarixga yozadi.
      *
      * Ochiq (ended_at = null) yozuv "hozirgi holat" hisoblanadi. Har importda
-     * hozirgi guruh va to'lov shakli ochiq yozuv bilan solishtiriladi:
-     *  - Ochiq yozuv yo'q bo'lsa — hozirgi holat birinchi yozuv sifatida ochiladi (backfill).
-     *  - Guruh yoki to'lov shakli o'zgargan bo'lsa — eski yozuv yopiladi (ended_at)
-     *    va yangisi ochiladi.
+     * hozirgi holat ochiq yozuv bilan solishtiriladi:
+     *  - Ochiq yozuv yo'q bo'lsa — hozirgi holat birinchi yozuv sifatida ochiladi.
+     *  - Guruh, to'lov shakli yoki semestr o'zgargan bo'lsa — eski yozuv
+     *    yopiladi (ended_at) va yangisi ochiladi.
      *  - O'zgarmagan bo'lsa — hech nima qilinmaydi.
      *
-     * To'lov shakli ham kuzatiladi, chunki talaba guruhini o'zgartirmasdan
-     * grantdan kontraktga (yoki aksincha) o'tishi mumkin va bu tarixda
-     * saqlanishi kerak.
+     * To'lov shakli kuzatiladi, chunki talaba guruhini o'zgartirmasdan grantdan
+     * kontraktga (yoki aksincha) o'tishi mumkin. Semestr ham kuzatiladi, shunda
+     * har semestrdagi shartnoma turi tarixda alohida qator bo'lib qoladi.
      *
      * HEMIS ko'chirish sanasini bermagani uchun started_at/ended_at qiymati
      * o'zgarish import orqali birinchi aniqlangan vaqt bilan belgilanadi.
@@ -122,6 +122,7 @@ class HemisService
         }
 
         $tracksPayment = Schema::hasColumn('student_group_history', 'payment_form_name');
+        $tracksSemester = Schema::hasColumn('student_group_history', 'semester_name');
 
         $openRecord = StudentGroupHistory::where('student_id', $student->id)
             ->whereNull('ended_at')
@@ -129,23 +130,39 @@ class HemisService
             ->first();
 
         if ($openRecord) {
+            $same = fn ($a, $b) => trim((string) $a) === trim((string) $b);
+
             $sameGroup = (string) $openRecord->group_hemis_id === (string) $newGroupId;
             $samePayment = !$tracksPayment
-                || trim((string) $openRecord->payment_form_name) === trim((string) $student->payment_form_name);
+                || $same($openRecord->payment_form_name, $student->payment_form_name);
+            $sameSemester = !$tracksSemester
+                || $same($openRecord->semester_name, $student->semester_name);
 
-            // Na guruh, na to'lov shakli o'zgarmagan bo'lsa — hech nima qilinmaydi
-            if ($sameGroup && $samePayment) {
+            // Guruh, to'lov shakli va semestr o'zgarmagan bo'lsa — hech nima qilinmaydi
+            if ($sameGroup && $samePayment && $sameSemester) {
                 return;
             }
 
-            // Eski yozuvda to'lov shakli bo'sh qolgan bo'lsa (migratsiyadan oldingi
-            // yozuvlar) va guruh o'zgarmagan bo'lsa — yangi qator ochish o'rniga
-            // mavjudini to'ldiramiz, aks holda soxta "o'zgarish" paydo bo'ladi.
-            if ($sameGroup && $tracksPayment && trim((string) $openRecord->payment_form_name) === '') {
-                $openRecord->update([
-                    'payment_form_code' => $student->payment_form_code,
-                    'payment_form_name' => $student->payment_form_name,
-                ]);
+            // Migratsiyadan oldingi yozuvlarda bu maydonlar bo'sh. Guruh va to'lov
+            // shakli o'zgarmagan bo'lsa, bo'sh maydonlarni yangi qator ochmasdan
+            // to'ldiramiz — aks holda birinchi importda soxta "o'zgarish" paydo bo'ladi.
+            $backfill = [];
+            if ($tracksPayment && $same($openRecord->payment_form_name, '')) {
+                $backfill['payment_form_code'] = $student->payment_form_code;
+                $backfill['payment_form_name'] = $student->payment_form_name;
+            }
+            if ($tracksSemester && $same($openRecord->semester_name, '')) {
+                $backfill['semester_code'] = $student->semester_code;
+                $backfill['semester_name'] = $student->semester_name;
+            }
+
+            $paymentResolved = $samePayment || isset($backfill['payment_form_name']);
+            $semesterResolved = $sameSemester || isset($backfill['semester_name']);
+
+            if ($sameGroup && $paymentResolved && $semesterResolved) {
+                if ($backfill) {
+                    $openRecord->update($backfill);
+                }
 
                 return;
             }
@@ -166,6 +183,11 @@ class HemisService
         if ($tracksPayment) {
             $values['payment_form_code'] = $student->payment_form_code;
             $values['payment_form_name'] = $student->payment_form_name;
+        }
+
+        if ($tracksSemester) {
+            $values['semester_code'] = $student->semester_code;
+            $values['semester_name'] = $student->semester_name;
         }
 
         StudentGroupHistory::create($values);

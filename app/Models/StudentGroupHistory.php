@@ -16,6 +16,8 @@ class StudentGroupHistory extends Model
         'payment_form_code',
         'payment_form_name',
         'education_year_name',
+        'semester_code',
+        'semester_name',
         'started_at',
         'ended_at',
     ];

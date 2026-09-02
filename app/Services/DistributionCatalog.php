@@ -114,10 +114,32 @@ class DistributionCatalog
         // qo'shamiz. Kurs guruh nomidagi qabul yilidan hisoblanadi.
         $known = $rows->pluck('group_hemis_id')->flip();
 
+        // HEMIS ba'zan bitta guruhni ikki xil id bilan (eski/yangi yozuv)
+        // faol holda saqlaydi — nom bo'yicha dedupe qilamiz: talabali guruh
+        // bilan bir xil nomlisi tashlanadi, sintetiklardan eng yangisi qoladi.
+        $nameKeyOf = fn ($name, $specialty) => mb_strtolower(trim((string) $name)) . '|' . mb_strtolower(trim((string) $specialty));
+        $existingNames = $rows
+            ->map(fn ($row) => $nameKeyOf($row['group_name'], $row['specialty_name']))
+            ->flip();
+
+        $candidates = [];
         foreach ($activeGroups as $groupId => $active) {
             if ($known->has($groupId)) {
                 continue;
             }
+
+            $nameKey = $nameKeyOf($active->name, $active->specialty_name);
+            if ($existingNames->has($nameKey)) {
+                continue;
+            }
+            if (isset($candidates[$nameKey]) && (int) $candidates[$nameKey]->group_hemis_id > (int) $active->group_hemis_id) {
+                continue;
+            }
+            $candidates[$nameKey] = $active;
+        }
+
+        foreach ($candidates as $active) {
+            $groupId = (int) $active->group_hemis_id;
 
             $course = $this->courseFromName((string) $active->name);
             $movedIn = (int) $incoming->get($groupId, 0);

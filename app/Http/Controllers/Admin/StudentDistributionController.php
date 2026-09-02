@@ -282,6 +282,129 @@ class StudentDistributionController extends Controller
         ]);
     }
 
+    /**
+     * Bir nechta talabani bitta guruhga birdaniga ko'chirish rejasi.
+     *
+     * Qoidalar yakka ko'chirish bilan bir xil. Avval hamma talaba tekshiriladi,
+     * bittasi ham o'tmasa — hech kim ko'chirilmaydi va xatolar ro'yxati
+     * qaytadi. Oddiy rejimda guruhda hamma uchun joy yetishi shart; "to'liq
+     * guruh" rejimida sig'im tekshirilmaydi.
+     */
+    public function assignStudents(Request $request): JsonResponse
+    {
+        abort_unless(
+            Schema::hasTable('distribution_draft_assignments'),
+            503,
+            'Taqsimot rejasi jadvali hali migratsiya qilinmagan.'
+        );
+
+        $data = $request->validate([
+            'student_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'student_ids.*' => ['required', 'integer'],
+            'to_group_hemis_id' => ['required', 'integer'],
+            'full_group_mode' => ['nullable', 'boolean'],
+        ]);
+
+        $fullMode = (bool) ($data['full_group_mode'] ?? false);
+        $ids = collect($data['student_ids'])->map(fn ($id) => (int) $id)->unique()->values();
+
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+        $target = $catalog->get((int) $data['to_group_hemis_id']);
+
+        if (!$target) {
+            return response()->json(['message' => 'Maqsadli guruh ro\'yxatda topilmadi.'], 404);
+        }
+
+        $students = Student::query()
+            ->where('student_status_code', 11)
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        $existing = DistributionDraftAssignment::query()
+            ->whereIn('student_id', $ids)
+            ->get()
+            ->keyBy('student_id');
+
+        $errors = [];
+        $plans = [];
+
+        foreach ($ids as $id) {
+            $student = $students->get($id);
+            if (!$student) {
+                $errors[] = 'ID ' . $id . ': talaba topilmadi.';
+                continue;
+            }
+
+            $draft = $existing->get($id);
+            $fromGroupId = $draft ? (int) $draft->from_group_hemis_id : (int) $student->group_id;
+            $source = $catalog->get($fromGroupId);
+
+            if ($fromGroupId === (int) $target['group_hemis_id']) {
+                $errors[] = $student->full_name . ': allaqachon shu guruhda.';
+                continue;
+            }
+
+            if (!$this->groupsCompatible($source, $target, $fullMode)) {
+                $errors[] = $student->full_name . ': yo\'nalishi, kursi yoki ta\'lim tili mos emas.';
+                continue;
+            }
+
+            $plans[] = [
+                'student' => $student,
+                'from_group_hemis_id' => $fromGroupId,
+                'from_group_name' => $source['group_name'] ?? $student->group_name,
+            ];
+        }
+
+        if ($errors) {
+            return response()->json([
+                'message' => "Ko'chirib bo'lmadi:\n" . implode("\n", $errors),
+            ], 422);
+        }
+
+        // Rejadagi joyi allaqachon shu guruhda bo'lgan talaba joy egallamaydi —
+        // faqat yangi kelayotganlar hisoblanadi.
+        $newcomers = collect($plans)->filter(function ($plan) use ($existing, $target) {
+            $draft = $existing->get($plan['student']->id);
+
+            return !$draft || (int) $draft->to_group_hemis_id !== (int) $target['group_hemis_id'];
+        })->count();
+
+        if (!$fullMode) {
+            $free = $target['free_places'];
+            if ($free === null || $free < $newcomers) {
+                return response()->json([
+                    'message' => $target['group_name'] . ' guruhida ' . ($free === null ? 'sig\'im belgilanmagan' : 'faqat ' . max(0, $free) . ' ta bo\'sh joy bor')
+                        . ', ' . $newcomers . ' ta talaba tanlangan.',
+                ], 422);
+            }
+        }
+
+        DB::transaction(function () use ($plans, $target, $fullMode) {
+            foreach ($plans as $plan) {
+                DistributionDraftAssignment::updateOrCreate(
+                    ['student_id' => $plan['student']->id],
+                    [
+                        'from_group_hemis_id' => $plan['from_group_hemis_id'],
+                        'to_group_hemis_id' => (int) $target['group_hemis_id'],
+                        'student_name' => $plan['student']->full_name,
+                        'student_id_number' => $plan['student']->student_id_number,
+                        'from_group_name' => $plan['from_group_name'],
+                        'to_group_name' => $target['group_name'],
+                        'full_group_mode' => $fullMode,
+                        'assigned_by' => Auth::id(),
+                    ]
+                );
+            }
+        });
+
+        return response()->json([
+            'message' => count($plans) . ' ta talaba ' . $target['group_name'] . ' guruhiga rejalashtirildi.',
+            'groups' => $this->groupCatalog()->values(),
+        ]);
+    }
+
     /** Rejalashtirilgan ko'chirishni bekor qiladi. */
     public function unassignStudent(Request $request): JsonResponse
     {

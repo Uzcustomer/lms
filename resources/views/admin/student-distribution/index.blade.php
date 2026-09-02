@@ -55,6 +55,11 @@
     }
     .sd-pick-choose:hover { background:var(--navy); color:#fff; }
     .sd-pick-choose:disabled { border-color:#cfd9e6; color:#a9b7ca; background:#f7f9fc; cursor:not-allowed; }
+    .sd-pick-bulk {
+        padding:8px 12px; border-bottom:1px solid var(--line-soft);
+        background:#fffbf2; color:#8a5a06; font-size:11.5px;
+    }
+    .sd-pick-bulk b { font-weight:700; }
     .sd-mcap-wrap { padding:10px 20px 12px; border-bottom:1px solid var(--line-soft); background:#fbfcfe; }
     .sd-mcap-title {
         margin-bottom:8px; color:var(--muted);
@@ -509,7 +514,11 @@
                         </label>
                         <span class="sd-hint" id="modalHint"></span>
                     </span>
-                    <button class="sd-btn sd-btn-outline" id="modalOpenVoting" type="button" disabled style="white-space:nowrap;">Tanlanganlarga ovoz berishga ruxsat</button>
+                    <span style="display:flex;align-items:center;gap:8px;">
+                        <button class="sd-btn sd-btn-outline" id="modalOpenVoting" type="button" disabled style="white-space:nowrap;">Tanlanganlarga ovoz berishga ruxsat</button>
+                        <button class="sd-btn" id="modalBulkMove" type="button" disabled style="white-space:nowrap;"
+                                title="Belgilangan talabalarni bitta guruhga birdaniga ko'chirish">Tanlanganlarni ko'chirish...</button>
+                    </span>
                 </div>
             </div>
         </div>
@@ -527,6 +536,7 @@
         const searchUrl   = @json(route('admin.student-distribution.search-students'));
         const targetsUrl  = @json(route('admin.student-distribution.target-groups'));
         const assignUrl   = @json(route('admin.student-distribution.assign-student'));
+        const assignManyUrl = @json(route('admin.student-distribution.assign-students'));
         const unassignUrl = @json(route('admin.student-distribution.unassign-student'));
         const resetDraftsUrl = @json(route('admin.student-distribution.drafts.reset'));
         const syncGroupsUrl  = @json(route('admin.student-distribution.groups.sync'));
@@ -937,6 +947,9 @@
         // --- Ko'chirish paneli: guruh ro'yxati sig'imi bilan, joyida tahrirlanadi ---
         const pickPanel = $('pickPanel');
         let pickStudentId = null;
+        // Ommaviy ko'chirish: panel bir nechta talaba uchun ochilgan bo'lsa
+        // tanlangan guruhga hammasi bitta so'rov bilan o'tkaziladi.
+        let pickBulkIds = [];
         let pickAnchorRect = null;
         let pickSearch = '';
         let pickStatus = '';
@@ -944,6 +957,7 @@
         function closePickPanel() {
             pickPanel.hidden = true;
             pickStudentId = null;
+            pickBulkIds = [];
         }
 
         function pickRowHtml(g) {
@@ -991,7 +1005,12 @@
         }
 
         function renderPickPanel() {
+            const bulkNote = pickBulkIds.length
+                ? '<div class="sd-pick-bulk"><b>' + pickBulkIds.length + '</b> ta talaba tanlangan \u2014 hammasi tanlangan guruhga o\'tadi</div>'
+                : '';
+
             pickPanel.innerHTML =
+                bulkNote +
                 '<div class="sd-pick-head">' +
                     '<input type="search" id="pickSearchInput" placeholder="Guruh nomini yozing..." autocomplete="off">' +
                     '<select id="pickStatusSelect">' +
@@ -1026,7 +1045,21 @@
             if (!opener) return;
             event.preventDefault();
             pickStudentId = Number(opener.dataset.pick);
+            pickBulkIds = [];
             pickAnchorRect = opener.getBoundingClientRect();
+            pickSearch = '';
+            pickStatus = '';
+            pickPanel.hidden = false;
+            renderPickPanel();
+        });
+
+        // Ommaviy ko'chirish — belgilangan talabalar uchun bitta panel.
+        $('modalBulkMove').addEventListener('click', event => {
+            if (!modalVotePicked.size || !modalTargets.length) return;
+            event.preventDefault();
+            pickStudentId = null;
+            pickBulkIds = [...modalVotePicked];
+            pickAnchorRect = $('modalBulkMove').getBoundingClientRect();
             pickSearch = '';
             pickStatus = '';
             pickPanel.hidden = false;
@@ -1066,26 +1099,49 @@
         // Guruhni tanlash — talaba rejalashtiriladi.
         pickPanel.addEventListener('click', async event => {
             const button = event.target.closest('button[data-choose]');
-            if (!button || pickStudentId === null) return;
+            if (!button) return;
+            const bulk = pickBulkIds.length > 0;
+            if (!bulk && pickStudentId === null) return;
 
+            const count = bulk ? pickBulkIds.length : 1;
             const target = modalTargets.find(g => g.group_hemis_id === Number(button.dataset.choose));
-            if (target && !(target.free_places > 0)) {
-                const after = target.free_places === null || target.free_places === undefined
+            const free = target ? target.free_places : null;
+
+            // Joy yetmasa: oddiy rejimda to'xtatiladi, to'liq guruh rejimida
+            // ogohlantirib davom etiladi.
+            if (target && !(free >= count)) {
+                const freeText = free === null || free === undefined
                     ? "sig'imi belgilanmagan"
-                    : (Math.abs(target.free_places) + 1) + " ta ortiqcha bo'ladi";
-                if (!confirm(target.group_name + " guruhida bo'sh joy yo'q (" + after + ").\n\nBaribir ko'chirilsinmi?")) return;
+                    : (free > 0 ? 'faqat ' + free + " ta bo'sh joy bor" : "bo'sh joy yo'q");
+                if (!modalFull) {
+                    alert(target.group_name + ' guruhida ' + freeText + ', ' + count + " ta talaba tanlangan.\n\nKo'chirish uchun \"To'liq guruh\" rejimini yoqing yoki kamroq talaba tanlang.");
+                    return;
+                }
+                const after = free === null || free === undefined
+                    ? ''
+                    : ' (' + (count - free) + " ta ortiqcha bo'ladi)";
+                if (!confirm(target.group_name + ' guruhida ' + freeText + after + '.\n\nBaribir ' + (bulk ? count + ' ta talaba ' : '') + "ko'chirilsinmi?")) return;
+            } else if (bulk && !confirm(count + ' ta talaba ' + (target ? target.group_name : '') + " guruhiga ko'chirilsinmi?")) {
+                return;
             }
 
             button.disabled = true;
             try {
-                const data = await postJson(assignUrl, {
-                    student_id: pickStudentId,
-                    to_group_hemis_id: Number(button.dataset.choose),
-                    full_group_mode: modalFull,
-                });
+                const data = bulk
+                    ? await postJson(assignManyUrl, {
+                        student_ids: pickBulkIds,
+                        to_group_hemis_id: Number(button.dataset.choose),
+                        full_group_mode: modalFull,
+                    })
+                    : await postJson(assignUrl, {
+                        student_id: pickStudentId,
+                        to_group_hemis_id: Number(button.dataset.choose),
+                        full_group_mode: modalFull,
+                    });
                 groups = data.groups;
                 render();
                 closePickPanel();
+                if (bulk) modalVotePicked = new Set();
                 await loadStudents();
             } catch (error) {
                 alert(error.message);
@@ -1096,7 +1152,7 @@
         // Tashqariga bosilsa yoki modal yopilsa panel ham yopiladi.
         document.addEventListener('click', event => {
             if (pickPanel.hidden) return;
-            if (event.target.closest('#pickPanel') || event.target.closest('button[data-pick]')) return;
+            if (event.target.closest('#pickPanel') || event.target.closest('button[data-pick]') || event.target.closest('#modalBulkMove')) return;
             closePickPanel();
         });
         $('modalBody').addEventListener('scroll', closePickPanel);
@@ -1107,6 +1163,10 @@
 
         function updateModalVoteControls() {
             $('modalOpenVoting').disabled = modalVotePicked.size === 0;
+            $('modalBulkMove').disabled = modalVotePicked.size === 0 || modalTargets.length === 0;
+            $('modalBulkMove').textContent = modalVotePicked.size
+                ? 'Tanlanganlarni ko\'chirish (' + modalVotePicked.size + ')...'
+                : 'Tanlanganlarni ko\'chirish...';
             const eligible = modalVoteEligible();
             $('modalVoteAll').checked = eligible.length > 0 && eligible.every(st => modalVotePicked.has(st.student_id));
         }

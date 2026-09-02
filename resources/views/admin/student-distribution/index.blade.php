@@ -18,7 +18,7 @@
 
     /* ---- Ikki ustun ---- */
     .sd-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; }
-    .sd-side { overflow:hidden; border:1px solid var(--line); border-radius:6px; background:#fff; }
+    .sd-side { display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--line); border-radius:6px; background:#fff; }
     .sd-side-head {
         display:flex; align-items:center; justify-content:space-between; gap:12px;
         padding:13px 16px; background:#1b3a63;
@@ -71,7 +71,8 @@
     .sd-tab.is-on span { background:var(--navy); color:#fff; }
 
     /* ---- Ro'yxat ---- */
-    .sd-rows { max-height:600px; overflow-y:auto; }
+    .sd-rows { flex:1 1 auto; min-height:0; overflow-y:auto; }
+    .sd-actions { margin-top:auto; }
     /* Ustunlar: № | checkbox | guruh | talaba | sig'im | holat
        Sarlavha va qatorlar bir xil grid ishlatadi — shunda ular tekislanadi. */
     .sd-grid {
@@ -977,6 +978,21 @@
                 renderTabs();
             }
         });
+
+        // Panellarni oyna balandligiga tenglashtiramiz — pastdan 100px qoladi.
+        function sizePanels() {
+            const cols = document.querySelector('.sd-cols');
+            if (!cols) return;
+            if (window.innerWidth <= 1100) {
+                cols.querySelectorAll('.sd-side').forEach(el => { el.style.height = ''; });
+                return;
+            }
+            const top = cols.getBoundingClientRect().top + window.scrollY;
+            const height = Math.max(360, window.innerHeight - top - 100);
+            cols.querySelectorAll('.sd-side').forEach(el => { el.style.height = height + 'px'; });
+        }
+        window.addEventListener('resize', sizePanels);
+        sizePanels();
 
         Object.values(panels).forEach(refreshOptions);
         render();

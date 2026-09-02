@@ -10,10 +10,17 @@
     $gvTargets = collect();
     $gvShow = false;
 
+    $gvAllowed = false;
     if ($gvStudent && $gvStudent->group_id
         && \Illuminate\Support\Facades\Schema::hasTable('distribution_voting_groups')
-        && \Illuminate\Support\Facades\Schema::hasTable('distribution_votes')
-        && \App\Models\DistributionVotingGroup::query()->where('group_hemis_id', (int) $gvStudent->group_id)->exists()
+        && \Illuminate\Support\Facades\Schema::hasTable('distribution_votes')) {
+        // Ruxsat guruh bo'yicha yoki shu talabaga alohida berilgan bo'lishi mumkin.
+        $gvAllowed = \App\Models\DistributionVotingGroup::query()->where('group_hemis_id', (int) $gvStudent->group_id)->exists()
+            || (\Illuminate\Support\Facades\Schema::hasTable('distribution_voting_students')
+                && \App\Models\DistributionVotingStudent::query()->where('student_id', $gvStudent->id)->exists());
+    }
+
+    if ($gvAllowed
         && !\App\Models\DistributionVote::query()->where('student_id', $gvStudent->id)->exists()) {
         $gvTargets = app(\App\Services\DistributionCatalog::class)->targetsFor((int) $gvStudent->group_id);
         $gvShow = $gvTargets->isNotEmpty();

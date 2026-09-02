@@ -305,7 +305,8 @@
     .sd-student b { color:var(--ink); font-size:13px; font-weight:600; }
     .sd-student span { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
     .sd-modal-note { padding:34px 20px; color:var(--muted); font-size:12.5px; text-align:center; }
-    .sd-student { grid-template-columns:30px minmax(0,1fr) auto auto; }
+    .sd-student { grid-template-columns:22px 30px minmax(0,1fr) auto auto; }
+    .sd-student input[type=checkbox] { width:15px; height:15px; accent-color:var(--navy); cursor:pointer; }
     .sd-move {
         height:26px; padding:0 6px; max-width:150px;
         border:1px solid #cfd9e6; border-radius:4px; background:#fff; color:var(--navy);
@@ -511,7 +512,14 @@
                 </div>
                 <div class="sd-modal-body" id="modalBody"></div>
                 <div class="sd-modal-foot">
-                    <span class="sd-hint" id="modalHint"></span>
+                    <span style="display:flex;align-items:center;gap:12px;">
+                        <label class="sd-hint" style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;">
+                            <input type="checkbox" id="modalVoteAll" style="width:15px;height:15px;accent-color:var(--navy);">
+                            Hammasi
+                        </label>
+                        <span class="sd-hint" id="modalHint"></span>
+                    </span>
+                    <button class="sd-btn sd-btn-outline" id="modalOpenVoting" type="button" disabled style="white-space:nowrap;">Tanlanganlarga ovoz berishga ruxsat</button>
                 </div>
             </div>
         </div>
@@ -533,6 +541,7 @@
         const resetDraftsUrl = @json(route('admin.student-distribution.drafts.reset'));
         const votesUrl        = @json(route('admin.student-distribution.votes'));
         const openVotingUrl   = @json(route('admin.student-distribution.voting.open'));
+        const openVotingStudentsUrl = @json(route('admin.student-distribution.voting.open-students'));
         const closeVotingUrl  = @json(route('admin.student-distribution.voting.close'));
         const approveVotesUrl = @json(route('admin.student-distribution.votes.approve'));
         const deleteVotesUrl  = @json(route('admin.student-distribution.votes.delete'));
@@ -809,6 +818,8 @@
         const modal = $('studentsModal');
         let modalGroupId = null;
         let modalTargets = [];
+        let modalStudents = [];
+        let modalVotePicked = new Set();
         // "To'liq guruh" rejimi: bo'sh joyi yo'q guruhlar ham ro'yxatga
         // tushadi, ingliz guruhiga o'zbek/rus guruhidan o'tish mumkin.
         let modalFull = false;
@@ -835,8 +846,12 @@
         }
 
         function studentRow(st, index) {
+            const voteCheck = (!st.incoming && !st.moved_to)
+                ? '<input type="checkbox" data-vstudent="' + st.student_id + '"' + (modalVotePicked.has(st.student_id) ? ' checked' : '') + '>'
+                : '<span></span>';
+
             if (st.incoming) {
-                return '<div class="sd-student is-incoming"><i>' + (index + 1) + '.</i>' +
+                return '<div class="sd-student is-incoming">' + voteCheck + '<i>' + (index + 1) + '.</i>' +
                     '<b>' + esc(st.full_name) + '</b>' +
                     '<span>' + esc(st.student_id_number) + '</span>' +
                     '<span class="sd-moved">&larr; ' + esc(st.from_group_name || '') +
@@ -845,7 +860,7 @@
             }
 
             if (st.moved_to) {
-                return '<div class="sd-student"><i>' + (index + 1) + '.</i>' +
+                return '<div class="sd-student">' + voteCheck + '<i>' + (index + 1) + '.</i>' +
                     '<b>' + esc(st.full_name) + '</b>' +
                     '<span>' + esc(st.student_id_number) + '</span>' +
                     '<span class="sd-moved' + (st.full_group_mode ? ' is-full' : '') + '"' +
@@ -858,7 +873,7 @@
                 ? '<button class="sd-move sd-pick-btn" type="button" data-pick="' + st.student_id + '">' + "Ko'chirish..." + '</button>'
                 : '<button class="sd-move" type="button" disabled>' + "Mos guruh yo'q" + '</button>';
 
-            return '<div class="sd-student"><i>' + (index + 1) + '.</i>' +
+            return '<div class="sd-student">' + voteCheck + '<i>' + (index + 1) + '.</i>' +
                 '<b>' + esc(st.full_name) + '</b>' +
                 '<span>' + esc(st.student_id_number) + '</span>' +
                 select + '</div>';
@@ -894,7 +909,11 @@
             if (!studentsResponse.ok) throw new Error(studentsData.message || "Yuklab bo'lmadi.");
 
             modalTargets = targetsResponse.ok ? targetsData.groups : [];
-            renderStudents([...(studentsData.incoming || []), ...studentsData.students]);
+            modalStudents = [...(studentsData.incoming || []), ...studentsData.students];
+            modalVotePicked = new Set([...modalVotePicked].filter(id =>
+                modalStudents.some(st => st.student_id === id && !st.incoming && !st.moved_to)));
+            renderStudents(modalStudents);
+            updateModalVoteControls();
         }
 
         function setFullMode(on) {
@@ -904,6 +923,8 @@
 
         async function openStudents(groupId) {
             modalGroupId = groupId;
+            modalVotePicked = new Set();
+            $('modalVoteAll').checked = false;
             setFullMode(false);
             const group = groups.find(g => g.group_hemis_id === groupId);
             $('modalGroup').textContent = group ? group.group_name : 'Guruh';
@@ -1086,6 +1107,52 @@
         });
         $('modalBody').addEventListener('scroll', closePickPanel);
 
+        function modalVoteEligible() {
+            return modalStudents.filter(st => !st.incoming && !st.moved_to);
+        }
+
+        function updateModalVoteControls() {
+            $('modalOpenVoting').disabled = modalVotePicked.size === 0;
+            const eligible = modalVoteEligible();
+            $('modalVoteAll').checked = eligible.length > 0 && eligible.every(st => modalVotePicked.has(st.student_id));
+        }
+
+        $('modalBody').addEventListener('change', event => {
+            const box = event.target.closest('input[data-vstudent]');
+            if (!box) return;
+            const id = Number(box.dataset.vstudent);
+            if (box.checked) modalVotePicked.add(id); else modalVotePicked.delete(id);
+            updateModalVoteControls();
+        });
+
+        $('modalVoteAll').addEventListener('change', event => {
+            if (event.target.checked) {
+                modalVoteEligible().forEach(st => modalVotePicked.add(st.student_id));
+            } else {
+                modalVotePicked.clear();
+            }
+            renderStudents(modalStudents);
+            updateModalVoteControls();
+        });
+
+        $('modalOpenVoting').addEventListener('click', async () => {
+            if (!modalVotePicked.size) return;
+            if (!confirm(modalVotePicked.size + " ta talabaga ovoz berish ochilsinmi? Ular LMS ga kirganda guruh tanlash oynasi chiqadi.")) return;
+            const button = $('modalOpenVoting');
+            button.disabled = true;
+            try {
+                const data = await postJson(openVotingStudentsUrl, {student_ids: [...modalVotePicked]});
+                alert(data.message);
+                modalVotePicked = new Set();
+                renderStudents(modalStudents);
+                updateModalVoteControls();
+                await loadVotes();
+            } catch (error) {
+                alert(error.message);
+                button.disabled = false;
+            }
+        });
+
         $('modalBody').addEventListener('click', async event => {
             const button = event.target.closest('button[data-undo]');
             if (!button) return;
@@ -1177,9 +1244,13 @@
                 votesData = data.votes;
                 $('votesCount').textContent = votesData.filter(v => v.status === 'pending').length;
                 const open = data.voting_open_count || 0;
-                $('votingStatus').hidden = open === 0;
-                $('votingStatus').textContent = 'Ovoz berish ' + open + ' ta guruhda ochiq';
-                $('closeVotingBtn').hidden = open === 0;
+                const openStudents = data.voting_student_count || 0;
+                const parts = [];
+                if (open) parts.push(open + ' ta guruh');
+                if (openStudents) parts.push(openStudents + ' ta talaba');
+                $('votingStatus').hidden = parts.length === 0;
+                $('votingStatus').textContent = parts.length ? 'Ovoz berish ochiq: ' + parts.join(' \u00b7 ') : '';
+                $('closeVotingBtn').hidden = parts.length === 0;
             } catch (error) { /* jim */ }
         }
 

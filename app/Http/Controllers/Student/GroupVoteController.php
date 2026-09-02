@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\DistributionVote;
 use App\Models\DistributionVotingGroup;
+use App\Models\DistributionVotingStudent;
 use App\Services\DistributionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,8 +43,10 @@ class GroupVoteController extends Controller
         ]);
 
         $votingOpen = DistributionVotingGroup::query()
-            ->where('group_hemis_id', (int) $student->group_id)
-            ->exists();
+                ->where('group_hemis_id', (int) $student->group_id)
+                ->exists()
+            || (Schema::hasTable('distribution_voting_students')
+                && DistributionVotingStudent::query()->where('student_id', $student->id)->exists());
 
         if (!$votingOpen) {
             return response()->json(['message' => 'Guruhingiz uchun ovoz berish ochiq emas.'], 422);

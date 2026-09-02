@@ -480,6 +480,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/group-students', [StudentDistributionController::class, 'groupStudents'])->name('group-students');
                 Route::get('/search-students', [StudentDistributionController::class, 'searchStudents'])->name('search-students');
                 Route::post('/voting/open', [StudentDistributionController::class, 'openVoting'])->name('voting.open');
+                Route::post('/voting/open-students', [StudentDistributionController::class, 'openVotingStudents'])->name('voting.open-students');
                 Route::post('/voting/close', [StudentDistributionController::class, 'closeVoting'])->name('voting.close');
                 Route::get('/votes', [StudentDistributionController::class, 'votes'])->name('votes');
                 Route::post('/votes/approve', [StudentDistributionController::class, 'approveVotes'])->name('votes.approve');

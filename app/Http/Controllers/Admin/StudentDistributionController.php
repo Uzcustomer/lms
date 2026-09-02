@@ -10,6 +10,7 @@ use App\Models\DistributionSourceGroup;
 use App\Models\Group;
 use App\Models\DistributionVote;
 use App\Models\DistributionVotingGroup;
+use App\Models\DistributionVotingStudent;
 use App\Models\Student;
 use App\Services\DistributionCatalog;
 use Illuminate\Http\JsonResponse;
@@ -450,16 +451,48 @@ class StudentDistributionController extends Controller
         ]);
     }
 
+    /** Tanlangan talabalarga ovoz berishni ochadi (modal ichidan). */
+    public function openVotingStudents(Request $request): JsonResponse
+    {
+        abort_unless(Schema::hasTable('distribution_voting_students'), 503, 'Ovoz berish jadvali hali migratsiya qilinmagan.');
+
+        $data = $request->validate([
+            'student_ids' => ['required', 'array', 'min:1', 'max:2000'],
+            'student_ids.*' => ['required', 'integer'],
+        ]);
+
+        $students = Student::query()
+            ->where('student_status_code', 11)
+            ->whereIn('id', collect($data['student_ids'])->unique())
+            ->get(['id', 'group_id']);
+
+        foreach ($students as $student) {
+            DistributionVotingStudent::updateOrCreate(
+                ['student_id' => $student->id],
+                ['group_hemis_id' => (int) $student->group_id, 'opened_by' => Auth::id()]
+            );
+        }
+
+        return response()->json([
+            'message' => $students->count() . ' ta talabaga ovoz berish ochildi.',
+            'voting_student_count' => DistributionVotingStudent::query()->count(),
+        ]);
+    }
+
     /** Ovoz berishni butunlay yopadi (barcha guruhlar uchun). */
     public function closeVoting(): JsonResponse
     {
         abort_unless(Schema::hasTable('distribution_voting_groups'), 503, 'Ovoz berish jadvali hali migratsiya qilinmagan.');
 
         DistributionVotingGroup::query()->delete();
+        if (Schema::hasTable('distribution_voting_students')) {
+            DistributionVotingStudent::query()->delete();
+        }
 
         return response()->json([
-            'message' => 'Ovoz berish yopildi.',
+            'message' => 'Ovoz berish hammaga yopildi.',
             'voting_open_count' => 0,
+            'voting_student_count' => 0,
         ]);
     }
 
@@ -491,6 +524,9 @@ class StudentDistributionController extends Controller
             'votes' => $votes,
             'voting_open_count' => Schema::hasTable('distribution_voting_groups')
                 ? DistributionVotingGroup::query()->count()
+                : 0,
+            'voting_student_count' => Schema::hasTable('distribution_voting_students')
+                ? DistributionVotingStudent::query()->count()
                 : 0,
         ]);
     }

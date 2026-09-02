@@ -123,9 +123,13 @@ class DistributionCatalog
             ->map(fn ($row) => $nameKeyOf($row['group_name'], $row['specialty_name']))
             ->flip();
 
-        // Bo'sh guruhlar faqat joriy qabul yili (1-kurs) va bakalavr bo'lsa
-        // qo'shiladi — aks holda eskirgan, talabasi allaqachon chiqib ketgan
-        // guruhlar ham ro'yxatga kirib qoladi.
+        // Bo'sh guruh ikki holatda qo'shiladi:
+        //  - joriy qabul yili (1-kurs) guruhi — yangi o'quv yilida ochilgan;
+        //  - LMS da hech qachon talabasi bo'lmagan guruh — HEMIS da yangi
+        //    yaratilgan (masalan, yuqori kurs uchun ochilgan ingliz guruhi).
+        // Talabasi bo'lib, keyin bo'shab qolgan guruh eskirgan hisoblanadi:
+        // import chiqib ketgan talabani o'chirmaydi, holatini 60 qiladi,
+        // shuning uchun har qanday holatdagi talaba yozuvi "bo'lgan" degani.
         // Har bir o'quv rejaning ta'lim turi. Yangi guruhning rejasi hali
         // import qilinmagan bo'lishi mumkin — bunda guruh chiqaverishi kerak,
         // faqat reja ANIQ bakalavr emasligi ma'lum bo'lsagina tashlanadi.
@@ -133,13 +137,27 @@ class DistributionCatalog
             ? Curriculum::query()->pluck('education_type_name', 'curricula_hemis_id')
             : collect();
 
+        $unknownIds = $activeGroups->keys()->reject(fn ($id) => $known->has($id))->values();
+        $everHadStudents = $unknownIds->isEmpty()
+            ? collect()
+            : Student::query()
+                ->whereIn('group_id', $unknownIds->all())
+                ->distinct()
+                ->pluck('group_id')
+                ->map(fn ($id) => (int) $id)
+                ->flip();
+
         $candidates = [];
         foreach ($activeGroups as $groupId => $active) {
             if ($known->has($groupId)) {
                 continue;
             }
 
-            if ($this->courseFromName((string) $active->name) !== 1) {
+            $course = $this->courseFromName((string) $active->name);
+            if ($course === null) {
+                continue;
+            }
+            if ($course !== 1 && $everHadStudents->has($groupId)) {
                 continue;
             }
 

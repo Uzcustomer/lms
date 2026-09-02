@@ -86,6 +86,28 @@
         font-size:11.5px; font-weight:700; white-space:nowrap;
     }
     .sd-num em { font-style:normal; color:var(--muted); font-weight:500; }
+    .sd-stats { display:flex; align-items:center; gap:6px; }
+    .sd-cap {
+        display:inline-flex; align-items:center; gap:3px;
+        padding:2px 6px; border:1px solid #d5dfec; border-radius:4px; background:#fff;
+    }
+    .sd-cap input {
+        width:32px; padding:0; border:0; background:transparent; color:var(--navy);
+        font-family:inherit; font-size:11.5px; font-weight:700; text-align:center; outline:none;
+        -moz-appearance:textfield;
+    }
+    .sd-cap input::-webkit-outer-spin-button, .sd-cap input::-webkit-inner-spin-button {
+        -webkit-appearance:none; margin:0;
+    }
+    .sd-cap input:focus { background:#eef4fd; border-radius:3px; }
+    .sd-cap.is-custom { border-color:#c9a227; background:#fffdf5; }
+    .sd-cap b { color:var(--muted); font-size:9.5px; font-weight:600; letter-spacing:.04em; }
+    .sd-free {
+        padding:3px 8px; border-radius:4px; font-size:11px; font-weight:700; white-space:nowrap;
+    }
+    .sd-free.free { background:#e9f7f0; color:#0f7a52; }
+    .sd-free.full { background:#f2f6fc; color:var(--muted); }
+    .sd-free.over { background:#fdeceb; color:#b3261e; }
     .sd-tag {
         margin-left:6px; padding:2px 7px; border-radius:999px;
         background:#fdf3e0; color:#8a5a06; font-size:10px; font-weight:700;
@@ -193,12 +215,21 @@
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
         const saveUrl = @json(route('admin.student-distribution.source-groups.store'));
         const exportUrl = @json(route('admin.student-distribution.export'));
+        const capacityUrl = @json(route('admin.student-distribution.capacity.update'));
 
         let groups = @json($groupPayloads);
         let picked = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
         let rightView = 'all';
 
         const courseLabel = g => g.course ? g.course + '-kurs' : (g.level_name || '');
+
+        // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
+        function freeHtml(g) {
+            if (g.free_places === null || g.free_places === undefined) return '';
+            if (g.free_places > 0) return '<span class="sd-free free">+' + g.free_places + ' bo'sh</span>';
+            if (g.free_places === 0) return '<span class="sd-free full">to'la</span>';
+            return '<span class="sd-free over">' + Math.abs(g.free_places) + ' ortiqcha</span>';
+        }
 
         // Har bir panelning o'z filtrlari bor — ular bir-biriga ta'sir qilmaydi.
         const panels = {
@@ -236,7 +267,14 @@
                 '<span><span class="sd-name">' + esc(g.group_name) + tag + '</span>' +
                 '<span class="sd-meta">' + esc(g.faculty_name || '—') + ' · ' + esc(g.specialty_name || '—') +
                 (courseLabel(g) ? ' · ' + esc(courseLabel(g)) : '') + '</span></span>' +
-                '<span class="sd-num">' + g.student_count + ' <em>talaba</em></span>' +
+                '<span class="sd-stats">' +
+                    '<span class="sd-num">' + g.student_count + ' <em>talaba</em></span>' +
+                    '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + '" title="Sig'im — o'zgartirish mumkin">' +
+                        '<b>SIG'IM</b>' +
+                        '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-cap="' + g.group_hemis_id + '">' +
+                    '</span>' +
+                    freeHtml(g) +
+                '</span>' +
                 '</label>';
         }
 
@@ -325,6 +363,51 @@
             renderPanel('right');
             renderTabs();
         }));
+
+        // Sig'im: input <label> ichida bo'lgani uchun bosilganda checkbox
+        // almashmasligi kerak — shuning uchun hodisa to'xtatiladi.
+        function guardCapacityInputs(root) {
+            root.addEventListener('click', event => {
+                if (event.target.matches('input[data-cap]')) event.preventDefault();
+            });
+        }
+
+        async function saveCapacity(input) {
+            const groupId = Number(input.dataset.cap);
+            const value = input.value.trim();
+            if (value === '') return;
+
+            input.disabled = true;
+            try {
+                const response = await fetch(capacityUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},
+                    body: JSON.stringify({group_hemis_id: groupId, capacity: Number(value)}),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Saqlab bo'lmadi.');
+
+                const index = groups.findIndex(g => g.group_hemis_id === groupId);
+                if (index !== -1) groups[index] = data.group;
+                render();
+            } catch (error) {
+                alert(error.message);
+                input.disabled = false;
+            }
+        }
+
+        Object.values(panels).forEach(panel => {
+            guardCapacityInputs(panel.rows);
+            panel.rows.addEventListener('change', event => {
+                if (event.target.matches('input[data-cap]')) saveCapacity(event.target);
+            });
+            panel.rows.addEventListener('keydown', event => {
+                if (event.target.matches('input[data-cap]') && event.key === 'Enter') {
+                    event.preventDefault();
+                    event.target.blur();
+                }
+            });
+        });
 
         // Excel: panel filtrlari qanday bo'lsa, faylda ham o'sha guruhlar chiqadi.
         document.querySelectorAll('.sd-xls').forEach(button => button.addEventListener('click', () => {

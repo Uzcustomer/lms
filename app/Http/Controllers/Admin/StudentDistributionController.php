@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\DistributionGroupStudentsExport;
 use App\Http\Controllers\Controller;
+use App\Models\DistributionGroupCapacity;
 use App\Models\DistributionSourceGroup;
 use App\Models\Group;
 use App\Models\Student;
@@ -96,6 +97,50 @@ class StudentDistributionController extends Controller
     }
 
     /**
+     * Bitta guruhning sig'imini qo'lda o'zgartiradi.
+     *
+     * Standartga teng qiymat yuborilsa yozuv o'chiriladi — shunda guruh yana
+     * kurs bo'yicha standart sig'imga qaytadi va keyinchalik standart
+     * o'zgartirilsa avtomatik ergashadi.
+     */
+    public function updateCapacity(Request $request): JsonResponse
+    {
+        abort_unless(
+            Schema::hasTable('distribution_group_capacities'),
+            503,
+            'Sig\'im jadvali hali migratsiya qilinmagan.'
+        );
+
+        $data = $request->validate([
+            'group_hemis_id' => ['required', 'integer'],
+            'capacity' => ['required', 'integer', 'min:0', 'max:200'],
+        ]);
+
+        $groupId = (int) $data['group_hemis_id'];
+        $group = $this->groupCatalog()->firstWhere('group_hemis_id', $groupId);
+
+        if (!$group) {
+            return response()->json(['message' => 'Guruh ro\'yxatda topilmadi.'], 422);
+        }
+
+        $capacity = (int) $data['capacity'];
+        $default = DistributionGroupCapacity::defaultFor($group['course']);
+
+        if ($default !== null && $capacity === $default) {
+            DistributionGroupCapacity::query()->where('group_hemis_id', $groupId)->delete();
+        } else {
+            DistributionGroupCapacity::updateOrCreate(
+                ['group_hemis_id' => $groupId],
+                ['capacity' => $capacity, 'updated_by' => Auth::id()]
+            );
+        }
+
+        return response()->json([
+            'group' => $this->groupCatalog()->firstWhere('group_hemis_id', $groupId),
+        ]);
+    }
+
+    /**
      * Filtrga mos guruhlar va ulardagi talabalarni Excelga chiqaradi.
      *
      * Filtrlar sahifadagi panel bilan bir xil ishlaydi, shuning uchun
@@ -162,6 +207,10 @@ class StudentDistributionController extends Controller
             ->where('active', true)
             ->pluck('group_hemis_id');
 
+        $overrides = Schema::hasTable('distribution_group_capacities')
+            ? DistributionGroupCapacity::query()->pluck('capacity', 'group_hemis_id')
+            : collect();
+
         return Student::query()
             ->where('student_status_code', 11)
             ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
@@ -183,17 +232,30 @@ class StudentDistributionController extends Controller
             ->orderBy('level_code')
             ->orderBy('group_name')
             ->get()
-            ->map(fn ($row) => [
-                'group_hemis_id' => (int) $row->group_id,
-                'group_name' => $row->group_name,
-                'faculty_name' => $row->department_name,
-                'specialty_name' => $row->specialty_name,
-                'level_code' => (string) $row->level_code,
-                'course' => $this->toCourse($row->level_code),
-                'level_name' => $row->level_name,
-                'student_count' => (int) $row->student_count,
-                'is_source' => $sourceIds->has((int) $row->group_id),
-            ]);
+            ->map(function ($row) use ($sourceIds, $overrides) {
+                $groupId = (int) $row->group_id;
+                $course = $this->toCourse($row->level_code);
+                $students = (int) $row->student_count;
+
+                $default = DistributionGroupCapacity::defaultFor($course);
+                $capacity = $overrides->has($groupId) ? (int) $overrides->get($groupId) : $default;
+
+                return [
+                    'group_hemis_id' => $groupId,
+                    'group_name' => $row->group_name,
+                    'faculty_name' => $row->department_name,
+                    'specialty_name' => $row->specialty_name,
+                    'level_code' => (string) $row->level_code,
+                    'course' => $course,
+                    'level_name' => $row->level_name,
+                    'student_count' => $students,
+                    'capacity' => $capacity,
+                    'is_custom_capacity' => $overrides->has($groupId),
+                    // Musbat — bo'sh joy, manfiy — ortiqcha talaba.
+                    'free_places' => $capacity === null ? null : $capacity - $students,
+                    'is_source' => $sourceIds->has($groupId),
+                ];
+            });
     }
 
     /**

@@ -64,10 +64,25 @@ class DistributionGroupStudentsExport implements FromArray, WithTitle, WithEvent
                 !empty($group['course']) ? $group['course'] . '-kurs' : ($group['level_name'] ?? null),
             ])->filter()->implode(' · ');
 
+            $capacity = $group['capacity'] ?? null;
+            $free = $group['free_places'] ?? null;
+
+            $summary = $students->count() . ' ta talaba';
+            if ($capacity !== null) {
+                $summary .= " / " . $capacity . " sig'im";
+                if ($free > 0) {
+                    $summary .= "  ·  " . $free . " bo'sh";
+                } elseif ($free < 0) {
+                    $summary .= '  ·  ' . abs($free) . ' ortiqcha';
+                } else {
+                    $summary .= "  ·  to'la";
+                }
+            }
+
             $rows[] = [
                 $group['group_name'] . ($meta !== '' ? '   ·   ' . $meta : ''),
                 '',
-                $students->count() . ' ta talaba',
+                $summary,
             ];
             $this->layout[] = ['row' => count($rows), 'type' => 'group'];
 
@@ -103,7 +118,7 @@ class DistributionGroupStudentsExport implements FromArray, WithTitle, WithEvent
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 46, 'C' => 18];
+        return ['A' => 6, 'B' => 46, 'C' => 34];
     }
 
     public function registerEvents(): array

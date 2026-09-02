@@ -49,6 +49,7 @@ use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\Admin\ClosingFormController;
 use App\Http\Controllers\Admin\StaffRegistrationController;
+use App\Http\Controllers\Admin\StudentDistributionController;
 use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\Admin\VedomostTekshirishController;
@@ -469,12 +470,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
         // Registrator ofisi bo'linmalari
-        // Talabalarni taqsimlash — modul qaytadan quriladi.
-        // Hozircha faqat bo'sh sahifa qoldirilgan.
+        // Talabalarni taqsimlash — registrator ofisi
         Route::prefix('student-distribution')->name('student-distribution.')
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
             ->group(function () {
-                Route::get('/', fn () => view('admin.student-distribution.index'))->name('index');
+                Route::get('/', [StudentDistributionController::class, 'index'])->name('index');
+                Route::get('/groups', [StudentDistributionController::class, 'groups'])->name('groups');
+                Route::post('/source-groups', [StudentDistributionController::class, 'storeSourceGroups'])->name('source-groups.store');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');

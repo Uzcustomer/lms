@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Schema;
  * Guruhlar `students` jadvalidan yig'iladi: kurs (level_code) faqat talabada
  * bor, `groups` jadvalida yo'q. Shu sababli fakultet, yo'nalish, kurs va
  * biriktirilgan talabalar soni bir manbadan olinadi va bir-biriga mos keladi.
+ * Ta'lim tili esa `groups` jadvalidan (HEMIS dagi educationLang) olinadi.
  */
 class StudentDistributionController extends Controller
 {
@@ -95,7 +96,7 @@ class StudentDistributionController extends Controller
      * Talabani boshqa guruhga ko'chirish rejasi.
      *
      * LMS dagi students.group_id o'zgartirilmaydi — bu faqat reja. Maqsadli
-     * guruh talabaning fakulteti, yo'nalishi va kursiga mos bo'lishi hamda
+     * guruh talabaning yo'nalishi, kursi va ta'lim tiliga mos bo'lishi hamda
      * bo'sh joyi qolgan bo'lishi shart.
      */
     public function assignStudent(Request $request): JsonResponse
@@ -136,7 +137,7 @@ class StudentDistributionController extends Controller
 
         if (!$this->groupsCompatible($source, $target)) {
             return response()->json([
-                'message' => 'Maqsadli guruh talabaning fakulteti, yo\'nalishi yoki kursiga mos emas.',
+                'message' => 'Maqsadli guruh talabaning yo\'nalishi, kursi yoki ta\'lim tiliga mos emas.',
             ], 422);
         }
 
@@ -183,8 +184,12 @@ class StudentDistributionController extends Controller
     }
 
     /**
-     * Talabani qabul qila oladigan guruhlar: bir xil fakultet, yo'nalish va
-     * kurs, bo'sh joyi bor, o'zi emas va taqsimlanadigan guruh emas.
+     * Talabani qabul qila oladigan guruhlar: bir xil yo'nalish, kurs va
+     * ta'lim tili, bo'sh joyi bor, o'zi emas va taqsimlanadigan guruh emas.
+     *
+     * Fakultet shart emas: bitta yo'nalish bir nechta fakultetga (1-son,
+     * 2-son davolash) bo'lingan bo'lishi mumkin, talaba ularning istalgan
+     * guruhiga o'tishi mumkin.
      */
     public function targetGroups(Request $request): JsonResponse
     {
@@ -214,9 +219,23 @@ class StudentDistributionController extends Controller
             return false;
         }
 
-        return $source['faculty_name'] === $target['faculty_name']
-            && $source['specialty_name'] === $target['specialty_name']
-            && $source['course'] === $target['course'];
+        return $source['specialty_name'] === $target['specialty_name']
+            && $source['course'] === $target['course']
+            && $this->languageKey($source) === $this->languageKey($target);
+    }
+
+    /**
+     * Ta'lim tilini solishtirish uchun kalit.
+     *
+     * HEMIS kodi (uz, ru, en) bo'lsa — shu, bo'lmasa nomi olinadi. Ikkala
+     * guruhda ham til ko'rsatilmagan bo'lsa, bo'sh kalitlar teng chiqadi va
+     * til bo'yicha cheklov qo'yilmaydi.
+     */
+    private function languageKey(array $group): string
+    {
+        $value = $group['language_code'] ?: ($group['language_name'] ?? '');
+
+        return mb_strtolower(trim((string) $value));
     }
 
     /** O'ng tomondagi checkboxlar holatini saqlaydi. */
@@ -380,9 +399,11 @@ class StudentDistributionController extends Controller
             ? DistributionSourceGroup::query()->pluck('group_hemis_id')->map(fn ($id) => (int) $id)->flip()
             : collect();
 
-        $activeGroupIds = Group::query()
+        // Faol guruhlar va ularning ta'lim tili — til faqat `groups` da bor.
+        $activeGroups = Group::query()
             ->where('active', true)
-            ->pluck('group_hemis_id');
+            ->get(['group_hemis_id', 'education_lang_code', 'education_lang_name'])
+            ->keyBy(fn ($group) => (int) $group->group_hemis_id);
 
         $overrides = Schema::hasTable('distribution_group_capacities')
             ? DistributionGroupCapacity::query()->pluck('capacity', 'group_hemis_id')
@@ -406,7 +427,7 @@ class StudentDistributionController extends Controller
         return Student::query()
             ->where('student_status_code', 11)
             ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
-            ->whereIn('group_id', $activeGroupIds)
+            ->whereIn('group_id', $activeGroups->keys())
             ->whereNotNull('group_id')
             ->whereNotNull('group_name')
             ->select([
@@ -424,10 +445,11 @@ class StudentDistributionController extends Controller
             ->orderBy('level_code')
             ->orderBy('group_name')
             ->get()
-            ->map(function ($row) use ($sourceIds, $overrides, $incoming, $outgoing) {
+            ->map(function ($row) use ($sourceIds, $activeGroups, $overrides, $incoming, $outgoing) {
                 $groupId = (int) $row->group_id;
                 $course = $this->toCourse($row->level_code);
                 $lmsCount = (int) $row->student_count;
+                $active = $activeGroups->get($groupId);
 
                 $movedIn = (int) $incoming->get($groupId, 0);
                 $movedOut = (int) $outgoing->get($groupId, 0);
@@ -444,6 +466,8 @@ class StudentDistributionController extends Controller
                     'level_code' => (string) $row->level_code,
                     'course' => $course,
                     'level_name' => $row->level_name,
+                    'language_code' => $active?->education_lang_code ?: null,
+                    'language_name' => $active?->education_lang_name ?: null,
                     'lms_student_count' => $lmsCount,
                     'student_count' => $students,
                     'moved_in' => $movedIn,

@@ -384,6 +384,9 @@
         let rightView = 'all';
 
         const courseLabel = g => g.course ? g.course + '-kurs' : (g.level_name || '');
+        // Fakultet · yo'nalish · kurs · ta'lim tili
+        const metaLabel = g => [g.faculty_name || '\u2014', g.specialty_name || '\u2014', courseLabel(g), g.language_name || '']
+            .filter(Boolean).join(' \u00b7 ');
 
         // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
         function freeHtml(g) {
@@ -444,8 +447,7 @@
                 '<span class="sd-idx">' + index + '.</span>' +
                 check +
                 '<span><span class="sd-name" data-group="' + g.group_hemis_id + '">' + esc(g.group_name) + '</span>' + tag +
-                '<span class="sd-meta">' + esc(g.faculty_name || '—') + ' · ' + esc(g.specialty_name || '—') +
-                (courseLabel(g) ? ' · ' + esc(courseLabel(g)) : '') + '</span></span>' +
+                '<span class="sd-meta">' + esc(metaLabel(g)) + '</span></span>' +
                 '<span class="sd-num">' + g.student_count + '</span>' +
                 (withCheckbox ? '' :
                     '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + "\" title=\"Sig'im - o'zgartirish mumkin\">" +
@@ -586,9 +588,14 @@
                     '</span></div>';
             }
 
+            // Boshqa fakultetdagi guruh ham chiqishi mumkin — nomi yonida
+            // fakulteti ko'rsatiladi, shunda qaysi guruhga o'tayotgani aniq bo'ladi.
+            const source = groups.find(g => g.group_hemis_id === modalGroupId);
             const options = modalTargets.length
                 ? modalTargets.map(g => '<option value="' + g.group_hemis_id + '">' +
-                    esc(g.group_name) + ' (' + g.free_places + " bo'sh)" + '</option>').join('')
+                    esc(g.group_name) + ' (' + g.free_places + " bo'sh)" +
+                    (source && g.faculty_name !== source.faculty_name ? ' \u00b7 ' + esc(g.faculty_name || '') : '') +
+                    '</option>').join('')
                 : '';
 
             const select = modalTargets.length
@@ -611,7 +618,7 @@
             $('modalHint').innerHTML = modalTargets.length
                 ? '<b>' + modalTargets.length + "</b> ta mos guruhda bo'sh joy bor" +
                   (moved ? ' &nbsp;&middot;&nbsp; <b>' + moved + '</b> ta talaba rejalashtirilgan' : '')
-                : "Bu kurs va yo'nalishda bo'sh joyli guruh yo'q";
+                : "Bu yo'nalish, kurs va ta'lim tilida bo'sh joyli guruh yo'q";
         }
 
         async function loadStudents() {
@@ -631,9 +638,7 @@
             modalGroupId = groupId;
             const group = groups.find(g => g.group_hemis_id === groupId);
             $('modalGroup').textContent = group ? group.group_name : 'Guruh';
-            $('modalMeta').textContent = group
-                ? [group.faculty_name, group.specialty_name, courseLabel(group)].filter(Boolean).join(' \u00b7 ')
-                : '';
+            $('modalMeta').textContent = group ? metaLabel(group) : '';
             $('modalBody').innerHTML = '<div class="sd-modal-note">Yuklanmoqda...</div>';
             $('modalHint').textContent = '';
             modal.classList.add('is-open');

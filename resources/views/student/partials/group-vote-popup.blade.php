@@ -87,7 +87,13 @@
                 headers: {'Content-Type':'application/json','X-CSRF-TOKEN':csrf,'Accept':'application/json'},
                 body: JSON.stringify({to_group_hemis_id: Number(chosen.value)}),
             });
-            const data = await response.json();
+            const raw = await response.text();
+            let data;
+            try {
+                data = JSON.parse(raw);
+            } catch (parseError) {
+                throw new Error("Server kutilmagan javob qaytardi. Sahifani yangilab (F5) qayta urinib ko'ring.");
+            }
             if (!response.ok) throw new Error(data.message || "Ovoz berib bo'lmadi.");
             alert(data.message);
             document.body.style.overflow = '';

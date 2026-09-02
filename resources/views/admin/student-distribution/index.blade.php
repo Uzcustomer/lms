@@ -368,6 +368,7 @@
                             <p>Talabalar shu guruhlarga ko'chiriladi</p>
                         </div>
                         <span class="sd-side-tools">
+                            <button class="sd-xls" id="syncGroups" type="button" title="HEMIS dan guruhlar ro'yxatini darhol yangilash">Groups sync</button>
                             <button class="sd-reset" id="resetDrafts" type="button" title="Barcha o'tkazilgan talabalarni o'z guruhlariga qaytarish">Hammasini qaytarish</button>
                             <button class="sd-xls" data-export="left" type="button" title="Filtrga mos guruhlar talabalarini yuklab olish">
                                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v10m0 0 3.5-3.5M12 14l-3.5-3.5M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg>
@@ -481,17 +482,6 @@
                     <button class="sd-close" type="button" id="votesClose" aria-label="Yopish">&times;</button>
                 </div>
                 <div class="sd-modal-body" id="votesBody"></div>
-                <div class="sd-modal-foot">
-                    <label class="sd-hint" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
-                        <input type="checkbox" id="votesCheckAll" style="width:15px;height:15px;accent-color:var(--navy);">
-                        Hammasini belgilash
-                    </label>
-                    <span style="display:flex;align-items:center;gap:12px;">
-                        <span class="sd-hint"><b id="votesPicked">0</b> ta tanlandi</span>
-                        <button class="sd-btn sd-btn-danger" id="deleteVotesBtn" type="button" disabled>O'chirish</button>
-                        <button class="sd-btn sd-btn-ok" id="approveVotesBtn" type="button" disabled>Tasdiqlash</button>
-                    </span>
-                </div>
             </div>
         </div>
 
@@ -539,6 +529,7 @@
         const assignUrl   = @json(route('admin.student-distribution.assign-student'));
         const unassignUrl = @json(route('admin.student-distribution.unassign-student'));
         const resetDraftsUrl = @json(route('admin.student-distribution.drafts.reset'));
+        const syncGroupsUrl  = @json(route('admin.student-distribution.groups.sync'));
         const votesUrl        = @json(route('admin.student-distribution.votes'));
         const openVotingUrl   = @json(route('admin.student-distribution.voting.open'));
         const openVotingStudentsUrl = @json(route('admin.student-distribution.voting.open-students'));
@@ -556,6 +547,9 @@
         let rightView = 'all';
 
         const courseLabel = g => g.course ? g.course + '-kurs' : (g.level_name || '');
+
+        // "25-01a" deb yozilsa ham "d1/d25-01(a)" topilsin — belgilar tashlanadi.
+        const normName = v => String(v || '').toLowerCase().replace(/[^a-z0-9\u0400-\u04ff]/g, '');
         // Fakultet · yo'nalish · kurs · ta'lim tili
         const metaLabel = g => [g.faculty_name || '\u2014', g.specialty_name || '\u2014', courseLabel(g), g.language_name || '']
             .filter(Boolean).join(' \u00b7 ');
@@ -602,7 +596,7 @@
             (!f.faculty || g.faculty_name === f.faculty) &&
             (!f.specialty || g.specialty_name === f.specialty) &&
             (!f.course || String(g.course) === f.course) &&
-            (!f.search || String(g.group_name).toLowerCase().includes(f.search)) &&
+            (!f.search || normName(g.group_name).includes(normName(f.search))) &&
             (f.minStudents === '' || g.student_count >= Number(f.minStudents)) &&
             (f.minCapacity === '' || (g.capacity !== null && g.capacity >= Number(f.minCapacity))) &&
             (!f.status || statusOf(g) === f.status)
@@ -972,7 +966,7 @@
 
         function pickFiltered() {
             return modalTargets.filter(g =>
-                (!pickSearch || String(g.group_name).toLowerCase().includes(pickSearch)) &&
+                (!pickSearch || normName(g.group_name).includes(normName(pickSearch))) &&
                 (!pickStatus || (pickStatus === 'free' ? g.free_places > 0 : !(g.free_places > 0)))
             );
         }
@@ -1178,6 +1172,26 @@
             });
         });
 
+        // HEMIS dan guruhlarni darhol yangilash (import:groups).
+        $('syncGroups').addEventListener('click', async () => {
+            const button = $('syncGroups');
+            button.disabled = true;
+            const oldText = button.textContent;
+            button.textContent = 'Yangilanmoqda...';
+            try {
+                const data = await postJson(syncGroupsUrl, {});
+                groups = data.groups;
+                Object.values(panels).forEach(refreshOptions);
+                render();
+                alert(data.message);
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = oldText;
+            }
+        });
+
         // Hammasini qaytarish — barcha reja bekor bo'ladi.
         $('resetDrafts').addEventListener('click', async () => {
             if (!confirm("Barcha bo'sh joyga o'tkazilgan talabalar o'z guruhlariga qaytarilsinmi?\nReja butunlay tozalanadi va guruhlar asl holatiga keladi.")) return;
@@ -1234,7 +1248,6 @@
         // --- Talabalar ovozlari ---
         const votesModal = $('votesModal');
         let votesData = [];
-        let votePicked = new Set();
 
         async function loadVotes() {
             try {
@@ -1255,33 +1268,20 @@
         }
 
         function renderVotes() {
-            votePicked = new Set([...votePicked].filter(id => votesData.some(v => v.id === id)));
-
-            const pending = votesData.filter(v => v.status === 'pending').length;
-            $('votesMeta').textContent = pending + ' ta kutilmoqda \u00b7 ' + (votesData.length - pending) + ' ta tasdiqlangan';
+            $('votesMeta').textContent = votesData.length + ' ta ovoz';
 
             $('votesBody').innerHTML = votesData.length
-                ? votesData.map(v => {
-                    const badge = v.status === 'approved'
-                        ? '<span style="margin-left:8px;padding:2px 8px;border-radius:999px;background:#e9f7f0;color:#0f7a52;font-size:10px;font-weight:700;">Tasdiqlangan</span>'
-                        : '';
-
-                    return '<label class="sd-vote-row">' +
-                        '<input type="checkbox" data-vote="' + v.id + '"' + (votePicked.has(v.id) ? ' checked' : '') + ' style="width:15px;height:15px;accent-color:var(--navy);cursor:pointer;">' +
-                        '<span><b>' + esc(v.student_name) + '</b>' + badge +
-                        '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
-                        '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b></span>' +
-                        '<button class="sd-vote-del" type="button" data-del-vote="' + v.id + '" title="Ovozni o’chirish">' +
-                            '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>' +
-                        '</button>' +
-                        '</label>';
-                }).join('')
+                ? votesData.map(v =>
+                    '<div class="sd-vote-row">' +
+                    '<span style="color:#0f7a52;font-weight:800;">&#10003;</span>' +
+                    '<span><b>' + esc(v.student_name) + '</b>' +
+                    '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
+                    '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b></span>' +
+                    '<button class="sd-vote-del" type="button" data-del-vote="' + v.id + '" title="Ovozni o\u2019chirish">' +
+                        '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>' +
+                    '</button>' +
+                    '</div>').join('')
                 : '<div class="sd-modal-note">Hali ovoz berilmagan.</div>';
-
-            $('votesPicked').textContent = votePicked.size;
-            const pendingPicked = votesData.some(v => votePicked.has(v.id) && v.status === 'pending');
-            $('approveVotesBtn').disabled = !pendingPicked;
-            $('deleteVotesBtn').disabled = votePicked.size === 0;
         }
 
         $('votesBtn').addEventListener('click', async () => {
@@ -1308,56 +1308,6 @@
             } catch (error) {
                 alert(error.message);
                 button.disabled = false;
-            }
-        });
-
-        $('votesBody').addEventListener('change', event => {
-            const box = event.target.closest('input[data-vote]');
-            if (!box) return;
-            const id = Number(box.dataset.vote);
-            if (box.checked) votePicked.add(id); else votePicked.delete(id);
-            renderVotes();
-        });
-
-        $('votesCheckAll').addEventListener('change', event => {
-            if (event.target.checked) {
-                votesData.forEach(v => votePicked.add(v.id));
-            } else {
-                votePicked.clear();
-            }
-            renderVotes();
-        });
-
-        $('approveVotesBtn').addEventListener('click', async () => {
-            if (!confirm(votePicked.size + " ta ovozni tasdiqlaysizmi? Talabalar tanlagan guruhlariga rejalashtiriladi va joylari band qilinadi.")) return;
-            $('approveVotesBtn').disabled = true;
-            try {
-                const data = await postJson(approveVotesUrl, {vote_ids: [...votePicked]});
-                groups = data.groups;
-                render();
-                await loadVotes();
-                renderVotes();
-                alert(data.message + (data.failed && data.failed.length ? '\n\n' + data.failed.join('\n') : ''));
-            } catch (error) {
-                alert(error.message);
-                $('approveVotesBtn').disabled = false;
-            }
-        });
-
-        $('deleteVotesBtn').addEventListener('click', async () => {
-            if (!confirm(votePicked.size + " ta ovoz o'chirilsinmi? Tasdiqlangan ovozning rejasi ham bekor bo'ladi va joyi qaytadi.")) return;
-            $('deleteVotesBtn').disabled = true;
-            try {
-                const data = await postJson(deleteVotesUrl, {vote_ids: [...votePicked]});
-                groups = data.groups;
-                render();
-                votePicked.clear();
-                await loadVotes();
-                renderVotes();
-                alert(data.message);
-            } catch (error) {
-                alert(error.message);
-                $('deleteVotesBtn').disabled = false;
             }
         });
 

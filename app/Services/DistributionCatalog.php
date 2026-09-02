@@ -32,7 +32,7 @@ class DistributionCatalog
         // Faol guruhlar va ularning ta'lim tili — til faqat `groups` da bor.
         $activeGroups = Group::query()
             ->where('active', true)
-            ->get(['group_hemis_id', 'education_lang_code', 'education_lang_name'])
+            ->get(['group_hemis_id', 'name', 'department_name', 'specialty_name', 'education_lang_code', 'education_lang_name'])
             ->keyBy(fn ($group) => (int) $group->group_hemis_id);
 
         $overrides = Schema::hasTable('distribution_group_capacities')
@@ -53,7 +53,7 @@ class DistributionCatalog
                 ->pluck('total', 'from_group_hemis_id');
         }
 
-        return Student::query()
+        $rows = Student::query()
             ->where('student_status_code', 11)
             ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
             ->whereIn('group_id', $activeGroups->keys())
@@ -108,6 +108,75 @@ class DistributionCatalog
                     'is_source' => $sourceIds->has($groupId),
                 ];
             });
+
+        // Hali talabasi yo'q guruhlar (masalan, yangi o'quv yilida ochilgan
+        // d26 guruhlari) students dan chiqmaydi — ularni groups jadvalidan
+        // qo'shamiz. Kurs guruh nomidagi qabul yilidan hisoblanadi.
+        $known = $rows->pluck('group_hemis_id')->flip();
+
+        foreach ($activeGroups as $groupId => $active) {
+            if ($known->has($groupId)) {
+                continue;
+            }
+
+            $course = $this->courseFromName((string) $active->name);
+            $movedIn = (int) $incoming->get($groupId, 0);
+            $movedOut = (int) $outgoing->get($groupId, 0);
+            $students = max(0, $movedIn - $movedOut);
+
+            $default = DistributionGroupCapacity::defaultFor($course);
+            $capacity = $overrides->has($groupId) ? (int) $overrides->get($groupId) : $default;
+
+            $rows->push([
+                'group_hemis_id' => $groupId,
+                'group_name' => $active->name,
+                'faculty_name' => $active->department_name,
+                'specialty_name' => $active->specialty_name,
+                'level_code' => '',
+                'course' => $course,
+                'level_name' => $course ? $course . '-kurs' : null,
+                'language_code' => $active->education_lang_code ?: null,
+                'language_name' => $active->education_lang_name ?: null,
+                'lms_student_count' => 0,
+                'student_count' => $students,
+                'moved_in' => $movedIn,
+                'moved_out' => $movedOut,
+                'capacity' => $capacity,
+                'is_custom_capacity' => $overrides->has($groupId),
+                'free_places' => $capacity === null ? null : $capacity - $students,
+                'is_source' => $sourceIds->has($groupId),
+            ]);
+        }
+
+        return $rows
+            ->sortBy([
+                ['faculty_name', 'asc'],
+                ['specialty_name', 'asc'],
+                ['course', 'asc'],
+                ['group_name', 'asc'],
+            ])
+            ->values();
+    }
+
+    /**
+     * Guruh nomidagi qabul yilidan kursni chiqaradi: d1/d26-01(a) -> 26 ->
+     * 2026-27 o'quv yilida 1-kurs. O'quv yili sentabrdan boshlanadi.
+     */
+    public function courseFromName(string $name): ?int
+    {
+        if (!preg_match('/(\d{2})\s*-/', $name, $match) && !preg_match('/(\d{2})/', $name, $match)) {
+            return null;
+        }
+
+        $admissionYear = (int) $match[1];
+        $base = (int) date('y');
+        if ((int) date('n') < 9) {
+            $base--;
+        }
+
+        $course = $base - $admissionYear + 1;
+
+        return $course >= 1 && $course <= 8 ? $course : null;
     }
 
     /**

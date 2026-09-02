@@ -16,6 +16,7 @@ use App\Services\DistributionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -117,6 +118,25 @@ class StudentDistributionController extends Controller
             'group' => $group,
             'students' => $students,
             'incoming' => $incoming,
+        ]);
+    }
+
+    /** HEMIS dan guruhlar ro'yxatini darhol yangilaydi (import:groups). */
+    public function syncGroups(): JsonResponse
+    {
+        $started = microtime(true);
+        $exitCode = Artisan::call('import:groups');
+        $seconds = round(microtime(true) - $started, 1);
+
+        if ($exitCode !== 0) {
+            return response()->json([
+                'message' => 'Guruhlarni yangilashda xatolik yuz berdi (kod: ' . $exitCode . ').',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Guruhlar HEMIS dan yangilandi (' . $seconds . ' s).',
+            'groups' => $this->groupCatalog()->values(),
         ]);
     }
 

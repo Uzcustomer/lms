@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\DistributionDraftAssignment;
 use App\Models\DistributionVote;
 use App\Models\DistributionVotingGroup;
 use App\Models\DistributionVotingStudent;
@@ -10,6 +11,7 @@ use App\Services\DistributionCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -66,19 +68,38 @@ class GroupVoteController extends Controller
             ], 422);
         }
 
-        DistributionVote::create([
-            'student_id' => $student->id,
-            'from_group_hemis_id' => (int) $student->group_id,
-            'to_group_hemis_id' => (int) $target['group_hemis_id'],
-            'student_name' => $student->full_name,
-            'student_id_number' => $student->student_id_number,
-            'from_group_name' => $student->group_name,
-            'to_group_name' => $target['group_name'],
-            'status' => 'pending',
-        ]);
+        // Ovoz darrov kuchga kiradi: reja yoziladi va joy band bo'ladi.
+        // Registrator tasdig'i talab qilinmaydi.
+        DB::transaction(function () use ($student, $target) {
+            DistributionVote::create([
+                'student_id' => $student->id,
+                'from_group_hemis_id' => (int) $student->group_id,
+                'to_group_hemis_id' => (int) $target['group_hemis_id'],
+                'student_name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'from_group_name' => $student->group_name,
+                'to_group_name' => $target['group_name'],
+                'status' => 'approved',
+                'approved_at' => now(),
+            ]);
+
+            if (Schema::hasTable('distribution_draft_assignments')) {
+                DistributionDraftAssignment::updateOrCreate(
+                    ['student_id' => $student->id],
+                    [
+                        'from_group_hemis_id' => (int) $student->group_id,
+                        'to_group_hemis_id' => (int) $target['group_hemis_id'],
+                        'student_name' => $student->full_name,
+                        'student_id_number' => $student->student_id_number,
+                        'from_group_name' => $student->group_name,
+                        'to_group_name' => $target['group_name'],
+                    ]
+                );
+            }
+        });
 
         return response()->json([
-            'message' => 'Ovozingiz qabul qilindi. Natija registrator tasdig\'idan keyin kuchga kiradi.',
+            'message' => 'Ovozingiz qabul qilindi. Siz ' . $target['group_name'] . ' guruhiga qo\'shildingiz.',
         ]);
     }
 }

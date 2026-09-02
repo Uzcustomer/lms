@@ -491,6 +491,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');
                 Route::post('/unassign-student', [StudentDistributionController::class, 'unassignStudent'])->name('unassign-student');
                 Route::post('/reset-drafts', [StudentDistributionController::class, 'resetDrafts'])->name('drafts.reset');
+                Route::post('/sync-groups', [StudentDistributionController::class, 'syncGroups'])->name('groups.sync');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');
@@ -1407,6 +1408,10 @@ Route::prefix('student')->name('student.')->group(function () {
     Route::post('/verify-login/resend', [StudentAuthController::class, 'resendLoginCode'])->name('verify-login.resend');
 
     Route::middleware(['auth:student'])->group(function () {
+        // Guruh tanlash ovozi — og'ir middlewarelarsiz, aks holda POST
+        // so'rov survey/contact sahifasiga redirect bo'lib HTML qaytaradi.
+        Route::post('/group-vote', [\App\Http\Controllers\Student\GroupVoteController::class, 'store'])->name('group-vote.store');
+
         Route::get('/change-password', [StudentAuthController::class, 'editPassword'])->name('password.edit');
         Route::put('/change-password', [StudentAuthController::class, 'updatePassword'])->name('password.update');
 
@@ -1508,9 +1513,6 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/bulk-delete', [\App\Http\Controllers\Student\NotificationController::class, 'bulkDelete'])->name('bulk-delete');
             Route::post('/delete-all', [\App\Http\Controllers\Student\NotificationController::class, 'deleteAll'])->name('delete-all');
         });
-
-        // Guruh tanlash ovozi (taqsimlash popupi)
-        Route::post('/group-vote', [\App\Http\Controllers\Student\GroupVoteController::class, 'store'])->name('group-vote.store');
 
         // Qayta o'qish arizalari
         Route::prefix('retake')->name('retake.')->group(function () {

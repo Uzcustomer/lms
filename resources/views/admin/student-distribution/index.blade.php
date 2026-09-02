@@ -23,6 +23,17 @@
     }
     .sd-head-btn:hover { background:rgba(255,255,255,.22); }
     .sd-head-btn b { margin-left:6px; padding:1px 8px; border-radius:999px; background:var(--gold); color:#0f2748; }
+    .sd-mcap-wrap { padding:10px 20px 12px; border-bottom:1px solid var(--line-soft); background:#fbfcfe; }
+    .sd-mcap-title {
+        margin-bottom:8px; color:var(--muted);
+        font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+    }
+    .sd-mcap-row {
+        display:grid; grid-template-columns:minmax(0,1fr) auto 74px 84px; gap:9px;
+        align-items:center; padding:4px 0;
+    }
+    .sd-mcap-name { color:var(--ink); font-size:12.5px; font-weight:600; }
+    .sd-mcap-cnt { color:var(--muted); font-size:11px; white-space:nowrap; }
     .sd-btn-ok { background:var(--ok); }
     .sd-btn-ok:hover { background:#0a5c3d; }
     .sd-btn-danger { background:var(--bad); }
@@ -441,7 +452,7 @@
         </div>
 
         <div class="sd-modal" id="studentsModal">
-            <div class="sd-modal-box" role="dialog" aria-modal="true">
+            <div class="sd-modal-box" style="width:min(760px,100%);height:calc(100vh - 80px);" role="dialog" aria-modal="true">
                 <div class="sd-modal-head">
                     <div>
                         <h3 id="modalGroup">Guruh</h3>
@@ -814,10 +825,29 @@
                 select + '</div>';
         }
 
+        // To'liq rejimda maqsad guruhlar ro'yxati sig'imi bilan chiqadi —
+        // sig'imni shu yerda oshirib bo'sh joy ochish va darrov ko'chirish mumkin.
+        function capacityEditor() {
+            if (!modalFull || !modalTargets.length) return '';
+
+            return '<div class="sd-mcap-wrap">' +
+                '<div class="sd-mcap-title">' + "Guruhlar sig'imi — tahrirlab bo'sh joy ochish mumkin" + '</div>' +
+                modalTargets.map(g =>
+                    '<div class="sd-mcap-row">' +
+                    '<span class="sd-mcap-name">' + esc(g.group_name) + '</span>' +
+                    '<span class="sd-mcap-cnt">' + g.student_count + ' talaba</span>' +
+                    '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + '">' +
+                        '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-mcap="' + g.group_hemis_id + '">' +
+                    '</span>' +
+                    freeHtml(g) +
+                    '</div>').join('') +
+                '</div>';
+        }
+
         function renderStudents(students) {
-            $('modalBody').innerHTML = students.length
+            $('modalBody').innerHTML = capacityEditor() + (students.length
                 ? students.map(studentRow).join('')
-                : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>';
+                : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>');
 
             const moved = students.filter(st => st.moved_to).length;
             const movedText = moved ? ' &nbsp;&middot;&nbsp; <b>' + moved + '</b> ta talaba rejalashtirilgan' : '';
@@ -1172,6 +1202,35 @@
                 input.disabled = false;
             }
         }
+
+        // Modal ichidagi sig'im tahriri (to'liq rejim)
+        $('modalBody').addEventListener('change', async event => {
+            const input = event.target.closest('input[data-mcap]');
+            if (!input) return;
+            const value = input.value.trim();
+            if (value === '') return;
+            input.disabled = true;
+            try {
+                const data = await postJson(capacityUrl, {
+                    group_hemis_id: Number(input.dataset.mcap),
+                    capacity: Number(value),
+                });
+                const index = groups.findIndex(g => g.group_hemis_id === Number(input.dataset.mcap));
+                if (index !== -1) groups[index] = data.group;
+                render();
+                await loadStudents();
+            } catch (error) {
+                alert(error.message);
+                input.disabled = false;
+            }
+        });
+
+        $('modalBody').addEventListener('keydown', event => {
+            if (event.target.matches('input[data-mcap]') && event.key === 'Enter') {
+                event.preventDefault();
+                event.target.blur();
+            }
+        });
 
         Object.values(panels).forEach(panel => {
             guardCapacityInputs(panel.rows);

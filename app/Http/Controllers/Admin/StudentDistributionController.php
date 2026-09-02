@@ -810,6 +810,8 @@ class StudentDistributionController extends Controller
     {
         $filters = $request->validate([
             'faculty' => ['nullable', 'string', 'max:255'],
+            'faculties' => ['nullable', 'array', 'max:50'],
+            'faculties.*' => ['required', 'string', 'max:255'],
             'specialty' => ['nullable', 'string', 'max:255'],
             'course' => ['nullable', 'string', 'max:32'],
             'search' => ['nullable', 'string', 'max:255'],
@@ -820,8 +822,16 @@ class StudentDistributionController extends Controller
 
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
 
+        // Bir nechta fakultet (faculties[]) yoki eski bitta (faculty) parametr.
+        $faculties = collect($filters['faculties'] ?? [])
+            ->when(!empty($filters['faculty']), fn ($list) => $list->push($filters['faculty']))
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
+
         $groups = $this->groupCatalog()
-            ->when(!empty($filters['faculty']), fn ($rows) => $rows->where('faculty_name', $filters['faculty']))
+            ->when($faculties->isNotEmpty(), fn ($rows) => $rows->whereIn('faculty_name', $faculties->all()))
             ->when(!empty($filters['specialty']), fn ($rows) => $rows->where('specialty_name', $filters['specialty']))
             ->when(!empty($filters['course']), fn ($rows) => $rows->where('course', (int) $filters['course']))
             ->when($search !== '', fn ($rows) => $rows->filter(
@@ -835,7 +845,7 @@ class StudentDistributionController extends Controller
             : 'Bo\'sh guruhlarni to\'ldirish';
 
         $scope = collect([
-            $filters['faculty'] ?? null,
+            $faculties->isNotEmpty() ? $faculties->implode(', ') : null,
             $filters['specialty'] ?? null,
             !empty($filters['course']) ? $filters['course'] . '-kurs' : null,
         ])->filter()->implode(' · ');

@@ -202,6 +202,43 @@
     .sd-name { cursor:pointer; }
     .sd-name:hover { text-decoration:underline; }
     .is-right .sd-filters { grid-template-columns:1fr 1fr 60px 1fr 1fr; }
+
+    /* Bir nechta fakultetni belgilash mumkin bo'lgan ro'yxat */
+    .sd-multi { position:relative; min-width:0; }
+    .sd-multi-btn {
+        display:flex; align-items:center; justify-content:space-between; gap:6px;
+        width:100%; height:30px; padding:0 7px; border:1px solid #cfd9e6; border-radius:4px;
+        background:#fff; color:var(--ink); font-family:inherit; font-size:11.5px; text-align:left;
+        cursor:pointer; outline:none; transition:border-color .14s, box-shadow .14s;
+    }
+    .sd-multi-btn span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sd-multi-btn::after {
+        content:''; flex:none; width:6px; height:6px; margin-right:2px;
+        border-right:1.5px solid var(--ink-soft); border-bottom:1.5px solid var(--ink-soft);
+        transform:rotate(45deg) translateY(-2px);
+    }
+    .sd-multi-btn:focus, .sd-multi.is-open .sd-multi-btn {
+        border-color:var(--navy-soft); box-shadow:0 0 0 2px rgba(27,58,99,.1);
+    }
+    .sd-multi-btn.is-on { border-color:var(--gold); background:#fffdf5; font-weight:600; }
+    .sd-multi-menu {
+        position:absolute; top:calc(100% + 3px); left:0; z-index:40;
+        min-width:100%; max-height:280px; overflow-y:auto; padding:4px 0;
+        border:1px solid #cfd9e6; border-radius:5px; background:#fff;
+        box-shadow:0 10px 28px rgba(15,39,72,.16);
+    }
+    .sd-multi-menu label {
+        display:flex; align-items:center; gap:8px; padding:6px 10px;
+        color:var(--ink); font-size:11.5px; white-space:nowrap; cursor:pointer;
+    }
+    .sd-multi-menu label:hover { background:#f5f8fc; }
+    .sd-multi-menu input { width:14px; height:14px; accent-color:var(--navy); cursor:pointer; }
+    .sd-multi-clear {
+        display:block; width:100%; padding:6px 10px; border:0; border-bottom:1px solid var(--line-soft);
+        background:transparent; color:var(--navy); font-family:inherit; font-size:11px; font-weight:600;
+        text-align:left; cursor:pointer;
+    }
+    .sd-multi-clear:hover { background:#f5f8fc; }
     .sd-moved-mini {
         display:inline-block; margin-left:6px; padding:1px 6px; border-radius:3px;
         background:#e9f7f0; color:#0f7a52; font-size:10px; font-weight:700;
@@ -384,7 +421,10 @@
                     </div>
 
                     <div class="sd-filters">
-                        <select data-f="faculty"><option value="">Barcha fakultetlar</option></select>
+                        <div class="sd-multi" data-multi="faculty">
+                            <button class="sd-multi-btn" type="button"><span>Barcha fakultetlar</span></button>
+                            <div class="sd-multi-menu" hidden></div>
+                        </div>
                         <select data-f="specialty"><option value="">Barcha yo'nalishlar</option></select>
                         <select data-f="course"><option value="">Kurs</option></select>
                         <input data-f="search" type="search" placeholder="Guruh nomi">
@@ -421,7 +461,10 @@
                     </div>
 
                     <div class="sd-filters">
-                        <select data-f="faculty"><option value="">Barcha fakultetlar</option></select>
+                        <div class="sd-multi" data-multi="faculty">
+                            <button class="sd-multi-btn" type="button"><span>Barcha fakultetlar</span></button>
+                            <div class="sd-multi-menu" hidden></div>
+                        </div>
                         <select data-f="specialty"><option value="">Barcha yo'nalishlar</option></select>
                         <select data-f="course"><option value="">Kurs</option></select>
                         <input data-f="search" type="search" placeholder="Guruh nomi">
@@ -573,9 +616,10 @@
         }
 
         // Har bir panelning o'z filtrlari bor — ular bir-biriga ta'sir qilmaydi.
+        // faculties — har panelda belgilangan fakultetlar (bir nechtasi bo'lishi mumkin).
         const panels = {
-            left:  {root: $('leftSide'),  rows: $('leftRows'),  count: $('leftCount'),  checkbox: false},
-            right: {root: $('rightSide'), rows: $('rightRows'), count: $('rightCount'), checkbox: true},
+            left:  {root: $('leftSide'),  rows: $('leftRows'),  count: $('leftCount'),  checkbox: false, faculties: new Set()},
+            right: {root: $('rightSide'), rows: $('rightRows'), count: $('rightCount'), checkbox: true,  faculties: new Set()},
         };
 
         const readFilters = panel => {
@@ -584,7 +628,7 @@
                 return field ? field.value : '';
             };
             return {
-                faculty: get('faculty'),
+                faculties: [...panel.faculties],
                 specialty: get('specialty'),
                 course: get('course'),
                 search: get('search').trim().toLowerCase(),
@@ -603,7 +647,7 @@
         }
 
         const applyFilters = f => groups.filter(g =>
-            (!f.faculty || g.faculty_name === f.faculty) &&
+            (!f.faculties.length || f.faculties.includes(g.faculty_name)) &&
             (!f.specialty || g.specialty_name === f.specialty) &&
             (!f.course || String(g.course) === f.course) &&
             (!f.search || normName(g.group_name).includes(normName(f.search))) &&
@@ -734,10 +778,9 @@
         // Fakultet -> yo'nalish -> kurs bog'lanishi har panelda alohida ishlaydi.
         function refreshOptions(panel) {
             const pick = key => panel.root.querySelector('.sd-filters [data-f="' + key + '"]');
-            setOptions(pick('faculty'), groups.map(g => g.faculty_name), 'Barcha fakultetlar');
+            renderFacultyMenu(panel);
 
-            const faculty = pick('faculty').value;
-            const scoped = groups.filter(g => !faculty || g.faculty_name === faculty);
+            const scoped = groups.filter(g => !panel.faculties.size || panel.faculties.has(g.faculty_name));
             setOptions(pick('specialty'), scoped.map(g => g.specialty_name), 'Barcha yo\'nalishlar');
 
             const specialty = pick('specialty').value;
@@ -749,6 +792,67 @@
                 courses.map(c => '<option value="' + c + '">' + c + '-kurs</option>').join('');
             if ([...courseSelect.options].some(o => o.value === currentCourse)) courseSelect.value = currentCourse;
         }
+
+        // Fakultet ro'yxati: checkboxlar, bir nechtasi belgilanadi. Ro'yxatdan
+        // chiqib ketgan fakultet (guruhlar yangilanganda) belgidan ham tushadi.
+        function renderFacultyMenu(panel) {
+            const box = panel.root.querySelector('.sd-multi[data-multi="faculty"]');
+            if (!box) return;
+            const names = [...new Set(groups.map(g => g.faculty_name).filter(Boolean))].sort();
+            [...panel.faculties].forEach(name => { if (!names.includes(name)) panel.faculties.delete(name); });
+
+            box.querySelector('.sd-multi-menu').innerHTML =
+                '<button class="sd-multi-clear" type="button" data-clear>Barcha fakultetlar</button>' +
+                names.map(name => '<label><input type="checkbox" value="' + esc(name) + '"' +
+                    (panel.faculties.has(name) ? ' checked' : '') + '>' + esc(name) + '</label>').join('');
+
+            const button = box.querySelector('.sd-multi-btn');
+            const picked = [...panel.faculties];
+            button.querySelector('span').textContent = !picked.length
+                ? 'Barcha fakultetlar'
+                : (picked.length === 1 ? picked[0] : picked.length + ' ta fakultet');
+            button.title = picked.join(', ');
+            button.classList.toggle('is-on', picked.length > 0);
+        }
+
+        Object.entries(panels).forEach(([key, panel]) => {
+            const box = panel.root.querySelector('.sd-multi[data-multi="faculty"]');
+            if (!box) return;
+            const menu = box.querySelector('.sd-multi-menu');
+
+            box.querySelector('.sd-multi-btn').addEventListener('click', () => {
+                const open = menu.hidden;
+                document.querySelectorAll('.sd-multi.is-open').forEach(other => {
+                    other.classList.remove('is-open');
+                    other.querySelector('.sd-multi-menu').hidden = true;
+                });
+                menu.hidden = !open;
+                box.classList.toggle('is-open', open);
+            });
+
+            menu.addEventListener('change', event => {
+                const input = event.target.closest('input[type="checkbox"]');
+                if (!input) return;
+                if (input.checked) panel.faculties.add(input.value); else panel.faculties.delete(input.value);
+                refreshOptions(panel);
+                render();
+            });
+
+            menu.addEventListener('click', event => {
+                if (!event.target.closest('[data-clear]')) return;
+                panel.faculties.clear();
+                refreshOptions(panel);
+                render();
+            });
+        });
+
+        document.addEventListener('click', event => {
+            if (event.target.closest('.sd-multi')) return;
+            document.querySelectorAll('.sd-multi.is-open').forEach(box => {
+                box.classList.remove('is-open');
+                box.querySelector('.sd-multi-menu').hidden = true;
+            });
+        });
 
         // Filtrlar: tugma yo'q — tanlangan/yozilgan zahoti chiqadi.
         // Ustun sarlavhasidagi filtrlar
@@ -1409,7 +1513,7 @@
                 exportModal.classList.remove('is-open');
                 const f = readFilters(panels[exportSide]);
                 const params = new URLSearchParams();
-                if (f.faculty) params.set('faculty', f.faculty);
+                f.faculties.forEach(name => params.append('faculties[]', name));
                 if (f.specialty) params.set('specialty', f.specialty);
                 if (f.course) params.set('course', f.course);
                 if (f.search) params.set('search', f.search);

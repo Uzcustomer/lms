@@ -415,7 +415,13 @@
                                                         @endif
                                                     </td>
                                                     <td style="padding:8px;color:#475569;">{{ $gh->specialty_name ?? '-' }}</td>
-                                                    <td style="padding:8px;color:#475569;">{{ $gh->semester_name ?: '—' }}</td>
+                                                    <td style="padding:8px;color:#475569;">
+                                                        @if($gh->semester_name || $gh->semester_code)
+                                                            {{ $gh->semester_name ?: $gh->semester_code }}
+                                                        @else
+                                                            <span class="text-gray-400 text-xs" title="Bu yozuv semestr kuzatila boshlangunga qadar yaratilgan">—</span>
+                                                        @endif
+                                                    </td>
                                                     <td style="padding:8px;">
                                                         @if($kind)
                                                             <span title="{{ $gh->payment_form_name }}" style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;{{ $kind === 'grant' ? 'background:#d1fae5;color:#065f46;' : 'background:#dbeafe;color:#1e40af;' }}">

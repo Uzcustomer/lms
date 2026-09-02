@@ -126,12 +126,11 @@ class DistributionCatalog
         // Bo'sh guruhlar faqat joriy qabul yili (1-kurs) va bakalavr bo'lsa
         // qo'shiladi — aks holda eskirgan, talabasi allaqachon chiqib ketgan
         // guruhlar ham ro'yxatga kirib qoladi.
-        $bachelorCurricula = Schema::hasTable('curricula')
-            ? Curriculum::query()
-                ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
-                ->pluck('curricula_hemis_id')
-                ->map(fn ($id) => (int) $id)
-                ->flip()
+        // Har bir o'quv rejaning ta'lim turi. Yangi guruhning rejasi hali
+        // import qilinmagan bo'lishi mumkin — bunda guruh chiqaverishi kerak,
+        // faqat reja ANIQ bakalavr emasligi ma'lum bo'lsagina tashlanadi.
+        $curriculumTypes = Schema::hasTable('curricula')
+            ? Curriculum::query()->pluck('education_type_name', 'curricula_hemis_id')
             : collect();
 
         $candidates = [];
@@ -144,8 +143,11 @@ class DistributionCatalog
                 continue;
             }
 
-            if ($bachelorCurricula->isNotEmpty()
-                && !$bachelorCurricula->has((int) $active->curriculum_hemis_id)) {
+            $curriculumType = $active->curriculum_hemis_id
+                ? $curriculumTypes->get((int) $active->curriculum_hemis_id)
+                : null;
+            if ($curriculumType !== null
+                && !str_contains(mb_strtolower((string) $curriculumType), 'bakalavr')) {
                 continue;
             }
 

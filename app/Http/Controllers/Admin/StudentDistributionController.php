@@ -94,9 +94,49 @@ class StudentDistributionController extends Controller
             })
             ->values();
 
+        // Rejaga ko'ra shu guruhga kelgan talabalar — chap panelda guruh
+        // ochilganda alohida ko'rsatiladi va qaytarish mumkin bo'ladi.
+        $incoming = collect();
+        if (Schema::hasTable('distribution_draft_assignments')) {
+            $incoming = DistributionDraftAssignment::query()
+                ->where('to_group_hemis_id', $groupId)
+                ->orderBy('student_name')
+                ->get()
+                ->map(fn (DistributionDraftAssignment $draft) => [
+                    'student_id' => $draft->student_id,
+                    'full_name' => $draft->student_name,
+                    'student_id_number' => (string) $draft->student_id_number,
+                    'from_group_name' => $draft->from_group_name,
+                    'incoming' => true,
+                ])
+                ->values();
+        }
+
         return response()->json([
             'group' => $group,
             'students' => $students,
+            'incoming' => $incoming,
+        ]);
+    }
+
+    /**
+     * Barcha rejalashtirilgan ko'chirishlarni bekor qiladi — hamma talaba
+     * o'z guruhiga qaytadi, guruhlar asl holatiga keladi. LMS ga tegilmaydi.
+     */
+    public function resetDrafts(): JsonResponse
+    {
+        abort_unless(
+            Schema::hasTable('distribution_draft_assignments'),
+            503,
+            'Taqsimot rejasi jadvali hali migratsiya qilinmagan.'
+        );
+
+        $count = DistributionDraftAssignment::query()->count();
+        DistributionDraftAssignment::query()->delete();
+
+        return response()->json([
+            'message' => $count . " ta talaba o'z guruhiga qaytarildi. Guruhlar asl holatiga keldi.",
+            'groups' => $this->groupCatalog()->values(),
         ]);
     }
 

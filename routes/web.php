@@ -489,6 +489,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/target-groups', [StudentDistributionController::class, 'targetGroups'])->name('target-groups');
                 Route::post('/assign-student', [StudentDistributionController::class, 'assignStudent'])->name('assign-student');
                 Route::post('/unassign-student', [StudentDistributionController::class, 'unassignStudent'])->name('unassign-student');
+                Route::post('/reset-drafts', [StudentDistributionController::class, 'resetDrafts'])->name('drafts.reset');
             });
         Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
             Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');

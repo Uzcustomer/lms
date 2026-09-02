@@ -110,6 +110,16 @@
     }
     .sd-xls:hover { background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.5); }
     .sd-xls svg { width:13px; height:13px; }
+    .sd-reset {
+        display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 11px;
+        border:1px solid rgba(255,190,182,.55); border-radius:4px;
+        background:rgba(179,38,30,.28); color:#ffe1de;
+        font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer;
+        transition:background .14s;
+    }
+    .sd-reset:hover { background:rgba(179,38,30,.45); }
+    .sd-student.is-incoming { background:#e9f7f0; }
+    .sd-student.is-incoming:hover { background:#def2e8; }
     .sd-count {
         padding:4px 10px; border-radius:999px;
         background:rgba(255,255,255,.16); color:#fff;
@@ -184,8 +194,8 @@
     }
     .sd-row:last-child { border-bottom:0; }
     .sd-row:hover { background:#fafcfe; }
-    .is-right .sd-name { cursor:pointer; }
-    .is-right .sd-name:hover { text-decoration:underline; }
+    .sd-name { cursor:pointer; }
+    .sd-name:hover { text-decoration:underline; }
     .is-right .sd-filters { grid-template-columns:1fr 1fr 60px 1fr 1fr; }
     .sd-moved-mini {
         display:inline-block; margin-left:6px; padding:1px 6px; border-radius:3px;
@@ -357,6 +367,7 @@
                             <p>Talabalar shu guruhlarga ko'chiriladi</p>
                         </div>
                         <span class="sd-side-tools">
+                            <button class="sd-reset" id="resetDrafts" type="button" title="Barcha o'tkazilgan talabalarni o'z guruhlariga qaytarish">Hammasini qaytarish</button>
                             <button class="sd-xls" data-export="left" type="button" title="Filtrga mos guruhlar talabalarini yuklab olish">
                                 <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v10m0 0 3.5-3.5M12 14l-3.5-3.5M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg>
                                 Excel
@@ -519,6 +530,7 @@
         const targetsUrl  = @json(route('admin.student-distribution.target-groups'));
         const assignUrl   = @json(route('admin.student-distribution.assign-student'));
         const unassignUrl = @json(route('admin.student-distribution.unassign-student'));
+        const resetDraftsUrl = @json(route('admin.student-distribution.drafts.reset'));
         const votesUrl        = @json(route('admin.student-distribution.votes'));
         const openVotingUrl   = @json(route('admin.student-distribution.voting.open'));
         const closeVotingUrl  = @json(route('admin.student-distribution.voting.close'));
@@ -823,6 +835,15 @@
         }
 
         function studentRow(st, index) {
+            if (st.incoming) {
+                return '<div class="sd-student is-incoming"><i>' + (index + 1) + '.</i>' +
+                    '<b>' + esc(st.full_name) + '</b>' +
+                    '<span>' + esc(st.student_id_number) + '</span>' +
+                    '<span class="sd-moved">&larr; ' + esc(st.from_group_name || '') +
+                        '<button class="sd-undo" type="button" data-undo="' + st.student_id + '" title="Qaytarish">&times;</button>' +
+                    '</span></div>';
+            }
+
             if (st.moved_to) {
                 return '<div class="sd-student"><i>' + (index + 1) + '.</i>' +
                     '<b>' + esc(st.full_name) + '</b>' +
@@ -873,7 +894,7 @@
             if (!studentsResponse.ok) throw new Error(studentsData.message || "Yuklab bo'lmadi.");
 
             modalTargets = targetsResponse.ok ? targetsData.groups : [];
-            renderStudents(studentsData.students);
+            renderStudents([...(studentsData.incoming || []), ...studentsData.students]);
         }
 
         function setFullMode(on) {
@@ -1080,12 +1101,31 @@
             }
         });
 
-        // Modal faqat o'ng paneldan ochiladi.
-        panels.right.rows.addEventListener('click', event => {
-            const name = event.target.closest('.sd-name');
-            if (!name) return;
-            event.preventDefault();
-            openStudents(Number(name.dataset.group));
+        // Guruh nomiga bosilganda ikkala panelda ham talabalar modali ochiladi.
+        Object.values(panels).forEach(panel => {
+            panel.rows.addEventListener('click', event => {
+                const name = event.target.closest('.sd-name');
+                if (!name) return;
+                event.preventDefault();
+                openStudents(Number(name.dataset.group));
+            });
+        });
+
+        // Hammasini qaytarish — barcha reja bekor bo'ladi.
+        $('resetDrafts').addEventListener('click', async () => {
+            if (!confirm("Barcha bo'sh joyga o'tkazilgan talabalar o'z guruhlariga qaytarilsinmi?\nReja butunlay tozalanadi va guruhlar asl holatiga keladi.")) return;
+            const button = $('resetDrafts');
+            button.disabled = true;
+            try {
+                const data = await postJson(resetDraftsUrl, {});
+                groups = data.groups;
+                render();
+                alert(data.message);
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
         });
 
         $('modalClose').addEventListener('click', closeModal);

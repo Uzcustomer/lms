@@ -5,40 +5,42 @@
         --ink:#17233a; --ink-soft:#4d6180; --muted:#8798b1;
         --line:#dde5ef; --line-soft:#eef2f8;
         --ok:#0f7a52; --bad:#b3261e;
-        color:var(--ink); font-family:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;
+        color:var(--ink); font-family:'Figtree',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
     }
     .sd-head {
-        padding:20px 24px; border:1px solid var(--line); border-left:3px solid var(--gold);
-        border-radius:6px; background:linear-gradient(180deg,#fbfcfe,#f5f8fc);
+        padding:20px 24px; border-radius:6px;
+        border-bottom:3px solid var(--gold);
+        background:linear-gradient(115deg,#0f2748,#1b3a63 62%,#22497a);
+        box-shadow:0 2px 10px rgba(15,39,72,.16);
     }
-    .sd-head h1 { margin:0; color:var(--navy); font-size:21px; font-weight:800; letter-spacing:-.01em; }
-    .sd-head p { margin:5px 0 0; color:var(--ink-soft); font-size:13px; }
+    .sd-head h1 { margin:0; color:#fff; font-size:21px; font-weight:700; letter-spacing:-.01em; }
+    .sd-head p { margin:5px 0 0; color:rgba(255,255,255,.72); font-size:13px; }
 
     /* ---- Ikki ustun ---- */
     .sd-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; }
     .sd-side { overflow:hidden; border:1px solid var(--line); border-radius:6px; background:#fff; }
     .sd-side-head {
         display:flex; align-items:center; justify-content:space-between; gap:12px;
-        padding:13px 16px; border-bottom:1px solid var(--line-soft);
-        background:linear-gradient(180deg,#fbfcfe,#f5f8fc);
+        padding:13px 16px; background:#1b3a63;
     }
-    .sd-side.is-right .sd-side-head { background:linear-gradient(180deg,#fffcf7,#fdf7ec); }
-    .sd-side-head h2 { margin:0; color:var(--navy); font-size:14.5px; font-weight:700; }
-    .sd-side-head p { margin:3px 0 0; color:var(--muted); font-size:11.5px; }
+    .sd-side.is-right .sd-side-head { background:#8a5a06; }
+    .sd-side-head h2 { margin:0; color:#fff; font-size:14.5px; font-weight:700; }
+    .sd-side-head p { margin:3px 0 0; color:rgba(255,255,255,.68); font-size:11.5px; }
     .sd-side-tools { display:flex; align-items:center; gap:8px; }
     .sd-xls {
         display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 11px;
-        border:1px solid #bcd9c9; border-radius:4px; background:#f2fbf6; color:#0f7a52;
+        border:1px solid rgba(255,255,255,.3); border-radius:4px;
+        background:rgba(255,255,255,.12); color:#fff;
         font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer;
         transition:background .14s, border-color .14s;
     }
-    .sd-xls:hover { background:#e6f7ee; border-color:#8fc9ac; }
+    .sd-xls:hover { background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.5); }
     .sd-xls svg { width:13px; height:13px; }
     .sd-count {
-        padding:4px 10px; border-radius:999px; background:#eef4fd; color:var(--navy);
+        padding:4px 10px; border-radius:999px;
+        background:rgba(255,255,255,.16); color:#fff;
         font-size:11px; font-weight:700; white-space:nowrap;
     }
-    .sd-side.is-right .sd-count { background:#fdf3e0; color:#8a5a06; }
 
     /* ---- Har paneldagi filtrlar (ixcham) ---- */
     .sd-filters {
@@ -226,8 +228,8 @@
         // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
         function freeHtml(g) {
             if (g.free_places === null || g.free_places === undefined) return '';
-            if (g.free_places > 0) return '<span class="sd-free free">+' + g.free_places + ' bo'sh</span>';
-            if (g.free_places === 0) return '<span class="sd-free full">to'la</span>';
+            if (g.free_places > 0) return '<span class="sd-free free">+' + g.free_places + " bo'sh</span>";
+            if (g.free_places === 0) return "<span class=\"sd-free full\">to'la</span>";
             return '<span class="sd-free over">' + Math.abs(g.free_places) + ' ortiqcha</span>';
         }
 
@@ -269,8 +271,8 @@
                 (courseLabel(g) ? ' · ' + esc(courseLabel(g)) : '') + '</span></span>' +
                 '<span class="sd-stats">' +
                     '<span class="sd-num">' + g.student_count + ' <em>talaba</em></span>' +
-                    '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + '" title="Sig'im — o'zgartirish mumkin">' +
-                        '<b>SIG'IM</b>' +
+                    '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + "\" title=\"Sig'im - o'zgartirish mumkin\">" +
+                        "<b>SIG'IM</b>" +
                         '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-cap="' + g.group_hemis_id + '">' +
                     '</span>' +
                     freeHtml(g) +
@@ -385,7 +387,7 @@
                     body: JSON.stringify({group_hemis_id: groupId, capacity: Number(value)}),
                 });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.message || 'Saqlab bo'lmadi.');
+                if (!response.ok) throw new Error(data.message || "Saqlab bo'lmadi.");
 
                 const index = groups.findIndex(g => g.group_hemis_id === groupId);
                 if (index !== -1) groups[index] = data.group;

@@ -375,6 +375,46 @@
                     .replace(/^p\/p?(?=\d)/, 'p')
                     .replace(/\(([a-z])\)$/i, '$1');
             };
+
+            // Til belgisi ("(rus)", "(ingliz)") guruhning alohida maydoni bo'lgani
+            // uchun nomga taalluqli emas. Uni olib tashlagan ikkinchi ko'rinish
+            // faqat zaxira sifatida ishlatiladi — aniq nom topilmaganda.
+            const stripGroupLanguage = value =>
+                normalizeGroupName(value)
+                    .replace(/\((?:rus|ru|ingliz|ing|en|eng|uz|uzb|o'zbek|ozbek)\)$/i, '');
+
+            /**
+             * Guruh nomlari xaritasi: avval aniq nom bo'yicha, topilmasa tilsiz
+             * ko'rinish bo'yicha qidiriladi. Tilsiz ko'rinishga bir nechta guruh
+             * to'g'ri kelsa — noto'g'ri guruhni tanlab qo'ymaslik uchun umuman
+             * ishlatilmaydi.
+             */
+            const buildGroupIndex = items => {
+                const exact = new Map();
+                const loose = new Map();
+                const ambiguous = new Set();
+
+                items.forEach(item => {
+                    const key = normalizeGroupName(item.group_name);
+                    if (!exact.has(key)) exact.set(key, item);
+
+                    const bare = stripGroupLanguage(item.group_name);
+                    if (bare === key) return;
+                    if (loose.has(bare) && loose.get(bare) !== item) ambiguous.add(bare);
+                    loose.set(bare, item);
+                });
+
+                return name => {
+                    const key = normalizeGroupName(name);
+                    if (exact.has(key)) return exact.get(key);
+
+                    const bare = stripGroupLanguage(name);
+                    if (exact.has(bare)) return exact.get(bare);
+                    if (!ambiguous.has(bare) && loose.has(bare)) return loose.get(bare);
+
+                    return undefined;
+                };
+            };
             function showMatchResult({title, matched, unmatched, okHint, extra}) {
                 const total = matched + unmatched.length;
                 const parts = [matched+'/'+total+' ta guruh topildi.'];
@@ -411,7 +451,7 @@
             function applyCatalogPaste() {
                 const text = $('catalogPaste').value.trim();
                 if (!text) return alert('Exceldan nusxalangan kataklarni kiriting.');
-                const byName = new Map(catalog.map(item => [normalizeGroupName(item.group_name), item]));
+                const findGroup = buildGroupIndex(catalog);
                 const matched = new Set();
                 const unmatched = new Set();
                 catalogSelected.clear();
@@ -424,7 +464,7 @@
                         const freePlaces = Number(String(cells[index + 2] || '').replace(',','.'));
                         if (!name || !Number.isFinite(capacity) || !Number.isFinite(freePlaces)) continue;
 
-                        const item = byName.get(normalizeGroupName(name));
+                        const item = findGroup(name);
                         if (item) {
                             catalogSelected.add(item.key);
                             catalogDraft.set(item.key, {
@@ -450,7 +490,7 @@
             function applySourcePaste() {
                 const text = $('sourcePaste').value.trim();
                 if (!text) return alert('Guruh nomi va talabalar sonini kiriting.');
-                const byName = new Map(catalog.map(item => [normalizeGroupName(item.group_name), item]));
+                const findGroup = buildGroupIndex(catalog);
                 const matched = new Set();
                 const unmatched = new Set();
                 text.split(/\r?\n/).forEach(line => {
@@ -460,7 +500,7 @@
                         const studentCount = Number(String(cells[index + 1] || '').replace(',','.'));
                         if (!name || !Number.isFinite(studentCount)) continue;
 
-                        const item = byName.get(normalizeGroupName(name));
+                        const item = findGroup(name);
                         if (item) {
                             sourceSelected.add(item.key);
                             sourceDraft.set(item.key, Math.max(0,Math.trunc(studentCount)));

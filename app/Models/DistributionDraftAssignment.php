@@ -21,6 +21,7 @@ class DistributionDraftAssignment extends Model
         'student_id_number',
         'from_group_name',
         'to_group_name',
+        'full_group_mode',
         'assigned_by',
     ];
 
@@ -28,6 +29,7 @@ class DistributionDraftAssignment extends Model
         'student_id' => 'integer',
         'from_group_hemis_id' => 'integer',
         'to_group_hemis_id' => 'integer',
+        'full_group_mode' => 'boolean',
         'assigned_by' => 'integer',
     ];
 

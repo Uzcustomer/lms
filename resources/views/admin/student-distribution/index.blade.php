@@ -189,6 +189,21 @@
         font-size:16px; line-height:1; cursor:pointer;
     }
     .sd-close:hover { background:rgba(255,255,255,.16); }
+    .sd-modal-tools { display:flex; align-items:center; gap:8px; flex:none; }
+    /* "To'liq guruh" rejimi: to'la guruhlarga va ingliz guruhiga ko'chirish */
+    .sd-toggle {
+        display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px;
+        border:1px solid rgba(255,255,255,.32); border-radius:4px;
+        background:transparent; color:#fff; font-family:inherit; font-size:11.5px; font-weight:600;
+        cursor:pointer; transition:background .14s, border-color .14s;
+    }
+    .sd-toggle:hover { background:rgba(255,255,255,.16); }
+    .sd-toggle::before {
+        content:''; width:8px; height:8px; border-radius:50%;
+        background:rgba(255,255,255,.35);
+    }
+    .sd-toggle.is-on { background:#c9a227; border-color:#c9a227; color:#1b2a44; }
+    .sd-toggle.is-on::before { background:#1b2a44; }
     .sd-modal-body { overflow-y:auto; }
     .sd-student {
         display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:10px;
@@ -218,6 +233,8 @@
         font-size:13px; line-height:1; cursor:pointer; padding:0 2px;
     }
     .sd-undo:hover { color:#8f1d17; }
+    .sd-moved.is-full { background:#fdf3e0; color:#8a5a06; }
+    .sd-moved.is-full .sd-undo { color:#8a5a06; }
     .sd-modal-foot {
         display:flex; align-items:center; justify-content:space-between; gap:12px;
         padding:12px 20px; border-top:1px solid var(--line-soft); background:#fbfcfe;
@@ -356,7 +373,11 @@
                         <h3 id="modalGroup">Guruh</h3>
                         <p id="modalMeta"></p>
                     </div>
-                    <button class="sd-close" type="button" id="modalClose" aria-label="Yopish">&times;</button>
+                    <div class="sd-modal-tools">
+                        <button class="sd-toggle" type="button" id="modalFull"
+                                title="To'la guruhlarga ham, ingliz guruhiga boshqa tildan ham ko'chirish">To'liq guruh</button>
+                        <button class="sd-close" type="button" id="modalClose" aria-label="Yopish">&times;</button>
+                    </div>
                 </div>
                 <div class="sd-modal-body" id="modalBody"></div>
                 <div class="sd-modal-foot">
@@ -564,6 +585,17 @@
         const modal = $('studentsModal');
         let modalGroupId = null;
         let modalTargets = [];
+        // "To'liq guruh" rejimi: bo'sh joyi yo'q guruhlar ham ro'yxatga
+        // tushadi, ingliz guruhiga o'zbek/rus guruhidan o'tish mumkin.
+        let modalFull = false;
+
+        // Dropdown yozuvi: bo'sh joy, to'la yoki ortiqcha
+        const freeText = g => {
+            if (g.free_places === null || g.free_places === undefined) return "sig'im yo'q";
+            if (g.free_places > 0) return g.free_places + " bo'sh";
+            if (g.free_places === 0) return "to'la";
+            return Math.abs(g.free_places) + ' ortiqcha';
+        };
 
         function closeModal() { modal.classList.remove('is-open'); }
 
@@ -583,18 +615,24 @@
                 return '<div class="sd-student"><i>' + (index + 1) + '.</i>' +
                     '<b>' + esc(st.full_name) + '</b>' +
                     '<span>' + esc(st.student_id_number) + '</span>' +
-                    '<span class="sd-moved">&rarr; ' + esc(st.moved_to) +
+                    '<span class="sd-moved' + (st.full_group_mode ? ' is-full' : '') + '"' +
+                        (st.full_group_mode ? " title=\"To'liq guruh rejimida ko'chirilgan\"" : '') + '>&rarr; ' + esc(st.moved_to) +
                         '<button class="sd-undo" type="button" data-undo="' + st.student_id + '" title="Bekor qilish">&times;</button>' +
                     '</span></div>';
             }
 
-            // Boshqa fakultetdagi guruh ham chiqishi mumkin — nomi yonida
-            // fakulteti ko'rsatiladi, shunda qaysi guruhga o'tayotgani aniq bo'ladi.
+            // Boshqa fakultet yoki tildagi guruh ham chiqishi mumkin — nomi
+            // yonida farqi ko'rsatiladi, shunda qaysi guruhga o'tayotgani aniq bo'ladi.
             const source = groups.find(g => g.group_hemis_id === modalGroupId);
+            const extra = g => {
+                const parts = [];
+                if (source && g.faculty_name !== source.faculty_name) parts.push(g.faculty_name || '');
+                if (source && g.language_name && g.language_name !== source.language_name) parts.push(g.language_name);
+                return parts.filter(Boolean).map(v => ' \u00b7 ' + esc(v)).join('');
+            };
             const options = modalTargets.length
                 ? modalTargets.map(g => '<option value="' + g.group_hemis_id + '">' +
-                    esc(g.group_name) + ' (' + g.free_places + " bo'sh)" +
-                    (source && g.faculty_name !== source.faculty_name ? ' \u00b7 ' + esc(g.faculty_name || '') : '') +
+                    esc(g.group_name) + ' (' + freeText(g) + ')' + extra(g) +
                     '</option>').join('')
                 : '';
 
@@ -615,16 +653,24 @@
                 : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>';
 
             const moved = students.filter(st => st.moved_to).length;
+            const movedText = moved ? ' &nbsp;&middot;&nbsp; <b>' + moved + '</b> ta talaba rejalashtirilgan' : '';
+
+            if (modalFull) {
+                $('modalHint').innerHTML = modalTargets.length
+                    ? "To'liq guruh rejimi: <b>" + modalTargets.length + "</b> ta guruh (to'la guruhlar va ingliz guruhlari ham)" + movedText
+                    : "Bu yo'nalish va kursda guruh yo'q";
+                return;
+            }
+
             $('modalHint').innerHTML = modalTargets.length
-                ? '<b>' + modalTargets.length + "</b> ta mos guruhda bo'sh joy bor" +
-                  (moved ? ' &nbsp;&middot;&nbsp; <b>' + moved + '</b> ta talaba rejalashtirilgan' : '')
+                ? '<b>' + modalTargets.length + "</b> ta mos guruhda bo'sh joy bor" + movedText
                 : "Bu yo'nalish, kurs va ta'lim tilida bo'sh joyli guruh yo'q";
         }
 
         async function loadStudents() {
             const [studentsResponse, targetsResponse] = await Promise.all([
                 fetch(studentsUrl + '?group_hemis_id=' + modalGroupId, {headers:{'Accept':'application/json'}}),
-                fetch(targetsUrl + '?group_hemis_id=' + modalGroupId, {headers:{'Accept':'application/json'}}),
+                fetch(targetsUrl + '?group_hemis_id=' + modalGroupId + (modalFull ? '&full_group_mode=1' : ''), {headers:{'Accept':'application/json'}}),
             ]);
             const studentsData = await studentsResponse.json();
             const targetsData = await targetsResponse.json();
@@ -634,8 +680,14 @@
             renderStudents(studentsData.students);
         }
 
+        function setFullMode(on) {
+            modalFull = on;
+            $('modalFull').classList.toggle('is-on', on);
+        }
+
         async function openStudents(groupId) {
             modalGroupId = groupId;
+            setFullMode(false);
             const group = groups.find(g => g.group_hemis_id === groupId);
             $('modalGroup').textContent = group ? group.group_name : 'Guruh';
             $('modalMeta').textContent = group ? metaLabel(group) : '';
@@ -654,11 +706,25 @@
         $('modalBody').addEventListener('change', async event => {
             const select = event.target.closest('select[data-student]');
             if (!select || !select.value) return;
+
+            // To'la guruhga ko'chirish to'silmaydi, lekin ogohlantiriladi.
+            const target = modalTargets.find(g => g.group_hemis_id === Number(select.value));
+            if (target && !(target.free_places > 0)) {
+                const after = target.free_places === null || target.free_places === undefined
+                    ? "sig'imi belgilanmagan"
+                    : (Math.abs(target.free_places) + 1) + " ta ortiqcha bo'ladi";
+                if (!confirm(target.group_name + " guruhida bo'sh joy yo'q (" + after + ").\n\nBaribir ko'chirilsinmi?")) {
+                    select.value = '';
+                    return;
+                }
+            }
+
             select.disabled = true;
             try {
                 const data = await postJson(assignUrl, {
                     student_id: Number(select.dataset.student),
                     to_group_hemis_id: Number(select.value),
+                    full_group_mode: modalFull,
                 });
                 groups = data.groups;
                 render();
@@ -695,6 +761,15 @@
         });
 
         $('modalClose').addEventListener('click', closeModal);
+        $('modalFull').addEventListener('click', async () => {
+            setFullMode(!modalFull);
+            $('modalHint').textContent = '';
+            try {
+                await loadStudents();
+            } catch (error) {
+                $('modalBody').innerHTML = '<div class="sd-modal-note">' + esc(error.message) + '</div>';
+            }
+        });
         modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
         document.addEventListener('keydown', event => {
             if (event.key !== 'Escape') return;

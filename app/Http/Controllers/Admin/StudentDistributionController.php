@@ -35,7 +35,7 @@ class StudentDistributionController extends Controller
             'groupPayloads' => $groups->values(),
             'faculties' => $groups->pluck('faculty_name')->filter()->unique()->sort()->values(),
             'specialties' => $groups->pluck('specialty_name')->filter()->unique()->sort()->values(),
-            'courses' => $groups->pluck('level_code')->filter()->unique()->sort()->values(),
+            'courses' => $groups->pluck('course')->filter()->unique()->sort()->values(),
         ]);
     }
 
@@ -117,7 +117,7 @@ class StudentDistributionController extends Controller
         $groups = $this->groupCatalog()
             ->when(!empty($filters['faculty']), fn ($rows) => $rows->where('faculty_name', $filters['faculty']))
             ->when(!empty($filters['specialty']), fn ($rows) => $rows->where('specialty_name', $filters['specialty']))
-            ->when(!empty($filters['course']), fn ($rows) => $rows->where('level_code', (string) $filters['course']))
+            ->when(!empty($filters['course']), fn ($rows) => $rows->where('course', (int) $filters['course']))
             ->when($search !== '', fn ($rows) => $rows->filter(
                 fn ($row) => str_contains(mb_strtolower((string) $row['group_name']), $search)
             ))
@@ -189,9 +189,28 @@ class StudentDistributionController extends Controller
                 'faculty_name' => $row->department_name,
                 'specialty_name' => $row->specialty_name,
                 'level_code' => (string) $row->level_code,
+                'course' => $this->toCourse($row->level_code),
                 'level_name' => $row->level_name,
                 'student_count' => (int) $row->student_count,
                 'is_source' => $sourceIds->has((int) $row->group_id),
             ]);
+    }
+
+    /**
+     * HEMIS level_code ni kurs raqamiga aylantiradi.
+     *
+     * HEMIS odatda 11..16 beradi (11 = 1-kurs ... 16 = 6-kurs), lekin toza
+     * 1..8 ko'rinishi ham uchraydi — StudentController dagi bilan bir xil
+     * mantiq, ikkala ko'rinish ham qo'llab-quvvatlanadi.
+     */
+    private function toCourse($raw): ?int
+    {
+        $number = (int) $raw;
+
+        if ($number >= 11 && $number <= 20) {
+            $number -= 10;
+        }
+
+        return $number >= 1 && $number <= 8 ? $number : null;
     }
 }

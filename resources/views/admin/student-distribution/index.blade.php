@@ -198,7 +198,7 @@
         let picked = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
         let rightView = 'all';
 
-        const courseLabel = g => g.level_name || (g.level_code ? g.level_code + '-kurs' : '');
+        const courseLabel = g => g.course ? g.course + '-kurs' : (g.level_name || '');
 
         // Har bir panelning o'z filtrlari bor — ular bir-biriga ta'sir qilmaydi.
         const panels = {
@@ -219,7 +219,7 @@
         const applyFilters = f => groups.filter(g =>
             (!f.faculty || g.faculty_name === f.faculty) &&
             (!f.specialty || g.specialty_name === f.specialty) &&
-            (!f.course || String(g.level_code) === f.course) &&
+            (!f.course || String(g.course) === f.course) &&
             (!f.search || String(g.group_name).toLowerCase().includes(f.search))
         );
 
@@ -285,7 +285,12 @@
 
             const specialty = pick('specialty').value;
             const scoped2 = scoped.filter(g => !specialty || g.specialty_name === specialty);
-            setOptions(pick('course'), scoped2.map(g => g.level_code), 'Kurs');
+            const courses = [...new Set(scoped2.map(g => g.course).filter(Boolean))].sort((a, b) => a - b);
+            const courseSelect = pick('course');
+            const currentCourse = courseSelect.value;
+            courseSelect.innerHTML = '<option value="">Kurs</option>' +
+                courses.map(c => '<option value="' + c + '">' + c + '-kurs</option>').join('');
+            if ([...courseSelect.options].some(o => o.value === currentCourse)) courseSelect.value = currentCourse;
         }
 
         // Filtrlar: tugma yo'q — tanlangan/yozilgan zahoti chiqadi.

@@ -61,7 +61,7 @@ class DistributionGroupStudentsExport implements FromArray, WithTitle, WithEvent
             $meta = collect([
                 $group['faculty_name'] ?? null,
                 $group['specialty_name'] ?? null,
-                $group['level_name'] ?? null,
+                !empty($group['course']) ? $group['course'] . '-kurs' : ($group['level_name'] ?? null),
             ])->filter()->implode(' · ');
 
             $rows[] = [

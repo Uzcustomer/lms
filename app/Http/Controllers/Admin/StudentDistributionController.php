@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DistributionSourceGroup;
+use App\Models\Group;
 use App\Models\Student;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,8 +97,11 @@ class StudentDistributionController extends Controller
     /**
      * Guruhlar katalogi: nomi, fakulteti, yo'nalishi, kursi va talabalar soni.
      *
-     * Faqat o'qiyotgan (student_status_code = 11) talabalar hisobga olinadi —
-     * chetlashtirilgan yoki bitirgan talabalar guruh sig'imiga kirmasligi kerak.
+     * Uch shart bo'yicha cheklanadi:
+     *  - faqat o'qiyotgan talabalar (student_status_code = 11);
+     *  - faqat bakalavr (education_type_name ichida "bakalavr") — loyihaning
+     *    boshqa joylarida ham shu usul ishlatiladi, alohida kod yo'q;
+     *  - faqat `groups` jadvalida faol deb belgilangan guruhlar.
      */
     private function groupCatalog(): Collection
     {
@@ -105,8 +109,14 @@ class StudentDistributionController extends Controller
             ? DistributionSourceGroup::query()->pluck('group_hemis_id')->map(fn ($id) => (int) $id)->flip()
             : collect();
 
+        $activeGroupIds = Group::query()
+            ->where('active', true)
+            ->pluck('group_hemis_id');
+
         return Student::query()
             ->where('student_status_code', 11)
+            ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
+            ->whereIn('group_id', $activeGroupIds)
             ->whereNotNull('group_id')
             ->whereNotNull('group_name')
             ->select([

@@ -360,12 +360,16 @@
             function openCatalog() { configOptions(catalog,'catalog'); renderCatalog(); $('catalogModal').classList.add('is-open'); }
             function openSources() { configOptions(catalog,'source'); renderSources(); $('sourcesModal').classList.add('is-open'); }
             // Nusxalab qo'yilgan nom LMS dagidan bir necha ko'rinishda farq qiladi:
-            //   d1/d25-04(a) -> d1/25-04a   (d1, d2 prefiksi LMS da ham bor, saqlanadi)
-            //   p/p24-02(b)  -> p24-02b     (p/ prefiksi LMS da yo'q, olib tashlanadi)
-            // Shuning uchun "p/" prefiksi olib tashlanadi (takrorlangan "p/p" ham),
-            // d1 va d2 esa saqlanib, faqat ichki harfidan tozalanadi.
+            //   d1/d25-04(a)               -> d1/25-04a   (d1, d2 prefiksi LMS da ham bor, saqlanadi)
+            //   p/p24-02(b)                -> p24-02b     (p/ prefiksi LMS da yo'q, olib tashlanadi)
+            //   d1/23-09b (2 talik guruh)  -> d1/23-09b   (izoh qavs tashlab yuboriladi)
+            //
+            // Oxiridagi qavs ikki xil bo'ladi: "(a)", "(b)", "(rus)" — guruhni
+            // ajratadigan qism, saqlanadi; "(2 talik guruh)" kabi ko'p so'zli
+            // izoh esa nomga taalluqli emas, olib tashlanadi.
             const normalizeGroupName = value => {
                 return String(value || '').trim().toLowerCase()
+                    .replace(/\((?=[^()]*[\s\d])[^()]*\)\s*$/, '')
                     .replace(/\s+/g,'')
                     .replace(/^(d[12])\/[dp](?=\d)/, '$1/')
                     .replace(/^p\/p?(?=\d)/, 'p')

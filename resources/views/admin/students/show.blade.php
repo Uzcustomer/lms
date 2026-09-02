@@ -86,7 +86,7 @@
                                 <button type="button" onclick="switchProfileTab('shaxsiy')" id="ptab-shaxsiy" class="sp-tab sp-tab-active">Shaxsiy</button>
                                 <button type="button" onclick="switchProfileTab('akademik')" id="ptab-akademik" class="sp-tab">Akademik</button>
                                 <button type="button" onclick="switchProfileTab('tashkiliy')" id="ptab-tashkiliy" class="sp-tab">Tashkiliy</button>
-                                <button type="button" onclick="switchProfileTab('guruh-tarixi')" id="ptab-guruh-tarixi" class="sp-tab">Guruh tarixi</button>
+                                <button type="button" onclick="switchProfileTab('guruh-tarixi')" id="ptab-guruh-tarixi" class="sp-tab">Guruh va shartnoma tarixi</button>
                                 <button type="button" onclick="switchProfileTab('manzil')" id="ptab-manzil" class="sp-tab">Manzil</button>
                                 @if($canUploadFiles)<button type="button" onclick="switchProfileTab('qabul')" id="ptab-qabul" class="sp-tab">Umumiy ma'lumotlar</button>@endif
                             </div>
@@ -376,14 +376,28 @@
                             {{-- TAB: GURUH TARIXI --}}
                             <div id="ptab-content-guruh-tarixi" class="sp-content" style="display:none;">
                               <div class="sp-card">
-                                <h4 class="sp-title">Guruh tarixi</h4>
-                                <p class="text-xs text-gray-500 mb-3">Talaba qaysi davrda qaysi guruhda o'qigani. Oldingi guruhlardagi vedomostlarni topish uchun kerak.</p>
+                                <h4 class="sp-title">Guruh va shartnoma tarixi</h4>
+                                <p class="text-xs text-gray-500 mb-3">Talaba qaysi davrda qaysi guruhda va qaysi to'lov shaklida (grant / to'lov-kontrakt) o'qigani. Oldingi guruhlardagi vedomostlarni topish va shartnoma o'zgarishini kuzatish uchun kerak.</p>
+
+                                @php
+                                    $currentKind = \App\Models\StudentGroupHistory::classifyPaymentForm($student->payment_form_name);
+                                @endphp
+                                @if($student->payment_form_name)
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:9px 12px;border:1px solid #e2e8f0;border-left:3px solid {{ $currentKind === 'grant' ? '#059669' : '#2563eb' }};border-radius:6px;background:#f8fafc;">
+                                        <span class="text-xs" style="color:#64748b;">Hozirgi to'lov shakli:</span>
+                                        <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;{{ $currentKind === 'grant' ? 'background:#d1fae5;color:#065f46;' : 'background:#dbeafe;color:#1e40af;' }}">
+                                            {{ $student->payment_form_name }}
+                                        </span>
+                                    </div>
+                                @endif
+
                                 @if(isset($groupHistory) && $groupHistory->count() > 0)
                                     <table class="min-w-full text-sm" style="border-collapse:collapse;">
                                         <thead>
                                             <tr style="background:#f1f5f9;">
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Guruh</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Yo'nalish</th>
+                                                <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">To'lov shakli</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Boshlangan</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Tugagan</th>
                                                 <th class="text-left" style="padding:8px;font-weight:700;color:#334155;">Holat</th>
@@ -391,6 +405,7 @@
                                         </thead>
                                         <tbody>
                                             @foreach($groupHistory as $gh)
+                                                @php $kind = $gh->paymentKind(); @endphp
                                                 <tr style="border-bottom:1px solid #e2e8f0;">
                                                     <td style="padding:8px;">
                                                         <strong>{{ $gh->group_name ?? '-' }}</strong>
@@ -399,6 +414,15 @@
                                                         @endif
                                                     </td>
                                                     <td style="padding:8px;color:#475569;">{{ $gh->specialty_name ?? '-' }}</td>
+                                                    <td style="padding:8px;">
+                                                        @if($kind)
+                                                            <span title="{{ $gh->payment_form_name }}" style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;{{ $kind === 'grant' ? 'background:#d1fae5;color:#065f46;' : 'background:#dbeafe;color:#1e40af;' }}">
+                                                                {{ $kind === 'grant' ? 'Grant' : 'Kontrakt' }}
+                                                            </span>
+                                                        @else
+                                                            <span class="text-gray-400 text-xs" title="Bu yozuv to'lov shakli kuzatila boshlangunga qadar yaratilgan">—</span>
+                                                        @endif
+                                                    </td>
                                                     <td style="padding:8px;color:#475569;">{{ optional($gh->started_at)->format('d.m.Y') ?? '-' }}</td>
                                                     <td style="padding:8px;color:#475569;">{{ $gh->ended_at ? $gh->ended_at->format('d.m.Y') : '—' }}</td>
                                                     <td style="padding:8px;">
@@ -413,7 +437,7 @@
                                         </tbody>
                                     </table>
                                 @else
-                                    <div class="text-sm text-gray-400 p-2">Guruh tarixi hali yozilmagan. Talaba guruhi keyingi HEMIS importlarida o'zgarsa, bu yerda ko'rinadi.</div>
+                                    <div class="text-sm text-gray-400 p-2">Tarix hali yozilmagan. Talabaning guruhi yoki to'lov shakli keyingi HEMIS importlarida o'zgarsa, bu yerda ko'rinadi.</div>
                                 @endif
                               </div>
                             </div>

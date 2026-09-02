@@ -94,13 +94,18 @@ class HemisService
     }
 
     /**
-     * Talabaning guruhi o'zgarganda uni tarixga yozib boradi.
+     * Talabaning guruhi yoki to'lov shakli o'zgarganda uni tarixga yozib boradi.
      *
-     * Ochiq (ended_at = null) yozuv "hozirgi guruh" hisoblanadi. Har importda
-     * hozirgi guruh ochiq yozuvdagi guruh bilan solishtiriladi:
-     *  - Ochiq yozuv yo'q bo'lsa — hozirgi guruh birinchi yozuv sifatida ochiladi (backfill).
-     *  - Guruh o'zgargan bo'lsa — eski yozuv yopiladi (ended_at) va yangisi ochiladi.
+     * Ochiq (ended_at = null) yozuv "hozirgi holat" hisoblanadi. Har importda
+     * hozirgi guruh va to'lov shakli ochiq yozuv bilan solishtiriladi:
+     *  - Ochiq yozuv yo'q bo'lsa — hozirgi holat birinchi yozuv sifatida ochiladi (backfill).
+     *  - Guruh yoki to'lov shakli o'zgargan bo'lsa — eski yozuv yopiladi (ended_at)
+     *    va yangisi ochiladi.
      *  - O'zgarmagan bo'lsa — hech nima qilinmaydi.
+     *
+     * To'lov shakli ham kuzatiladi, chunki talaba guruhini o'zgartirmasdan
+     * grantdan kontraktga (yoki aksincha) o'tishi mumkin va bu tarixda
+     * saqlanishi kerak.
      *
      * HEMIS ko'chirish sanasini bermagani uchun started_at/ended_at qiymati
      * o'zgarish import orqali birinchi aniqlangan vaqt bilan belgilanadi.
@@ -116,30 +121,54 @@ class HemisService
             return; // guruhi yo'q talaba uchun tarix yuritilmaydi
         }
 
+        $tracksPayment = Schema::hasColumn('student_group_history', 'payment_form_name');
+
         $openRecord = StudentGroupHistory::where('student_id', $student->id)
             ->whereNull('ended_at')
             ->orderByDesc('started_at')
             ->first();
 
-        // Guruh o'zgarmagan bo'lsa — hech nima qilinmaydi
-        if ($openRecord && (string) $openRecord->group_hemis_id === (string) $newGroupId) {
-            return;
-        }
-
-        // Guruh o'zgargan bo'lsa — eski yozuvni yopamiz
         if ($openRecord) {
+            $sameGroup = (string) $openRecord->group_hemis_id === (string) $newGroupId;
+            $samePayment = !$tracksPayment
+                || trim((string) $openRecord->payment_form_name) === trim((string) $student->payment_form_name);
+
+            // Na guruh, na to'lov shakli o'zgarmagan bo'lsa — hech nima qilinmaydi
+            if ($sameGroup && $samePayment) {
+                return;
+            }
+
+            // Eski yozuvda to'lov shakli bo'sh qolgan bo'lsa (migratsiyadan oldingi
+            // yozuvlar) va guruh o'zgarmagan bo'lsa — yangi qator ochish o'rniga
+            // mavjudini to'ldiramiz, aks holda soxta "o'zgarish" paydo bo'ladi.
+            if ($sameGroup && $tracksPayment && trim((string) $openRecord->payment_form_name) === '') {
+                $openRecord->update([
+                    'payment_form_code' => $student->payment_form_code,
+                    'payment_form_name' => $student->payment_form_name,
+                ]);
+
+                return;
+            }
+
             $openRecord->update(['ended_at' => now()]);
         }
 
-        // Yangi (yoki birinchi) guruhni ochamiz
-        StudentGroupHistory::create([
+        // Yangi (yoki birinchi) yozuvni ochamiz
+        $values = [
             'student_id' => $student->id,
             'group_hemis_id' => $newGroupId,
             'group_name' => $student->group_name,
             'specialty_name' => $student->specialty_name,
             'education_year_name' => $student->education_year_name,
             'started_at' => now(),
-        ]);
+        ];
+
+        if ($tracksPayment) {
+            $values['payment_form_code'] = $student->payment_form_code;
+            $values['payment_form_name'] = $student->payment_form_name;
+        }
+
+        StudentGroupHistory::create($values);
     }
 
     protected function transformStudentData($data)

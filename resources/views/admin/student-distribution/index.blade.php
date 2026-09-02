@@ -23,6 +23,26 @@
     }
     .sd-head-btn:hover { background:rgba(255,255,255,.22); }
     .sd-head-btn b { margin-left:6px; padding:1px 8px; border-radius:999px; background:var(--gold); color:#0f2748; }
+    .sd-pick-panel {
+        position:fixed; z-index:120; width:min(560px, calc(100vw - 32px));
+        max-height:340px; overflow-y:auto;
+        border:1px solid var(--line); border-radius:8px; background:#fff;
+        box-shadow:0 16px 48px rgba(15,39,72,.28);
+    }
+    .sd-pick-row {
+        display:grid; grid-template-columns:minmax(0,1fr) auto 64px 78px auto; gap:8px;
+        align-items:center; padding:8px 12px; border-bottom:1px solid var(--line-soft);
+    }
+    .sd-pick-row:last-child { border-bottom:0; }
+    .sd-pick-name { color:var(--ink); font-size:12.5px; font-weight:600; }
+    .sd-pick-name span { display:block; color:var(--muted); font-size:10.5px; font-weight:500; }
+    .sd-pick-cnt { color:var(--muted); font-size:11px; white-space:nowrap; }
+    .sd-pick-choose {
+        height:27px; padding:0 11px; border:1px solid var(--navy); border-radius:5px;
+        background:#fff; color:var(--navy); font-family:inherit; font-size:11px; font-weight:700; cursor:pointer;
+    }
+    .sd-pick-choose:hover { background:var(--navy); color:#fff; }
+    .sd-pick-choose:disabled { border-color:#cfd9e6; color:#a9b7ca; background:#f7f9fc; cursor:not-allowed; }
     .sd-mcap-wrap { padding:10px 20px 12px; border-bottom:1px solid var(--line-soft); background:#fbfcfe; }
     .sd-mcap-title {
         margin-bottom:8px; color:var(--muted);
@@ -451,6 +471,8 @@
             </div>
         </div>
 
+        <div class="sd-pick-panel" id="pickPanel" hidden></div>
+
         <div class="sd-modal" id="studentsModal">
             <div class="sd-modal-box" style="width:min(760px,100%);height:calc(100vh - 80px);" role="dialog" aria-modal="true">
                 <div class="sd-modal-head">
@@ -775,7 +797,7 @@
             return Math.abs(g.free_places) + ' ortiqcha';
         };
 
-        function closeModal() { modal.classList.remove('is-open'); }
+        function closeModal() { modal.classList.remove('is-open'); closePickPanel(); }
 
         async function postJson(url, payload) {
             const response = await fetch(url, {
@@ -799,25 +821,9 @@
                     '</span></div>';
             }
 
-            // Boshqa fakultet yoki tildagi guruh ham chiqishi mumkin — nomi
-            // yonida farqi ko'rsatiladi, shunda qaysi guruhga o'tayotgani aniq bo'ladi.
-            const source = groups.find(g => g.group_hemis_id === modalGroupId);
-            const extra = g => {
-                const parts = [];
-                if (source && g.faculty_name !== source.faculty_name) parts.push(g.faculty_name || '');
-                if (source && g.language_name && g.language_name !== source.language_name) parts.push(g.language_name);
-                return parts.filter(Boolean).map(v => ' \u00b7 ' + esc(v)).join('');
-            };
-            const options = modalTargets.length
-                ? modalTargets.map(g => '<option value="' + g.group_hemis_id + '">' +
-                    esc(g.group_name) + ' (' + freeText(g) + ')' + extra(g) +
-                    '</option>').join('')
-                : '';
-
             const select = modalTargets.length
-                ? '<select class="sd-move" data-student="' + st.student_id + '">' +
-                    "<option value=\"\">Ko'chirish...</option>" + options + '</select>'
-                : "<select class=\"sd-move\" disabled><option>Bo'sh guruh yo'q</option></select>";
+                ? '<button class="sd-move sd-pick-btn" type="button" data-pick="' + st.student_id + '">' + "Ko'chirish..." + '</button>'
+                : '<button class="sd-move" type="button" disabled>' + "Mos guruh yo'q" + '</button>';
 
             return '<div class="sd-student"><i>' + (index + 1) + '.</i>' +
                 '<b>' + esc(st.full_name) + '</b>' +
@@ -825,29 +831,10 @@
                 select + '</div>';
         }
 
-        // To'liq rejimda maqsad guruhlar ro'yxati sig'imi bilan chiqadi —
-        // sig'imni shu yerda oshirib bo'sh joy ochish va darrov ko'chirish mumkin.
-        function capacityEditor() {
-            if (!modalFull || !modalTargets.length) return '';
-
-            return '<div class="sd-mcap-wrap">' +
-                '<div class="sd-mcap-title">' + "Guruhlar sig'imi — tahrirlab bo'sh joy ochish mumkin" + '</div>' +
-                modalTargets.map(g =>
-                    '<div class="sd-mcap-row">' +
-                    '<span class="sd-mcap-name">' + esc(g.group_name) + '</span>' +
-                    '<span class="sd-mcap-cnt">' + g.student_count + ' talaba</span>' +
-                    '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + '">' +
-                        '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-mcap="' + g.group_hemis_id + '">' +
-                    '</span>' +
-                    freeHtml(g) +
-                    '</div>').join('') +
-                '</div>';
-        }
-
         function renderStudents(students) {
-            $('modalBody').innerHTML = capacityEditor() + (students.length
+            $('modalBody').innerHTML = students.length
                 ? students.map(studentRow).join('')
-                : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>');
+                : '<div class="sd-modal-note">' + "Bu guruhda o'qiyotgan talaba yo'q." + '</div>';
 
             const moved = students.filter(st => st.moved_to).length;
             const movedText = moved ? ' &nbsp;&middot;&nbsp; <b>' + moved + '</b> ta talaba rejalashtirilgan' : '';
@@ -899,39 +886,127 @@
             }
         }
 
-        // Ko'chirish va bekor qilish
-        $('modalBody').addEventListener('change', async event => {
-            const select = event.target.closest('select[data-student]');
-            if (!select || !select.value) return;
+        // --- Ko'chirish paneli: guruh ro'yxati sig'imi bilan, joyida tahrirlanadi ---
+        const pickPanel = $('pickPanel');
+        let pickStudentId = null;
+        let pickAnchorRect = null;
 
-            // To'la guruhga ko'chirish to'silmaydi, lekin ogohlantiriladi.
-            const target = modalTargets.find(g => g.group_hemis_id === Number(select.value));
+        function closePickPanel() {
+            pickPanel.hidden = true;
+            pickStudentId = null;
+        }
+
+        function pickRowHtml(g) {
+            const source = groups.find(x => x.group_hemis_id === modalGroupId);
+            const parts = [];
+            if (source && g.faculty_name !== source.faculty_name) parts.push(g.faculty_name || '');
+            if (source && g.language_name && g.language_name !== source.language_name) parts.push(g.language_name);
+
+            return '<div class="sd-pick-row">' +
+                '<span class="sd-pick-name">' + esc(g.group_name) +
+                    (parts.length ? '<span>' + esc(parts.filter(Boolean).join(' \u00b7 ')) + '</span>' : '') + '</span>' +
+                '<span class="sd-pick-cnt">' + g.student_count + ' talaba</span>' +
+                '<span class="sd-cap' + (g.is_custom_capacity ? ' is-custom' : '') + '">' +
+                    '<input type="number" min="0" max="200" value="' + (g.capacity ?? '') + '" data-pcap="' + g.group_hemis_id + '">' +
+                '</span>' +
+                freeHtml(g) +
+                '<button class="sd-pick-choose" type="button" data-choose="' + g.group_hemis_id + '">Tanlash</button>' +
+                '</div>';
+        }
+
+        function renderPickPanel() {
+            pickPanel.innerHTML = modalTargets.length
+                ? modalTargets.map(pickRowHtml).join('')
+                : '<div class="sd-modal-note">' + "Mos guruh yo'q." + '</div>';
+
+            if (pickAnchorRect) {
+                const width = Math.min(560, window.innerWidth - 32);
+                let left = Math.min(pickAnchorRect.right - width, window.innerWidth - width - 16);
+                if (left < 16) left = 16;
+                let top = pickAnchorRect.bottom + 6;
+                if (top + 340 > window.innerHeight) top = Math.max(16, pickAnchorRect.top - 346);
+                pickPanel.style.left = left + 'px';
+                pickPanel.style.top = top + 'px';
+            }
+        }
+
+        $('modalBody').addEventListener('click', event => {
+            const opener = event.target.closest('button[data-pick]');
+            if (!opener) return;
+            event.preventDefault();
+            pickStudentId = Number(opener.dataset.pick);
+            pickAnchorRect = opener.getBoundingClientRect();
+            pickPanel.hidden = false;
+            renderPickPanel();
+        });
+
+        // Panel ichida sig'imni tahrirlash — joy ochiladi, panel yopilmaydi.
+        pickPanel.addEventListener('change', async event => {
+            const input = event.target.closest('input[data-pcap]');
+            if (!input) return;
+            const value = input.value.trim();
+            if (value === '') return;
+            input.disabled = true;
+            try {
+                const data = await postJson(capacityUrl, {
+                    group_hemis_id: Number(input.dataset.pcap),
+                    capacity: Number(value),
+                });
+                const index = groups.findIndex(g => g.group_hemis_id === Number(input.dataset.pcap));
+                if (index !== -1) groups[index] = data.group;
+                render();
+                await loadStudents();
+                renderPickPanel();
+            } catch (error) {
+                alert(error.message);
+                input.disabled = false;
+            }
+        });
+
+        pickPanel.addEventListener('keydown', event => {
+            if (event.target.matches('input[data-pcap]') && event.key === 'Enter') {
+                event.preventDefault();
+                event.target.blur();
+            }
+        });
+
+        // Guruhni tanlash — talaba rejalashtiriladi.
+        pickPanel.addEventListener('click', async event => {
+            const button = event.target.closest('button[data-choose]');
+            if (!button || pickStudentId === null) return;
+
+            const target = modalTargets.find(g => g.group_hemis_id === Number(button.dataset.choose));
             if (target && !(target.free_places > 0)) {
                 const after = target.free_places === null || target.free_places === undefined
                     ? "sig'imi belgilanmagan"
                     : (Math.abs(target.free_places) + 1) + " ta ortiqcha bo'ladi";
-                if (!confirm(target.group_name + " guruhida bo'sh joy yo'q (" + after + ").\n\nBaribir ko'chirilsinmi?")) {
-                    select.value = '';
-                    return;
-                }
+                if (!confirm(target.group_name + " guruhida bo'sh joy yo'q (" + after + ").\n\nBaribir ko'chirilsinmi?")) return;
             }
 
-            select.disabled = true;
+            button.disabled = true;
             try {
                 const data = await postJson(assignUrl, {
-                    student_id: Number(select.dataset.student),
-                    to_group_hemis_id: Number(select.value),
+                    student_id: pickStudentId,
+                    to_group_hemis_id: Number(button.dataset.choose),
                     full_group_mode: modalFull,
                 });
                 groups = data.groups;
                 render();
+                closePickPanel();
                 await loadStudents();
             } catch (error) {
                 alert(error.message);
-                select.disabled = false;
-                select.value = '';
+                button.disabled = false;
             }
         });
+
+        // Tashqariga bosilsa yoki modal yopilsa panel ham yopiladi.
+        document.addEventListener('click', event => {
+            if (pickPanel.hidden) return;
+            if (event.target.closest('#pickPanel') || event.target.closest('button[data-pick]')) return;
+            closePickPanel();
+        });
+        $('modalBody').addEventListener('scroll', closePickPanel);
 
         $('modalBody').addEventListener('click', async event => {
             const button = event.target.closest('button[data-undo]');
@@ -969,6 +1044,7 @@
         modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
         document.addEventListener('keydown', event => {
             if (event.key !== 'Escape') return;
+            closePickPanel();
             document.querySelectorAll('.sd-modal.is-open').forEach(m => m.classList.remove('is-open'));
         });
 
@@ -1202,35 +1278,6 @@
                 input.disabled = false;
             }
         }
-
-        // Modal ichidagi sig'im tahriri (to'liq rejim)
-        $('modalBody').addEventListener('change', async event => {
-            const input = event.target.closest('input[data-mcap]');
-            if (!input) return;
-            const value = input.value.trim();
-            if (value === '') return;
-            input.disabled = true;
-            try {
-                const data = await postJson(capacityUrl, {
-                    group_hemis_id: Number(input.dataset.mcap),
-                    capacity: Number(value),
-                });
-                const index = groups.findIndex(g => g.group_hemis_id === Number(input.dataset.mcap));
-                if (index !== -1) groups[index] = data.group;
-                render();
-                await loadStudents();
-            } catch (error) {
-                alert(error.message);
-                input.disabled = false;
-            }
-        });
-
-        $('modalBody').addEventListener('keydown', event => {
-            if (event.target.matches('input[data-mcap]') && event.key === 'Enter') {
-                event.preventDefault();
-                event.target.blur();
-            }
-        });
 
         Object.values(panels).forEach(panel => {
             guardCapacityInputs(panel.rows);

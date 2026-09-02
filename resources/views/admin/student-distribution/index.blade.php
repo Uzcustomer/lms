@@ -1411,7 +1411,7 @@
         });
 
         // Excel: avval qaysi holat kerakligini so'raymiz.
-        document.querySelectorAll('.sd-xls').forEach(button => button.addEventListener('click', () => {
+        document.querySelectorAll('.sd-xls[data-export]').forEach(button => button.addEventListener('click', () => {
             exportSide = button.dataset.export;
             exportModal.classList.add('is-open');
         }));

@@ -251,8 +251,11 @@
                         </div>
                     </div>
                     <div class="cyc-assign-foot">
-                        <button type="button" id="cycAssignClose">Bekor</button>
-                        <button type="button" id="cycAssignSave">Saqlash</button>
+                        <button type="button" id="cycAssignReset" title="O'qituvchi, vaqt va xonani olib tashlash">Tozalash</button>
+                        <span class="cyc-assign-right">
+                            <button type="button" id="cycAssignClose">Bekor</button>
+                            <button type="button" id="cycAssignSave">Saqlash</button>
+                        </span>
                     </div>
                 </div>
             </div>
@@ -1089,7 +1092,10 @@
         .cyc-assign-body select, .cyc-assign-body input { width: 100%; height: 36px; padding: 0 9px; border: 1px solid #cbd5e1;
             border-radius: 7px; font-size: 13px; outline: none; background: #fff; }
         .cyc-assign-body select:focus, .cyc-assign-body input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-        .cyc-assign-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; }
+        .cyc-assign-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; }
+        .cyc-assign-foot .cyc-assign-right { display: flex; gap: 8px; }
+        #cycAssignReset { border: 1px solid #fca5a5; background: #fef2f2; color: #b91c1c; }
+        #cycAssignReset:hover { background: #fee2e2; }
         .cyc-assign-foot button { height: 36px; padding: 0 16px; border-radius: 7px; font-size: 13px; font-weight: 700; cursor: pointer; }
         #cycAssignSave { border: 0; background: #1e3a5f; color: #fff; }
         #cycAssignSave:hover { background: #162c4a; }
@@ -3256,6 +3262,28 @@
                     out += digits[i];
                 }
                 ev.target.value = out;
+            });
+
+            // Tozalash: o'qituvchi, vaqt va xona olib tashlanadi.
+            $('cycAssignReset').addEventListener('click', async () => {
+                if (!cycAssignCard) return;
+                if (!confirm("Biriktirilgan o'qituvchi, vaqt va xona olib tashlansinmi?")) return;
+                const button = $('cycAssignReset');
+                button.disabled = true;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
+                        specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
+                        group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
+                        teacher_id: null, lesson_time: null, auditorium_code: null,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                    });
+                    closeCycleAssign();
+                    await loadCyclePlan();
+                } catch (e) {
+                    alert('Tozalab bo\u2018lmadi: ' + e.message);
+                } finally {
+                    button.disabled = false;
+                }
             });
 
             $('cycAssignClose').addEventListener('click', closeCycleAssign);

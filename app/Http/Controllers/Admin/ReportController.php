@@ -11401,6 +11401,11 @@ class ReportController extends Controller
             'faculty_name'  => $v->faculty_name ?: 'Barcha fakultetlar',
             'approved_at'   => optional($v->approved_at)->format('d.m.Y H:i'),
             'approver'      => optional(\App\Models\User::find($v->approved_by))->name,
+            'note'          => $v->note,
+            'summary'       => $v->summary,
+            // Filtr konteksti — shu versiyadan qo'lda tuzatib qayta tasdiqlashda
+            // yangi versiya aynan shu kontekst (fakultet, ta'lim turi...) ostida saqlanadi.
+            'context'       => $v->context ?: [],
             'blocks'        => $v->data ?: [],
         ]);
     }

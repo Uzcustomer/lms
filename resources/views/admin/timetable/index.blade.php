@@ -3245,6 +3245,19 @@
                 cycAssignCard = null;
             }
 
+            // Vaqt maskasi: raqam terilganda 08:30 - 12:50 ko'rinishiga keladi.
+            $('cycAssignTime').addEventListener('input', ev => {
+                const digits = ev.target.value.replace(/\D/g, '').slice(0, 8);
+                let out = '';
+                for (let i = 0; i < digits.length; i++) {
+                    if (i === 2) out += ':';
+                    if (i === 4) out += ' - ';
+                    if (i === 6) out += ':';
+                    out += digits[i];
+                }
+                ev.target.value = out;
+            });
+
             $('cycAssignClose').addEventListener('click', closeCycleAssign);
             $('cycAssignModal').addEventListener('click', ev => {
                 if (ev.target === $('cycAssignModal')) closeCycleAssign();
@@ -3293,15 +3306,17 @@
                             col++;
                         }
                         const color = subjColor(block.subject);
-                        const req = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
-                            .filter(Boolean).join(' · ');
+                        const reqParts = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
+                            .filter(Boolean);
+                        const req = reqParts.join(' · ');
+                        const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
                         h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (req ? ' · ' + esc(req) : '') + '">' +
                             '<span class="cyc-shift-actions">' +
                             '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
                             '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
                             '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
                             '</span><span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span>' +
-                            (req ? '<span class="cyc-req">' + esc(req) + '</span>' : '') +
+                            reqHtml +
                             '</td>';
                         col = block.to + 1;
                     });

@@ -11321,10 +11321,20 @@ class ReportController extends Controller
             return response()->json(['ok' => false, 'error' => 'Noto\'g\'ri so\'rov'], 422);
         }
 
+        $result = [];
         if ($what === 'groups') {
-            \Illuminate\Support\Facades\Artisan::queue('import:groups');
-            $message = 'Guruhlar HEMISdan tortilmoqda (fon rejimida). Bir necha daqiqadan so\'ng "Hisoblash" ni qayta bosing.';
-            \App\Services\ActivityLogService::log('import', 'group', 'Oqim sahifasidan guruhlar sinxronizatsiyasi boshlandi');
+            // Guruhlar ro'yxati kichik (bir necha ming) — SINXRON tortamiz, shunda javob
+            // kelishi bilan yangi guruhlarni ekrandagi ro'yxatga qo'shish mumkin.
+            set_time_limit(300);
+            $stats = app(\App\Services\HemisService::class)->importGroups();
+            \App\Services\ActivityLogService::log('import', 'group',
+                'Oqim sahifasidan guruhlar HEMISdan tortildi: ' . $stats['total'] . ' ta (yangi ' . $stats['created'] . ')');
+            if (!$stats['ok'] && $stats['total'] === 0) {
+                return response()->json(['ok' => false, 'error' => 'HEMIS bilan bog\'lanib bo\'lmadi: ' . ($stats['error'] ?? 'xatolik')], 502);
+            }
+            $message = 'HEMISdan ' . $stats['total'] . ' ta guruh tortildi (yangi: ' . $stats['created'] . ', yangilangan: ' . $stats['updated'] . ')'
+                . (!$stats['ok'] ? ' — qisman: ' . $stats['error'] : '') . '.';
+            $result = ['imported' => $stats['total'], 'created' => $stats['created'], 'updated' => $stats['updated'], 'sync' => true];
         } else {
             \Illuminate\Support\Facades\Artisan::queue('students:import');
             $message = 'Talabalar HEMISdan tortilmoqda (fon rejimida). Bu jarayon uzoqroq davom etadi — keyinroq "Hisoblash" ni qayta bosing.';
@@ -11343,7 +11353,7 @@ class ReportController extends Controller
             // Statistika bo'lmasa ham import baribir navbatga qo'yilgan
         }
 
-        return response()->json(['ok' => true, 'message' => $message] + $stats);
+        return response()->json(['ok' => true, 'message' => $message] + $result + $stats);
     }
 
     /**

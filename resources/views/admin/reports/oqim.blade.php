@@ -264,6 +264,7 @@
                             <div id="mn-actions" style="display:none;padding:8px 20px;background:#fbfdff;border-bottom:1px solid #e2e8f0;align-items:center;gap:8px;flex-wrap:wrap;">
                                 <button type="button" id="mn-hemis-groups" class="af-btn af-load" onclick="hemisPull('groups')" title="HEMISdan guruhlar ro'yxatini yangilash (fon rejimida ishlaydi)">⇩ Guruhlarni HEMISdan tortish</button>
                                 <button type="button" id="mn-hemis-students" class="af-btn af-load" onclick="hemisPull('students')" title="HEMISdan talabalarni yangilash (fon rejimida, uzoqroq davom etadi)">⇩ Talabalarni HEMISdan tortish</button>
+                                <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadagi (HEMISdan tortilgan) yangi guruhlarni ekrandagi ro'yxatga qo'shish — mavjud joylashuv o'zgarmaydi">⟳ Yangi guruhlarni ro'yxatga qo'shish</button>
                                 <span id="mn-hemis-status" style="font-size:11.5px;font-weight:600;"></span>
                                 <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
@@ -1229,18 +1230,97 @@
             afterState[b].courses[c].oqims[o].label = this.value;
         });
 
-        // HEMISdan guruh/talabalarni tortish (fon rejimida import)
+        // Guruh nomini solishtirish uchun normallashtirish: til qavsi olib tashlanadi,
+        // kirill o'xshash harflar lotinga keltiriladi, bo'shliqlar/registr tekislanadi.
+        function mnNormName(n) {
+            return String(n || '')
+                .replace(/\s*\((?:o['’‘]?z|oz|uz|rus|ru|ing|eng|ang)\s*\)\s*$/i, '')
+                .replace(/[аА]/g, 'a').replace(/[еЕ]/g, 'e').replace(/[сС]/g, 'c').replace(/[оО]/g, 'o').replace(/[рР]/g, 'p').replace(/[хХ]/g, 'x')
+                .replace(/\s+/g, '').toLowerCase();
+        }
+
+        // Bazadagi (HEMISdan tortilgan) yangi guruhlarni ekrandagi ro'yxatga qo'shadi.
+        // Joriy holat (bo'sh guruhlar bilan) serverdan olinadi; ekranda yo'q guruhlar
+        // tegishli fakultet/kursga "Yangi (HEMIS)" oqimi sifatida qo'shiladi.
+        // Mavjud joylashuv (drag & drop natijasi) o'zgarmaydi.
+        function mergeNewGroups() {
+            var $st = $('#mn-hemis-status');
+            var $btn = $('#mn-merge-new').prop('disabled', true).css('opacity', 0.6);
+            $st.css('color', '#0369a1').text('Yangi guruhlar tekshirilmoqda...');
+            $.get(DATA_URL, getFilters(false)).done(function(res) {
+                var src = res.blocks || [];
+                if (!src.length) { $st.css('color', '#b45309').text('Bazada guruh topilmadi — filtrlarni tekshiring.'); return; }
+                if (!afterState || !afterState.length) {
+                    // Ekranda hech narsa yo'q — joriy holatni to'liq yuklaymiz
+                    afterState = JSON.parse(JSON.stringify(src));
+                    manualContext = null; MN_UNDO = [];
+                    mnRecalc(); renderManual(); renderAfterBody();
+                    $st.css('color', '#16a34a').text('✓ Joriy holat (barcha guruhlar) yuklandi.');
+                    return;
+                }
+                // Ekrandagi barcha guruh nomlari
+                var have = {};
+                afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                    (oq.rows || []).forEach(function(r) { have[mnNormName(r.name)] = true; });
+                }); }); });
+                var added = 0, addedNames = [];
+                var snapshot = JSON.stringify(afterState);
+                src.forEach(function(sb) {
+                    (sb.courses || []).forEach(function(sc) {
+                        var lvl = ctLevelNum(sc);
+                        var newRows = [];
+                        (sc.oqims || []).forEach(function(so) { (so.rows || []).forEach(function(r) {
+                            var k = mnNormName(r.name);
+                            if (!have[k]) { have[k] = true; newRows.push(JSON.parse(JSON.stringify(r))); }
+                        }); });
+                        if (!newRows.length) return;
+                        // Mos blok (fakultet+yo'nalish) va kursni topamiz, bo'lmasa yaratamiz
+                        var tb = afterState.find(function(b) { return b.title === sb.title; });
+                        if (!tb) { tb = { title: sb.title, courses: [] }; afterState.push(tb); }
+                        var tc = (tb.courses || []).find(function(c) { return ctLevelNum(c) === lvl; });
+                        if (!tc) { tc = { level_code: sc.level_code, level_name: sc.level_name, total: 0, oqims: [] }; tb.courses.push(tc); }
+                        // Yangi guruhlar tilga qarab alohida "Yangi (HEMIS)" oqimlariga tushadi
+                        var byLang = {};
+                        newRows.forEach(function(r) { var lg = r.lang || 'uz'; (byLang[lg] = byLang[lg] || []).push(r); });
+                        Object.keys(byLang).forEach(function(lg) {
+                            var ex = tc.oqims.find(function(o) { return /^Yangi/i.test(o.label || '') && (o.lang || 'uz') === lg; });
+                            if (ex) { ex.rows = ex.rows.concat(byLang[lg]); }
+                            else { tc.oqims.push({ label: 'Yangi (HEMIS)', lang: lg, total: 0, rows: byLang[lg] }); }
+                        });
+                        added += newRows.length;
+                        newRows.forEach(function(r) { addedNames.push(r.name); });
+                    });
+                });
+                if (!added) {
+                    $st.css('color', '#64748b').text('Yangi guruh topilmadi — ekrandagi ro\'yxat bazadagi bilan bir xil. (HEMISda yangi guruh ochilgan bo\'lsa avval "Guruhlarni HEMISdan tortish" ni bosing.)');
+                    return;
+                }
+                MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift();
+                mnRecalc(); renderManual(); renderAfterBody();
+                $st.css('color', '#16a34a').text('✓ ' + added + ' ta yangi guruh ro\'yxatga qo\'shildi ("Yangi (HEMIS)" oqimlarida): ' + addedNames.slice(0, 8).join(', ') + (addedNames.length > 8 ? ' ...' : '') + ' — kerakli oqimga sudrab joylang.');
+                mnFlash(added + ' ta yangi guruh qo\'shildi');
+            }).fail(function(xhr) {
+                $st.css('color', '#dc2626').text('Yangi guruhlarni yuklab bo\'lmadi (HTTP ' + xhr.status + ').');
+            }).always(function() { $btn.prop('disabled', false).css('opacity', 1); });
+        }
+
+        // HEMISdan guruh/talabalarni tortish (guruhlar — sinxron, talabalar — fon rejimida)
         function hemisPull(what) {
             var label = what === 'groups' ? 'Guruhlar' : 'Talabalar';
-            if (!confirm(label + " HEMISdan tortilsinmi? Jarayon fon rejimida ishlaydi va bir necha daqiqa davom etishi mumkin.")) return;
+            var q = what === 'groups'
+                ? "Guruhlar ro'yxati HEMISdan tortilsinmi? Bu bir necha soniya davom etadi, yangi guruhlar ekrandagi ro'yxatga avtomatik qo'shiladi."
+                : "Talabalar HEMISdan tortilsinmi? Jarayon fon rejimida ishlaydi va bir necha daqiqa davom etishi mumkin.";
+            if (!confirm(q)) return;
             var $btn = $(what === 'groups' ? '#mn-hemis-groups' : '#mn-hemis-students').prop('disabled', true).css('opacity', 0.6);
-            $('#mn-hemis-status').css('color', '#0369a1').text("So'rov yuborilmoqda...");
+            $('#mn-hemis-status').css('color', '#0369a1').text(what === 'groups' ? "Guruhlar HEMISdan tortilmoqda, kuting..." : "So'rov yuborilmoqda...");
             $.ajax({ url: HEMIS_PULL_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { what: what } })
                 .done(function(res) {
                     var extra = res.groups_total
                         ? ' Bazada ' + res.groups_total + ' ta guruh' + (res.groups_updated ? ' (oxirgi yangilanish: ' + res.groups_updated + ')' : '') + '.'
                         : '';
                     $('#mn-hemis-status').css('color', '#16a34a').text('✓ ' + (res.message || 'Boshlandi.') + extra);
+                    // Guruhlar sinxron tortildi — yangilarini darhol ekrandagi ro'yxatga qo'shamiz
+                    if (what === 'groups' && res.sync) mergeNewGroups();
                 })
                 .fail(function(xhr) {
                     var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : ('Xatolik (HTTP ' + xhr.status + ')');

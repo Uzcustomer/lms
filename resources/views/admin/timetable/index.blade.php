@@ -230,7 +230,34 @@
                             </button>
                         </div>
                     </div>
-                    <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
+                    <div class="cyc-assign-backdrop" id="cycAssignModal">
+                <div class="cyc-assign-panel">
+                    <div class="cyc-assign-head">
+                        <b id="cycAssignTitle">Sikl bloki</b>
+                        <span id="cycAssignMeta"></span>
+                    </div>
+                    <div class="cyc-assign-body">
+                        <div>
+                            <label id="cycAssignKafedra">O'qituvchi</label>
+                            <select id="cycAssignTeacher"><option value="">— Tanlanmagan —</option></select>
+                        </div>
+                        <div>
+                            <label>Dars vaqti</label>
+                            <input type="text" id="cycAssignTime" placeholder="Masalan: 08:30 - 12:50" maxlength="50" autocomplete="off">
+                        </div>
+                        <div>
+                            <label>Xona (bo'sh xonalar)</label>
+                            <select id="cycAssignRoom"><option value="">— Tanlanmagan —</option></select>
+                        </div>
+                    </div>
+                    <div class="cyc-assign-foot">
+                        <button type="button" id="cycAssignClose">Bekor</button>
+                        <button type="button" id="cycAssignSave">Saqlash</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
                 </div>
             </div>
 
@@ -1044,6 +1071,29 @@
         #cycleGrid .cyc-weekend { background: #fef08a; color: #854d0e; }
         #cycleGrid .cyc-holiday { background: #fecaca !important; color: #991b1b; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
+        #cycleGrid .cyc-req { display: block; padding: 0 4px 1px; font-size: 9px; font-weight: 500; color: #334155;
+            opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #cycleGrid .cyc-gear { width: 19px; height: 19px; padding: 0; border: 1px solid rgba(30,64,175,.35); border-radius: 5px;
+            background: #fff; color: #1e40af; font-size: 11px; line-height: 1; cursor: pointer; }
+        #cycleGrid .cyc-gear:hover { background: #dbeafe; border-color: #2563eb; }
+        .cyc-assign-backdrop { position: fixed; inset: 0; z-index: 140; display: none; align-items: center; justify-content: center;
+            padding: 16px; background: rgba(15,23,42,.55); }
+        .cyc-assign-backdrop.open { display: flex; }
+        .cyc-assign-panel { width: min(430px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 12px;
+            background: #fff; box-shadow: 0 24px 64px rgba(15,23,42,.35); }
+        .cyc-assign-head { padding: 14px 18px; background: #1e3a5f; color: #fff; border-radius: 12px 12px 0 0; }
+        .cyc-assign-head b { display: block; font-size: 14px; }
+        .cyc-assign-head span { display: block; margin-top: 3px; font-size: 11px; color: rgba(255,255,255,.7); }
+        .cyc-assign-body { display: grid; gap: 11px; padding: 15px 18px; }
+        .cyc-assign-body label { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 700; color: #475569; }
+        .cyc-assign-body select, .cyc-assign-body input { width: 100%; height: 36px; padding: 0 9px; border: 1px solid #cbd5e1;
+            border-radius: 7px; font-size: 13px; outline: none; background: #fff; }
+        .cyc-assign-body select:focus, .cyc-assign-body input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+        .cyc-assign-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; }
+        .cyc-assign-foot button { height: 36px; padding: 0 16px; border-radius: 7px; font-size: 13px; font-weight: 700; cursor: pointer; }
+        #cycAssignSave { border: 0; background: #1e3a5f; color: #fff; }
+        #cycAssignSave:hover { background: #162c4a; }
+        #cycAssignClose { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
         #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
         #cycleGrid [data-cycle-index].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
         /* Karta tanlanganda uning oqim qatori ajralib turadi */
@@ -3151,6 +3201,77 @@
                 if (date.holiday) return ' cyc-off cyc-holiday';
                 return date.sunday ? ' cyc-off cyc-weekend' : '';
             }
+            // ── Sikl blokiga o'qituvchi / vaqt / xona biriktirish ──
+            let cycAssignCard = null;
+
+            async function openCycleAssign(key) {
+                const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                if (!card || !card.placed) return;
+                cycAssignCard = card;
+
+                $('cycAssignTitle').textContent = card.subject;
+                $('cycAssignMeta').textContent = card.group + ' · ' + card.days + ' kun';
+                $('cycAssignKafedra').textContent = "O'qituvchi";
+                $('cycAssignTeacher').innerHTML = '<option value="">Yuklanmoqda...</option>';
+                $('cycAssignRoom').innerHTML = '<option value="">Yuklanmoqda...</option>';
+                $('cycAssignTime').value = '';
+                $('cycAssignModal').classList.add('open');
+
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/cycle-assign-options', 'POST', {
+                        specialty_name: card.specialty, course: card.course,
+                        group_name: card.group, subject_name: card.subject,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                    });
+
+                    $('cycAssignKafedra').textContent = "O'qituvchi" + (j.kafedra ? ' (' + j.kafedra + ')' : '');
+                    $('cycAssignTeacher').innerHTML = '<option value="">— Tanlanmagan —</option>' +
+                        (j.teachers || []).map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('');
+                    $('cycAssignRoom').innerHTML = '<option value="">— Tanlanmagan —</option>' +
+                        (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '') + '</option>').join('');
+
+                    const current = j.current || {};
+                    if (current.teacher_id) $('cycAssignTeacher').value = String(current.teacher_id);
+                    if (current.auditorium_code) $('cycAssignRoom').value = current.auditorium_code;
+                    $('cycAssignTime').value = current.lesson_time || '';
+                } catch (e) {
+                    $('cycAssignModal').classList.remove('open');
+                    alert('Ma\u2019lumotlarni yuklab bo\u2018lmadi: ' + e.message);
+                }
+            }
+
+            function closeCycleAssign() {
+                $('cycAssignModal').classList.remove('open');
+                cycAssignCard = null;
+            }
+
+            $('cycAssignClose').addEventListener('click', closeCycleAssign);
+            $('cycAssignModal').addEventListener('click', ev => {
+                if (ev.target === $('cycAssignModal')) closeCycleAssign();
+            });
+
+            $('cycAssignSave').addEventListener('click', async () => {
+                if (!cycAssignCard) return;
+                const button = $('cycAssignSave');
+                button.disabled = true;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
+                        specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
+                        group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
+                        teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
+                        lesson_time: $('cycAssignTime').value.trim() || null,
+                        auditorium_code: $('cycAssignRoom').value || null,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                    });
+                    closeCycleAssign();
+                    await loadCyclePlan();
+                } catch (e) {
+                    alert('Saqlab bo\u2018lmadi: ' + e.message);
+                } finally {
+                    button.disabled = false;
+                }
+            });
+
             function renderCyclePlan(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
@@ -3172,11 +3293,16 @@
                             col++;
                         }
                         const color = subjColor(block.subject);
-                        h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun">' +
+                        const req = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
+                            .filter(Boolean).join(' · ');
+                        h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (req ? ' · ' + esc(req) : '') + '">' +
                             '<span class="cyc-shift-actions">' +
                             '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
+                            '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
                             '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                            '</span><span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span></td>';
+                            '</span><span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span>' +
+                            (req ? '<span class="cyc-req">' + esc(req) + '</span>' : '') +
+                            '</td>';
                         col = block.to + 1;
                     });
                     while (col < dates.length) {
@@ -3250,6 +3376,15 @@
                         highlightCycleRow(cycleDragKey);
                     });
                     block.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); });
+                });
+                $('cycleGrid').querySelectorAll('[data-cycle-gear]').forEach(button => {
+                    button.addEventListener('mousedown', ev => ev.stopPropagation());
+                    button.addEventListener('dragstart', ev => { ev.preventDefault(); ev.stopPropagation(); });
+                    button.addEventListener('click', ev => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        openCycleAssign(button.dataset.cycleGear);
+                    });
                 });
                 $('cycleGrid').querySelectorAll('[data-cycle-shift]').forEach(button => {
                     button.addEventListener('click', async ev => {

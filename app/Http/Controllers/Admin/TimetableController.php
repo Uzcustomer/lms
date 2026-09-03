@@ -3857,6 +3857,10 @@ class TimetableController extends Controller
                     'from' => $from,
                     'to' => $to,
                     'days' => (int) $days,
+                    'teacher_name' => $placement->teacher_name ?? null,
+                    'lesson_time' => $placement->lesson_time ?? null,
+                    'auditorium_code' => $placement->auditorium_code ?? null,
+                    'auditorium_name' => $placement->auditorium_name ?? null,
                 ];
             }
             $placedSubjects = collect($blocks)->keyBy('subject');
@@ -3906,6 +3910,234 @@ class TimetableController extends Controller
             'rows'       => $rows,
             'cycle_cards' => $cycleCards,
         ]);
+    }
+
+    /**
+     * Sikl bloki rekvizitlari uchun variantlar: fan kafedrasining
+     * o'qituvchilari va shu sanalarda band bo'lmagan xonalar.
+     */
+    public function cycleAssignOptions(Request $request, TimetableBoard $board)
+    {
+        abort_unless(Schema::hasTable('timetable_cycle_placements'), 503, 'Sikl jadvali migratsiyasi hali ishga tushirilmagan.');
+
+        $data = $request->validate([
+            'specialty_name' => 'required|string|max:255',
+            'course'         => 'required|integer|min:1|max:7',
+            'group_name'     => 'required|string|max:255',
+            'subject_name'   => 'required|string|max:255',
+            'start_date'     => 'nullable|date',
+            'holidays'       => 'nullable|array',
+        ]);
+
+        $placement = TimetableCyclePlacement::where('board_id', $board->id)
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('course', (int) $data['course'])
+            ->where('group_name', $data['group_name'])
+            ->where('subject_name', $data['subject_name'])
+            ->first();
+
+        if (!$placement) {
+            return response()->json(['error' => 'Bu blok hali jadvalga joylanmagan.'], 422);
+        }
+
+        // Fanning kafedrasi — shu fan kartalaridan olinadi.
+        $kafedra = TimetableCard::where('board_id', $board->id)
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('course', (int) $data['course'])
+            ->whereRaw('LOWER(TRIM(subject_name)) = ?', [mb_strtolower(trim($data['subject_name']))])
+            ->whereNotNull('kafedra_name')
+            ->value('kafedra_name');
+
+        $teachers = collect();
+        if ($kafedra) {
+            $teachers = Teacher::query()
+                ->whereNotNull('full_name')
+                ->where('department', 'like', '%' . trim($kafedra) . '%')
+                ->orderBy('full_name')
+                ->limit(300)
+                ->get(['id', 'full_name', 'short_name']);
+        }
+
+        // Joriy biriktirilgan o'qituvchi kafedra ro'yxatida bo'lmasa ham ko'rinsin.
+        if ($placement->teacher_id && !$teachers->contains('id', $placement->teacher_id)) {
+            $current = Teacher::find($placement->teacher_id, ['id', 'full_name', 'short_name']);
+            if ($current) {
+                $teachers->prepend($current);
+            }
+        }
+
+        // Shu sanalar bilan kesishadigan boshqa bloklar band qilgan xonalar.
+        $busyRooms = $this->cycleOverlappingRoomCodes($board, $placement, $data);
+
+        $rooms = Auditorium::query()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get(['code', 'name', 'volume'])
+            ->filter(fn ($room) => !isset($busyRooms[$room->code]) || $room->code === $placement->auditorium_code)
+            ->values();
+
+        return response()->json([
+            'kafedra' => $kafedra,
+            'teachers' => $teachers->map(fn ($teacher) => [
+                'id' => $teacher->id,
+                'name' => $teacher->full_name ?: $teacher->short_name,
+            ])->values(),
+            'rooms' => $rooms->map(fn ($room) => [
+                'code' => $room->code,
+                'name' => $room->name,
+                'volume' => (int) $room->volume,
+            ])->values(),
+            'current' => [
+                'teacher_id' => $placement->teacher_id,
+                'teacher_name' => $placement->teacher_name,
+                'lesson_time' => $placement->lesson_time,
+                'auditorium_code' => $placement->auditorium_code,
+            ],
+        ]);
+    }
+
+    /** Sikl blokiga o'qituvchi, dars vaqti va xonani saqlaydi. */
+    public function cycleAssignSave(Request $request, TimetableBoard $board)
+    {
+        abort_unless(Schema::hasTable('timetable_cycle_placements'), 503, 'Sikl jadvali migratsiyasi hali ishga tushirilmagan.');
+
+        $data = $request->validate([
+            'specialty_name'  => 'required|string|max:255',
+            'course'          => 'required|integer|min:1|max:7',
+            'group_name'      => 'required|string|max:255',
+            'subject_name'    => 'required|string|max:255',
+            'teacher_id'      => 'nullable|integer|exists:teachers,id',
+            'lesson_time'     => 'nullable|string|max:50',
+            'auditorium_code' => 'nullable|string|max:50',
+            'start_date'      => 'nullable|date',
+            'holidays'        => 'nullable|array',
+        ]);
+
+        $placement = TimetableCyclePlacement::where('board_id', $board->id)
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('course', (int) $data['course'])
+            ->where('group_name', $data['group_name'])
+            ->where('subject_name', $data['subject_name'])
+            ->first();
+
+        if (!$placement) {
+            return response()->json(['error' => 'Bu blok hali jadvalga joylanmagan.'], 422);
+        }
+
+        $teacherName = null;
+        if (!empty($data['teacher_id'])) {
+            $teacher = Teacher::find($data['teacher_id']);
+            $teacherName = $teacher?->full_name ?: $teacher?->short_name;
+        }
+
+        $roomName = null;
+        if (!empty($data['auditorium_code'])) {
+            $room = Auditorium::where('code', $data['auditorium_code'])->first();
+            if (!$room) {
+                return response()->json(['error' => 'Xona topilmadi.'], 422);
+            }
+
+            $busyRooms = $this->cycleOverlappingRoomCodes($board, $placement, $data);
+            if (isset($busyRooms[$room->code]) && $room->code !== $placement->auditorium_code) {
+                return response()->json([
+                    'error' => "«{$room->name}» xonasi bu sanalarda «{$busyRooms[$room->code]}» sikliga band.",
+                ], 422);
+            }
+
+            $roomName = $room->name;
+        }
+
+        $placement->update([
+            'teacher_id' => $data['teacher_id'] ?: null,
+            'teacher_name' => $teacherName,
+            'lesson_time' => trim((string) ($data['lesson_time'] ?? '')) ?: null,
+            'auditorium_code' => $data['auditorium_code'] ?: null,
+            'auditorium_name' => $roomName,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'teacher_name' => $teacherName,
+            'lesson_time' => $placement->lesson_time,
+            'auditorium_name' => $roomName,
+        ]);
+    }
+
+    /**
+     * Berilgan blok sanalari bilan kesishadigan boshqa sikl bloklarining
+     * xonalari: [auditorium_code => fan nomi]. Kalendar cyclePlace bilan
+     * bir xil qurilib, bayram va yakshanbalar hisobga olinadi.
+     */
+    private function cycleOverlappingRoomCodes(TimetableBoard $board, TimetableCyclePlacement $placement, array $data): array
+    {
+        $set = (array) ($board->settings ?? []);
+        $start = $data['start_date'] ?? ($set['semester_start'] ?? null);
+        if (!$start) {
+            $yearStart = (int) preg_replace('/\D.*$/', '', (string) $board->academic_year);
+            if ($yearStart < 2000) $yearStart = (int) date('Y');
+            $start = $board->semester_parity === 'bahorgi'
+                ? sprintf('%04d-02-01', $yearStart + 1)
+                : sprintf('%04d-09-01', $yearStart);
+        }
+        $startC = Carbon::parse($start)->startOfDay();
+
+        $holSet = [];
+        foreach ((array) ($data['holidays'] ?? ($set['holidays'] ?? [])) as $holiday) {
+            try { $holSet[Carbon::parse($holiday)->toDateString()] = true; } catch (\Exception $e) { }
+        }
+
+        $daysPerWeek = max(1, (int) $board->days);
+        $maxDays = max(1, (int) $board->weeks) * $daysPerWeek;
+        $workIndices = [];
+        $calendarCount = 0;
+        $cur = $startC->copy();
+        $guard = 0;
+        while (count($workIndices) < $maxDays && $guard < $maxDays * 8 + count($holSet) * 2 + 60) {
+            $dow = (int) $cur->dayOfWeekIso;
+            $isTeachingDay = $dow <= $daysPerWeek && $dow < 7 && !isset($holSet[$cur->toDateString()]);
+            $calendarCount++;
+            if ($isTeachingDay) {
+                $workIndices[] = $calendarCount - 1;
+            }
+            $cur->addDay();
+            $guard++;
+        }
+
+        $endIndexFor = function (int $from, int $needed) use ($workIndices): ?int {
+            foreach ($workIndices as $position => $calendarIndex) {
+                if ($calendarIndex >= $from) {
+                    return $workIndices[$position + max(1, $needed) - 1] ?? null;
+                }
+            }
+            return null;
+        };
+
+        // Fanning davomiyligi (kunlarda) — sikl sozlamalaridan.
+        $cycleDays = [];
+        foreach (TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')->get() as $setting) {
+            $key = mb_strtolower(trim($setting->specialty_name)) . '|' . (int) $setting->course . '|' . mb_strtolower(trim($setting->subject_name));
+            $cycleDays[$key] = max(1, (int) $setting->cycle_days);
+        }
+        $daysOf = fn ($item) => $cycleDays[mb_strtolower(trim($item->specialty_name)) . '|' . (int) $item->course . '|' . mb_strtolower(trim($item->subject_name))] ?? 1;
+
+        $from = (int) $placement->start_index;
+        $to = $endIndexFor($from, $daysOf($placement)) ?? $from;
+
+        $busy = [];
+        $others = TimetableCyclePlacement::where('board_id', $board->id)
+            ->where('id', '!=', $placement->id)
+            ->whereNotNull('auditorium_code')
+            ->get();
+
+        foreach ($others as $other) {
+            $otherFrom = (int) $other->start_index;
+            $otherTo = $endIndexFor($otherFrom, $daysOf($other)) ?? $otherFrom;
+            if ($otherFrom <= $to && $from <= $otherTo) {
+                $busy[$other->auditorium_code] = $other->subject_name;
+            }
+        }
+
+        return $busy;
     }
 
     /**

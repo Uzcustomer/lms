@@ -968,6 +968,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 // Sikl (4-6 kurs) kalendar rejasi
                 Route::post('/boards/{board}/cycle-plan', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlan'])->name('cycle-plan');
                 Route::post('/boards/{board}/cycle-place', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlace'])->name('cycle-place');
+                Route::post('/boards/{board}/cycle-assign-options', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignOptions'])->name('cycle-assign-options');
+                Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
                 // Qoidalar (aSc "Взаимосвязи" uslubida)
                 Route::get('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'rules'])->name('rules');
                 Route::post('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'saveRule'])->name('rules.save');

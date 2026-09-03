@@ -296,9 +296,10 @@ class DistributionCatalog
     /**
      * Ikki guruh bir-biriga mos keladimi.
      *
-     * Yo'nalish va kurs har doim bir xil bo'lishi shart. Ta'lim tili oddiy
-     * rejimda bir xil bo'lishi kerak; "to'liq guruh" rejimida esa maqsad
-     * ingliz guruhi bo'lsa, o'zbek/rus guruhidan ham o'tish mumkin.
+     * Fakultet, yo'nalish va kurs har doim bir xil bo'lishi shart — talaba
+     * o'z fakultetidan chiqib ketmaydi. Ta'lim tili oddiy rejimda bir xil
+     * bo'lishi kerak; "to'liq guruh" rejimida esa maqsad ingliz guruhi bo'lsa,
+     * o'zbek/rus guruhidan ham o'tish mumkin.
      */
     public function compatible(?array $source, array $target, bool $fullMode = false): bool
     {
@@ -306,7 +307,8 @@ class DistributionCatalog
             return false;
         }
 
-        if ($source['specialty_name'] !== $target['specialty_name']
+        if ($this->facultyKey($source) !== $this->facultyKey($target)
+            || $source['specialty_name'] !== $target['specialty_name']
             || $source['course'] !== $target['course']) {
             return false;
         }
@@ -316,6 +318,12 @@ class DistributionCatalog
         }
 
         return $fullMode && $this->isEnglish($target);
+    }
+
+    /** Fakultetni solishtirish kaliti (bo'shliq va katta-kichik harf farqsiz). */
+    public function facultyKey(array $group): string
+    {
+        return preg_replace('/\s+/u', ' ', mb_strtolower(trim((string) ($group['faculty_name'] ?? '')))) ?? '';
     }
 
     /** Guruh ingliz tilida o'qiydimi. */

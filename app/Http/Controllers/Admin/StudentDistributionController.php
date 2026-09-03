@@ -203,13 +203,13 @@ class StudentDistributionController extends Controller
      * Talabani boshqa guruhga ko'chirish rejasi.
      *
      * LMS dagi students.group_id o'zgartirilmaydi — bu faqat reja. Maqsadli
-     * guruh talabaning yo'nalishi, kursi va ta'lim tiliga mos bo'lishi hamda
-     * bo'sh joyi qolgan bo'lishi shart.
+     * guruh talabaning fakulteti, yo'nalishi, kursi va ta'lim tiliga mos
+     * bo'lishi hamda bo'sh joyi qolgan bo'lishi shart.
      *
      * "To'liq guruh" rejimida (full_group_mode) ikki cheklov yumshaydi:
      * bo'sh joyi yo'q guruhga ham ko'chirish mumkin (guruh "ortiqcha" bo'lib
      * qoladi) va o'zbek/rus guruhidan ingliz guruhiga o'tishga ruxsat beriladi.
-     * Boshqa yo'nalish yoki kursga bu rejimda ham o'tib bo'lmaydi.
+     * Boshqa fakultet, yo'nalish yoki kursga bu rejimda ham o'tib bo'lmaydi.
      */
     public function assignStudent(Request $request): JsonResponse
     {
@@ -253,8 +253,8 @@ class StudentDistributionController extends Controller
         if (!$this->groupsCompatible($source, $target, $fullMode)) {
             return response()->json([
                 'message' => $fullMode
-                    ? 'Maqsadli guruh talabaning yo\'nalishi yoki kursiga mos emas, yoki ta\'lim tili boshqa (faqat ingliz guruhiga o\'tish mumkin).'
-                    : 'Maqsadli guruh talabaning yo\'nalishi, kursi yoki ta\'lim tiliga mos emas.',
+                    ? 'Maqsadli guruh talabaning fakulteti, yo\'nalishi yoki kursiga mos emas, yoki ta\'lim tili boshqa (faqat ingliz guruhiga o\'tish mumkin).'
+                    : 'Maqsadli guruh talabaning fakulteti, yo\'nalishi, kursi yoki ta\'lim tiliga mos emas.',
             ], 422);
         }
 
@@ -346,7 +346,7 @@ class StudentDistributionController extends Controller
             }
 
             if (!$this->groupsCompatible($source, $target, $fullMode)) {
-                $errors[] = $student->full_name . ': yo\'nalishi, kursi yoki ta\'lim tili mos emas.';
+                $errors[] = $student->full_name . ': fakulteti, yo\'nalishi, kursi yoki ta\'lim tili mos emas.';
                 continue;
             }
 

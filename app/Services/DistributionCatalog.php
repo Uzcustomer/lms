@@ -118,7 +118,8 @@ class DistributionCatalog
         // HEMIS ba'zan bitta guruhni ikki xil id bilan (eski/yangi yozuv)
         // faol holda saqlaydi — nom bo'yicha dedupe qilamiz: talabali guruh
         // bilan bir xil nomlisi tashlanadi, sintetiklardan eng yangisi qoladi.
-        $nameKeyOf = fn ($name, $specialty) => mb_strtolower(trim((string) $name)) . '|' . mb_strtolower(trim((string) $specialty));
+        $nameKeyOf = fn ($name, $specialty) => $this->groupNameKey($name)
+            . '|' . mb_strtolower(trim((string) $specialty));
         $existingNames = $rows
             ->map(fn ($row) => $nameKeyOf($row['group_name'], $row['specialty_name']))
             ->flip();
@@ -225,6 +226,29 @@ class DistributionCatalog
      * Guruh nomidagi qabul yilidan kursni chiqaradi: d1/d26-01(a) -> 26 ->
      * 2026-27 o'quv yilida 1-kurs. O'quv yili sentabrdan boshlanadi.
      */
+    /**
+     * Guruh nomining solishtirish kaliti.
+     *
+     * HEMIS bir guruhni ikki xil yozuvda saqlashi mumkin — qabul yili oldidagi
+     * fakultet harfi bor ("d1/d25-01(b)") va yo'q ("d1/25-01(b)") ko'rinishda.
+     * Ular bitta guruh: nom bo'yicha dedupe ularni bir xil deb ko'rishi kerak,
+     * aks holda talabasiz "arvoh" yozuv katalogda alohida guruh bo'lib qoladi
+     * va ovoz berish ro'yxatida talabaning o'z guruhi ko'rinib turadi.
+     *
+     * Kalit: kichik harf, bo'shliq/nuqta/tire olib tashlanadi, "/" dan keyingi
+     * harf prefiksi (d25 -> 25) qisqartiriladi.
+     */
+    public function groupNameKey(?string $name): string
+    {
+        $key = mb_strtolower(trim((string) $name));
+        // "d1/d25-01(b)" -> "d1/25-01(b)"
+        $key = preg_replace('~/\s*[a-zа-я]+(?=\d)~u', '/', $key) ?? $key;
+        // Ajratgichlar farqi ahamiyatsiz: "d1/25 - 01 (b)" -> "d1/2501b"
+        $key = preg_replace('/[\s.\-_()]+/u', '', $key) ?? $key;
+
+        return $key;
+    }
+
     public function courseFromName(string $name): ?int
     {
         if (!preg_match('/(\d{2})\s*-/', $name, $match) && !preg_match('/(\d{2})/', $name, $match)) {
@@ -255,8 +279,14 @@ class DistributionCatalog
             return collect();
         }
 
+        // O'z guruhi id bo'yicha ham, nomi bo'yicha ham chiqarib tashlanadi:
+        // HEMIS bir guruhni ikki id bilan saqlagan bo'lsa, id tekshiruvi yolg'iz
+        // yetmaydi va talabaga o'z guruhi taklif bo'lib qolardi.
+        $ownName = $this->groupNameKey($source['group_name'] ?? null);
+
         return $catalog
             ->filter(fn ($group) => $group['group_hemis_id'] !== $source['group_hemis_id']
+                && $this->groupNameKey($group['group_name'] ?? null) !== $ownName
                 && !$group['is_source']
                 && ($fullMode || ($group['free_places'] !== null && $group['free_places'] > 0))
                 && $this->compatible($source, $group, $fullMode))

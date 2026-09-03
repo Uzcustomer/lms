@@ -3585,7 +3585,9 @@ class TimetableController extends Controller
             'courses.*'         => 'integer|min:1|max:7',
             'auto'              => 'nullable|boolean',
             'clear'             => 'nullable|boolean',
+            'view'              => 'nullable|in:flow,group',
         ]);
+        $cycleView = $data['view'] ?? 'flow';
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
             if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
@@ -3689,7 +3691,8 @@ class TimetableController extends Controller
                     continue;
                 }
                 foreach ($this->cycleCardGroups($c) as $member) {
-                    $flow = $this->cycleFlowName($c, $member);
+                    // Guruh rejimida har subguruh o'z qatori; oqim rejimida oqim nomi.
+                    $flow = $cycleView === 'group' ? $member : $this->cycleFlowName($c, $member);
                     $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
                     if (!isset($byFlow[$flowKey])) {
                         $byFlow[$flowKey] = ['name' => $flow, 'subs' => [], 'members' => [], 'req' => [],
@@ -3723,20 +3726,24 @@ class TimetableController extends Controller
                 if (!isset($cycleKey[$ck])) {
                     continue;
                 }
-                $flow = $this->cycleFlowName($c);
-                $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
-                if (!isset($byFlow[$flowKey])) {
-                    continue;
-                }
-                $reqKey = $c->subject_name . '|lecture';
-                if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
-                    $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
-                }
-                if ($c->teacher_name) {
-                    $byFlow[$flowKey]['req'][$reqKey]['teachers'][$c->teacher_name] = true;
-                }
-                if ($c->auditorium_name || $c->auditorium_code) {
-                    $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
+                $lectureRows = $cycleView === 'group'
+                    ? $this->cycleCardGroups($c)
+                    : [$this->cycleFlowName($c)];
+                foreach ($lectureRows as $flow) {
+                    $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
+                    if (!isset($byFlow[$flowKey])) {
+                        continue;
+                    }
+                    $reqKey = $c->subject_name . '|lecture';
+                    if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
+                        $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
+                    }
+                    if ($c->teacher_name) {
+                        $byFlow[$flowKey]['req'][$reqKey]['teachers'][$c->teacher_name] = true;
+                    }
+                    if ($c->auditorium_name || $c->auditorium_code) {
+                        $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
+                    }
                 }
             }
         }
@@ -4003,6 +4010,7 @@ class TimetableController extends Controller
             'group_name'     => 'required|string|max:255',
             'subject_name'   => 'required|string|max:255',
             'training_type'  => 'nullable|in:lecture,practice',
+            'view'           => 'nullable|in:flow,group',
             'start_date'     => 'nullable|date',
             'holidays'       => 'nullable|array',
         ]);
@@ -4012,7 +4020,7 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu blok hali jadvalga joylanmagan.'], 422);
         }
 
-        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name'], $data['training_type'] ?? null);
+        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name'], $data['training_type'] ?? null, $data['view'] ?? 'flow');
         if ($flowCards->isEmpty()) {
             return response()->json(['error' => 'Bu oqim uchun fan kartalari topilmadi.'], 422);
         }
@@ -4081,6 +4089,7 @@ class TimetableController extends Controller
             'group_name'      => 'required|string|max:255',
             'subject_name'    => 'required|string|max:255',
             'training_type'   => 'nullable|in:lecture,practice',
+            'view'            => 'nullable|in:flow,group',
             'teacher_id'      => 'nullable|integer|exists:teachers,id',
             'lesson_time'     => 'nullable|string|max:50',
             'auditorium_code' => 'nullable|string|max:50',
@@ -4093,7 +4102,7 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu blok hali jadvalga joylanmagan.'], 422);
         }
 
-        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name'], $data['training_type'] ?? null);
+        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name'], $data['training_type'] ?? null, $data['view'] ?? 'flow');
         if ($flowCards->isEmpty()) {
             return response()->json(['error' => 'Bu oqim uchun fan kartalari topilmadi.'], 422);
         }
@@ -4155,7 +4164,7 @@ class TimetableController extends Controller
     }
 
     /** Oqimga tegishli fan kartalari (ma'ruza ham, amaliyot ham). */
-    private function cycleFlowCards(TimetableBoard $board, string $specialty, int $course, string $subject, string $flow, ?string $type = null)
+    private function cycleFlowCards(TimetableBoard $board, string $specialty, int $course, string $subject, string $flow, ?string $type = null, string $view = 'flow')
     {
         $subjectLower = mb_strtolower(trim($subject));
         $flowLower = mb_strtolower(trim($flow));
@@ -4164,11 +4173,21 @@ class TimetableController extends Controller
             ->where('specialty_name', $specialty)
             ->where('course', $course)
             ->get()
-            ->filter(function (TimetableCard $card) use ($subjectLower, $flowLower, $type) {
+            ->filter(function (TimetableCard $card) use ($subjectLower, $flowLower, $type, $view) {
                 if ($type !== null && $card->training_type !== $type) {
                     return false;
                 }
                 if (mb_strtolower(trim((string) $card->subject_name)) !== $subjectLower) {
+                    return false;
+                }
+
+                if ($view === 'group') {
+                    foreach ($this->cycleCardGroups($card) as $member) {
+                        if (mb_strtolower(trim($member)) === $flowLower) {
+                            return true;
+                        }
+                    }
+
                     return false;
                 }
 
@@ -4250,14 +4269,20 @@ class TimetableController extends Controller
             $subjectLower = mb_strtolower(trim((string) $card->subject_name));
             $base = mb_strtolower(trim((string) $card->specialty_name)) . '|' . (int) $card->course . '|' . $subjectLower . '|';
 
+            $typeSuffix = '|' . ($card->training_type === 'practice' ? 'practice' : $card->training_type);
             if ($card->training_type === 'practice') {
                 foreach ($this->cycleCardGroups($card) as $member) {
-                    $key = $base . mb_strtolower($this->cycleFlowName($card, $member)) . '|practice';
-                    $roomByKey[$key] = $roomByKey[$key] ?? $card->auditorium_code;
+                    foreach ([$this->cycleFlowName($card, $member), $member] as $rowName) {
+                        $key = $base . mb_strtolower(trim($rowName)) . $typeSuffix;
+                        $roomByKey[$key] = $roomByKey[$key] ?? $card->auditorium_code;
+                    }
                 }
             } else {
-                $key = $base . mb_strtolower($this->cycleFlowName($card)) . '|' . $card->training_type;
-                $roomByKey[$key] = $roomByKey[$key] ?? $card->auditorium_code;
+                $rowNames = array_merge([$this->cycleFlowName($card)], $this->cycleCardGroups($card));
+                foreach ($rowNames as $rowName) {
+                    $key = $base . mb_strtolower(trim($rowName)) . $typeSuffix;
+                    $roomByKey[$key] = $roomByKey[$key] ?? $card->auditorium_code;
+                }
             }
         }
 
@@ -4307,7 +4332,8 @@ class TimetableController extends Controller
             'subject_name' => 'required|string|max:255',
             'start_index' => 'nullable|integer|min:0',
             'training_type' => 'required|in:lecture,practice',
-            'pair' => 'nullable|integer|min:1|max:12',
+            'pair' => 'nullable|integer|min:1|max:24',
+            'view' => 'nullable|in:flow,group',
             'action' => 'required|in:place,remove,shift',
             'direction' => 'nullable|integer|in:-1,1',
             'start_date' => 'nullable|date',
@@ -4326,14 +4352,27 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu fan sikl rejimida topilmadi.'], 422);
         }
 
-        $reqPair = max(1, min(12, (int) ($data['pair'] ?? 1)));
+        $reqPair = max(1, min(24, (int) ($data['pair'] ?? 1)));
+        $cycleView = $data['view'] ?? 'flow';
         $scopeCards = TimetableCard::where('board_id', $board->id)
             ->where('course', (int) $data['course'])
             ->where('specialty_name', $data['specialty_name'])
             ->get();
         // Qator identifikatori — OQIM (cyclePlan bilan bir xil mantiq): karta
         // `oqim_label` bo'yicha, label'siz eski kartalarda asosiy guruh bo'yicha.
-        $cardFlows = function (TimetableCard $card) use ($norm): array {
+        $cardFlows = function (TimetableCard $card) use ($norm, $cycleView): array {
+            // Guruh rejimida qator = subguruh nomi (ma'ruza kartasi barcha
+            // a'zolariga tegishli); oqim rejimida — oqim nomi.
+            if ($cycleView === 'group') {
+                $flows = [];
+                foreach ($this->cycleCardGroups($card) as $member) {
+                    $member = $norm($member);
+                    if ($member !== '') {
+                        $flows[$member] = true;
+                    }
+                }
+                return array_keys($flows);
+            }
             if ($card->training_type !== 'practice') {
                 $flow = $norm($this->cycleFlowName($card));
                 return $flow !== '' ? [$flow] : [];

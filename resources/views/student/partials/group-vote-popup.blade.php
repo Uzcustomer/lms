@@ -1,33 +1,65 @@
 {{--
-    Guruh tanlash ovozi popupi.
+    Guruh tanlash popupi — ikki ko'rinishda.
 
-    Faqat quyidagi holatda ko'rinadi: jadval mavjud, talabaning guruhi uchun
-    ovoz berish ochilgan, talaba hali ovoz bermagan va tanlash uchun kamida
-    bitta mos guruh bor. Aks holda hech narsa render qilinmaydi.
+    OVOZ: talabaning guruhi (yoki o'zi) uchun ovoz berish ochilgan, u hali
+    ovoz bermagan va tanlash uchun mos guruh bor. Yopib bo'lmaydi.
+
+    XABAR: o'sha fakultet + yo'nalish + kursda ovoz berish ketyapti, lekin bu
+    guruhga ochilmagan. Talaba "bizniki nega chiqmadi" deb sarosimaga
+    tushmasligi uchun guruhi o'zgarmasligi aytiladi. Kichik, bir marta
+    ko'rsatiladi va istalgan joyga bosilsa yopiladi.
 --}}
 @php
     $gvStudent = auth()->guard('student')->user();
     $gvTargets = collect();
-    $gvShow = false;
+    $gvMode = null;   // 'vote' | 'notice'
 
-    $gvAllowed = false;
-    if ($gvStudent && $gvStudent->group_id
-        && \Illuminate\Support\Facades\Schema::hasTable('distribution_voting_groups')
-        && \Illuminate\Support\Facades\Schema::hasTable('distribution_votes')) {
+    $gvHasTables = \Illuminate\Support\Facades\Schema::hasTable('distribution_voting_groups')
+        && \Illuminate\Support\Facades\Schema::hasTable('distribution_votes');
+
+    if ($gvStudent && $gvStudent->group_id && $gvHasTables) {
         // Ruxsat guruh bo'yicha yoki shu talabaga alohida berilgan bo'lishi mumkin.
         $gvAllowed = \App\Models\DistributionVotingGroup::query()->where('group_hemis_id', (int) $gvStudent->group_id)->exists()
             || (\Illuminate\Support\Facades\Schema::hasTable('distribution_voting_students')
                 && \App\Models\DistributionVotingStudent::query()->where('student_id', $gvStudent->id)->exists());
-    }
 
-    if ($gvAllowed
-        && !\App\Models\DistributionVote::query()->where('student_id', $gvStudent->id)->exists()) {
-        $gvTargets = app(\App\Services\DistributionCatalog::class)->targetsFor((int) $gvStudent->group_id);
-        $gvShow = $gvTargets->isNotEmpty();
+        $gvVoted = \App\Models\DistributionVote::query()->where('student_id', $gvStudent->id)->exists();
+
+        if ($gvAllowed && !$gvVoted) {
+            $gvTargets = app(\App\Services\DistributionCatalog::class)->targetsFor((int) $gvStudent->group_id);
+            if ($gvTargets->isNotEmpty()) {
+                $gvMode = 'vote';
+            }
+        } elseif (!$gvAllowed && !$gvVoted) {
+            // Ovoz ochilgan guruhlar: guruh bo'yicha ochilganlari va alohida
+            // talabalarga ochilganlarning guruhlari. Katalog og'ir so'rov, shu
+            // sabab avval shu arzon ro'yxat olinadi va bo'sh bo'lsa to'xtaladi.
+            $gvOpenIds = \App\Models\DistributionVotingGroup::query()->pluck('group_hemis_id');
+            if (\Illuminate\Support\Facades\Schema::hasTable('distribution_voting_students')) {
+                $gvOpenIds = $gvOpenIds->merge(
+                    \App\Models\DistributionVotingStudent::query()->pluck('group_hemis_id')
+                );
+            }
+            $gvOpenIds = $gvOpenIds->filter()->map(fn ($id) => (int) $id)->unique()->flip();
+
+            if ($gvOpenIds->isNotEmpty()) {
+                // Xabar faqat qo'shnilarida ovoz ketayotgan bo'lsa chiqadi: shu
+                // fakultet + yo'nalish + kursdagi boshqa guruhga ruxsat berilganmi.
+                $gvCatalog = app(\App\Services\DistributionCatalog::class)->groups();
+                $gvOwn = $gvCatalog->firstWhere('group_hemis_id', (int) $gvStudent->group_id);
+
+                if ($gvOwn) {
+                    $gvMode = $gvCatalog->contains(fn ($group) => $gvOpenIds->has($group['group_hemis_id'])
+                        && $group['faculty_name'] === $gvOwn['faculty_name']
+                        && $group['specialty_name'] === $gvOwn['specialty_name']
+                        && $group['course'] === $gvOwn['course']) ? 'notice' : null;
+                }
+            }
+        }
     }
 @endphp
 
-@if($gvShow)
+@if($gvMode === 'vote')
 <div id="gvBackdrop" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,39,72,.6);">
     <div style="display:flex;flex-direction:column;width:min(480px,100%);max-height:calc(100vh - 40px);overflow:hidden;border-radius:12px;background:#fff;box-shadow:0 24px 64px rgba(15,39,72,.35);font-family:inherit;">
         <div style="padding:18px 20px;background:#0f2748;color:#fff;">
@@ -102,6 +134,46 @@
             alert(error.message);
             submit.disabled = false;
         }
+    });
+})();
+</script>
+@endif
+
+@if($gvMode === 'notice')
+<div id="gvNotice" style="position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,39,72,.45);">
+    <div style="width:min(380px,100%);overflow:hidden;border-radius:12px;background:#fff;box-shadow:0 20px 52px rgba(15,39,72,.3);font-family:inherit;">
+        <div style="display:flex;align-items:center;gap:11px;padding:15px 18px;background:#0f7a52;color:#fff;">
+            <span style="font-size:19px;line-height:1;">&#10003;</span>
+            <h3 style="margin:0;font-size:14.5px;font-weight:800;">Sizning guruhingiz o'zgarmaydi</h3>
+        </div>
+        <div style="padding:15px 18px;color:#41506b;font-size:12.5px;line-height:1.65;">
+            Hozir ba'zi guruhlarda talabalarni taqsimlash ketmoqda, ammo
+            <b style="color:#17233a;">{{ $gvStudent->group_name }}</b> guruhi bunga kirmaydi.
+            Siz o'z guruhingizda qolasiz va <b style="color:#17233a;">ovoz berishingiz shart emas</b>.
+        </div>
+        <div style="padding:0 18px 15px;color:#8798b1;font-size:11.5px;">
+            Yopish uchun istalgan joyga bosing.
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    // Xabar bir marta ko'rsatiladi: yopilgach shu brauzerda qayta chiqmaydi.
+    // Saqlash imkoni bo'lmasa (maxfiy oyna) — har safar chiqaveradi, bu xato emas.
+    const KEY = 'gvNoticeSeen:{{ $gvStudent->id }}:{{ (int) $gvStudent->group_id }}';
+    const notice = document.getElementById('gvNotice');
+
+    try {
+        if (localStorage.getItem(KEY)) {
+            notice.remove();
+            return;
+        }
+    } catch (e) { /* saqlash yopiq — xabar baribir ko'rsatiladi */ }
+
+    notice.addEventListener('click', () => {
+        try { localStorage.setItem(KEY, '1'); } catch (e) { /* e'tiborsiz */ }
+        notice.remove();
     });
 })();
 </script>

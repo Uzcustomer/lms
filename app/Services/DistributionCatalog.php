@@ -291,22 +291,45 @@ class DistributionCatalog
     /** Guruh ingliz tilida o'qiydimi. */
     public function isEnglish(array $group): bool
     {
-        $name = mb_strtolower(trim((string) ($group['language_name'] ?? '')));
-        if ($name !== '' && (str_contains($name, 'ingliz') || str_contains($name, 'english') || str_contains($name, 'англ'))) {
-            return true;
-        }
-
-        $code = mb_strtolower(trim((string) ($group['language_code'] ?? '')));
-
-        return in_array($code, ['en', 'eng', 'en-us', '14'], true);
+        return $this->languageKey($group) === 'en';
     }
 
     /** Ta'lim tilini solishtirish uchun kalit. */
     public function languageKey(array $group): string
     {
-        $value = $group['language_code'] ?: ($group['language_name'] ?? '');
+        // Til kodi va nomi bitta kalitga keltiriladi: HEMIS bir guruhda kod,
+        // boshqasida faqat nom berishi mumkin ("uz" ↔ "O'zbekcha"), ular bir xil
+        // til sifatida qaralishi kerak.
+        $code = mb_strtolower(trim((string) ($group['language_code'] ?? '')));
+        $name = mb_strtolower(trim((string) ($group['language_name'] ?? '')));
 
-        return mb_strtolower(trim((string) $value));
+        foreach ([
+            'uz' => ['uz', 'uzb', 'oz', '11', "o'z", 'ўз'],
+            'ru' => ['ru', 'rus', '12', 'рус'],
+            'en' => ['en', 'eng', 'en-us', '14'],
+        ] as $key => $codes) {
+            if ($code !== '' && in_array($code, $codes, true)) {
+                return $key;
+            }
+        }
+
+        foreach ([
+            'uz' => ['ozbek', "o'zbek", 'o‘zbek', 'uzbek', 'ўзбек', 'узбек'],
+            'ru' => ['rus', 'русск', 'rossiya'],
+            'en' => ['ingliz', 'english', 'англ'],
+        ] as $key => $needles) {
+            foreach ($needles as $needle) {
+                if ($name !== '' && str_contains($name, $needle)) {
+                    return $key;
+                }
+            }
+        }
+
+        // Til aniqlanmadi. Bunday guruhlarni bir-biriga mos deb hisoblab
+        // bo'lmaydi — har biri o'z kaliti bilan ajralib turadi.
+        $raw = $code !== '' ? $code : $name;
+
+        return $raw !== '' ? 'x:' . $raw : 'x:' . (string) $group['group_hemis_id'];
     }
 
     /** HEMIS level_code (11..16 yoki 1..8) ni kurs raqamiga aylantiradi. */

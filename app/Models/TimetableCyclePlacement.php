@@ -8,9 +8,7 @@ class TimetableCyclePlacement extends Model
 {
     protected $fillable = [
         'board_id', 'specialty_name', 'course', 'group_name',
-        'subject_name', 'start_index',
-        'teacher_id', 'teacher_name', 'lesson_time',
-        'auditorium_code', 'auditorium_name',
+        'subject_name', 'start_index', 'lesson_time',
     ];
 
     protected $casts = [

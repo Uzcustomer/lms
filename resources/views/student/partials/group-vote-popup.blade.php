@@ -23,7 +23,11 @@
             || (\Illuminate\Support\Facades\Schema::hasTable('distribution_voting_students')
                 && \App\Models\DistributionVotingStudent::query()->where('student_id', $gvStudent->id)->exists());
 
-        $gvVoted = \App\Models\DistributionVote::query()->where('student_id', $gvStudent->id)->exists();
+        // Ovoz bergan yoki registrator qo'lda boshqa guruhga ko'chirgan talaba
+        // uchun tanlov tugagan — popup ikkalasida ham chiqmaydi.
+        $gvVoted = \App\Models\DistributionVote::query()->where('student_id', $gvStudent->id)->exists()
+            || (\Illuminate\Support\Facades\Schema::hasTable('distribution_draft_assignments')
+                && \App\Models\DistributionDraftAssignment::query()->where('student_id', $gvStudent->id)->exists());
 
         if ($gvAllowed && !$gvVoted) {
             $gvTargets = app(\App\Services\DistributionCatalog::class)->targetsFor((int) $gvStudent->group_id);

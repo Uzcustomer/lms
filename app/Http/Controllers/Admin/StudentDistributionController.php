@@ -609,15 +609,28 @@ class StudentDistributionController extends Controller
             ->whereIn('id', collect($data['student_ids'])->unique())
             ->get(['id', 'group_id']);
 
+        // Qo'lda ko'chirilgan talabaning guruhi hal qilingan — unga ovoz
+        // berish ochilmaydi, aks holda ovozi rejani buzib yuborardi.
+        $assigned = $this->assignedStudentIds($students->pluck('id'));
+        $opened = 0;
+
         foreach ($students as $student) {
+            if ($assigned->has((int) $student->id)) {
+                continue;
+            }
+
             DistributionVotingStudent::updateOrCreate(
                 ['student_id' => $student->id],
                 ['group_hemis_id' => (int) $student->group_id, 'opened_by' => Auth::id()]
             );
+            $opened++;
         }
 
+        $skipped = $students->count() - $opened;
+
         return response()->json([
-            'message' => $students->count() . ' ta talabaga ovoz berish ochildi.',
+            'message' => $opened . ' ta talabaga ovoz berish ochildi.'
+                . ($skipped ? ' ' . $skipped . " ta talaba qo'lda ko'chirilgani uchun o'tkazib yuborildi." : ''),
             'voting_student_count' => DistributionVotingStudent::query()->count(),
         ]);
     }
@@ -717,7 +730,11 @@ class StudentDistributionController extends Controller
                 ->groupBy(fn ($student) => (int) $student->group_id)
             : collect();
 
-        $groups = $openGroups->map(function (DistributionVotingGroup $row) use ($catalog, $memberIds, $voted) {
+        // Qo'lda ko'chirilganlar ovoz bermaydi — ular ham "hal bo'lgan" hisobga
+        // kiradi, aks holda qator hech qachon to'liq ko'rinmasdi.
+        $assigned = $this->assignedStudentIds($memberIds->flatten()->pluck('id'));
+
+        $groups = $openGroups->map(function (DistributionVotingGroup $row) use ($catalog, $memberIds, $voted, $assigned) {
             $groupId = (int) $row->group_hemis_id;
             $members = $memberIds->get($groupId, collect());
             $group = $catalog->get($groupId);
@@ -729,7 +746,8 @@ class StudentDistributionController extends Controller
                 'specialty_name' => $group['specialty_name'] ?? '',
                 'course' => $group['course'] ?? null,
                 'student_count' => $members->count(),
-                'voted_count' => $members->filter(fn ($student) => $voted->has((int) $student->id))->count(),
+                'voted_count' => $members->filter(fn ($student) => $voted->has((int) $student->id)
+                    || $assigned->has((int) $student->id))->count(),
             ];
         })->values();
 
@@ -982,6 +1000,23 @@ class StudentDistributionController extends Controller
      *    boshqa joylarida ham shu usul ishlatiladi, alohida kod yo'q;
      *  - faqat `groups` jadvalida faol deb belgilangan guruhlar.
      */
+    /**
+     * Berilganlardan qaysilari reja bo'yicha allaqachon ko'chirilgan.
+     * Qaytadi: talaba id => true (isset uchun).
+     */
+    private function assignedStudentIds(Collection $studentIds): Collection
+    {
+        if ($studentIds->isEmpty() || !Schema::hasTable('distribution_draft_assignments')) {
+            return collect();
+        }
+
+        return DistributionDraftAssignment::query()
+            ->whereIn('student_id', $studentIds->map(fn ($id) => (int) $id)->all())
+            ->pluck('student_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+    }
+
     private function groupCatalog(): Collection
     {
         return $this->catalog->groups();

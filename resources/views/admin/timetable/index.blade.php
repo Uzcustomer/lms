@@ -195,6 +195,10 @@
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Ko'rinish rejimi">
+                            <button type="button" id="cycViewFlow" class="px-2 py-1 bg-blue-600 font-semibold text-white">Oqim bo'yicha</button>
+                            <button type="button" id="cycViewGroup" class="px-2 py-1 bg-white text-gray-400 cursor-not-allowed" title="Tez orada" disabled>Guruh bo'yicha</button>
+                        </span>
                         <span id="cycleMsg" class="text-[11px] text-gray-500"></span>
                     </div>
                     <div id="cycleHolBar" class="hidden flex flex-wrap items-center gap-1.5 px-3 py-1.5 border-b border-gray-100 bg-amber-50">
@@ -1074,6 +1078,16 @@
         #cycleGrid .cyc-weekend { background: #fef08a; color: #854d0e; }
         #cycleGrid .cyc-holiday { background: #fecaca !important; color: #991b1b; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
+        #cycleGrid .cyc-pcol { width: 26px; min-width: 26px; padding: 0 3px; background: #f1f5f9; color: #64748b;
+            font-size: 9px; font-weight: 700; text-align: center; border: 1px solid #e2e8f0; }
+        #cycleGrid .cyc-type { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: 3px;
+            border-radius: 4px; font-size: 8px; font-weight: 800; color: #fff; vertical-align: middle; }
+        #cycleGrid .cyc-type.lecture { background: #4f46e5; }
+        #cycleGrid .cyc-type.practice { background: #0d9488; }
+        .cycle-pn-type { display: inline-block; margin-right: 4px; padding: 1px 5px; border-radius: 4px;
+            font-size: 8.5px; font-weight: 800; color: #fff; }
+        .cycle-pn-type.lecture { background: #4f46e5; }
+        .cycle-pn-type.practice { background: #0d9488; }
         #cycleGrid .cyc-req { display: block; padding: 0 4px 1px; font-size: 9px; font-weight: 500; color: #334155;
             opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #cycleGrid .cyc-gear { width: 19px; height: 19px; padding: 0; border: 1px solid rgba(30,64,175,.35); border-radius: 5px;
@@ -3176,12 +3190,13 @@
             }
             // Sikl panjarasi interaktiv ko'rinishda chiziladi: bo'sh katakka fan
             // kartasini sudrash uning start indeksini saqlaydi.
-            async function placeCycleCardAt(card, index) {
+            async function placeCycleCardAt(card, index, pair) {
                 if (!card) return;
                 try {
                     await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                         action: 'place', specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject, start_index: index,
+                        training_type: card.type || 'practice', pair: pair || 1,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
@@ -3215,7 +3230,7 @@
                 if (!card || !card.placed) return;
                 cycAssignCard = card;
 
-                $('cycAssignTitle').textContent = card.subject;
+                $('cycAssignTitle').textContent = card.subject + (card.type === 'lecture' ? " — Ma'ruza" : ' — Amaliy');
                 $('cycAssignMeta').textContent = card.group + ' · ' + card.days + ' kun';
                 $('cycAssignKafedra').textContent = "O'qituvchi";
                 $('cycAssignTeacher').innerHTML = '<option value="">Yuklanmoqda...</option>';
@@ -3227,6 +3242,7 @@
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-assign-options', 'POST', {
                         specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject,
+                        training_type: card.type || 'practice',
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
 
@@ -3274,6 +3290,7 @@
                     await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
                         specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
                         group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
+                        training_type: cycAssignCard.type || 'practice',
                         teacher_id: null, lesson_time: null, auditorium_code: null,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
@@ -3299,6 +3316,7 @@
                     await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
                         specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
                         group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
+                        training_type: cycAssignCard.type || 'practice',
                         teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
                         lesson_time: $('cycAssignTime').value.trim() || null,
                         auditorium_code: $('cycAssignRoom').value || null,
@@ -3320,39 +3338,49 @@
                     renderCycleCards(j);
                     return;
                 }
-                let h = '<colgroup><col class="cyc-group-col">';
+                const pairs = Math.max(1, +j.pairs || 1);
+                let h = '<colgroup><col class="cyc-group-col"><col style="width:26px">';
                 dates.forEach(() => h += '<col class="cyc-date-col">');
-                h += '</colgroup><thead><tr><th class="cyc-gcol">Oqim</th>';
+                h += '</colgroup><thead><tr><th class="cyc-gcol">Oqim</th><th class="cyc-pcol" title="Juftlik">J</th>';
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
-                    h += '<tr><td class="cyc-gcol">' + cycleMembersHtml(row.group, row.subgroups) + '</td>';
-                    let col = 0;
-                    (row.blocks || []).forEach(block => {
-                        while (col < block.from) {
-                            h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
+                    for (let pair = 1; pair <= pairs; pair++) {
+                        h += '<tr>';
+                        if (pair === 1) {
+                            h += '<td class="cyc-gcol" rowspan="' + pairs + '">' + cycleMembersHtml(row.group, row.subgroups) + '</td>';
+                        }
+                        h += '<td class="cyc-pcol">' + pair + '</td>';
+                        const pairBlocks = (row.blocks || []).filter(block => (+block.pair || 1) === pair)
+                            .sort((a, b) => a.from - b.from);
+                        let col = 0;
+                        pairBlocks.forEach(block => {
+                            while (col < block.from) {
+                                h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + col + '"></td>';
+                                col++;
+                            }
+                            const color = subjColor(block.subject);
+                            const reqParts = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
+                                .filter(Boolean);
+                            const req = reqParts.join(' · ');
+                            const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
+                            const typeChip = '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
+                            h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (req ? ' · ' + esc(req) : '') + '">' +
+                                '<span class="cyc-shift-actions">' +
+                                '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
+                                '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
+                                '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
+                                '</span><span class="cyc-lbl">' + typeChip + esc(block.subject) + ' <b>' + block.days + '</b></span>' +
+                                reqHtml +
+                                '</td>';
+                            col = block.to + 1;
+                        });
+                        while (col < dates.length) {
+                            h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + col + '"></td>';
                             col++;
                         }
-                        const color = subjColor(block.subject);
-                        const reqParts = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
-                            .filter(Boolean);
-                        const req = reqParts.join(' · ');
-                        const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
-                        h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (req ? ' · ' + esc(req) : '') + '">' +
-                            '<span class="cyc-shift-actions">' +
-                            '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
-                            '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
-                            '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                            '</span><span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span>' +
-                            reqHtml +
-                            '</td>';
-                        col = block.to + 1;
-                    });
-                    while (col < dates.length) {
-                        h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
-                        col++;
+                        h += '</tr>';
                     }
-                    h += '</tr>';
                 });
                 h += '</tbody>';
                 $('cycleGrid').innerHTML = h;
@@ -3387,6 +3415,7 @@
                             await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                                 action: 'place', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: index,
+                                training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1,
                                 start_date: $('cycleStart').value, holidays: cycleHolidays,
                             });
                             await loadCyclePlan();
@@ -3408,7 +3437,7 @@
                             alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
                             return;
                         }
-                        placeCycleCardAt(card, index);
+                        placeCycleCardAt(card, index, +cell.dataset.cyclePair || 1);
                     });
                 });
                 $('cycleGrid').querySelectorAll('.cyc-block[data-cycle-key]').forEach(block => {
@@ -3442,6 +3471,7 @@
                             const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
+                                training_type: card.type || 'practice', pair: card.pair || 1,
                                 direction: direction, start_date: $('cycleStart').value, holidays: cycleHolidays,
                             });
                             await loadCyclePlan();
@@ -3485,10 +3515,11 @@
                     // Panel kartasi jadvaldagi blok bilan bir xil rangda — qaysi fan
                     // qayerga tushishi ko'rinib tursin.
                     const color = subjColor(card.subject);
+                    const typeChip = '<span class="cycle-pn-type ' + (card.type || 'practice') + '">' + (card.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '</span>';
                     return '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) +
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
                         'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
-                        '<span class="cycle-pn-subject">' + esc(card.subject) + '</span>' +
+                        '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + '</span>' +
                         '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
@@ -3524,6 +3555,7 @@
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                             action: 'remove', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject,
+                            training_type: card.type || 'practice',
                         });
                         await loadCyclePlan();
                     } catch (e) { alert('Sikl blokini olib bo‘lmadi: ' + e.message); }

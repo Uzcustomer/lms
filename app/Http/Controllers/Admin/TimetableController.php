@@ -3699,15 +3699,44 @@ class TimetableController extends Controller
                     $byFlow[$flowKey]['members'][$member] = true;
 
                     // Rekvizitlar kartalardan: Biriktirish tabi bilan bitta manba.
-                    if (!isset($byFlow[$flowKey]['req'][$c->subject_name])) {
-                        $byFlow[$flowKey]['req'][$c->subject_name] = ['teachers' => [], 'auds' => []];
+                    $reqKey = $c->subject_name . '|practice';
+                    if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
+                        $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
                     }
                     if ($c->teacher_name) {
-                        $byFlow[$flowKey]['req'][$c->subject_name]['teachers'][$c->teacher_name] = true;
+                        $byFlow[$flowKey]['req'][$reqKey]['teachers'][$c->teacher_name] = true;
                     }
                     if ($c->auditorium_name || $c->auditorium_code) {
-                        $byFlow[$flowKey]['req'][$c->subject_name]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
+                        $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
+                }
+            }
+        }
+
+        // Ma'ruza kartalarining rekvizitlari (o'qituvchi/xona) ham blokda ko'rinsin.
+        if (!empty($cycleKey)) {
+            foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture')->get() as $c) {
+                if (!$inScope($c)) {
+                    continue;
+                }
+                $ck = $normKey($c->specialty_name, $c->course, $c->subject_name);
+                if (!isset($cycleKey[$ck])) {
+                    continue;
+                }
+                $flow = $this->cycleFlowName($c);
+                $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
+                if (!isset($byFlow[$flowKey])) {
+                    continue;
+                }
+                $reqKey = $c->subject_name . '|lecture';
+                if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
+                    $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
+                }
+                if ($c->teacher_name) {
+                    $byFlow[$flowKey]['req'][$reqKey]['teachers'][$c->teacher_name] = true;
+                }
+                if ($c->auditorium_name || $c->auditorium_code) {
+                    $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                 }
             }
         }
@@ -3730,6 +3759,7 @@ class TimetableController extends Controller
                 ?: strnatcasecmp($a['name'], $b['name']);
         });
 
+        $pairsPerDay = max(1, (int) $board->pairs_per_day);
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
         $subjectKey = fn($g, $subject) => $rowKey($g) . '|' . (string) $subject;
         $autoRows = [];
@@ -3799,12 +3829,28 @@ class TimetableController extends Controller
                         continue;
                     }
                     foreach ($row['blocks'] as $block) {
+                        // Ma'ruza 1-juftlikda, amaliy 2-juftlikda (bitta juftlik
+                        // bo'lsa faqat amaliy) — bir xil sana oynasida parallel.
+                        if ($pairsPerDay >= 2) {
+                            TimetableCyclePlacement::create([
+                                'board_id' => $board->id,
+                                'specialty_name' => $row['specialty'],
+                                'course' => $row['course'],
+                                'group_name' => $row['group'],
+                                'subject_name' => $block['subject'],
+                                'training_type' => 'lecture',
+                                'pair' => 1,
+                                'start_index' => $block['from'],
+                            ]);
+                        }
                         TimetableCyclePlacement::create([
                             'board_id' => $board->id,
                             'specialty_name' => $row['specialty'],
                             'course' => $row['course'],
                             'group_name' => $row['group'],
                             'subject_name' => $block['subject'],
+                            'training_type' => 'practice',
+                            'pair' => $pairsPerDay >= 2 ? 2 : 1,
                             'start_index' => $block['from'],
                         ]);
                     }
@@ -3862,13 +3908,17 @@ class TimetableController extends Controller
                 if ($to === null) {
                     continue;
                 }
-                $req = $g['req'][$placement->subject_name] ?? ['teachers' => [], 'auds' => []];
+                $blockType = $placement->training_type ?: 'practice';
+                $blockPair = max(1, (int) ($placement->pair ?: 1));
+                $req = $g['req'][$placement->subject_name . '|' . $blockType] ?? ['teachers' => [], 'auds' => []];
                 $teacherNames = array_keys($req['teachers']);
                 $audNames = array_keys($req['auds']);
 
                 $blocks[] = [
-                    'key' => $subjectKey($g, $placement->subject_name),
+                    'key' => $subjectKey($g, $placement->subject_name) . '|' . $blockType,
                     'subject' => $placement->subject_name,
+                    'type' => $blockType,
+                    'pair' => $blockPair,
                     'from' => $from,
                     'to' => $to,
                     'days' => (int) $days,
@@ -3882,20 +3932,24 @@ class TimetableController extends Controller
                         : null,
                 ];
             }
-            $placedSubjects = collect($blocks)->keyBy('subject');
+            $placedSubjects = collect($blocks)->keyBy(fn ($b) => $b['subject'] . '|' . $b['type']);
             foreach ($g['subs'] as $subject => $days) {
-                $block = $placedSubjects->get($subject);
-                $cycleCards[] = [
-                    'key' => $subjectKey($g, $subject),
-                    'row_key' => $rk,
-                    'group' => $g['name'],
-                    'specialty' => $g['specialty'],
-                    'course' => $g['course'],
-                    'subject' => $subject,
-                    'days' => (int) $days,
-                    'placed' => (bool) $block,
-                    'start_index' => $block['from'] ?? null,
-                ];
+                foreach (['lecture', 'practice'] as $cardType) {
+                    $block = $placedSubjects->get($subject . '|' . $cardType);
+                    $cycleCards[] = [
+                        'key' => $subjectKey($g, $subject) . '|' . $cardType,
+                        'row_key' => $rk,
+                        'group' => $g['name'],
+                        'specialty' => $g['specialty'],
+                        'course' => $g['course'],
+                        'subject' => $subject,
+                        'type' => $cardType,
+                        'days' => (int) $days,
+                        'placed' => (bool) $block,
+                        'pair' => $block['pair'] ?? null,
+                        'start_index' => $block['from'] ?? null,
+                    ];
+                }
             }
             $members = array_keys($g['members']);
             sort($members, SORT_NATURAL);
@@ -3927,6 +3981,7 @@ class TimetableController extends Controller
             }, $dates),
             'subjects'   => array_map(fn($sn) => ['name' => $sn, 'days' => $allSubs[$sn]], $subOrder),
             'rows'       => $rows,
+            'pairs'      => $pairsPerDay,
             'cycle_cards' => $cycleCards,
         ]);
     }
@@ -3947,6 +4002,7 @@ class TimetableController extends Controller
             'course'         => 'required|integer|min:1|max:7',
             'group_name'     => 'required|string|max:255',
             'subject_name'   => 'required|string|max:255',
+            'training_type'  => 'nullable|in:lecture,practice',
             'start_date'     => 'nullable|date',
             'holidays'       => 'nullable|array',
         ]);
@@ -3956,7 +4012,7 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu blok hali jadvalga joylanmagan.'], 422);
         }
 
-        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name']);
+        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name'], $data['training_type'] ?? null);
         if ($flowCards->isEmpty()) {
             return response()->json(['error' => 'Bu oqim uchun fan kartalari topilmadi.'], 422);
         }
@@ -4024,6 +4080,7 @@ class TimetableController extends Controller
             'course'          => 'required|integer|min:1|max:7',
             'group_name'      => 'required|string|max:255',
             'subject_name'    => 'required|string|max:255',
+            'training_type'   => 'nullable|in:lecture,practice',
             'teacher_id'      => 'nullable|integer|exists:teachers,id',
             'lesson_time'     => 'nullable|string|max:50',
             'auditorium_code' => 'nullable|string|max:50',
@@ -4036,7 +4093,7 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu blok hali jadvalga joylanmagan.'], 422);
         }
 
-        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name']);
+        $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name'], $data['training_type'] ?? null);
         if ($flowCards->isEmpty()) {
             return response()->json(['error' => 'Bu oqim uchun fan kartalari topilmadi.'], 422);
         }
@@ -4092,11 +4149,13 @@ class TimetableController extends Controller
             ->where('course', (int) $data['course'])
             ->where('group_name', $data['group_name'])
             ->where('subject_name', $data['subject_name'])
+            ->when(!empty($data['training_type']), fn ($q) => $q
+                ->where(fn ($w) => $w->where('training_type', $data['training_type'])->orWhereNull('training_type')))
             ->first();
     }
 
     /** Oqimga tegishli fan kartalari (ma'ruza ham, amaliyot ham). */
-    private function cycleFlowCards(TimetableBoard $board, string $specialty, int $course, string $subject, string $flow)
+    private function cycleFlowCards(TimetableBoard $board, string $specialty, int $course, string $subject, string $flow, ?string $type = null)
     {
         $subjectLower = mb_strtolower(trim($subject));
         $flowLower = mb_strtolower(trim($flow));
@@ -4105,7 +4164,10 @@ class TimetableController extends Controller
             ->where('specialty_name', $specialty)
             ->where('course', $course)
             ->get()
-            ->filter(function (TimetableCard $card) use ($subjectLower, $flowLower) {
+            ->filter(function (TimetableCard $card) use ($subjectLower, $flowLower, $type) {
+                if ($type !== null && $card->training_type !== $type) {
+                    return false;
+                }
                 if (mb_strtolower(trim((string) $card->subject_name)) !== $subjectLower) {
                     return false;
                 }
@@ -4190,17 +4252,18 @@ class TimetableController extends Controller
 
             if ($card->training_type === 'practice') {
                 foreach ($this->cycleCardGroups($card) as $member) {
-                    $key = $base . mb_strtolower($this->cycleFlowName($card, $member));
+                    $key = $base . mb_strtolower($this->cycleFlowName($card, $member)) . '|practice';
                     $roomByKey[$key] = $roomByKey[$key] ?? $card->auditorium_code;
                 }
             } else {
-                $key = $base . mb_strtolower($this->cycleFlowName($card));
+                $key = $base . mb_strtolower($this->cycleFlowName($card)) . '|' . $card->training_type;
                 $roomByKey[$key] = $roomByKey[$key] ?? $card->auditorium_code;
             }
         }
 
         $keyOf = fn ($item) => mb_strtolower(trim((string) $item->specialty_name)) . '|' . (int) $item->course . '|'
-            . mb_strtolower(trim((string) $item->subject_name)) . '|' . mb_strtolower(trim((string) $item->group_name));
+            . mb_strtolower(trim((string) $item->subject_name)) . '|' . mb_strtolower(trim((string) $item->group_name))
+            . '|' . mb_strtolower(trim((string) ($item->training_type ?? '') ?: 'practice'));
 
         $from = (int) $placement->start_index;
         $to = $endIndexFor($from, $daysOf($placement)) ?? $from;
@@ -4243,6 +4306,8 @@ class TimetableController extends Controller
             'group_name' => 'required|string|max:255',
             'subject_name' => 'required|string|max:255',
             'start_index' => 'nullable|integer|min:0',
+            'training_type' => 'required|in:lecture,practice',
+            'pair' => 'nullable|integer|min:1|max:12',
             'action' => 'required|in:place,remove,shift',
             'direction' => 'nullable|integer|in:-1,1',
             'start_date' => 'nullable|date',
@@ -4261,14 +4326,18 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu fan sikl rejimida topilmadi.'], 422);
         }
 
+        $reqPair = max(1, min(12, (int) ($data['pair'] ?? 1)));
         $scopeCards = TimetableCard::where('board_id', $board->id)
             ->where('course', (int) $data['course'])
             ->where('specialty_name', $data['specialty_name'])
-            ->where('training_type', 'practice')
             ->get();
         // Qator identifikatori — OQIM (cyclePlan bilan bir xil mantiq): karta
         // `oqim_label` bo'yicha, label'siz eski kartalarda asosiy guruh bo'yicha.
         $cardFlows = function (TimetableCard $card) use ($norm): array {
+            if ($card->training_type !== 'practice') {
+                $flow = $norm($this->cycleFlowName($card));
+                return $flow !== '' ? [$flow] : [];
+            }
             $flows = [];
             foreach ($this->cycleCardGroups($card) as $member) {
                 $flow = $norm($this->cycleFlowName($card, $member));
@@ -4281,6 +4350,9 @@ class TimetableController extends Controller
         $activeFlows = $scopeCards->flatMap($cardFlows)->filter()->flip()->all();
         $cards = $scopeCards
             ->filter(function ($card) use ($data, $norm, $cardFlows) {
+                if ($card->training_type !== $data['training_type']) {
+                    return false;
+                }
                 $inFlow = in_array($norm($data['group_name']), $cardFlows($card), true);
                 return $inFlow
                     && $norm($card->subject_name) === $norm($data['subject_name']);
@@ -4356,6 +4428,7 @@ class TimetableController extends Controller
                 if ($norm(data_get($placement, 'specialty_name')) !== $norm($data['specialty_name'])
                     || (int) data_get($placement, 'course') !== (int) $data['course']
                     || $norm(data_get($placement, 'subject_name')) !== $norm($subject)
+                    || $norm(data_get($placement, 'training_type') ?: 'practice') !== $norm($data['training_type'])
                     || $norm(data_get($placement, 'group_name')) === $norm($flow)
                     || !isset($activeFlows[$norm(data_get($placement, 'group_name'))])) {
                     continue;
@@ -4417,6 +4490,7 @@ class TimetableController extends Controller
                     && (int) data_get($placement, 'course') === (int) $data['course']
                     && $norm(data_get($placement, 'group_name')) === $norm($data['group_name'])
                     && $norm(data_get($placement, 'subject_name')) === $norm($data['subject_name'])
+                    && $norm(data_get($placement, 'training_type') ?: 'practice') === $norm($data['training_type'])
                     && (int) data_get($placement, 'start_index') === $currentStart;
             };
             $isRow = function ($placement) use ($data, $norm): bool {
@@ -4426,10 +4500,13 @@ class TimetableController extends Controller
             };
             $shifted = 0;
             if ($hasCyclePlacements) {
+                // Kaskad faqat shu juftlik qatorida — boshqa juftlikdagi
+                // bloklar joyida qoladi.
                 $placements = TimetableCyclePlacement::where('board_id', $board->id)
                     ->where('specialty_name', $data['specialty_name'])
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
+                    ->where(fn ($q) => $q->where('pair', $reqPair)->orWhereNull('pair'))
                     ->orderBy('start_index')->get();
                 $toShift = [];
                 $targetFound = false;
@@ -4490,6 +4567,7 @@ class TimetableController extends Controller
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
                     ->where('subject_name', $data['subject_name'])
+                    ->where(fn ($q) => $q->where('training_type', $data['training_type'])->orWhereNull('training_type'))
                     ->delete();
             } else {
                 $set['cycle_placements'] = collect($set['cycle_placements'] ?? [])
@@ -4533,7 +4611,10 @@ class TimetableController extends Controller
         }
         $endPosition = $startPosition + $requiredDays - 1;
         foreach ($others->sortBy('start_index') as $other) {
-            if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
+            // Boshqa juftlikdagi blok bu juftlikka xalaqit bermaydi.
+            if (max(1, (int) ($other->pair ?? 1)) !== $reqPair) continue;
+            if ($norm($other->subject_name) === $norm($data['subject_name'])
+                && $norm($other->training_type ?? 'practice') === $norm($data['training_type'])) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);
             if ($otherStartPosition === null) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
@@ -4564,7 +4645,8 @@ class TimetableController extends Controller
                 'course' => (int) $data['course'],
                 'group_name' => $data['group_name'],
                 'subject_name' => $data['subject_name'],
-            ], ['start_index' => $from]);
+                'training_type' => $data['training_type'],
+            ], ['start_index' => $from, 'pair' => $reqPair]);
         } else {
             $fallback = collect($set['cycle_placements'] ?? [])
                 ->reject(fn($item) => ($item['specialty_name'] ?? '') === $data['specialty_name']

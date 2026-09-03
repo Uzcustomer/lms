@@ -4066,9 +4066,9 @@ class TimetableController extends Controller
         }
 
         TimetableCard::whereIn('id', $flowCards->pluck('id'))->update([
-            'teacher_id' => $data['teacher_id'] ?: null,
+            'teacher_id' => ($data['teacher_id'] ?? null) ?: null,
             'teacher_name' => $teacherName,
-            'auditorium_code' => $data['auditorium_code'] ?: null,
+            'auditorium_code' => ($data['auditorium_code'] ?? null) ?: null,
             'auditorium_name' => $roomName,
         ]);
 

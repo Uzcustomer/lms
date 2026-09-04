@@ -1086,6 +1086,7 @@
             border-radius: 4px; font-size: 8px; font-weight: 800; color: #fff; vertical-align: middle; }
         #cycleGrid .cyc-type.lecture { background: #4f46e5; }
         #cycleGrid .cyc-type.practice { background: #0d9488; }
+        #cycleGrid .cyc-hrs { margin-left: 3px; font-style: normal; font-weight: 700; font-size: 8.5px; color: #475569; }
         .cycle-pn-type { display: inline-block; margin-right: 4px; padding: 1px 5px; border-radius: 4px;
             font-size: 8.5px; font-weight: 800; color: #fff; }
         .cycle-pn-type.lecture { background: #4f46e5; }
@@ -3377,12 +3378,12 @@
                             const req = reqParts.join(' · ');
                             const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
                             const typeChip = '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
-                            h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (req ? ' · ' + esc(req) : '') + '">' +
+                            h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
                                 '<span class="cyc-shift-actions">' +
                                 '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
                                 '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
                                 '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                                '</span><span class="cyc-lbl">' + typeChip + esc(block.subject) + ' <b>' + block.days + '</b></span>' +
+                                '</span><span class="cyc-lbl">' + typeChip + esc(block.subject) + ' <b>' + block.days + '</b>' + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
                                 reqHtml +
                                 '</td>';
                             col = block.to + 1;
@@ -3532,7 +3533,7 @@
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
                         'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
                         '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + '</span>' +
-                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>';
+                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span></div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     // Bosib tanlash: sudrash ishlamagan holatlarda ham karta

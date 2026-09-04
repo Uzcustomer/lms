@@ -3426,89 +3426,89 @@
                 });
                 h += '</tbody>';
                 $('cycleGrid').innerHTML = h;
-                $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {
-                    // dragover'da preventDefault bo'lmasa brauzer drop'ni umuman
-                    // bermaydi, shuning uchun katak har qanday sudrashni qabul qiladi;
-                    // karta o'zi drop'da tekshiriladi.
-                    cell.addEventListener('dragenter', ev => ev.preventDefault());
-                    cell.addEventListener('dragover', ev => {
-                        ev.preventDefault();
-                        if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
-                        cell.classList.add('cycle-drop-target');
-                    });
-                    cell.addEventListener('dragleave', () => cell.classList.remove('cycle-drop-target'));
-                    cell.addEventListener('drop', async ev => {
-                        ev.preventDefault();
-                        cell.classList.remove('cycle-drop-target');
-                        // Kalit sudrash boshlanganda saqlanadi; ba'zi brauzerlarda
-                        // u yo'qolsa, dataTransfer'dagi nusxadan olinadi.
-                        const key = cycleDragKey || (ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '';
-                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
-                        const rowKey = cell.dataset.cycleRow;
-                        const index = +cell.dataset.cycleIndex;
-                        cycleDragKey = null;
-                        if (!card) return;
-                        if (card.row_key !== rowKey) {
-                            console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
-                            alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
-                            return;
-                        }
-                        try {
-                            await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                                action: 'place', specialty_name: card.specialty, course: card.course,
-                                group_name: card.group, subject_name: card.subject, start_index: index,
-                                training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleViewMode,
-                                start_date: $('cycleStart').value, holidays: cycleHolidays,
-                            });
-                            await loadCyclePlan();
-                        } catch (e) {
-                            console.error('Sikl joylash xatosi', {karta: card, index: index, xato: e.message});
-                            alert('Sikl blokini joylab bo‘lmadi: ' + e.message);
-                        }
-                    });
+                setupCycleGridEvents();
+                renderCycleCards(j);
+            }
+
+            // ── Sikl jadvali hodisalari (delegatsiya) ──
+            // Har renderda minglab katakka to'rttadan listener ulash drag
+            // paytida interfeysni qotirardi; endi butun jadvalga bir marta
+            // ulanadi va render faqat innerHTML almashtiradi.
+            let cycleDropCell = null;
+            let cycleGridEventsReady = false;
+            function setupCycleGridEvents() {
+                if (cycleGridEventsReady) return;
+                cycleGridEventsReady = true;
+                const grid = $('cycleGrid');
+                const cellOf = ev => ev.target && ev.target.closest ? ev.target.closest('[data-cycle-index]') : null;
+                const clearDropMark = () => {
+                    if (cycleDropCell) { cycleDropCell.classList.remove('cycle-drop-target'); cycleDropCell = null; }
+                };
+                grid.addEventListener('dragenter', ev => { if (cellOf(ev)) ev.preventDefault(); });
+                grid.addEventListener('dragover', ev => {
+                    const cell = cellOf(ev);
+                    if (!cell) return;
+                    // dragover'da preventDefault bo'lmasa brauzer drop'ni umuman bermaydi.
+                    ev.preventDefault();
+                    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+                    if (cycleDropCell !== cell) { clearDropMark(); cycleDropCell = cell; cell.classList.add('cycle-drop-target'); }
                 });
-                $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {
-                    cell.addEventListener('click', () => {
-                        if (!cycleDragKey) return;
-                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
-                        const rowKey = cell.dataset.cycleRow;
-                        const index = +cell.dataset.cycleIndex;
-                        cycleDragKey = null;
-                        highlightCycleRow(null);
-                        if (!card || card.row_key !== rowKey) {
-                            alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
-                            return;
-                        }
-                        placeCycleCardAt(card, index, +cell.dataset.cyclePair || 1);
-                    });
+                grid.addEventListener('dragleave', ev => {
+                    if (!ev.relatedTarget || !grid.contains(ev.relatedTarget)) clearDropMark();
                 });
-                $('cycleGrid').querySelectorAll('.cyc-block[data-cycle-key]').forEach(block => {
-                    block.addEventListener('dragstart', ev => {
-                        cycleDragKey = block.dataset.cycleKey;
-                        ev.dataTransfer.effectAllowed = 'move';
-                        ev.dataTransfer.setData('text/plain', cycleDragKey);
-                        highlightCycleRow(cycleDragKey);
-                    });
-                    block.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); });
+                grid.addEventListener('drop', async ev => {
+                    const cell = cellOf(ev);
+                    if (!cell) return;
+                    ev.preventDefault();
+                    clearDropMark();
+                    // Kalit sudrash boshlanganda saqlanadi; ba'zi brauzerlarda
+                    // u yo'qolsa, dataTransfer'dagi nusxadan olinadi.
+                    const key = cycleDragKey || (ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '';
+                    const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                    const rowKey = cell.dataset.cycleRow;
+                    const index = +cell.dataset.cycleIndex;
+                    cycleDragKey = null;
+                    if (!card) return;
+                    if (card.row_key !== rowKey) {
+                        console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
+                        alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
+                        return;
+                    }
+                    try {
+                        await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                            action: 'place', specialty_name: card.specialty, course: card.course,
+                            group_name: card.group, subject_name: card.subject, start_index: index,
+                            training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleViewMode,
+                            start_date: $('cycleStart').value, holidays: cycleHolidays,
+                        });
+                        await loadCyclePlan();
+                    } catch (e) {
+                        console.error('Sikl joylash xatosi', {karta: card, index: index, xato: e.message});
+                        alert('Sikl blokini joylab bo‘lmadi: ' + e.message);
+                    }
                 });
-                $('cycleGrid').querySelectorAll('[data-cycle-gear]').forEach(button => {
-                    button.addEventListener('mousedown', ev => ev.stopPropagation());
-                    button.addEventListener('dragstart', ev => { ev.preventDefault(); ev.stopPropagation(); });
-                    button.addEventListener('click', ev => {
+                grid.addEventListener('dragstart', ev => {
+                    if (ev.target.closest && ev.target.closest('[data-cycle-gear]')) { ev.preventDefault(); return; }
+                    const block = ev.target && ev.target.closest ? ev.target.closest('.cyc-block[data-cycle-key]') : null;
+                    if (!block) return;
+                    cycleDragKey = block.dataset.cycleKey;
+                    ev.dataTransfer.effectAllowed = 'move';
+                    ev.dataTransfer.setData('text/plain', cycleDragKey);
+                    highlightCycleRow(cycleDragKey);
+                });
+                grid.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); clearDropMark(); });
+                grid.addEventListener('click', async ev => {
+                    const gear = ev.target.closest ? ev.target.closest('[data-cycle-gear]') : null;
+                    if (gear) { ev.preventDefault(); ev.stopPropagation(); openCycleAssign(gear.dataset.cycleGear); return; }
+                    const shiftBtn = ev.target.closest ? ev.target.closest('[data-cycle-shift]') : null;
+                    if (shiftBtn) {
                         ev.preventDefault();
                         ev.stopPropagation();
-                        openCycleAssign(button.dataset.cycleGear);
-                    });
-                });
-                $('cycleGrid').querySelectorAll('[data-cycle-shift]').forEach(button => {
-                    button.addEventListener('click', async ev => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        const block = button.closest('.cyc-block');
+                        const block = shiftBtn.closest('.cyc-block');
                         const card = (cyclePlanData.cycle_cards || []).find(item => item.key === (block && block.dataset.cycleKey));
                         if (!card || !card.placed) return;
-                        const direction = +button.dataset.cycleShift;
-                        button.disabled = true;
+                        const direction = +shiftBtn.dataset.cycleShift;
+                        shiftBtn.disabled = true;
                         try {
                             const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
@@ -3522,11 +3522,23 @@
                         } catch (e) {
                             alert('Sikl kartalarini surib bo\'lmadi: ' + e.message);
                         } finally {
-                            button.disabled = false;
+                            shiftBtn.disabled = false;
                         }
-                    });
+                        return;
+                    }
+                    const cell = cellOf(ev);
+                    if (!cell || !cycleDragKey) return;
+                    const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
+                    const rowKey = cell.dataset.cycleRow;
+                    const index = +cell.dataset.cycleIndex;
+                    cycleDragKey = null;
+                    highlightCycleRow(null);
+                    if (!card || card.row_key !== rowKey) {
+                        alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
+                        return;
+                    }
+                    placeCycleCardAt(card, index, +cell.dataset.cyclePair || 1);
                 });
-                renderCycleCards(j);
             }
             function renderCycleCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];

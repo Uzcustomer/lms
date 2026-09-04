@@ -3772,6 +3772,7 @@ class TimetableController extends Controller
         $hoursFor = fn(string $spec, int $course, string $subject): ?array =>
             $cycleHours[$this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject)] ?? null;
         $fmtHours = fn(?float $v) => $v === null ? null : (fmod($v, 1.0) == 0.0 ? (int) $v : round($v, 1));
+        $rowHours = $this->cycleRowHours($board);
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
         $subjectKey = fn($g, $subject) => $rowKey($g) . '|' . (string) $subject;
         $autoRows = [];
@@ -3830,7 +3831,7 @@ class TimetableController extends Controller
         // kartalarning day/pair maydonlarini buzmasligi kerak.
         $hasCyclePlacements = Schema::hasTable('timetable_cycle_placements');
         if ($hasCyclePlacements && ($request->boolean('clear') || $request->boolean('auto'))) {
-            DB::transaction(function () use ($autoRows, $board, $request, $hoursFor) {
+            DB::transaction(function () use ($autoRows, $board, $request, $hoursFor, $pairsPerDay, $rowHours) {
                 foreach ($autoRows as $row) {
                     TimetableCyclePlacement::where('board_id', $board->id)
                         ->where('specialty_name', $row['specialty'])
@@ -3868,7 +3869,9 @@ class TimetableController extends Controller
                             'group_name' => $row['group'],
                             'subject_name' => $block['subject'],
                             'training_type' => 'practice',
-                            'pair' => $pairsPerDay >= 2 ? 2 : 1,
+                            // Amaliy ma'ruza qatorlari tugagan joydan boshlanadi
+                            // (yarim-para jadvalida ma'ruza 2 qator egallaydi).
+                            'pair' => ($pairsPerDay >= 2 && $lectureDays >= 1) ? 1 + (int) ceil(2 / max(1, $rowHours)) : 1,
                             'start_index' => $block['from'],
                         ]);
                     }
@@ -3935,7 +3938,7 @@ class TimetableController extends Controller
                 // Kunlik para egallashi (6 soat modeli): amaliy blok ma'ruzali
                 // davrda 2, keyin 3 para; ma'ruza 1 para. Klient shu maydonlar
                 // bilan 2-3-paradagi davom segmentlarini chizadi.
-                $span = $this->cycleLaneSpan($blockType, $hrs, max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)));
+                $span = $this->cycleLaneSpan($blockType, $hrs, max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)), $rowHours);
                 $headDays = min((int) $span['head_days'], (int) $days);
                 $headTo = $headDays > 0 ? $endIndexFor($from, $headDays) : null;
                 $tailFrom = $headDays >= $days ? null : ($headDays > 0 ? $endIndexFor($from, $headDays + 1) : $from);
@@ -4311,19 +4314,55 @@ class TimetableController extends Controller
      * topilmasa eski bir-lane xulqi saqlanadi.
      * head_days — blok boshidan nechta O'QUV kuni head rejimida ekani.
      */
-    private function cycleLaneSpan(string $type, ?array $hours, int $cycleDays): array
+    private function cycleLaneSpan(string $type, ?array $hours, int $cycleDays, int $rowHours = 2): array
     {
         $cycleDays = max(1, $cycleDays);
-        if ($hours === null || $type === 'lecture') {
+        $rowHours = max(1, min(2, $rowHours));
+        if ($hours === null) {
             return ['head_span' => 1, 'tail_span' => 0, 'head_days' => $cycleDays];
+        }
+        if ($type === 'lecture') {
+            // Ma'ruza kuniga 2 soat = to'liq bitta para.
+            return ['head_span' => (int) ceil(2 / $rowHours), 'tail_span' => 0, 'head_days' => $cycleDays];
         }
         $lecDays = (int) ceil(((float) ($hours['lecture'] ?? 0)) / 2);
         $lecDays = max(0, min($cycleDays, $lecDays));
         return [
-            'head_span' => $lecDays > 0 ? 2 : 0,
-            'tail_span' => $lecDays < $cycleDays ? 3 : 0,
+            'head_span' => $lecDays > 0 ? (int) ceil(4 / $rowHours) : 0,
+            'tail_span' => $lecDays < $cycleDays ? (int) ceil(6 / $rowHours) : 0,
             'head_days' => $lecDays,
         ];
+    }
+
+    /**
+     * Jadvaldagi bitta para qatori necha akademik soat ekani: qo'ng'iroq
+     * jadvali yarim-paralarda (40-45 daqiqalik qatorlar, masalan 0.5-para,
+     * 1-para, 1.5-para...) bo'lsa 1 soat, to'liq paralarda (80-90 daqiqa) 2.
+     */
+    private function cycleRowHours(TimetableBoard $board): int
+    {
+        $mins = [];
+        foreach ((array) ($board->bell_schedule ?? []) as $it) {
+            $type = is_array($it) ? ($it['type'] ?? '') : ($it->type ?? '');
+            if ($type !== 'pair') {
+                continue;
+            }
+            $startT = (string) (is_array($it) ? ($it['start'] ?? '') : ($it->start ?? ''));
+            $endT = (string) (is_array($it) ? ($it['end'] ?? '') : ($it->end ?? ''));
+            if (!preg_match('/^\d{1,2}:\d{2}$/', $startT) || !preg_match('/^\d{1,2}:\d{2}$/', $endT)) {
+                continue;
+            }
+            [$sh, $sm] = array_map('intval', explode(':', $startT));
+            [$eh, $em] = array_map('intval', explode(':', $endT));
+            $d = ($eh * 60 + $em) - ($sh * 60 + $sm);
+            if ($d > 0) {
+                $mins[] = $d;
+            }
+        }
+        if (!$mins) {
+            return 2;
+        }
+        return (array_sum($mins) / count($mins)) >= 60 ? 2 : 1;
     }
 
     private function cycleOverlappingRoomCodes(TimetableBoard $board, TimetableCyclePlacement $placement, array $data): array
@@ -4477,6 +4516,7 @@ class TimetableController extends Controller
         $cycleHours = $this->cycleSubjectHoursMap($board);
         $hoursFor = fn(string $spec, int $course, string $subject): ?array =>
             $cycleHours[$this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject)] ?? null;
+        $rowHours = $this->cycleRowHours($board);
         $scopeCards = TimetableCard::where('board_id', $board->id)
             ->where('course', (int) $data['course'])
             ->where('specialty_name', $data['specialty_name'])
@@ -4559,7 +4599,8 @@ class TimetableController extends Controller
         $reqSpan = $this->cycleLaneSpan(
             (string) $data['training_type'],
             $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $data['subject_name']),
-            max(1, (int) $setting->cycle_days)
+            max(1, (int) $setting->cycle_days),
+            $rowHours
         );
         $laneMaxSpan = fn(array $sp): int => max(1, (int) $sp['head_span'], (int) $sp['tail_span']);
         $reqLaneTo = $reqPair + $laneMaxSpan($reqSpan) - 1;
@@ -4702,14 +4743,15 @@ class TimetableController extends Controller
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
                     ->orderBy('start_index')->get()
-                    ->filter(function ($p) use ($data, $norm, $cycleSettings, $hoursFor, $laneMaxSpan, $reqPair, $reqLaneTo) {
+                    ->filter(function ($p) use ($data, $norm, $cycleSettings, $hoursFor, $laneMaxSpan, $reqPair, $reqLaneTo, $rowHours) {
                         $pSetting = $cycleSettings->get(
                             $norm($data['specialty_name']) . '|' . (int) $data['course'] . '|' . $norm($p->subject_name)
                         );
                         $span = $this->cycleLaneSpan(
                             (string) ($p->training_type ?: 'practice'),
                             $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $p->subject_name),
-                            max(1, (int) ($pSetting->cycle_days ?? 1))
+                            max(1, (int) ($pSetting->cycle_days ?? 1)),
+                            $rowHours
                         );
                         $pairNo = max(1, (int) ($p->pair ?? 1));
                         return $pairNo + $laneMaxSpan($span) - 1 >= $reqPair && $pairNo <= $reqLaneTo;
@@ -4822,7 +4864,8 @@ class TimetableController extends Controller
             $otherSpan = $this->cycleLaneSpan(
                 (string) ($other->training_type ?: 'practice'),
                 $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $other->subject_name),
-                max(1, (int) ($otherSpanSetting->cycle_days ?? 1))
+                max(1, (int) ($otherSpanSetting->cycle_days ?? 1)),
+                $rowHours
             );
             $otherPairNo = max(1, (int) ($other->pair ?? 1));
             if ($otherPairNo + $laneMaxSpan($otherSpan) - 1 < $reqPair || $otherPairNo > $reqLaneTo) continue;

@@ -203,12 +203,14 @@ class StudentDistributionController extends Controller
      * Talabani boshqa guruhga ko'chirish rejasi.
      *
      * LMS dagi students.group_id o'zgartirilmaydi — bu faqat reja. Maqsadli
-     * guruh talabaning fakulteti, yo'nalishi va kursiga mos bo'lishi shart:
-     * bularda o'quv rejasi boshqa bo'ladi.
+     * guruh talabaning yo'nalishi va kursiga mos bo'lishi shart: bularda o'quv
+     * rejasi boshqa bo'ladi.
      *
-     * Ta'lim tili cheklov emas — registrator boshqa tildagi guruhga ham
-     * o'tkaza oladi, UI tanlashdan oldin buni ogohlantirib chiqadi. Talaba
-     * ovozida esa til hamon bir xil bo'lishi shart.
+     * Ta'lim tili va fakultet cheklov emas: registrator boshqa tildagi guruhga
+     * ham, bir yo'nalishning boshqa "N-son" fakultetiga ham (1-son davolash ↔
+     * 2-son davolash) o'tkaza oladi. UI tanlashdan oldin ikkalasini ham
+     * ogohlantirib chiqadi. Talaba ovozida esa til ham, fakultet ham bir xil
+     * bo'lishi shart.
      *
      * "To'liq guruh" rejimida (full_group_mode) sig'im tekshirilmaydi:
      * bo'sh joyi yo'q guruhga ham ko'chirish mumkin (guruh "ortiqcha" bo'ladi).
@@ -256,7 +258,8 @@ class StudentDistributionController extends Controller
         // guruhga ham o'tkaza oladi (UI tanlashdan oldin ogohlantiradi).
         if (!$this->groupsCompatible($source, $target, true)) {
             return response()->json([
-                'message' => 'Maqsadli guruh talabaning fakulteti, yo\'nalishi yoki kursiga mos emas.',
+                'message' => 'Maqsadli guruh talabaning yo\'nalishi yoki kursiga mos emas '
+                    . '(fakultet faqat bir yo\'nalishning "N-son" juftlari orasida almashishi mumkin).',
             ], 422);
         }
 
@@ -348,7 +351,7 @@ class StudentDistributionController extends Controller
             }
 
             if (!$this->groupsCompatible($source, $target, true)) {
-                $errors[] = $student->full_name . ': fakulteti, yo\'nalishi yoki kursi mos emas.';
+                $errors[] = $student->full_name . ': yo\'nalishi, kursi yoki fakulteti mos emas.';
                 continue;
             }
 

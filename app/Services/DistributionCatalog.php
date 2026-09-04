@@ -299,26 +299,34 @@ class DistributionCatalog
     /**
      * Ikki guruh bir-biriga mos keladimi.
      *
-     * Fakultet, yo'nalish va kurs har doim bir xil bo'lishi shart — bularda
-     * o'quv rejasi boshqa bo'ladi.
+     * Yo'nalish va kurs har doim bir xil bo'lishi shart — bularda o'quv rejasi
+     * boshqa bo'ladi.
      *
-     * Ta'lim tili: talaba ovozida bir xil bo'lishi kerak (o'zbek faqat o'zbek
-     * guruhiga o'tadi). Registratorning qo'lda ko'chirishida ($allowOtherLang)
-     * til farq qilsa ham ruxsat beriladi — UI oldindan ogohlantiradi.
+     * Fakultet va ta'lim tili talaba ovozida bir xil bo'lishi kerak. $manualMode
+     * — registratorning qo'lda ko'chirishi: til farq qilsa ham, fakultet bir xil
+     * yo'nalishning "N-son" juftidan bo'lsa ham (1-son davolash ↔ 2-son
+     * davolash) ruxsat beriladi. UI ikkalasini ham ogohlantirib chiqadi.
      */
-    public function compatible(?array $source, array $target, bool $allowOtherLang = false): bool
+    public function compatible(?array $source, array $target, bool $manualMode = false): bool
     {
         if (!$source) {
             return false;
         }
 
-        if ($this->facultyKey($source) !== $this->facultyKey($target)
-            || $source['specialty_name'] !== $target['specialty_name']
+        if ($source['specialty_name'] !== $target['specialty_name']
             || $source['course'] !== $target['course']) {
             return false;
         }
 
-        return $allowOtherLang
+        $sameFaculty = $manualMode
+            ? $this->facultyGroupKey($source) === $this->facultyGroupKey($target)
+            : $this->facultyKey($source) === $this->facultyKey($target);
+
+        if (!$sameFaculty) {
+            return false;
+        }
+
+        return $manualMode
             || $this->languageKey($source) === $this->languageKey($target);
     }
 
@@ -326,6 +334,19 @@ class DistributionCatalog
     public function facultyKey(array $group): string
     {
         return preg_replace('/\s+/u', ' ', mb_strtolower(trim((string) ($group['faculty_name'] ?? '')))) ?? '';
+    }
+
+    /**
+     * Bir yo'nalishning nomerlangan fakultetlarini birlashtiruvchi kalit:
+     * "1-son davolash" va "2-son davolash" bitta kalitga tushadi. Qo'lda
+     * ko'chirishda talaba shu juft ichida harakatlana oladi.
+     */
+    public function facultyGroupKey(array $group): string
+    {
+        $key = $this->facultyKey($group);
+        $stripped = preg_replace('/^\s*\d+\s*-?\s*son\s+/u', '', $key);
+
+        return trim((string) ($stripped ?? $key)) ?: $key;
     }
 
     /** Guruh ingliz tilida o'qiydimi. */

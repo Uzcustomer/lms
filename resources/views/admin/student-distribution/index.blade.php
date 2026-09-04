@@ -612,6 +612,9 @@
         const LANG_LABELS = {uz: "o'zbek", ru: 'rus', en: 'ingliz'};
         const langLabel = g => LANG_LABELS[langKey(g)] || (g.language_name || 'noma’lum tilli');
 
+        // Fakultet kaliti — backenddagi facultyKey bilan bir xil.
+        const facultyKey = g => String(g.faculty_name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
         // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
         function freeHtml(g) {
             if (g.free_places === null || g.free_places === undefined) return '<span></span>';
@@ -1011,13 +1014,16 @@
         function pickRowHtml(g) {
             const source = groups.find(x => x.group_hemis_id === modalGroupId);
             const parts = [];
-            if (source && g.faculty_name !== source.faculty_name) parts.push(g.faculty_name || '');
 
-            // Boshqa tildagi guruh tanlanishi mumkin, lekin ajralib tursin.
+            // Boshqa fakultet yoki tildagi guruh tanlanishi mumkin, lekin
+            // tasodifan bosilmasin — ajratib ko'rsatiladi.
+            const otherFaculty = source && facultyKey(g) !== facultyKey(source);
+            if (otherFaculty) parts.push(g.faculty_name || '');
+
             const otherLang = source && langKey(g) !== langKey(source);
             if (otherLang) parts.push(g.language_name || langLabel(g));
 
-            return '<div class="sd-pick-row' + (otherLang ? ' is-other-lang' : '') + '">' +
+            return '<div class="sd-pick-row' + (otherLang || otherFaculty ? ' is-other-lang' : '') + '">' +
                 '<span class="sd-pick-name">' + esc(g.group_name) +
                     (parts.length ? '<span>' + esc(parts.filter(Boolean).join(' \u00b7 ')) + '</span>' : '') + '</span>' +
                 '<span class="sd-pick-cnt">' + g.student_count + ' talaba</span>' +
@@ -1158,14 +1164,24 @@
             const target = modalTargets.find(g => g.group_hemis_id === Number(button.dataset.choose));
             const free = target ? target.free_places : null;
 
-            // Til farqi cheklov emas, lekin bilib turib qilinishi kerak.
+            // Til va fakultet farqi cheklov emas, lekin bilib turib qilinishi
+            // kerak — ikkalasi bitta dialogda so'raladi.
             const source = groups.find(g => g.group_hemis_id === modalGroupId);
-            if (source && target && langKey(source) !== langKey(target)) {
-                const who = bulk ? count + ' ta talabani' : 'talabani';
-                if (!confirm('Diqqat! Siz ' + langLabel(source) + ' guruhdagi ' + who + ' ' +
-                        langLabel(target) + ' guruhga (' + target.group_name + ") o'tkazyapsiz.\n\n" +
-                        'Amaliyot davom ettirilsinmi?')) {
-                    return;
+            if (source && target) {
+                const notes = [];
+                if (langKey(source) !== langKey(target)) {
+                    notes.push('ta’lim tili: ' + langLabel(source) + ' → ' + langLabel(target));
+                }
+                if (facultyKey(source) !== facultyKey(target)) {
+                    notes.push('fakultet: ' + (source.faculty_name || '—') + ' → ' + (target.faculty_name || '—'));
+                }
+
+                if (notes.length) {
+                    const who = bulk ? count + ' ta talaba' : 'Talaba';
+                    if (!confirm('Diqqat! ' + who + ' ' + target.group_name + " guruhiga o'tkazilmoqda:\n\n  • " +
+                            notes.join('\n  • ') + '\n\nAmaliyot davom ettirilsinmi?')) {
+                        return;
+                    }
                 }
             }
 

@@ -269,6 +269,9 @@ class DistributionCatalog
     /**
      * Berilgan guruh talabasini qabul qila oladigan guruhlar: mos yo'nalish,
      * kurs va til, bo'sh joyi bor, taqsimlanadigan guruh emas.
+     *
+     * $fullMode — registratorning "to'liq guruh" rejimi: sig'im tekshirilmaydi
+     * va boshqa tildagi guruh ham ro'yxatga tushadi.
      */
     public function targetsFor(int $groupHemisId, bool $fullMode = false): Collection
     {
@@ -296,12 +299,14 @@ class DistributionCatalog
     /**
      * Ikki guruh bir-biriga mos keladimi.
      *
-     * Fakultet, yo'nalish va kurs har doim bir xil bo'lishi shart — talaba
-     * o'z fakultetidan chiqib ketmaydi. Ta'lim tili oddiy rejimda bir xil
-     * bo'lishi kerak; "to'liq guruh" rejimida esa maqsad ingliz guruhi bo'lsa,
-     * o'zbek/rus guruhidan ham o'tish mumkin.
+     * Fakultet, yo'nalish va kurs har doim bir xil bo'lishi shart — bularda
+     * o'quv rejasi boshqa bo'ladi.
+     *
+     * Ta'lim tili: talaba ovozida bir xil bo'lishi kerak (o'zbek faqat o'zbek
+     * guruhiga o'tadi). Registratorning qo'lda ko'chirishida ($allowOtherLang)
+     * til farq qilsa ham ruxsat beriladi — UI oldindan ogohlantiradi.
      */
-    public function compatible(?array $source, array $target, bool $fullMode = false): bool
+    public function compatible(?array $source, array $target, bool $allowOtherLang = false): bool
     {
         if (!$source) {
             return false;
@@ -313,11 +318,8 @@ class DistributionCatalog
             return false;
         }
 
-        if ($this->languageKey($source) === $this->languageKey($target)) {
-            return true;
-        }
-
-        return $fullMode && $this->isEnglish($target);
+        return $allowOtherLang
+            || $this->languageKey($source) === $this->languageKey($target);
     }
 
     /** Fakultetni solishtirish kaliti (bo'shliq va katta-kichik harf farqsiz). */

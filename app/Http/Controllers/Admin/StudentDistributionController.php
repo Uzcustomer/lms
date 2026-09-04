@@ -203,13 +203,15 @@ class StudentDistributionController extends Controller
      * Talabani boshqa guruhga ko'chirish rejasi.
      *
      * LMS dagi students.group_id o'zgartirilmaydi — bu faqat reja. Maqsadli
-     * guruh talabaning fakulteti, yo'nalishi, kursi va ta'lim tiliga mos
-     * bo'lishi hamda bo'sh joyi qolgan bo'lishi shart.
+     * guruh talabaning fakulteti, yo'nalishi va kursiga mos bo'lishi shart:
+     * bularda o'quv rejasi boshqa bo'ladi.
      *
-     * "To'liq guruh" rejimida (full_group_mode) ikki cheklov yumshaydi:
-     * bo'sh joyi yo'q guruhga ham ko'chirish mumkin (guruh "ortiqcha" bo'lib
-     * qoladi) va o'zbek/rus guruhidan ingliz guruhiga o'tishga ruxsat beriladi.
-     * Boshqa fakultet, yo'nalish yoki kursga bu rejimda ham o'tib bo'lmaydi.
+     * Ta'lim tili cheklov emas — registrator boshqa tildagi guruhga ham
+     * o'tkaza oladi, UI tanlashdan oldin buni ogohlantirib chiqadi. Talaba
+     * ovozida esa til hamon bir xil bo'lishi shart.
+     *
+     * "To'liq guruh" rejimida (full_group_mode) sig'im tekshirilmaydi:
+     * bo'sh joyi yo'q guruhga ham ko'chirish mumkin (guruh "ortiqcha" bo'ladi).
      */
     public function assignStudent(Request $request): JsonResponse
     {
@@ -250,11 +252,11 @@ class StudentDistributionController extends Controller
             return response()->json(['message' => 'Talaba allaqachon shu guruhda.'], 422);
         }
 
-        if (!$this->groupsCompatible($source, $target, $fullMode)) {
+        // Til farqiga ruxsat: qo'lda ko'chirishda registrator boshqa tildagi
+        // guruhga ham o'tkaza oladi (UI tanlashdan oldin ogohlantiradi).
+        if (!$this->groupsCompatible($source, $target, true)) {
             return response()->json([
-                'message' => $fullMode
-                    ? 'Maqsadli guruh talabaning fakulteti, yo\'nalishi yoki kursiga mos emas, yoki ta\'lim tili boshqa (faqat ingliz guruhiga o\'tish mumkin).'
-                    : 'Maqsadli guruh talabaning fakulteti, yo\'nalishi, kursi yoki ta\'lim tiliga mos emas.',
+                'message' => 'Maqsadli guruh talabaning fakulteti, yo\'nalishi yoki kursiga mos emas.',
             ], 422);
         }
 
@@ -345,8 +347,8 @@ class StudentDistributionController extends Controller
                 continue;
             }
 
-            if (!$this->groupsCompatible($source, $target, $fullMode)) {
-                $errors[] = $student->full_name . ': fakulteti, yo\'nalishi, kursi yoki ta\'lim tili mos emas.';
+            if (!$this->groupsCompatible($source, $target, true)) {
+                $errors[] = $student->full_name . ': fakulteti, yo\'nalishi yoki kursi mos emas.';
                 continue;
             }
 
@@ -453,11 +455,14 @@ class StudentDistributionController extends Controller
             return response()->json(['message' => 'Guruh topilmadi.'], 404);
         }
 
+        // Registrator ro'yxatida boshqa tildagi guruhlar ham ko'rinadi — ular
+        // "To'liq guruh" rejimidan qat'i nazar tanlanishi mumkin, UI esa
+        // tanlashdan oldin til farqini ogohlantirib chiqadi.
         $targets = $catalog
             ->filter(fn ($group) => $group['group_hemis_id'] !== $source['group_hemis_id']
                 && !$group['is_source']
                 && ($fullMode || ($group['free_places'] !== null && $group['free_places'] > 0))
-                && $this->groupsCompatible($source, $group, $fullMode))
+                && $this->groupsCompatible($source, $group, true))
             ->values();
 
         return response()->json(['groups' => $targets]);

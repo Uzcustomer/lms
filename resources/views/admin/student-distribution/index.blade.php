@@ -46,6 +46,9 @@
         align-items:center; padding:8px 12px; border-bottom:1px solid var(--line-soft);
     }
     .sd-pick-row:last-child { border-bottom:0; }
+    /* Boshqa tildagi guruh — tanlash mumkin, lekin ko'zga tashlanib tursin */
+    .sd-pick-row.is-other-lang { background:#fffaf0; box-shadow:inset 3px 0 0 #d97706; }
+    .sd-pick-row.is-other-lang .sd-pick-name span { color:#b45309; font-weight:700; }
     .sd-pick-name { color:var(--ink); font-size:12.5px; font-weight:600; }
     .sd-pick-name span { display:block; color:var(--muted); font-size:10.5px; font-weight:500; }
     .sd-pick-cnt { color:var(--muted); font-size:11px; white-space:nowrap; }
@@ -590,6 +593,25 @@
         const metaLabel = g => [g.faculty_name || '\u2014', g.specialty_name || '\u2014', courseLabel(g), g.language_name || '']
             .filter(Boolean).join(' \u00b7 ');
 
+        // Ta'lim tili kaliti — backenddagi DistributionCatalog::languageKey bilan
+        // bir xil: kod va nom uz/ru/en ga keltiriladi, tanilmagani o'z kalitida
+        // qoladi. Ko'chirishda til farqini aniqlash uchun ishlatiladi.
+        function langKey(g) {
+            const code = String(g.language_code || '').trim().toLowerCase();
+            const name = String(g.language_name || '').trim().toLowerCase();
+
+            const byCode = {uz:['uz','uzb','oz','11',"o'z",'ўз'], ru:['ru','rus','12','рус'], en:['en','eng','en-us','14']};
+            for (const key in byCode) if (code && byCode[key].includes(code)) return key;
+
+            const byName = {uz:['ozbek',"o'zbek",'o‘zbek','uzbek','ўзбек','узбек'], ru:['rus','русск'], en:['ingliz','english','англ']};
+            for (const key in byName) if (name && byName[key].some(n => name.includes(n))) return key;
+
+            return 'x:' + (code || name || g.group_hemis_id);
+        }
+
+        const LANG_LABELS = {uz: "o'zbek", ru: 'rus', en: 'ingliz'};
+        const langLabel = g => LANG_LABELS[langKey(g)] || (g.language_name || 'noma’lum tilli');
+
         // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
         function freeHtml(g) {
             if (g.free_places === null || g.free_places === undefined) return '<span></span>';
@@ -990,9 +1012,12 @@
             const source = groups.find(x => x.group_hemis_id === modalGroupId);
             const parts = [];
             if (source && g.faculty_name !== source.faculty_name) parts.push(g.faculty_name || '');
-            if (source && g.language_name && g.language_name !== source.language_name) parts.push(g.language_name);
 
-            return '<div class="sd-pick-row">' +
+            // Boshqa tildagi guruh tanlanishi mumkin, lekin ajralib tursin.
+            const otherLang = source && langKey(g) !== langKey(source);
+            if (otherLang) parts.push(g.language_name || langLabel(g));
+
+            return '<div class="sd-pick-row' + (otherLang ? ' is-other-lang' : '') + '">' +
                 '<span class="sd-pick-name">' + esc(g.group_name) +
                     (parts.length ? '<span>' + esc(parts.filter(Boolean).join(' \u00b7 ')) + '</span>' : '') + '</span>' +
                 '<span class="sd-pick-cnt">' + g.student_count + ' talaba</span>' +
@@ -1132,6 +1157,17 @@
             const count = bulk ? pickBulkIds.length : 1;
             const target = modalTargets.find(g => g.group_hemis_id === Number(button.dataset.choose));
             const free = target ? target.free_places : null;
+
+            // Til farqi cheklov emas, lekin bilib turib qilinishi kerak.
+            const source = groups.find(g => g.group_hemis_id === modalGroupId);
+            if (source && target && langKey(source) !== langKey(target)) {
+                const who = bulk ? count + ' ta talabani' : 'talabani';
+                if (!confirm('Diqqat! Siz ' + langLabel(source) + ' guruhdagi ' + who + ' ' +
+                        langLabel(target) + ' guruhga (' + target.group_name + ") o'tkazyapsiz.\n\n" +
+                        'Amaliyot davom ettirilsinmi?')) {
+                    return;
+                }
+            }
 
             // Joy yetmasa: oddiy rejimda to'xtatiladi, to'liq guruh rejimida
             // ogohlantirib davom etiladi.

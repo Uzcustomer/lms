@@ -3932,6 +3932,13 @@ class TimetableController extends Controller
                     continue;
                 }
                 $blockPair = max(1, (int) ($placement->pair ?: 1));
+                // Kunlik para egallashi (6 soat modeli): amaliy blok ma'ruzali
+                // davrda 2, keyin 3 para; ma'ruza 1 para. Klient shu maydonlar
+                // bilan 2-3-paradagi davom segmentlarini chizadi.
+                $span = $this->cycleLaneSpan($blockType, $hrs, max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)));
+                $headDays = min((int) $span['head_days'], (int) $days);
+                $headTo = $headDays > 0 ? $endIndexFor($from, $headDays) : null;
+                $tailFrom = $headDays >= $days ? null : ($headDays > 0 ? $endIndexFor($from, $headDays + 1) : $from);
                 $req = $g['req'][$placement->subject_name . '|' . $blockType] ?? ['teachers' => [], 'auds' => []];
                 $teacherNames = array_keys($req['teachers']);
                 $audNames = array_keys($req['auds']);
@@ -3946,6 +3953,11 @@ class TimetableController extends Controller
                     'days' => (int) $days,
                     'hours' => $fmtHours($hrs === null ? null
                         : (float) ($blockType === 'lecture' ? $hrs['lecture'] : $hrs['practice'])),
+                    'span_head' => (int) $span['head_span'],
+                    'span_tail' => (int) $span['tail_span'],
+                    'head_days' => $headDays,
+                    'head_to' => $headTo,
+                    'tail_from' => $tailFrom,
                     'teacher_name' => $teacherNames
                         ? ($teacherNames[0] . (count($teacherNames) > 1 ? ' +' . (count($teacherNames) - 1) : ''))
                         : null,
@@ -4292,6 +4304,28 @@ class TimetableController extends Controller
         return min($cycleDays, max(0, $lectureDays));
     }
 
+    /**
+     * Blok kunlik nechta para (lane) egallashini beradi. Kun 6 soat:
+     * ma'ruza 1 para (2 soat); amaliy — ma'ruzali davrda (head) 2 para
+     * (4 soat), ma'ruza tugagach (tail) 3 para (6 soat). Reja soatlari
+     * topilmasa eski bir-lane xulqi saqlanadi.
+     * head_days — blok boshidan nechta O'QUV kuni head rejimida ekani.
+     */
+    private function cycleLaneSpan(string $type, ?array $hours, int $cycleDays): array
+    {
+        $cycleDays = max(1, $cycleDays);
+        if ($hours === null || $type === 'lecture') {
+            return ['head_span' => 1, 'tail_span' => 0, 'head_days' => $cycleDays];
+        }
+        $lecDays = (int) ceil(((float) ($hours['lecture'] ?? 0)) / 2);
+        $lecDays = max(0, min($cycleDays, $lecDays));
+        return [
+            'head_span' => $lecDays > 0 ? 2 : 0,
+            'tail_span' => $lecDays < $cycleDays ? 3 : 0,
+            'head_days' => $lecDays,
+        ];
+    }
+
     private function cycleOverlappingRoomCodes(TimetableBoard $board, TimetableCyclePlacement $placement, array $data): array
     {
         $set = (array) ($board->settings ?? []);
@@ -4520,6 +4554,24 @@ class TimetableController extends Controller
         if ($requiredDays < 1) {
             return response()->json(['error' => 'Bu fanning ishchi rejasida ma\'ruza soati yo\'q — ma\'ruza bloki joylanmaydi.'], 422);
         }
+        // Kunlik para (lane) egallashi: vertikal kesishuv ham tekshiriladi
+        // (amaliy 2-3 para, ma'ruza 1 para).
+        $reqSpan = $this->cycleLaneSpan(
+            (string) $data['training_type'],
+            $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $data['subject_name']),
+            max(1, (int) $setting->cycle_days)
+        );
+        $laneMaxSpan = fn(array $sp): int => max(1, (int) $sp['head_span'], (int) $sp['tail_span']);
+        $reqLaneTo = $reqPair + $laneMaxSpan($reqSpan) - 1;
+        $bellPairTotal = collect((array) ($board->bell_schedule ?? []))
+            ->filter(fn($it) => (is_array($it) ? ($it['type'] ?? '') : ($it->type ?? '')) === 'pair')
+            ->count();
+        $pairsTotal = $bellPairTotal ?: max(1, (int) $board->pairs_per_day);
+        if ($data['action'] === 'place' && $reqLaneTo > $pairsTotal) {
+            return response()->json(['error' => 'Bu blok kuniga ' . $laneMaxSpan($reqSpan)
+                . ' para egallaydi — ' . $reqPair . '-paradan boshlansa jadvaldagi '
+                . $pairsTotal . ' paraga sig\'maydi. Yuqoriroq (kichikroq raqamli) juftlikni tanlang.'], 422);
+        }
         $daysPerWeek = max(1, (int) $board->days);
         $maxDays = max(1, (int) $board->weeks) * $daysPerWeek;
         while (count($workIndices) < $maxDays && $guard < $maxDays * 8 + count($holSet) * 2 + 60) {
@@ -4643,14 +4695,25 @@ class TimetableController extends Controller
             };
             $shifted = 0;
             if ($hasCyclePlacements) {
-                // Kaskad faqat shu juftlik qatorida — boshqa juftlikdagi
-                // bloklar joyida qoladi.
+                // Kaskad faqat lane (para) oralig'i kesishgan bloklarda —
+                // boshqa paralardagi bloklar joyida qoladi.
                 $placements = TimetableCyclePlacement::where('board_id', $board->id)
                     ->where('specialty_name', $data['specialty_name'])
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
-                    ->where(fn ($q) => $q->where('pair', $reqPair)->orWhereNull('pair'))
-                    ->orderBy('start_index')->get();
+                    ->orderBy('start_index')->get()
+                    ->filter(function ($p) use ($data, $norm, $cycleSettings, $hoursFor, $laneMaxSpan, $reqPair, $reqLaneTo) {
+                        $pSetting = $cycleSettings->get(
+                            $norm($data['specialty_name']) . '|' . (int) $data['course'] . '|' . $norm($p->subject_name)
+                        );
+                        $span = $this->cycleLaneSpan(
+                            (string) ($p->training_type ?: 'practice'),
+                            $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $p->subject_name),
+                            max(1, (int) ($pSetting->cycle_days ?? 1))
+                        );
+                        $pairNo = max(1, (int) ($p->pair ?? 1));
+                        return $pairNo + $laneMaxSpan($span) - 1 >= $reqPair && $pairNo <= $reqLaneTo;
+                    })->values();
                 $toShift = [];
                 $targetFound = false;
                 foreach ($placements as $placement) {
@@ -4754,8 +4817,15 @@ class TimetableController extends Controller
         }
         $endPosition = $startPosition + $requiredDays - 1;
         foreach ($others->sortBy('start_index') as $other) {
-            // Boshqa juftlikdagi blok bu juftlikka xalaqit bermaydi.
-            if (max(1, (int) ($other->pair ?? 1)) !== $reqPair) continue;
+            // Lane (para) oralig'i kesishmagan blok xalaqit bermaydi.
+            $otherSpanSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
+            $otherSpan = $this->cycleLaneSpan(
+                (string) ($other->training_type ?: 'practice'),
+                $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $other->subject_name),
+                max(1, (int) ($otherSpanSetting->cycle_days ?? 1))
+            );
+            $otherPairNo = max(1, (int) ($other->pair ?? 1));
+            if ($otherPairNo + $laneMaxSpan($otherSpan) - 1 < $reqPair || $otherPairNo > $reqLaneTo) continue;
             if ($norm($other->subject_name) === $norm($data['subject_name'])
                 && $norm($other->training_type ?? 'practice') === $norm($data['training_type'])) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);

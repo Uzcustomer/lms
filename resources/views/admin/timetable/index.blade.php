@@ -1087,7 +1087,6 @@
         #cycleGrid .cyc-type.lecture { background: #4f46e5; }
         #cycleGrid .cyc-type.practice { background: #0d9488; }
         #cycleGrid .cyc-hrs { margin-left: 3px; font-style: normal; font-weight: 700; font-size: 8.5px; color: #475569; }
-        #cycleGrid .cyc-cont { border-top-style: dashed; opacity: .85; }
         .cycle-pn-type { display: inline-block; margin-right: 4px; padding: 1px 5px; border-radius: 4px;
             font-size: 8.5px; font-weight: 800; color: #fff; }
         .cycle-pn-type.lecture { background: #4f46e5; }
@@ -1118,8 +1117,8 @@
         #cycAssignSave { border: 0; background: #1e3a5f; color: #fff; }
         #cycAssignSave:hover { background: #162c4a; }
         #cycAssignClose { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
-        #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
-        #cycleGrid [data-cycle-index].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
+        #cycleGrid [data-cycle-from] { transition: box-shadow .12s, background .12s; }
+        #cycleGrid [data-cycle-from].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
         /* Karta tanlanganda uning oqim qatori ajralib turadi */
         #cycleGrid .cyc-cell.cycle-row-target:not(.cyc-block) { background: #ecfeff; box-shadow: inset 0 -2px 0 #06b6d4; cursor: copy; }
         #cycleGrid .cyc-cell.cycle-row-muted { opacity: .45; }
@@ -3353,28 +3352,73 @@
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
-                    // Har blokning para (lane) qamrovi — kun 6 soat modeli:
-                    // asosiy qator to'liq eni bilan, amaliy blokning 2- va
-                    // 3-paradagi davomi alohida segment bo'lib chiziladi
-                    // (3-para faqat ma'ruza tugagan kunlarda).
-                    const laneSegs = {};
+                    // Bloklar yaxlit to'rtburchak katak bo'lib chiziladi (rowspan)
+                    // — ichki chiziqlar yo'q. Amaliy blok: ma'ruzali davr (2 para)
+                    // + keyingi davr (3 para) — tutash chegarasiz ikki bo'lak.
+                    // Bo'sh kataklar colspan bilan birlashtiriladi: DOM kichik,
+                    // drag & drop qotmaydi; aniq kun sichqoncha o'rnidan topiladi.
+                    const cols = dates.length;
+                    const cellAt = {};   // lane -> {boshCol: {html, next}}
+                    const covered = {};  // lane -> rowspan/colspan qamrovi
+                    for (let l = 1; l <= pairs; l++) { cellAt[l] = {}; covered[l] = new Uint8Array(cols); }
+                    const mark = (lane0, lanes, from, to) => {
+                        for (let l = lane0; l < lane0 + lanes && l <= pairs; l++)
+                            for (let c = from; c <= to && c < cols; c++) covered[l][c] = 1;
+                    };
+                    const free = (lane0, lanes, from, to) => {
+                        for (let l = lane0; l < lane0 + lanes && l <= pairs; l++)
+                            for (let c = from; c <= to && c < cols; c++) if (covered[l][c]) return false;
+                        return true;
+                    };
                     (row.blocks || []).forEach(block => {
                         const p = Math.max(1, +block.pair || 1);
-                        const spanHead = +block.span_head || 1, spanTail = +block.span_tail || 0;
+                        if (p > pairs || block.from >= cols) return;
+                        const spanHead = Math.max(1, +block.span_head || 1);
+                        const spanTail = +block.span_tail || 0;
                         const headDays = +block.head_days || 0;
-                        const maxSpan = Math.max(spanHead, spanTail, 1);
-                        for (let k = 0; k < maxSpan; k++) {
-                            const lane = p + k;
-                            if (lane > pairs) break;
-                            let f = null, t = null;
-                            const headCov = headDays > 0 && spanHead > k;
-                            const tailCov = spanTail > k && block.tail_from != null;
-                            if (k === 0 || (headCov && tailCov)) { f = block.from; t = block.to; }
-                            else if (headCov) { f = block.from; t = block.head_to != null ? +block.head_to : block.to; }
-                            else if (tailCov) { f = +block.tail_from; t = block.to; }
-                            if (f == null || t == null || t < f) continue;
-                            (laneSegs[lane] = laneSegs[lane] || []).push({ from: f, to: t, block: block, main: k === 0 });
+                        const headTo = block.head_to != null ? +block.head_to : block.to;
+                        const tailFrom = block.tail_from != null ? +block.tail_from : null;
+                        const rects = [];
+                        if (block.type === 'practice' && spanTail > 0 && tailFrom != null && headDays > 0) {
+                            // Bosh bo'lak ichki yakshanba/bayram ustunlarini ham qamrab,
+                            // dum bo'lagigacha uzluksiz davom etadi.
+                            rects.push({ lanes: spanHead, from: block.from, to: Math.min(tailFrom - 1, block.to), main: true });
+                            rects.push({ lanes: spanTail, from: tailFrom, to: block.to, main: false });
+                        } else if (block.type === 'practice' && spanTail > 0 && headDays < 1) {
+                            rects.push({ lanes: spanTail, from: block.from, to: block.to, main: true });
+                        } else {
+                            rects.push({ lanes: spanHead, from: block.from, to: block.to, main: true });
                         }
+                        const color = subjColor(block.subject);
+                        const reqParts = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
+                            .filter(Boolean);
+                        const req = reqParts.join(' · ');
+                        const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
+                        const typeChip = '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
+                        const twoRects = rects.length > 1;
+                        rects.forEach(rect => {
+                            const lanes = Math.min(rect.lanes, pairs - p + 1);
+                            const to = Math.min(rect.to, cols - 1);
+                            if (lanes < 1 || to < rect.from || rect.from < 0) return;
+                            if (!free(p, lanes, rect.from, to)) return; // ustma-ust yozuv jadvalni buzmasin
+                            const spanCols = to - rect.from + 1;
+                            const joinStyle = twoRects ? (rect.main ? 'border-right:0;' : 'border-left:0;') : '';
+                            let cellHtml;
+                            if (rect.main) {
+                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
+                                    '<span class="cyc-shift-actions">' +
+                                    '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
+                                    '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
+                                    '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
+                                    '</span><span class="cyc-lbl">' + typeChip + esc(block.subject) + ' <b>' + block.days + '</b>' + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
+                                    reqHtml +
+                                    '</td>';
+                            } else {
+                                cellHtml = '<td class="cyc-cell cyc-block cyc-cont" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + '"></td>';
+                            }
+                            cellAt[p][rect.from] = { html: cellHtml, next: to + 1 };
+                            mark(p, lanes, rect.from, to);
+                        });
                     });
                     for (let pair = 1; pair <= pairs; pair++) {
                         h += '<tr>';
@@ -3388,38 +3432,15 @@
                         const pt = bellPairs[pair - 1];
                         h += '<td class="cyc-pcol"><div class="cyc-pname">' + esc(pt ? (pt.name || pt.abbr || pair) : (pair + '-para')) + '</div>' +
                             (pt && (pt.start || pt.end) ? '<div class="cyc-ptime">' + esc(pt.start || '') + '<br>' + esc(pt.end || '') + '</div>' : '') + '</td>';
-                        const segs = (laneSegs[pair] || []).sort((a, b) => a.from - b.from || ((b.main ? 1 : 0) - (a.main ? 1 : 0)));
                         let col = 0;
-                        segs.forEach(seg => {
-                            if (seg.from < col) return; // ustma-ust segment jadval kataklarini buzmasin
-                            while (col < seg.from) {
-                                h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + col + '"></td>';
-                                col++;
-                            }
-                            const block = seg.block;
-                            const color = subjColor(block.subject);
-                            if (seg.main) {
-                                const reqParts = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
-                                    .filter(Boolean);
-                                const req = reqParts.join(' · ');
-                                const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
-                                const typeChip = '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
-                                h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (seg.to - seg.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
-                                    '<span class="cyc-shift-actions">' +
-                                    '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
-                                    '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
-                                    '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                                    '</span><span class="cyc-lbl">' + typeChip + esc(block.subject) + ' <b>' + block.days + '</b>' + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
-                                    reqHtml +
-                                    '</td>';
-                            } else {
-                                h += '<td class="cyc-cell cyc-block cyc-cont" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + seg.from + '" colspan="' + (seg.to - seg.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + (block.type === 'lecture' ? "ma'ruza" : 'amaliy') + ' davomi (' + pair + '-para)"></td>';
-                            }
-                            col = seg.to + 1;
-                        });
-                        while (col < dates.length) {
-                            h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-index="' + col + '"></td>';
-                            col++;
+                        while (col < cols) {
+                            const cellObj = cellAt[pair][col];
+                            if (cellObj) { h += cellObj.html; col = cellObj.next; continue; }
+                            if (covered[pair][col]) { col++; continue; }
+                            let endCol = col;
+                            while (endCol + 1 < cols && !covered[pair][endCol + 1] && !cellAt[pair][endCol + 1]) endCol++;
+                            h += '<td class="cyc-cell" colspan="' + (endCol - col + 1) + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-from="' + col + '" data-cycle-span="' + (endCol - col + 1) + '"></td>';
+                            col = endCol + 1;
                         }
                         h += '</tr>';
                     }
@@ -3440,7 +3461,16 @@
                 if (cycleGridEventsReady) return;
                 cycleGridEventsReady = true;
                 const grid = $('cycleGrid');
-                const cellOf = ev => ev.target && ev.target.closest ? ev.target.closest('[data-cycle-index]') : null;
+                const cellOf = ev => ev.target && ev.target.closest ? ev.target.closest('[data-cycle-from]') : null;
+                // Birlashtirilgan katakda aniq kun: katak boshidan sichqoncha
+                // X-koordinatasigacha nechta ustun borligi hisoblanadi.
+                const indexAt = (cell, ev) => {
+                    const span = Math.max(1, +cell.dataset.cycleSpan || 1);
+                    const rect = cell.getBoundingClientRect();
+                    const colW = rect.width / span;
+                    const off = colW > 0 && ev.clientX != null ? Math.floor((ev.clientX - rect.left) / colW) : 0;
+                    return (+cell.dataset.cycleFrom || 0) + Math.min(span - 1, Math.max(0, off));
+                };
                 const clearDropMark = () => {
                     if (cycleDropCell) { cycleDropCell.classList.remove('cycle-drop-target'); cycleDropCell = null; }
                 };
@@ -3466,7 +3496,7 @@
                     const key = cycleDragKey || (ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '';
                     const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
                     const rowKey = cell.dataset.cycleRow;
-                    const index = +cell.dataset.cycleIndex;
+                    const index = indexAt(cell, ev);
                     cycleDragKey = null;
                     if (!card) return;
                     if (card.row_key !== rowKey) {
@@ -3530,7 +3560,7 @@
                     if (!cell || !cycleDragKey) return;
                     const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
                     const rowKey = cell.dataset.cycleRow;
-                    const index = +cell.dataset.cycleIndex;
+                    const index = indexAt(cell, ev);
                     cycleDragKey = null;
                     highlightCycleRow(null);
                     if (!card || card.row_key !== rowKey) {

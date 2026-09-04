@@ -4308,10 +4308,10 @@ class TimetableController extends Controller
     }
 
     /**
-     * Blok kunlik nechta para (lane) egallashini beradi. Kun 6 soat:
-     * ma'ruza 1 para (2 soat); amaliy — ma'ruzali davrda (head) 2 para
-     * (4 soat), ma'ruza tugagach (tail) 3 para (6 soat). Reja soatlari
-     * topilmasa eski bir-lane xulqi saqlanadi.
+     * Blok kunlik nechta para (lane) egallashini beradi: ma'ruza kuniga
+     * 2 soat (to'liq bitta para), amaliy butun sikl davomida kuniga
+     * 4 soat (2 para) — ma'ruza tugagandan keyin ham shu hajmda qoladi.
+     * Reja soatlari topilmasa eski bir-lane xulqi saqlanadi.
      * head_days — blok boshidan nechta O'QUV kuni head rejimida ekani.
      */
     private function cycleLaneSpan(string $type, ?array $hours, int $cycleDays, int $rowHours = 2): array
@@ -4325,12 +4325,11 @@ class TimetableController extends Controller
             // Ma'ruza kuniga 2 soat = to'liq bitta para.
             return ['head_span' => (int) ceil(2 / $rowHours), 'tail_span' => 0, 'head_days' => $cycleDays];
         }
-        $lecDays = (int) ceil(((float) ($hours['lecture'] ?? 0)) / 2);
-        $lecDays = max(0, min($cycleDays, $lecDays));
+        // Amaliy bir tekis: butun blok kuniga 4 soat (2 para).
         return [
-            'head_span' => $lecDays > 0 ? (int) ceil(4 / $rowHours) : 0,
-            'tail_span' => $lecDays < $cycleDays ? (int) ceil(6 / $rowHours) : 0,
-            'head_days' => $lecDays,
+            'head_span' => (int) ceil(4 / $rowHours),
+            'tail_span' => 0,
+            'head_days' => $cycleDays,
         ];
     }
 
@@ -4595,7 +4594,7 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu fanning ishchi rejasida ma\'ruza soati yo\'q — ma\'ruza bloki joylanmaydi.'], 422);
         }
         // Kunlik para (lane) egallashi: vertikal kesishuv ham tekshiriladi
-        // (amaliy 2-3 para, ma'ruza 1 para).
+        // (amaliy 4 soat = 2 para, ma'ruza 2 soat = 1 para).
         $reqSpan = $this->cycleLaneSpan(
             (string) $data['training_type'],
             $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $data['subject_name']),

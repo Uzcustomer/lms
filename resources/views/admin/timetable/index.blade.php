@@ -1042,6 +1042,11 @@
         .tt-dd-tools button:hover { text-decoration: underline; }
         .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
+        /* Sana qatori doim ko'rinib tursin: vertikal scroll wrap ichida
+           bo'ladi (sticky top overflow konteynerga nisbatan ishlaydi). */
+        #cycleGridWrap { max-height: calc(100vh - 130px); }
+        #cycleGrid thead th { position: sticky; top: 0; z-index: 5; }
+        #cycleGrid thead .cyc-gcol { z-index: 7; }
         #cycleGrid { --cycle-group-width: 170px; border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
         #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
         #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; box-sizing: border-box; overflow: hidden;
@@ -3353,10 +3358,10 @@
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
                     // Bloklar yaxlit to'rtburchak katak bo'lib chiziladi (rowspan)
-                    // — ichki chiziqlar yo'q. Amaliy blok: ma'ruzali davr (2 para)
-                    // + keyingi davr (3 para) — tutash chegarasiz ikki bo'lak.
-                    // Bo'sh kataklar colspan bilan birlashtiriladi: DOM kichik,
-                    // drag & drop qotmaydi; aniq kun sichqoncha o'rnidan topiladi.
+                    // — ichki chiziqlar yo'q: ma'ruza 1 para, amaliy butun sikl
+                    // davomida kuniga 4 soat (2 para). Bo'sh kataklar colspan bilan
+                    // birlashtiriladi: DOM kichik, drag & drop qotmaydi; aniq kun
+                    // sichqoncha o'rnidan topiladi.
                     const cols = dates.length;
                     const cellAt = {};   // lane -> {boshCol: {html, next}}
                     const covered = {};  // lane -> rowspan/colspan qamrovi

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Exports\DistributionGroupStudentsExport;
+use App\Exports\DistributionExport;
 use App\Http\Controllers\Controller;
 use App\Models\DistributionDraftAssignment;
 use App\Models\DistributionGroupCapacity;
@@ -1006,7 +1006,7 @@ class StudentDistributionController extends Controller
 
         $fileName = 'guruh-talabalari-' . $mode . '-' . now()->format('Y-m-d-Hi') . '.xlsx';
 
-        return (new DistributionGroupStudentsExport($groups, $heading, $modes))->download($fileName);
+        return (new DistributionExport($groups, $heading, $modes))->download($fileName);
     }
 
     /**

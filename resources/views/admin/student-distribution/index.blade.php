@@ -657,6 +657,13 @@
 
         // Fakultet kaliti — backenddagi facultyKey bilan bir xil.
         const facultyKey = g => String(g.faculty_name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        // "N-son" prefiksisiz kalit — backenddagi facultyGroupKey bilan bir xil:
+        // 1-son davolash va 2-son davolash bitta fakultet hisoblanadi.
+        const facultyGroupKey = g => {
+            const key = facultyKey(g);
+            const stripped = key.replace(/^\s*\d+\s*-?\s*son\s+/, '').trim();
+            return stripped || key;
+        };
 
         // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
         function freeHtml(g) {
@@ -1120,8 +1127,9 @@
             const parts = [];
 
             // Boshqa fakultet yoki tildagi guruh tanlanishi mumkin, lekin
-            // tasodifan bosilmasin — ajratib ko'rsatiladi.
-            const otherFaculty = source && facultyKey(g) !== facultyKey(source);
+            // tasodifan bosilmasin — ajratib ko'rsatiladi. 1-son ↔ 2-son
+            // bitta fakultet, ular ajratilmaydi.
+            const otherFaculty = source && facultyGroupKey(g) !== facultyGroupKey(source);
             if (otherFaculty) parts.push(g.faculty_name || '');
 
             const otherLang = source && langKey(g) !== langKey(source);
@@ -1276,7 +1284,7 @@
                 if (langKey(source) !== langKey(target)) {
                     notes.push('ta’lim tili: ' + langLabel(source) + ' → ' + langLabel(target));
                 }
-                if (facultyKey(source) !== facultyKey(target)) {
+                if (facultyGroupKey(source) !== facultyGroupKey(target)) {
                     notes.push('fakultet: ' + (source.faculty_name || '—') + ' → ' + (target.faculty_name || '—'));
                 }
 

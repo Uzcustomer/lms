@@ -20,9 +20,11 @@ class TimetableAssignmentAccess
             $activeRole = $userRoles[0];
         }
 
+        // Kafedra mudiri va o'quv bo'limi ruxsatlari bir xil: joylashtirish
+        // (haftalik + sikl) hamda o'qituvchi/auditoriya biriktirish hammasiga.
         $auditoriumAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];
-        $placementRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi'];
-        $teacherAssignmentRoles = ['kafedra_mudiri'];
+        $placementRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];
+        $teacherAssignmentRoles = ['kafedra_mudiri', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
         $assignmentRoles = $auditoriumAssignmentRoles;
 
         if ($user && in_array($activeRole, $assignmentRoles, true)) {

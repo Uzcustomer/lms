@@ -438,8 +438,8 @@
 
                     <div class="sd-colhead sd-grid">
                         <span>#</span><span></span><span>Guruh</span>
-                        <input data-f="minStudents" type="text" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
-                        <input data-f="minCapacity" type="text" placeholder="Sig'im" title="Sig'im: 10 — aynan 10, >10 / <10 / >=10 / <=10 — taqqoslash, 10-15 — oraliq">
+                        <input data-f="minStudents" type="text" list="sdStudentHints" autocomplete="off" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q, !=0 — talabasi bor, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
+                        <input data-f="minCapacity" type="text" list="sdCapacityHints" autocomplete="off" placeholder="Sig'im" title="Sig'im: 10 — aynan 10, !=10 — 10 dan boshqa, >10 / <10 / >=10 / <=10 — taqqoslash, 10-15 — oraliq">
                         <select data-f="status" title="Holat bo'yicha">
                             <option value="">Holat</option>
                             <option value="free">Bo'sh joy bor</option>
@@ -486,7 +486,7 @@
                         <span>#</span>
                         <input type="checkbox" id="rightCheckAll" title="Hammasini belgilash" style="width:14px;height:14px;accent-color:var(--navy);cursor:pointer;">
                         <span>Guruh</span>
-                        <input data-f="minStudents" type="text" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
+                        <input data-f="minStudents" type="text" list="sdStudentHints" autocomplete="off" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q, !=0 — talabasi bor, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
                     </div>
                     <div class="sd-rows" id="rightRows"></div>
 
@@ -562,6 +562,22 @@
         </div>
 
         <div class="sd-pick-panel" id="pickPanel" hidden></div>
+
+        {{-- Son filtrlari uchun tayyor variantlar (katakcha bosilganda chiqadi) --}}
+        <datalist id="sdStudentHints">
+            <option value="0">talabasi yo'q</option>
+            <option value="!=0">talabasi bor</option>
+            <option value="<5">5 tadan kam</option>
+            <option value=">=10">10 va undan ko'p</option>
+            <option value="5-9">5 dan 9 gacha</option>
+        </datalist>
+        <datalist id="sdCapacityHints">
+            <option value="10">aynan 10</option>
+            <option value="15">aynan 15</option>
+            <option value="!=15">15 dan boshqa</option>
+            <option value=">=15">15 va undan ko'p</option>
+            <option value="10-15">10 dan 15 gacha</option>
+        </datalist>
 
         <div class="sd-modal" id="studentsModal">
             <div class="sd-modal-box" style="width:min(760px,100%);height:calc(100vh - 80px);" role="dialog" aria-modal="true">
@@ -704,10 +720,13 @@
             return 'over';
         }
 
-        // Son bo'yicha filtr: "0" — aynan 0, ">9", "<9", ">=9", "<=9" — taqqoslash,
-        // "5-9" — oraliq. Bo'sh yoki tushunarsiz yozuv — cheklov yo'q.
+        // Son bo'yicha filtr: "0" — aynan 0, "!=0" (yoki "<>0", "≠0") — 0 dan
+        // boshqa, ">9", "<9", ">=9", "<=9" (≥, ≤ ham) — taqqoslash, "5-9" —
+        // oraliq. Bo'sh yoki tushunarsiz yozuv — cheklov yo'q.
         function numberMatches(raw, value) {
-            const text = String(raw ?? '').replace(/\s+/g, '');
+            const text = String(raw ?? '').replace(/\s+/g, '')
+                .replace(/\u2260/g, '!=').replace(/\u2265/g, '>=').replace(/\u2264/g, '<=').replace(/<>/g, '!=')
+                .replace(/=>/g, '>=').replace(/=</g, '<=');
             if (text === '') return true;
 
             let match;
@@ -715,10 +734,11 @@
                 const lo = Number(match[1]), hi = Number(match[2]);
                 return value !== null && value !== undefined && value >= Math.min(lo, hi) && value <= Math.max(lo, hi);
             }
-            if ((match = text.match(/^(>=|<=|>|<|=)?(\d+)$/))) {
+            if ((match = text.match(/^(!=|>=|<=|>|<|=)?(\d+)$/))) {
                 const n = Number(match[2]);
-                if (value === null || value === undefined) return false;
+                if (value === null || value === undefined) return match[1] === '!=';
                 switch (match[1] || '=') {
+                    case '!=': return value !== n;
                     case '>': return value > n;
                     case '<': return value < n;
                     case '>=': return value >= n;

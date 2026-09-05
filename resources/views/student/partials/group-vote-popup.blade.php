@@ -48,13 +48,15 @@
 
             if ($gvOpenIds->isNotEmpty()) {
                 // Xabar faqat qo'shnilarida ovoz ketayotgan bo'lsa chiqadi: shu
-                // fakultet + yo'nalish + kursdagi boshqa guruhga ruxsat berilganmi.
+                // fakultet (1-son/2-son bitta) + yo'nalish + kursdagi boshqa
+                // guruhga ruxsat berilganmi.
                 $gvCatalog = app(\App\Services\DistributionCatalog::class)->groups();
                 $gvOwn = $gvCatalog->firstWhere('group_hemis_id', (int) $gvStudent->group_id);
 
                 if ($gvOwn) {
+                    $gvCatalogService = app(\App\Services\DistributionCatalog::class);
                     $gvMode = $gvCatalog->contains(fn ($group) => $gvOpenIds->has($group['group_hemis_id'])
-                        && $group['faculty_name'] === $gvOwn['faculty_name']
+                        && $gvCatalogService->facultyGroupKey($group) === $gvCatalogService->facultyGroupKey($gvOwn)
                         && $group['specialty_name'] === $gvOwn['specialty_name']
                         && $group['course'] === $gvOwn['course']) ? 'notice' : null;
                 }

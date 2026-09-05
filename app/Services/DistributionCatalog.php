@@ -302,10 +302,13 @@ class DistributionCatalog
      * Yo'nalish va kurs har doim bir xil bo'lishi shart — bularda o'quv rejasi
      * boshqa bo'ladi.
      *
-     * Fakultet va ta'lim tili talaba ovozida bir xil bo'lishi kerak. $manualMode
-     * — registratorning qo'lda ko'chirishi: til farq qilsa ham, fakultet bir xil
-     * yo'nalishning "N-son" juftidan bo'lsa ham (1-son davolash ↔ 2-son
-     * davolash) ruxsat beriladi. UI ikkalasini ham ogohlantirib chiqadi.
+     * Fakultet "N-son" prefiksisiz solishtiriladi: 1-son davolash ↔ 2-son
+     * davolash bitta fakultet hisoblanadi, Pediatriya esa alohida. Bu talaba
+     * ovozida ham, registratorning qo'lda ko'chirishida ham bir xil.
+     *
+     * Ta'lim tili talaba ovozida bir xil bo'lishi shart. $manualMode —
+     * registratorning qo'lda ko'chirishi: til farq qilsa ham ruxsat beriladi,
+     * UI tanlashdan oldin ogohlantirib chiqadi.
      */
     public function compatible(?array $source, array $target, bool $manualMode = false): bool
     {
@@ -318,11 +321,7 @@ class DistributionCatalog
             return false;
         }
 
-        $sameFaculty = $manualMode
-            ? $this->facultyGroupKey($source) === $this->facultyGroupKey($target)
-            : $this->facultyKey($source) === $this->facultyKey($target);
-
-        if (!$sameFaculty) {
+        if ($this->facultyGroupKey($source) !== $this->facultyGroupKey($target)) {
             return false;
         }
 

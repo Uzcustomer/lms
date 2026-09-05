@@ -438,8 +438,8 @@
 
                     <div class="sd-colhead sd-grid">
                         <span>#</span><span></span><span>Guruh</span>
-                        <input data-f="minStudents" type="number" min="0" placeholder="Talaba" title="Shu sondan kam bo'lmagan talabali guruhlar">
-                        <input data-f="minCapacity" type="number" min="0" placeholder="Sig'im" title="Shu sondan kam bo'lmagan sig'imli guruhlar">
+                        <input data-f="minStudents" type="text" inputmode="numeric" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
+                        <input data-f="minCapacity" type="text" inputmode="numeric" placeholder="Sig'im" title="Sig'im: 10 — aynan 10, >10 / <10 / >=10 / <=10 — taqqoslash, 10-15 — oraliq">
                         <select data-f="status" title="Holat bo'yicha">
                             <option value="">Holat</option>
                             <option value="free">Bo'sh joy bor</option>
@@ -486,7 +486,7 @@
                         <span>#</span>
                         <input type="checkbox" id="rightCheckAll" title="Hammasini belgilash" style="width:14px;height:14px;accent-color:var(--navy);cursor:pointer;">
                         <span>Guruh</span>
-                        <input data-f="minStudents" type="number" min="0" placeholder="Talaba" title="Shu sondan kam bo'lmagan talabali guruhlar">
+                        <input data-f="minStudents" type="text" inputmode="numeric" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
                     </div>
                     <div class="sd-rows" id="rightRows"></div>
 
@@ -704,13 +704,38 @@
             return 'over';
         }
 
+        // Son bo'yicha filtr: "0" — aynan 0, ">9", "<9", ">=9", "<=9" — taqqoslash,
+        // "5-9" — oraliq. Bo'sh yoki tushunarsiz yozuv — cheklov yo'q.
+        function numberMatches(raw, value) {
+            const text = String(raw ?? '').replace(/\s+/g, '');
+            if (text === '') return true;
+
+            let match;
+            if ((match = text.match(/^(\d+)-(\d+)$/))) {
+                const lo = Number(match[1]), hi = Number(match[2]);
+                return value !== null && value !== undefined && value >= Math.min(lo, hi) && value <= Math.max(lo, hi);
+            }
+            if ((match = text.match(/^(>=|<=|>|<|=)?(\d+)$/))) {
+                const n = Number(match[2]);
+                if (value === null || value === undefined) return false;
+                switch (match[1] || '=') {
+                    case '>': return value > n;
+                    case '<': return value < n;
+                    case '>=': return value >= n;
+                    case '<=': return value <= n;
+                    default: return value === n;
+                }
+            }
+            return true;
+        }
+
         const applyFilters = f => groups.filter(g =>
             (!f.faculties.length || f.faculties.includes(g.faculty_name)) &&
             (!f.specialty || g.specialty_name === f.specialty) &&
             (!f.course || String(g.course) === f.course) &&
             (!f.search || normName(g.group_name).includes(normName(f.search))) &&
-            (f.minStudents === '' || g.student_count >= Number(f.minStudents)) &&
-            (f.minCapacity === '' || (g.capacity !== null && g.capacity >= Number(f.minCapacity))) &&
+            numberMatches(f.minStudents, g.student_count) &&
+            numberMatches(f.minCapacity, g.capacity) &&
             (!f.status || statusOf(g) === f.status)
         );
 

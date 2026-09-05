@@ -330,6 +330,21 @@
                                     </td>
                                     @if($isRegistrar)
                                         <td class="am-actions-cell">
+                                            @php
+                                                // Talaba o'zi yuborgan ariza: created_by talabaning o'zi.
+                                                $isStudentSubmitted = (int) $application->created_by_id === (int) $application->student_id
+                                                    && trim((string) $application->created_by_name) === trim((string) optional($application->student)->full_name);
+                                            @endphp
+                                            @if($isStudentSubmitted)
+                                                <form method="POST" action="{{ route('admin.academic-mobility.move-to-transfer', $application) }}" onsubmit="return confirm('Bu ariza \'O\'qishni ko\'chirish arizalari\' bo\'limiga o\'tkazilsinmi?')">
+                                                    @csrf
+                                                    <button type="submit" class="am-move-btn" title="O'qishni ko'chirish arizalariga o'tkazish" aria-label="O'qishni ko'chirish arizalariga o'tkazish">
+                                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                                                        </svg>
+                                                    </button>
+                                                </form>
+                                            @endif
                                             <form method="POST" action="{{ route('admin.academic-mobility.destroy', $application) }}" onsubmit="return confirm('Bu arizani barcha hujjatlari va tasdiqlari bilan butunlay o\'chirasizmi?')">
                                                 @csrf
                                                 @method('DELETE')
@@ -452,6 +467,11 @@
         .am-status-heading,.am-status-cell { min-width:235px; }
         .am-actions-heading,.am-actions-cell { width:62px;min-width:62px;text-align:center!important; }
         .am-actions-cell form { display:inline-flex;margin:0; }
+        .am-actions-cell { white-space:nowrap; }
+        .am-actions-cell form { display:inline-block;margin:0 2px; }
+        .am-move-btn { width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #bfdbfe;border-radius:7px;background:#fff;color:#2563eb;cursor:pointer;transition:.15s; }
+        .am-move-btn svg { width:16px;height:16px; }
+        .am-move-btn:hover { border-color:#2563eb;background:#dbeafe;transform:translateY(-1px); }
         .am-delete-btn { width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #fecaca;border-radius:7px;background:#fff;color:#dc2626;cursor:pointer;transition:.15s; }
         .am-delete-btn svg { width:16px;height:16px; }
         .am-delete-btn:hover { border-color:#dc2626;background:#fee2e2;transform:translateY(-1px); }

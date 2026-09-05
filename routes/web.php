@@ -279,6 +279,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/applications', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'store'])->name('store');
                 Route::patch('/applications/{application}/transfer-destination', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'updateTransferDestination'])->name('transfer-destination.update');
                 Route::delete('/applications/{application}', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'destroy'])->name('destroy');
+                Route::post('/applications/{application}/move-to-transfer', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'moveToTransfer'])->name('move-to-transfer');
                 Route::get('/applications/{application}/document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'downloadDocument'])->name('document');
                 Route::get('/applications/{application}/basis-document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'basisDocument'])->name('basis-document');
                 Route::post('/applications/{application}/curriculum-document', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'uploadCurriculumDocument'])->name('curriculum-document.upload');

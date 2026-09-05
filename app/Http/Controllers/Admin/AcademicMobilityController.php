@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AkademikMobillikAriza;
+use App\Models\StudentTransferApplication;
 use App\Models\AkademikMobillikTasdiq;
 use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
@@ -157,6 +158,47 @@ class AcademicMobilityController extends Controller
         ]);
 
         return back()->with('success', "Talabaning o'tish joyi saqlandi.");
+    }
+
+    /**
+     * Talaba o'zi yuborgan (adashib mobillikka tushib qolgan) arizani asl
+     * joyiga - "O'qishni ko'chirish arizalari" jadvaliga o'tkazadi. Hujjat
+     * fayllari joyida qoladi, yangi yozuv shu yo'llarga ishora qiladi.
+     */
+    public function moveToTransfer(AkademikMobillikAriza $application): RedirectResponse
+    {
+        abort_unless(
+            in_array($this->activeRole(), ['superadmin', 'admin', 'registrator_ofisi'], true),
+            403
+        );
+
+        DB::transaction(function () use ($application) {
+            $transfer = new StudentTransferApplication([
+                'student_id' => $application->student_id,
+                'phone' => $application->phone,
+                'target_institution' => $application->transfer_destination,
+                'reason' => $application->reason,
+                'order_path' => $application->document_path,
+                'order_name' => $application->document_name,
+                'order_mime' => $application->document_mime,
+                'order_size' => $application->document_size,
+                'basis_document_path' => $application->basis_document_path,
+                'basis_document_name' => $application->basis_document_name,
+                'basis_document_mime' => $application->basis_document_mime,
+                'basis_document_size' => $application->basis_document_size,
+                'status' => in_array($application->status, ['pending', 'approved', 'rejected'], true)
+                    ? $application->status
+                    : 'pending',
+            ]);
+            // Ariza sanasi saqlanadi - ro'yxatda asl topshirilgan vaqti ko'rinadi.
+            $transfer->created_at = $application->created_at;
+            $transfer->save();
+
+            // Fayllar O'CHIRILMAYDI (destroy dan farqli) - yo'llar yangi yozuvda.
+            $application->delete();
+        });
+
+        return back()->with('success', "Ariza \"O'qishni ko'chirish arizalari\" bo'limiga o'tkazildi.");
     }
 
     public function destroy(AkademikMobillikAriza $application): RedirectResponse

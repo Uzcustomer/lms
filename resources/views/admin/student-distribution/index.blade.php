@@ -438,8 +438,8 @@
 
                     <div class="sd-colhead sd-grid">
                         <span>#</span><span></span><span>Guruh</span>
-                        <input data-f="minStudents" type="text" inputmode="numeric" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
-                        <input data-f="minCapacity" type="text" inputmode="numeric" placeholder="Sig'im" title="Sig'im: 10 — aynan 10, >10 / <10 / >=10 / <=10 — taqqoslash, 10-15 — oraliq">
+                        <input data-f="minStudents" type="text" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
+                        <input data-f="minCapacity" type="text" placeholder="Sig'im" title="Sig'im: 10 — aynan 10, >10 / <10 / >=10 / <=10 — taqqoslash, 10-15 — oraliq">
                         <select data-f="status" title="Holat bo'yicha">
                             <option value="">Holat</option>
                             <option value="free">Bo'sh joy bor</option>
@@ -486,7 +486,7 @@
                         <span>#</span>
                         <input type="checkbox" id="rightCheckAll" title="Hammasini belgilash" style="width:14px;height:14px;accent-color:var(--navy);cursor:pointer;">
                         <span>Guruh</span>
-                        <input data-f="minStudents" type="text" inputmode="numeric" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
+                        <input data-f="minStudents" type="text" placeholder="Talaba" title="Talabalar soni: 0 — talabasi yo'q guruhlar, 9 — aynan 9 ta, >9 / <9 / >=9 / <=9 — taqqoslash, 5-9 — oraliq">
                     </div>
                     <div class="sd-rows" id="rightRows"></div>
 

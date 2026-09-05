@@ -246,10 +246,6 @@
                             <select id="cycAssignTeacher"><option value="">— Tanlanmagan —</option></select>
                         </div>
                         <div>
-                            <label>Dars vaqti</label>
-                            <input type="text" id="cycAssignTime" placeholder="Masalan: 08:30 - 12:50" maxlength="50" autocomplete="off">
-                        </div>
-                        <div>
                             <label>Xona (bo'sh xonalar)</label>
                             <select id="cycAssignRoom"><option value="">— Tanlanmagan —</option></select>
                         </div>
@@ -1069,6 +1065,11 @@
         #cycleGrid .cyc-dcol { width: 24px; min-width: 24px; font-size: 9px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
         #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
+        #cycleGrid .cyc-addrow td { height: 18px; }
+        #cycleGrid .cyc-addcell { background: #f8fafc; }
+        #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
+            color: #2563eb; font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; }
+        #cycleGrid .cyc-addpair:hover { color: #1d4ed8; background: #dbeafe; }
         #cycleGrid .cyc-group-col { width: var(--cycle-group-width); min-width: var(--cycle-group-width); }
         #cycleGrid .cyc-date-col { width: 24px; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
@@ -2390,7 +2391,7 @@
                     // Sikl sanasi/bayramlari doskaga xos — almashganda tozalaymiz (boshqa
                     // doska qiymatini uning ustiga yozib yubormaslik uchun).
                     if ($('cycleStart')) $('cycleStart').value = '';
-                    cyclePlanData = null; cycleHolidays = [];
+                    cyclePlanData = null; cycleHolidays = []; cyclePairsShown = null;
                     if ($('cycleHolBar')) $('cycleHolBar').classList.add('hidden');
                 }
                 $('boardSel').value = String(board.id);
@@ -3081,6 +3082,7 @@
 
             let cyclePlanData = null;
             let cycleViewMode = 'flow';   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
+            let cyclePairsShown = null;   // ko'rinadigan para qatorlari (sukut: sikl kuni = 6 soat)
             let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
             // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
@@ -3245,7 +3247,6 @@
                 $('cycAssignKafedra').textContent = "O'qituvchi";
                 $('cycAssignTeacher').innerHTML = '<option value="">Yuklanmoqda...</option>';
                 $('cycAssignRoom').innerHTML = '<option value="">Yuklanmoqda...</option>';
-                $('cycAssignTime').value = '';
                 $('cycAssignModal').classList.add('open');
 
                 try {
@@ -3265,7 +3266,6 @@
                     const current = j.current || {};
                     if (current.teacher_id) $('cycAssignTeacher').value = String(current.teacher_id);
                     if (current.auditorium_code) $('cycAssignRoom').value = current.auditorium_code;
-                    $('cycAssignTime').value = current.lesson_time || '';
                 } catch (e) {
                     $('cycAssignModal').classList.remove('open');
                     alert('Ma\u2019lumotlarni yuklab bo\u2018lmadi: ' + e.message);
@@ -3277,23 +3277,10 @@
                 cycAssignCard = null;
             }
 
-            // Vaqt maskasi: raqam terilganda 08:30 - 12:50 ko'rinishiga keladi.
-            $('cycAssignTime').addEventListener('input', ev => {
-                const digits = ev.target.value.replace(/\D/g, '').slice(0, 8);
-                let out = '';
-                for (let i = 0; i < digits.length; i++) {
-                    if (i === 2) out += ':';
-                    if (i === 4) out += ' - ';
-                    if (i === 6) out += ':';
-                    out += digits[i];
-                }
-                ev.target.value = out;
-            });
-
-            // Tozalash: o'qituvchi, vaqt va xona olib tashlanadi.
+            // Tozalash: o'qituvchi va xona olib tashlanadi.
             $('cycAssignReset').addEventListener('click', async () => {
                 if (!cycAssignCard) return;
-                if (!confirm("Biriktirilgan o'qituvchi, vaqt va xona olib tashlansinmi?")) return;
+                if (!confirm("Biriktirilgan o'qituvchi va xona olib tashlansinmi?")) return;
                 const button = $('cycAssignReset');
                 button.disabled = true;
                 try {
@@ -3328,7 +3315,6 @@
                         group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
                         training_type: cycAssignCard.type || 'practice', view: cycleViewMode,
                         teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
-                        lesson_time: $('cycAssignTime').value.trim() || null,
                         auditorium_code: $('cycAssignRoom').value || null,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
@@ -3350,7 +3336,23 @@
                 }
                 // Juftlik qatorlar qo'ng'iroq jadvalidan: nomi (0.5-para, 1-para...) va vaqti bilan.
                 const bellPairs = boardSchedule().filter(it => it.type === 'pair');
-                const pairs = bellPairs.length || Math.max(1, +j.pairs || 1);
+                const totalPairs = bellPairs.length || Math.max(1, +j.pairs || 1);
+                // Sukutda sikl kuniga yetarli qatorlar ko'rinadi (6 soat):
+                // yarim-para jadvalida 6 qator, to'liq parada 3 qator. Qolganini
+                // "+" tugmasi ochadi; band qatorlar hech qachon yashirilmaydi.
+                const parseT = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+                const durs = bellPairs.map(it => { const a = parseT(it.start), b = parseT(it.end); return a != null && b != null && b > a ? b - a : null; }).filter(v => v != null);
+                const rowMins = durs.length ? durs.reduce((x, y) => x + y, 0) / durs.length : 80;
+                const basePairs = Math.ceil(6 / (rowMins >= 60 ? 2 : 1));
+                let maxLaneUsed = 1;
+                rows.forEach(row => (row.blocks || []).forEach(block => {
+                    const laneTo = Math.max(1, +block.pair || 1) + Math.max(+block.span_head || 1, +block.span_tail || 0, 1) - 1;
+                    if (laneTo > maxLaneUsed) maxLaneUsed = laneTo;
+                }));
+                if (cyclePairsShown == null) cyclePairsShown = basePairs;
+                const pairs = Math.max(1, Math.min(totalPairs, Math.max(cyclePairsShown, maxLaneUsed)));
+                cyclePairsShown = pairs;
+                const showAddPair = pairs < totalPairs;
                 let h = '<colgroup><col class="cyc-group-col"><col style="width:52px">';
                 dates.forEach(() => h += '<col class="cyc-date-col">');
                 h += '</colgroup><thead><tr><th class="cyc-gcol">' + (cycleViewMode === 'group' ? 'Guruh' : 'Oqim') + '</th><th class="cyc-pcol" title="Juftlik">Para</th>';
@@ -3395,7 +3397,7 @@
                             rects.push({ lanes: spanHead, from: block.from, to: block.to, main: true });
                         }
                         const color = subjColor(block.subject);
-                        const reqParts = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
+                        const reqParts = [block.teacher_name, block.auditorium_name || block.auditorium_code]
                             .filter(Boolean);
                         const req = reqParts.join(' · ');
                         const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
@@ -3432,7 +3434,7 @@
                             const groupLabel = cycleViewMode === 'group'
                                 ? '<div class="cyc-members"><div class="cyc-member-row"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div></div>'
                                 : cycleMembersHtml(row.group, row.subgroups);
-                            h += '<td class="cyc-gcol" rowspan="' + pairs + '">' + groupLabel + '</td>';
+                            h += '<td class="cyc-gcol" rowspan="' + (pairs + (showAddPair ? 1 : 0)) + '">' + groupLabel + '</td>';
                         }
                         const pt = bellPairs[pair - 1];
                         h += '<td class="cyc-pcol"><div class="cyc-pname">' + esc(pt ? (pt.name || pt.abbr || pair) : (pair + '-para')) + '</div>' +
@@ -3448,6 +3450,10 @@
                             col = endCol + 1;
                         }
                         h += '</tr>';
+                    }
+                    if (showAddPair) {
+                        h += '<tr class="cyc-addrow"><td class="cyc-pcol"><button type="button" class="cyc-addpair" title="Yana bir para qo\'shish">+</button></td>' +
+                            '<td class="cyc-addcell" colspan="' + dates.length + '"></td></tr>';
                     }
                 });
                 h += '</tbody>';
@@ -3533,6 +3539,13 @@
                 });
                 grid.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); clearDropMark(); });
                 grid.addEventListener('click', async ev => {
+                    const addBtn = ev.target.closest ? ev.target.closest('.cyc-addpair') : null;
+                    if (addBtn) {
+                        ev.preventDefault();
+                        cyclePairsShown = (cyclePairsShown || 1) + 1;
+                        if (cyclePlanData) renderCyclePlan(cyclePlanData);
+                        return;
+                    }
                     const gear = ev.target.closest ? ev.target.closest('[data-cycle-gear]') : null;
                     if (gear) { ev.preventDefault(); ev.stopPropagation(); openCycleAssign(gear.dataset.cycleGear); return; }
                     const shiftBtn = ev.target.closest ? ev.target.closest('[data-cycle-shift]') : null;

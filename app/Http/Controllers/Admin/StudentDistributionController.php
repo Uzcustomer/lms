@@ -984,7 +984,14 @@ class StudentDistributionController extends Controller
             ->when($search !== '', fn ($rows) => $rows->filter(
                 fn ($row) => str_contains(mb_strtolower((string) $row['group_name']), $search)
             ))
-            ->when(!empty($filters['only_sources']), fn ($rows) => $rows->where('is_source', true))
+            ->values();
+
+        // Ekrandagi ro'yxat bilan bir xil: taqsimlanadigan (belgilangan) guruhlar
+        // faqat "Taqsimlanadigan guruhlar" vkladkasida chiqadi, chap panel va
+        // o'ng paneldagi "Barcha guruhlar" ro'yxatidan tushib qoladi.
+        $sourcesOnly = !empty($filters['only_sources']);
+        $groups = $groups
+            ->filter(fn ($row) => $sourcesOnly ? $row['is_source'] : !$row['is_source'])
             ->values();
 
         $heading = ($filters['side'] ?? 'left') === 'right'
@@ -1004,9 +1011,10 @@ class StudentDistributionController extends Controller
         $mode = $filters['mode'] ?? 'old';
         $modes = $mode === 'both' ? ['old', 'new'] : [$mode];
 
-        $fileName = 'guruh-talabalari-' . $mode . '-' . now()->format('Y-m-d-Hi') . '.xlsx';
+        $fileName = ($sourcesOnly ? 'taqsimlanadigan-guruhlar-' : 'guruh-talabalari-')
+            . $mode . '-' . now()->format('Y-m-d-Hi') . '.xlsx';
 
-        return (new DistributionExport($groups, $heading, $modes))->download($fileName);
+        return (new DistributionExport($groups, $heading, $modes, $sourcesOnly))->download($fileName);
     }
 
     /**

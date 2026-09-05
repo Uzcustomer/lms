@@ -58,6 +58,15 @@ class GroupVoteController extends Controller
             return response()->json(['message' => 'Siz allaqachon ovoz bergansiz. Ovoz faqat bir marta beriladi.'], 422);
         }
 
+        // Registrator qo'lda ko'chirgan talabaning guruhi hal qilingan — uning
+        // ovozi rejani buzib, band qilingan joyni boshqasiga o'tkazib yuborardi.
+        if (Schema::hasTable('distribution_draft_assignments')
+            && DistributionDraftAssignment::query()->where('student_id', $student->id)->exists()) {
+            return response()->json([
+                'message' => 'Sizning guruhingiz allaqachon belgilangan, ovoz berish talab qilinmaydi.',
+            ], 422);
+        }
+
         $target = $this->catalog
             ->targetsFor((int) $student->group_id)
             ->firstWhere('group_hemis_id', (int) $data['to_group_hemis_id']);

@@ -195,6 +195,10 @@
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Ko'rinish rejimi">
+                            <button type="button" id="cycViewFlow" class="px-2 py-1 bg-blue-600 font-semibold text-white">Oqim bo'yicha</button>
+                            <button type="button" id="cycViewGroup" class="px-2 py-1 bg-white text-gray-500">Guruh bo'yicha</button>
+                        </span>
                         <span id="cycleMsg" class="text-[11px] text-gray-500"></span>
                     </div>
                     <div id="cycleHolBar" class="hidden flex flex-wrap items-center gap-1.5 px-3 py-1.5 border-b border-gray-100 bg-amber-50">
@@ -230,7 +234,37 @@
                             </button>
                         </div>
                     </div>
-                    <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
+                    <div class="cyc-assign-backdrop" id="cycAssignModal">
+                <div class="cyc-assign-panel">
+                    <div class="cyc-assign-head">
+                        <b id="cycAssignTitle">Sikl bloki</b>
+                        <span id="cycAssignMeta"></span>
+                    </div>
+                    <div class="cyc-assign-body">
+                        <div>
+                            <label id="cycAssignKafedra">O'qituvchi</label>
+                            <select id="cycAssignTeacher"><option value="">— Tanlanmagan —</option></select>
+                        </div>
+                        <div>
+                            <label>Dars vaqti</label>
+                            <input type="text" id="cycAssignTime" placeholder="Masalan: 08:30 - 12:50" maxlength="50" autocomplete="off">
+                        </div>
+                        <div>
+                            <label>Xona (bo'sh xonalar)</label>
+                            <select id="cycAssignRoom"><option value="">— Tanlanmagan —</option></select>
+                        </div>
+                    </div>
+                    <div class="cyc-assign-foot">
+                        <button type="button" id="cycAssignReset" title="O'qituvchi, vaqt va xonani olib tashlash">Tozalash</button>
+                        <span class="cyc-assign-right">
+                            <button type="button" id="cycAssignClose">Bekor</button>
+                            <button type="button" id="cycAssignSave">Saqlash</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="cardPanel" class="p-2 flex flex-wrap gap-1.5 overflow-y-auto bg-white" style="max-height: 120px;"></div>
                 </div>
             </div>
 
@@ -1008,6 +1042,11 @@
         .tt-dd-tools button:hover { text-decoration: underline; }
         .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
+        /* Sana qatori doim ko'rinib tursin: vertikal scroll wrap ichida
+           bo'ladi (sticky top overflow konteynerga nisbatan ishlaydi). */
+        #cycleGridWrap { max-height: calc(100vh - 130px); }
+        #cycleGrid thead th { position: sticky; top: 0; z-index: 5; }
+        #cycleGrid thead .cyc-gcol { z-index: 7; }
         #cycleGrid { --cycle-group-width: 170px; border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
         #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
         #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; box-sizing: border-box; overflow: hidden;
@@ -1044,8 +1083,47 @@
         #cycleGrid .cyc-weekend { background: #fef08a; color: #854d0e; }
         #cycleGrid .cyc-holiday { background: #fecaca !important; color: #991b1b; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
-        #cycleGrid [data-cycle-index] { transition: box-shadow .12s, background .12s; }
-        #cycleGrid [data-cycle-index].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
+        #cycleGrid .cyc-pcol { width: 52px; min-width: 52px; padding: 1px 3px; background: #f1f5f9; color: #64748b;
+            font-size: 9px; font-weight: 700; text-align: center; border: 1px solid #e2e8f0; }
+        #cycleGrid .cyc-pname { font-size: 9.5px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
+        #cycleGrid .cyc-ptime { font-size: 8px; font-weight: 700; color: #64748b; line-height: 1.1; margin-top: 1px; }
+        #cycleGrid .cyc-type { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: 3px;
+            border-radius: 4px; font-size: 8px; font-weight: 800; color: #fff; vertical-align: middle; }
+        #cycleGrid .cyc-type.lecture { background: #4f46e5; }
+        #cycleGrid .cyc-type.practice { background: #0d9488; }
+        #cycleGrid .cyc-hrs { margin-left: 3px; font-style: normal; font-weight: 700; font-size: 8.5px; color: #475569; }
+        .cycle-pn-type { display: inline-block; margin-right: 4px; padding: 1px 5px; border-radius: 4px;
+            font-size: 8.5px; font-weight: 800; color: #fff; }
+        .cycle-pn-type.lecture { background: #4f46e5; }
+        .cycle-pn-type.practice { background: #0d9488; }
+        #cycleGrid .cyc-req { display: block; padding: 0 4px 1px; font-size: 9px; font-weight: 500; color: #334155;
+            opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #cycleGrid .cyc-gear { width: 19px; height: 19px; padding: 0; border: 1px solid rgba(30,64,175,.35); border-radius: 5px;
+            background: #fff; color: #1e40af; font-size: 11px; line-height: 1; cursor: pointer; }
+        #cycleGrid .cyc-gear:hover { background: #dbeafe; border-color: #2563eb; }
+        .cyc-assign-backdrop { position: fixed; inset: 0; z-index: 140; display: none; align-items: center; justify-content: center;
+            padding: 16px; background: rgba(15,23,42,.55); }
+        .cyc-assign-backdrop.open { display: flex; }
+        .cyc-assign-panel { width: min(430px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 12px;
+            background: #fff; box-shadow: 0 24px 64px rgba(15,23,42,.35); }
+        .cyc-assign-head { padding: 14px 18px; background: #1e3a5f; color: #fff; border-radius: 12px 12px 0 0; }
+        .cyc-assign-head b { display: block; font-size: 14px; }
+        .cyc-assign-head span { display: block; margin-top: 3px; font-size: 11px; color: rgba(255,255,255,.7); }
+        .cyc-assign-body { display: grid; gap: 11px; padding: 15px 18px; }
+        .cyc-assign-body label { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 700; color: #475569; }
+        .cyc-assign-body select, .cyc-assign-body input { width: 100%; height: 36px; padding: 0 9px; border: 1px solid #cbd5e1;
+            border-radius: 7px; font-size: 13px; outline: none; background: #fff; }
+        .cyc-assign-body select:focus, .cyc-assign-body input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+        .cyc-assign-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; }
+        .cyc-assign-foot .cyc-assign-right { display: flex; gap: 8px; }
+        #cycAssignReset { border: 1px solid #fca5a5; background: #fef2f2; color: #b91c1c; }
+        #cycAssignReset:hover { background: #fee2e2; }
+        .cyc-assign-foot button { height: 36px; padding: 0 16px; border-radius: 7px; font-size: 13px; font-weight: 700; cursor: pointer; }
+        #cycAssignSave { border: 0; background: #1e3a5f; color: #fff; }
+        #cycAssignSave:hover { background: #162c4a; }
+        #cycAssignClose { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
+        #cycleGrid [data-cycle-from] { transition: box-shadow .12s, background .12s; }
+        #cycleGrid [data-cycle-from].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
         /* Karta tanlanganda uning oqim qatori ajralib turadi */
         #cycleGrid .cyc-cell.cycle-row-target:not(.cyc-block) { background: #ecfeff; box-shadow: inset 0 -2px 0 #06b6d4; cursor: copy; }
         #cycleGrid .cyc-cell.cycle-row-muted { opacity: .45; }
@@ -3002,6 +3080,7 @@
             }
 
             let cyclePlanData = null;
+            let cycleViewMode = 'flow';   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
             // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
@@ -3019,6 +3098,7 @@
                 body.holidays = cycleHolidays;
                 if (options.auto) body.auto = 1;
                 if (options.clear) body.clear = 1;
+                body.view = cycleViewMode;
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
@@ -3030,7 +3110,7 @@
                     renderCycleCards(j);
                     $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
                         ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
-                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ' oqim · ' + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
+                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + (cycleViewMode === 'group' ? ' guruh · ' : ' oqim · ') + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
                         (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
 
                         (cycleHolidays.length ? (' · ' + cycleHolidays.length + ' bayram') : '');
@@ -3120,12 +3200,13 @@
             }
             // Sikl panjarasi interaktiv ko'rinishda chiziladi: bo'sh katakka fan
             // kartasini sudrash uning start indeksini saqlaydi.
-            async function placeCycleCardAt(card, index) {
+            async function placeCycleCardAt(card, index, pair) {
                 if (!card) return;
                 try {
                     await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                         action: 'place', specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject, start_index: index,
+                        training_type: card.type || 'practice', pair: pair || 1, view: cycleViewMode,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
@@ -3151,6 +3232,115 @@
                 if (date.holiday) return ' cyc-off cyc-holiday';
                 return date.sunday ? ' cyc-off cyc-weekend' : '';
             }
+            // ── Sikl blokiga o'qituvchi / vaqt / xona biriktirish ──
+            let cycAssignCard = null;
+
+            async function openCycleAssign(key) {
+                const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                if (!card || !card.placed) return;
+                cycAssignCard = card;
+
+                $('cycAssignTitle').textContent = card.subject + (card.type === 'lecture' ? " — Ma'ruza" : ' — Amaliy');
+                $('cycAssignMeta').textContent = card.group + ' · ' + card.days + ' kun';
+                $('cycAssignKafedra').textContent = "O'qituvchi";
+                $('cycAssignTeacher').innerHTML = '<option value="">Yuklanmoqda...</option>';
+                $('cycAssignRoom').innerHTML = '<option value="">Yuklanmoqda...</option>';
+                $('cycAssignTime').value = '';
+                $('cycAssignModal').classList.add('open');
+
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/cycle-assign-options', 'POST', {
+                        specialty_name: card.specialty, course: card.course,
+                        group_name: card.group, subject_name: card.subject,
+                        training_type: card.type || 'practice', view: cycleViewMode,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                    });
+
+                    $('cycAssignKafedra').textContent = "O'qituvchi" + (j.kafedra ? ' (' + j.kafedra + ')' : '');
+                    $('cycAssignTeacher').innerHTML = '<option value="">— Tanlanmagan —</option>' +
+                        (j.teachers || []).map(t => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('');
+                    $('cycAssignRoom').innerHTML = '<option value="">— Tanlanmagan —</option>' +
+                        (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '') + '</option>').join('');
+
+                    const current = j.current || {};
+                    if (current.teacher_id) $('cycAssignTeacher').value = String(current.teacher_id);
+                    if (current.auditorium_code) $('cycAssignRoom').value = current.auditorium_code;
+                    $('cycAssignTime').value = current.lesson_time || '';
+                } catch (e) {
+                    $('cycAssignModal').classList.remove('open');
+                    alert('Ma\u2019lumotlarni yuklab bo\u2018lmadi: ' + e.message);
+                }
+            }
+
+            function closeCycleAssign() {
+                $('cycAssignModal').classList.remove('open');
+                cycAssignCard = null;
+            }
+
+            // Vaqt maskasi: raqam terilganda 08:30 - 12:50 ko'rinishiga keladi.
+            $('cycAssignTime').addEventListener('input', ev => {
+                const digits = ev.target.value.replace(/\D/g, '').slice(0, 8);
+                let out = '';
+                for (let i = 0; i < digits.length; i++) {
+                    if (i === 2) out += ':';
+                    if (i === 4) out += ' - ';
+                    if (i === 6) out += ':';
+                    out += digits[i];
+                }
+                ev.target.value = out;
+            });
+
+            // Tozalash: o'qituvchi, vaqt va xona olib tashlanadi.
+            $('cycAssignReset').addEventListener('click', async () => {
+                if (!cycAssignCard) return;
+                if (!confirm("Biriktirilgan o'qituvchi, vaqt va xona olib tashlansinmi?")) return;
+                const button = $('cycAssignReset');
+                button.disabled = true;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
+                        specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
+                        group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
+                        training_type: cycAssignCard.type || 'practice', view: cycleViewMode,
+                        teacher_id: null, lesson_time: null, auditorium_code: null,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                    });
+                    closeCycleAssign();
+                    await loadCyclePlan();
+                } catch (e) {
+                    alert('Tozalab bo\u2018lmadi: ' + e.message);
+                } finally {
+                    button.disabled = false;
+                }
+            });
+
+            $('cycAssignClose').addEventListener('click', closeCycleAssign);
+            $('cycAssignModal').addEventListener('click', ev => {
+                if (ev.target === $('cycAssignModal')) closeCycleAssign();
+            });
+
+            $('cycAssignSave').addEventListener('click', async () => {
+                if (!cycAssignCard) return;
+                const button = $('cycAssignSave');
+                button.disabled = true;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
+                        specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
+                        group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
+                        training_type: cycAssignCard.type || 'practice', view: cycleViewMode,
+                        teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
+                        lesson_time: $('cycAssignTime').value.trim() || null,
+                        auditorium_code: $('cycAssignRoom').value || null,
+                        start_date: $('cycleStart').value, holidays: cycleHolidays,
+                    });
+                    closeCycleAssign();
+                    await loadCyclePlan();
+                } catch (e) {
+                    alert('Saqlab bo\u2018lmadi: ' + e.message);
+                } finally {
+                    button.disabled = false;
+                }
+            });
+
             function renderCyclePlan(j) {
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
@@ -3158,112 +3348,207 @@
                     renderCycleCards(j);
                     return;
                 }
-                let h = '<colgroup><col class="cyc-group-col">';
+                // Juftlik qatorlar qo'ng'iroq jadvalidan: nomi (0.5-para, 1-para...) va vaqti bilan.
+                const bellPairs = boardSchedule().filter(it => it.type === 'pair');
+                const pairs = bellPairs.length || Math.max(1, +j.pairs || 1);
+                let h = '<colgroup><col class="cyc-group-col"><col style="width:52px">';
                 dates.forEach(() => h += '<col class="cyc-date-col">');
-                h += '</colgroup><thead><tr><th class="cyc-gcol">Oqim</th>';
+                h += '</colgroup><thead><tr><th class="cyc-gcol">' + (cycleViewMode === 'group' ? 'Guruh' : 'Oqim') + '</th><th class="cyc-pcol" title="Juftlik">Para</th>';
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
-                    h += '<tr><td class="cyc-gcol">' + cycleMembersHtml(row.group, row.subgroups) + '</td>';
-                    let col = 0;
+                    // Bloklar yaxlit to'rtburchak katak bo'lib chiziladi (rowspan)
+                    // — ichki chiziqlar yo'q: ma'ruza 1 para, amaliy butun sikl
+                    // davomida kuniga 4 soat (2 para). Bo'sh kataklar colspan bilan
+                    // birlashtiriladi: DOM kichik, drag & drop qotmaydi; aniq kun
+                    // sichqoncha o'rnidan topiladi.
+                    const cols = dates.length;
+                    const cellAt = {};   // lane -> {boshCol: {html, next}}
+                    const covered = {};  // lane -> rowspan/colspan qamrovi
+                    for (let l = 1; l <= pairs; l++) { cellAt[l] = {}; covered[l] = new Uint8Array(cols); }
+                    const mark = (lane0, lanes, from, to) => {
+                        for (let l = lane0; l < lane0 + lanes && l <= pairs; l++)
+                            for (let c = from; c <= to && c < cols; c++) covered[l][c] = 1;
+                    };
+                    const free = (lane0, lanes, from, to) => {
+                        for (let l = lane0; l < lane0 + lanes && l <= pairs; l++)
+                            for (let c = from; c <= to && c < cols; c++) if (covered[l][c]) return false;
+                        return true;
+                    };
                     (row.blocks || []).forEach(block => {
-                        while (col < block.from) {
-                            h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
-                            col++;
+                        const p = Math.max(1, +block.pair || 1);
+                        if (p > pairs || block.from >= cols) return;
+                        const spanHead = Math.max(1, +block.span_head || 1);
+                        const spanTail = +block.span_tail || 0;
+                        const headDays = +block.head_days || 0;
+                        const headTo = block.head_to != null ? +block.head_to : block.to;
+                        const tailFrom = block.tail_from != null ? +block.tail_from : null;
+                        const rects = [];
+                        if (block.type === 'practice' && spanTail > 0 && tailFrom != null && headDays > 0) {
+                            // Bosh bo'lak ichki yakshanba/bayram ustunlarini ham qamrab,
+                            // dum bo'lagigacha uzluksiz davom etadi.
+                            rects.push({ lanes: spanHead, from: block.from, to: Math.min(tailFrom - 1, block.to), main: true });
+                            rects.push({ lanes: spanTail, from: tailFrom, to: block.to, main: false });
+                        } else if (block.type === 'practice' && spanTail > 0 && headDays < 1) {
+                            rects.push({ lanes: spanTail, from: block.from, to: block.to, main: true });
+                        } else {
+                            rects.push({ lanes: spanHead, from: block.from, to: block.to, main: true });
                         }
                         const color = subjColor(block.subject);
-                        h += '<td class="cyc-cell cyc-block" draggable="true" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + block.from + '" data-cycle-key="' + esc(block.key) + '" colspan="' + (block.to - block.from + 1) + '" style="background:' + color.bg + ';border-color:' + color.border + ';" title="' + esc(block.subject) + ' — ' + block.days + ' kun">' +
-                            '<span class="cyc-shift-actions">' +
-                            '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
-                            '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                            '</span><span class="cyc-lbl">' + esc(block.subject) + ' <b>' + block.days + '</b></span></td>';
-                        col = block.to + 1;
+                        const reqParts = [block.teacher_name, block.lesson_time, block.auditorium_name || block.auditorium_code]
+                            .filter(Boolean);
+                        const req = reqParts.join(' · ');
+                        const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
+                        const typeChip = '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
+                        const twoRects = rects.length > 1;
+                        rects.forEach(rect => {
+                            const lanes = Math.min(rect.lanes, pairs - p + 1);
+                            const to = Math.min(rect.to, cols - 1);
+                            if (lanes < 1 || to < rect.from || rect.from < 0) return;
+                            if (!free(p, lanes, rect.from, to)) return; // ustma-ust yozuv jadvalni buzmasin
+                            const spanCols = to - rect.from + 1;
+                            const joinStyle = twoRects ? (rect.main ? 'border-right:0;' : 'border-left:0;') : '';
+                            let cellHtml;
+                            if (rect.main) {
+                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
+                                    '<span class="cyc-shift-actions">' +
+                                    '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
+                                    '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
+                                    '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
+                                    '</span><span class="cyc-lbl">' + typeChip + esc(block.subject) + ' <b>' + block.days + '</b>' + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
+                                    reqHtml +
+                                    '</td>';
+                            } else {
+                                cellHtml = '<td class="cyc-cell cyc-block cyc-cont" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + '"></td>';
+                            }
+                            cellAt[p][rect.from] = { html: cellHtml, next: to + 1 };
+                            mark(p, lanes, rect.from, to);
+                        });
                     });
-                    while (col < dates.length) {
-                        h += '<td class="cyc-cell" data-cycle-row="' + esc(row.row_key) + '" data-cycle-index="' + col + '"></td>';
-                        col++;
+                    for (let pair = 1; pair <= pairs; pair++) {
+                        h += '<tr>';
+                        if (pair === 1) {
+                            // Guruh rejimida qator — bitta guruh: nomi to'g'ridan-to'g'ri.
+                            const groupLabel = cycleViewMode === 'group'
+                                ? '<div class="cyc-members"><div class="cyc-member-row"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div></div>'
+                                : cycleMembersHtml(row.group, row.subgroups);
+                            h += '<td class="cyc-gcol" rowspan="' + pairs + '">' + groupLabel + '</td>';
+                        }
+                        const pt = bellPairs[pair - 1];
+                        h += '<td class="cyc-pcol"><div class="cyc-pname">' + esc(pt ? (pt.name || pt.abbr || pair) : (pair + '-para')) + '</div>' +
+                            (pt && (pt.start || pt.end) ? '<div class="cyc-ptime">' + esc(pt.start || '') + '<br>' + esc(pt.end || '') + '</div>' : '') + '</td>';
+                        let col = 0;
+                        while (col < cols) {
+                            const cellObj = cellAt[pair][col];
+                            if (cellObj) { h += cellObj.html; col = cellObj.next; continue; }
+                            if (covered[pair][col]) { col++; continue; }
+                            let endCol = col;
+                            while (endCol + 1 < cols && !covered[pair][endCol + 1] && !cellAt[pair][endCol + 1]) endCol++;
+                            h += '<td class="cyc-cell" colspan="' + (endCol - col + 1) + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + pair + '" data-cycle-from="' + col + '" data-cycle-span="' + (endCol - col + 1) + '"></td>';
+                            col = endCol + 1;
+                        }
+                        h += '</tr>';
                     }
-                    h += '</tr>';
                 });
                 h += '</tbody>';
                 $('cycleGrid').innerHTML = h;
-                $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {
-                    // dragover'da preventDefault bo'lmasa brauzer drop'ni umuman
-                    // bermaydi, shuning uchun katak har qanday sudrashni qabul qiladi;
-                    // karta o'zi drop'da tekshiriladi.
-                    cell.addEventListener('dragenter', ev => ev.preventDefault());
-                    cell.addEventListener('dragover', ev => {
-                        ev.preventDefault();
-                        if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
-                        cell.classList.add('cycle-drop-target');
-                    });
-                    cell.addEventListener('dragleave', () => cell.classList.remove('cycle-drop-target'));
-                    cell.addEventListener('drop', async ev => {
-                        ev.preventDefault();
-                        cell.classList.remove('cycle-drop-target');
-                        // Kalit sudrash boshlanganda saqlanadi; ba'zi brauzerlarda
-                        // u yo'qolsa, dataTransfer'dagi nusxadan olinadi.
-                        const key = cycleDragKey || (ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '';
-                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
-                        const rowKey = cell.dataset.cycleRow;
-                        const index = +cell.dataset.cycleIndex;
-                        cycleDragKey = null;
-                        if (!card) return;
-                        if (card.row_key !== rowKey) {
-                            console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
-                            alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
-                            return;
-                        }
-                        try {
-                            await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                                action: 'place', specialty_name: card.specialty, course: card.course,
-                                group_name: card.group, subject_name: card.subject, start_index: index,
-                                start_date: $('cycleStart').value, holidays: cycleHolidays,
-                            });
-                            await loadCyclePlan();
-                        } catch (e) {
-                            console.error('Sikl joylash xatosi', {karta: card, index: index, xato: e.message});
-                            alert('Sikl blokini joylab bo‘lmadi: ' + e.message);
-                        }
-                    });
+                setupCycleGridEvents();
+                renderCycleCards(j);
+            }
+
+            // ── Sikl jadvali hodisalari (delegatsiya) ──
+            // Har renderda minglab katakka to'rttadan listener ulash drag
+            // paytida interfeysni qotirardi; endi butun jadvalga bir marta
+            // ulanadi va render faqat innerHTML almashtiradi.
+            let cycleDropCell = null;
+            let cycleGridEventsReady = false;
+            function setupCycleGridEvents() {
+                if (cycleGridEventsReady) return;
+                cycleGridEventsReady = true;
+                const grid = $('cycleGrid');
+                const cellOf = ev => ev.target && ev.target.closest ? ev.target.closest('[data-cycle-from]') : null;
+                // Birlashtirilgan katakda aniq kun: katak boshidan sichqoncha
+                // X-koordinatasigacha nechta ustun borligi hisoblanadi.
+                const indexAt = (cell, ev) => {
+                    const span = Math.max(1, +cell.dataset.cycleSpan || 1);
+                    const rect = cell.getBoundingClientRect();
+                    const colW = rect.width / span;
+                    const off = colW > 0 && ev.clientX != null ? Math.floor((ev.clientX - rect.left) / colW) : 0;
+                    return (+cell.dataset.cycleFrom || 0) + Math.min(span - 1, Math.max(0, off));
+                };
+                const clearDropMark = () => {
+                    if (cycleDropCell) { cycleDropCell.classList.remove('cycle-drop-target'); cycleDropCell = null; }
+                };
+                grid.addEventListener('dragenter', ev => { if (cellOf(ev)) ev.preventDefault(); });
+                grid.addEventListener('dragover', ev => {
+                    const cell = cellOf(ev);
+                    if (!cell) return;
+                    // dragover'da preventDefault bo'lmasa brauzer drop'ni umuman bermaydi.
+                    ev.preventDefault();
+                    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+                    if (cycleDropCell !== cell) { clearDropMark(); cycleDropCell = cell; cell.classList.add('cycle-drop-target'); }
                 });
-                $('cycleGrid').querySelectorAll('[data-cycle-index]').forEach(cell => {
-                    cell.addEventListener('click', () => {
-                        if (!cycleDragKey) return;
-                        const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
-                        const rowKey = cell.dataset.cycleRow;
-                        const index = +cell.dataset.cycleIndex;
-                        cycleDragKey = null;
-                        highlightCycleRow(null);
-                        if (!card || card.row_key !== rowKey) {
-                            alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
-                            return;
-                        }
-                        placeCycleCardAt(card, index);
-                    });
+                grid.addEventListener('dragleave', ev => {
+                    if (!ev.relatedTarget || !grid.contains(ev.relatedTarget)) clearDropMark();
                 });
-                $('cycleGrid').querySelectorAll('.cyc-block[data-cycle-key]').forEach(block => {
-                    block.addEventListener('dragstart', ev => {
-                        cycleDragKey = block.dataset.cycleKey;
-                        ev.dataTransfer.effectAllowed = 'move';
-                        ev.dataTransfer.setData('text/plain', cycleDragKey);
-                        highlightCycleRow(cycleDragKey);
-                    });
-                    block.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); });
+                grid.addEventListener('drop', async ev => {
+                    const cell = cellOf(ev);
+                    if (!cell) return;
+                    ev.preventDefault();
+                    clearDropMark();
+                    // Kalit sudrash boshlanganda saqlanadi; ba'zi brauzerlarda
+                    // u yo'qolsa, dataTransfer'dagi nusxadan olinadi.
+                    const key = cycleDragKey || (ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '';
+                    const card = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                    const rowKey = cell.dataset.cycleRow;
+                    const index = indexAt(cell, ev);
+                    cycleDragKey = null;
+                    if (!card) return;
+                    if (card.row_key !== rowKey) {
+                        console.warn('Sikl: qator mos kelmadi', {kartaQatori: card.row_key, katakQatori: rowKey});
+                        alert('Fan kartasini faqat o‘z oqimining qatoriga joylang.');
+                        return;
+                    }
+                    try {
+                        await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                            action: 'place', specialty_name: card.specialty, course: card.course,
+                            group_name: card.group, subject_name: card.subject, start_index: index,
+                            training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleViewMode,
+                            start_date: $('cycleStart').value, holidays: cycleHolidays,
+                        });
+                        await loadCyclePlan();
+                    } catch (e) {
+                        console.error('Sikl joylash xatosi', {karta: card, index: index, xato: e.message});
+                        alert('Sikl blokini joylab bo‘lmadi: ' + e.message);
+                    }
                 });
-                $('cycleGrid').querySelectorAll('[data-cycle-shift]').forEach(button => {
-                    button.addEventListener('click', async ev => {
+                grid.addEventListener('dragstart', ev => {
+                    if (ev.target.closest && ev.target.closest('[data-cycle-gear]')) { ev.preventDefault(); return; }
+                    const block = ev.target && ev.target.closest ? ev.target.closest('.cyc-block[data-cycle-key]') : null;
+                    if (!block) return;
+                    cycleDragKey = block.dataset.cycleKey;
+                    ev.dataTransfer.effectAllowed = 'move';
+                    ev.dataTransfer.setData('text/plain', cycleDragKey);
+                    highlightCycleRow(cycleDragKey);
+                });
+                grid.addEventListener('dragend', () => { cycleDragKey = null; highlightCycleRow(null); clearDropMark(); });
+                grid.addEventListener('click', async ev => {
+                    const gear = ev.target.closest ? ev.target.closest('[data-cycle-gear]') : null;
+                    if (gear) { ev.preventDefault(); ev.stopPropagation(); openCycleAssign(gear.dataset.cycleGear); return; }
+                    const shiftBtn = ev.target.closest ? ev.target.closest('[data-cycle-shift]') : null;
+                    if (shiftBtn) {
                         ev.preventDefault();
                         ev.stopPropagation();
-                        const block = button.closest('.cyc-block');
+                        const block = shiftBtn.closest('.cyc-block');
                         const card = (cyclePlanData.cycle_cards || []).find(item => item.key === (block && block.dataset.cycleKey));
                         if (!card || !card.placed) return;
-                        const direction = +button.dataset.cycleShift;
-                        button.disabled = true;
+                        const direction = +shiftBtn.dataset.cycleShift;
+                        shiftBtn.disabled = true;
                         try {
                             const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
+                                training_type: card.type || 'practice', pair: card.pair || 1, view: cycleViewMode,
                                 direction: direction, start_date: $('cycleStart').value, holidays: cycleHolidays,
                             });
                             await loadCyclePlan();
@@ -3272,11 +3557,23 @@
                         } catch (e) {
                             alert('Sikl kartalarini surib bo\'lmadi: ' + e.message);
                         } finally {
-                            button.disabled = false;
+                            shiftBtn.disabled = false;
                         }
-                    });
+                        return;
+                    }
+                    const cell = cellOf(ev);
+                    if (!cell || !cycleDragKey) return;
+                    const card = (cyclePlanData.cycle_cards || []).find(item => item.key === cycleDragKey);
+                    const rowKey = cell.dataset.cycleRow;
+                    const index = indexAt(cell, ev);
+                    cycleDragKey = null;
+                    highlightCycleRow(null);
+                    if (!card || card.row_key !== rowKey) {
+                        alert('Fan kartasini faqat o\u2018z oqimining qatoriga joylang.');
+                        return;
+                    }
+                    placeCycleCardAt(card, index, +cell.dataset.cyclePair || 1);
                 });
-                renderCycleCards(j);
             }
             function renderCycleCards(j) {
                 const cycleCards = (j && j.cycle_cards) || [];
@@ -3307,11 +3604,12 @@
                     // Panel kartasi jadvaldagi blok bilan bir xil rangda — qaysi fan
                     // qayerga tushishi ko'rinib tursin.
                     const color = subjColor(card.subject);
+                    const typeChip = '<span class="cycle-pn-type ' + (card.type || 'practice') + '">' + (card.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '</span>';
                     return '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) +
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
                         'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +
-                        '<span class="cycle-pn-subject">' + esc(card.subject) + '</span>' +
-                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun</span></span></div>';
+                        '<span class="cycle-pn-subject">' + typeChip + esc(card.subject) + '</span>' +
+                        '<span class="cycle-pn-meta"><span>' + esc(cycleFlowShort(card.group)) + ' · ' + esc(card.course) + '-kurs</span><span class="cycle-pn-days">' + card.days + ' kun' + (card.hours ? ' · ' + card.hours + ' soat' : '') + '</span></span></div>';
                 }).join('') || '<div class="text-xs text-slate-400 p-2">Barcha sikl fan kartalari joylashgan.</div>';
                 $('cardPanel').querySelectorAll('.cycle-pn-card').forEach(card => {
                     // Bosib tanlash: sudrash ishlamagan holatlarda ham karta
@@ -3346,6 +3644,7 @@
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
                             action: 'remove', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject,
+                            training_type: card.type || 'practice', view: cycleViewMode,
                         });
                         await loadCyclePlan();
                     } catch (e) { alert('Sikl blokini olib bo‘lmadi: ' + e.message); }
@@ -3407,6 +3706,22 @@
             };
 
             if ($('cycleRefresh')) $('cycleRefresh').onclick = () => loadCyclePlan();
+            // Ko'rinish rejimi: oqim bo'yicha / guruh bo'yicha
+            function setCycleViewMode(mode) {
+                if (cycleViewMode === mode) return;
+                cycleViewMode = mode;
+                const on = ['bg-blue-600', 'font-semibold', 'text-white'];
+                const off = ['bg-white', 'text-gray-500'];
+                [['cycViewFlow', 'flow'], ['cycViewGroup', 'group']].forEach(([id, m]) => {
+                    const btn = $(id);
+                    if (!btn) return;
+                    btn.classList.remove(...on, ...off);
+                    btn.classList.add(...(m === mode ? on : off));
+                });
+                loadCyclePlan();
+            }
+            if ($('cycViewFlow')) $('cycViewFlow').onclick = () => setCycleViewMode('flow');
+            if ($('cycViewGroup')) $('cycViewGroup').onclick = () => setCycleViewMode('group');
             if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
             // Bayram qo'shish
             if ($('cycleHolAddBtn')) $('cycleHolAddBtn').onclick = () => {

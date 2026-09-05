@@ -203,13 +203,17 @@ class StudentDistributionController extends Controller
      * Talabani boshqa guruhga ko'chirish rejasi.
      *
      * LMS dagi students.group_id o'zgartirilmaydi — bu faqat reja. Maqsadli
-     * guruh talabaning yo'nalishi, kursi va ta'lim tiliga mos bo'lishi hamda
-     * bo'sh joyi qolgan bo'lishi shart.
+     * guruh talabaning yo'nalishi va kursiga mos bo'lishi shart: bularda o'quv
+     * rejasi boshqa bo'ladi.
      *
-     * "To'liq guruh" rejimida (full_group_mode) ikki cheklov yumshaydi:
-     * bo'sh joyi yo'q guruhga ham ko'chirish mumkin (guruh "ortiqcha" bo'lib
-     * qoladi) va o'zbek/rus guruhidan ingliz guruhiga o'tishga ruxsat beriladi.
-     * Boshqa yo'nalish yoki kursga bu rejimda ham o'tib bo'lmaydi.
+     * Ta'lim tili va fakultet cheklov emas: registrator boshqa tildagi guruhga
+     * ham, bir yo'nalishning boshqa "N-son" fakultetiga ham (1-son davolash ↔
+     * 2-son davolash) o'tkaza oladi. UI tanlashdan oldin ikkalasini ham
+     * ogohlantirib chiqadi. Talaba ovozida esa til ham, fakultet ham bir xil
+     * bo'lishi shart.
+     *
+     * "To'liq guruh" rejimida (full_group_mode) sig'im tekshirilmaydi:
+     * bo'sh joyi yo'q guruhga ham ko'chirish mumkin (guruh "ortiqcha" bo'ladi).
      */
     public function assignStudent(Request $request): JsonResponse
     {
@@ -250,11 +254,12 @@ class StudentDistributionController extends Controller
             return response()->json(['message' => 'Talaba allaqachon shu guruhda.'], 422);
         }
 
-        if (!$this->groupsCompatible($source, $target, $fullMode)) {
+        // Til farqiga ruxsat: qo'lda ko'chirishda registrator boshqa tildagi
+        // guruhga ham o'tkaza oladi (UI tanlashdan oldin ogohlantiradi).
+        if (!$this->groupsCompatible($source, $target, true)) {
             return response()->json([
-                'message' => $fullMode
-                    ? 'Maqsadli guruh talabaning yo\'nalishi yoki kursiga mos emas, yoki ta\'lim tili boshqa (faqat ingliz guruhiga o\'tish mumkin).'
-                    : 'Maqsadli guruh talabaning yo\'nalishi, kursi yoki ta\'lim tiliga mos emas.',
+                'message' => 'Maqsadli guruh talabaning yo\'nalishi yoki kursiga mos emas '
+                    . '(fakultet faqat bir yo\'nalishning "N-son" juftlari orasida almashishi mumkin).',
             ], 422);
         }
 
@@ -345,8 +350,8 @@ class StudentDistributionController extends Controller
                 continue;
             }
 
-            if (!$this->groupsCompatible($source, $target, $fullMode)) {
-                $errors[] = $student->full_name . ': yo\'nalishi, kursi yoki ta\'lim tili mos emas.';
+            if (!$this->groupsCompatible($source, $target, true)) {
+                $errors[] = $student->full_name . ': yo\'nalishi, kursi yoki fakulteti mos emas.';
                 continue;
             }
 
@@ -453,11 +458,14 @@ class StudentDistributionController extends Controller
             return response()->json(['message' => 'Guruh topilmadi.'], 404);
         }
 
+        // Registrator ro'yxatida boshqa tildagi guruhlar ham ko'rinadi — ular
+        // "To'liq guruh" rejimidan qat'i nazar tanlanishi mumkin, UI esa
+        // tanlashdan oldin til farqini ogohlantirib chiqadi.
         $targets = $catalog
             ->filter(fn ($group) => $group['group_hemis_id'] !== $source['group_hemis_id']
                 && !$group['is_source']
                 && ($fullMode || ($group['free_places'] !== null && $group['free_places'] > 0))
-                && $this->groupsCompatible($source, $group, $fullMode))
+                && $this->groupsCompatible($source, $group, true))
             ->values();
 
         return response()->json(['groups' => $targets]);
@@ -609,34 +617,173 @@ class StudentDistributionController extends Controller
             ->whereIn('id', collect($data['student_ids'])->unique())
             ->get(['id', 'group_id']);
 
+        // Qo'lda ko'chirilgan talabaning guruhi hal qilingan — unga ovoz
+        // berish ochilmaydi, aks holda ovozi rejani buzib yuborardi.
+        $assigned = $this->assignedStudentIds($students->pluck('id'));
+        $opened = 0;
+
         foreach ($students as $student) {
+            if ($assigned->has((int) $student->id)) {
+                continue;
+            }
+
             DistributionVotingStudent::updateOrCreate(
                 ['student_id' => $student->id],
                 ['group_hemis_id' => (int) $student->group_id, 'opened_by' => Auth::id()]
             );
+            $opened++;
         }
 
+        $skipped = $students->count() - $opened;
+
         return response()->json([
-            'message' => $students->count() . ' ta talabaga ovoz berish ochildi.',
+            'message' => $opened . ' ta talabaga ovoz berish ochildi.'
+                . ($skipped ? ' ' . $skipped . " ta talaba qo'lda ko'chirilgani uchun o'tkazib yuborildi." : ''),
             'voting_student_count' => DistributionVotingStudent::query()->count(),
         ]);
     }
 
     /** Ovoz berishni butunlay yopadi (barcha guruhlar uchun). */
-    public function closeVoting(): JsonResponse
+    /**
+     * Ovoz berishni yopadi.
+     *
+     * Guruh yoki talaba ro'yxati berilsa — faqat o'shalar yopiladi; ikkalasi
+     * ham bo'sh kelsa hammasi yopiladi. Berilgan ovozlarga tegilmaydi: yopish
+     * shundan keyin ovoz berishni to'xtatadi, avvalgi tanlovni bekor qilmaydi.
+     */
+    public function closeVoting(Request $request): JsonResponse
     {
         abort_unless(Schema::hasTable('distribution_voting_groups'), 503, 'Ovoz berish jadvali hali migratsiya qilinmagan.');
 
-        DistributionVotingGroup::query()->delete();
-        if (Schema::hasTable('distribution_voting_students')) {
-            DistributionVotingStudent::query()->delete();
+        $data = $request->validate([
+            'group_hemis_ids' => ['nullable', 'array', 'max:5000'],
+            'group_hemis_ids.*' => ['required', 'integer'],
+            'student_ids' => ['nullable', 'array', 'max:5000'],
+            'student_ids.*' => ['required', 'integer'],
+        ]);
+
+        $groupIds = collect($data['group_hemis_ids'] ?? [])->map(fn ($id) => (int) $id)->unique();
+        $studentIds = collect($data['student_ids'] ?? [])->map(fn ($id) => (int) $id)->unique();
+        $hasStudents = Schema::hasTable('distribution_voting_students');
+
+        if ($groupIds->isEmpty() && $studentIds->isEmpty()) {
+            DistributionVotingGroup::query()->delete();
+            if ($hasStudents) {
+                DistributionVotingStudent::query()->delete();
+            }
+            $message = 'Ovoz berish hammaga yopildi.';
+        } else {
+            $closedGroups = 0;
+            $closedStudents = 0;
+
+            if ($groupIds->isNotEmpty()) {
+                $closedGroups = DistributionVotingGroup::query()
+                    ->whereIn('group_hemis_id', $groupIds->all())->delete();
+
+                // Guruh yopilganda unga tegishli yakka ruxsatlar ham ketadi,
+                // aks holda guruh yopiq ko'rinib, talabada popup qolib ketardi.
+                if ($hasStudents) {
+                    $closedStudents += DistributionVotingStudent::query()
+                        ->whereIn('group_hemis_id', $groupIds->all())->delete();
+                }
+            }
+
+            if ($studentIds->isNotEmpty() && $hasStudents) {
+                $closedStudents += DistributionVotingStudent::query()
+                    ->whereIn('student_id', $studentIds->all())->delete();
+            }
+
+            $parts = [];
+            if ($closedGroups) {
+                $parts[] = $closedGroups . ' ta guruh';
+            }
+            if ($closedStudents) {
+                $parts[] = $closedStudents . ' ta talaba';
+            }
+            $message = $parts
+                ? 'Ovoz berish yopildi: ' . implode(' · ', $parts) . '.'
+                : 'Yopiladigan ochiq ovoz topilmadi.';
         }
 
         return response()->json([
-            'message' => 'Ovoz berish hammaga yopildi.',
-            'voting_open_count' => 0,
-            'voting_student_count' => 0,
+            'message' => $message,
+            'voting_open_count' => DistributionVotingGroup::query()->count(),
+            'voting_student_count' => $hasStudents ? DistributionVotingStudent::query()->count() : 0,
         ]);
+    }
+
+    /**
+     * Ovoz berish ochiq guruhlar va yakka talabalar ro'yxati — yopishda
+     * tanlash uchun. Har qatorda nechta talaba hali ovoz bermagani ko'rinadi.
+     */
+    public function openVotings(): JsonResponse
+    {
+        if (!Schema::hasTable('distribution_voting_groups')) {
+            return response()->json(['groups' => [], 'students' => []]);
+        }
+
+        $voted = Schema::hasTable('distribution_votes')
+            ? DistributionVote::query()->pluck('student_id')->map(fn ($id) => (int) $id)->flip()
+            : collect();
+
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+
+        // Ochiq guruhlardagi talabalar — qaysi biri ovoz berganini sanash uchun.
+        $openGroups = DistributionVotingGroup::query()->orderBy('group_name')->get();
+        $memberIds = $openGroups->isNotEmpty()
+            ? Student::query()
+                ->where('student_status_code', 11)
+                ->whereIn('group_id', $openGroups->pluck('group_hemis_id')->all())
+                ->get(['id', 'group_id'])
+                ->groupBy(fn ($student) => (int) $student->group_id)
+            : collect();
+
+        // Qo'lda ko'chirilganlar ovoz bermaydi — ular ham "hal bo'lgan" hisobga
+        // kiradi, aks holda qator hech qachon to'liq ko'rinmasdi.
+        $assigned = $this->assignedStudentIds($memberIds->flatten()->pluck('id'));
+
+        $groups = $openGroups->map(function (DistributionVotingGroup $row) use ($catalog, $memberIds, $voted, $assigned) {
+            $groupId = (int) $row->group_hemis_id;
+            $members = $memberIds->get($groupId, collect());
+            $group = $catalog->get($groupId);
+
+            return [
+                'group_hemis_id' => $groupId,
+                'group_name' => $row->group_name ?: ($group['group_name'] ?? ('#' . $groupId)),
+                'faculty_name' => $group['faculty_name'] ?? '',
+                'specialty_name' => $group['specialty_name'] ?? '',
+                'course' => $group['course'] ?? null,
+                'student_count' => $members->count(),
+                'voted_count' => $members->filter(fn ($student) => $voted->has((int) $student->id)
+                    || $assigned->has((int) $student->id))->count(),
+            ];
+        })->values();
+
+        $students = collect();
+        if (Schema::hasTable('distribution_voting_students')) {
+            $openStudents = DistributionVotingStudent::query()->get();
+            $names = $openStudents->isNotEmpty()
+                ? Student::query()->whereIn('id', $openStudents->pluck('student_id')->all())
+                    ->get(['id', 'full_name', 'student_id_number', 'group_name'])->keyBy('id')
+                : collect();
+
+            $students = $openStudents
+                ->map(function (DistributionVotingStudent $row) use ($names, $voted) {
+                    $student = $names->get($row->student_id);
+
+                    return [
+                        'student_id' => (int) $row->student_id,
+                        'full_name' => $student->full_name ?? ('#' . $row->student_id),
+                        'student_id_number' => (string) ($student->student_id_number ?? ''),
+                        'group_name' => $student->group_name ?? '',
+                        'has_voted' => $voted->has((int) $row->student_id),
+                    ];
+                })
+                ->sortBy('full_name')
+                ->values();
+        }
+
+        return response()->json(['groups' => $groups, 'students' => $students]);
     }
 
     /** Berilgan ovozlar ro'yxati va ochiq guruhlar soni. */
@@ -871,6 +1018,23 @@ class StudentDistributionController extends Controller
      *    boshqa joylarida ham shu usul ishlatiladi, alohida kod yo'q;
      *  - faqat `groups` jadvalida faol deb belgilangan guruhlar.
      */
+    /**
+     * Berilganlardan qaysilari reja bo'yicha allaqachon ko'chirilgan.
+     * Qaytadi: talaba id => true (isset uchun).
+     */
+    private function assignedStudentIds(Collection $studentIds): Collection
+    {
+        if ($studentIds->isEmpty() || !Schema::hasTable('distribution_draft_assignments')) {
+            return collect();
+        }
+
+        return DistributionDraftAssignment::query()
+            ->whereIn('student_id', $studentIds->map(fn ($id) => (int) $id)->all())
+            ->pluck('student_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+    }
+
     private function groupCatalog(): Collection
     {
         return $this->catalog->groups();

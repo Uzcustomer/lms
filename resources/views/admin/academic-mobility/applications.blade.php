@@ -190,7 +190,7 @@
                                     </td>
                                     <td>
                                         @if($application->document_path)
-                                            <a href="{{ route('admin.academic-mobility.document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-document-btn" title="{{ $application->document_name }}">
+                                            <a href="{{ route('admin.academic-mobility.document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-document-btn" data-am-open-and-save title="{{ $application->document_name }}">
                                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/>
                                                 </svg>
@@ -201,7 +201,7 @@
                                             <span class="am-no-document">Hujjat yo'q</span>
                                         @endif
                                         @if($application->basis_document_path && $application->basis_document_path !== 'pending')
-                                            <a href="{{ route('admin.academic-mobility.basis-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-document-btn am-document-btn-green" title="{{ $application->basis_document_name }}">
+                                            <a href="{{ route('admin.academic-mobility.basis-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-document-btn am-document-btn-green" data-am-open-and-save title="{{ $application->basis_document_name }}">
                                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4m0 12 4-4m-4 4-4-4M5 20h14"/>
                                                 </svg>
@@ -221,7 +221,7 @@
                                                             <button type="submit" title="Hujjatni olib tashlash" aria-label="Hujjatni olib tashlash">&times;</button>
                                                         </form>
                                                     @endif
-                                                    <a href="{{ route('admin.academic-mobility.curriculum-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-review-file" title="{{ $application->curriculum_document_name }}">
+                                                    <a href="{{ route('admin.academic-mobility.curriculum-document', $application) }}" target="_blank" rel="noopener noreferrer" class="am-review-file" data-am-open-and-save title="{{ $application->curriculum_document_name }}">
                                                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8m-4-6v6h6M9 15l2 2 4-4"/>
                                                         </svg>
@@ -355,6 +355,29 @@
             </section>
         </div>
     </div>
+
+    <script>
+        // Hujjat havolasi bosilganda ikkala ish bajariladi: fayl yangi oynada
+        // ochiladi (havolaning o'z xatti-harakati) va shu bilan birga saqlanadi.
+        // Saqlash uchun ?download=1 — server Content-Disposition'ni attachment
+        // qilib qaytaradi; ko'rinmas iframe orqali chaqiriladi, shunda joriy
+        // sahifa ham, yangi oyna ham bezovta bo'lmaydi.
+        document.addEventListener('click', function (event) {
+            var link = event.target.closest('a[data-am-open-and-save]');
+            if (!link || event.defaultPrevented) return;
+            // Ctrl/Cmd yoki o'rta tugma — brauzerning o'z xatti-harakati qolsin.
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+
+            var url = new URL(link.href, window.location.origin);
+            url.searchParams.set('download', '1');
+
+            var frame = document.createElement('iframe');
+            frame.style.display = 'none';
+            frame.src = url.toString();
+            document.body.appendChild(frame);
+            setTimeout(function () { frame.remove(); }, 60000);
+        });
+    </script>
 
     <style>
         .am-alert { display:flex;align-items:center;gap:10px;margin-bottom:14px;border:1px solid #a7f3d0;border-radius:10px;background:#ecfdf5;padding:11px 14px;font-size:13px;font-weight:600;color:#047857; }

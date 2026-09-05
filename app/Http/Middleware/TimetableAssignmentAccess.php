@@ -53,6 +53,8 @@ class TimetableAssignmentAccess
                     'admin.timetable.boards.compact-week',
                     'admin.timetable.cycle-plan',
                     'admin.timetable.cycle-place',
+                    'admin.timetable.cycle-assign-options',
+                    'admin.timetable.cycle-assign',
                 ]);
             }
 

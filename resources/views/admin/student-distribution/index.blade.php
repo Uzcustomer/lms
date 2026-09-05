@@ -46,6 +46,9 @@
         align-items:center; padding:8px 12px; border-bottom:1px solid var(--line-soft);
     }
     .sd-pick-row:last-child { border-bottom:0; }
+    /* Boshqa tildagi guruh — tanlash mumkin, lekin ko'zga tashlanib tursin */
+    .sd-pick-row.is-other-lang { background:#fffaf0; box-shadow:inset 3px 0 0 #d97706; }
+    .sd-pick-row.is-other-lang .sd-pick-name span { color:#b45309; font-weight:700; }
     .sd-pick-name { color:var(--ink); font-size:12.5px; font-weight:600; }
     .sd-pick-name span { display:block; color:var(--muted); font-size:10.5px; font-weight:500; }
     .sd-pick-cnt { color:var(--muted); font-size:11px; white-space:nowrap; }
@@ -279,6 +282,9 @@
         background:#fdf3e0; color:#8a5a06; font-size:10px; font-weight:700;
     }
 
+    .sd-modal-section { position:sticky; top:0; z-index:1; padding:8px 14px; border-bottom:1px solid var(--line);
+        background:#f4f7fb; color:var(--ink-soft); font-size:11px; font-weight:800; text-transform:uppercase;
+        letter-spacing:.4px; }
     .sd-empty { padding:42px 20px; color:var(--muted); font-size:12.5px; text-align:center; }
     .sd-empty b { display:block; margin-bottom:5px; color:var(--ink-soft); font-size:13.5px; font-weight:700; }
 
@@ -533,6 +539,28 @@
             </div>
         </div>
 
+        {{-- Ovoz berishni tanlab yopish --}}
+        <div class="sd-modal" id="closeVotingModal">
+            <div class="sd-modal-box" style="width:min(760px,100%);height:calc(100vh - 120px);" role="dialog" aria-modal="true">
+                <div class="sd-modal-head">
+                    <div>
+                        <h3>Ovoz berishni yopish</h3>
+                        <p id="cvMeta">Yopiladiganlarni belgilang</p>
+                    </div>
+                    <button class="sd-close" type="button" id="cvClose" aria-label="Yopish">&times;</button>
+                </div>
+                <div class="sd-modal-body" id="cvBody"></div>
+                <div class="sd-modal-foot">
+                    <label class="sd-hint" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+                        <input type="checkbox" id="cvCheckAll" style="width:15px;height:15px;accent-color:var(--navy);">
+                        Hammasini belgilash
+                    </label>
+                    <span class="sd-hint" id="cvHint"></span>
+                    <button class="sd-btn" id="cvSubmit" type="button" disabled>Tanlanganlarni yopish</button>
+                </div>
+            </div>
+        </div>
+
         <div class="sd-pick-panel" id="pickPanel" hidden></div>
 
         <div class="sd-modal" id="studentsModal">
@@ -587,6 +615,7 @@
         const openVotingUrl   = @json(route('admin.student-distribution.voting.open'));
         const openVotingStudentsUrl = @json(route('admin.student-distribution.voting.open-students'));
         const closeVotingUrl  = @json(route('admin.student-distribution.voting.close'));
+        const openVotingListUrl = @json(route('admin.student-distribution.voting.open-list'));
         const approveVotesUrl = @json(route('admin.student-distribution.votes.approve'));
         const deleteVotesUrl  = @json(route('admin.student-distribution.votes.delete'));
 
@@ -606,6 +635,28 @@
         // Fakultet · yo'nalish · kurs · ta'lim tili
         const metaLabel = g => [g.faculty_name || '\u2014', g.specialty_name || '\u2014', courseLabel(g), g.language_name || '']
             .filter(Boolean).join(' \u00b7 ');
+
+        // Ta'lim tili kaliti — backenddagi DistributionCatalog::languageKey bilan
+        // bir xil: kod va nom uz/ru/en ga keltiriladi, tanilmagani o'z kalitida
+        // qoladi. Ko'chirishda til farqini aniqlash uchun ishlatiladi.
+        function langKey(g) {
+            const code = String(g.language_code || '').trim().toLowerCase();
+            const name = String(g.language_name || '').trim().toLowerCase();
+
+            const byCode = {uz:['uz','uzb','oz','11',"o'z",'ўз'], ru:['ru','rus','12','рус'], en:['en','eng','en-us','14']};
+            for (const key in byCode) if (code && byCode[key].includes(code)) return key;
+
+            const byName = {uz:['ozbek',"o'zbek",'o‘zbek','uzbek','ўзбек','узбек'], ru:['rus','русск'], en:['ingliz','english','англ']};
+            for (const key in byName) if (name && byName[key].some(n => name.includes(n))) return key;
+
+            return 'x:' + (code || name || g.group_hemis_id);
+        }
+
+        const LANG_LABELS = {uz: "o'zbek", ru: 'rus', en: 'ingliz'};
+        const langLabel = g => LANG_LABELS[langKey(g)] || (g.language_name || 'noma’lum tilli');
+
+        // Fakultet kaliti — backenddagi facultyKey bilan bir xil.
+        const facultyKey = g => String(g.faculty_name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
         // Bo'sh joy: musbat — joy bor, 0 — to'la, manfiy — ortiqcha talaba.
         function freeHtml(g) {
@@ -1067,10 +1118,16 @@
         function pickRowHtml(g) {
             const source = groups.find(x => x.group_hemis_id === modalGroupId);
             const parts = [];
-            if (source && g.faculty_name !== source.faculty_name) parts.push(g.faculty_name || '');
-            if (source && g.language_name && g.language_name !== source.language_name) parts.push(g.language_name);
 
-            return '<div class="sd-pick-row">' +
+            // Boshqa fakultet yoki tildagi guruh tanlanishi mumkin, lekin
+            // tasodifan bosilmasin — ajratib ko'rsatiladi.
+            const otherFaculty = source && facultyKey(g) !== facultyKey(source);
+            if (otherFaculty) parts.push(g.faculty_name || '');
+
+            const otherLang = source && langKey(g) !== langKey(source);
+            if (otherLang) parts.push(g.language_name || langLabel(g));
+
+            return '<div class="sd-pick-row' + (otherLang || otherFaculty ? ' is-other-lang' : '') + '">' +
                 '<span class="sd-pick-name">' + esc(g.group_name) +
                     (parts.length ? '<span>' + esc(parts.filter(Boolean).join(' \u00b7 ')) + '</span>' : '') + '</span>' +
                 '<span class="sd-pick-cnt">' + g.student_count + ' talaba</span>' +
@@ -1210,6 +1267,27 @@
             const count = bulk ? pickBulkIds.length : 1;
             const target = modalTargets.find(g => g.group_hemis_id === Number(button.dataset.choose));
             const free = target ? target.free_places : null;
+
+            // Til va fakultet farqi cheklov emas, lekin bilib turib qilinishi
+            // kerak — ikkalasi bitta dialogda so'raladi.
+            const source = groups.find(g => g.group_hemis_id === modalGroupId);
+            if (source && target) {
+                const notes = [];
+                if (langKey(source) !== langKey(target)) {
+                    notes.push('ta’lim tili: ' + langLabel(source) + ' → ' + langLabel(target));
+                }
+                if (facultyKey(source) !== facultyKey(target)) {
+                    notes.push('fakultet: ' + (source.faculty_name || '—') + ' → ' + (target.faculty_name || '—'));
+                }
+
+                if (notes.length) {
+                    const who = bulk ? count + ' ta talaba' : 'Talaba';
+                    if (!confirm('Diqqat! ' + who + ' ' + target.group_name + " guruhiga o'tkazilmoqda:\n\n  • " +
+                            notes.join('\n  • ') + '\n\nAmaliyot davom ettirilsinmi?')) {
+                        return;
+                    }
+                }
+            }
 
             // Joy yetmasa: oddiy rejimda to'xtatiladi, to'liq guruh rejimida
             // ogohlantirib davom etiladi.
@@ -1488,15 +1566,107 @@
             }
         });
 
+        // --- Ovoz berishni tanlab yopish ---
+        const closeVotingModal = $('closeVotingModal');
+        let cvOpenGroups = [];
+        let cvOpenStudents = [];
+
+        function cvChecks() {
+            return Array.from($('cvBody').querySelectorAll('input[type="checkbox"]'));
+        }
+
+        function cvSync() {
+            const boxes = cvChecks();
+            const picked = boxes.filter(box => box.checked);
+            $('cvSubmit').disabled = picked.length === 0;
+            $('cvHint').textContent = picked.length ? picked.length + ' ta belgilandi' : '';
+            $('cvCheckAll').checked = boxes.length > 0 && picked.length === boxes.length;
+        }
+
+        function cvRender() {
+            const blocks = [];
+
+            if (cvOpenGroups.length) {
+                blocks.push('<div class="sd-modal-section">Guruhlar</div>' + cvOpenGroups.map(group => {
+                    const meta = [group.specialty_name, group.course ? group.course + '-kurs' : '', group.faculty_name]
+                        .filter(Boolean).join(' · ');
+                    const progress = group.student_count
+                        ? group.voted_count + '/' + group.student_count + ' ovoz bergan'
+                        : 'talabasi yo‘q';
+                    return '<label class="sd-vote-row" style="cursor:pointer;">' +
+                        '<input type="checkbox" data-cv-group="' + group.group_hemis_id + '" style="width:15px;height:15px;accent-color:var(--navy);">' +
+                        '<span><b>' + esc(group.group_name) + '</b><span class="sd-meta">' + esc(meta) + '</span></span>' +
+                        '<span class="sd-vote-route">' + esc(progress) + '</span></label>';
+                }).join(''));
+            }
+
+            if (cvOpenStudents.length) {
+                blocks.push('<div class="sd-modal-section">Alohida talabalar</div>' + cvOpenStudents.map(student =>
+                    '<label class="sd-vote-row" style="cursor:pointer;">' +
+                    '<input type="checkbox" data-cv-student="' + student.student_id + '" style="width:15px;height:15px;accent-color:var(--navy);">' +
+                    '<span><b>' + esc(student.full_name) + '</b><span class="sd-meta">' +
+                        esc([student.student_id_number, student.group_name].filter(Boolean).join(' · ')) + '</span></span>' +
+                    '<span class="sd-vote-route">' + (student.has_voted ? 'ovoz bergan' : 'ovoz bermagan') + '</span></label>'
+                ).join(''));
+            }
+
+            $('cvBody').innerHTML = blocks.length
+                ? blocks.join('')
+                : '<div class="sd-empty">Ochiq ovoz berish topilmadi.</div>';
+            $('cvMeta').textContent = cvOpenGroups.length + ' ta guruh · ' + cvOpenStudents.length + ' ta alohida talaba';
+            $('cvCheckAll').checked = false;
+            cvSync();
+        }
+
         $('closeVotingBtn').addEventListener('click', async () => {
-            if (!confirm("Ovoz berish barcha guruhlar uchun yopilsinmi?")) return;
             try {
-                const data = await postJson(closeVotingUrl, {});
-                alert(data.message);
-                await loadVotes();
+                const response = await fetch(openVotingListUrl, {headers:{'Accept':'application/json'}});
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Ro‘yxatni olib bo‘lmadi.');
+                cvOpenGroups = data.groups || [];
+                cvOpenStudents = data.students || [];
+                cvRender();
+                closeVotingModal.classList.add('is-open');
             } catch (error) {
                 alert(error.message);
             }
+        });
+
+        $('cvBody').addEventListener('change', cvSync);
+
+        $('cvCheckAll').addEventListener('change', () => {
+            cvChecks().forEach(box => { box.checked = $('cvCheckAll').checked; });
+            cvSync();
+        });
+
+        $('cvSubmit').addEventListener('click', async () => {
+            const groupIds = cvChecks().filter(box => box.checked && box.dataset.cvGroup)
+                .map(box => Number(box.dataset.cvGroup));
+            const studentIds = cvChecks().filter(box => box.checked && box.dataset.cvStudent)
+                .map(box => Number(box.dataset.cvStudent));
+            if (!groupIds.length && !studentIds.length) return;
+
+            const total = groupIds.length + studentIds.length;
+            if (!confirm(total + " ta qator uchun ovoz berish yopilsinmi? Berilgan ovozlar saqlanadi.")) return;
+
+            $('cvSubmit').disabled = true;
+            try {
+                const data = await postJson(closeVotingUrl, {
+                    group_hemis_ids: groupIds,
+                    student_ids: studentIds,
+                });
+                alert(data.message);
+                closeVotingModal.classList.remove('is-open');
+                await loadVotes();
+            } catch (error) {
+                alert(error.message);
+                $('cvSubmit').disabled = false;
+            }
+        });
+
+        $('cvClose').addEventListener('click', () => closeVotingModal.classList.remove('is-open'));
+        closeVotingModal.addEventListener('click', event => {
+            if (event.target === closeVotingModal) closeVotingModal.classList.remove('is-open');
         });
 
         $('votesClose').addEventListener('click', () => votesModal.classList.remove('is-open'));

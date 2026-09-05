@@ -185,11 +185,14 @@
                     </div>
                     <div id="table-area" style="display:none;">
                         <div style="padding:8px 20px 0;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                            <button type="button" class="oq-tab active" data-tab="joriy" onclick="switchTab('joriy')" title="HEMISdagi haqiqiy, tasdiqlanadigan holat — optimizatsiya bunga ta'sir qilmaydi">Joriy holat</button>
-                            <button type="button" class="oq-tab" data-tab="taklif" onclick="switchTab('taklif')" title="Nimani nimaga o'zgartirish taklifi — kamayadigan guruh/oqimlar">
+                            <button type="button" class="oq-tab active" data-tab="approved" onclick="switchTab('approved')" title="Tasdiqlangan oqimlar — oxirgi tasdiqlangan holat va sanalar bo'yicha tarix">
+                                ✓ Tasdiqlangan <span id="ap-tab-badge" class="ap-tab-badge" style="display:none;"></span>
+                            </button>
+                            <button type="button" class="oq-tab calc-only" data-tab="joriy" onclick="switchTab('joriy')" title="HEMISdagi haqiqiy, tasdiqlanadigan holat — optimizatsiya bunga ta'sir qilmaydi" style="display:none;">Joriy holat</button>
+                            <button type="button" class="oq-tab calc-only" data-tab="taklif" onclick="switchTab('taklif')" title="Nimani nimaga o'zgartirish taklifi — kamayadigan guruh/oqimlar" style="display:none;">
                                 Taklif etilayotgan o'zgartirish <span id="opt-tab-badge" class="opt-tab-badge" style="display:none;"></span>
                             </button>
-                            <button type="button" class="oq-tab" data-tab="after" onclick="switchTab('after')" title="Optimizatsiya qo'llangandan keyingi to'liq holat">
+                            <button type="button" class="oq-tab calc-only" data-tab="after" onclick="switchTab('after')" title="Optimizatsiya qo'llangandan keyingi to'liq holat" style="display:none;">
                                 Optimizatsiyadan keyingi holat
                             </button>
                             <button type="button" class="oq-tab" data-tab="manual" onclick="switchTab('manual')" title="Guruhlarni oqimlar orasida drag & drop bilan qo'lda ko'chirish va HEMISdan guruh/talabalarni tortish">
@@ -198,8 +201,27 @@
                             <span id="time-badge" style="font-size:12px;color:#94a3b8;margin-left:auto;"></span>
                         </div>
 
+                        <!-- TASDIQLANGAN tab (oxirgi tasdiqlangan holat + sanalar bo'yicha versiyalar) -->
+                        <div id="tab-approved">
+                            <div style="padding:8px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <label style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#166534;">Tasdiqlangan sana</label>
+                                <select id="ap-version" onchange="selectVersion(this.value)" style="border:1px solid #86efac;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;color:#14532d;background:#fff;min-width:320px;max-width:560px;">
+                                    <option value="">Yuklanmoqda...</option>
+                                </select>
+                                <button type="button" class="af-btn af-load" onclick="loadApprovedList(false)" title="Ro'yxatni yangilash">↻</button>
+                                <span id="ap-badge" class="badge" style="display:none;background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                                <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" id="ap-edit" class="af-btn af-edit" onclick="editVersion()" style="display:none;" title="Shu versiyani drag & drop bilan qo'lda tuzatib, yangi sana bilan tasdiqlash">✎ Qo'lda tuzatish (shu versiyadan)</button>
+                                    <button type="button" id="ap-excel" class="af-btn af-draft" onclick="exportVersionExcel()" style="display:none;" title="Shu versiyani Excel (jadval) ko'rinishida yuklash">⬇ Excel</button>
+                                    <button type="button" class="af-btn af-draft" onclick="openHistory()" title="To'liq tarix ro'yxati">📋 Tarix</button>
+                                </span>
+                            </div>
+                            <div id="ap-note" style="display:none;padding:6px 20px;font-size:12px;color:#475569;background:#fbfdff;border-bottom:1px solid #e2e8f0;"></div>
+                            <div id="ap-body" style="padding:16px 20px;max-height:calc(100vh - 340px);overflow:auto;"></div>
+                        </div>
+
                         <!-- JORIY tab -->
-                        <div id="tab-joriy">
+                        <div id="tab-joriy" style="display:none;">
                             <div style="padding:8px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;">
                                 <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             </div>
@@ -393,6 +415,7 @@
             activeTab = tab;
             $('.oq-tab').removeClass('active');
             $('.oq-tab[data-tab="' + tab + '"]').addClass('active');
+            $('#tab-approved').toggle(tab === 'approved');
             $('#tab-joriy').toggle(tab === 'joriy');
             $('#tab-taklif').toggle(tab === 'taklif');
             $('#tab-after').toggle(tab === 'after');
@@ -430,7 +453,9 @@
                 renderReport(joriy);
                 renderOptimized(opt);
                 renderComparison(opt.plan);
+                manualContext = null; // hisoblangan holat — joriy filtrlar konteksti
                 $('#time-badge').text(elapsed + ' soniyada hisoblandi · ' + esc(joriy.generated_at));
+                $('.calc-only').show();
                 switchTab('joriy');
                 $('#table-area').show();
                 $('#btn-excel').prop('disabled', false).css('opacity', '1');
@@ -440,7 +465,8 @@
                 var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
                 if (xhr.responseJSON && xhr.responseJSON.error) msg += ' (' + xhr.responseJSON.error + ')';
                 else if (xhr.status) msg += ' (HTTP ' + xhr.status + ')';
-                $('#empty-state').show().find('p:first').text(msg);
+                if (AP_LOADED) { $('#table-area').show(); switchTab('approved'); mnFlash(msg); }
+                else $('#empty-state').show().find('p:first').text(msg);
             });
         }
 
@@ -612,9 +638,13 @@
                 url: SNAP_SAVE_URL, method: 'POST',
                 headers: { 'X-CSRF-TOKEN': CSRF },
                 contentType: 'application/json',
-                data: JSON.stringify({ action: action, context: getFilters(true), data: afterState, note: '' })
+                // Tarixdagi versiyadan tuzatilayotgan bo'lsa — o'sha versiyaning konteksti,
+                // aks holda joriy filtrlar konteksti ostida saqlanadi.
+                data: JSON.stringify({ action: action, context: manualContext || getFilters(true), data: afterState, note: '' })
             }).done(function(res) {
-                $status.css('color', '#16a34a').text('✓ ' + (action === 'approve' ? 'Tasdiqlandi' : (action === 'unapprove' ? 'Tasdiq bekor qilindi' : 'Saqlandi')));
+                $status.css('color', '#16a34a').text('✓ ' + (action === 'approve' ? 'Tasdiqlandi' + (res.approved_at ? ' · ' + res.approved_at : '') : (action === 'unapprove' ? 'Tasdiq bekor qilindi' : 'Saqlandi')));
+                // Tasdiqlanganda tarixga yangi sana-vaqtli versiya yoziladi — ro'yxatni yangilab, uni ko'rsatamiz
+                if (action === 'approve') loadApprovedList(true);
                 var $b = $('#snap-badge');
                 if (res.status === 'approved') {
                     $b.css({display:'inline-block', background:'#dcfce7', color:'#166534', border:'1px solid #86efac'})
@@ -995,9 +1025,18 @@
 
         function renderManual() {
             $('#mn-actions').css('display', CAN_APPROVE ? 'flex' : 'none');
+            // Hisoblash qilinmagan bo'lsa — ekrandagi tasdiqlangan versiya ustida ishlaymiz
+            if ((!afterState || !afterState.length) && AP_CURRENT && AP_CURRENT.blocks && AP_CURRENT.blocks.length) {
+                afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
+                manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+                MN_UNDO = [];
+                mnRecalc();
+                renderAfterBody();
+                $('#mn-save-status').css('color', '#166534').text('Tasdiqlangan versiya (' + (AP_CURRENT.approved_at || '') + ') yuklandi — tuzatib "✓ Tasdiqlash" bossangiz yangi sana bilan tarixga tushadi.');
+            }
             if (!afterState || !afterState.length) {
                 $('#mn-body').html('<div style="padding:48px 20px;text-align:center;color:#94a3b8;font-size:14px;font-weight:600;">' +
-                    'Avval filtrlarni tanlab <b>"Hisoblash"</b> tugmasini bosing — natija shu yerda drag &amp; drop bilan tuzatish uchun ochiladi.</div>');
+                    'Avval filtrlarni tanlab <b>"Hisoblash"</b> tugmasini bosing yoki <b>"✓ Tasdiqlangan"</b> vkladkasida versiya tanlang — natija shu yerda drag &amp; drop bilan tuzatish uchun ochiladi.</div>');
                 $('#mn-total-badge').text('');
                 return;
             }
@@ -1076,6 +1115,7 @@
             var base = src === 'joriy' ? joriyState : optState;
             if (!base || !base.length) { mnFlash('Avval "Hisoblash" tugmasini bosing.'); return; }
             afterState = JSON.parse(JSON.stringify(base));
+            manualContext = null;
             MN_UNDO = [];
             mnRecalc();
             renderManual();
@@ -1209,6 +1249,106 @@
                 .always(function() { $btn.prop('disabled', false).css('opacity', 1); });
         }
 
+        // ===== Tasdiqlangan oqim (asosiy ekran) — oxirgi tasdiqlangan holat va sanalar bo'yicha versiyalar =====
+        var AP_LOADED = false;      // tasdiqlangan versiya ekranga yuklanganmi
+        var AP_VERSIONS = [];       // versiyalar ro'yxati (sana bo'yicha kamayish tartibida)
+        var AP_CURRENT = null;      // hozir ekranda turgan versiya (to'liq: blocks, context...)
+        var manualContext = null;   // qo'lda tuzatish qaysi kontekst ostida tasdiqlanadi (null — joriy filtrlar)
+
+        function apVersionLabel(r) {
+            var s = r.summary || {};
+            return (r.approved_at || '—') + ' · ' + (r.kind === 'plan' ? 'Reja ' + (r.academic_year || '') : 'Real')
+                + ' · ' + (r.faculty_name || '') + (r.approver ? ' · ' + r.approver : '')
+                + ' · ' + (s.students || 0) + ' talaba / ' + (s.oqim || 0) + ' oqim';
+        }
+
+        // Versiyalar ro'yxatini yuklaydi; selectLatest=true bo'lsa eng oxirgisini ekranga chiqaradi
+        function loadApprovedList(selectLatest) {
+            var dekanFaculty = document.getElementById('dekan_faculty_id');
+            var p = {};
+            if (dekanFaculty) p.faculty = dekanFaculty.value;
+            $.get(HISTORY_URL, p).done(function(rows) {
+                AP_VERSIONS = rows || [];
+                var $sel = $('#ap-version').empty();
+                $('#ap-tab-badge').toggle(AP_VERSIONS.length > 0).text(AP_VERSIONS.length);
+                if (!AP_VERSIONS.length) {
+                    $sel.append('<option value="">Hali tasdiqlangan oqim yo\'q</option>');
+                    $('#ap-badge, #ap-edit, #ap-excel, #ap-note').hide();
+                    $('#ap-body').html('<div style="padding:48px 20px;text-align:center;color:#94a3b8;font-size:14px;font-weight:600;line-height:1.7;">' +
+                        'Hali tasdiqlangan oqim yo\'q.<br><span style="font-size:12.5px;font-weight:500;">"Hisoblash" → "🖐 Qo\'lda tuzatish" → "✓ Tasdiqlash" — tasdiqlangan holat sana-vaqti bilan shu yerda saqlanadi.</span></div>');
+                    $('#empty-state').hide();
+                    $('#table-area').show();
+                    if (!AP_LOADED) switchTab('approved');
+                    return;
+                }
+                AP_VERSIONS.forEach(function(r) {
+                    $sel.append($('<option>').val(r.id).text(apVersionLabel(r)));
+                });
+                var keepId = AP_CURRENT ? AP_CURRENT.id : null;
+                var pick = (selectLatest || !keepId || !AP_VERSIONS.some(function(r){ return r.id === keepId; }))
+                    ? AP_VERSIONS[0].id : keepId;
+                $sel.val(pick);
+                selectVersion(pick);
+            }).fail(function() {
+                $('#ap-version').empty().append('<option value="">Tarixni yuklab bo\'lmadi</option>');
+            });
+        }
+
+        // Tanlangan sanadagi versiyani ekranga chiqaradi (faqat ko'rish; tahrir uchun "Qo'lda tuzatish")
+        function selectVersion(id) {
+            if (!id) return;
+            $('#ap-body').html('<div style="padding:30px;text-align:center;color:#94a3b8;">Yuklanmoqda...</div>');
+            $.get(HISTORY_SHOW_URL + '/' + id).done(function(res) {
+                AP_CURRENT = res;
+                AP_LOADED = true;
+                var grand = renderBlocks(res.blocks || [], '#ap-body', false);
+                $('#ap-badge').css('display', 'inline-block').text(
+                    '✓ Tasdiqlangan · ' + (res.approved_at || '') + (res.approver ? ' · ' + res.approver : '') +
+                    ' · ' + (res.kind === 'plan' ? 'REJA ' + (res.academic_year || '') : 'Real') + ' · Jami talaba: ' + grand + ' ta');
+                $('#ap-note').toggle(!!res.note).text(res.note ? 'Izoh: ' + res.note : '');
+                $('#ap-edit').toggle(!!CAN_APPROVE);
+                $('#ap-excel').show();
+                $('#empty-state').hide();
+                $('#table-area').show();
+                if (activeTab !== 'manual') switchTab('approved');
+            }).fail(function(xhr) {
+                $('#ap-body').html('<div style="padding:30px;text-align:center;color:#dc2626;">Versiyani yuklab bo\'lmadi' + (xhr.status ? ' (HTTP ' + xhr.status + ')' : '') + '.</div>');
+            });
+        }
+
+        // Ekrandagi versiyani qo'lda tuzatishga (drag & drop) yuklaydi — tasdiqlansa yangi sana bilan tarixga tushadi
+        function editVersion() {
+            if (!AP_CURRENT || !AP_CURRENT.blocks) { mnFlash('Avval versiyani tanlang.'); return; }
+            afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
+            manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+            MN_UNDO = [];
+            mnRecalc();
+            renderAfterBody();
+            switchTab('manual');
+            $('#mn-save-status').css('color', '#166534').text('Tasdiqlangan versiya (' + (AP_CURRENT.approved_at || '') + ') yuklandi — tuzating va "✓ Tasdiqlash" bosing, yangi sana bilan tarixga tushadi.');
+        }
+
+        function exportVersionExcel() {
+            if (!AP_CURRENT) return;
+            var p = new URLSearchParams();
+            p.set('id', AP_CURRENT.id);
+            p.set('format', 'table_xlsx');
+            window.location = HISTORY_EXPORT_URL + '?' + p.toString();
+        }
+
+        // Tarix oynasidan versiyani asosiy ekranga chiqarish
+        function openVersionOnScreen(id) {
+            closeHistory();
+            if (!AP_VERSIONS.some(function(r){ return r.id === id; })) {
+                // Ro'yxatda yo'q (filtr tufayli) — ro'yxatni qayta yuklab, keyin tanlaymiz
+                AP_CURRENT = { id: id };
+                loadApprovedList(false);
+                return;
+            }
+            $('#ap-version').val(id);
+            selectVersion(id);
+        }
+
         // ===== Tasdiqlangan oqimlar tarixi =====
         var HISTORY_URL = '{{ route("admin.reports.oqim.history") }}';
         var HISTORY_SHOW_URL = '{{ url("admin/reports/oqim/history") }}';
@@ -1257,7 +1397,8 @@
                         '<td style="padding:6px 8px;text-align:right;">' + (s.guruhcha || 0) + '</td>' +
                         '<td style="padding:6px 8px;">' + esc(r.approved_at || '') + '</td>' +
                         '<td style="padding:6px 8px;">' + esc(r.approver || '') + '</td>' +
-                        '<td style="padding:6px 8px;"><button type="button" onclick="viewHistory(' + r.id + ')" style="background:#2b5ea7;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;">Ko\'rish</button></td>' +
+                        '<td style="padding:6px 8px;white-space:nowrap;"><button type="button" onclick="viewHistory(' + r.id + ')" style="background:#2b5ea7;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;">Ko\'rish</button> ' +
+                        '<button type="button" onclick="openVersionOnScreen(' + r.id + ')" title="Shu versiyani asosiy ekranga chiqarish — ustida amallar bajarish mumkin" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer;">Ekranga</button></td>' +
                         (r.note ? '</tr><tr><td colspan="9" style="padding:0 8px 6px;color:#94a3b8;font-size:11.5px;">Izoh: ' + esc(r.note) + '</td>' : '') +
                         '</tr>';
                 });
@@ -1282,6 +1423,9 @@
             $('.select2').each(function() {
                 $(this).select2({ theme: 'classic', width: '100%', placeholder: $(this).find('option:first').text() });
             });
+
+            // Sahifa ochilganda — oxirgi tasdiqlangan oqim darhol ekranda ko'rinsin
+            loadApprovedList(true);
 
             // Kelasi yil (rejalashtirilgan) rejim: yil tanlovini ko'rsatish + banner + kontingent paneli
             function toggleProjection() {
@@ -1458,6 +1602,8 @@
         .oq-tab:hover { color:#2b5ea7; }
         .oq-tab.active { color:#2b5ea7; border-bottom-color:#2b5ea7; }
         .opt-tab-badge { background:#16a34a; color:#fff; font-size:10.5px; font-weight:800; padding:1px 7px; border-radius:999px; }
+        .ap-tab-badge { background:#dcfce7; color:#166534; font-size:10.5px; font-weight:800; padding:1px 7px; border-radius:999px; }
+        .oq-tab[data-tab="approved"].active { color:#166534; border-bottom-color:#16a34a; }
 
         .cmp-card { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:12px; overflow:hidden; }
         .cmp-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding:8px 12px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }

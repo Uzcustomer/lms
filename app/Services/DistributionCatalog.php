@@ -118,7 +118,8 @@ class DistributionCatalog
         // HEMIS ba'zan bitta guruhni ikki xil id bilan (eski/yangi yozuv)
         // faol holda saqlaydi — nom bo'yicha dedupe qilamiz: talabali guruh
         // bilan bir xil nomlisi tashlanadi, sintetiklardan eng yangisi qoladi.
-        $nameKeyOf = fn ($name, $specialty) => mb_strtolower(trim((string) $name)) . '|' . mb_strtolower(trim((string) $specialty));
+        $nameKeyOf = fn ($name, $specialty) => $this->groupNameKey($name)
+            . '|' . mb_strtolower(trim((string) $specialty));
         $existingNames = $rows
             ->map(fn ($row) => $nameKeyOf($row['group_name'], $row['specialty_name']))
             ->flip();
@@ -225,6 +226,29 @@ class DistributionCatalog
      * Guruh nomidagi qabul yilidan kursni chiqaradi: d1/d26-01(a) -> 26 ->
      * 2026-27 o'quv yilida 1-kurs. O'quv yili sentabrdan boshlanadi.
      */
+    /**
+     * Guruh nomining solishtirish kaliti.
+     *
+     * HEMIS bir guruhni ikki xil yozuvda saqlashi mumkin — qabul yili oldidagi
+     * fakultet harfi bor ("d1/d25-01(b)") va yo'q ("d1/25-01(b)") ko'rinishda.
+     * Ular bitta guruh: nom bo'yicha dedupe ularni bir xil deb ko'rishi kerak,
+     * aks holda talabasiz "arvoh" yozuv katalogda alohida guruh bo'lib qoladi
+     * va ovoz berish ro'yxatida talabaning o'z guruhi ko'rinib turadi.
+     *
+     * Kalit: kichik harf, bo'shliq/nuqta/tire olib tashlanadi, "/" dan keyingi
+     * harf prefiksi (d25 -> 25) qisqartiriladi.
+     */
+    public function groupNameKey(?string $name): string
+    {
+        $key = mb_strtolower(trim((string) $name));
+        // "d1/d25-01(b)" -> "d1/25-01(b)"
+        $key = preg_replace('~/\s*[a-zа-я]+(?=\d)~u', '/', $key) ?? $key;
+        // Ajratgichlar farqi ahamiyatsiz: "d1/25 - 01 (b)" -> "d1/2501b"
+        $key = preg_replace('/[\s.\-_()]+/u', '', $key) ?? $key;
+
+        return $key;
+    }
+
     public function courseFromName(string $name): ?int
     {
         if (!preg_match('/(\d{2})\s*-/', $name, $match) && !preg_match('/(\d{2})/', $name, $match)) {
@@ -245,6 +269,9 @@ class DistributionCatalog
     /**
      * Berilgan guruh talabasini qabul qila oladigan guruhlar: mos yo'nalish,
      * kurs va til, bo'sh joyi bor, taqsimlanadigan guruh emas.
+     *
+     * $fullMode — registratorning "to'liq guruh" rejimi: sig'im tekshirilmaydi
+     * va boshqa tildagi guruh ham ro'yxatga tushadi.
      */
     public function targetsFor(int $groupHemisId, bool $fullMode = false): Collection
     {
@@ -255,8 +282,14 @@ class DistributionCatalog
             return collect();
         }
 
+        // O'z guruhi id bo'yicha ham, nomi bo'yicha ham chiqarib tashlanadi:
+        // HEMIS bir guruhni ikki id bilan saqlagan bo'lsa, id tekshiruvi yolg'iz
+        // yetmaydi va talabaga o'z guruhi taklif bo'lib qolardi.
+        $ownName = $this->groupNameKey($source['group_name'] ?? null);
+
         return $catalog
             ->filter(fn ($group) => $group['group_hemis_id'] !== $source['group_hemis_id']
+                && $this->groupNameKey($group['group_name'] ?? null) !== $ownName
                 && !$group['is_source']
                 && ($fullMode || ($group['free_places'] !== null && $group['free_places'] > 0))
                 && $this->compatible($source, $group, $fullMode))
@@ -266,11 +299,15 @@ class DistributionCatalog
     /**
      * Ikki guruh bir-biriga mos keladimi.
      *
-     * Yo'nalish va kurs har doim bir xil bo'lishi shart. Ta'lim tili oddiy
-     * rejimda bir xil bo'lishi kerak; "to'liq guruh" rejimida esa maqsad
-     * ingliz guruhi bo'lsa, o'zbek/rus guruhidan ham o'tish mumkin.
+     * Yo'nalish va kurs har doim bir xil bo'lishi shart — bularda o'quv rejasi
+     * boshqa bo'ladi.
+     *
+     * Fakultet va ta'lim tili talaba ovozida bir xil bo'lishi kerak. $manualMode
+     * — registratorning qo'lda ko'chirishi: til farq qilsa ham, fakultet bir xil
+     * yo'nalishning "N-son" juftidan bo'lsa ham (1-son davolash ↔ 2-son
+     * davolash) ruxsat beriladi. UI ikkalasini ham ogohlantirib chiqadi.
      */
-    public function compatible(?array $source, array $target, bool $fullMode = false): bool
+    public function compatible(?array $source, array $target, bool $manualMode = false): bool
     {
         if (!$source) {
             return false;
@@ -281,32 +318,79 @@ class DistributionCatalog
             return false;
         }
 
-        if ($this->languageKey($source) === $this->languageKey($target)) {
-            return true;
+        $sameFaculty = $manualMode
+            ? $this->facultyGroupKey($source) === $this->facultyGroupKey($target)
+            : $this->facultyKey($source) === $this->facultyKey($target);
+
+        if (!$sameFaculty) {
+            return false;
         }
 
-        return $fullMode && $this->isEnglish($target);
+        return $manualMode
+            || $this->languageKey($source) === $this->languageKey($target);
+    }
+
+    /** Fakultetni solishtirish kaliti (bo'shliq va katta-kichik harf farqsiz). */
+    public function facultyKey(array $group): string
+    {
+        return preg_replace('/\s+/u', ' ', mb_strtolower(trim((string) ($group['faculty_name'] ?? '')))) ?? '';
+    }
+
+    /**
+     * Bir yo'nalishning nomerlangan fakultetlarini birlashtiruvchi kalit:
+     * "1-son davolash" va "2-son davolash" bitta kalitga tushadi. Qo'lda
+     * ko'chirishda talaba shu juft ichida harakatlana oladi.
+     */
+    public function facultyGroupKey(array $group): string
+    {
+        $key = $this->facultyKey($group);
+        $stripped = preg_replace('/^\s*\d+\s*-?\s*son\s+/u', '', $key);
+
+        return trim((string) ($stripped ?? $key)) ?: $key;
     }
 
     /** Guruh ingliz tilida o'qiydimi. */
     public function isEnglish(array $group): bool
     {
-        $name = mb_strtolower(trim((string) ($group['language_name'] ?? '')));
-        if ($name !== '' && (str_contains($name, 'ingliz') || str_contains($name, 'english') || str_contains($name, 'англ'))) {
-            return true;
-        }
-
-        $code = mb_strtolower(trim((string) ($group['language_code'] ?? '')));
-
-        return in_array($code, ['en', 'eng', 'en-us', '14'], true);
+        return $this->languageKey($group) === 'en';
     }
 
     /** Ta'lim tilini solishtirish uchun kalit. */
     public function languageKey(array $group): string
     {
-        $value = $group['language_code'] ?: ($group['language_name'] ?? '');
+        // Til kodi va nomi bitta kalitga keltiriladi: HEMIS bir guruhda kod,
+        // boshqasida faqat nom berishi mumkin ("uz" ↔ "O'zbekcha"), ular bir xil
+        // til sifatida qaralishi kerak.
+        $code = mb_strtolower(trim((string) ($group['language_code'] ?? '')));
+        $name = mb_strtolower(trim((string) ($group['language_name'] ?? '')));
 
-        return mb_strtolower(trim((string) $value));
+        foreach ([
+            'uz' => ['uz', 'uzb', 'oz', '11', "o'z", 'ўз'],
+            'ru' => ['ru', 'rus', '12', 'рус'],
+            'en' => ['en', 'eng', 'en-us', '14'],
+        ] as $key => $codes) {
+            if ($code !== '' && in_array($code, $codes, true)) {
+                return $key;
+            }
+        }
+
+        foreach ([
+            'uz' => ['ozbek', "o'zbek", 'o‘zbek', 'uzbek', 'ўзбек', 'узбек'],
+            'ru' => ['rus', 'русск', 'rossiya'],
+            'en' => ['ingliz', 'english', 'англ'],
+        ] as $key => $needles) {
+            foreach ($needles as $needle) {
+                if ($name !== '' && str_contains($name, $needle)) {
+                    return $key;
+                }
+            }
+        }
+
+        // Til aniqlanmadi. Bunday guruhlarni bir-biriga mos deb hisoblab
+        // bo'lmaydi — har biri o'z kaliti bilan ajralib turadi.
+        $raw = $code !== '' ? $code : $name;
+
+        return $raw !== '' ? 'x:' . $raw : 'x:' . (string) $group['group_hemis_id'];
     }
 
     /** HEMIS level_code (11..16 yoki 1..8) ni kurs raqamiga aylantiradi. */

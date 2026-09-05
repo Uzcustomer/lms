@@ -11401,6 +11401,11 @@ class ReportController extends Controller
             'faculty_name'  => $v->faculty_name ?: 'Barcha fakultetlar',
             'approved_at'   => optional($v->approved_at)->format('d.m.Y H:i'),
             'approver'      => optional(\App\Models\User::find($v->approved_by))->name,
+            'note'          => $v->note,
+            'summary'       => $v->summary,
+            // Filtr konteksti — shu versiyadan qo'lda tuzatib qayta tasdiqlashda
+            // yangi versiya aynan shu kontekst (fakultet, ta'lim turi...) ostida saqlanadi.
+            'context'       => $v->context ?: [],
             'blocks'        => $v->data ?: [],
         ]);
     }
@@ -11739,6 +11744,13 @@ class ReportController extends Controller
 
         $rows = $q->get();
 
+        // ---- Bo'sh (talabasiz) FAOL guruhlar ham ro'yxatda chiqsin ----
+        // HEMISda yangi ochilgan, hali talaba biriktirilmagan guruhlar (masalan yangi
+        // qabul 1-kurs guruhlari) 0 talaba bilan ko'rsatiladi. Kurs guruh jadvalida
+        // yo'q — o'quv reja qabul yilidan, bo'lmasa guruh nomidagi yildan (d26 → 2026)
+        // hisoblanadi.
+        $rows = $rows->concat($this->oqimEmptyGroupRows($request, $rows));
+
         // ---- Kelasi yil (rejalashtirilgan) rejim ----
         // Joriy talabalarni +1 kursga suramiz, yangi 1-kursni bashoratdan qo'shamiz.
         // O'chirilgan (projection=0) holda hech narsa o'zgarmaydi.
@@ -11925,6 +11937,90 @@ class ReportController extends Controller
      *  - Yangi 1-kursni ContingentProjection bashoratidan sun'iy guruhlar sifatida qo'shadi.
      * Natijada mavjud optimizator o'zgarishsiz kelasi yil oqimini quradi.
      */
+    /**
+     * Talabasi yo'q (bo'sh) FAOL guruhlarni hisobot qatorlariga aylantiradi (cnt=0).
+     * Guruhning kursi: o'quv reja (curricula.education_year_code) qabul yilidan,
+     * u bo'lmasa guruh nomidagi 2 xonali yildan (d1/d26-08b → 26 → 2026) aniqlanadi.
+     * O'qish muddatidan chiqib ketgan (bitirgan) eski bo'sh guruhlar chiqarilmaydi.
+     */
+    private function oqimEmptyGroupRows(Request $request, $studentRows)
+    {
+        $seen = [];
+        foreach ($studentRows as $r) {
+            $seen[(int) $r->group_id] = true;
+        }
+
+        $eq = DB::table('groups as g')
+            ->join('departments as d', 'g.department_hemis_id', '=', 'd.department_hemis_id')
+            ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
+            ->where('d.structure_type_code', 11)
+            ->where('d.active', true)
+            ->where('g.active', true)
+            ->select(
+                'g.group_hemis_id', 'g.name as group_name',
+                'g.department_hemis_id as dep_hemis_id', 'g.department_name',
+                'g.specialty_hemis_id as spec_hemis_id', 'g.specialty_name',
+                'c.education_year_code', 'c.education_period', 'c.education_type_code'
+            );
+
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId) {
+            $faculty = Department::find($dekanFacultyId);
+            if ($faculty) {
+                $eq->where('g.department_hemis_id', $faculty->department_hemis_id);
+            }
+        } elseif ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $eq->where('g.department_hemis_id', $faculty->department_hemis_id);
+            }
+        }
+
+        // Ta'lim turi: o'quv reja bo'yicha; reja hali sinxronlanmagan guruh yashirinib
+        // qolmasligi uchun NULL (reja topilmagan) ham o'tkaziladi.
+        if ($request->filled('education_type')) {
+            $et = (string) $request->education_type;
+            $eq->where(function ($w) use ($et) {
+                $w->where('c.education_type_code', $et)->orWhereNull('c.education_type_code');
+            });
+        }
+
+        // Joriy o'quv yili boshi: iyuldan keyin — shu yil (2026-sentyabr → 2026-2027)
+        $acadStart = now()->month >= 7 ? now()->year : now()->year - 1;
+
+        $out = [];
+        foreach ($eq->get() as $g) {
+            if (isset($seen[(int) $g->group_hemis_id])) {
+                continue; // talabasi bor — asosiy so'rovda allaqachon chiqqan
+            }
+
+            // Qabul yili: o'quv rejadan, bo'lmasa guruh nomidan (…d26-… / …f26-…)
+            $admYear = (int) $g->education_year_code;
+            if ($admYear < 1990 && preg_match('/(?:^|[\/\-\s])[a-zA-Z]{0,4}(\d{2})\s*-/u', (string) $g->group_name, $m)) {
+                $admYear = 2000 + (int) $m[1];
+            }
+            $level = ($admYear >= 1990) ? ($acadStart - $admYear + 1) : 1;
+            $period = (int) ($g->education_period ?: 6);
+            if ($level < 1 || $level > $period) {
+                continue; // bitirgan yoki hali boshlanmagan eski/noto'g'ri guruh
+            }
+
+            $out[] = (object) [
+                'department_id'   => $g->dep_hemis_id,
+                'department_name' => $g->department_name,
+                'specialty_id'    => $g->spec_hemis_id,
+                'specialty_name'  => $g->specialty_name,
+                'level_code'      => (string) (10 + $level),
+                'level_name'      => $level . '-kurs',
+                'group_id'        => $g->group_hemis_id,
+                'group_name'      => $g->group_name,
+                'cnt'             => 0,
+            ];
+        }
+
+        return collect($out);
+    }
+
     private function applyOqimProjection($rows, Request $request)
     {
         $academicYear = (string) $request->get('academic_year', '');

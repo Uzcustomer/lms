@@ -187,35 +187,53 @@ class AcademicMobilityController extends Controller
         return back()->with('success', 'Akademik mobillik arizasi butunlay o\'chirildi.');
     }
 
-    public function downloadDocument(AkademikMobillikAriza $application): BinaryFileResponse
+    /**
+     * Hujjatni qaytaradi: `?download=1` bo'lsa saqlash dialogi bilan, aks holda
+     * brauzerda ochiladi. Yuklash tugmasi ikkalasini ham chaqiradi — hujjat
+     * yangi oynada ko'rinadi va shu bilan birga fayl saqlanadi.
+     */
+    private function documentResponse(
+        Request $request,
+        string $path,
+        ?string $mime,
+        ?string $name
+    ): BinaryFileResponse {
+        $fileName = trim((string) $name) ?: basename($path);
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
+        return response()->file(Storage::path($path), [
+            'Content-Type' => $mime ?: 'application/octet-stream',
+            'Content-Disposition' => $disposition . '; filename="' . addslashes($fileName) . '"',
+        ]);
+    }
+
+    public function downloadDocument(Request $request, AkademikMobillikAriza $application): BinaryFileResponse
     {
         abort_if(
             !$application->document_path || !Storage::exists($application->document_path),
             404
         );
 
-        return response()->file(
-            Storage::path($application->document_path),
-            [
-                'Content-Type' => $application->document_mime ?: 'application/octet-stream',
-                'Content-Disposition' => 'inline; filename="' . basename($application->document_path) . '"',
-            ]
+        return $this->documentResponse(
+            $request,
+            $application->document_path,
+            $application->document_mime,
+            $application->document_name
         );
     }
 
-    public function basisDocument(AkademikMobillikAriza $application): BinaryFileResponse
+    public function basisDocument(Request $request, AkademikMobillikAriza $application): BinaryFileResponse
     {
         abort_if(
             !$application->basis_document_path || !Storage::exists($application->basis_document_path),
             404
         );
 
-        return response()->file(
-            Storage::path($application->basis_document_path),
-            [
-                'Content-Type' => $application->basis_document_mime ?: 'application/octet-stream',
-                'Content-Disposition' => 'inline; filename="' . basename($application->basis_document_name) . '"',
-            ]
+        return $this->documentResponse(
+            $request,
+            $application->basis_document_path,
+            $application->basis_document_mime,
+            $application->basis_document_name
         );
     }
 
@@ -293,7 +311,7 @@ class AcademicMobilityController extends Controller
         return back()->with('success', "O'quv reja mosligi hujjati olib tashlandi.");
     }
 
-    public function curriculumDocument(AkademikMobillikAriza $application): BinaryFileResponse
+    public function curriculumDocument(Request $request, AkademikMobillikAriza $application): BinaryFileResponse
     {
         abort_unless(
             in_array($this->activeRole(), ['oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori'], true),
@@ -305,12 +323,11 @@ class AcademicMobilityController extends Controller
             404
         );
 
-        return response()->file(
-            Storage::path($application->curriculum_document_path),
-            [
-                'Content-Type' => $application->curriculum_document_mime ?: 'application/octet-stream',
-                'Content-Disposition' => 'inline; filename="' . basename($application->curriculum_document_path) . '"',
-            ]
+        return $this->documentResponse(
+            $request,
+            $application->curriculum_document_path,
+            $application->curriculum_document_mime,
+            $application->curriculum_document_name
         );
     }
 

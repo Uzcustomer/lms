@@ -398,8 +398,25 @@ class FanTestiController extends Controller
             ]);
 
         $this->attachCurriculumLabels($subjects);
+        $this->attachGroupCounts($subjects);
 
-        return $subjects;
+        // Joriy semestr (kuzgi — toq, bahorgi — juft) birinchi turadi, so'ng
+        // guruhi borlar, keyin fan nomi. Guruhsiz variantlar pastga tushadi.
+        $currentIsOdd = (int) date('n') >= 8 || (int) date('n') <= 1;
+
+        return $subjects
+            ->sortBy(function ($subject) use ($currentIsOdd) {
+                $number = max(0, (int) $subject->semester_code - 10);
+                $matchesSeason = $number > 0 && ($number % 2 === 1) === $currentIsOdd;
+
+                return [
+                    $subject->group_count > 0 ? 0 : 1,
+                    $matchesSeason ? 0 : 1,
+                    (string) $subject->subject_name,
+                    -$subject->group_count,
+                ];
+            })
+            ->values();
     }
 
     private function collectionsFor($subjects)
@@ -416,6 +433,47 @@ class FanTestiController extends Controller
         );
 
         return $collections;
+    }
+
+    /**
+     * Har fan yozuviga unga biriktirilgan guruhlar sonini qo'yadi.
+     *
+     * Bitta so'rovda yig'iladi: fan bo'yicha ro'yxat uzun bo'lishi mumkin,
+     * har biriga alohida so'rov yubormaymiz. Kalitlar — subject_id,
+     * curriculum_id va semester_id (fanning semester_code i).
+     */
+    private function attachGroupCounts($subjects): void
+    {
+        foreach ($subjects as $subject) {
+            $subject->group_count = 0;
+        }
+
+        if (!Schema::hasTable('curriculum_subject_teachers') || $subjects->isEmpty()) {
+            return;
+        }
+
+        try {
+            $rows = CurriculumSubjectTeacher::query()
+                ->select('subject_id', 'curriculum_id', 'semester_id')
+                ->selectRaw('COUNT(DISTINCT group_id) as groups_count')
+                ->whereIn('subject_id', $subjects->pluck('subject_id')->filter()->unique())
+                ->where('active', true)
+                ->whereNotNull('group_id')
+                ->groupBy('subject_id', 'curriculum_id', 'semester_id')
+                ->get();
+
+            $counts = [];
+            foreach ($rows as $row) {
+                $counts[$row->subject_id . '|' . $row->curriculum_id . '|' . $row->semester_id] = (int) $row->groups_count;
+            }
+
+            foreach ($subjects as $subject) {
+                $key = $subject->subject_id . '|' . $subject->curricula_hemis_id . '|' . $subject->semester_code;
+                $subject->group_count = $counts[$key] ?? 0;
+            }
+        } catch (\Throwable $exception) {
+            // Sanoq bezak — u bo'lmasa ham ro'yxat ishlaydi.
+        }
     }
 
     /** Fan yozuvlariga o'quv reja nomini tayyor satr qilib biriktiradi. */

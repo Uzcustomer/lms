@@ -293,6 +293,8 @@
         background: #fafcfe; color: var(--navy); font-size: 12px; font-weight: 500;
     }
     .bl-groups-note { color: var(--warn); font-size: 12.5px; }
+    .bl-groups-head b { margin-left: 6px; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 12px; }
+    option.bl-opt-empty { color: #9aa8bd; }
 
     /* ---- Xabar / bo'sh holat ---- */
     .bl-alert { padding: 14px 18px; border: 1px solid; border-left-width: 3px; border-radius: 5px; font-size: 13.5px; }
@@ -380,13 +382,15 @@
                         <option value="">Fan tanlang</option>
                         @foreach($subjects as $subject)
                             @php
+                                $subjectGroups = (int) ($subject->group_count ?? 0);
                                 $subjectLabel = collect([
                                     $subject->subject_name,
                                     $subject->semester_name,
                                     $subject->curriculum_label ?? null,
-                                ])->filter()->implode(' · ');
+                                ])->filter()->implode(' · ')
+                                    . ' — ' . ($subjectGroups > 0 ? $subjectGroups . ' guruh' : 'guruh yo\'q');
                             @endphp
-                            <option value="{{ $subject->id }}" @selected((int) old('curriculum_subject_id', $collection?->curriculum_subject_id) === (int) $subject->id)>
+                            <option value="{{ $subject->id }}" @selected((int) old('curriculum_subject_id', $collection?->curriculum_subject_id) === (int) $subject->id) @class(['bl-opt-empty' => $subjectGroups < 1])>
                                 {{ $subjectLabel }}
                             </option>
                         @endforeach
@@ -436,11 +440,16 @@
         @if($isEdit)
             @php $allowedGroups = $allowedGroups ?? collect(); @endphp
             <div class="bl-groups">
-                <div class="bl-groups-head">Testni ishlay oladigan guruhlar</div>
+                <div class="bl-groups-head">
+                    Testni ishlay oladigan guruhlar
+                    @if($allowedGroups->isNotEmpty())
+                        <b>{{ $allowedGroups->count() }}</b>
+                    @endif
+                </div>
                 @forelse($allowedGroups as $groupName)
                     <span class="bl-group-chip">{{ $groupName }}</span>
                 @empty
-                    <span class="bl-groups-note">Fanga guruh biriktirilmagan — hozircha istalgan talaba ID kiritib kira oladi.</span>
+                    <span class="bl-groups-note">Bu fan-semestr-reja uchun guruh biriktirilmagan — testni istalgan talaba ishlay oladi. Ro'yxatdan guruhi bor variantni tanlang.</span>
                 @endforelse
             </div>
 

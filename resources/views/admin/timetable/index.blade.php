@@ -1080,45 +1080,64 @@
         /* Dam olish kunlari: katak ichidagi ustunlar ranglanadi */
         #cycleGrid td.cyc-cell.has-off { background-repeat: no-repeat, repeat; }
         /* ── Kafedra mudiri: blok ichida ma'ruza soatlarini belgilash ── */
-        #cycleGrid tr.cyc-markrow td { height: 96px; vertical-align: top; }
+        #cycleGrid tr.cyc-markrow td { height: 168px; vertical-align: top; }
         #cycleGrid .cyc-block.is-mark { padding: 0; overflow: visible; }
         #cycleGrid .cyc-mk {
             position: absolute; inset: 0; display: flex; flex-direction: column;
         }
         #cycleGrid .cyc-mk-head {
-            flex: none; overflow: hidden; padding: 2px 5px;
-            font-size: 9.5px; font-weight: 700; line-height: 1.3;
-            text-overflow: ellipsis; white-space: nowrap;
+            display: flex; align-items: center; gap: 6px; flex: none;
+            overflow: hidden; height: 24px; padding: 0 6px;
+            font-size: 10.5px; font-weight: 700; line-height: 24px; white-space: nowrap;
         }
-        #cycleGrid .cyc-mk-head i {
-            font-style: normal; font-weight: 500; opacity: .75;
+        #cycleGrid .cyc-mk-name { overflow: hidden; text-overflow: ellipsis; }
+        #cycleGrid .cyc-mk-head i { font-style: normal; font-weight: 500; opacity: .75; }
+        #cycleGrid .cyc-mk-count {
+            flex: none; margin-left: auto; padding: 1px 7px; border-radius: 3px;
+            background: rgba(255, 255, 255, .8); color: #3730a3;
+            font-size: 10px; font-weight: 800;
         }
+        #cycleGrid .cyc-mk-count.is-over { background: #fee2e2; color: #b91c1c; }
+        #cycleGrid .cyc-mk-count.is-done { background: #dcfce7; color: #15803d; }
         #cycleGrid .cyc-mk-grid {
             flex: 1 1 auto; display: grid; min-height: 0;
-            border-top: 1px solid rgba(15, 39, 72, .18);
+            border-top: 1px solid rgba(15, 39, 72, .22);
             user-select: none;
         }
         #cycleGrid .cyc-mk-cell {
-            position: relative; padding: 0; border: 0;
-            border-right: 1px solid rgba(15, 39, 72, .13);
-            border-bottom: 1px solid rgba(15, 39, 72, .13);
+            display: grid; place-items: center; padding: 0; border: 0;
+            border-right: 1px solid rgba(15, 39, 72, .14);
+            border-bottom: 1px solid rgba(15, 39, 72, .14);
             background: transparent; cursor: pointer; transition: background .1s;
+            font-family: inherit; font-size: 10px; font-weight: 800; line-height: 1;
+            color: rgba(15, 39, 72, .38);
         }
+        #cycleGrid .cyc-mk-cell::after { content: 'A'; }
         #cycleGrid .cyc-mk-cell:hover { background: rgba(37, 99, 235, .16); }
-        #cycleGrid .cyc-mk-cell.is-lecture { background: #4f46e5; }
+        #cycleGrid .cyc-mk-cell.is-lecture { background: #4f46e5; color: #fff; }
+        #cycleGrid .cyc-mk-cell.is-lecture::after { content: 'M'; }
         #cycleGrid .cyc-mk-cell.is-lecture:hover { background: #4338ca; }
-        #cycleGrid .cyc-mk-cell.is-off { background: rgba(148, 163, 184, .28); cursor: not-allowed; }
-        #cycleGrid .cyc-mk-cell.is-off:hover { background: rgba(148, 163, 184, .28); }
+        #cycleGrid .cyc-mk-cell.is-off { background: rgba(148, 163, 184, .30); cursor: not-allowed; }
+        #cycleGrid .cyc-mk-cell.is-off::after { content: ''; }
+        #cycleGrid .cyc-mk-cell.is-off:hover { background: rgba(148, 163, 184, .30); }
         /* Har 2-soatdan keyin (para chegarasi) to'qroq chiziq */
-        #cycleGrid .cyc-mk-cell.is-pair-end { border-bottom-color: rgba(15, 39, 72, .34); }
-        #cycleGrid .cyc-mk-legend {
-            display: inline-flex; align-items: center; gap: 5px; margin-left: 10px;
-            color: #475569; font-size: 10.5px; font-weight: 600;
+        #cycleGrid .cyc-mk-cell.is-pair-end { border-bottom-color: rgba(15, 39, 72, .36); }
+
+        /* Yonbosh yorliqlar: karta ichidagi soat qatorlari bilan bir tekis */
+        #cycleGrid td.cyc-mk-side {
+            width: 62px; min-width: 62px; max-width: 62px; padding: 0;
+            background: #f1f5f9; border: 1px solid #e2e8f0;
         }
-        #cycleGrid .cyc-mk-legend s {
-            display: inline-block; width: 11px; height: 11px; border-radius: 2px;
-            background: #4f46e5; text-decoration: none;
+        #cycleGrid .cyc-mk-side-box { display: flex; flex-direction: column; height: 100%; }
+        #cycleGrid .cyc-mk-side-gap { flex: none; height: 24px; border-bottom: 1px solid rgba(15, 39, 72, .22); }
+        #cycleGrid .cyc-mk-side-rows { flex: 1 1 auto; display: grid; min-height: 0; }
+        #cycleGrid .cyc-mk-side-row {
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            border-bottom: 1px solid rgba(15, 39, 72, .12); line-height: 1.15;
         }
+        #cycleGrid .cyc-mk-side-row.is-pair-end { border-bottom-color: rgba(15, 39, 72, .32); }
+        #cycleGrid .cyc-mk-side-row b { color: #1e293b; font-size: 9.5px; font-weight: 800; white-space: nowrap; }
+        #cycleGrid .cyc-mk-side-row span { color: #64748b; font-size: 7.5px; font-weight: 700; }
         #cycleGrid .cyc-addrow td { height: 18px; }
         #cycleGrid .cyc-addcell { background: #f8fafc; }
         #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
@@ -3548,9 +3567,12 @@
                 const pairs = simple ? 1 : Math.max(1, Math.min(totalPairs, Math.max(cyclePairsShown, maxLaneUsed)));
                 if (!simple) cyclePairsShown = pairs;
                 const showAddPair = !simple && pairs < totalPairs;
-                let h = '<colgroup><col class="cyc-group-col">' + (simple ? '' : '<col style="width:52px">');
+                let h = '<colgroup><col class="cyc-group-col">'
+                    + (markMode ? '<col style="width:62px">' : '')
+                    + (simple ? '' : '<col style="width:52px">');
                 dates.forEach(() => h += '<col class="cyc-date-col">');
                 h += '</colgroup><thead><tr><th class="cyc-gcol">' + (cycleViewMode === 'group' ? 'Guruh' : 'Oqim') + '</th>'
+                    + (markMode ? '<th class="cyc-mk-side">Para</th>' : '')
                     + (simple ? '' : '<th class="cyc-pcol" title="Juftlik">Para</th>');
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
@@ -3614,6 +3636,7 @@
                                 // Ustunlar — blokning kalendar kunlari, qatorlar
                                 // — kunlik soatlar; ma'ruza kataklari bo'yaladi.
                                 const slots = block.lecture_slots || {};
+                                let marked = 0;
                                 let inner = '';
                                 for (let hour = 1; hour <= dayHours; hour++) {
                                     for (let d = 0; d < spanCols; d++) {
@@ -3622,6 +3645,7 @@
                                         const off = date && (date.sunday || date.holiday);
                                         const offset = dayIndex - block.from;
                                         const on = Array.isArray(slots[offset]) && slots[offset].includes(hour);
+                                        if (on && !off) marked++;
                                         inner += '<button type="button" class="cyc-mk-cell'
                                             + (off ? ' is-off' : '')
                                             + (on ? ' is-lecture' : '')
@@ -3634,9 +3658,11 @@
                                 }
                                 cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
                                     '<div class="cyc-mk">' +
-                                    '<div class="cyc-mk-head">' + esc(block.subject) +
-                                    (req ? ' <i>· ' + esc(req) + '</i>' : '') +
-                                    '<button type="button" class="cyc-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish" style="position:static;margin-left:6px">&#9881;</button>' +
+                                    '<div class="cyc-mk-head">' +
+                                    '<span class="cyc-mk-name">' + esc(block.subject) +
+                                    (req ? ' <i>· ' + esc(req) + '</i>' : '') + '</span>' +
+                                    '<button type="button" class="cyc-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish" style="position:static">&#9881;</button>' +
+                                    '<b class="cyc-mk-count" data-mk-count="' + esc(block.key) + '"' + ' data-mk-total="' + (block.lecture_hours != null ? block.lecture_hours : '') + '">' + markCountLabel(marked, block.lecture_hours) + '</b>' +
                                     '</div>' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
@@ -3665,6 +3691,22 @@
                                 ? '<div class="cyc-members"><div class="cyc-member-row"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div></div>'
                                 : cycleMembersHtml(row.group, row.subgroups);
                             h += '<td class="cyc-gcol" rowspan="' + (pairs + (showAddPair ? 1 : 0)) + '">' + groupLabel + '</td>';
+                            if (markMode) {
+                                // Karta ichidagi soat qatorlari bilan bir tekis
+                                // turadigan yonbosh yorliqlar (qo'ng'iroq jadvalidan).
+                                let sideRows = '';
+                                for (let hour = 1; hour <= dayHours; hour++) {
+                                    const pt = bellPairs[hour - 1];
+                                    sideRows += '<div class="cyc-mk-side-row' + (hour % 2 === 0 ? ' is-pair-end' : '') + '">' +
+                                        '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
+                                        (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '') +
+                                        '</div>';
+                                }
+                                h += '<td class="cyc-mk-side"><div class="cyc-mk-side-box">' +
+                                    '<div class="cyc-mk-side-gap"></div>' +
+                                    '<div class="cyc-mk-side-rows" style="grid-template-rows:repeat(' + dayHours + ',1fr)">' +
+                                    sideRows + '</div></div></td>';
+                            }
                         }
                         if (!simple) {
                             const pt = bellPairs[pair - 1];
@@ -3705,6 +3747,28 @@
             // Bosib yoki sudrab belgilanadi; sichqoncha qo'yib yuborilganda
             // butun blok belgilari bitta so'rovda saqlanadi.
             let mkDrag = null;   // {key, turnOn} — sudrash paytidagi holat
+
+            // Hisoblagich yozuvi: belgilangan soat / rejadagi ma'ruza soati.
+            function markCountLabel(marked, total) {
+                if (total == null || total === '') return 'M: ' + marked + ' soat';
+                const left = total - marked;
+                if (left > 0) return 'M: ' + marked + '/' + total + ' soat · qoldi ' + left;
+                if (left < 0) return 'M: ' + marked + '/' + total + ' soat · ortiqcha ' + (-left);
+                return 'M: ' + marked + '/' + total + ' soat';
+            }
+
+            function refreshMarkCount(key) {
+                const badge = document.querySelector('.cyc-mk-count[data-mk-count="' + CSS.escape(key) + '"]');
+                if (!badge) return;
+                const marked = document.querySelectorAll(
+                    '.cyc-mk-cell.is-lecture:not(.is-off)[data-mk-key="' + CSS.escape(key) + '"]'
+                ).length;
+                const raw = badge.dataset.mkTotal;
+                const total = raw === '' ? null : Number(raw);
+                badge.textContent = markCountLabel(marked, total);
+                badge.classList.toggle('is-done', total != null && marked === total);
+                badge.classList.toggle('is-over', total != null && marked > total);
+            }
 
             function mkSlotsOf(key) {
                 const slots = {};
@@ -3752,6 +3816,7 @@
                     const turnOn = !cell.classList.contains('is-lecture');
                     cell.classList.toggle('is-lecture', turnOn);
                     mkDrag = { key: cell.dataset.mkKey, turnOn: turnOn };
+                    refreshMarkCount(mkDrag.key);
                 });
 
                 grid.addEventListener('mouseover', ev => {
@@ -3759,6 +3824,7 @@
                     const cell = ev.target.closest ? ev.target.closest('.cyc-mk-cell') : null;
                     if (!cell || cell.disabled || cell.dataset.mkKey !== mkDrag.key) return;
                     cell.classList.toggle('is-lecture', mkDrag.turnOn);
+                    refreshMarkCount(mkDrag.key);
                 });
 
                 document.addEventListener('mouseup', () => {
@@ -3919,6 +3985,9 @@
                 $('unplacedExportBtn').classList.add('hidden');
                 $('subjectColorsBtn').classList.toggle('hidden', !cycleCards.length);
                 $('cardPanelTitle').textContent = 'Sikl fan kartalari';
+                if (j && j.mark_mode && j.mark_ready === false) {
+                    $('cycleMsg').textContent = 'Diqqat: ma' + String.fromCharCode(39) + 'ruza belgilari uchun migratsiya bajarilmagan (php artisan migrate).';
+                }
                 $('cardPanelHint').textContent = (j && j.mark_mode)
                     ? 'Blok ichidagi kataklarni bosing yoki sudrang — belgilangan soatlar ma\'ruza bo\'ladi.'
                     : 'Kartani bosing, so‘ng o‘z oqim qatoridagi boshlanish kunini bosing (yoki sudrab tashlang)';

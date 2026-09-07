@@ -3594,6 +3594,10 @@ class TimetableController extends Controller
         // olmaydi — blok ichida ma'ruza soatlarini belgilaydi.
         $cycleRole = $this->timetableActiveRole($request);
         $cycleMark = $cycleRole === 'kafedra_mudiri';
+        // Migratsiya hali bajarilmagan bo'lsa belgilar o'qilmaydi — sahifa
+        // baribir ochiladi, faqat belgilash saqlanmaydi.
+        $hasLectureSlots = Schema::hasTable('timetable_cycle_placements')
+            && Schema::hasColumn('timetable_cycle_placements', 'lecture_slots');
         $cycleSimple = $cycleMark || in_array($cycleRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
@@ -3981,7 +3985,8 @@ class TimetableController extends Controller
                         ? ($teacherNames[0] . (count($teacherNames) > 1 ? ' +' . (count($teacherNames) - 1) : ''))
                         : null,
                     'lesson_time' => $placement->lesson_time ?? null,
-                    'lecture_slots' => (array) ($placement->lecture_slots ?? []),
+                    'lecture_slots' => $hasLectureSlots ? (array) ($placement->lecture_slots ?? []) : [],
+                    'lecture_hours' => $hrs === null ? null : $fmtHours((float) $hrs['lecture']),
                     'auditorium_code' => null,
                     'auditorium_name' => $audNames
                         ? ($audNames[0] . (count($audNames) > 1 ? ' +' . (count($audNames) - 1) : ''))
@@ -4053,6 +4058,7 @@ class TimetableController extends Controller
             'pairs'      => $cycleSimple ? 1 : $pairsPerDay,
             'simple'     => $cycleSimple,
             'mark_mode'  => $cycleMark,
+            'mark_ready' => $hasLectureSlots,
             'day_hours'  => 6,
             'cycle_cards' => $cycleCards,
         ]);

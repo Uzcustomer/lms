@@ -1115,13 +1115,17 @@
         #cycleOverlay .cyc-off-band { position: absolute; top: 0; bottom: 0; }
         #cycleOverlay .cyc-off-band.is-sunday { background: rgba(251, 146, 60, .22); }
         #cycleOverlay .cyc-off-band.is-holiday { background: rgba(248, 113, 113, .26); }
-        /* Sudrash paytidagi nishon: bitta kun ustuni bo'yicha */
-        #cycleOverlay .cyc-drop-mark {
-            position: absolute; top: 0; bottom: 0; border-radius: 3px;
-            box-shadow: inset 0 0 0 2px #0284c7; background: rgba(14, 165, 233, .18);
+        /* Sudrash nishoni katak ichida chiziladi: birlashtirilgan katakda
+           ham aynan sichqoncha turgan kun ustuni yoritiladi. Koordinata
+           katakka nisbatan bo'lgani uchun skroll ta'sir qilmaydi. */
+        #cycleGrid td.cyc-cell { position: relative; }
+        #cycleGrid .cyc-drop-mark {
+            position: absolute; top: 0; bottom: 0; z-index: 4; border-radius: 3px;
+            pointer-events: none;
+            box-shadow: inset 0 0 0 2px #0284c7; background: rgba(14, 165, 233, .22);
         }
-        #cycleOverlay .cyc-drop-mark.is-bad {
-            box-shadow: inset 0 0 0 2px #dc2626; background: rgba(239, 68, 68, .20);
+        #cycleGrid .cyc-drop-mark.is-bad {
+            box-shadow: inset 0 0 0 2px #dc2626; background: rgba(239, 68, 68, .24);
         }
         #cycleGrid tbody td { position: relative; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
@@ -3351,30 +3355,27 @@
             }
 
             // Sudrash paytida aniq bitta kun ustunini belgilaydi; joylab
-            // bo'lmaydigan kun qizil bo'ladi.
-            function markCycleDrop(index, rowTop, rowHeight, allowed) {
-                const overlay = $('cycleOverlay');
-                if (!overlay) return;
+            // bo'lmaydigan kun qizil bo'ladi. Nishon katak ichiga qo'yiladi,
+            // shuning uchun skroll va jadval siljishi ta'sir qilmaydi.
+            function markCycleDrop(cell, dayIndex, allowed) {
                 clearCycleDropMark();
+                if (!cell) return;
 
-                const geo = cycleDayGeometry[index];
-                if (!geo) return;
+                const from = +cell.dataset.cycleFrom || 0;
+                const span = Math.max(1, +cell.dataset.cycleSpan || 1);
+                const offset = Math.min(span - 1, Math.max(0, dayIndex - from));
+                const colWidth = cell.offsetWidth / span;
 
                 const mark = document.createElement('div');
                 mark.className = 'cyc-drop-mark' + (allowed ? '' : ' is-bad');
-                mark.style.left = geo.left + 'px';
-                mark.style.width = geo.width + 'px';
-                if (rowTop != null) {
-                    mark.style.top = rowTop + 'px';
-                    mark.style.bottom = 'auto';
-                    mark.style.height = rowHeight + 'px';
-                }
-                overlay.appendChild(mark);
+                mark.style.left = (offset * colWidth) + 'px';
+                mark.style.width = colWidth + 'px';
+                cell.appendChild(mark);
             }
 
             function clearCycleDropMark() {
-                const overlay = $('cycleOverlay');
-                if (overlay) overlay.querySelectorAll('.cyc-drop-mark').forEach(el => el.remove());
+                const grid = $('cycleGrid');
+                if (grid) grid.querySelectorAll('.cyc-drop-mark').forEach(el => el.remove());
             }
 
             function cycleDateClass(date) {
@@ -3658,13 +3659,7 @@
                         .find(item => item.key === cycleDragKey);
                     const allowed = Boolean(card) && card.row_key === cell.dataset.cycleRow;
 
-                    const wrap = $('cycleGridWrap');
-                    const body = $('cycleGrid').querySelector('tbody');
-                    const cellRect = cell.getBoundingClientRect();
-                    const bodyRect = body ? body.getBoundingClientRect() : null;
-                    const rowTop = bodyRect ? Math.round(cellRect.top - bodyRect.top) : null;
-
-                    markCycleDrop(index, rowTop, Math.round(cellRect.height), allowed);
+                    markCycleDrop(cell, index, allowed);
                 });
                 grid.addEventListener('dragleave', ev => {
                     if (!ev.relatedTarget || !grid.contains(ev.relatedTarget)) clearDropMark();

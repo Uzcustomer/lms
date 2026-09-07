@@ -1,5 +1,5 @@
 <x-app-layout>
-<x-fan-testi-kit />
+@include('teacher.fan-testlari._kit')
 
 @php
     $questions = $collection?->questions ?? [];
@@ -129,7 +129,7 @@
             </div>
 
             @forelse($questions as $index => $question)
-                <details class="ft-q" @if($errors->any() && old('question_index') == $index) open @endif>
+                <details class="ft-q">
                     <summary class="ft-q-sum">
                         <span class="ft-q-no">{{ $index + 1 }}</span>
                         <span class="ft-q-text">{{ \Illuminate\Support\Str::limit(strip_tags($question['prompt'] ?? ''), 110) ?: 'Savol matni kiritilmagan' }}</span>
@@ -235,7 +235,9 @@
     .ft-q-meta { flex: none; color: var(--ft-ink-mute); font-size: 11px; white-space: nowrap; }
     .ft-q-body { border-top: 1px solid var(--ft-line-soft); }
     .ft-q-del { display: flex; justify-content: flex-end; padding: 0 16px 14px; }
-    @media (max-width: 640px) { .ft-q-meta { display: none; } }
+    @media (max-width: 640px) {
+        .ft-q-meta { display: none; }
+    }
 </style>
 
 <script>

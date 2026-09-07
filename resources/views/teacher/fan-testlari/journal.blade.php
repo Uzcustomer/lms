@@ -1,5 +1,5 @@
 <x-app-layout>
-<x-fan-testi-kit />
+@include('teacher.fan-testlari._kit')
 
 <div class="ft ft-page">
     <div class="ft-head">

@@ -33,7 +33,9 @@
 
     /* ── Sahifa karkasi ─────────────────────────────────────────── */
     .ft-page { display: grid; gap: 14px; padding: 18px 16px 28px; }
-    @media (min-width: 640px) { .ft-page { padding: 20px 24px 32px; } }
+    @media (min-width: 640px) {
+        .ft-page { padding: 20px 24px 32px; }
+    }
 
     .ft-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
     .ft-back { color: var(--ft-brand); font-size: 12px; font-weight: 700; text-decoration: none; }
@@ -54,7 +56,10 @@
 
     /* ── Maydonlar ──────────────────────────────────────────────── */
     .ft-grid { display: grid; gap: 12px; }
-    @media (min-width: 900px) { .ft-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ft-span-2 { grid-column: 1 / -1; } }
+    @media (min-width: 900px) {
+        .ft-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .ft-span-2 { grid-column: 1 / -1; }
+    }
 
     .ft-field { min-width: 0; }
     .ft-field > label, .ft-label { display: block; margin-bottom: 4px; color: var(--ft-ink-soft); font-size: 11px; font-weight: 700; }
@@ -146,4 +151,51 @@
     .ft-table .ft-t-sub { margin-top: 2px; color: var(--ft-ink-mute); font-size: 11px; }
     .ft-actions { display: inline-flex; align-items: center; gap: 6px; }
     .ft-actions form { display: inline-flex; margin: 0; }
+</style>
+
+
+<style>
+    /* Savol formasi — kit ustiga qurilgan ixcham joylashuv */
+    .ft-qf { display: grid; gap: 11px; padding: 13px 16px 15px; }
+
+    .ft-qf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+    .ft-qf-type { flex: 1 1 180px; max-width: 220px; font-weight: 600; }
+    .ft-qf-bar-end { display: inline-flex; align-items: center; gap: 9px; margin-left: auto; }
+    .ft-qf-points { display: inline-flex; align-items: center; gap: 6px; color: var(--ft-ink-soft); font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .ft-qf-points input { width: 62px !important; text-align: center; }
+
+    .ft-qf-top { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 12px; }
+    .ft-qf-media { display: grid; gap: 8px; align-content: start; }
+    .ft-qf-drop { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 84px; padding: 10px; border: 1px dashed #bccfea; border-radius: var(--ft-radius-sm); background: #f8fafd; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+    .ft-qf-drop:hover { border-color: #5a8cf3; background: var(--ft-brand-soft); }
+    .ft-qf-drop input[type='file'] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .ft-qf-drop-name { overflow: hidden; max-width: 100%; color: var(--ft-ink-soft); font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .ft-qf-drop-hint { color: var(--ft-ink-mute); font-size: 10px; }
+    .ft-qf-thumb { padding: 7px; border: 1px solid var(--ft-line); border-radius: var(--ft-radius-sm); background: #f8fafd; }
+    .ft-qf-thumb img { display: block; width: 100%; max-height: 92px; border-radius: 6px; object-fit: contain; }
+    .ft-qf-thumb-del { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--ft-danger); font-size: 11px; font-weight: 600; cursor: pointer; }
+
+    .ft-qf-block { display: grid; gap: 8px; padding: 11px 12px; border: 1px solid #d9e6fa; border-radius: var(--ft-radius-sm); background: #f9fbff; }
+    .ft-qf-block.is-blank { border-color: #f6e2bf; background: #fffdf7; }
+    .ft-qf-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ft-ink); font-size: 12px; font-weight: 700; }
+    .ft-qf-block-head em { color: var(--ft-ink-mute); font-size: 10.5px; font-style: normal; font-weight: 600; }
+
+    /* Variantlar ko'p bo'lsa ro'yxat o'zi skroll bo'ladi */
+    .ft-qf-opts { display: grid; gap: 6px; max-height: 320px; overflow-y: auto; padding-right: 2px; }
+    .ft-qf-opts::-webkit-scrollbar { width: 8px; }
+    .ft-qf-opts::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: #c9d6e8; background-clip: content-box; }
+    .ft-qf-opt { display: grid; grid-template-columns: 40px minmax(0, 1fr) 30px; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid var(--ft-line-soft); border-radius: 8px; background: #fff; transition: border-color .15s, background .15s; }
+    .ft-qf-opt.is-correct { border-color: #8fdfba; background: var(--ft-ok-soft); }
+    .ft-qf-pick { display: inline-flex; align-items: center; gap: 5px; color: var(--ft-ink-soft); cursor: pointer; }
+    .ft-qf-pick input[type='radio'] { accent-color: var(--ft-ok); }
+    .ft-qf-pick span { font-size: 12px; font-weight: 800; }
+    .ft-qf-opt.is-correct .ft-qf-pick span { color: #047857; }
+
+    .ft-qf-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 10px; border-top: 1px solid var(--ft-line-soft); }
+
+    @media (max-width: 780px) {
+        .ft-qf-top { grid-template-columns: 1fr; }
+        .ft-qf-bar-end { margin-left: 0; }
+        .ft-qf-drop { min-height: 68px; }
+    }
 </style>

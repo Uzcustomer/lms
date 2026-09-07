@@ -62,7 +62,7 @@ class FanTestiController extends Controller
     {
         $this->authorizeCollection($fanTesti);
         $subjects = $this->subjectsFor($this->teacher());
-        $collection = $fanTesti->load('subject.curriculum');
+        $collection = $fanTesti->load('subject.curriculum:curricula_hemis_id,name,education_year_name');
 
         return view('teacher.fan-testlari.builder', [
             'collection' => $collection,
@@ -401,23 +401,22 @@ class FanTestiController extends Controller
         // Bir xil fan bir necha o'quv rejada takrorlanadi — ro'yxatda ularni
         // ajratish uchun reja nomi ham olinadi.
         return CurriculumSubject::query()
-            ->with('curriculum')
+            ->with('curriculum:curricula_hemis_id,name,education_year_name')
             ->where('is_active', true)
             ->where('department_id', $teacher->department_hemis_id)
             ->whereIn('subject_id', $assignedSubjectIds)
             ->orderBy('subject_name')
             ->orderBy('semester_name')
             ->get([
-                'id', 'subject_id', 'subject_name', 'subject_code',
-                'semester_name', 'semester_code', 'curricula_hemis_id',
-                'department_id', 'department_name',
+                'id', 'subject_name', 'subject_code', 'semester_name', 'semester_code',
+                'curricula_hemis_id', 'department_id', 'department_name',
             ]);
     }
 
     private function collectionsFor($subjects)
     {
         return FanTesti::query()
-            ->with('subject.curriculum')
+            ->with('subject.curriculum:curricula_hemis_id,name,education_year_name')
             ->whereIn('curriculum_subject_id', $subjects->pluck('id'))
             ->latest()
             ->get();

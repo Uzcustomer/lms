@@ -3673,7 +3673,7 @@
                                     '</div>' +
                                     '<div class="cyc-mk-line">' +
                                     (req ? '<i>' + esc(req) + '</i>' : '') +
-                                    '<b class="cyc-mk-count" data-mk-count="' + esc(block.key) + '"' + ' data-mk-total="' + (block.lecture_hours != null ? block.lecture_hours : '') + ' style="margin-left:auto">' + markCountLabel(marked, block.lecture_hours) + '</b>' +
+                                    '<b class="cyc-mk-count" data-mk-count="' + esc(block.key) + '"' + ' data-mk-total="' + (block.lecture_hours != null ? block.lecture_hours : '') + '" style="margin-left:auto">' + markCountLabel(marked, block.lecture_hours) + '</b>' +
                                     '</div>' +
                                     '</div>' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +

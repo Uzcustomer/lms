@@ -11,7 +11,11 @@
     <div class="bl-qf-bar">
         <select name="type" x-model="type" class="bl-qf-type">
             <option value="single_choice">Bitta to'g'ri javob</option>
+            <option value="multiple_choice">Bir nechta to'g'ri javob</option>
+            <option value="true_false">To'g'ri / Noto'g'ri</option>
             <option value="fill_in_blank">Bo'sh joyni to'ldirish</option>
+            <option value="matching">Moslashtirish (juftlik)</option>
+            <option value="ordering">Ketma-ketlikni tuzish</option>
         </select>
 
         <div class="bl-langs" role="tablist" aria-label="Til">
@@ -61,16 +65,20 @@
         </div>
     </div>
 
-    <div x-show="type === 'single_choice'" x-cloak class="bl-answers">
+    <div x-show="type === 'single_choice' || type === 'multiple_choice'" x-cloak class="bl-answers">
         <div class="bl-answers-head">
-            <span>Javob variantlari <em>to'g'risini belgilang</em></span>
+            <span>
+                Javob variantlari
+                <em x-text="type === 'multiple_choice' ? 'to\'g\'rilarining hammasini belgilang' : 'to\'g\'risini belgilang'"></em>
+            </span>
             <button type="button" @click="addOption" class="bl-btn bl-btn-ghost bl-btn-sm">+ Variant</button>
         </div>
         <div class="bl-opts">
             <template x-for="(option, index) in options" :key="index">
-                <div class="bl-opt" :class="correctOption === index + 1 && 'is-correct'">
+                <div class="bl-opt" :class="isCorrectOption(index) && 'is-correct'">
                     <label class="bl-pick">
-                        <input type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption">
+                        <input x-show="type === 'single_choice'" type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption">
+                        <input x-show="type === 'multiple_choice'" x-cloak type="checkbox" name="correct_option_numbers[]" :value="index + 1" x-model="correctOptions">
                         <span x-text="String.fromCharCode(65 + index)">A</span>
                     </label>
                     <input :name="'options[' + index + '][text]'" x-model="option.text" x-show="lang === 'uz'" placeholder="Variant matni">
@@ -80,6 +88,69 @@
                 </div>
             </template>
         </div>
+        <p class="bl-note" x-show="type === 'multiple_choice'" x-cloak>
+            Talaba ball olishi uchun barcha to'g'ri variantlarni belgilashi va bittasini ham ortiqcha belgilamasligi kerak.
+        </p>
+    </div>
+
+    {{-- To'g'ri / Noto'g'ri --}}
+    <div x-show="type === 'true_false'" x-cloak class="bl-answers">
+        <div class="bl-answers-head"><span>To'g'ri javob</span></div>
+        <div class="bl-tf">
+            <label class="bl-tf-pick" :class="trueFalse === '1' && 'is-on'">
+                <input type="radio" name="true_false_answer" value="1" x-model="trueFalse">
+                <span>To'g'ri</span>
+            </label>
+            <label class="bl-tf-pick" :class="trueFalse === '0' && 'is-off'">
+                <input type="radio" name="true_false_answer" value="0" x-model="trueFalse">
+                <span>Noto'g'ri</span>
+            </label>
+        </div>
+        <p class="bl-note">Talabaga savol matni bilan birga "To'g'ri / Noto'g'ri" tanlovi ko'rsatiladi.</p>
+    </div>
+
+    {{-- Moslashtirish --}}
+    <div x-show="type === 'matching'" x-cloak class="bl-answers is-match">
+        <div class="bl-answers-head">
+            <span>Juftliklar <em>chap ustun — mos javob</em></span>
+            <button type="button" @click="addPair" class="bl-btn bl-btn-ghost bl-btn-sm">+ Juftlik</button>
+        </div>
+        <div class="bl-opts">
+            <template x-for="(pair, index) in pairs" :key="index">
+                <div class="bl-pair">
+                    <span class="bl-pair-no" x-text="index + 1">1</span>
+                    <input :name="'pairs[' + index + '][left]'" x-model="pair.left" x-show="lang === 'uz'" placeholder="Chap ustun (savol bandi)">
+                    <input :name="'pairs[' + index + '][left_ru]'" x-model="pair.left_ru" x-show="lang === 'ru'" x-cloak placeholder="Левая колонка">
+                    <input :name="'pairs[' + index + '][left_en]'" x-model="pair.left_en" x-show="lang === 'en'" x-cloak placeholder="Left column">
+                    <span class="bl-pair-arrow">&rarr;</span>
+                    <input :name="'pairs[' + index + '][right]'" x-model="pair.right" x-show="lang === 'uz'" placeholder="Mos javob">
+                    <input :name="'pairs[' + index + '][right_ru]'" x-model="pair.right_ru" x-show="lang === 'ru'" x-cloak placeholder="Соответствие">
+                    <input :name="'pairs[' + index + '][right_en]'" x-model="pair.right_en" x-show="lang === 'en'" x-cloak placeholder="Match">
+                    <button type="button" @click="removePair(index)" class="bl-x" :disabled="pairs.length <= 2" title="O'chirish" aria-label="Juftlikni o'chirish">&times;</button>
+                </div>
+            </template>
+        </div>
+        <p class="bl-note">Talabaga o'ng ustun aralashtirib ko'rsatiladi. Ball barcha juftlik to'g'ri bo'lgandagina beriladi.</p>
+    </div>
+
+    {{-- Ketma-ketlik --}}
+    <div x-show="type === 'ordering'" x-cloak class="bl-answers is-order">
+        <div class="bl-answers-head">
+            <span>Bosqichlar <em>to'g'ri tartibda kiriting</em></span>
+            <button type="button" @click="addStep" class="bl-btn bl-btn-ghost bl-btn-sm">+ Bosqich</button>
+        </div>
+        <div class="bl-opts">
+            <template x-for="(step, index) in steps" :key="index">
+                <div class="bl-step-row">
+                    <span class="bl-step-no" x-text="index + 1">1</span>
+                    <input :name="'steps[' + index + '][text]'" x-model="step.text" x-show="lang === 'uz'" placeholder="Bosqich matni">
+                    <input :name="'steps[' + index + '][text_ru]'" x-model="step.text_ru" x-show="lang === 'ru'" x-cloak placeholder="Текст шага">
+                    <input :name="'steps[' + index + '][text_en]'" x-model="step.text_en" x-show="lang === 'en'" x-cloak placeholder="Step text">
+                    <button type="button" @click="removeStep(index)" class="bl-x" :disabled="steps.length <= 3" title="O'chirish" aria-label="Bosqichni o'chirish">&times;</button>
+                </div>
+            </template>
+        </div>
+        <p class="bl-note">Talabaga bosqichlar aralashtirib beriladi — u raqamlab to'g'ri ketma-ketlikni tuzadi.</p>
     </div>
 
     <div x-show="type === 'fill_in_blank'" x-cloak class="bl-answers is-blank">

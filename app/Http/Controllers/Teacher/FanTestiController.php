@@ -434,7 +434,7 @@ class FanTestiController extends Controller
     private function validatedQuestion(Request $request): array
     {
         $validated = $request->validate([
-            'type' => ['required', Rule::in(['single_choice', 'fill_in_blank'])],
+            'type' => ['required', Rule::in(['single_choice', 'multiple_choice', 'true_false', 'fill_in_blank', 'matching', 'ordering'])],
             'prompt' => ['required', 'string'],
             'prompt_ru' => ['nullable', 'string'],
             'prompt_en' => ['nullable', 'string'],
@@ -453,10 +453,24 @@ class FanTestiController extends Controller
             'points' => ['required', 'integer', 'min:1', 'max:100'],
             'is_active' => ['nullable', 'boolean'],
             'correct_option_number' => ['nullable', 'integer', 'min:1'],
+            'correct_option_numbers' => ['nullable', 'array'],
+            'correct_option_numbers.*' => ['integer', 'min:1'],
+            'true_false_answer' => ['nullable', 'in:0,1'],
             'options' => ['nullable', 'array'],
             'options.*.text' => ['nullable', 'string', 'max:255'],
             'options.*.text_ru' => ['nullable', 'string', 'max:255'],
             'options.*.text_en' => ['nullable', 'string', 'max:255'],
+            'pairs' => ['nullable', 'array'],
+            'pairs.*.left' => ['nullable', 'string', 'max:255'],
+            'pairs.*.left_ru' => ['nullable', 'string', 'max:255'],
+            'pairs.*.left_en' => ['nullable', 'string', 'max:255'],
+            'pairs.*.right' => ['nullable', 'string', 'max:255'],
+            'pairs.*.right_ru' => ['nullable', 'string', 'max:255'],
+            'pairs.*.right_en' => ['nullable', 'string', 'max:255'],
+            'steps' => ['nullable', 'array'],
+            'steps.*.text' => ['nullable', 'string', 'max:255'],
+            'steps.*.text_ru' => ['nullable', 'string', 'max:255'],
+            'steps.*.text_en' => ['nullable', 'string', 'max:255'],
         ]);
 
         if ($validated['type'] === 'fill_in_blank' && trim((string) ($validated['correct_answer_text'] ?? '')) === '') {
@@ -465,23 +479,69 @@ class FanTestiController extends Controller
             ]);
         }
 
-        if ($validated['type'] === 'single_choice') {
+        if (in_array($validated['type'], ['single_choice', 'multiple_choice'], true)) {
             $options = collect($validated['options'] ?? [])
                 ->filter(fn ($option) => trim((string) ($option['text'] ?? '')) !== '')
                 ->values();
             if ($options->count() < 2) {
                 throw ValidationException::withMessages([
-                    'options' => 'Bitta javobli savol uchun kamida 2 ta variant kerak.',
-                ]);
-            }
-            $correct = (int) ($validated['correct_option_number'] ?? 0);
-            if ($correct < 1 || $correct > $options->count()) {
-                throw ValidationException::withMessages([
-                    'correct_option_number' => 'To\'g\'ri javob variantini tanlang.',
+                    'options' => 'Variantli savol uchun kamida 2 ta variant kerak.',
                 ]);
             }
             $validated['options'] = $options->all();
-            $validated['correct_option_number'] = $correct;
+
+            if ($validated['type'] === 'single_choice') {
+                $correct = (int) ($validated['correct_option_number'] ?? 0);
+                if ($correct < 1 || $correct > $options->count()) {
+                    throw ValidationException::withMessages([
+                        'correct_option_number' => 'To\'g\'ri javob variantini tanlang.',
+                    ]);
+                }
+                $validated['correct_option_number'] = $correct;
+            } else {
+                $picked = collect($validated['correct_option_numbers'] ?? [])
+                    ->map(fn ($number) => (int) $number)
+                    ->filter(fn ($number) => $number >= 1 && $number <= $options->count())
+                    ->unique()
+                    ->sort()
+                    ->values();
+                if ($picked->count() < 2) {
+                    throw ValidationException::withMessages([
+                        'correct_option_numbers' => 'Ko\'p javobli savolda kamida 2 ta to\'g\'ri variant belgilang.',
+                    ]);
+                }
+                if ($picked->count() >= $options->count()) {
+                    throw ValidationException::withMessages([
+                        'correct_option_numbers' => 'Barcha variantlar to\'g\'ri bo\'lishi mumkin emas — kamida bittasi noto\'g\'ri qolsin.',
+                    ]);
+                }
+                $validated['correct_option_numbers'] = $picked->all();
+            }
+        }
+
+        if ($validated['type'] === 'matching') {
+            $pairs = collect($validated['pairs'] ?? [])
+                ->filter(fn ($pair) => trim((string) ($pair['left'] ?? '')) !== ''
+                    && trim((string) ($pair['right'] ?? '')) !== '')
+                ->values();
+            if ($pairs->count() < 2) {
+                throw ValidationException::withMessages([
+                    'pairs' => 'Moslashtirish savolida kamida 2 ta to\'liq juftlik kerak.',
+                ]);
+            }
+            $validated['pairs'] = $pairs->all();
+        }
+
+        if ($validated['type'] === 'ordering') {
+            $steps = collect($validated['steps'] ?? [])
+                ->filter(fn ($step) => trim((string) ($step['text'] ?? '')) !== '')
+                ->values();
+            if ($steps->count() < 3) {
+                throw ValidationException::withMessages([
+                    'steps' => 'Ketma-ketlik savolida kamida 3 ta bosqich kerak.',
+                ]);
+            }
+            $validated['steps'] = $steps->all();
         }
 
         return $validated;
@@ -517,15 +577,54 @@ class FanTestiController extends Controller
             'points' => (int) $validated['points'],
             'is_active' => $request->boolean('is_active', true),
             'options' => [],
+            'pairs' => [],
+            'steps' => [],
         ];
 
-        if ($validated['type'] === 'single_choice') {
+        if (in_array($validated['type'], ['single_choice', 'multiple_choice'], true)) {
+            $correctNumbers = $validated['type'] === 'single_choice'
+                ? [(int) $validated['correct_option_number']]
+                : array_map('intval', $validated['correct_option_numbers']);
+
             foreach ($validated['options'] as $index => $option) {
                 $question['options'][] = [
                     'text' => trim((string) ($option['text'] ?? '')),
                     'text_ru' => trim((string) ($option['text_ru'] ?? '')),
                     'text_en' => trim((string) ($option['text_en'] ?? '')),
-                    'is_correct' => ($index + 1) === (int) $validated['correct_option_number'],
+                    'is_correct' => in_array($index + 1, $correctNumbers, true),
+                ];
+            }
+        }
+
+        // To'g'ri/Noto'g'ri — ikkita doimiy variantli maxsus holat.
+        if ($validated['type'] === 'true_false') {
+            $isTrue = (string) ($validated['true_false_answer'] ?? '1') === '1';
+            $question['options'] = [
+                ['text' => "To'g'ri", 'text_ru' => 'Верно', 'text_en' => 'True', 'is_correct' => $isTrue],
+                ['text' => "Noto'g'ri", 'text_ru' => 'Неверно', 'text_en' => 'False', 'is_correct' => !$isTrue],
+            ];
+        }
+
+        if ($validated['type'] === 'matching') {
+            foreach ($validated['pairs'] as $pair) {
+                $question['pairs'][] = [
+                    'left' => trim((string) ($pair['left'] ?? '')),
+                    'left_ru' => trim((string) ($pair['left_ru'] ?? '')),
+                    'left_en' => trim((string) ($pair['left_en'] ?? '')),
+                    'right' => trim((string) ($pair['right'] ?? '')),
+                    'right_ru' => trim((string) ($pair['right_ru'] ?? '')),
+                    'right_en' => trim((string) ($pair['right_en'] ?? '')),
+                ];
+            }
+        }
+
+        // Bosqichlar kiritilgan tartibda to'g'ri hisoblanadi, talabaga aralashtirib beriladi.
+        if ($validated['type'] === 'ordering') {
+            foreach ($validated['steps'] as $step) {
+                $question['steps'][] = [
+                    'text' => trim((string) ($step['text'] ?? '')),
+                    'text_ru' => trim((string) ($step['text_ru'] ?? '')),
+                    'text_en' => trim((string) ($step['text_en'] ?? '')),
                 ];
             }
         }

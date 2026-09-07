@@ -184,6 +184,40 @@
     .bl-pick span { color: var(--ink-soft); font-family: 'Roboto Slab', serif; font-size: 13px; font-weight: 600; }
     .bl-opt.is-correct .bl-pick span { color: var(--ok); }
 
+    .bl-answers.is-match { border-left-color: #7c9dd0; }
+    .bl-answers.is-order { border-left-color: #59a389; }
+
+    .bl-tf { display: flex; flex-wrap: wrap; gap: 10px; }
+    .bl-tf-pick {
+        display: inline-flex; align-items: center; gap: 9px; padding: 11px 20px;
+        border: 1px solid var(--line); border-radius: 5px; background: #fff;
+        color: var(--ink-soft); font-size: 13.5px; cursor: pointer; transition: border-color .16s, background .16s, color .16s;
+    }
+    .bl-tf-pick.is-on { border-color: #a5d6bf; background: var(--ok-bg); color: var(--ok); font-weight: 500; }
+    .bl-tf-pick.is-off { border-color: #e8c3c0; background: var(--bad-bg); color: var(--bad); font-weight: 500; }
+
+    .bl-pair {
+        display: grid; grid-template-columns: 30px minmax(0, 1fr) 22px minmax(0, 1fr) 32px;
+        align-items: center; gap: 9px;
+        padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff;
+    }
+    .bl-pair-no, .bl-step-no {
+        display: grid; place-items: center; width: 26px; height: 26px;
+        border: 1px solid var(--line); border-radius: 4px; background: #fafcfe;
+        color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 12px; font-weight: 600;
+    }
+    .bl-pair-arrow { color: var(--muted); font-size: 15px; text-align: center; }
+
+    .bl-step-row {
+        display: grid; grid-template-columns: 30px minmax(0, 1fr) 32px; align-items: center; gap: 9px;
+        padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff;
+    }
+
+    @media (max-width: 780px) {
+        .bl-pair { grid-template-columns: 30px minmax(0, 1fr) 32px; }
+        .bl-pair-arrow { display: none; }
+    }
+
     .bl-more { border: 1px solid var(--line); border-radius: 5px; background: #fafcfe; }
     .bl-more > summary {
         padding: 9px 14px; color: var(--ink-soft); font-size: 11.5px; font-weight: 500;
@@ -429,7 +463,14 @@
                 @forelse($questions as $index => $question)
                     @php
                         $preview = trim(strip_tags((string) ($question['prompt'] ?? '')));
-                        $typeLabel = ($question['type'] ?? '') === 'fill_in_blank' ? "Bo'sh joyni to'ldirish" : "Bitta to'g'ri javob";
+                        $typeLabel = [
+                            'single_choice' => "Bitta to'g'ri javob",
+                            'multiple_choice' => "Bir nechta to'g'ri javob",
+                            'true_false' => "To'g'ri / Noto'g'ri",
+                            'fill_in_blank' => "Bo'sh joyni to'ldirish",
+                            'matching' => 'Moslashtirish',
+                            'ordering' => 'Ketma-ketlik',
+                        ][$question['type'] ?? 'single_choice'] ?? "Bitta to'g'ri javob";
                     @endphp
                     <details class="bl-q">
                         <summary>
@@ -547,6 +588,26 @@
         }));
         while (options.length < 3) options.push({text: '', text_ru: '', text_en: ''});
 
+        // Ko'p javobli savol uchun belgilangan variant raqamlari (1 dan boshlab)
+        const correctNumbers = sourceOptions
+            .map((option, index) => (option.is_correct ? index + 1 : null))
+            .filter(number => number !== null)
+            .map(String);
+
+        const pairs = (Array.isArray(source.pairs) ? source.pairs : []).map(pair => ({
+            left: pair.left || '', left_ru: pair.left_ru || '', left_en: pair.left_en || '',
+            right: pair.right || '', right_ru: pair.right_ru || '', right_en: pair.right_en || ''
+        }));
+        while (pairs.length < 3) pairs.push({left: '', left_ru: '', left_en: '', right: '', right_ru: '', right_en: ''});
+
+        const steps = (Array.isArray(source.steps) ? source.steps : []).map(step => ({
+            text: step.text || '', text_ru: step.text_ru || '', text_en: step.text_en || ''
+        }));
+        while (steps.length < 3) steps.push({text: '', text_ru: '', text_en: ''});
+
+        // To'g'ri/Noto'g'ri: birinchi variant "To'g'ri" bo'lib saqlanadi
+        const trueFalse = sourceOptions.length === 2 && sourceOptions[1]?.is_correct ? '0' : '1';
+
         return {
             type: source.type || 'single_choice',
             prompt: source.prompt || '', prompt_ru: source.prompt_ru || '', prompt_en: source.prompt_en || '',
@@ -555,15 +616,32 @@
             correct_answer_text: source.correct_answer_text || '', correct_answer_text_ru: source.correct_answer_text_ru || '', correct_answer_text_en: source.correct_answer_text_en || '',
             case_sensitive: Boolean(source.case_sensitive), points: source.points || 1, is_active: source.is_active !== false,
             options: options, correctOption: correctIndex + 1,
+            correctOptions: correctNumbers, trueFalse: trueFalse,
+            pairs: pairs, steps: steps,
             lang: 'uz', imageName: '',
             pickImage(event) { this.imageName = event.target.files?.[0]?.name || ''; },
+            isCorrectOption(index) {
+                return this.type === 'multiple_choice'
+                    ? this.correctOptions.includes(String(index + 1))
+                    : this.correctOption === index + 1;
+            },
             addOption() { this.options.push({text: '', text_ru: '', text_en: ''}); },
             removeOption(index) {
                 if (this.options.length <= 2) return;
                 this.options.splice(index, 1);
                 if (this.correctOption > this.options.length) this.correctOption = this.options.length;
                 if (this.correctOption > index + 1) this.correctOption--;
-            }
+                // Ko'p javobli tanlovda raqamlar siljiydi
+                this.correctOptions = this.correctOptions
+                    .map(Number)
+                    .filter(number => number !== index + 1)
+                    .map(number => (number > index + 1 ? number - 1 : number))
+                    .map(String);
+            },
+            addPair() { this.pairs.push({left: '', left_ru: '', left_en: '', right: '', right_ru: '', right_en: ''}); },
+            removePair(index) { if (this.pairs.length > 2) this.pairs.splice(index, 1); },
+            addStep() { this.steps.push({text: '', text_ru: '', text_en: ''}); },
+            removeStep(index) { if (this.steps.length > 3) this.steps.splice(index, 1); }
         };
     }
 </script>

@@ -92,6 +92,38 @@
             margin: 15px 0 0; border: 1px solid var(--line); border-radius: 4px;
         }
         .q-options { margin-top: 17px; }
+        .q-hint-multi {
+            margin-bottom: 11px; padding: 8px 12px;
+            border-left: 3px solid var(--gold); border-radius: 0 3px 3px 0;
+            background: #fdfaf0; color: var(--ink-soft); font-size: 12.5px;
+        }
+        .o.is-multi input:checked + .o-box .o-key { border-radius: 4px; }
+
+        .q-match { display: grid; gap: 9px; }
+        .q-match-row {
+            display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center;
+            padding: 10px 13px; border: 1px solid var(--line); border-radius: 5px; background: #fafcfe;
+        }
+        .q-match-left { color: var(--ink); font-size: 14px; line-height: 1.5; }
+        .q-match-pick, .q-order-pick {
+            height: 40px; padding: 0 10px; border: 1px solid #c4d0e0; border-radius: 4px;
+            background: #fff; color: var(--ink); font-family: inherit; font-size: 13.5px; outline: none;
+        }
+        .q-match-pick:focus, .q-order-pick:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(27,58,99,.14); }
+
+        .q-order { display: grid; gap: 9px; }
+        .q-order-row {
+            display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; align-items: center;
+            padding: 10px 13px; border: 1px solid var(--line); border-radius: 5px; background: #fafcfe;
+        }
+        .q-order-row.is-set { border-color: #a9c6ec; background: #f4f8fd; }
+        .q-order-text { color: var(--ink); font-size: 14px; line-height: 1.5; }
+        .q-order-dup .q-order-pick { border-color: var(--bad); background: var(--bad-bg); }
+
+        @media (max-width: 640px) {
+            .q-match-row { grid-template-columns: 1fr; gap: 8px; }
+            .q-order-row { grid-template-columns: 64px minmax(0, 1fr); }
+        }
 
         /* ---------- Variantlar ---------- */
         .o { display: block; margin-bottom: 8px; cursor: pointer; }
@@ -205,10 +237,75 @@
                         <img class="q-img" src="{{ route('fan-testi.attempt-image', [$attempt, $index]) }}" alt="Savol rasmi" loading="lazy">
                     @endif
 
+                    @php $qType = $question['type'] ?? 'single_choice'; @endphp
+
                     <div class="q-options">
-                        @if(($question['type'] ?? 'single_choice') === 'fill_in_blank')
+                        @if($qType === 'fill_in_blank')
                             <input class="q-blank" type="text" name="answers[{{ $index }}]"
                                    autocomplete="off" placeholder="Javobingizni yozing">
+
+                        @elseif($qType === 'multiple_choice')
+                            <div class="q-hint-multi">Bir nechta to'g'ri javob bor — barchasini belgilang.</div>
+                            @foreach($question['options'] ?? [] as $optionIndex => $option)
+                                <label class="o is-multi">
+                                    <input type="checkbox" name="answers[{{ $index }}][]" value="{{ $optionIndex }}">
+                                    <span class="o-box">
+                                        <span class="o-key">{{ chr(65 + $optionIndex) }}</span>
+                                        <span class="o-text">{{ $option['text'] ?? '' }}</span>
+                                    </span>
+                                </label>
+                            @endforeach
+
+                        @elseif($qType === 'matching')
+                            @php
+                                $pairs = $question['pairs'] ?? [];
+                                $rightOrder = collect($pairs)->keys()->all();
+                                // O'ng ustun aralashtiriladi — tanlov mazmunli bo'lsin.
+                                $seed = $index + 7;
+                                usort($rightOrder, fn ($a, $b) => (($a * 31 + $seed) % 97) <=> (($b * 31 + $seed) % 97));
+                            @endphp
+                            <div class="q-hint-multi">Har bir chap ustun bandiga mos javobni tanlang.</div>
+                            <div class="q-match">
+                                @foreach($pairs as $pairIndex => $pair)
+                                    <div class="q-match-row">
+                                        <span class="q-match-left">{{ $pair['left'] ?? '' }}</span>
+                                        <select class="q-match-pick" name="answers[{{ $index }}][{{ $pairIndex }}]">
+                                            <option value="">— tanlang —</option>
+                                            @foreach($rightOrder as $rightIndex)
+                                                <option value="{{ $rightIndex }}">{{ $pairs[$rightIndex]['right'] ?? '' }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endforeach
+                            </div>
+
+                        @elseif($qType === 'ordering')
+                            @php
+                                $steps = $question['steps'] ?? [];
+                                $stepOrder = collect($steps)->keys()->all();
+                                $seed = $index + 3;
+                                usort($stepOrder, fn ($a, $b) => (($a * 17 + $seed) % 89) <=> (($b * 17 + $seed) % 89));
+                                $stepCount = count($steps);
+                            @endphp
+                            <div class="q-hint-multi">Bosqichlarni to'g'ri ketma-ketlikda raqamlang (1 dan {{ $stepCount }} gacha).</div>
+                            <div class="q-order" data-order="{{ $index }}" data-count="{{ $stepCount }}">
+                                @foreach($stepOrder as $stepIndex)
+                                    <div class="q-order-row">
+                                        <select class="q-order-pick" data-step="{{ $stepIndex }}">
+                                            <option value="">—</option>
+                                            @for($position = 1; $position <= $stepCount; $position++)
+                                                <option value="{{ $position }}">{{ $position }}</option>
+                                            @endfor
+                                        </select>
+                                        <span class="q-order-text">{{ $steps[$stepIndex]['text'] ?? '' }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                            {{-- Tartib JS orqali yig'iladi: pozitsiya bo'yicha bosqich indekslari --}}
+                            @for($slot = 0; $slot < $stepCount; $slot++)
+                                <input type="hidden" name="answers[{{ $index }}][]" data-order-slot="{{ $index }}-{{ $slot }}" value="">
+                            @endfor
+
                         @else
                             @foreach($question['options'] ?? [] as $optionIndex => $option)
                                 <label class="o">
@@ -280,12 +377,58 @@
         renderClock();
     }, 1000);
 
+    // Ketma-ketlik savoli: tanlangan pozitsiyalardan yashirin maydonlarga
+    // bosqich indekslarini joylaymiz (1-pozitsiya -> birinchi maydon).
+    function syncOrdering() {
+        form.querySelectorAll('.q-order').forEach(box => {
+            const qIndex = box.dataset.order;
+            const count = Number(box.dataset.count || 0);
+            const slots = form.querySelectorAll('[data-order-slot^="' + qIndex + '-"]');
+            slots.forEach(slot => { slot.value = ''; });
+
+            const used = new Map();
+            box.querySelectorAll('.q-order-pick').forEach(pick => {
+                const position = Number(pick.value || 0);
+                const row = pick.closest('.q-order-row');
+                row.classList.toggle('is-set', position > 0);
+                if (!position) return;
+                if (used.has(position)) {
+                    used.get(position).classList.add('q-order-dup');
+                    row.classList.add('q-order-dup');
+                } else {
+                    used.set(position, row);
+                    row.classList.remove('q-order-dup');
+                    const slot = form.querySelector('[data-order-slot="' + qIndex + '-' + (position - 1) + '"]');
+                    if (slot) slot.value = pick.dataset.step;
+                }
+            });
+
+            // Takrorlanmagan qatorlardan xato belgisini olib tashlaymiz
+            box.querySelectorAll('.q-order-row').forEach(row => {
+                const pick = row.querySelector('.q-order-pick');
+                const position = Number(pick.value || 0);
+                if (!position || used.get(position) === row) row.classList.remove('q-order-dup');
+            });
+        });
+    }
+
     function refreshProgress() {
+        syncOrdering();
         let done = 0;
         form.querySelectorAll('.q').forEach(block => {
             const radio = block.querySelector('input[type=radio]:checked');
+            const checks = block.querySelectorAll('input[type=checkbox]:checked');
             const text = block.querySelector('.q-blank');
-            const answered = Boolean(radio) || Boolean(text && text.value.trim());
+            const matchPicks = block.querySelectorAll('.q-match-pick');
+            const orderPicks = block.querySelectorAll('.q-order-pick');
+
+            let answered = Boolean(radio) || checks.length > 0 || Boolean(text && text.value.trim());
+            if (!answered && matchPicks.length) {
+                answered = Array.from(matchPicks).every(pick => pick.value !== '');
+            }
+            if (!answered && orderPicks.length) {
+                answered = Array.from(orderPicks).every(pick => pick.value !== '');
+            }
             if (answered) done += 1;
             block.classList.toggle('is-done', answered);
         });

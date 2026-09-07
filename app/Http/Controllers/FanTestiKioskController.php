@@ -291,6 +291,85 @@ class FanTestiKioskController extends Controller
                             ? $text === $correct
                             : mb_strtolower($text) === mb_strtolower($correct);
                     }
+                } elseif ($type === 'multiple_choice') {
+                    // Ball faqat to'liq to'g'ri to'plamga beriladi: bitta ortiqcha
+                    // yoki yetishmagan belgi javobni noto'g'ri qiladi.
+                    $options = $question['options'] ?? [];
+                    $correctIndexes = collect($options)
+                        ->filter(fn ($option) => ($option['is_correct'] ?? false) === true)
+                        ->keys()
+                        ->sort()
+                        ->values();
+
+                    $row['correct_answer_text'] = $correctIndexes
+                        ->map(fn ($index) => (string) ($options[$index]['text'] ?? ''))
+                        ->implode(', ');
+
+                    $chosen = collect(is_array($given) ? $given : [])
+                        ->map(fn ($index) => (int) $index)
+                        ->filter(fn ($index) => isset($options[$index]))
+                        ->unique()
+                        ->sort()
+                        ->values();
+
+                    if ($chosen->isNotEmpty()) {
+                        $row['answered_at'] = now(self::TZ);
+                        $row['selected_option_text'] = $chosen
+                            ->map(fn ($index) => (string) ($options[$index]['text'] ?? ''))
+                            ->implode(', ');
+                        $row['answer_text'] = $chosen->implode(',');
+                        $row['is_correct'] = $chosen->all() === $correctIndexes->all();
+                    }
+                } elseif ($type === 'matching') {
+                    // Javob: chap ustun indeksi => tanlangan o'ng ustun indeksi.
+                    $pairs = $question['pairs'] ?? [];
+                    $row['correct_answer_text'] = collect($pairs)
+                        ->map(fn ($pair) => ($pair['left'] ?? '') . ' → ' . ($pair['right'] ?? ''))
+                        ->implode('; ');
+
+                    $given = is_array($given) ? $given : [];
+                    $matched = 0;
+                    $shown = [];
+                    foreach ($pairs as $pairIndex => $pair) {
+                        $picked = $given[$pairIndex] ?? null;
+                        if ($picked === null || $picked === '') {
+                            continue;
+                        }
+                        $picked = (int) $picked;
+                        $shown[] = ($pair['left'] ?? '') . ' → ' . (string) ($pairs[$picked]['right'] ?? '?');
+                        if ($picked === (int) $pairIndex) {
+                            $matched++;
+                        }
+                    }
+
+                    if ($shown) {
+                        $row['answered_at'] = now(self::TZ);
+                        $row['selected_option_text'] = implode('; ', $shown);
+                        $row['answer_text'] = json_encode($given, JSON_UNESCAPED_UNICODE);
+                        $row['is_correct'] = $matched === count($pairs);
+                    }
+                } elseif ($type === 'ordering') {
+                    // Javob: talaba tuzgan tartib — bosqich indekslari ketma-ketligi.
+                    $steps = $question['steps'] ?? [];
+                    $row['correct_answer_text'] = collect($steps)
+                        ->map(fn ($step, $index) => ($index + 1) . '. ' . ($step['text'] ?? ''))
+                        ->implode('; ');
+
+                    $order = collect(is_array($given) ? $given : [])
+                        ->map(fn ($index) => (int) $index)
+                        ->filter(fn ($index) => isset($steps[$index]))
+                        ->unique()
+                        ->values();
+
+                    if ($order->isNotEmpty()) {
+                        $row['answered_at'] = now(self::TZ);
+                        $row['selected_option_text'] = $order
+                            ->map(fn ($index, $position) => ($position + 1) . '. ' . (string) ($steps[$index]['text'] ?? ''))
+                            ->implode('; ');
+                        $row['answer_text'] = $order->implode(',');
+                        $row['is_correct'] = $order->count() === count($steps)
+                            && $order->all() === range(0, count($steps) - 1);
+                    }
                 } else {
                     $options = $question['options'] ?? [];
                     $correctIndex = collect($options)->search(fn ($option) => ($option['is_correct'] ?? false) === true);

@@ -28,32 +28,36 @@ class FanTestiController extends Controller
 
     public function create()
     {
-        $teacher = $this->teacher();
-
-        // VAQTINCHALIK: sahifadagi xatoni logga emas, ekranga chiqaramiz.
+        // VAQTINCHALIK DIAGNOSTIKA: xatoni logga emas, ekranga chiqaramiz.
         try {
+            $teacher = $this->teacher();
             $subjects = $this->subjectsFor($teacher);
             $collections = $this->collectionsFor($subjects);
+
+            return view('teacher.fan-testlari.builder', [
+                'collection' => null,
+                'subjects' => $subjects,
+                'collections' => $collections,
+            ]);
         } catch (\Throwable $exception) {
-            return response(
-                '<pre style="padding:24px;font:13px/1.6 monospace;white-space:pre-wrap;color:#b3261e">'
-                . 'XATO: ' . e($exception->getMessage()) . "
-
-"
-                . 'FAYL: ' . e($exception->getFile()) . ':' . $exception->getLine() . "
-
-"
-                . e($exception->getTraceAsString())
-                . '</pre>',
-                500
-            );
+            return response($this->debugDump($exception), 500);
         }
+    }
 
-        return view('teacher.fan-testlari.builder', [
-            'collection' => null,
-            'subjects' => $subjects,
-            'collections' => $collections,
-        ]);
+    /** VAQTINCHALIK: xatoni o'qiladigan ko'rinishda qaytaradi. */
+    private function debugDump(\Throwable $exception): string
+    {
+        $lines = [
+            'XATO:  ' . $exception->getMessage(),
+            'TUR:   ' . get_class($exception),
+            'FAYL:  ' . $exception->getFile() . ':' . $exception->getLine(),
+            '',
+            $exception->getTraceAsString(),
+        ];
+
+        return '<pre style="padding:24px;font:13px/1.7 monospace;white-space:pre-wrap;color:#b3261e;background:#fff">'
+            . e(implode(PHP_EOL, $lines))
+            . '</pre>';
     }
 
     public function store(Request $request)

@@ -442,6 +442,8 @@
                 // Qo'lda tuzatish vkladkasi uchun manba holatlarni saqlab qo'yamiz
                 joriyState = JSON.parse(JSON.stringify(joriy.blocks || []));
                 optState = JSON.parse(JSON.stringify(opt.blocks || []));
+                calcGroupIds = joriy.group_ids || [];
+                manualKnownIds = idSetFromList(calcGroupIds); // afterState = optimizatsiya — shu guruhlar hisobga olingan
                 MN_UNDO = [];
                 var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                 $('#loading-state').hide();
@@ -668,6 +670,7 @@
             $.get(SNAP_SHOW_URL, getFilters(true)).done(function(res) {
                 if (res && res.found && res.data) {
                     afterState = res.data;
+                    manualKnownIds = idsFromBlocks(afterState);
                     editMode = false;
                     renderAfterBody();
                     if (activeTab === 'manual') { MN_UNDO = []; renderManual(); }
@@ -974,6 +977,7 @@
                     }
                     $('#loading-state').hide();
                     afterState = blocks; editMode = true;
+                    manualContext = null; manualKnownIds = idSetFromList(base.group_ids || []); MN_UNDO = [];
                     $('#table-area').show(); switchTab('after'); renderAfterBody();
                     $('#after-actions').css('display', CAN_APPROVE ? 'flex' : 'none');
                     $('#btn-edit').addClass('on').text('✎ Tahrirlash yoqilgan'); $('#edit-hint').show();
@@ -1030,6 +1034,7 @@
             if ((!afterState || !afterState.length) && AP_CURRENT && AP_CURRENT.blocks && AP_CURRENT.blocks.length) {
                 afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
                 manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+                manualKnownIds = idsFromBlocks(afterState);
                 MN_UNDO = [];
                 mnRecalc();
                 renderAfterBody();
@@ -1120,6 +1125,7 @@
             if (!base || !base.length) { mnFlash('Avval "Hisoblash" tugmasini bosing.'); return; }
             afterState = JSON.parse(JSON.stringify(base));
             manualContext = null;
+            manualKnownIds = idSetFromList(calcGroupIds);
             MN_UNDO = [];
             mnRecalc();
             renderManual();
@@ -1275,22 +1281,42 @@
             var $st = $('#mn-hemis-status');
             var $btn = $('#mn-merge-new').prop('disabled', true).css('opacity', 0.6);
             $st.css('color', '#0369a1').text('Yangi guruhlar tekshirilmoqda...');
-            $.get(DATA_URL, getFilters(false)).done(function(res) {
+            // Tarixdagi versiya tahrirlanayotgan bo'lsa — o'sha versiyaning konteksti (fakultet,
+            // ta'lim turi, reja yili...) bo'yicha so'raymiz; faqat optimize=0 (joriy holat).
+            var mf = manualContext ? $.extend(true, {}, manualContext, { optimize: 0 }) : getFilters(false);
+            if (manualContext) { delete mf.goal; delete mf.merge_faculties; }
+            $.get(DATA_URL, mf).done(function(res) {
                 var src = res.blocks || [];
                 if (!src.length) { $st.css('color', '#b45309').text('Bazada guruh topilmadi — filtrlarni tekshiring.'); return; }
                 if (!afterState || !afterState.length) {
                     // Ekranda hech narsa yo'q — joriy holatni to'liq yuklaymiz
                     afterState = JSON.parse(JSON.stringify(src));
-                    manualContext = null; MN_UNDO = [];
+                    manualKnownIds = idSetFromList(res.group_ids || []);
+                    MN_UNDO = [];
                     mnRecalc(); renderManual(); renderAfterBody();
                     $st.css('color', '#16a34a').text('✓ Joriy holat (barcha guruhlar) yuklandi.');
                     return;
                 }
-                // Ekrandagi barcha guruh nomlari
+                // Yangi guruh — HEMIS ID bo'yicha aniqlanadi (nom bo'yicha emas: optimizatsiya
+                // guruhlarni birlashtirib nomini o'zgartirgan bo'lsa ham ular "yangi" sanalmaydi).
+                // ID ma'lumoti umuman bo'lmagan eski versiyalar uchun — nom bo'yicha zaxira usul.
+                var knownIds = $.extend({}, manualKnownIds, idsFromBlocks(afterState));
+                var useIds = Object.keys(knownIds).length > 0;
                 var have = {};
                 afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
                     (oq.rows || []).forEach(function(r) { have[mnNormName(r.name)] = true; });
                 }); }); });
+                function isNewRow(r) {
+                    if (useIds) {
+                        if (!(+r.gid > 0)) return false;        // sun'iy (bashorat) qatorlar hech qachon qo'shilmaydi
+                        if (knownIds[+r.gid]) return false;
+                        knownIds[+r.gid] = true; manualKnownIds[+r.gid] = true;
+                        return true;
+                    }
+                    var k = mnNormName(r.name);
+                    if (have[k]) return false;
+                    have[k] = true; return true;
+                }
                 var added = 0, addedNames = [];
                 var snapshot = JSON.stringify(afterState);
                 src.forEach(function(sb) {
@@ -1298,8 +1324,7 @@
                         var lvl = ctLevelNum(sc);
                         var newRows = [];
                         (sc.oqims || []).forEach(function(so) { (so.rows || []).forEach(function(r) {
-                            var k = mnNormName(r.name);
-                            if (!have[k]) { have[k] = true; newRows.push(JSON.parse(JSON.stringify(r))); }
+                            if (isNewRow(r)) newRows.push(JSON.parse(JSON.stringify(r)));
                         }); });
                         if (!newRows.length) return;
                         // Mos blok (fakultet+yo'nalish) va kursni topamiz, bo'lmasa yaratamiz
@@ -1362,6 +1387,21 @@
         var AP_VERSIONS = [];       // versiyalar ro'yxati (sana bo'yicha kamayish tartibida)
         var AP_CURRENT = null;      // hozir ekranda turgan versiya (to'liq: blocks, context...)
         var manualContext = null;   // qo'lda tuzatish qaysi kontekst ostida tasdiqlanadi (null — joriy filtrlar)
+        var manualKnownIds = {};    // ekrandagi holat hisobga olgan HEMIS guruh IDlari (yangi guruhlarni aniqlash uchun)
+        var calcGroupIds = [];      // oxirgi hisoblashga kirgan guruh IDlari (joriy va optimizatsiya — bir xil to'plam)
+
+        // Bloklardagi qatorlardan guruh IDlarini yig'adi (gid — haqiqiy guruh, gids — birlashtirilgan manba guruhlar)
+        function idsFromBlocks(blocks) {
+            var set = {};
+            (blocks || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                (oq.rows || []).forEach(function(r) {
+                    if (+r.gid > 0) set[+r.gid] = true;
+                    (r.gids || []).forEach(function(g) { if (+g > 0) set[+g] = true; });
+                });
+            }); }); });
+            return set;
+        }
+        function idSetFromList(list) { var set = {}; (list || []).forEach(function(g) { if (+g > 0) set[+g] = true; }); return set; }
 
         function apVersionLabel(r) {
             var s = r.summary || {};
@@ -1429,6 +1469,7 @@
             if (!AP_CURRENT || !AP_CURRENT.blocks) { mnFlash('Avval versiyani tanlang.'); return; }
             afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
             manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+            manualKnownIds = idsFromBlocks(afterState);
             MN_UNDO = [];
             mnRecalc();
             renderAfterBody();

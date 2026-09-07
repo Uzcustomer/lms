@@ -28,36 +28,14 @@ class FanTestiController extends Controller
 
     public function create()
     {
-        // VAQTINCHALIK DIAGNOSTIKA: xatoni logga emas, ekranga chiqaramiz.
-        try {
-            $teacher = $this->teacher();
-            $subjects = $this->subjectsFor($teacher);
-            $collections = $this->collectionsFor($subjects);
+        $teacher = $this->teacher();
+        $subjects = $this->subjectsFor($teacher);
 
-            return view('teacher.fan-testlari.builder', [
-                'collection' => null,
-                'subjects' => $subjects,
-                'collections' => $collections,
-            ]);
-        } catch (\Throwable $exception) {
-            return response($this->debugDump($exception), 500);
-        }
-    }
-
-    /** VAQTINCHALIK: xatoni o'qiladigan ko'rinishda qaytaradi. */
-    private function debugDump(\Throwable $exception): string
-    {
-        $lines = [
-            'XATO:  ' . $exception->getMessage(),
-            'TUR:   ' . get_class($exception),
-            'FAYL:  ' . $exception->getFile() . ':' . $exception->getLine(),
-            '',
-            $exception->getTraceAsString(),
-        ];
-
-        return '<pre style="padding:24px;font:13px/1.7 monospace;white-space:pre-wrap;color:#b3261e;background:#fff">'
-            . e(implode(PHP_EOL, $lines))
-            . '</pre>';
+        return view('teacher.fan-testlari.builder', [
+            'collection' => null,
+            'subjects' => $subjects,
+            'collections' => $this->collectionsFor($subjects),
+        ]);
     }
 
     public function store(Request $request)
@@ -432,15 +410,35 @@ class FanTestiController extends Controller
                 'semester_code', 'curricula_hemis_id', 'department_id', 'department_name',
             ]);
 
-        // Reja nomi qo'shiladi. Bu qadam sahifani yiqitmasligi kerak:
-        // nomsiz ham ro'yxat ishlaydi, shuning uchun xato ushlanadi va
-        // sababi sahifada ko'rsatiladi.
+        $this->attachCurriculumLabels($subjects);
+
+        return $subjects;
+    }
+
+    private function collectionsFor($subjects)
+    {
+        $collections = FanTesti::query()
+            ->with('subject')
+            ->whereIn('curriculum_subject_id', $subjects->pluck('id'))
+            ->latest()
+            ->get();
+
+        // Jadval va jurnal filtri fan yonida reja nomini ko'rsatadi.
+        $this->attachCurriculumLabels(
+            $collections->map(fn (FanTesti $item) => $item->subject)->filter()
+        );
+
+        return $collections;
+    }
+
+    /** Fan yozuvlariga o'quv reja nomini tayyor satr qilib biriktiradi. */
+    private function attachCurriculumLabels($subjects): void
+    {
         try {
-            $names = Schema::hasTable('curricula')
-                ? Curriculum::query()
-                    ->whereIn('curricula_hemis_id', $subjects->pluck('curricula_hemis_id')->filter()->unique())
-                    ->pluck('name', 'curricula_hemis_id')
-                : collect();
+            $ids = $subjects->pluck('curricula_hemis_id')->filter()->unique();
+            $names = $ids->isEmpty() || !Schema::hasTable('curricula')
+                ? collect()
+                : Curriculum::query()->whereIn('curricula_hemis_id', $ids)->pluck('name', 'curricula_hemis_id');
 
             foreach ($subjects as $subject) {
                 $subject->curriculum_label = (string) ($names[$subject->curricula_hemis_id] ?? '');
@@ -449,20 +447,7 @@ class FanTestiController extends Controller
             foreach ($subjects as $subject) {
                 $subject->curriculum_label = '';
             }
-            session()->flash('curriculum_label_error', $exception->getMessage()
-                . ' (' . basename($exception->getFile()) . ':' . $exception->getLine() . ')');
         }
-
-        return $subjects;
-    }
-
-    private function collectionsFor($subjects)
-    {
-        return FanTesti::query()
-            ->with('subject')
-            ->whereIn('curriculum_subject_id', $subjects->pluck('id'))
-            ->latest()
-            ->get();
     }
 
     private function isAllowedDepartment($teacher): bool

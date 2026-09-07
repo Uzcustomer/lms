@@ -243,8 +243,15 @@
                             <select name="subject_id" id="subject_id" onchange="this.form.querySelector('[name=test_id]').value=''; this.form.submit();">
                                 <option value="">Barcha fanlar</option>
                                 @foreach($subjectOptions ?? [] as $subjectOption)
+                                    @php
+                                        $optionLabel = collect([
+                                            $subjectOption->subject_name,
+                                            $subjectOption->semester_name,
+                                            $subjectOption->curriculum_label ?? null,
+                                        ])->filter()->implode(' · ');
+                                    @endphp
                                     <option value="{{ $subjectOption->id }}" @selected((int) request('subject_id') === (int) $subjectOption->id)>
-                                        {{ $subjectOption->subject_name }}@if($subjectOption->semester_name) · {{ $subjectOption->semester_name }}@endif
+                                        {{ $optionLabel }}
                                     </option>
                                 @endforeach
                             </select>

@@ -334,11 +334,6 @@
         @if(session('success'))
             <div class="bl-alert is-ok">{{ session('success') }}</div>
         @endif
-        @if(session('curriculum_label_error'))
-            <div class="bl-alert is-bad">
-                <b>Reja nomini olishda xato:</b> {{ session('curriculum_label_error') }}
-            </div>
-        @endif
         @if($errors->any())
             <div class="bl-alert is-bad">
                 Ma'lumotlarni tekshiring:
@@ -384,8 +379,15 @@
                     <select name="curriculum_subject_id" id="curriculum_subject_id" required>
                         <option value="">Fan tanlang</option>
                         @foreach($subjects as $subject)
+                            @php
+                                $subjectLabel = collect([
+                                    $subject->subject_name,
+                                    $subject->semester_name,
+                                    $subject->curriculum_label ?? null,
+                                ])->filter()->implode(' · ');
+                            @endphp
                             <option value="{{ $subject->id }}" @selected((int) old('curriculum_subject_id', $collection?->curriculum_subject_id) === (int) $subject->id)>
-                                {{ $subject->subject_name }}@if($subject->semester_name) · {{ $subject->semester_name }}@endif@if(!empty($subject->curriculum_label)) · {{ $subject->curriculum_label }}@endif
+                                {{ $subjectLabel }}
                             </option>
                         @endforeach
                     </select>

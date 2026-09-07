@@ -1062,16 +1062,16 @@
             font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
         #cycleGrid .cyc-member-row b { display: flex; align-items: center; box-sizing: border-box; width: 48px; min-width: 48px; padding: 4px 6px;
             border-left: 1px solid #60a5fa; background: #0ea5e9; color: #fff; font-size: 10px; justify-content: center; }
-        #cycleGrid .cyc-dcol { width: 24px; min-width: 24px; font-size: 9px; writing-mode: vertical-rl; text-orientation: mixed;
+        #cycleGrid .cyc-dcol { width: 30px; min-width: 30px; font-size: 9.5px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
-        #cycleGrid .cyc-cell { width: 24px; min-width: 24px; height: 26px; }
+        #cycleGrid .cyc-cell { width: 30px; min-width: 30px; height: 28px; }
         #cycleGrid .cyc-addrow td { height: 18px; }
         #cycleGrid .cyc-addcell { background: #f8fafc; }
         #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
             color: #2563eb; font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; }
         #cycleGrid .cyc-addpair:hover { color: #1d4ed8; background: #dbeafe; }
         #cycleGrid .cyc-group-col { width: var(--cycle-group-width); min-width: var(--cycle-group-width); }
-        #cycleGrid .cyc-date-col { width: 24px; }
+        #cycleGrid .cyc-date-col { width: 30px; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
         #cycleGrid .cyc-block { position: relative; }
@@ -1081,8 +1081,29 @@
         #cycleGrid .cyc-shift-btn { width: 19px; height: 19px; padding: 0; border: 1px solid rgba(30,64,175,.35); border-radius: 5px;
             background: rgba(255,255,255,.94); color: #1d4ed8; font-size: 15px; font-weight: 800; line-height: 16px; cursor: pointer; }
         #cycleGrid .cyc-shift-btn:hover { background: #dbeafe; border-color: #2563eb; }
-        #cycleGrid .cyc-weekend { background: #fef08a; color: #854d0e; }
-        #cycleGrid .cyc-holiday { background: #fecaca !important; color: #991b1b; }
+        #cycleGrid .cyc-weekend { background: #fdba74; color: #7c2d12; }
+        #cycleGrid .cyc-holiday { background: #fca5a5 !important; color: #7f1d1d; }
+
+        /* Kun ustunlari: bo'sh kataklar colspan bilan birlashtirilgani uchun
+           chiziq va dam olish rangi jadval fonida chiziladi — DOM o'smaydi.
+           --cyc-col: ustun eni, --cyc-x0: birinchi kun ustuni boshlanishi. */
+        #cycleGridWrap { position: relative; }
+        #cycleGrid tbody { position: relative; }
+        #cycleGrid tbody::before {
+            content: ''; position: absolute; z-index: 0; pointer-events: none;
+            top: 0; bottom: 0; left: var(--cyc-x0, 0px); right: 0;
+            background-image: repeating-linear-gradient(
+                to right,
+                rgba(148, 163, 184, .34) 0 1px,
+                transparent 1px var(--cyc-col, 24px)
+            );
+        }
+        #cycleGrid .cyc-off-band {
+            position: absolute; z-index: 0; top: 0; bottom: 0; pointer-events: none;
+        }
+        #cycleGrid .cyc-off-band.is-sunday { background: rgba(253, 186, 116, .30); }
+        #cycleGrid .cyc-off-band.is-holiday { background: rgba(252, 165, 165, .38); }
+        #cycleGrid tbody td { position: relative; z-index: 1; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
         #cycleGrid .cyc-pcol { width: 52px; min-width: 52px; padding: 1px 3px; background: #f1f5f9; color: #64748b;
             font-size: 9px; font-weight: 700; text-align: center; border: 1px solid #e2e8f0; }
@@ -3083,6 +3104,7 @@
             let cyclePlanData = null;
             let cycleViewMode = 'flow';   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             let cyclePairsShown = null;   // ko'rinadigan para qatorlari (sukut: sikl kuni = 6 soat)
+            let cycleBandsResize = null;  // kun chiziqlarini qayta chizuvchi resize ishlovchisi
             let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
             // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
@@ -3199,6 +3221,11 @@
                 });
                 h += '</tbody>';
                 $('cycleGrid').innerHTML = h;
+                paintCycleDayBands(dates);
+                // Oyna o'lchami o'zgarsa ustun eni ham o'zgaradi — qayta chizamiz.
+                if (cycleBandsResize) window.removeEventListener('resize', cycleBandsResize);
+                cycleBandsResize = () => paintCycleDayBands(dates);
+                window.addEventListener('resize', cycleBandsResize);
             }
             // Sikl panjarasi interaktiv ko'rinishda chiziladi: bo'sh katakka fan
             // kartasini sudrash uning start indeksini saqlaydi.
@@ -3229,6 +3256,50 @@
                         ? 'cycle-row-target' : 'cycle-row-muted');
                 });
             }
+            // Kun chiziqlari va dam olish ustunlari jadval fonida chiziladi:
+            // sarlavha kataklaridan haqiqiy o'lchov olinadi, shuning uchun
+            // ustun eni o'zgarsa ham chiziq joyida qoladi.
+            function paintCycleDayBands(dates) {
+                const grid = $('cycleGrid');
+                const body = grid.querySelector('tbody');
+                if (!body) return;
+
+                body.querySelectorAll('.cyc-off-band').forEach(el => el.remove());
+
+                const heads = grid.querySelectorAll('thead .cyc-dcol');
+                if (!heads.length) return;
+
+                const gridLeft = grid.getBoundingClientRect().left;
+                const first = heads[0].getBoundingClientRect();
+                const colWidth = first.width || 24;
+
+                grid.style.setProperty('--cyc-col', colWidth + 'px');
+                grid.style.setProperty('--cyc-x0', (first.left - gridLeft) + 'px');
+
+                // Dam olish kunlari — uzluksiz bo'laklar bo'lib chiziladi.
+                let start = null;
+                const flush = (endIndex) => {
+                    if (start === null) return;
+                    const from = heads[start.index].getBoundingClientRect();
+                    const to = heads[endIndex].getBoundingClientRect();
+                    const band = document.createElement('div');
+                    band.className = 'cyc-off-band ' + (start.holiday ? 'is-holiday' : 'is-sunday');
+                    band.style.left = (from.left - gridLeft) + 'px';
+                    band.style.width = (to.right - from.left) + 'px';
+                    body.appendChild(band);
+                    start = null;
+                };
+
+                dates.forEach((d, index) => {
+                    const holiday = Boolean(d.holiday);
+                    const off = holiday || Boolean(d.sunday);
+                    if (!off) { flush(index - 1); return; }
+                    if (start && start.holiday !== holiday) flush(index - 1);
+                    if (!start) start = { index: index, holiday: holiday };
+                });
+                flush(dates.length - 1);
+            }
+
             function cycleDateClass(date) {
                 if (!date) return '';
                 if (date.holiday) return ' cyc-off cyc-holiday';

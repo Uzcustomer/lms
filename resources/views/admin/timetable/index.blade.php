@@ -1062,9 +1062,9 @@
             font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
         #cycleGrid .cyc-member-row b { display: flex; align-items: center; box-sizing: border-box; width: 48px; min-width: 48px; padding: 4px 6px;
             border-left: 1px solid #60a5fa; background: #0ea5e9; color: #fff; font-size: 10px; justify-content: center; }
-        #cycleGrid .cyc-dcol { width: 30px; min-width: 30px; font-size: 9.5px; writing-mode: vertical-rl; text-orientation: mixed;
+        #cycleGrid .cyc-dcol { width: 30px; min-width: 30px; max-width: 30px; font-size: 9.5px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
-        #cycleGrid .cyc-cell { width: 30px; min-width: 30px; height: 28px; }
+        #cycleGrid .cyc-cell { width: 30px; min-width: 30px; max-width: 30px; height: 28px; }
         #cycleGrid .cyc-addrow td { height: 18px; }
         #cycleGrid .cyc-addcell { background: #f8fafc; }
         #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
@@ -1089,14 +1089,12 @@
            --cyc-col: ustun eni, --cyc-x0: birinchi kun ustuni boshlanishi. */
         #cycleGridWrap { position: relative; }
         #cycleGrid tbody { position: relative; }
-        #cycleGrid tbody::before {
-            content: ''; position: absolute; z-index: 0; pointer-events: none;
-            top: 0; bottom: 0; left: var(--cyc-x0, 0px); right: 0;
-            background-image: repeating-linear-gradient(
-                to right,
-                rgba(148, 163, 184, .34) 0 1px,
-                transparent 1px var(--cyc-col, 24px)
-            );
+        /* Chiziqlar har kun uchun alohida qo'yiladi: ustun eni kasrli
+           bo'lgani uchun takrorlanuvchi gradient asta siljib, chiziq
+           ikki kunda bittaga tushib qolardi. */
+        #cycleGrid .cyc-day-line {
+            position: absolute; z-index: 0; top: 0; bottom: 0; width: 1px;
+            background: rgba(148, 163, 184, .38); pointer-events: none;
         }
         #cycleGrid .cyc-off-band {
             position: absolute; z-index: 0; top: 0; bottom: 0; pointer-events: none;
@@ -3264,17 +3262,24 @@
                 const body = grid.querySelector('tbody');
                 if (!body) return;
 
-                body.querySelectorAll('.cyc-off-band').forEach(el => el.remove());
+                body.querySelectorAll('.cyc-off-band, .cyc-day-line').forEach(el => el.remove());
 
                 const heads = grid.querySelectorAll('thead .cyc-dcol');
                 if (!heads.length) return;
 
                 const gridLeft = grid.getBoundingClientRect().left;
-                const first = heads[0].getBoundingClientRect();
-                const colWidth = first.width || 24;
+                const frag = document.createDocumentFragment();
 
-                grid.style.setProperty('--cyc-col', colWidth + 'px');
-                grid.style.setProperty('--cyc-x0', (first.left - gridLeft) + 'px');
+                // Har kun chegarasi o'z o'lchovi bo'yicha: kasr enlarda ham
+                // chiziq aynan katak chetiga tushadi.
+                heads.forEach(head => {
+                    const rect = head.getBoundingClientRect();
+                    const line = document.createElement('div');
+                    line.className = 'cyc-day-line';
+                    line.style.left = Math.round(rect.left - gridLeft) + 'px';
+                    frag.appendChild(line);
+                });
+                body.appendChild(frag);
 
                 // Dam olish kunlari — uzluksiz bo'laklar bo'lib chiziladi.
                 let start = null;
@@ -3284,8 +3289,8 @@
                     const to = heads[endIndex].getBoundingClientRect();
                     const band = document.createElement('div');
                     band.className = 'cyc-off-band ' + (start.holiday ? 'is-holiday' : 'is-sunday');
-                    band.style.left = (from.left - gridLeft) + 'px';
-                    band.style.width = (to.right - from.left) + 'px';
+                    band.style.left = Math.round(from.left - gridLeft) + 'px';
+                    band.style.width = Math.round(to.right - from.left) + 'px';
                     body.appendChild(band);
                     start = null;
                 };

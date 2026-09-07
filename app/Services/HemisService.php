@@ -490,33 +490,52 @@ class HemisService
         );
     }
 
-    public function importGroups()
+    /**
+     * HEMISdan guruhlar ro'yxatini tortadi (sinxron). Natija: ['total','created','updated','pages','ok','error'].
+     */
+    public function importGroups(): array
     {
         $page = 1;
         $hasMore = true;
+        $stats = ['total' => 0, 'created' => 0, 'updated' => 0, 'pages' => 0, 'ok' => true, 'error' => null];
 
         while ($hasMore) {
             $response = $this->fetchGroups($page);
 
-            if ($response['success']) {
+            if (!empty($response['success'])) {
                 foreach ($response['data']['items'] as $groupData) {
-                    $this->updateOrCreateGroup($groupData);
+                    $res = $this->updateOrCreateGroup($groupData);
+                    if ($res === null) {
+                        continue;
+                    }
+                    $stats['total']++;
+                    if ($res) {
+                        $stats['created']++;
+                    } else {
+                        $stats['updated']++;
+                    }
                 }
 
                 $pagination = $response['data']['pagination'];
                 $hasMore = $pagination['page'] < $pagination['pageCount'];
+                $stats['pages']++;
                 $page++;
             } else {
                 Log::error('Failed to fetch groups from HEMIS', $response);
+                $stats['ok'] = false;
+                $stats['error'] = $response['error'] ?? 'API request failed';
                 break;
             }
         }
+
+        return $stats;
     }
 
     protected function fetchGroups($page)
     {
         try {
             $response = Http::withoutVerifying()->withToken($this->token)
+                ->timeout(60)
                 ->get($this->baseUrl . 'data/group-list', [
                     'page' => $page,
                     'limit' => 200,
@@ -527,7 +546,7 @@ class HemisService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
-                return ['success' => false, 'error' => 'API request failed'];
+                return ['success' => false, 'error' => 'API request failed (HTTP ' . $response->status() . ')'];
             }
 
             return $response->json();
@@ -536,31 +555,44 @@ class HemisService
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return ['success' => false, 'error' => 'Exception occurred'];
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 
-    protected function updateOrCreateGroup($data)
+    /**
+     * Guruhni lokal `groups` jadvaliga yozadi (import:groups komandasi bilan bir xil maydonlar).
+     * Qaytaradi: true — yangi yaratildi, false — yangilandi, null — o'tkazib yuborildi.
+     */
+    protected function updateOrCreateGroup($data): ?bool
     {
-        $department = Department::where('hemis_id', $data['department']['id'])->first();
-        $specialty = Specialty::where('hemis_id', $data['specialty']['id'])->first();
-        $curriculum = Curriculum::where('hemis_id', $data['_curriculum'])->first();
-
-        if ($department && $specialty && $curriculum) {
-            Group::updateOrCreate(
-                ['hemis_id' => $data['id']],
-                [
-                    'name' => $data['name'],
-                    'department_id' => $department->id,
-                    'specialty_id' => $specialty->id,
-                    'education_lang_code' => $data['educationLang']['code'],
-                    'education_lang_name' => $data['educationLang']['name'],
-                    'curriculum_id' => $curriculum->id,
-                ]
-            );
-        } else {
+        if (empty($data['id']) || empty($data['department']['id']) || empty($data['specialty']['id'])) {
             Log::warning('Missing related data for group', $data);
+            return null;
         }
+
+        $group = Group::updateOrCreate(
+            ['group_hemis_id' => $data['id']],
+            [
+                'name' => $data['name'] ?? '',
+                'department_hemis_id' => $data['department']['id'],
+                'department_name' => $data['department']['name'] ?? '',
+                'department_code' => $data['department']['code'] ?? '',
+                'department_structure_type_code' => $data['department']['structureType']['code'] ?? '',
+                'department_structure_type_name' => $data['department']['structureType']['name'] ?? '',
+                'department_locality_type_code' => $data['department']['localityType']['code'] ?? '',
+                'department_locality_type_name' => $data['department']['localityType']['name'] ?? '',
+                'department_active' => (bool) ($data['department']['active'] ?? true),
+                'active' => (bool) ($data['active'] ?? true),
+                'specialty_hemis_id' => $data['specialty']['id'],
+                'specialty_code' => $data['specialty']['code'] ?? '',
+                'specialty_name' => $data['specialty']['name'] ?? '',
+                'education_lang_code' => $data['educationLang']['code'] ?? '',
+                'education_lang_name' => $data['educationLang']['name'] ?? '',
+                'curriculum_hemis_id' => $data['_curriculum'] ?? 0,
+            ]
+        );
+
+        return $group->wasRecentlyCreated;
     }
 
     public function importCurricula()

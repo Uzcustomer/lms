@@ -57,6 +57,7 @@ class TimetableAssignmentAccess
                     'admin.timetable.cycle-place',
                     'admin.timetable.cycle-assign-options',
                     'admin.timetable.cycle-assign',
+                    'admin.timetable.cycle-lecture-slots',
                 ]);
             }
 

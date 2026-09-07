@@ -3590,7 +3590,11 @@ class TimetableController extends Controller
         $cycleView = $data['view'] ?? 'flow';
         // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
         // para qatorlari yo'q — faqat fan nomi, kunlar va joylash qoidalari.
-        $cycleSimple = in_array($this->timetableActiveRole($request), ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+        // Kafedra mudiri xuddi shu bitta kartani ko'radi, lekin uni ko'chira
+        // olmaydi — blok ichida ma'ruza soatlarini belgilaydi.
+        $cycleRole = $this->timetableActiveRole($request);
+        $cycleMark = $cycleRole === 'kafedra_mudiri';
+        $cycleSimple = $cycleMark || in_array($cycleRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
             if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
@@ -3977,6 +3981,7 @@ class TimetableController extends Controller
                         ? ($teacherNames[0] . (count($teacherNames) > 1 ? ' +' . (count($teacherNames) - 1) : ''))
                         : null,
                     'lesson_time' => $placement->lesson_time ?? null,
+                    'lecture_slots' => (array) ($placement->lecture_slots ?? []),
                     'auditorium_code' => null,
                     'auditorium_name' => $audNames
                         ? ($audNames[0] . (count($audNames) > 1 ? ' +' . (count($audNames) - 1) : ''))
@@ -4047,6 +4052,8 @@ class TimetableController extends Controller
             'rows'       => $rows,
             'pairs'      => $cycleSimple ? 1 : $pairsPerDay,
             'simple'     => $cycleSimple,
+            'mark_mode'  => $cycleMark,
+            'day_hours'  => 6,
             'cycle_cards' => $cycleCards,
         ]);
     }
@@ -4490,6 +4497,59 @@ class TimetableController extends Controller
         }
 
         return $busy;
+    }
+
+    /**
+     * Blok ichidagi ma'ruza kataklarini saqlaydi (kafedra mudiri).
+     *
+     * Belgilar blok boshidan hisoblangan kun siljishi bo'yicha keladi:
+     * {"0": [1,2]} — blokning birinchi kunida 1 va 2 soat ma'ruza.
+     * Blok surilsa belgilar u bilan birga ko'chadi.
+     */
+    public function cycleLectureSlots(Request $request, TimetableBoard $board)
+    {
+        abort_unless(Schema::hasTable('timetable_cycle_placements'), 503, 'Sikl jadvali migratsiyasi hali ishga tushirilmagan.');
+        abort_unless(Schema::hasColumn('timetable_cycle_placements', 'lecture_slots'), 503, 'Ma\'ruza belgilari migratsiyasi hali ishga tushirilmagan.');
+
+        $data = $request->validate([
+            'specialty_name' => 'required|string|max:255',
+            'course'         => 'required|integer|min:1|max:7',
+            'group_name'     => 'required|string|max:255',
+            'subject_name'   => 'required|string|max:255',
+            'training_type'  => 'nullable|in:lecture,practice',
+            'view'           => 'nullable|in:flow,group',
+            'slots'          => 'nullable|array',
+            'slots.*'        => 'array',
+            'slots.*.*'      => 'integer|min:1|max:12',
+        ]);
+
+        $placement = $this->findCyclePlacement($board, $data);
+        if (!$placement) {
+            return response()->json(['error' => 'Sikl bloki topilmadi.'], 404);
+        }
+
+        // Kalitlar butun son, qiymatlar takrorlanmaydigan tartiblangan soatlar.
+        $slots = [];
+        foreach ((array) ($data['slots'] ?? []) as $day => $hours) {
+            $day = (int) $day;
+            if ($day < 0) {
+                continue;
+            }
+            $hours = collect((array) $hours)
+                ->map(fn ($hour) => (int) $hour)
+                ->filter(fn ($hour) => $hour >= 1 && $hour <= 12)
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+            if ($hours) {
+                $slots[$day] = $hours;
+            }
+        }
+
+        $placement->update(['lecture_slots' => $slots]);
+
+        return response()->json(['ok' => true, 'slots' => $slots]);
     }
 
     /**

@@ -960,6 +960,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-place', [\App\Http\Controllers\Admin\TimetableController::class, 'cyclePlace'])->name('cycle-place');
                 Route::post('/boards/{board}/cycle-assign-options', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignOptions'])->name('cycle-assign-options');
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
+                Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
                 // Qoidalar (aSc "Взаимосвязи" uslubida)
                 Route::get('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'rules'])->name('rules');
                 Route::post('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'saveRule'])->name('rules.save');

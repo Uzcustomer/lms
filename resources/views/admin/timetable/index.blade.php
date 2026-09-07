@@ -1079,6 +1079,46 @@
         }
         /* Dam olish kunlari: katak ichidagi ustunlar ranglanadi */
         #cycleGrid td.cyc-cell.has-off { background-repeat: no-repeat, repeat; }
+        /* ── Kafedra mudiri: blok ichida ma'ruza soatlarini belgilash ── */
+        #cycleGrid tr.cyc-markrow td { height: 96px; vertical-align: top; }
+        #cycleGrid .cyc-block.is-mark { padding: 0; overflow: visible; }
+        #cycleGrid .cyc-mk {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+        }
+        #cycleGrid .cyc-mk-head {
+            flex: none; overflow: hidden; padding: 2px 5px;
+            font-size: 9.5px; font-weight: 700; line-height: 1.3;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        #cycleGrid .cyc-mk-head i {
+            font-style: normal; font-weight: 500; opacity: .75;
+        }
+        #cycleGrid .cyc-mk-grid {
+            flex: 1 1 auto; display: grid; min-height: 0;
+            border-top: 1px solid rgba(15, 39, 72, .18);
+            user-select: none;
+        }
+        #cycleGrid .cyc-mk-cell {
+            position: relative; padding: 0; border: 0;
+            border-right: 1px solid rgba(15, 39, 72, .13);
+            border-bottom: 1px solid rgba(15, 39, 72, .13);
+            background: transparent; cursor: pointer; transition: background .1s;
+        }
+        #cycleGrid .cyc-mk-cell:hover { background: rgba(37, 99, 235, .16); }
+        #cycleGrid .cyc-mk-cell.is-lecture { background: #4f46e5; }
+        #cycleGrid .cyc-mk-cell.is-lecture:hover { background: #4338ca; }
+        #cycleGrid .cyc-mk-cell.is-off { background: rgba(148, 163, 184, .28); cursor: not-allowed; }
+        #cycleGrid .cyc-mk-cell.is-off:hover { background: rgba(148, 163, 184, .28); }
+        /* Har 2-soatdan keyin (para chegarasi) to'qroq chiziq */
+        #cycleGrid .cyc-mk-cell.is-pair-end { border-bottom-color: rgba(15, 39, 72, .34); }
+        #cycleGrid .cyc-mk-legend {
+            display: inline-flex; align-items: center; gap: 5px; margin-left: 10px;
+            color: #475569; font-size: 10.5px; font-weight: 600;
+        }
+        #cycleGrid .cyc-mk-legend s {
+            display: inline-block; width: 11px; height: 11px; border-radius: 2px;
+            background: #4f46e5; text-decoration: none;
+        }
         #cycleGrid .cyc-addrow td { height: 18px; }
         #cycleGrid .cyc-addcell { background: #f8fafc; }
         #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
@@ -3502,6 +3542,8 @@
                 // O'quv bo'limi ko'rinishi: ma'ruza/amaliy ajratilmaydi, para
                 // qatorlari yo'q — bitta qator, faqat kunlar va qoidalar.
                 const simple = Boolean(j.simple);
+                const markMode = Boolean(j.mark_mode);
+                const dayHours = Math.max(1, +j.day_hours || 6);
                 if (cyclePairsShown == null) cyclePairsShown = basePairs;
                 const pairs = simple ? 1 : Math.max(1, Math.min(totalPairs, Math.max(cyclePairsShown, maxLaneUsed)));
                 if (!simple) cyclePairsShown = pairs;
@@ -3567,7 +3609,39 @@
                             const spanCols = to - rect.from + 1;
                             const joinStyle = twoRects ? (rect.main ? 'border-right:0;' : 'border-left:0;') : '';
                             let cellHtml;
-                            if (rect.main) {
+                            if (rect.main && markMode) {
+                                // Kafedra mudiri: blok ichida kun × soat to'ri.
+                                // Ustunlar — blokning kalendar kunlari, qatorlar
+                                // — kunlik soatlar; ma'ruza kataklari bo'yaladi.
+                                const slots = block.lecture_slots || {};
+                                let inner = '';
+                                for (let hour = 1; hour <= dayHours; hour++) {
+                                    for (let d = 0; d < spanCols; d++) {
+                                        const dayIndex = rect.from + d;
+                                        const date = dates[dayIndex];
+                                        const off = date && (date.sunday || date.holiday);
+                                        const offset = dayIndex - block.from;
+                                        const on = Array.isArray(slots[offset]) && slots[offset].includes(hour);
+                                        inner += '<button type="button" class="cyc-mk-cell'
+                                            + (off ? ' is-off' : '')
+                                            + (on ? ' is-lecture' : '')
+                                            + (hour % 2 === 0 ? ' is-pair-end' : '')
+                                            + '" data-mk-key="' + esc(block.key) + '"'
+                                            + ' data-mk-day="' + offset + '" data-mk-hour="' + hour + '"'
+                                            + (off ? ' disabled' : '')
+                                            + ' title="' + (date ? esc(date.d) : '') + ' · ' + hour + '-soat"></button>';
+                                    }
+                                }
+                                cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
+                                    '<div class="cyc-mk">' +
+                                    '<div class="cyc-mk-head">' + esc(block.subject) +
+                                    (req ? ' <i>· ' + esc(req) + '</i>' : '') +
+                                    '<button type="button" class="cyc-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish" style="position:static;margin-left:6px">&#9881;</button>' +
+                                    '</div>' +
+                                    '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
+                                    inner +
+                                    '</div></div></td>';
+                            } else if (rect.main) {
                                 cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<span class="cyc-shift-actions">' +
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
@@ -3584,7 +3658,7 @@
                         });
                     });
                     for (let pair = 1; pair <= pairs; pair++) {
-                        h += '<tr>';
+                        h += markMode ? '<tr class="cyc-markrow">' : '<tr>';
                         if (pair === 1) {
                             // Guruh rejimida qator — bitta guruh: nomi to'g'ridan-to'g'ri.
                             const groupLabel = cycleViewMode === 'group'
@@ -3617,6 +3691,7 @@
                 h += '</tbody>';
                 $('cycleGrid').innerHTML = h;
                 setupCycleGridEvents();
+                setupCycleMarking();
                 renderCycleCards(j);
             }
 
@@ -3626,6 +3701,74 @@
             // ulanadi va render faqat innerHTML almashtiradi.
             let cycleDropCell = null;
             let cycleGridEventsReady = false;
+            // ── Ma'ruza kataklarini belgilash (kafedra mudiri) ──
+            // Bosib yoki sudrab belgilanadi; sichqoncha qo'yib yuborilganda
+            // butun blok belgilari bitta so'rovda saqlanadi.
+            let mkDrag = null;   // {key, turnOn} — sudrash paytidagi holat
+
+            function mkSlotsOf(key) {
+                const slots = {};
+                document.querySelectorAll('.cyc-mk-cell.is-lecture[data-mk-key="' + CSS.escape(key) + '"]')
+                    .forEach(cell => {
+                        const day = cell.dataset.mkDay;
+                        (slots[day] = slots[day] || []).push(+cell.dataset.mkHour);
+                    });
+                return slots;
+            }
+
+            async function saveLectureSlots(key) {
+                const card = (cyclePlanData && cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                if (!card) return;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', {
+                        specialty_name: card.specialty, course: card.course,
+                        group_name: card.group, subject_name: card.subject,
+                        training_type: card.type || 'practice', view: cycleViewMode,
+                        slots: mkSlotsOf(key),
+                    });
+                    // Keyingi renderda belgilar joyida qolsin.
+                    const block = (cyclePlanData.rows || [])
+                        .flatMap(row => row.blocks || [])
+                        .find(item => item.key === key);
+                    if (block) block.lecture_slots = mkSlotsOf(key);
+                    $('cycleMsg').textContent = 'Ma\'ruza soatlari saqlandi.';
+                } catch (e) {
+                    alert('Ma\'ruza soatlarini saqlab bo\'lmadi: ' + e.message);
+                    loadCyclePlan();
+                }
+            }
+
+            function setupCycleMarking() {
+                const grid = $('cycleGrid');
+                if (!grid || grid.dataset.mkReady) return;
+                grid.dataset.mkReady = '1';
+
+                grid.addEventListener('mousedown', ev => {
+                    const cell = ev.target.closest ? ev.target.closest('.cyc-mk-cell') : null;
+                    if (!cell || cell.disabled) return;
+                    ev.preventDefault();
+                    // Birinchi katak holatini teskarisiga o'giramiz, sudrash
+                    // davomida qolganlari ham shu yo'nalishda o'zgaradi.
+                    const turnOn = !cell.classList.contains('is-lecture');
+                    cell.classList.toggle('is-lecture', turnOn);
+                    mkDrag = { key: cell.dataset.mkKey, turnOn: turnOn };
+                });
+
+                grid.addEventListener('mouseover', ev => {
+                    if (!mkDrag) return;
+                    const cell = ev.target.closest ? ev.target.closest('.cyc-mk-cell') : null;
+                    if (!cell || cell.disabled || cell.dataset.mkKey !== mkDrag.key) return;
+                    cell.classList.toggle('is-lecture', mkDrag.turnOn);
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (!mkDrag) return;
+                    const key = mkDrag.key;
+                    mkDrag = null;
+                    saveLectureSlots(key);
+                });
+            }
+
             function setupCycleGridEvents() {
                 if (cycleGridEventsReady) return;
                 cycleGridEventsReady = true;
@@ -3696,6 +3839,8 @@
                     }
                 });
                 grid.addEventListener('dragstart', ev => {
+                    // Belgilash rejimida bloklar ko'chirilmaydi.
+                    if (cyclePlanData && cyclePlanData.mark_mode) { ev.preventDefault(); return; }
                     if (ev.target.closest && ev.target.closest('[data-cycle-gear]')) { ev.preventDefault(); return; }
                     const block = ev.target && ev.target.closest ? ev.target.closest('.cyc-block[data-cycle-key]') : null;
                     if (!block) return;
@@ -3774,7 +3919,9 @@
                 $('unplacedExportBtn').classList.add('hidden');
                 $('subjectColorsBtn').classList.toggle('hidden', !cycleCards.length);
                 $('cardPanelTitle').textContent = 'Sikl fan kartalari';
-                $('cardPanelHint').textContent = 'Kartani bosing, so‘ng o‘z oqim qatoridagi boshlanish kunini bosing (yoki sudrab tashlang)';
+                $('cardPanelHint').textContent = (j && j.mark_mode)
+                    ? 'Blok ichidagi kataklarni bosing yoki sudrang — belgilangan soatlar ma\'ruza bo\'ladi.'
+                    : 'Kartani bosing, so‘ng o‘z oqim qatoridagi boshlanish kunini bosing (yoki sudrab tashlang)';
                 $('cardPanelHint').classList.remove('hidden');
                 const unplaced = cycleCards.filter(card => !card.placed &&
                     (!cycleGroupFilter || card.group === cycleGroupFilter)).sort((a, b) =>

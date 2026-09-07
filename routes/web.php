@@ -269,6 +269,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/{application}/basis-document', [\App\Http\Controllers\Admin\StudentTransferApplicationController::class, 'basisDocument'])->name('basis-document');
             });
 
+        // Fanlar farqi (hozircha bo'sh bo'lim)
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
+            ->prefix('subject-differences')
+            ->name('subject-differences.')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\SubjectDifferenceController::class, 'index'])->name('index');
+            });
+
         // Akademik mobillik: Registrator ariza yaratadi, O'quv bo'limi va prorektor tasdiqlaydi.
         Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|oquv_prorektori')
             ->prefix('academic-mobility')

@@ -135,6 +135,26 @@ class FanTestiController extends Controller
         return back()->with('success', 'Savol o\'chirildi.');
     }
 
+    /**
+     * Test sahifasini talabalar uchun yopadi yoki qayta ochadi.
+     * Kiosk kirishi is_active bo'yicha tekshiriladi, shu sababli bayroqni
+     * o'zgartirish testni darhol yopadi — mavjud urinishlarga tegilmaydi.
+     */
+    public function toggleActive(FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $willOpen = !$fanTesti->is_active;
+        $fanTesti->update([
+            'is_active' => $willOpen,
+            'updated_by' => $this->teacher()->id,
+        ]);
+
+        return back()->with('success', $willOpen
+            ? 'Test sahifasi ochildi — talabalar havola orqali kira oladi.'
+            : 'Test sahifasi yopildi.');
+    }
+
     public function destroy(FanTesti $fanTesti)
     {
         $this->authorizeCollection($fanTesti);

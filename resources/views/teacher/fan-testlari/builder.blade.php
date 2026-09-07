@@ -239,7 +239,9 @@
     .bl-pill { display: inline-flex; padding: 3px 11px; border-radius: 3px; font-size: 11px; font-weight: 500; letter-spacing: .03em; }
     .bl-pill.ok { background: var(--ok-bg); color: var(--ok); }
     .bl-pill.off { background: #eef1f6; color: var(--muted); }
-    .bl-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; }
+    .bl-btn-warn { border-color: #e5cfa4; background: #fff; color: var(--warn); }
+    .bl-btn-warn:hover { background: var(--warn-bg); }
+    .bl-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; white-space: nowrap; }
     .bl-acts form { display: inline-flex; margin: 0; }
 
     /* ---- Xabar / bo'sh holat ---- */
@@ -473,12 +475,23 @@
                                 <td style="text-align:center"><span class="bl-num">{{ $item->questionCount() }}</span></td>
                                 <td style="text-align:center">{{ $item->duration_minutes }} daqiqa</td>
                                 <td>
-                                    <span class="bl-pill {{ $item->is_active ? 'ok' : 'off' }}">{{ $item->is_active ? 'Faol' : 'Nofaol' }}</span>
+                                    <span class="bl-pill {{ $item->is_active ? 'ok' : 'off' }}">{{ $item->is_active ? 'Ochiq' : 'Yopiq' }}</span>
                                 </td>
-                                <td>
+                                <td style="text-align:right">
                                     <div class="bl-acts">
-                                        @if($item->is_active && $item->questionCount() > 0)
-                                            <a href="{{ route('kiosk.fan-testi.show', $item) }}" target="_blank" class="bl-btn bl-btn-ok bl-btn-sm" title="Talabalar uchun test sahifasini ochish">Ochish</a>
+                                        @if($item->questionCount() > 0)
+                                            @if($item->is_active)
+                                                <a href="{{ route('kiosk.fan-testi.show', $item) }}" target="_blank" class="bl-btn bl-btn-ok bl-btn-sm" title="Talabalar uchun test sahifasini ochish">Ochish</a>
+                                                <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}" onsubmit="return confirm('Test sahifasi yopilsinmi? Talabalar havola orqali kira olmaydi.')">
+                                                    @csrf
+                                                    <button class="bl-btn bl-btn-warn bl-btn-sm" title="Talabalar uchun test sahifasini yopish">Yopish</button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}">
+                                                    @csrf
+                                                    <button class="bl-btn bl-btn-ok bl-btn-sm" title="Talabalar uchun test sahifasini ochish">Ochish</button>
+                                                </form>
+                                            @endif
                                         @endif
                                         <a href="{{ route('teacher.fan-testlari.edit', $item) }}" class="bl-btn bl-btn-ghost bl-btn-sm">Tahrirlash</a>
                                         <form method="POST" action="{{ route('teacher.fan-testlari.destroy', $item) }}" onsubmit="return confirm('Bu test to\'plami va savollarini o\'chirishni tasdiqlaysizmi?')">

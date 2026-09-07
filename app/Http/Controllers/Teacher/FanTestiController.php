@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
-use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
 use App\Models\FanTesti;
 use App\Models\Group;
+use App\Models\Semester;
 use App\Models\FanTestiAttempt;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
@@ -70,6 +70,60 @@ class FanTestiController extends Controller
             'collections' => $this->collectionsFor($subjects),
             'allowedGroups' => $this->allowedGroupsFor($collection),
         ]);
+    }
+
+    /**
+     * Test fani biriktirilgan guruhlar (hemis id).
+     *
+     * Bitta fan bir necha o'quv reja va semestrda o'qitiladi, shuning uchun
+     * faqat subject_id bo'yicha izlash barcha kurslardagi guruhlarni qaytarib
+     * yuboradi. Shu sababli biriktirma o'quv reja (curriculum) va semestr
+     * bo'yicha ham toraytiriladi — natijada aynan shu semestrdagi guruhlar
+     * qoladi. Bu maydonlar bo'sh bo'lsa keng qidiruvga qaytiladi.
+     */
+    private function subjectGroupIds(?CurriculumSubject $subject)
+    {
+        if (!Schema::hasTable('curriculum_subject_teachers') || !$subject?->subject_id) {
+            return collect();
+        }
+
+        $semesterIds = Schema::hasTable('semesters')
+            ? Semester::query()
+                ->where('code', $subject->semester_code)
+                ->when(
+                    $subject->curricula_hemis_id,
+                    fn ($query) => $query->where('curriculum_hemis_id', $subject->curricula_hemis_id)
+                )
+                ->pluck('semester_hemis_id')
+            : collect();
+
+        $query = CurriculumSubjectTeacher::query()
+            ->where('subject_id', $subject->subject_id)
+            ->where('active', true)
+            ->whereNotNull('group_id');
+
+        if ($subject->curricula_hemis_id) {
+            $query->where('curriculum_id', $subject->curricula_hemis_id);
+        }
+        if ($semesterIds->isNotEmpty()) {
+            $query->whereIn('semester_id', $semesterIds);
+        }
+
+        $groupIds = $query->pluck('group_id')->unique()->values();
+
+        // Reja/semestr maydonlari to'ldirilmagan bo'lsa hech nima
+        // topilmasligi mumkin — bunda eski, kengroq qidiruv ishlatiladi.
+        if ($groupIds->isEmpty()) {
+            $groupIds = CurriculumSubjectTeacher::query()
+                ->where('subject_id', $subject->subject_id)
+                ->where('active', true)
+                ->whereNotNull('group_id')
+                ->pluck('group_id')
+                ->unique()
+                ->values();
+        }
+
+        return $groupIds;
     }
 
     private function allowedGroupsFor(FanTesti $fanTesti)
@@ -213,14 +267,12 @@ class FanTestiController extends Controller
             ? $collections->where('curriculum_subject_id', $subjectId)->values()
             : $collections;
 
-        $subjectOptions = $this->withCurriculumLabel(
-            $collections
-                ->map(fn (FanTesti $item) => $item->subject)
-                ->filter()
-                ->unique('id')
-                ->sortBy('subject_name')
-                ->values()
-        );
+        $subjectOptions = $collections
+            ->map(fn (FanTesti $item) => $item->subject)
+            ->filter()
+            ->unique('id')
+            ->sortBy('subject_name')
+            ->values();
 
         $selected = $request->filled('test_id')
             ? $visibleCollections->firstWhere('id', (int) $request->integer('test_id'))
@@ -346,80 +398,25 @@ class FanTestiController extends Controller
 
         $assignedSubjectIds = $assignments->pluck('subject_id')->unique()->values();
 
-        $subjects = CurriculumSubject::query()
+        return CurriculumSubject::query()
             ->where('is_active', true)
             ->where('department_id', $teacher->department_hemis_id)
             ->whereIn('subject_id', $assignedSubjectIds)
             ->orderBy('subject_name')
             ->orderBy('semester_name')
             ->get([
-                'id', 'subject_id', 'subject_name', 'subject_code', 'semester_name',
-                'semester_code', 'curricula_hemis_id', 'department_id', 'department_name',
+                'id', 'subject_name', 'subject_code', 'semester_name',
+                'department_id', 'department_name',
             ]);
-
-        return $this->withCurriculumLabel($subjects);
-    }
-
-    /**
-     * Har fanga o'quv reja nomini qo'shadi.
-     *
-     * Bitta fan (masalan Bioetika) o'nlab rejada bir xil nom va semestr
-     * bilan takrorlanadi, ro'yxatda ularni faqat reja nomi ajratadi.
-     * Nom tayyor satr sifatida qo'yiladi — shablon aloqa chaqirmaydi.
-     */
-    private function withCurriculumLabel($subjects)
-    {
-        $curriculumIds = $subjects->pluck('curricula_hemis_id')->filter()->unique();
-
-        $names = $curriculumIds->isEmpty() || !Schema::hasTable('curricula')
-            ? collect()
-            : Curriculum::query()
-                ->whereIn('curricula_hemis_id', $curriculumIds)
-                ->pluck('name', 'curricula_hemis_id');
-
-        return $subjects->each(function ($subject) use ($names) {
-            $subject->curriculum_label = (string) ($names[$subject->curricula_hemis_id] ?? '');
-        });
-    }
-
-    /**
-     * Fan biriktirilgan guruhlarning hemis id lari.
-     *
-     * HEMIS biriktirmasida curriculum_id = fanning curricula_hemis_id si,
-     * semester_id esa fanning semester_code i (semesters jadvali orqali
-     * o'tilmaydi). Shu ikki shart bo'lmasa bitta subject_id butun
-     * universitetdagi guruhlarni qaytarib yuboradi.
-     */
-    private function subjectGroupIds($subject)
-    {
-        if (!Schema::hasTable('curriculum_subject_teachers') || !$subject?->subject_id) {
-            return collect();
-        }
-
-        return CurriculumSubjectTeacher::query()
-            ->where('subject_id', $subject->subject_id)
-            ->where('active', true)
-            ->whereNotNull('group_id')
-            ->when($subject->curricula_hemis_id, fn ($query) => $query->where('curriculum_id', $subject->curricula_hemis_id))
-            ->when($subject->semester_code, fn ($query) => $query->where('semester_id', $subject->semester_code))
-            ->pluck('group_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
     }
 
     private function collectionsFor($subjects)
     {
-        $collections = FanTesti::query()
+        return FanTesti::query()
             ->with('subject')
             ->whereIn('curriculum_subject_id', $subjects->pluck('id'))
             ->latest()
             ->get();
-
-        // Jadval va filtrlarda fan yonida reja nomi ko'rinsin.
-        $this->withCurriculumLabel($collections->map(fn (FanTesti $item) => $item->subject)->filter());
-
-        return $collections;
     }
 
     private function isAllowedDepartment($teacher): bool

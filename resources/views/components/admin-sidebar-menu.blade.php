@@ -1044,6 +1044,16 @@
         </a>
         @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
+        <a href="{{ route('admin.subject-differences.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.subject-differences.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-5 6h4m-4 4h4m-7-4h.01M8 15h.01"/>
+            </svg>
+            Fanlar farqi
+        </a>
+        @endif
+
         @if($hasActiveRole(['superadmin', 'admin']))
         <a href="{{ route('admin.document-templates.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.document-templates.*') ? 'sidebar-active' : '' }}">
@@ -1118,14 +1128,6 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-5-8.5V16c0 1.1 2.24 2 5 2s5-.9 5-2v-4.5"></path>
             </svg>
             Akademik mobillik
-        </a>
-
-        <a href="{{ route('admin.subject-differences.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.subject-differences.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-5 6h4m-4 4h4m-7-4h.01M8 15h.01"/>
-            </svg>
-            Fanlar farqi
         </a>
         @endif
 

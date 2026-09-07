@@ -1066,6 +1066,19 @@
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
         #cycleGrid .cyc-cell { width: 30px; min-width: 30px; max-width: 30px; height: 28px;
             border: 1px solid #e2e8f0; }
+        /* Bo'sh kataklar colspan bilan birlashtirilgan (drag tezligi uchun) —
+           kun chegaralari katak ichida gradient bilan chiziladi. Ustun eni
+           qat'iy 30px bo'lgani uchun chiziq aniq joyiga tushadi. */
+        #cycleGrid td.cyc-cell:not(.cyc-block) {
+            background-image: repeating-linear-gradient(
+                to right,
+                transparent 0 29px,
+                #e2e8f0 29px 30px
+            );
+            background-position: -1px 0;
+        }
+        /* Dam olish kunlari: katak ichidagi ustunlar ranglanadi */
+        #cycleGrid td.cyc-cell.has-off { background-repeat: no-repeat, repeat; }
         #cycleGrid .cyc-addrow td { height: 18px; }
         #cycleGrid .cyc-addcell { background: #f8fafc; }
         #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
@@ -1098,10 +1111,6 @@
         #cycleOverlay {
             position: absolute; z-index: 3; top: 0; left: 0;
             pointer-events: none; overflow: hidden;
-        }
-        #cycleOverlay .cyc-day-line {
-            position: absolute; top: 0; bottom: 0; width: 1px;
-            background: rgba(100, 116, 139, .30);
         }
         #cycleOverlay .cyc-off-band { position: absolute; top: 0; bottom: 0; }
         #cycleOverlay .cyc-off-band.is-sunday { background: rgba(251, 146, 60, .22); }
@@ -3292,14 +3301,14 @@
                 const heads = grid.querySelectorAll('thead .cyc-dcol');
                 if (!heads.length) return;
 
-                // Overlay jadval ustiga aniq tushishi uchun o'lchovlar wrap ga
-                // nisbatan olinadi (skroll hisobga olingan holda).
+                // Overlay jadval bilan bir tekislikda: offsetTop/offsetLeft
+                // wrap ichidagi haqiqiy joyni beradi va skrollga bog'liq emas,
+                // shuning uchun qo'shimcha tuzatish talab qilmaydi.
                 const wrapRect = wrap.getBoundingClientRect();
                 const bodyRect = body.getBoundingClientRect();
                 const offsetX = wrap.scrollLeft - wrapRect.left;
-                const offsetY = wrap.scrollTop - wrapRect.top;
 
-                overlay.style.top = (bodyRect.top + offsetY) + 'px';
+                overlay.style.top = (body.offsetTop) + 'px';
                 overlay.style.left = '0px';
                 overlay.style.width = grid.offsetWidth + 'px';
                 overlay.style.height = bodyRect.height + 'px';
@@ -3311,21 +3320,7 @@
                     const left = Math.round(rect.left + offsetX);
                     const width = Math.round(rect.right + offsetX) - left;
                     cycleDayGeometry[index] = { left: left, width: width };
-
-                    const line = document.createElement('div');
-                    line.className = 'cyc-day-line';
-                    line.style.left = left + 'px';
-                    frag.appendChild(line);
                 });
-
-                // O'ng chekka chizig'i
-                const last = cycleDayGeometry[cycleDayGeometry.length - 1];
-                if (last) {
-                    const edge = document.createElement('div');
-                    edge.className = 'cyc-day-line';
-                    edge.style.left = (last.left + last.width) + 'px';
-                    frag.appendChild(edge);
-                }
 
                 // Dam olish kunlari — uzluksiz bo'laklar bo'lib chiziladi.
                 let start = null;

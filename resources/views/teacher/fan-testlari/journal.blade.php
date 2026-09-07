@@ -244,7 +244,7 @@
                                 <option value="">Barcha fanlar</option>
                                 @foreach($subjectOptions ?? [] as $subjectOption)
                                     <option value="{{ $subjectOption->id }}" @selected((int) request('subject_id') === (int) $subjectOption->id)>
-                                        {{ $subjectOption->subject_name }}@if($subjectOption->semester_name) · {{ $subjectOption->semester_name }}@endif
+                                        {{ $subjectOption->subject_name }}@if($subjectOption->semester_name) · {{ $subjectOption->semester_name }}@endif@if($subjectOption->curriculum_label ?? '') · {{ $subjectOption->curriculum_label }}@endif
                                     </option>
                                 @endforeach
                             </select>

@@ -6,7 +6,6 @@ use App\Models\FanTesti;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
 use App\Models\CurriculumSubjectTeacher;
-use App\Models\Semester;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -190,10 +189,10 @@ class FanTestiKioskController extends Controller
     /**
      * Test fani biriktirilgan guruhlarning hemis id lari.
      *
-     * Bitta fan bir necha o'quv reja va semestrda o'qitilgani uchun
-     * biriktirma o'quv reja va semestr bo'yicha toraytiriladi — aks holda
-     * boshqa kursdagi guruhlar ham ruxsat olib qolardi. Bu maydonlar bo'sh
-     * bo'lsa keng qidiruvga qaytiladi.
+     * HEMIS biriktirmasida curriculum_id = fanning curricula_hemis_id si,
+     * semester_id esa fanning semester_code i. Shu ikki shartsiz bitta
+     * subject_id boshqa kurs va yo'nalishdagi guruhlarni ham qo'shib
+     * yuboradi — natijada begona talaba testga kirib qolardi.
      */
     private function allowedGroupIds(FanTesti $fanTesti): array
     {
@@ -206,39 +205,13 @@ class FanTestiKioskController extends Controller
             return [];
         }
 
-        $semesterIds = Schema::hasTable('semesters')
-            ? Semester::query()
-                ->where('code', $subject->semester_code)
-                ->when(
-                    $subject->curricula_hemis_id,
-                    fn ($query) => $query->where('curriculum_hemis_id', $subject->curricula_hemis_id)
-                )
-                ->pluck('semester_hemis_id')
-            : collect();
-
-        $scoped = CurriculumSubjectTeacher::query()
+        return CurriculumSubjectTeacher::query()
             ->where('subject_id', $subject->subject_id)
             ->where('active', true)
-            ->whereNotNull('group_id');
-
-        if ($subject->curricula_hemis_id) {
-            $scoped->where('curriculum_id', $subject->curricula_hemis_id);
-        }
-        if ($semesterIds->isNotEmpty()) {
-            $scoped->whereIn('semester_id', $semesterIds);
-        }
-
-        $groupIds = $scoped->pluck('group_id');
-
-        if ($groupIds->isEmpty()) {
-            $groupIds = CurriculumSubjectTeacher::query()
-                ->where('subject_id', $subject->subject_id)
-                ->where('active', true)
-                ->whereNotNull('group_id')
-                ->pluck('group_id');
-        }
-
-        return $groupIds
+            ->whereNotNull('group_id')
+            ->when($subject->curricula_hemis_id, fn ($query) => $query->where('curriculum_id', $subject->curricula_hemis_id))
+            ->when($subject->semester_code, fn ($query) => $query->where('semester_id', $subject->semester_code))
+            ->pluck('group_id')
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values()

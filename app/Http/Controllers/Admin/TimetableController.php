@@ -4524,9 +4524,9 @@ class TimetableController extends Controller
             'subject_name'   => 'required|string|max:255',
             'training_type'  => 'nullable|in:lecture,practice',
             'view'           => 'nullable|in:flow,group',
-            'slots'          => 'nullable|array',
-            'slots.*'        => 'array',
-            'slots.*.*'      => 'integer|min:1|max:12',
+            // FormData ichma-ich obyektni yubora olmaydi, shuning uchun
+            // belgilar JSON satr bo'lib keladi.
+            'slots_json'     => 'nullable|string|max:20000',
         ]);
 
         $placement = $this->findCyclePlacement($board, $data);
@@ -4534,9 +4534,14 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Sikl bloki topilmadi.'], 404);
         }
 
+        $incoming = json_decode((string) ($data['slots_json'] ?? '{}'), true);
+        if (!is_array($incoming)) {
+            $incoming = [];
+        }
+
         // Kalitlar butun son, qiymatlar takrorlanmaydigan tartiblangan soatlar.
         $slots = [];
-        foreach ((array) ($data['slots'] ?? []) as $day => $hours) {
+        foreach ($incoming as $day => $hours) {
             $day = (int) $day;
             if ($day < 0) {
                 continue;

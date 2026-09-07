@@ -1080,22 +1080,30 @@
         /* Dam olish kunlari: katak ichidagi ustunlar ranglanadi */
         #cycleGrid td.cyc-cell.has-off { background-repeat: no-repeat, repeat; }
         /* ── Kafedra mudiri: blok ichida ma'ruza soatlarini belgilash ── */
-        #cycleGrid tr.cyc-markrow td { height: 168px; vertical-align: top; }
+        #cycleGrid tr.cyc-markrow td { height: 190px; vertical-align: top; }
         #cycleGrid .cyc-block.is-mark { padding: 0; overflow: visible; }
         #cycleGrid .cyc-mk {
             position: absolute; inset: 0; display: flex; flex-direction: column;
         }
         #cycleGrid .cyc-mk-head {
-            display: flex; align-items: center; gap: 6px; flex: none;
-            overflow: hidden; height: 24px; padding: 0 6px;
-            font-size: 10.5px; font-weight: 700; line-height: 24px; white-space: nowrap;
+            flex: none; overflow: hidden; height: 46px; padding: 4px 8px 0;
         }
-        #cycleGrid .cyc-mk-name { overflow: hidden; text-overflow: ellipsis; }
-        #cycleGrid .cyc-mk-head i { font-style: normal; font-weight: 500; opacity: .75; }
+        #cycleGrid .cyc-mk-line {
+            display: flex; align-items: center; gap: 7px;
+            height: 21px; overflow: hidden; white-space: nowrap;
+        }
+        #cycleGrid .cyc-mk-name {
+            overflow: hidden; text-overflow: ellipsis;
+            font-size: 12px; font-weight: 800; letter-spacing: -.01em;
+        }
+        #cycleGrid .cyc-mk-head i {
+            overflow: hidden; font-style: normal; font-weight: 500;
+            font-size: 10.5px; opacity: .75; text-overflow: ellipsis;
+        }
         #cycleGrid .cyc-mk-count {
-            flex: none; margin-left: auto; padding: 1px 7px; border-radius: 3px;
-            background: rgba(255, 255, 255, .8); color: #3730a3;
-            font-size: 10px; font-weight: 800;
+            flex: none; padding: 1px 8px; border-radius: 3px;
+            background: rgba(255, 255, 255, .82); color: #3730a3;
+            font-size: 11px; font-weight: 800;
         }
         #cycleGrid .cyc-mk-count.is-over { background: #fee2e2; color: #b91c1c; }
         #cycleGrid .cyc-mk-count.is-done { background: #dcfce7; color: #15803d; }
@@ -1129,7 +1137,7 @@
             background: #f1f5f9; border: 1px solid #e2e8f0;
         }
         #cycleGrid .cyc-mk-side-box { display: flex; flex-direction: column; height: 100%; }
-        #cycleGrid .cyc-mk-side-gap { flex: none; height: 24px; border-bottom: 1px solid rgba(15, 39, 72, .22); }
+        #cycleGrid .cyc-mk-side-gap { flex: none; height: 46px; border-bottom: 1px solid rgba(15, 39, 72, .22); }
         #cycleGrid .cyc-mk-side-rows { flex: 1 1 auto; display: grid; min-height: 0; }
         #cycleGrid .cyc-mk-side-row {
             display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -3659,10 +3667,14 @@
                                 cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-head">' +
-                                    '<span class="cyc-mk-name">' + esc(block.subject) +
-                                    (req ? ' <i>· ' + esc(req) + '</i>' : '') + '</span>' +
-                                    '<button type="button" class="cyc-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish" style="position:static">&#9881;</button>' +
-                                    '<b class="cyc-mk-count" data-mk-count="' + esc(block.key) + '"' + ' data-mk-total="' + (block.lecture_hours != null ? block.lecture_hours : '') + '">' + markCountLabel(marked, block.lecture_hours) + '</b>' +
+                                    '<div class="cyc-mk-line">' +
+                                    '<span class="cyc-mk-name">' + esc(block.subject) + '</span>' +
+                                    '<button type="button" class="cyc-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish" style="position:static;margin-left:auto">&#9881;</button>' +
+                                    '</div>' +
+                                    '<div class="cyc-mk-line">' +
+                                    (req ? '<i>' + esc(req) + '</i>' : '') +
+                                    '<b class="cyc-mk-count" data-mk-count="' + esc(block.key) + '"' + ' data-mk-total="' + (block.lecture_hours != null ? block.lecture_hours : '') + ' style="margin-left:auto">' + markCountLabel(marked, block.lecture_hours) + '</b>' +
+                                    '</div>' +
                                     '</div>' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
@@ -3788,7 +3800,7 @@
                         specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject,
                         training_type: card.type || 'practice', view: cycleViewMode,
-                        slots: mkSlotsOf(key),
+                        slots_json: JSON.stringify(mkSlotsOf(key)),
                     });
                     // Keyingi renderda belgilar joyida qolsin.
                     const block = (cyclePlanData.rows || [])

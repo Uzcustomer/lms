@@ -3242,7 +3242,8 @@
                 if (!card || !card.placed) return;
                 cycAssignCard = card;
 
-                $('cycAssignTitle').textContent = card.subject + (card.type === 'lecture' ? " — Ma'ruza" : ' — Amaliy');
+                $('cycAssignTitle').textContent = card.subject
+                    + ((cyclePlanData && cyclePlanData.simple) ? '' : (card.type === 'lecture' ? " — Ma'ruza" : ' — Amaliy'));
                 $('cycAssignMeta').textContent = card.group + ' · ' + card.days + ' kun';
                 $('cycAssignKafedra').textContent = "O'qituvchi";
                 $('cycAssignTeacher').innerHTML = '<option value="">Yuklanmoqda...</option>';
@@ -3349,13 +3350,17 @@
                     const laneTo = Math.max(1, +block.pair || 1) + Math.max(+block.span_head || 1, +block.span_tail || 0, 1) - 1;
                     if (laneTo > maxLaneUsed) maxLaneUsed = laneTo;
                 }));
+                // O'quv bo'limi ko'rinishi: ma'ruza/amaliy ajratilmaydi, para
+                // qatorlari yo'q — bitta qator, faqat kunlar va qoidalar.
+                const simple = Boolean(j.simple);
                 if (cyclePairsShown == null) cyclePairsShown = basePairs;
-                const pairs = Math.max(1, Math.min(totalPairs, Math.max(cyclePairsShown, maxLaneUsed)));
-                cyclePairsShown = pairs;
-                const showAddPair = pairs < totalPairs;
-                let h = '<colgroup><col class="cyc-group-col"><col style="width:52px">';
+                const pairs = simple ? 1 : Math.max(1, Math.min(totalPairs, Math.max(cyclePairsShown, maxLaneUsed)));
+                if (!simple) cyclePairsShown = pairs;
+                const showAddPair = !simple && pairs < totalPairs;
+                let h = '<colgroup><col class="cyc-group-col">' + (simple ? '' : '<col style="width:52px">');
                 dates.forEach(() => h += '<col class="cyc-date-col">');
-                h += '</colgroup><thead><tr><th class="cyc-gcol">' + (cycleViewMode === 'group' ? 'Guruh' : 'Oqim') + '</th><th class="cyc-pcol" title="Juftlik">Para</th>';
+                h += '</colgroup><thead><tr><th class="cyc-gcol">' + (cycleViewMode === 'group' ? 'Guruh' : 'Oqim') + '</th>'
+                    + (simple ? '' : '<th class="cyc-pcol" title="Juftlik">Para</th>');
                 dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
@@ -3401,7 +3406,9 @@
                             .filter(Boolean);
                         const req = reqParts.join(' · ');
                         const reqHtml = reqParts.map(part => '<span class="cyc-req">' + esc(part) + '</span>').join('');
-                        const typeChip = '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
+                        const typeChip = simple
+                            ? ''
+                            : '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
                         const twoRects = rects.length > 1;
                         rects.forEach(rect => {
                             const lanes = Math.min(rect.lanes, pairs - p + 1);
@@ -3436,9 +3443,11 @@
                                 : cycleMembersHtml(row.group, row.subgroups);
                             h += '<td class="cyc-gcol" rowspan="' + (pairs + (showAddPair ? 1 : 0)) + '">' + groupLabel + '</td>';
                         }
-                        const pt = bellPairs[pair - 1];
-                        h += '<td class="cyc-pcol"><div class="cyc-pname">' + esc(pt ? (pt.name || pt.abbr || pair) : (pair + '-para')) + '</div>' +
-                            (pt && (pt.start || pt.end) ? '<div class="cyc-ptime">' + esc(pt.start || '') + '<br>' + esc(pt.end || '') + '</div>' : '') + '</td>';
+                        if (!simple) {
+                            const pt = bellPairs[pair - 1];
+                            h += '<td class="cyc-pcol"><div class="cyc-pname">' + esc(pt ? (pt.name || pt.abbr || pair) : (pair + '-para')) + '</div>' +
+                                (pt && (pt.start || pt.end) ? '<div class="cyc-ptime">' + esc(pt.start || '') + '<br>' + esc(pt.end || '') + '</div>' : '') + '</td>';
+                        }
                         let col = 0;
                         while (col < cols) {
                             const cellObj = cellAt[pair][col];
@@ -3617,7 +3626,9 @@
                     // Panel kartasi jadvaldagi blok bilan bir xil rangda — qaysi fan
                     // qayerga tushishi ko'rinib tursin.
                     const color = subjColor(card.subject);
-                    const typeChip = '<span class="cycle-pn-type ' + (card.type || 'practice') + '">' + (card.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '</span>';
+                    const typeChip = (j && j.simple)
+                        ? ''
+                        : '<span class="cycle-pn-type ' + (card.type || 'practice') + '">' + (card.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '</span>';
                     return '<div class="cycle-pn-card" draggable="true" data-cycle-key="' + esc(card.key) +
                         '" style="background:' + color.bg + ';border-left-color:' + color.border + ';" ' +
                         'title="' + esc(card.subject) + ' — ' + esc(card.group) + '">' +

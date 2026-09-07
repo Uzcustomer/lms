@@ -3588,6 +3588,9 @@ class TimetableController extends Controller
             'view'              => 'nullable|in:flow,group',
         ]);
         $cycleView = $data['view'] ?? 'flow';
+        // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
+        // para qatorlari yo'q — faqat fan nomi, kunlar va joylash qoidalari.
+        $cycleSimple = in_array($this->timetableActiveRole($request), ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
             if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
@@ -3831,7 +3834,7 @@ class TimetableController extends Controller
         // kartalarning day/pair maydonlarini buzmasligi kerak.
         $hasCyclePlacements = Schema::hasTable('timetable_cycle_placements');
         if ($hasCyclePlacements && ($request->boolean('clear') || $request->boolean('auto'))) {
-            DB::transaction(function () use ($autoRows, $board, $request, $hoursFor, $pairsPerDay, $rowHours) {
+            DB::transaction(function () use ($autoRows, $board, $request, $hoursFor, $pairsPerDay, $rowHours, $cycleSimple) {
                 foreach ($autoRows as $row) {
                     TimetableCyclePlacement::where('board_id', $board->id)
                         ->where('specialty_name', $row['specialty'])
@@ -3850,7 +3853,7 @@ class TimetableController extends Controller
                             $hoursFor((string) $row['specialty'], (int) $row['course'], (string) $block['subject']),
                             'lecture'
                         );
-                        if ($pairsPerDay >= 2 && $lectureDays >= 1) {
+                        if (!$cycleSimple && $pairsPerDay >= 2 && $lectureDays >= 1) {
                             TimetableCyclePlacement::create([
                                 'board_id' => $board->id,
                                 'specialty_name' => $row['specialty'],
@@ -3871,7 +3874,7 @@ class TimetableController extends Controller
                             'training_type' => 'practice',
                             // Amaliy ma'ruza qatorlari tugagan joydan boshlanadi
                             // (yarim-para jadvalida ma'ruza 2 qator egallaydi).
-                            'pair' => ($pairsPerDay >= 2 && $lectureDays >= 1) ? 1 + (int) ceil(2 / max(1, $rowHours)) : 1,
+                            'pair' => (!$cycleSimple && $pairsPerDay >= 2 && $lectureDays >= 1) ? 1 + (int) ceil(2 / max(1, $rowHours)) : 1,
                             'start_index' => $block['from'],
                         ]);
                     }
@@ -3921,11 +3924,18 @@ class TimetableController extends Controller
                     continue;
                 }
                 $blockType = $placement->training_type ?: 'practice';
+                // Sodda rejimda ma'ruza yozuvi ko'rsatilmaydi: amaliy blok
+                // butun fanni bildiradi, ikkalasi bitta karta bo'lib chiqadi.
+                if ($cycleSimple && $blockType === 'lecture') {
+                    continue;
+                }
                 $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name);
                 // Kun = 6 soat: ma'ruza o'z soatidan (2 soat/kun), amaliy to'liq sikl.
-                $days = max(1, $this->cycleTypeDays(
-                    max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)), $hrs, $blockType
-                ));
+                $days = $cycleSimple
+                    ? max(1, (int) ($g['subs'][$placement->subject_name] ?? 1))
+                    : max(1, $this->cycleTypeDays(
+                        max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)), $hrs, $blockType
+                    ));
                 $from = max(0, (int) $placement->start_index);
                 if ($from >= $totalDays) {
                     continue;
@@ -3938,7 +3948,9 @@ class TimetableController extends Controller
                 // Kunlik para egallashi (6 soat modeli): amaliy blok ma'ruzali
                 // davrda 2, keyin 3 para; ma'ruza 1 para. Klient shu maydonlar
                 // bilan 2-3-paradagi davom segmentlarini chizadi.
-                $span = $this->cycleLaneSpan($blockType, $hrs, max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)), $rowHours);
+                $span = $cycleSimple
+                    ? ['head_span' => 1, 'tail_span' => 0, 'head_days' => max(1, (int) ($g['subs'][$placement->subject_name] ?? 1))]
+                    : $this->cycleLaneSpan($blockType, $hrs, max(1, (int) ($g['subs'][$placement->subject_name] ?? 1)), $rowHours);
                 $headDays = min((int) $span['head_days'], (int) $days);
                 $headTo = $headDays > 0 ? $endIndexFor($from, $headDays) : null;
                 $tailFrom = $headDays >= $days ? null : ($headDays > 0 ? $endIndexFor($from, $headDays + 1) : $from);
@@ -3974,8 +3986,12 @@ class TimetableController extends Controller
             $placedSubjects = collect($blocks)->keyBy(fn ($b) => $b['subject'] . '|' . $b['type']);
             foreach ($g['subs'] as $subject => $days) {
                 $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $subject);
-                foreach (['lecture', 'practice'] as $cardType) {
-                    $typeDays = $this->cycleTypeDays((int) $days, $hrs, $cardType);
+                // Sodda rejimda fanga bitta karta (ma'ruza+amaliy birga).
+                $cardTypes = $cycleSimple ? ['practice'] : ['lecture', 'practice'];
+                foreach ($cardTypes as $cardType) {
+                    $typeDays = $cycleSimple
+                        ? (int) $days
+                        : $this->cycleTypeDays((int) $days, $hrs, $cardType);
                     if ($cardType === 'lecture' && $typeDays < 1) {
                         // Rejasida ma'ruza soati yo'q — ma'ruza kartasi chiqmaydi.
                         continue;
@@ -3990,8 +4006,9 @@ class TimetableController extends Controller
                         'subject' => $subject,
                         'type' => $cardType,
                         'days' => max(1, $typeDays),
-                        'hours' => $fmtHours($hrs === null ? null
-                            : (float) ($cardType === 'lecture' ? $hrs['lecture'] : $hrs['practice'])),
+                        'hours' => $fmtHours($hrs === null ? null : (float) ($cycleSimple
+                            ? ($hrs['lecture'] + $hrs['practice'])
+                            : ($cardType === 'lecture' ? $hrs['lecture'] : $hrs['practice']))),
                         'placed' => (bool) $block,
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
@@ -4028,7 +4045,8 @@ class TimetableController extends Controller
             }, $dates),
             'subjects'   => array_map(fn($sn) => ['name' => $sn, 'days' => $allSubs[$sn]], $subOrder),
             'rows'       => $rows,
-            'pairs'      => $pairsPerDay,
+            'pairs'      => $cycleSimple ? 1 : $pairsPerDay,
+            'simple'     => $cycleSimple,
             'cycle_cards' => $cycleCards,
         ]);
     }

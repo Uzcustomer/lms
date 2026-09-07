@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
+use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
 use App\Models\FanTesti;
@@ -398,16 +399,39 @@ class FanTestiController extends Controller
 
         $assignedSubjectIds = $assignments->pluck('subject_id')->unique()->values();
 
-        return CurriculumSubject::query()
+        $subjects = CurriculumSubject::query()
             ->where('is_active', true)
             ->where('department_id', $teacher->department_hemis_id)
             ->whereIn('subject_id', $assignedSubjectIds)
             ->orderBy('subject_name')
             ->orderBy('semester_name')
             ->get([
-                'id', 'subject_name', 'subject_code', 'semester_name',
-                'department_id', 'department_name',
+                'id', 'subject_id', 'subject_name', 'subject_code', 'semester_name',
+                'semester_code', 'curricula_hemis_id', 'department_id', 'department_name',
             ]);
+
+        // Reja nomi qo'shiladi. Bu qadam sahifani yiqitmasligi kerak:
+        // nomsiz ham ro'yxat ishlaydi, shuning uchun xato ushlanadi va
+        // sababi sahifada ko'rsatiladi.
+        try {
+            $names = Schema::hasTable('curricula')
+                ? Curriculum::query()
+                    ->whereIn('curricula_hemis_id', $subjects->pluck('curricula_hemis_id')->filter()->unique())
+                    ->pluck('name', 'curricula_hemis_id')
+                : collect();
+
+            foreach ($subjects as $subject) {
+                $subject->curriculum_label = (string) ($names[$subject->curricula_hemis_id] ?? '');
+            }
+        } catch (\Throwable $exception) {
+            foreach ($subjects as $subject) {
+                $subject->curriculum_label = '';
+            }
+            session()->flash('curriculum_label_error', $exception->getMessage()
+                . ' (' . basename($exception->getFile()) . ':' . $exception->getLine() . ')');
+        }
+
+        return $subjects;
     }
 
     private function collectionsFor($subjects)

@@ -25,14 +25,10 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
-use App\Http\Controllers\Teacher\TestSubjectLessonTestController;
-use App\Http\Controllers\Teacher\TestSubjectController as TeacherTestSubjectController;
 use App\Http\Controllers\Teacher\FanTestiController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
-use App\Http\Controllers\TestSubjectQuestionImageController;
 use App\Http\Controllers\Admin\TeacherController;
-use App\Http\Controllers\Admin\TestSubjectController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
@@ -114,9 +110,6 @@ Route::post('/staff-evaluate/{token}', [\App\Http\Controllers\StaffEvaluateContr
 
 // Til almashtirish (Language switch)
 Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
-Route::get('/test-subject-question-images/{question}', [TestSubjectQuestionImageController::class, 'show'])
-    ->name('test-subject-questions.image');
-
 // Fan testi savol rasmlari — public/storage symlinkiga tayanmaydi.
 Route::get('/fan-testi-images/{fanTesti}/{question}', [\App\Http\Controllers\FanTestiQuestionImageController::class, 'show'])
     ->whereNumber('question')->name('fan-testi.question-image');
@@ -148,19 +141,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-ratings', [\App\Http\Controllers\Admin\StudentRatingController::class, 'index'])->name('student-ratings.index');
         Route::get('/student-ratings/export-excel', [\App\Http\Controllers\Admin\StudentRatingController::class, 'exportExcel'])->name('student-ratings.export-excel');
         Route::get('/student-ratings/{studentHemisId}/subjects', [\App\Http\Controllers\Admin\StudentRatingController::class, 'subjectDetails'])->name('student-ratings.subjects');
-
-        Route::prefix('test-subjects')->name('test-subjects.')
-            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')
-            ->group(function () {
-            Route::get('/', [TestSubjectController::class, 'index'])->name('index');
-            Route::get('/create', [TestSubjectController::class, 'create'])->name('create');
-            Route::post('/', [TestSubjectController::class, 'store'])->name('store');
-            Route::get('/{testSubject}', [TestSubjectController::class, 'show'])->name('show');
-            Route::post('/{testSubject}/lessons', [TestSubjectController::class, 'storeLesson'])->name('lessons.store');
-            Route::put('/{testSubject}/lessons/{lesson}', [TestSubjectController::class, 'updateLesson'])->name('lessons.update');
-            Route::delete('/{testSubject}/lessons/{lesson}', [TestSubjectController::class, 'destroyLesson'])->name('lessons.destroy');
-            Route::delete('/{testSubject}', [TestSubjectController::class, 'destroy'])->name('destroy');
-        });
 
         // Role switching
         Route::post('/switch-role', function (\Illuminate\Http\Request $request) {
@@ -1446,16 +1426,6 @@ Route::prefix('student')->name('student.')->group(function () {
         }
     })->name('login');
 
-    Route::prefix('test-kiosk')->name('test-kiosk.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Student\TestKioskController::class, 'index'])->name('index');
-        Route::post('/', [\App\Http\Controllers\Student\TestKioskController::class, 'lookup'])->name('lookup');
-        Route::post('/check-student', [\App\Http\Controllers\Student\TestKioskController::class, 'checkStudent'])->name('check-student');
-        Route::post('/face-verify', [\App\Http\Controllers\Student\TestKioskController::class, 'faceVerify'])->name('face-verify');
-        Route::get('/{studentIdNumber}', [\App\Http\Controllers\Student\TestKioskController::class, 'student'])->name('student');
-        Route::get('/{studentIdNumber}/subjects/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestKioskController::class, 'show'])->name('tests.show');
-        Route::post('/{studentIdNumber}/subjects/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestKioskController::class, 'submit'])->name('tests.submit');
-    });
-
     Route::middleware(['auth:student', 'force.student.contact', 'ensure.survey.completed'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('student.dashboard');
@@ -1465,12 +1435,6 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/attendance', [StudentController::class, 'getAttendance'])->name('attendance');
         Route::get('/subjects', [StudentController::class, 'getSubjects'])->name('subjects');
         Route::get('/subject/{id}', [StudentController::class, 'getSubjectGrades'])->name('subject.grades');
-        Route::prefix('test-subjects')->name('test-subjects.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Student\TestSubjectController::class, 'index'])->name('index');
-            Route::get('/{testSubject}', [\App\Http\Controllers\Student\TestSubjectController::class, 'subject'])->name('subject');
-            Route::get('/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestSubjectController::class, 'show'])->name('tests.show');
-            Route::post('/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestSubjectController::class, 'submit'])->name('tests.submit');
-        });
         Route::get('/pending-lessons', [StudentController::class, 'getPendingLessons'])->name('pending-lessons');
         Route::get('/independents', [StudentController::class, 'getIndependents'])->name('independents');
         Route::post('/independents/{id}/submit', [StudentController::class, 'submitIndependent'])->name('independents.submit');
@@ -1629,20 +1593,6 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         });
         Route::get('/dashboard', [TeacherMainController::class, 'index'])->name('dashboard');
         Route::get('/info-me', [TeacherMainController::class, 'info'])->name('info-me');
-
-        Route::prefix('test-subjects')->name('test-subjects.')
-            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':oqituvchi|admin|superadmin|kichik_admin')
-            ->group(function () {
-                Route::get('/', [TeacherTestSubjectController::class, 'index'])->name('index');
-                Route::get('/{testSubject}', [TeacherTestSubjectController::class, 'show'])->name('show');
-                Route::get('/{testSubject}/student-preview', [TeacherTestSubjectController::class, 'studentPreview'])->name('student-preview');
-                Route::get('/{testSubject}/lessons/{lesson}/test', [TestSubjectLessonTestController::class, 'edit'])->name('tests.edit');
-                Route::get('/{testSubject}/lessons/{lesson}/test/results', [TestSubjectLessonTestController::class, 'results'])->name('tests.results');
-                Route::post('/{testSubject}/lessons/{lesson}/test', [TestSubjectLessonTestController::class, 'upsert'])->name('tests.upsert');
-                Route::post('/{testSubject}/lessons/{lesson}/test/questions', [TestSubjectLessonTestController::class, 'storeQuestion'])->name('tests.questions.store');
-                Route::put('/{testSubject}/lessons/{lesson}/test/questions/{question}', [TestSubjectLessonTestController::class, 'updateQuestion'])->name('tests.questions.update');
-                Route::delete('/{testSubject}/lessons/{lesson}/test/questions/{question}', [TestSubjectLessonTestController::class, 'destroyQuestion'])->name('tests.questions.destroy');
-            });
 
         Route::prefix('test-collections')->name('fan-testlari.')
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':kafedra_mudiri|oqituvchi')

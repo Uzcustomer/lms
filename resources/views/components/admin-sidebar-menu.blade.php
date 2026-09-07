@@ -57,11 +57,9 @@
     $logoutRoute = $isImpersonating ? route('impersonate.stop') : ($useTeacherRoutes ? route('teacher.logout') : route('admin.logout'));
     $switchRoleRoute = $useTeacherRoutes ? route('teacher.switch-role') : route('admin.switch-role');
     $profileRoute = $useTeacherRoutes ? route('teacher.info-me') : null;
-    $teacherTestSubjectCount = 0;
     $canCreateFanTestlari = false;
 
     if ($isTeacher && $user && !in_array($activeRole, $adminRoles)) {
-        $teacherTestSubjectCount = \App\Models\TestSubject::where('teacher_id', $user->id)->count();
         if (in_array($activeRole, ['kafedra_mudiri', 'oqituvchi'], true)) {
             $matchesAllowedDepartment = function ($name) {
                 $normalized = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $name)));
@@ -1339,9 +1337,8 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || ($isTeacher && !in_array($activeRole, $adminRoles) && $teacherTestSubjectCount > 0) || $canCreateFanTestlari)
-        <div class="sidebar-section">Test Moduli</div>
         @if($canCreateFanTestlari)
+        <div class="sidebar-section">Test Moduli</div>
         <a href="{{ route('teacher.fan-testlari.index') }}"
            class="sidebar-link {{ request()->routeIs('teacher.fan-testlari.*') && !request()->routeIs('teacher.fan-testlari.journal') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1356,15 +1353,6 @@
             </svg>
             Test jurnali
         </a>
-        @else
-        <a href="{{ $r('admin.test-subjects.index', 'teacher.test-subjects.index') }}"
-           class="sidebar-link {{ $isActive('admin.test-subjects.*', 'teacher.test-subjects.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            Test fanlar
-        </a>
-        @endif
         @endif
 
         @endif {{-- end if !javobgar_firma --}}

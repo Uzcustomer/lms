@@ -1069,7 +1069,9 @@
                                     ? '<input class="mn-label" value="' + esc(oq.label) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" title="Oqim nomi — tahrirlash mumkin">'
                                     : '<span class="mn-label-ro">' + esc(oq.label) + '</span>')
                               + (mixed ? '<span class="mn-mixed" title="Diqqat: bir oqimda har xil tildagi guruhlar bor!">⚠ aralash til</span>' : '')
-                              + '<span class="mn-oqim-total" data-mnot="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span></div>';
+                              + '<span class="mn-oqim-total" data-mnot="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>'
+                              + (CAN_APPROVE ? '<button type="button" class="mn-x mn-x-oqim" title="Oqimni (barcha guruhlari bilan) ro\'yxatdan o\'chirish" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '">×</button>' : '')
+                              + '</div>';
                         for (var r2 = 0; r2 < rows.length; r2++) {
                             var row = rows[r2];
                             var rl = row.lang || oq.lang || 'uz';
@@ -1082,6 +1084,7 @@
                                         ? '<input class="mn-cnt" type="number" min="0" value="' + esc(row.count) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
                                         : '<span class="mn-cnt-ro">' + esc(row.count) + '</span>')
                                   + '<span class="mn-lang mn-lang-' + esc(rl) + '">' + (MN_LANG_LBL[rl] || rl) + '</span>'
+                                  + (CAN_APPROVE ? '<button type="button" class="mn-x mn-x-row" title="Guruhni ro\'yxatdan o\'chirish (masalan bashoratdagi soxta guruh)" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">×</button>' : '')
                                   + '</div>';
                         }
                         html += '</div>';
@@ -1209,6 +1212,31 @@
             var tb = +$(this).data('b'), tc = +$(this).data('c');
             var s = dragSrc; dragSrc = null;
             mnMove(s, tb, tc, -1);
+        });
+
+        // Guruhni ro'yxatdan o'chirish (bashoratdagi soxta "1K-01a" kabi guruhlar uchun)
+        $(document).on('click', '#mn-body .mn-x-row', function(e) {
+            e.stopPropagation();
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o'), r = +$(this).data('r');
+            var oq = afterState[b].courses[c].oqims[o];
+            var row = oq.rows[r];
+            if ((+row.count || 0) > 0 && !confirm('"' + row.name + '" guruhida ' + row.count + ' ta talaba bor. Baribir ro\'yxatdan o\'chirilsinmi?')) return;
+            mnPushUndo();
+            oq.rows.splice(r, 1);
+            if (!oq.rows.length) afterState[b].courses[c].oqims.splice(o, 1);
+            mnRecalc(); renderManual(); renderAfterBody();
+            mnFlash('"' + row.name + '" o\'chirildi (↶ Bekor qilish bilan qaytarish mumkin)');
+        });
+        // Oqimni barcha guruhlari bilan o'chirish
+        $(document).on('click', '#mn-body .mn-x-oqim', function(e) {
+            e.stopPropagation();
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o');
+            var oq = afterState[b].courses[c].oqims[o];
+            if (!confirm('"' + (oq.label || 'Oqim') + '" oqimi ' + (oq.rows || []).length + ' ta guruhi (' + (oq.total || 0) + ' talaba) bilan ro\'yxatdan o\'chirilsinmi?')) return;
+            mnPushUndo();
+            afterState[b].courses[c].oqims.splice(o, 1);
+            mnRecalc(); renderManual(); renderAfterBody();
+            mnFlash('Oqim o\'chirildi (↶ Bekor qilish bilan qaytarish mumkin)');
         });
 
         // Talaba sonini tahrirlash — jami qiymatlar joyida yangilanadi
@@ -1759,6 +1787,9 @@
         .mn-lang-uz  { color:#1d4ed8; background:#eff6ff; }
         .mn-lang-rus { color:#be123c; background:#fff1f2; }
         .mn-lang-ing { color:#6d28d9; background:#f5f3ff; }
+        .mn-x { flex-shrink:0; width:18px; height:18px; line-height:16px; padding:0; border:1px solid transparent; border-radius:5px; background:transparent; color:#cbd5e1; font-size:14px; font-weight:800; cursor:pointer; }
+        .mn-x:hover { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
+        .mn-x-oqim { margin-left:4px; }
         .mn-new { border:2px dashed #cbd5e1; border-radius:8px; margin-top:6px; padding:10px 8px; text-align:center; font-size:11.5px; font-weight:700; color:#94a3b8; transition:all .12s; }
         .mn-new.mn-over { border-color:#a21caf; color:#a21caf; background:#fdf4ff; }
         #mn-flash { display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; font-size:13px; font-weight:700; padding:10px 18px; border-radius:10px; z-index:2000; box-shadow:0 8px 24px rgba(0,0,0,0.35); max-width:80vw; text-align:center; }

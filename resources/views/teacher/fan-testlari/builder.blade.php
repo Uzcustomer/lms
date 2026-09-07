@@ -380,7 +380,7 @@
                         <option value="">Fan tanlang</option>
                         @foreach($subjects as $subject)
                             <option value="{{ $subject->id }}" @selected((int) old('curriculum_subject_id', $collection?->curriculum_subject_id) === (int) $subject->id)>
-                                {{ $subject->subject_name }} @if($subject->subject_code) ({{ $subject->subject_code }}) @endif @if($subject->semester_name) · {{ $subject->semester_name }} @endif
+                                {{ $subject->subject_name }}@if($subject->semester_name) · {{ $subject->semester_name }}@endif@if($subject->curriculum?->name) · {{ $subject->curriculum->name }}@elseif($subject->curriculum?->education_year_name) · {{ $subject->curriculum->education_year_name }}@endif
                             </option>
                         @endforeach
                     </select>
@@ -537,7 +537,7 @@
                                 </td>
                                 <td>
                                     <span class="bl-t-name">{{ $item->subject?->subject_name ?? '-' }}</span>
-                                    <span class="bl-t-sub">{{ $item->subject?->semester_name ?? $item->subject?->subject_code ?? '-' }}</span>
+                                    <span class="bl-t-sub">{{ collect([$item->subject?->semester_name, $item->subject?->curriculum?->name])->filter()->implode(' · ') ?: ($item->subject?->subject_code ?? '-') }}</span>
                                 </td>
                                 <td style="text-align:center"><span class="bl-num">{{ $item->questionCount() }}</span></td>
                                 <td style="text-align:center">{{ $item->duration_minutes }} daqiqa</td>

@@ -385,9 +385,10 @@
                                     $subject->semester_name,
                                     $subject->curriculum_label ?? null,
                                 ])->filter()->implode(' · ');
+                                $subjectYear = $subject->curriculum_year ?? '';
                             @endphp
                             <option value="{{ $subject->id }}" @selected((int) old('curriculum_subject_id', $collection?->curriculum_subject_id) === (int) $subject->id)>
-                                {{ $subjectLabel }}
+                                {{ $subjectLabel }}{{ $subjectYear ? ' · ' . $subjectYear : '' }}
                             </option>
                         @endforeach
                     </select>

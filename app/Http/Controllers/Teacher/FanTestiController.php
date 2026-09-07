@@ -403,6 +403,7 @@ class FanTestiController extends Controller
             ->where('is_active', true)
             ->where('department_id', $teacher->department_hemis_id)
             ->whereIn('subject_id', $assignedSubjectIds)
+            ->whereIn('curricula_hemis_id', $this->liveCurriculumIds())
             ->orderBy('subject_name')
             ->orderBy('semester_name')
             ->get([
@@ -412,7 +413,14 @@ class FanTestiController extends Controller
 
         $this->attachCurriculumLabels($subjects);
 
-        return $subjects;
+        // Yangi o'quv yili birinchi — o'qituvchi odatda joriy rejani izlaydi.
+        return $subjects
+            ->sortBy([
+                fn ($a, $b) => strcmp((string) $b->curriculum_year, (string) $a->curriculum_year),
+                fn ($a, $b) => strcmp((string) $a->subject_name, (string) $b->subject_name),
+                fn ($a, $b) => strnatcmp((string) $a->semester_name, (string) $b->semester_name),
+            ])
+            ->values();
     }
 
     private function collectionsFor($subjects)
@@ -431,21 +439,48 @@ class FanTestiController extends Controller
         return $collections;
     }
 
+    /**
+     * Amaldagi o'quv rejalar — biriktirilgan faol guruhi bor rejalar.
+     *
+     * curricula.current bayrog'iga tayanib bo'lmaydi: bazada bugungi
+     * o'qish ketayotgan 2025-2026 rejalari current=0 bo'lib turibdi,
+     * current=1 esa kelasi yilning ikki rejasida. Shu sababli mezon
+     * guruhlardan olinadi — talabasi bor reja amalda, qolgani arxiv.
+     */
+    private function liveCurriculumIds()
+    {
+        if (!Schema::hasTable('groups')) {
+            return collect();
+        }
+
+        return Group::query()
+            ->where('active', true)
+            ->whereNotNull('curriculum_hemis_id')
+            ->distinct()
+            ->pluck('curriculum_hemis_id');
+    }
+
     /** Fan yozuvlariga o'quv reja nomini tayyor satr qilib biriktiradi. */
     private function attachCurriculumLabels($subjects): void
     {
         try {
             $ids = $subjects->pluck('curricula_hemis_id')->filter()->unique();
-            $names = $ids->isEmpty() || !Schema::hasTable('curricula')
+            $rows = $ids->isEmpty() || !Schema::hasTable('curricula')
                 ? collect()
-                : Curriculum::query()->whereIn('curricula_hemis_id', $ids)->pluck('name', 'curricula_hemis_id');
+                : Curriculum::query()
+                    ->whereIn('curricula_hemis_id', $ids)
+                    ->get(['curricula_hemis_id', 'name', 'education_year_name'])
+                    ->keyBy('curricula_hemis_id');
 
             foreach ($subjects as $subject) {
-                $subject->curriculum_label = (string) ($names[$subject->curricula_hemis_id] ?? '');
+                $row = $rows[$subject->curricula_hemis_id] ?? null;
+                $subject->curriculum_label = (string) ($row->name ?? '');
+                $subject->curriculum_year = (string) ($row->education_year_name ?? '');
             }
         } catch (\Throwable $exception) {
             foreach ($subjects as $subject) {
                 $subject->curriculum_label = '';
+                $subject->curriculum_year = '';
             }
         }
     }

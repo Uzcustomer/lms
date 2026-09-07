@@ -205,7 +205,7 @@
                         <span class="text-[11px] text-amber-700 font-medium">Bayram kunlari:</span>
                         <span id="cycleHolList" class="flex flex-wrap items-center gap-1"></span>
                     </div>
-                    <div id="cycleGridWrap" class="overflow-auto"><table id="cycleGrid" class="border-collapse text-[11px]"></table></div>
+                    <div id="cycleGridWrap" class="overflow-auto"><table id="cycleGrid" class="border-collapse text-[11px]"></table><div id="cycleOverlay"></div></div>
                 </div>
 
                 {{-- Joylashtirilmagan kartochkalar — pastda gorizontal panel (flex-shrink-0 — doim ko'rinadi) --}}
@@ -1064,7 +1064,8 @@
             border-left: 1px solid #60a5fa; background: #0ea5e9; color: #fff; font-size: 10px; justify-content: center; }
         #cycleGrid .cyc-dcol { width: 30px; min-width: 30px; max-width: 30px; font-size: 9.5px; writing-mode: vertical-rl; text-orientation: mixed;
             padding: 3px 0; background: #dbeafe; white-space: nowrap; color: #334155; }
-        #cycleGrid .cyc-cell { width: 30px; min-width: 30px; max-width: 30px; height: 28px; }
+        #cycleGrid .cyc-cell { width: 30px; min-width: 30px; max-width: 30px; height: 28px;
+            border: 1px solid #e2e8f0; }
         #cycleGrid .cyc-addrow td { height: 18px; }
         #cycleGrid .cyc-addcell { background: #f8fafc; }
         #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
@@ -1089,19 +1090,31 @@
            --cyc-col: ustun eni, --cyc-x0: birinchi kun ustuni boshlanishi. */
         #cycleGridWrap { position: relative; }
         #cycleGrid tbody { position: relative; }
-        /* Chiziqlar har kun uchun alohida qo'yiladi: ustun eni kasrli
-           bo'lgani uchun takrorlanuvchi gradient asta siljib, chiziq
-           ikki kunda bittaga tushib qolardi. */
-        #cycleGrid .cyc-day-line {
-            position: absolute; z-index: 0; top: 0; bottom: 0; width: 1px;
-            background: rgba(148, 163, 184, .38); pointer-events: none;
+        /* Kun chiziqlari va dam olish ranglari jadval ustidagi qatlamda
+           chiziladi: bo'sh kataklar colspan bilan birlashtirilgani uchun
+           ularga alohida chegara berib bo'lmaydi. Qatlam sichqonchani
+           o'tkazib yuboradi, shuning uchun drag & drop ishlayveradi. */
+        #cycleGridWrap { position: relative; }
+        #cycleOverlay {
+            position: absolute; z-index: 3; top: 0; left: 0;
+            pointer-events: none; overflow: hidden;
         }
-        #cycleGrid .cyc-off-band {
-            position: absolute; z-index: 0; top: 0; bottom: 0; pointer-events: none;
+        #cycleOverlay .cyc-day-line {
+            position: absolute; top: 0; bottom: 0; width: 1px;
+            background: rgba(100, 116, 139, .30);
         }
-        #cycleGrid .cyc-off-band.is-sunday { background: rgba(253, 186, 116, .30); }
-        #cycleGrid .cyc-off-band.is-holiday { background: rgba(252, 165, 165, .38); }
-        #cycleGrid tbody td { position: relative; z-index: 1; }
+        #cycleOverlay .cyc-off-band { position: absolute; top: 0; bottom: 0; }
+        #cycleOverlay .cyc-off-band.is-sunday { background: rgba(251, 146, 60, .22); }
+        #cycleOverlay .cyc-off-band.is-holiday { background: rgba(248, 113, 113, .26); }
+        /* Sudrash paytidagi nishon: bitta kun ustuni bo'yicha */
+        #cycleOverlay .cyc-drop-mark {
+            position: absolute; top: 0; bottom: 0; border-radius: 3px;
+            box-shadow: inset 0 0 0 2px #0284c7; background: rgba(14, 165, 233, .18);
+        }
+        #cycleOverlay .cyc-drop-mark.is-bad {
+            box-shadow: inset 0 0 0 2px #dc2626; background: rgba(239, 68, 68, .20);
+        }
+        #cycleGrid tbody td { position: relative; }
         #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
         #cycleGrid .cyc-pcol { width: 52px; min-width: 52px; padding: 1px 3px; background: #f1f5f9; color: #64748b;
             font-size: 9px; font-weight: 700; text-align: center; border: 1px solid #e2e8f0; }
@@ -1143,7 +1156,7 @@
         #cycAssignSave:hover { background: #162c4a; }
         #cycAssignClose { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
         #cycleGrid [data-cycle-from] { transition: box-shadow .12s, background .12s; }
-        #cycleGrid [data-cycle-from].cycle-drop-target { box-shadow: inset 0 0 0 2px #0ea5e9; background: #e0f2fe; }
+        #cycleGrid [data-cycle-from].cycle-drop-target { background: rgba(14, 165, 233, .07); }
         /* Karta tanlanganda uning oqim qatori ajralib turadi */
         #cycleGrid .cyc-cell.cycle-row-target:not(.cyc-block) { background: #ecfeff; box-shadow: inset 0 -2px 0 #06b6d4; cursor: copy; }
         #cycleGrid .cyc-cell.cycle-row-muted { opacity: .45; }
@@ -3103,6 +3116,7 @@
             let cycleViewMode = 'flow';   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             let cyclePairsShown = null;   // ko'rinadigan para qatorlari (sukut: sikl kuni = 6 soat)
             let cycleBandsResize = null;  // kun chiziqlarini qayta chizuvchi resize ishlovchisi
+            let cycleDayGeometry = [];    // kun ustunlari o'lchovi: [{left, width}]
             let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
             // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
@@ -3224,6 +3238,14 @@
                 if (cycleBandsResize) window.removeEventListener('resize', cycleBandsResize);
                 cycleBandsResize = () => paintCycleDayBands(dates);
                 window.addEventListener('resize', cycleBandsResize);
+                // Skrollda ham qayta o'lchanadi — overlay jadval bilan birga yuradi.
+                const wrapEl = $('cycleGridWrap');
+                if (wrapEl && !wrapEl.dataset.bandScroll) {
+                    wrapEl.dataset.bandScroll = '1';
+                    wrapEl.addEventListener('scroll', () => {
+                        if (cyclePlanData) paintCycleDayBands(cyclePlanData.dates || []);
+                    }, { passive: true });
+                }
             }
             // Sikl panjarasi interaktiv ko'rinishda chiziladi: bo'sh katakka fan
             // kartasini sudrash uning start indeksini saqlaydi.
@@ -3259,39 +3281,65 @@
             // ustun eni o'zgarsa ham chiziq joyida qoladi.
             function paintCycleDayBands(dates) {
                 const grid = $('cycleGrid');
+                const wrap = $('cycleGridWrap');
+                const overlay = $('cycleOverlay');
                 const body = grid.querySelector('tbody');
-                if (!body) return;
+                if (!overlay || !body) return;
 
-                body.querySelectorAll('.cyc-off-band, .cyc-day-line').forEach(el => el.remove());
+                overlay.innerHTML = '';
+                cycleDayGeometry = [];
 
                 const heads = grid.querySelectorAll('thead .cyc-dcol');
                 if (!heads.length) return;
 
-                const gridLeft = grid.getBoundingClientRect().left;
+                // Overlay jadval ustiga aniq tushishi uchun o'lchovlar wrap ga
+                // nisbatan olinadi (skroll hisobga olingan holda).
+                const wrapRect = wrap.getBoundingClientRect();
+                const bodyRect = body.getBoundingClientRect();
+                const offsetX = wrap.scrollLeft - wrapRect.left;
+                const offsetY = wrap.scrollTop - wrapRect.top;
+
+                overlay.style.top = (bodyRect.top + offsetY) + 'px';
+                overlay.style.left = '0px';
+                overlay.style.width = grid.offsetWidth + 'px';
+                overlay.style.height = bodyRect.height + 'px';
+
                 const frag = document.createDocumentFragment();
 
-                // Har kun chegarasi o'z o'lchovi bo'yicha: kasr enlarda ham
-                // chiziq aynan katak chetiga tushadi.
-                heads.forEach(head => {
+                heads.forEach((head, index) => {
                     const rect = head.getBoundingClientRect();
+                    const left = Math.round(rect.left + offsetX);
+                    const width = Math.round(rect.right + offsetX) - left;
+                    cycleDayGeometry[index] = { left: left, width: width };
+
                     const line = document.createElement('div');
                     line.className = 'cyc-day-line';
-                    line.style.left = Math.round(rect.left - gridLeft) + 'px';
+                    line.style.left = left + 'px';
                     frag.appendChild(line);
                 });
-                body.appendChild(frag);
+
+                // O'ng chekka chizig'i
+                const last = cycleDayGeometry[cycleDayGeometry.length - 1];
+                if (last) {
+                    const edge = document.createElement('div');
+                    edge.className = 'cyc-day-line';
+                    edge.style.left = (last.left + last.width) + 'px';
+                    frag.appendChild(edge);
+                }
 
                 // Dam olish kunlari — uzluksiz bo'laklar bo'lib chiziladi.
                 let start = null;
                 const flush = (endIndex) => {
                     if (start === null) return;
-                    const from = heads[start.index].getBoundingClientRect();
-                    const to = heads[endIndex].getBoundingClientRect();
-                    const band = document.createElement('div');
-                    band.className = 'cyc-off-band ' + (start.holiday ? 'is-holiday' : 'is-sunday');
-                    band.style.left = Math.round(from.left - gridLeft) + 'px';
-                    band.style.width = Math.round(to.right - from.left) + 'px';
-                    body.appendChild(band);
+                    const from = cycleDayGeometry[start.index];
+                    const to = cycleDayGeometry[endIndex];
+                    if (from && to) {
+                        const band = document.createElement('div');
+                        band.className = 'cyc-off-band ' + (start.holiday ? 'is-holiday' : 'is-sunday');
+                        band.style.left = from.left + 'px';
+                        band.style.width = (to.left + to.width - from.left) + 'px';
+                        frag.appendChild(band);
+                    }
                     start = null;
                 };
 
@@ -3303,6 +3351,35 @@
                     if (!start) start = { index: index, holiday: holiday };
                 });
                 flush(dates.length - 1);
+
+                overlay.appendChild(frag);
+            }
+
+            // Sudrash paytida aniq bitta kun ustunini belgilaydi; joylab
+            // bo'lmaydigan kun qizil bo'ladi.
+            function markCycleDrop(index, rowTop, rowHeight, allowed) {
+                const overlay = $('cycleOverlay');
+                if (!overlay) return;
+                clearCycleDropMark();
+
+                const geo = cycleDayGeometry[index];
+                if (!geo) return;
+
+                const mark = document.createElement('div');
+                mark.className = 'cyc-drop-mark' + (allowed ? '' : ' is-bad');
+                mark.style.left = geo.left + 'px';
+                mark.style.width = geo.width + 'px';
+                if (rowTop != null) {
+                    mark.style.top = rowTop + 'px';
+                    mark.style.bottom = 'auto';
+                    mark.style.height = rowHeight + 'px';
+                }
+                overlay.appendChild(mark);
+            }
+
+            function clearCycleDropMark() {
+                const overlay = $('cycleOverlay');
+                if (overlay) overlay.querySelectorAll('.cyc-drop-mark').forEach(el => el.remove());
             }
 
             function cycleDateClass(date) {
@@ -3569,6 +3646,7 @@
                 };
                 const clearDropMark = () => {
                     if (cycleDropCell) { cycleDropCell.classList.remove('cycle-drop-target'); cycleDropCell = null; }
+                    clearCycleDropMark();
                 };
                 grid.addEventListener('dragenter', ev => { if (cellOf(ev)) ev.preventDefault(); });
                 grid.addEventListener('dragover', ev => {
@@ -3577,7 +3655,21 @@
                     // dragover'da preventDefault bo'lmasa brauzer drop'ni umuman bermaydi.
                     ev.preventDefault();
                     if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
-                    if (cycleDropCell !== cell) { clearDropMark(); cycleDropCell = cell; cell.classList.add('cycle-drop-target'); }
+                    if (cycleDropCell !== cell) { cycleDropCell = cell; }
+
+                    // Nishon aynan sichqoncha turgan kun ustuniga tushadi.
+                    const index = indexAt(cell, ev);
+                    const card = (cyclePlanData && cyclePlanData.cycle_cards || [])
+                        .find(item => item.key === cycleDragKey);
+                    const allowed = Boolean(card) && card.row_key === cell.dataset.cycleRow;
+
+                    const wrap = $('cycleGridWrap');
+                    const body = $('cycleGrid').querySelector('tbody');
+                    const cellRect = cell.getBoundingClientRect();
+                    const bodyRect = body ? body.getBoundingClientRect() : null;
+                    const rowTop = bodyRect ? Math.round(cellRect.top - bodyRect.top) : null;
+
+                    markCycleDrop(index, rowTop, Math.round(cellRect.height), allowed);
                 });
                 grid.addEventListener('dragleave', ev => {
                     if (!ev.relatedTarget || !grid.contains(ev.relatedTarget)) clearDropMark();

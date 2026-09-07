@@ -244,6 +244,22 @@
     .bl-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; white-space: nowrap; }
     .bl-acts form { display: inline-flex; margin: 0; }
 
+    /* ---- Ruxsat etilgan guruhlar ---- */
+    .bl-groups {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        padding: 13px 20px; border: 1px solid var(--line);
+        border-left: 3px solid var(--navy-soft); border-radius: 6px; background: #fff;
+    }
+    .bl-groups-head {
+        margin-right: 6px; color: var(--muted); font-size: 9.5px; font-weight: 700;
+        letter-spacing: .13em; text-transform: uppercase;
+    }
+    .bl-group-chip {
+        padding: 4px 12px; border: 1px solid var(--line); border-radius: 3px;
+        background: #fafcfe; color: var(--navy); font-size: 12px; font-weight: 500;
+    }
+    .bl-groups-note { color: var(--warn); font-size: 12.5px; }
+
     /* ---- Xabar / bo'sh holat ---- */
     .bl-alert { padding: 14px 18px; border: 1px solid; border-left-width: 3px; border-radius: 5px; font-size: 13.5px; }
     .bl-alert.is-ok { border-color: #a5d6bf; border-left-color: var(--ok); background: var(--ok-bg); color: #0a6043; }
@@ -377,6 +393,16 @@
         </form>
 
         @if($isEdit)
+            @php $allowedGroups = $allowedGroups ?? collect(); @endphp
+            <div class="bl-groups">
+                <div class="bl-groups-head">Testni ishlay oladigan guruhlar</div>
+                @forelse($allowedGroups as $groupName)
+                    <span class="bl-group-chip">{{ $groupName }}</span>
+                @empty
+                    <span class="bl-groups-note">Fanga guruh biriktirilmagan — hozircha istalgan talaba ID kiritib kira oladi.</span>
+                @endforelse
+            </div>
+
             {{-- 02 · Yangi savol --}}
             <div class="bl-panel">
                 <div class="bl-panel-head">

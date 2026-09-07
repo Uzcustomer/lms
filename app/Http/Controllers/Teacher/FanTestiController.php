@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\CurriculumSubjectTeacher;
 use App\Models\FanTesti;
+use App\Models\Group;
 use App\Models\FanTestiAttempt;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
@@ -60,12 +61,41 @@ class FanTestiController extends Controller
     {
         $this->authorizeCollection($fanTesti);
         $subjects = $this->subjectsFor($this->teacher());
+        $collection = $fanTesti->load('subject');
 
         return view('teacher.fan-testlari.builder', [
-            'collection' => $fanTesti->load('subject'),
+            'collection' => $collection,
             'subjects' => $subjects,
             'collections' => $this->collectionsFor($subjects),
+            'allowedGroups' => $this->allowedGroupsFor($collection),
         ]);
+    }
+
+    /**
+     * Test fani biriktirilgan guruhlar nomi — kiosk aynan shu ro'yxat
+     * bo'yicha talabani kiritadi, shuning uchun o'qituvchiga ko'rsatiladi.
+     */
+    private function allowedGroupsFor(FanTesti $fanTesti)
+    {
+        if (!Schema::hasTable('curriculum_subject_teachers') || !$fanTesti->subject?->subject_id) {
+            return collect();
+        }
+
+        $groupIds = CurriculumSubjectTeacher::query()
+            ->where('subject_id', $fanTesti->subject->subject_id)
+            ->where('active', true)
+            ->whereNotNull('group_id')
+            ->pluck('group_id')
+            ->unique();
+
+        if ($groupIds->isEmpty()) {
+            return collect();
+        }
+
+        return Group::query()
+            ->whereIn('group_hemis_id', $groupIds)
+            ->orderBy('name')
+            ->pluck('name');
     }
 
     public function update(Request $request, FanTesti $fanTesti)

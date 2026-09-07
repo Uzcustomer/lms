@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FanTesti;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
+use App\Models\CurriculumSubjectTeacher;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,15 @@ class FanTestiKioskController extends Controller
 
     public function show(FanTesti $fanTesti)
     {
-        $this->assertReady($fanTesti);
+        $this->assertTableReady();
+
+        // Yopilgan test 404 bermaydi: sinf kompyuterlarida havola ochiq
+        // turgan bo'lishi mumkin, shuning uchun tushunarli xabar chiqadi.
+        if (!$fanTesti->is_active) {
+            return view('kiosk.fan-testi.closed', [
+                'test' => $fanTesti->load('subject'),
+            ]);
+        }
 
         return view('kiosk.fan-testi.start', [
             'test' => $fanTesti->load('subject'),
@@ -34,7 +43,12 @@ class FanTestiKioskController extends Controller
 
     public function start(Request $request, FanTesti $fanTesti)
     {
-        $this->assertReady($fanTesti);
+        $this->assertTableReady();
+
+        // Yopilgan testda yangi urinish boshlanmaydi.
+        if (!$fanTesti->is_active) {
+            return redirect()->route('kiosk.fan-testi.show', $fanTesti);
+        }
 
         $data = $request->validate([
             'student_id_number' => ['required', 'string', 'max:64'],
@@ -44,6 +58,13 @@ class FanTestiKioskController extends Controller
         if (!$student) {
             throw ValidationException::withMessages([
                 'student_id_number' => 'Bunday ID raqamli talaba topilmadi. Raqamni tekshirib qayta kiriting.',
+            ]);
+        }
+
+        // Testni faqat shu fan biriktirilgan guruhlar talabalari ishlaydi.
+        if (!$this->studentMayTake($fanTesti, $student)) {
+            throw ValidationException::withMessages([
+                'student_id_number' => 'Bu test sizning guruhingiz uchun mo\'ljallanmagan.',
             ]);
         }
 
@@ -156,14 +177,55 @@ class FanTestiKioskController extends Controller
         ]);
     }
 
-    private function assertReady(FanTesti $fanTesti): void
+    private function assertTableReady(): void
     {
         abort_unless(
             Schema::hasTable('fan_testi_attempts'),
             503,
             'Test natijalari jadvali migratsiyasi hali ishga tushirilmagan.'
         );
-        abort_unless($fanTesti->is_active, 404, 'Bu test to\'plami faol emas.');
+    }
+
+    /**
+     * Test fani biriktirilgan guruhlarning hemis id lari.
+     * Manba — o'quv reja fan-o'qituvchi biriktirmasi (curriculum_subject_teachers):
+     * u yerda har biriktirma qaysi guruhga tegishli ekani turadi.
+     */
+    private function allowedGroupIds(FanTesti $fanTesti): array
+    {
+        if (!Schema::hasTable('curriculum_subject_teachers')) {
+            return [];
+        }
+
+        $subject = $fanTesti->subject;
+        if (!$subject || !$subject->subject_id) {
+            return [];
+        }
+
+        return CurriculumSubjectTeacher::query()
+            ->where('subject_id', $subject->subject_id)
+            ->where('active', true)
+            ->whereNotNull('group_id')
+            ->pluck('group_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Guruh biriktirmasi topilmasa test hammaga ochiq qoladi — eski
+     * to'plamlar va reja to'liq to'ldirilmagan holatlar ishlashda davom etadi.
+     */
+    private function studentMayTake(FanTesti $fanTesti, Student $student): bool
+    {
+        $groupIds = $this->allowedGroupIds($fanTesti);
+
+        if (empty($groupIds)) {
+            return true;
+        }
+
+        return in_array((int) $student->group_id, $groupIds, true);
     }
 
     private function findStudent(string $identifier): ?Student

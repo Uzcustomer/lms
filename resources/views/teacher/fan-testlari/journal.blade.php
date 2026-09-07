@@ -30,7 +30,38 @@
         padding: 16px 20px;
         border: 1px solid var(--line); border-radius: 6px; background: #fff;
     }
-    .jr-filters { display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: end; }
+    .jr-filters { display: grid; grid-template-columns: 1.3fr 1.6fr 1fr 1.2fr auto auto; gap: 12px; align-items: end; }
+    .jr-filters input[type='search'] {
+        width: 100%; height: 40px; padding: 0 11px;
+        border: 1px solid #c4d0e0; border-radius: 5px; background: #fcfdff;
+        color: var(--ink); font-family: 'Roboto', sans-serif; font-size: 13.5px; outline: none;
+    }
+    .jr-filters input[type='search']:focus { border-color: var(--navy-soft); box-shadow: 0 0 0 3px rgba(27,58,99,.1); }
+    .jr-reset {
+        display: inline-flex; align-items: center; height: 40px; padding: 0 16px;
+        border: 1px solid #c4d0e0; border-radius: 5px; background: #fff;
+        color: var(--ink-soft); font-size: 12.5px; text-decoration: none; white-space: nowrap;
+    }
+    .jr-reset:hover { background: #f1f5fa; color: var(--navy); }
+
+    .jr-flash {
+        padding: 13px 18px; border: 1px solid #a5d6bf; border-left: 3px solid var(--ok);
+        border-radius: 5px; background: var(--ok-bg); color: #0a6043; font-size: 13.5px;
+    }
+
+    .jr-group-clear { margin: 0; }
+    .jr-group-clear button {
+        padding: 5px 12px; border: 1px solid #e8c3c0; border-radius: 4px; background: #fff;
+        color: var(--bad); font-family: 'Roboto', sans-serif; font-size: 11px; cursor: pointer; transition: background .16s;
+    }
+    .jr-group-clear button:hover { background: var(--bad-bg); }
+
+    .jr-del-form { margin: 0; }
+    .jr-del {
+        width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent;
+        color: #c3ccd9; font-size: 19px; line-height: 1; cursor: pointer; transition: background .16s, color .16s;
+    }
+    .jr-del:hover { background: var(--bad-bg); color: var(--bad); }
     .jr-filters label {
         display: block; margin-bottom: 6px;
         color: var(--ink-soft); font-size: 11px; font-weight: 500; letter-spacing: .05em;
@@ -175,6 +206,7 @@
         .jr-stats { grid-template-columns: repeat(2, 1fr); }
         .jr-stat { border-bottom: 1px solid var(--line-soft); }
         .jr-filters { grid-template-columns: 1fr; }
+        .jr-reset { justify-content: center; }
         .jr-table thead { display: none; }
         .jr-table td { display: block; padding: 6px 16px; border-bottom: 0; }
         .jr-table tbody tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
@@ -183,6 +215,10 @@
 
     <div class="jr py-6">
         <div class="w-full px-4 sm:px-6 lg:px-8" style="display:flex;flex-direction:column;gap:14px">
+
+            @if(session('success'))
+                <div class="jr-flash">{{ session('success') }}</div>
+            @endif
 
             <div class="jr-head">
                 <div class="jr-eyebrow">Test moduli</div>
@@ -203,6 +239,17 @@
                 <div class="jr-panel">
                     <form method="GET" class="jr-filters">
                         <div>
+                            <label for="subject_id">Mavzu (fan)</label>
+                            <select name="subject_id" id="subject_id" onchange="this.form.querySelector('[name=test_id]').value=''; this.form.submit();">
+                                <option value="">Barcha fanlar</option>
+                                @foreach($subjectOptions ?? [] as $subjectOption)
+                                    <option value="{{ $subjectOption->id }}" @selected((int) request('subject_id') === (int) $subjectOption->id)>
+                                        {{ $subjectOption->subject_name }}@if($subjectOption->semester_name) · {{ $subjectOption->semester_name }}@endif
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
                             <label for="test_id">Test to'plami</label>
                             <select name="test_id" id="test_id">
                                 @foreach($collections as $item)
@@ -221,7 +268,14 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div>
+                            <label for="student">Talaba (ism yoki ID)</label>
+                            <input type="search" name="student" id="student" value="{{ request('student') }}" placeholder="Familiya, ism yoki ID raqami">
+                        </div>
                         <button class="jr-btn" type="submit">Ko'rsatish</button>
+                        @if(request()->hasAny(['group', 'student', 'subject_id']))
+                            <a class="jr-reset" href="{{ route('teacher.fan-testlari.journal', ['test_id' => $selected?->id]) }}">Tozalash</a>
+                        @endif
                     </form>
                 </div>
 
@@ -250,6 +304,13 @@
                                     <span class="jr-tag"><b>{{ $group['submitted_count'] }}</b> topshirgan</span>
                                     <span class="jr-tag is-ok"><b>{{ $group['passed_count'] }}</b> o'tgan</span>
                                     <span class="jr-tag">o'rtacha <b>{{ $group['average_percent'] }}%</b></span>
+                                    <form method="POST" action="{{ route('teacher.fan-testlari.attempts.clear', $selected) }}"
+                                          onsubmit="return confirm('Bu guruhning barcha natijalari o\'chirilsinmi?')" class="jr-group-clear">
+                                        @csrf
+                                        @method('DELETE')
+                                        <input type="hidden" name="group" value="{{ $group['name'] }}">
+                                        <button type="submit">Natijalarni tozalash</button>
+                                    </form>
                                 </div>
                             </div>
 
@@ -260,8 +321,9 @@
                                     <th style="width:11%">Holat</th>
                                     <th style="width:9%">Ball</th>
                                     <th style="width:8%">Foiz</th>
-                                    <th style="width:15%">Topshirgan vaqti</th>
+                                    <th style="width:14%">Topshirgan vaqti</th>
                                     <th>Javoblari</th>
+                                    <th style="width:60px"></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -317,6 +379,14 @@
                                                     </div>
                                                 </details>
                                             @endif
+                                        </td>
+                                        <td style="text-align:right">
+                                            <form method="POST" action="{{ route('teacher.fan-testlari.attempts.destroy', $attempt) }}"
+                                                  onsubmit="return confirm('Bu talabaning natijasi o\'chirilsinmi? U testni qaytadan topshira oladi.')" class="jr-del-form">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="jr-del" title="Natijani o'chirish" aria-label="Natijani o'chirish">&times;</button>
+                                            </form>
                                         </td>
                                     </tr>
                                 @endforeach

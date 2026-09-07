@@ -211,29 +211,53 @@ class FanTestiController extends Controller
                 'selected' => null,
                 'groups' => collect(),
                 'summary' => null,
+                'subjectOptions' => collect(),
+                'allGroups' => collect(),
                 'migrationPending' => true,
             ]);
         }
 
         $collections = $this->collectionsFor($subjects);
+
+        // Mavzu (fan) filtri: tanlangan fan bo'yicha to'plamlar toraytiriladi.
+        $subjectId = $request->integer('subject_id') ?: null;
+        $visibleCollections = $subjectId
+            ? $collections->where('curriculum_subject_id', $subjectId)->values()
+            : $collections;
+
+        $subjectOptions = $collections
+            ->map(fn (FanTesti $item) => $item->subject)
+            ->filter()
+            ->unique('id')
+            ->sortBy('subject_name')
+            ->values();
+
         $selected = $request->filled('test_id')
-            ? $collections->firstWhere('id', (int) $request->integer('test_id'))
-            : $collections->first();
+            ? $visibleCollections->firstWhere('id', (int) $request->integer('test_id'))
+            : $visibleCollections->first();
 
         if (!$selected) {
             return view('teacher.fan-testlari.journal', [
-                'collections' => $collections,
+                'collections' => $visibleCollections,
                 'selected' => null,
                 'groups' => collect(),
                 'summary' => null,
+                'subjectOptions' => $subjectOptions,
+                'allGroups' => collect(),
                 'migrationPending' => false,
             ]);
         }
+
+        $search = trim((string) $request->input('student'));
 
         $attempts = FanTestiAttempt::query()
             ->with('answers')
             ->where('fan_testi_id', $selected->id)
             ->when($request->filled('group'), fn ($query) => $query->where('group_name', $request->string('group')))
+            ->when($search !== '', fn ($query) => $query->where(function ($inner) use ($search) {
+                $inner->where('student_name', 'like', "%{$search}%")
+                    ->orWhere('student_id_number', 'like', "%{$search}%");
+            }))
             ->orderBy('student_name')
             ->get();
 
@@ -252,9 +276,10 @@ class FanTestiController extends Controller
         $finished = $attempts->where('status', '!=', 'in_progress');
 
         return view('teacher.fan-testlari.journal', [
-            'collections' => $collections,
+            'collections' => $visibleCollections,
             'selected' => $selected,
             'groups' => $groups,
+            'subjectOptions' => $subjectOptions,
             'allGroups' => FanTestiAttempt::query()
                 ->where('fan_testi_id', $selected->id)
                 ->whereNotNull('group_name')
@@ -270,6 +295,36 @@ class FanTestiController extends Controller
             ],
             'migrationPending' => false,
         ]);
+    }
+
+    /**
+     * Jurnaldan bitta urinishni o'chiradi — talaba testni qaytadan
+     * topshira oladi (kiosk bir talabaga bitta urinish beradi).
+     */
+    public function destroyAttempt(FanTestiAttempt $attempt)
+    {
+        $collection = FanTesti::find($attempt->fan_testi_id);
+        abort_unless($collection, 404);
+        $this->authorizeCollection($collection);
+
+        $attempt->delete();
+
+        return back()->with('success', 'Talaba urinishi o\'chirildi — u testni qaytadan topshira oladi.');
+    }
+
+    /** Tanlangan test bo'yicha barcha urinishlarni tozalaydi. */
+    public function clearAttempts(Request $request, FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $query = FanTestiAttempt::query()->where('fan_testi_id', $fanTesti->id);
+        if ($request->filled('group')) {
+            $query->where('group_name', $request->string('group'));
+        }
+        $removed = $query->count();
+        $query->delete();
+
+        return back()->with('success', $removed . ' ta urinish o\'chirildi.');
     }
 
     private function teacher()

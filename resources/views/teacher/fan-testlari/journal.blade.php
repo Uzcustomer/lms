@@ -248,7 +248,6 @@
                                             $subjectOption->subject_name,
                                             $subjectOption->semester_name,
                                             $subjectOption->curriculum_label ?? null,
-                                            $subjectOption->curriculum_year ?? null,
                                         ])->filter()->implode(' · ');
                                     @endphp
                                     <option value="{{ $subjectOption->id }}" @selected((int) request('subject_id') === (int) $subjectOption->id)>

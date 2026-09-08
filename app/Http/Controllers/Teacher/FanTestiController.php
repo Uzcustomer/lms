@@ -161,7 +161,7 @@ class FanTestiController extends Controller
             'updated_by' => $this->teacher()->id,
         ]);
 
-        return back()->with('success', 'Savol qo\'shildi.');
+        return back()->withFragment('savollar')->with('success', 'Savol qo\'shildi.');
     }
 
     public function updateQuestion(Request $request, FanTesti $fanTesti, int $question)
@@ -179,7 +179,7 @@ class FanTestiController extends Controller
             'updated_by' => $this->teacher()->id,
         ]);
 
-        return back()->with('success', 'Savol yangilandi.');
+        return back()->withFragment('savollar')->with('success', 'Savol yangilandi.');
     }
 
     public function destroyQuestion(FanTesti $fanTesti, int $question)
@@ -195,7 +195,7 @@ class FanTestiController extends Controller
             'updated_by' => $this->teacher()->id,
         ]);
 
-        return back()->with('success', 'Savol o\'chirildi.');
+        return back()->withFragment('savollar')->with('success', 'Savol o\'chirildi.');
     }
 
     /**

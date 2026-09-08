@@ -281,6 +281,7 @@
     }
 
     /* ---- Savol katakchalari ---- */
+    #savollar { scroll-margin-top: 20px; }
     .bl-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
     .bl-slot {
         display: flex; flex-direction: column; gap: 7px; min-height: 96px;
@@ -616,7 +617,7 @@
                     'ordering' => 'Ketma-ketlik',
                 ];
             @endphp
-            <div class="bl-panel">
+            <div class="bl-panel" id="savollar">
                 <div class="bl-panel-head">
                     <span class="bl-step">02</span>
                     <div>

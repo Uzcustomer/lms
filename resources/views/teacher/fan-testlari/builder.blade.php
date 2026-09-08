@@ -278,26 +278,78 @@
         padding-top: 14px; border-top: 1px solid var(--line-soft);
     }
 
-    /* ---- Kiritilgan savollar ---- */
-    .bl-q { border-bottom: 1px solid var(--line-soft); }
-    .bl-q:last-of-type { border-bottom: 0; }
-    .bl-q > summary {
-        display: flex; align-items: center; gap: 13px; padding: 13px 20px;
-        cursor: pointer; list-style: none; transition: background .16s;
+    /* ---- Savol katakchalari ---- */
+    .bl-slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .bl-slot {
+        display: flex; flex-direction: column; gap: 7px; min-height: 96px;
+        padding: 14px 16px; border: 1px solid var(--line); border-radius: 11px;
+        background: #fff; font-family: 'Roboto', sans-serif; text-align: left; cursor: pointer;
+        transition: border-color .16s, background .16s, box-shadow .16s, transform .16s;
     }
-    .bl-q > summary::-webkit-details-marker { display: none; }
-    .bl-q > summary:hover { background: #fafcfe; }
-    .bl-q[open] > summary { background: #f5f8fc; border-bottom: 1px solid var(--line-soft); }
-    .bl-q-no {
-        flex: none; display: grid; place-items: center; width: 28px; height: 28px;
-        border: 1px solid var(--line); border-radius: 8px; background: #fff;
-        color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 12px; font-weight: 600;
+    .bl-slot:hover { border-color: var(--navy-soft); box-shadow: 0 6px 18px rgba(15, 39, 72, .1); transform: translateY(-1px); }
+    .bl-slot-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .bl-slot-no { color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 13px; font-weight: 600; }
+
+    /* Bo'sh katakcha: yashil doiradagi + */
+    .bl-slot.is-empty {
+        align-items: center; justify-content: center; gap: 10px;
+        border-style: dashed; border-color: #cfdaea; background: #fbfdff;
     }
-    .bl-q[open] .bl-q-no { border-color: var(--navy); background: var(--navy); color: #fff; }
-    .bl-q-text { overflow: hidden; flex: 1 1 auto; min-width: 0; font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
-    .bl-q-text.is-empty { color: var(--muted); font-style: italic; }
-    .bl-q-meta { flex: none; color: var(--muted); font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
-    .bl-q-del { display: flex; justify-content: flex-end; padding: 0 20px 16px; }
+    .bl-slot.is-empty .bl-slot-top { width: 100%; justify-content: center; }
+    .bl-slot.is-empty .bl-slot-no { color: var(--muted); font-weight: 500; }
+    .bl-slot.is-empty:hover { border-color: var(--ok); background: #f4fbf8; }
+    .bl-slot-plus {
+        display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+        background: linear-gradient(160deg, #17a06a, var(--ok)); color: #fff;
+        box-shadow: 0 5px 14px rgba(15, 122, 82, .3); transition: transform .16s, box-shadow .16s;
+    }
+    .bl-slot-plus svg { width: 19px; height: 19px; }
+    .bl-slot.is-empty:hover .bl-slot-plus { transform: scale(1.08); box-shadow: 0 7px 18px rgba(15, 122, 82, .38); }
+
+    /* To'ldirilgan katakcha: yashil tus */
+    .bl-slot.is-filled {
+        border-color: #a5d6bf; background: linear-gradient(180deg, #f4fbf8, #eaf7f1);
+    }
+    .bl-slot.is-filled:hover { border-color: var(--ok); }
+    .bl-slot-tick {
+        display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+        background: var(--ok); color: #fff;
+    }
+    .bl-slot-tick svg { width: 13px; height: 13px; }
+    .bl-slot-text {
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        color: var(--ink); font-size: 12.5px; line-height: 1.5;
+    }
+    .bl-slot-text.is-empty { color: var(--muted); font-style: italic; }
+    .bl-slot-meta { margin-top: auto; color: #5c7d6e; font-size: 11px; font-weight: 600; }
+
+    @media (max-width: 780px) { .bl-slots { grid-template-columns: 1fr; } }
+
+    /* ---- Savol oynasi ---- */
+    .bl-qmodal {
+        position: fixed; inset: 0; z-index: 220; display: none;
+        align-items: flex-start; justify-content: center; padding: 24px 16px;
+        background: rgba(15, 39, 72, .55); overflow-y: auto;
+    }
+    .bl-qmodal.is-open { display: flex; }
+    .bl-qmodal-box {
+        width: min(1040px, 100%); overflow: hidden; border-radius: 12px; background: #fff;
+        box-shadow: 0 24px 60px rgba(15, 39, 72, .35);
+    }
+    .bl-qmodal-head {
+        display: flex; align-items: center; gap: 14px;
+        padding: 16px 22px; border-bottom: 1px solid var(--line-soft);
+        background: linear-gradient(180deg, #fdfefe, #f4f8fc);
+    }
+    .bl-qmodal-head h3 { margin: 0; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; }
+    .bl-qmodal-head p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; }
+    .bl-qmodal-x {
+        margin-left: auto; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 8px;
+        background: #fff; color: var(--ink-soft); font-size: 20px; line-height: 1; cursor: pointer; transition: .16s;
+    }
+    .bl-qmodal-x:hover { border-color: var(--bad); background: var(--bad-bg); color: var(--bad); }
+    .bl-qmodal-body { max-height: calc(100vh - 150px); overflow-y: auto; }
+    .bl-qmodal-body .bl-q-del { display: flex; justify-content: flex-end; padding: 0 20px 18px; }
 
     /* ---- Jadval ---- */
     .bl-scroll { overflow-x: auto; }
@@ -531,65 +583,90 @@
                 @endforelse
             </div>
 
-            {{-- 02 · Yangi savol --}}
+            {{-- 02 · Savollar katakchalari --}}
+            @php
+                $slotCount = max(20, count($questions));
+                $typeLabels = [
+                    'single_choice' => "Bitta to'g'ri javob",
+                    'multiple_choice' => "Bir nechta to'g'ri javob",
+                    'true_false' => "To'g'ri / Noto'g'ri",
+                    'fill_in_blank' => "Bo'sh joyni to'ldirish",
+                    'matching' => 'Moslashtirish',
+                    'ordering' => 'Ketma-ketlik',
+                ];
+            @endphp
             <div class="bl-panel">
                 <div class="bl-panel-head">
                     <span class="bl-step">02</span>
                     <div>
-                        <h2>Yangi savol qo'shish</h2>
-                        <p>Savol turini tanlang, matn va javob variantlarini kiriting.</p>
+                        <h2>Savollar</h2>
+                        <p>Bo'sh katakchadagi <b>+</b> ni bosing — savol oynasi ochiladi.</p>
+                    </div>
+                    <span class="bl-panel-count">{{ count($questions) }} / {{ $slotCount }}</span>
+                </div>
+
+                <div class="bl-panel-body">
+                    <div class="bl-slots">
+                        @foreach($questions as $index => $question)
+                            @php
+                                $preview = trim(strip_tags((string) ($question['prompt'] ?? '')));
+                                $typeLabel = $typeLabels[$question['type'] ?? 'single_choice'] ?? $typeLabels['single_choice'];
+                            @endphp
+                            <button type="button" class="bl-slot is-filled" data-q-open="{{ $index }}">
+                                <span class="bl-slot-top">
+                                    <span class="bl-slot-no">{{ $index + 1 }}-savol</span>
+                                    <span class="bl-slot-tick">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+                                    </span>
+                                </span>
+                                <span class="bl-slot-text {{ $preview === '' ? 'is-empty' : '' }}">{{ $preview !== '' ? \Illuminate\Support\Str::limit($preview, 90) : 'Savol matni kiritilmagan' }}</span>
+                                <span class="bl-slot-meta">{{ $typeLabel }} · {{ $question['points'] ?? 1 }} ball</span>
+                            </button>
+                        @endforeach
+
+                        @for($slot = count($questions); $slot < $slotCount; $slot++)
+                            <button type="button" class="bl-slot is-empty" data-q-open="new">
+                                <span class="bl-slot-top">
+                                    <span class="bl-slot-no">{{ $slot + 1 }}-savol</span>
+                                </span>
+                                <span class="bl-slot-plus">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                                </span>
+                            </button>
+                        @endfor
                     </div>
                 </div>
-                @include('teacher.fan-testlari._question-form', ['action' => route('teacher.fan-testlari.questions.store', $collection), 'method' => null, 'question' => null, 'questionIndex' => null, 'optionDefaults' => $optionDefaults])
             </div>
 
-            {{-- 03 · Kiritilgan savollar --}}
-            <div class="bl-panel">
-                <div class="bl-panel-head">
-                    <span class="bl-step">03</span>
-                    <div>
-                        <h2>Kiritilgan savollar</h2>
-                        <p>Savol sarlavhasini bosib tahrirlash oynasini oching.</p>
-                    </div>
-                    <span class="bl-panel-count">{{ count($questions) }} ta</span>
-                </div>
-
-                @forelse($questions as $index => $question)
-                    @php
-                        $preview = trim(strip_tags((string) ($question['prompt'] ?? '')));
-                        $typeLabel = [
-                            'single_choice' => "Bitta to'g'ri javob",
-                            'multiple_choice' => "Bir nechta to'g'ri javob",
-                            'true_false' => "To'g'ri / Noto'g'ri",
-                            'fill_in_blank' => "Bo'sh joyni to'ldirish",
-                            'matching' => 'Moslashtirish',
-                            'ordering' => 'Ketma-ketlik',
-                        ][$question['type'] ?? 'single_choice'] ?? "Bitta to'g'ri javob";
-                    @endphp
-                    <details class="bl-q">
-                        <summary>
-                            <span class="bl-q-no">{{ $index + 1 }}</span>
-                            <span class="bl-q-text {{ $preview === '' ? 'is-empty' : '' }}">{{ $preview !== '' ? \Illuminate\Support\Str::limit($preview, 110) : 'Savol matni kiritilmagan' }}</span>
-                            <span class="bl-q-meta">{{ $typeLabel }} · {{ $question['points'] ?? 1 }} ball</span>
-                        </summary>
+            {{-- Savol oynasi --}}
+            <div class="bl-qmodal" id="qModal">
+                <div class="bl-qmodal-box">
+                    <div class="bl-qmodal-head">
+                        <span class="bl-step" id="qModalNo">+</span>
                         <div>
-                            @include('teacher.fan-testlari._question-form', ['action' => route('teacher.fan-testlari.questions.update', [$collection, $index]), 'method' => 'PUT', 'question' => $question, 'questionIndex' => $index, 'optionDefaults' => $optionDefaults])
-                            <form method="POST" action="{{ route('teacher.fan-testlari.questions.destroy', [$collection, $index]) }}" onsubmit="return confirm('Bu savolni o\'chirishni tasdiqlaysizmi?')" class="bl-q-del">
-                                @csrf
-                                @method('DELETE')
-                                <button class="bl-btn bl-btn-bad bl-btn-sm">Savolni o'chirish</button>
-                            </form>
+                            <h3 id="qModalTitle">Yangi savol</h3>
+                            <p>Savol turini tanlang, matn va javob variantlarini kiriting.</p>
                         </div>
-                    </details>
-                @empty
-                    <div class="bl-panel-body">
-                        <div class="bl-empty">
-                            <b>Hali savol qo'shilmagan</b>
-                            <span>Yuqoridagi forma orqali test to'plamingizni savollar bilan to'ldiring.</span>
-                        </div>
+                        <button type="button" class="bl-qmodal-x" id="qModalClose" aria-label="Yopish">&times;</button>
                     </div>
-                @endforelse
+                    <div class="bl-qmodal-body">
+                        <div data-q-pane="new">
+                            @include('teacher.fan-testlari._question-form', ['action' => route('teacher.fan-testlari.questions.store', $collection), 'method' => null, 'question' => null, 'questionIndex' => null, 'optionDefaults' => $optionDefaults])
+                        </div>
+                        @foreach($questions as $index => $question)
+                            <div data-q-pane="{{ $index }}" hidden>
+                                @include('teacher.fan-testlari._question-form', ['action' => route('teacher.fan-testlari.questions.update', [$collection, $index]), 'method' => 'PUT', 'question' => $question, 'questionIndex' => $index, 'optionDefaults' => $optionDefaults])
+                                <form method="POST" action="{{ route('teacher.fan-testlari.questions.destroy', [$collection, $index]) }}" onsubmit="return confirm('Bu savolni o\'chirishni tasdiqlaysizmi?')" class="bl-q-del">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="bl-btn bl-btn-bad bl-btn-sm">Savolni o'chirish</button>
+                                </form>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
             </div>
+
         @else
             <div class="bl-empty">
                 <b>Avval test to'plamini saqlang</b>
@@ -825,6 +902,54 @@
         document.addEventListener('keydown', ev => {
             if (ev.key === 'Escape') modal.classList.remove('is-open');
         });
+    })();
+    </script>
+
+
+    <script>
+    (() => {
+        const modal = document.getElementById('qModal');
+        if (!modal) return;
+
+        const panes = modal.querySelectorAll('[data-q-pane]');
+        const title = document.getElementById('qModalTitle');
+        const badge = document.getElementById('qModalNo');
+
+        function open(key, label) {
+            panes.forEach(pane => { pane.hidden = pane.dataset.qPane !== key; });
+            title.textContent = key === 'new' ? 'Yangi savol' : (label || 'Savolni tahrirlash');
+            badge.textContent = key === 'new' ? '+' : (Number(key) + 1);
+            modal.classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+            // Fokus savol matniga — darrov yozishni boshlash mumkin
+            const active = modal.querySelector('[data-q-pane]:not([hidden]) [name="prompt"]');
+            if (active) setTimeout(() => active.focus(), 60);
+        }
+
+        function close() {
+            modal.classList.remove('is-open');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('click', ev => {
+            const slot = ev.target.closest ? ev.target.closest('[data-q-open]') : null;
+            if (slot) {
+                const key = slot.dataset.qOpen;
+                const no = slot.querySelector('.bl-slot-no');
+                open(key, key === 'new' ? null : (no ? no.textContent.trim() : null));
+                return;
+            }
+            if (ev.target === modal || ev.target.id === 'qModalClose') close();
+        });
+
+        document.addEventListener('keydown', ev => {
+            if (ev.key === 'Escape' && modal.classList.contains('is-open')) close();
+        });
+
+        // Tekshiruvda o'tmagan forma bo'lsa oyna ochiq qoladi
+        @if($errors->any())
+            open('new');
+        @endif
     })();
     </script>
 

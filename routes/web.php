@@ -1604,6 +1604,9 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::post('/', [FanTestiController::class, 'store'])->name('store');
                 Route::get('/{fanTesti}/edit', [FanTestiController::class, 'edit'])->name('edit');
                 Route::put('/{fanTesti}', [FanTestiController::class, 'update'])->name('update');
+                Route::post('/{fanTesti}/import/preview', [FanTestiController::class, 'importPreview'])->name('import.preview');
+                Route::post('/{fanTesti}/import', [FanTestiController::class, 'importStore'])->name('import.store');
+                Route::post('/{fanTesti}/questions/{question}/answer', [FanTestiController::class, 'setQuestionAnswer'])->name('questions.answer');
                 Route::post('/{fanTesti}/questions', [FanTestiController::class, 'storeQuestion'])->name('questions.store');
                 Route::put('/{fanTesti}/questions/{question}', [FanTestiController::class, 'updateQuestion'])->name('questions.update');
                 Route::delete('/{fanTesti}/questions/{question}', [FanTestiController::class, 'destroyQuestion'])->name('questions.destroy');

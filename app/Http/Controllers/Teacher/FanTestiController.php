@@ -179,6 +179,338 @@ class FanTestiController extends Controller
         return back()->with('success', 'Savol yangilandi.');
     }
 
+    /**
+     * Word fayldan savollarni o'qib, tekshirish uchun qaytaradi (saqlamaydi).
+     *
+     * Kutilgan tuzilish:
+     *   1.
+     *   • UZ: savol matni
+     *   • RU: текст вопроса
+     *   • EN: question text
+     *   ○ A) uz variant / ru variant / en variant
+     *   ○ B) ...
+     *   Pathoma: ...            ← manba qatori, tashlab ketiladi
+     *
+     * To'g'ri javob faylda belgilanmagani uchun har savol "javob kutilmoqda"
+     * holatida keladi — o'qituvchi ro'yxatda bir bosishda belgilaydi.
+     */
+    public function importPreview(Request $request, FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $request->validate([
+            'document' => ['required', 'file', 'mimes:docx', 'max:20480'],
+        ], [], ['document' => 'Word fayl']);
+
+        try {
+            $parsed = $this->parseQuestionDocument($request->file('document')->getRealPath());
+        } catch (\Throwable $exception) {
+            return response()->json([
+                'error' => 'Faylni o\'qib bo\'lmadi: ' . $exception->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'questions' => $parsed['questions'],
+            'warnings' => $parsed['warnings'],
+            'count' => count($parsed['questions']),
+        ]);
+    }
+
+    /** Tekshiruvdan o'tgan savollarni to'plamga qo'shadi. */
+    public function importStore(Request $request, FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $data = $request->validate([
+            'questions_json' => ['required', 'string', 'max:4000000'],
+        ]);
+
+        $incoming = json_decode($data['questions_json'], true);
+        if (!is_array($incoming) || !$incoming) {
+            return response()->json(['error' => 'Import qilinadigan savol topilmadi.'], 422);
+        }
+
+        $questions = $fanTesti->questions ?? [];
+        $added = 0;
+
+        foreach ($incoming as $item) {
+            $prompt = trim((string) ($item['prompt'] ?? ''));
+            if ($prompt === '') {
+                continue;
+            }
+
+            $options = [];
+            foreach ((array) ($item['options'] ?? []) as $option) {
+                $text = trim((string) ($option['text'] ?? ''));
+                if ($text === '') {
+                    continue;
+                }
+                $options[] = [
+                    'text' => $text,
+                    'text_ru' => trim((string) ($option['text_ru'] ?? '')),
+                    'text_en' => trim((string) ($option['text_en'] ?? '')),
+                    'is_correct' => false,
+                ];
+            }
+            if (count($options) < 2) {
+                continue;
+            }
+
+            $questions[] = [
+                'type' => 'single_choice',
+                'prompt' => $prompt,
+                'prompt_ru' => trim((string) ($item['prompt_ru'] ?? '')),
+                'prompt_en' => trim((string) ($item['prompt_en'] ?? '')),
+                'image_path' => null,
+                'helper_text' => '',
+                'helper_text_ru' => '',
+                'helper_text_en' => '',
+                'correct_explanation' => '',
+                'correct_explanation_ru' => '',
+                'correct_explanation_en' => '',
+                'correct_answer_text' => null,
+                'correct_answer_text_ru' => null,
+                'correct_answer_text_en' => null,
+                'case_sensitive' => false,
+                'points' => 1,
+                'is_active' => true,
+                // To'g'ri javob hali belgilanmagan — kiosk bunday savolni
+                // talabaga ko'rsatmaydi, ro'yxatda esa qizil belgi turadi.
+                'needs_answer' => true,
+                'options' => $options,
+                'pairs' => [],
+                'steps' => [],
+            ];
+            $added++;
+        }
+
+        if (!$added) {
+            return response()->json(['error' => 'Yaroqli savol topilmadi (har savolda kamida 2 ta variant kerak).'], 422);
+        }
+
+        $fanTesti->update([
+            'questions' => $questions,
+            'updated_by' => $this->teacher()->id,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'added' => $added,
+            'message' => $added . ' ta savol qo\'shildi. Endi har biriga to\'g\'ri javobni belgilang.',
+        ]);
+    }
+
+    /** Bitta savolning to'g'ri variantini belgilaydi (ro'yxatdan tez tanlash). */
+    public function setQuestionAnswer(Request $request, FanTesti $fanTesti, int $question)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $data = $request->validate([
+            'option_number' => ['required', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $questions = $fanTesti->questions ?? [];
+        abort_unless(array_key_exists($question, $questions), 404);
+
+        $options = $questions[$question]['options'] ?? [];
+        $picked = (int) $data['option_number'];
+        if ($picked < 1 || $picked > count($options)) {
+            return response()->json(['error' => 'Bunday variant yo\'q.'], 422);
+        }
+
+        foreach ($options as $index => $option) {
+            $options[$index]['is_correct'] = ($index + 1) === $picked;
+        }
+
+        $questions[$question]['options'] = $options;
+        $questions[$question]['needs_answer'] = false;
+
+        $fanTesti->update([
+            'questions' => $questions,
+            'updated_by' => $this->teacher()->id,
+        ]);
+
+        return response()->json(['ok' => true, 'option_number' => $picked]);
+    }
+
+    /**
+     * Word hujjatidan savollarni ajratadi.
+     *
+     * Qatorlar ketma-ket o'qiladi: raqamli qator yangi savol boshlaydi,
+     * "UZ:/RU:/EN:" savol matnini beradi, "A)" ko'rinishidagi qator variant
+     * bo'ladi. Variant matni "/" bilan uch tilga bo'linadi. Naqshga tushmagan
+     * qator oldingi maydonning davomi sifatida qo'shiladi — Word'da uzun
+     * savol bir necha xatboshga bo'linib ketishi mumkin.
+     */
+    private function parseQuestionDocument(string $path): array
+    {
+        $document = \PhpOffice\PhpWord\IOFactory::load($path);
+
+        $lines = [];
+        foreach ($document->getSections() as $section) {
+            foreach ($section->getElements() as $element) {
+                foreach (explode("\n", $this->docxText($element)) as $piece) {
+                    $lines[] = $piece;
+                }
+            }
+        }
+
+        $questions = [];
+        $warnings = [];
+        $current = null;
+        $lastField = null;
+
+        $flush = function () use (&$questions, &$current, &$warnings) {
+            if (!$current) {
+                return;
+            }
+            if (trim($current['prompt']) !== '' && count($current['options']) >= 2) {
+                $questions[] = $current;
+            } elseif (trim($current['prompt']) !== '') {
+                $warnings[] = 'Tashlab ketildi (variant yetarli emas): '
+                    . mb_substr(trim($current['prompt']), 0, 60);
+            }
+            $current = null;
+        };
+
+        $start = function () use (&$current) {
+            $current = ['prompt' => '', 'prompt_ru' => '', 'prompt_en' => '', 'options' => []];
+        };
+
+        foreach ($lines as $raw) {
+            $line = trim(preg_replace('/\s+/u', ' ', (string) $raw));
+            if ($line === '') {
+                continue;
+            }
+
+            // Ro'yxat belgilarini olib tashlaymiz (•, ○, ●, – va boshqalar)
+            $line = trim(preg_replace('/^[\x{2022}\x{25CB}\x{25CF}\x{25AA}\x{00B7}\x{2013}\x{2014}\-\*o]\s+/u', '', $line));
+            if ($line === '') {
+                continue;
+            }
+
+            // Manba qatori saqlanmaydi
+            if (preg_match('/^(pathoma|manba|source|reference|izoh)\s*:/iu', $line)) {
+                continue;
+            }
+
+            // Yolg'iz raqam — yangi savol
+            if (preg_match('/^\d+\s*[\.\)]\s*$/u', $line)) {
+                $flush();
+                $start();
+                $lastField = null;
+                continue;
+            }
+
+            // Raqam va matn bir qatorda: raqamni olib tashlaymiz
+            if (preg_match('/^\d+\s*[\.\)]\s+(.+)$/u', $line, $m)) {
+                $flush();
+                $start();
+                $lastField = null;
+                $line = trim($m[1]);
+            }
+
+            // Til qatori
+            if (preg_match('/^(uz|o[\x{2018}\x{2019}\']?z|ru|en|eng)\s*[:\-\x{2013}]\s*(.+)$/iu', $line, $m)) {
+                $lang = mb_strtolower($m[1]);
+                $text = trim($m[2]);
+
+                // Oldingi savol tugagan bo'lsa (variantlari bor) — yangisi boshlanadi
+                if ($current && $current['options'] && str_starts_with($lang, 'u')) {
+                    $flush();
+                }
+                if (!$current) {
+                    $start();
+                }
+
+                $field = str_starts_with($lang, 'r') ? 'prompt_ru'
+                    : (str_starts_with($lang, 'e') ? 'prompt_en' : 'prompt');
+                $current[$field] = $current[$field] === '' ? $text : $current[$field] . ' ' . $text;
+                $lastField = $field;
+                continue;
+            }
+
+            // Variant: "A) matn" yoki "A. matn"
+            if ($current && preg_match('/^([A-Za-z\x{0410}-\x{042F}])\s*[\.\)]\s*(.+)$/u', $line, $m)) {
+                $parts = preg_split('~\s*/\s*~u', trim($m[2]));
+                $parts = array_values(array_filter(array_map('trim', $parts), fn ($p) => $p !== ''));
+
+                if (count($parts) > 3) {
+                    // "/" matn ichida ham bo'lishi mumkin — bo'lmasdan qoldiramiz
+                    $current['options'][] = ['text' => trim($m[2]), 'text_ru' => '', 'text_en' => ''];
+                    $warnings[] = 'Variant tillarga bo\'linmadi: ' . mb_substr(trim($m[2]), 0, 50);
+                } else {
+                    $current['options'][] = [
+                        'text' => $parts[0] ?? '',
+                        'text_ru' => $parts[1] ?? '',
+                        'text_en' => $parts[2] ?? '',
+                    ];
+                }
+                $lastField = 'option:' . (count($current['options']) - 1);
+                continue;
+            }
+
+            // Naqshga tushmadi — oldingi maydonning davomi
+            if ($current && $lastField) {
+                if (str_starts_with($lastField, 'option:')) {
+                    $index = (int) substr($lastField, 7);
+                    if (isset($current['options'][$index])) {
+                        $current['options'][$index]['text'] .= ' ' . $line;
+                    }
+                } else {
+                    $current[$lastField] .= ' ' . $line;
+                }
+            }
+        }
+
+        $flush();
+
+        return ['questions' => $questions, 'warnings' => array_slice($warnings, 0, 20)];
+    }
+
+    /** PhpWord elementidan matn (ichma-ich elementlar bilan). */
+    private function docxText($element): string
+    {
+        if (method_exists($element, 'getText')) {
+            $text = $element->getText();
+            if (is_string($text)) {
+                return $text;
+            }
+            if (is_object($text) && method_exists($text, 'getText')) {
+                return (string) $text->getText();
+            }
+        }
+
+        if (method_exists($element, 'getTextObject')) {
+            $inner = $element->getTextObject();
+            if ($inner) {
+                return $this->docxText($inner);
+            }
+        }
+
+        $parts = [];
+
+        if (method_exists($element, 'getElements')) {
+            foreach ($element->getElements() as $child) {
+                $parts[] = $this->docxText($child);
+            }
+            // Xatboshi ichidagi bo'laklar bitta qator: bo'shliqsiz birlashadi
+            return implode('', $parts);
+        }
+
+        if (method_exists($element, 'getRows')) {
+            foreach ($element->getRows() as $row) {
+                foreach ($row->getCells() as $cell) {
+                    $parts[] = $this->docxText($cell);
+                }
+            }
+            return implode("\n", $parts);
+        }
+
+        return '';
+    }
+
     public function destroyQuestion(FanTesti $fanTesti, int $question)
     {
         $this->authorizeCollection($fanTesti);

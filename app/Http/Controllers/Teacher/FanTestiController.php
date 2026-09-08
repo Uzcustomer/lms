@@ -9,6 +9,7 @@ use App\Models\CurriculumSubjectTeacher;
 use App\Models\FanTesti;
 use App\Models\Group;
 use App\Models\FanTestiAttempt;
+use App\Models\FanTestiAttemptAnswer;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -248,6 +249,94 @@ class FanTestiController extends Controller
         ]);
 
         return back()->with('success', "To'plam fanga biriktirildi. Endi uni talabalarga ochish mumkin.");
+    }
+
+    /**
+     * O'qituvchi uchun sinov ko'rinishi: testni talaba ko'rgan holicha
+     * ochadi va ishlab ko'rish imkonini beradi.
+     *
+     * Hech narsa saqlanmaydi — urinish ham, javob ham bazaga yozilmaydi,
+     * jurnalda ko'rinmaydi. Shu sababli fani biriktirilmagan qoralamani ham
+     * sinab ko'rsa bo'ladi.
+     */
+    public function preview(FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $questions = $this->previewQuestions($fanTesti);
+        if ($questions->isEmpty()) {
+            return back()->with('error', "Bu to'plamda hali savol yo'q.");
+        }
+
+        return view('kiosk.fan-testi.take', [
+            'test' => $fanTesti->load('subject'),
+            'attempt' => $this->previewAttempt($fanTesti),
+            'questions' => $questions->values(),
+            'secondsLeft' => max(1, (int) $fanTesti->duration_minutes) * 60,
+            'preview' => true,
+        ]);
+    }
+
+    /** Sinov javoblarini baholaydi va natijani ko'rsatadi (saqlamaydi). */
+    public function previewSubmit(Request $request, FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $questions = $this->previewQuestions($fanTesti)->values();
+        $given = (array) $request->input('answers', []);
+
+        $kiosk = app(\App\Http\Controllers\FanTestiKioskController::class);
+        $rows = $kiosk->gradePreview($questions->all(), $given);
+
+        $answers = collect($rows)->map(fn ($row) => new FanTestiAttemptAnswer($row));
+        $correct = $answers->where('is_correct', true)->count();
+        $score = (int) $answers->sum('points_earned');
+        $total = (int) $answers->sum('points_possible');
+        $percent = $total > 0 ? round($score / $total * 100, 1) : 0.0;
+
+        $attempt = $this->previewAttempt($fanTesti);
+        $attempt->status = 'submitted';
+        $attempt->questions_count = $questions->count();
+        $attempt->answers_count = $answers->whereNotNull('answered_at')->count();
+        $attempt->correct_count = $correct;
+        $attempt->total_points = $total;
+        $attempt->score = $score;
+        $attempt->percent = $percent;
+        $attempt->is_passed = $percent >= (float) ($fanTesti->pass_percent ?? 60);
+        $attempt->submitted_at = now();
+        $attempt->duration_seconds = null;
+        $attempt->setRelation('answers', $answers);
+
+        return view('kiosk.fan-testi.result', [
+            'test' => $fanTesti->load('subject'),
+            'attempt' => $attempt,
+            'preview' => true,
+        ]);
+    }
+
+    /** Sinov uchun saqlanmaydigan urinish namunasi. */
+    private function previewAttempt(FanTesti $fanTesti): FanTestiAttempt
+    {
+        $teacher = $this->teacher();
+
+        $attempt = new FanTestiAttempt([
+            'fan_testi_id' => $fanTesti->id,
+            'student_name' => $teacher->short_name ?: $teacher->full_name,
+            'student_id_number' => 'Sinov',
+            'group_name' => null,
+            'status' => 'in_progress',
+        ]);
+        $attempt->questions_snapshot = $this->previewQuestions($fanTesti)->values()->all();
+
+        return $attempt;
+    }
+
+    /** Sinovda faol savollar (javobi belgilanmagani ham ko'rsatiladi). */
+    private function previewQuestions(FanTesti $fanTesti)
+    {
+        return collect($fanTesti->questions ?? [])
+            ->filter(fn ($question) => ($question['is_active'] ?? true) !== false)
+            ->values();
     }
 
     public function destroy(FanTesti $fanTesti)

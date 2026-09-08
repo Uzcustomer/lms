@@ -269,18 +269,41 @@ class FanTestiKioskController extends Controller
      */
     private function gradeAnswers(FanTestiAttempt $attempt, array $answers): void
     {
-        $questions = collect($attempt->questions_snapshot ?? []);
+        $rows = $this->buildAnswerRows($attempt->questions_snapshot ?? [], $answers);
 
-        DB::transaction(function () use ($attempt, $questions, $answers) {
+        DB::transaction(function () use ($attempt, $rows) {
             $attempt->answers()->delete();
 
+            foreach ($rows as $row) {
+                FanTestiAttemptAnswer::create($row + ['attempt_id' => $attempt->id]);
+            }
+        });
+    }
+
+    /**
+     * Javoblarni baholaydi va yozuvlar massivini qaytaradi (saqlamaydi).
+     *
+     * Saqlash ham, o'qituvchining ko'rib chiqishi ham shu yerdan o'tadi —
+     * qoida ikki joyda ajralib ketmasligi uchun.
+     */
+    /** O'qituvchi sinovida ham shu baholash ishlatiladi. */
+    public function gradePreview(array $snapshot, array $answers): array
+    {
+        return $this->buildAnswerRows($snapshot, $answers);
+    }
+
+    private function buildAnswerRows(array $snapshot, array $answers): array
+    {
+        $questions = collect($snapshot);
+        $rows = [];
+
+        {
             foreach ($questions as $index => $question) {
                 $given = $answers[$index] ?? null;
                 $points = max(1, (int) ($question['points'] ?? 1));
                 $type = $question['type'] ?? 'single_choice';
 
                 $row = [
-                    'attempt_id' => $attempt->id,
                     'question_index' => (int) $index,
                     'question_type' => $type,
                     'question_prompt' => $question['prompt'] ?? '',
@@ -401,9 +424,11 @@ class FanTestiKioskController extends Controller
                     $row['points_earned'] = $points;
                 }
 
-                FanTestiAttemptAnswer::create($row);
+                $rows[] = $row;
             }
-        });
+        }
+
+        return $rows;
     }
 
     private function finalize(FanTestiAttempt $attempt, string $status): void

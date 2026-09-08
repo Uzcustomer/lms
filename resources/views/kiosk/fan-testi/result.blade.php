@@ -115,6 +115,7 @@
             </div>
             <div class="r-sub">
                 {{ $attempt->student_name }}@if($attempt->group_name) · {{ $attempt->group_name }}@endif
+                @if($preview ?? false) · <b>sinov ko'rinishi, natija saqlanmadi</b>@endif
             </div>
 
             @if($attempt->status === 'expired')

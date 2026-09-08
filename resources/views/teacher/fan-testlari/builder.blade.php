@@ -594,6 +594,11 @@
                                 </td>
                                 <td style="text-align:right">
                                     <div class="bl-acts">
+                                        @if($item->questionCount() > 0)
+                                            <a href="{{ route('teacher.fan-testlari.preview', $item) }}" target="_blank"
+                                               class="bl-btn bl-btn-ghost bl-btn-sm"
+                                               title="Testni talaba ko'radigan holicha sinab ko'rish (natija saqlanmaydi)">Sinash</a>
+                                        @endif
                                         @if($isDraft)
                                             <button type="button" class="bl-btn bl-btn-main bl-btn-sm bl-attach"
                                                     data-attach-id="{{ $item->id }}"

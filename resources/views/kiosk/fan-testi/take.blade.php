@@ -191,13 +191,14 @@
 @endsection
 
 @section('content')
-    <form method="POST" action="{{ route('kiosk.fan-testi.submit', [$test, $attempt]) }}" id="testForm">
+    @php $isPreview = $preview ?? false; @endphp
+    <form method="POST" action="{{ $isPreview ? route('teacher.fan-testlari.preview.submit', $test) : route('kiosk.fan-testi.submit', [$test, $attempt]) }}" id="testForm">
         @csrf
 
         <div class="t-bar">
             <div class="t-who">
                 <b>{{ $attempt->student_name }}</b>
-                <span>{{ $attempt->student_id_number }}@if($attempt->group_name) &nbsp;·&nbsp; {{ $attempt->group_name }}@endif</span>
+                <span>@if($isPreview)Sinov ko'rinishi — javoblar saqlanmaydi@else{{ $attempt->student_id_number }}@if($attempt->group_name) &nbsp;·&nbsp; {{ $attempt->group_name }}@endif @endif</span>
             </div>
             <div class="t-right">
                 <div class="t-progress">
@@ -234,7 +235,7 @@
                     @endif
 
                     @if(!empty($question['image_path']))
-                        <img class="q-img" src="{{ route('fan-testi.attempt-image', [$attempt, $index]) }}" alt="Savol rasmi" loading="lazy">
+                        <img class="q-img" src="{{ $isPreview ? route('fan-testi.question-image', [$test, $index]) : route('fan-testi.attempt-image', [$attempt, $index]) }}" alt="Savol rasmi" loading="lazy">
                     @endif
 
                     @php $qType = $question['type'] ?? 'single_choice'; @endphp

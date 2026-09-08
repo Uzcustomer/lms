@@ -393,14 +393,31 @@
     .bl-t-draft { color: var(--warn); font-size: 12.5px; font-weight: 500; }
 
     /* Fan biriktirish oynasi */
-    .bl-modal { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 39, 72, .55); }
+    .bl-modal {
+        position: fixed; inset: 0; z-index: 200; display: none;
+        align-items: center; justify-content: center; padding: 20px;
+        background: rgba(15, 39, 72, .55);
+    }
     .bl-modal.is-open { display: flex; }
-    .bl-modal-box { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 6px; background: #fff; box-shadow: 0 20px 50px rgba(15, 39, 72, .3); }
-    .bl-modal-head { padding: 16px 20px; border-bottom: 1px solid var(--line-soft); background: linear-gradient(180deg, #fbfcfe, #f5f8fc); }
-    .bl-modal-head h3 { margin: 0; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; }
-    .bl-modal-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-    .bl-modal-body { display: grid; gap: 14px; padding: 18px 20px; }
-    .bl-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 20px; border-top: 1px solid var(--line-soft); background: #fafcfe; }
+    .bl-modal-box {
+        width: min(600px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
+        border-radius: 12px; background: #fff; box-shadow: 0 24px 60px rgba(15, 39, 72, .35);
+    }
+    .bl-modal-head {
+        display: flex; align-items: center; gap: 13px;
+        padding: 17px 22px; border-bottom: 1px solid var(--line-soft);
+        background: linear-gradient(180deg, #fdfefe, #f4f8fc);
+    }
+    .bl-modal-head h3 { margin: 0; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16.5px; font-weight: 600; }
+    .bl-modal-head p { margin: 3px 0 0; color: var(--ink-soft); font-size: 12px; }
+    .bl-modal-icon {
+        flex: none; display: grid; place-items: center; width: 38px; height: 38px;
+        border-radius: 10px; background: linear-gradient(160deg, var(--navy-soft), var(--navy)); color: #fff;
+        box-shadow: 0 4px 12px rgba(15, 39, 72, .22);
+    }
+    .bl-modal-icon svg { width: 18px; height: 18px; }
+    .bl-modal-body { display: grid; gap: 16px; padding: 20px 22px; }
+    .bl-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--line-soft); background: #fafcfe; }
     .bl-btn-warn { border-color: #e5cfa4; background: #fff; color: var(--warn); }
     .bl-btn-warn:hover { background: var(--warn-bg); }
     .bl-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; white-space: nowrap; }
@@ -867,16 +884,19 @@
 </script>
 
     {{-- Qoralamaga fan biriktirish --}}
-    <div class="bl-modal" id="attachModal">
+    <div class="bl bl-modal" id="attachModal">
         <form method="POST" action="" class="bl-modal-box" id="attachForm">
             @csrf
             <div class="bl-modal-head">
-                <h3>To'plamni fanga biriktirish</h3>
-                <p>Fan tanlangach guruhlar aniqlanadi va to'plamni talabalarga ochish mumkin bo'ladi.</p>
+                <span class="bl-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></span>
+                <div>
+                    <h3>To'plamni fanga biriktirish</h3>
+                    <p>Fan tanlangach guruhlar aniqlanadi va to'plamni talabalarga ochish mumkin bo'ladi.</p>
+                </div>
             </div>
             <div class="bl-modal-body">
                 <div class="bl-field">
-                    <label for="attachSubject">Bu semestrda o'tadigan fanlaringiz</label>
+                    <label for="attachSubject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H19v15H5.5A2.5 2.5 0 0 0 3 20.5V5.5Z"/><path d="M3 20.5A2.5 2.5 0 0 1 5.5 18H19v3H5.5A2.5 2.5 0 0 1 3 20.5Z"/></svg> Bu semestrda o'tadigan fanlaringiz</label>
                     <select name="curriculum_subject_id" id="attachSubject" required>
                         <option value="">Fan tanlang</option>
                         @foreach($subjects as $subject)
@@ -897,13 +917,13 @@
                     @endif
                 </div>
                 <div class="bl-field">
-                    <label for="attachName">To'plam nomi</label>
+                    <label for="attachName"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg> To'plam nomi</label>
                     <input id="attachName" name="name" required maxlength="255" placeholder="Masalan: 1-mavzu">
                 </div>
             </div>
             <div class="bl-modal-foot">
                 <button type="button" class="bl-btn bl-btn-ghost" id="attachCancel">Bekor qilish</button>
-                <button type="submit" class="bl-btn bl-btn-main">Biriktirish</button>
+                <button type="submit" class="bl-btn bl-btn-main"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Biriktirish</button>
             </div>
         </form>
     </div>

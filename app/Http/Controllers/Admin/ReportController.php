@@ -12543,6 +12543,7 @@ class ReportController extends Controller
             $langLabelMap = ['uz' => "o'z", 'rus' => 'rus', 'ing' => 'ing'];
             $blocks[$blockKey]['courses'][$lvlKey]['groups'][] = [
                 'group_id'   => $r->group_id,
+                'raw_name'   => (string) $r->group_name, // HEMISdagi asl nom (o'zgartirilmagan)
                 'name'       => $nameNoLang,
                 'base'       => $base,
                 'letter'     => $letter,
@@ -13488,6 +13489,7 @@ class ReportController extends Controller
                 'letter' => $g['letter'],
                 'count'  => $g['count'],
                 'name'   => $g['name'], // HEMISdagi haqiqiy nom (til belgisisiz)
+                'raw'    => $g['raw_name'] ?? null, // HEMISdagi asl nom (aynan)
                 'gid'    => (int) ($g['group_id'] ?? 0), // barqaror HEMIS guruh ID (sun'iy: <0)
             ];
         }
@@ -13704,6 +13706,9 @@ class ReportController extends Controller
             $row = ['name' => $name . $suffix, 'count' => (int) $m['count']];
             if (!empty($m['gid']) && (int) $m['gid'] > 0) {
                 $row['gid'] = (int) $m['gid'];
+            }
+            if (!empty($m['raw'])) {
+                $row['hemis_name'] = $m['raw'];
             }
             $out[] = $row;
         }

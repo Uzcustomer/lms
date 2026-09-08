@@ -270,7 +270,7 @@
                                 <span style="font-size:11.5px;color:#86198f;">Guruhni ushlab (⠿) boshqa oqimga yoki "Yangi oqim" maydoniga tashlang — jami avtomatik yangilanadi. Talaba soni qo'lda kiritilmaydi — bazadan (HEMISdan) avtomatik olinadi. Boshqa fakultetga tashlansa, guruh "mehmon" deb belgilanadi.</span>
                             </div>
                             <div id="mn-actions" style="display:none;padding:8px 20px;background:#fbfdff;border-bottom:1px solid #e2e8f0;align-items:center;gap:8px;flex-wrap:wrap;">
-                                <button type="button" id="mn-hemis-groups" class="af-btn af-load" onclick="hemisPull('groups')" title="HEMISdan guruhlar ro'yxatini yangilash (fon rejimida ishlaydi)">⇩ Guruhlarni HEMISdan tortish</button>
+                                <button type="button" id="mn-hemis-groups" class="af-btn af-load" onclick="hemisPull('groups')" title="HEMISdagi BARCHA faol guruhlarni (asl nomi bilan) tortib, fakultet → kurs → til bo'yicha oqimlarga joylaydi. Ekrandagi joriy joylashuv almashtiriladi (↶ Bekor qilish bilan qaytariladi)">⇩ Guruhlarni HEMISdan tortish (barchasi, fakultet/kurs/til bo'yicha)</button>
                                 <button type="button" id="mn-hemis-students" class="af-btn af-load" onclick="hemisPull('students')" title="HEMISdan talabalarni yangilash (fon rejimida, uzoqroq davom etadi)">⇩ Talabalarni HEMISdan tortish</button>
                                 <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadan yangilash: yangi guruhlar ro'yxatga qo'shiladi, mavjud guruhlardagi talaba soni HEMISdagi (bazadagi) songa yangilanadi — joylashuv o'zgarmaydi">⟳ Bazadan yangilash (yangi guruhlar + talaba sonlari)</button>
                                 <button type="button" id="mn-diag" class="af-btn" style="background:#fff;color:#0f766e;border-color:#99f6e4;" onclick="openDiagnose()" title="Tashxis: ekrandagi son ≠ bazadagi son bo'lgan guruhlar; har biri uchun HEMIS bilan jonli solishtirish va qayta tortish">🩺 Tashxis</button>
@@ -1099,7 +1099,7 @@
                             html += '<div class="mn-row lang-' + esc(rl) + '" draggable="' + (CAN_APPROVE ? 'true' : 'false') + '"'
                                   + ' data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
                                   + '<span class="mn-handle" title="Ushlab suring">⠿</span>'
-                                  + '<span class="mn-name' + (+row.gid > 0 ? ' mn-name-chk' : '') + '" title="' + esc(row.name) + (+row.gid > 0 ? ' — bosing: bazadagi talabalar ro\'yxati va tekshiruv' : '') + '"' + (+row.gid > 0 ? ' data-gid="' + (+row.gid) + '" data-cnt="' + esc(row.count) + '"' : '') + '>' + esc(row.name)
+                                  + '<span class="mn-name' + (+row.gid > 0 ? ' mn-name-chk' : '') + '" title="' + esc(row.hemis_name || row.name) + (+row.gid > 0 ? ' — bosing: bazadagi talabalar ro\'yxati va tekshiruv' : '') + '"' + (+row.gid > 0 ? ' data-gid="' + (+row.gid) + '" data-cnt="' + esc(row.count) + '"' : '') + '>' + esc(row.hemis_name || row.name)
                                   + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from || 'mehmon') + '</span>' : '') + '</span>'
                                   + '<span class="mn-cnt-ro" title="Talaba soni bazadan (HEMISdan) avtomatik olinadi' + ((+row.gid > 0 || (row.gids && row.gids.length)) ? '' : ' — bu qatorda HEMIS ID yo\'q, son yangilanmaydi') + '">' + esc(row.count)
                                   + ((+row.gid > 0 || (row.gids && row.gids.length)) ? '' : '<span class="mn-noid" title="HEMIS ID yo\'q — bashorat (soxta) guruh yoki eski yozuv; son avtomatik yangilanmaydi">?</span>') + '</span>'
@@ -1601,6 +1601,27 @@
             return removed;
         }
 
+        // HEMISdagi barcha faol guruhlarni (bazadan, asl nomi bilan) fakultet → kurs → til bo'yicha
+        // oqimlarga joylab, ekrandagi holat sifatida yuklaydi. Oldingi joylashuv "Bekor qilish" ga yoziladi.
+        function loadFromHemis(pullRes) {
+            var $st = $('#mn-hemis-status');
+            $st.css('color', '#0369a1').text('Guruhlar fakultet/kurs/til bo\'yicha joylanmoqda...');
+            $.get(DATA_URL, getFilters(false)).done(function(res) {
+                var src = res.blocks || [];
+                if (!src.length) { $st.css('color', '#b45309').text('Bazada faol guruh topilmadi — filtrlarni (ta\'lim turi, fakultet) tekshiring.'); return; }
+                if (afterState && afterState.length) mnPushUndo();
+                afterState = JSON.parse(JSON.stringify(src));
+                manualContext = null; // joriy filtrlar konteksti
+                manualKnownIds = idSetFromList(res.group_ids || []);
+                mnRecalc(); renderManual(); renderAfterBody();
+                var groups = 0, students = 0, oqims = 0;
+                afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { students += (+co.total || 0); (co.oqims || []).forEach(function(oq) { oqims++; groups += (oq.rows || []).length; }); }); });
+                var pulled = pullRes && pullRes.imported != null ? 'HEMISdan ' + pullRes.imported + ' ta guruh tortildi (yangi ' + (pullRes.created || 0) + '). ' : '';
+                $st.css('color', '#16a34a').text('✓ ' + pulled + 'Ekranga ' + groups + ' ta faol guruh (' + students + ' talaba) fakultet → kurs → til bo\'yicha ' + oqims + ' ta oqimga joylandi, nomlar HEMISdagidek. Oldingi joylashuv kerak bo\'lsa — "↶ Bekor qilish".');
+                mnFlash(groups + ' ta guruh HEMISdan joylandi');
+            }).fail(function(xhr) { $st.css('color', '#dc2626').text('Guruhlarni joylab bo\'lmadi (HTTP ' + xhr.status + ').'); });
+        }
+
         // opts: { countsOnly: faqat sonlar/ID (yangi guruh qo'shilmaydi), silent: xabarsiz, bekor qilish yozuvisiz }
         function mergeNewGroups(opts) {
             opts = opts || {};
@@ -1765,7 +1786,7 @@
         function hemisPull(what) {
             var label = what === 'groups' ? 'Guruhlar' : 'Talabalar';
             var q = what === 'groups'
-                ? "Guruhlar ro'yxati HEMISdan tortilsinmi? Bu bir necha soniya davom etadi, yangi guruhlar ekrandagi ro'yxatga avtomatik qo'shiladi."
+                ? "HEMISdagi BARCHA faol guruhlar tortilib, fakultet → kurs → til bo'yicha oqimlarga joylanadi (nomlar HEMISdagidek). Ekrandagi hozirgi joylashuv almashtiriladi — kerak bo'lsa \"↶ Bekor qilish\" bilan qaytarasiz. Davom etilsinmi?"
                 : "Talabalar HEMISdan tortilsinmi? Jarayon fon rejimida ishlaydi va bir necha daqiqa davom etishi mumkin.";
             if (!confirm(q)) return;
             var $btn = $(what === 'groups' ? '#mn-hemis-groups' : '#mn-hemis-students').prop('disabled', true).css('opacity', 0.6);
@@ -1776,8 +1797,8 @@
                         ? ' Bazada ' + res.groups_total + ' ta guruh' + (res.groups_updated ? ' (oxirgi yangilanish: ' + res.groups_updated + ')' : '') + '.'
                         : '';
                     $('#mn-hemis-status').css('color', '#16a34a').text('✓ ' + (res.message || 'Boshlandi.') + extra);
-                    // Guruhlar sinxron tortildi — yangilarini darhol ekrandagi ro'yxatga qo'shamiz
-                    if (what === 'groups' && res.sync) mergeNewGroups();
+                    // Guruhlar sinxron tortildi — HEMISdagi barcha faol guruhlarni fakultet/kurs/til bo'yicha ekranga yuklaymiz
+                    if (what === 'groups' && res.sync) loadFromHemis(res);
                     // Talabalar — fon rejimida: holatini kuzatamiz, tugagach sonlar yangilanadi
                     if (what === 'students') { stLastState = 'queued'; clearTimeout(stPollTimer); stPollTimer = setTimeout(function() { pollStudentImport(true); }, 3000); }
                 })

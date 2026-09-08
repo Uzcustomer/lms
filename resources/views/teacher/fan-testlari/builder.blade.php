@@ -185,11 +185,13 @@
     .bl-lang:hover { color: var(--navy); }
     .bl-lang.is-on { background: var(--navy); color: #fff; }
 
-    .bl-qf-top { display: grid; grid-template-columns: minmax(0, 1fr) 186px; gap: 16px; }
-    .bl-qf-media { display: grid; gap: 9px; align-content: start; }
+    .bl-qf-top { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 18px; align-items: stretch; }
+    /* Rasm ustuni ham yorliq bilan boshlanadi — ikki ustun bir tekisda turadi */
+    .bl-qf-media { display: grid; grid-template-rows: auto 1fr; gap: 7px; }
+    .bl-qf-media .bl-drop { height: 100%; }
     .bl-drop {
-        position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-        min-height: 96px; padding: 12px; border: 1px dashed #c4d0e0; border-radius: 5px;
+        position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+        min-height: 96px; padding: 12px; border: 1px dashed #c4d0e0; border-radius: 9px;
         background: #fafcfe; text-align: center; cursor: pointer; transition: border-color .16s, background .16s;
     }
     .bl-drop:hover { border-color: var(--navy-soft); background: #f1f5fa; }
@@ -279,7 +281,7 @@
     }
 
     /* ---- Savol katakchalari ---- */
-    .bl-slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .bl-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
     .bl-slot {
         display: flex; flex-direction: column; gap: 7px; min-height: 96px;
         padding: 14px 16px; border: 1px solid var(--line); border-radius: 11px;
@@ -288,15 +290,15 @@
     }
     .bl-slot:hover { border-color: var(--navy-soft); box-shadow: 0 6px 18px rgba(15, 39, 72, .1); transform: translateY(-1px); }
     .bl-slot-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .bl-slot-no { color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 13px; font-weight: 600; }
+    .bl-slot-no { color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; }
 
     /* Bo'sh katakcha: yashil doiradagi + */
     .bl-slot.is-empty {
-        align-items: center; justify-content: center; gap: 10px;
+        flex-direction: row; align-items: center; justify-content: space-between; gap: 14px;
         border-style: dashed; border-color: #cfdaea; background: #fbfdff;
     }
-    .bl-slot.is-empty .bl-slot-top { width: 100%; justify-content: center; }
-    .bl-slot.is-empty .bl-slot-no { color: var(--muted); font-weight: 500; }
+    .bl-slot.is-empty .bl-slot-top { flex: 1 1 auto; min-width: 0; justify-content: flex-start; }
+    .bl-slot.is-empty .bl-slot-no { color: var(--ink-soft); }
     .bl-slot.is-empty:hover { border-color: var(--ok); background: #f4fbf8; }
     .bl-slot-plus {
         display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
@@ -323,17 +325,18 @@
     .bl-slot-text.is-empty { color: var(--muted); font-style: italic; }
     .bl-slot-meta { margin-top: auto; color: #5c7d6e; font-size: 11px; font-weight: 600; }
 
-    @media (max-width: 780px) { .bl-slots { grid-template-columns: 1fr; } }
+    @media (max-width: 1100px) { .bl-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .bl-slots { grid-template-columns: 1fr; } }
 
     /* ---- Savol oynasi ---- */
     .bl-qmodal {
         position: fixed; inset: 0; z-index: 220; display: none;
-        align-items: flex-start; justify-content: center; padding: 24px 16px;
+        align-items: flex-start; justify-content: center; padding: 22px 14px;
         background: rgba(15, 39, 72, .55); overflow-y: auto;
     }
     .bl-qmodal.is-open { display: flex; }
     .bl-qmodal-box {
-        width: min(1040px, 100%); overflow: hidden; border-radius: 12px; background: #fff;
+        width: min(1280px, 100%); overflow: hidden; border-radius: 12px; background: #fff;
         box-shadow: 0 24px 60px rgba(15, 39, 72, .35);
     }
     .bl-qmodal-head {
@@ -585,7 +588,9 @@
 
             {{-- 02 · Savollar katakchalari --}}
             @php
-                $slotCount = max(20, count($questions));
+                // Kamida 20 ta, lekin to'ldirilganidan keyin ham bo'sh
+                // katakcha qolsin — 25-30 savolli to'plamlar uchun.
+                $slotCount = max(20, count($questions) + 5);
                 $typeLabels = [
                     'single_choice' => "Bitta to'g'ri javob",
                     'multiple_choice' => "Bir nechta to'g'ri javob",
@@ -602,7 +607,11 @@
                         <h2>Savollar</h2>
                         <p>Bo'sh katakchadagi <b>+</b> ni bosing — savol oynasi ochiladi.</p>
                     </div>
-                    <span class="bl-panel-count">{{ count($questions) }} / {{ $slotCount }}</span>
+                    <span class="bl-panel-count" id="slotCount">{{ count($questions) }} / {{ $slotCount }}</span>
+                    <button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" id="addSlots" style="margin-left:10px">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                        Katakcha
+                    </button>
                 </div>
 
                 <div class="bl-panel-body">
@@ -945,6 +954,30 @@
         document.addEventListener('keydown', ev => {
             if (ev.key === 'Escape' && modal.classList.contains('is-open')) close();
         });
+
+        // Katakcha qo'shish: oxirgi bo'sh katakcha nusxalanadi va
+        // raqami yangilanadi. Katakchalar sof ko'rinish uchun — savol
+        // qaysi biri bosilsa ham navbatdagi bo'sh joyga tushadi.
+        const addBtn = document.getElementById('addSlots');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                const grid = document.querySelector('.bl-slots');
+                const last = grid ? grid.querySelector('.bl-slot.is-empty:last-of-type') : null;
+                if (!grid || !last) return;
+                let total = grid.querySelectorAll('.bl-slot').length;
+                for (let i = 0; i < 3; i++) {
+                    const copy = last.cloneNode(true);
+                    total += 1;
+                    const no = copy.querySelector('.bl-slot-no');
+                    if (no) no.textContent = total + '-savol';
+                    grid.appendChild(copy);
+                }
+                const counter = document.getElementById('slotCount');
+                if (counter) {
+                    counter.textContent = counter.textContent.split('/')[0].trim() + ' / ' + total;
+                }
+            });
+        }
 
         // Tekshiruvda o'tmagan forma bo'lsa oyna ochiq qoladi
         @if($errors->any())

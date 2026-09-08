@@ -47,10 +47,11 @@
         </div>
 
         <div class="bl-qf-media">
+            <span class="bl-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg> Savol rasmi</span>
             <label class="bl-drop">
                 <input type="file" name="question_image" accept="image/jpeg,image/png,image/webp,image/gif" @change="pickImage($event)">
                 <span class="bl-drop-icon" aria-hidden="true">&#9635;</span>
-                <span class="bl-drop-name" x-text="imageName || 'Savol rasmi'"></span>
+                <span class="bl-drop-name" x-text="imageName || 'Rasm tanlang'"></span>
                 <span class="bl-drop-hint">JPG · PNG · 4 MB gacha</span>
             </label>
             @if($editingQuestion && !empty($question['image_path']) && $questionIndex !== null)

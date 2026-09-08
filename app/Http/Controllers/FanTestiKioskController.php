@@ -253,21 +253,7 @@ class FanTestiKioskController extends Controller
     private function activeQuestions(FanTesti $fanTesti)
     {
         return collect($fanTesti->questions ?? [])
-            ->filter(fn ($question) => ($question['is_active'] ?? true) !== false)
-            // To'g'ri javobi belgilanmagan savol (masalan Word'dan yangi
-            // import qilingan) talabaga berilmaydi — u har qanday javobda
-            // noto'g'ri hisoblanardi.
-            ->filter(function ($question) {
-                if (($question['needs_answer'] ?? false) === true) {
-                    return false;
-                }
-                $type = $question['type'] ?? 'single_choice';
-                if (!in_array($type, ['single_choice', 'multiple_choice', 'true_false'], true)) {
-                    return true;
-                }
-                return collect($question['options'] ?? [])
-                    ->contains(fn ($option) => ($option['is_correct'] ?? false) === true);
-            });
+            ->filter(fn ($question) => ($question['is_active'] ?? true) !== false);
     }
 
     private function assertAttemptBelongs(FanTesti $fanTesti, FanTestiAttempt $attempt): void

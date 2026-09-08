@@ -255,53 +255,6 @@
     .bl-q-meta { flex: none; color: var(--muted); font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
     .bl-q-del { display: flex; justify-content: flex-end; padding: 0 20px 16px; }
 
-    /* ---- Word'dan import ---- */
-    .bl-imp { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; }
-    .bl-imp-drop {
-        flex: 1 1 320px; display: flex; flex-direction: column; justify-content: center;
-        min-height: 56px; padding: 8px 16px; border: 1px dashed #c4d0e0; border-radius: 5px;
-        background: #fafcfe; cursor: pointer; transition: border-color .16s, background .16s;
-    }
-    .bl-imp-drop:hover { border-color: var(--navy-soft); background: #f1f5fa; }
-    .bl-imp-drop b { color: var(--navy); font-size: 13px; font-weight: 600; }
-    .bl-imp-drop span { margin-top: 2px; color: var(--muted); font-size: 11.5px; }
-    .bl-imp-note { margin-top: 10px; color: var(--ink-soft); font-size: 12.5px; }
-    .bl-imp-note.is-bad { color: var(--bad); }
-
-    .bl-imp-help { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 5px; background: #fafcfe; }
-    .bl-imp-help pre {
-        margin: 0; overflow-x: auto; color: var(--ink);
-        font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.65;
-    }
-    .bl-imp-help p { margin: 10px 0 0; color: var(--ink-soft); font-size: 12.5px; }
-
-    .bl-imp-sum {
-        display: flex; align-items: center; gap: 8px; margin: 16px 0 10px;
-        padding: 10px 14px; border: 1px solid #a5d6bf; border-left: 3px solid var(--ok);
-        border-radius: 5px; background: var(--ok-bg); color: #0a6043; font-size: 13px;
-    }
-    .bl-imp-sum b { font-family: 'Roboto Slab', serif; font-size: 16px; }
-    .bl-imp-list { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 5px; }
-    .bl-imp-item { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
-    .bl-imp-item:last-child { border-bottom: 0; }
-    .bl-imp-item b { color: var(--navy); }
-    .bl-imp-item span { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; }
-
-    /* ---- Javob belgilanmagan savollar ---- */
-    .bl-q-warn {
-        flex: none; padding: 2px 9px; border-radius: 3px;
-        background: #fdf3e4; color: var(--warn); font-size: 10.5px; font-weight: 700;
-    }
-    .bl-q-pick { display: inline-flex; flex: none; align-items: center; gap: 4px; }
-    .bl-q-pick button {
-        width: 24px; height: 24px; padding: 0; border: 1px solid #c4d0e0; border-radius: 4px;
-        background: #fff; color: var(--navy); font-family: 'Roboto', sans-serif;
-        font-size: 11px; font-weight: 700; cursor: pointer; transition: .15s;
-    }
-    .bl-q-pick button:hover { border-color: var(--navy); background: #f1f5fa; }
-    .bl-q-pick button.is-on { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
-    .bl-q-pick button:disabled { opacity: .5; cursor: default; }
-
     /* ---- Jadval ---- */
     .bl-scroll { overflow-x: auto; }
     .bl-table { width: 100%; min-width: 700px; border-collapse: collapse; }
@@ -500,57 +453,10 @@
                 @endforelse
             </div>
 
-            {{-- Word'dan import --}}
+            {{-- 02 · Yangi savol --}}
             <div class="bl-panel">
                 <div class="bl-panel-head">
                     <span class="bl-step">02</span>
-                    <div>
-                        <h2>Word fayldan savollarni yuklash</h2>
-                        <p>Savollar avval ko'rib chiqiladi, keyin qo'shiladi.</p>
-                    </div>
-                    <button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" id="impHelpBtn">Format namunasi</button>
-                </div>
-                <div class="bl-panel-body">
-                    <div class="bl-imp">
-                        <label class="bl-imp-drop">
-                            <input type="file" id="impFile" accept=".docx" hidden>
-                            <b id="impName">Word faylni tanlang</b>
-                            <span>.docx · 20 MB gacha</span>
-                        </label>
-                        <button type="button" class="bl-btn bl-btn-main" id="impRead" disabled>Faylni o'qish</button>
-                    </div>
-                    <div class="bl-imp-note" id="impMsg"></div>
-
-                    <div id="impHelp" class="bl-imp-help" hidden>
-<pre>1.
-• UZ: Savol matni?
-• RU: Текст вопроса?
-• EN: Question text?
-○ A) uz variant / ru variant / en variant
-○ B) uz variant / ru variant / en variant
-○ C) ...
-Pathoma: Chapter 1 — ...        ← saqlanmaydi
-
-2.
-• UZ: ...</pre>
-                        <p>To'g'ri javob faylda belgilanmaydi — savollar qo'shilgach ro'yxatdan
-                           bir bosishda tanlanadi. Variantlar <b>/</b> bilan uch tilga bo'linadi.</p>
-                    </div>
-
-                    <div id="impPreview" hidden>
-                        <div class="bl-imp-sum">
-                            <b id="impCount">0</b> ta savol topildi
-                            <button type="button" class="bl-btn bl-btn-main bl-btn-sm" id="impSave" style="margin-left:auto">Savollarni qo'shish</button>
-                        </div>
-                        <div class="bl-imp-list" id="impList"></div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- 03 · Yangi savol --}}
-            <div class="bl-panel">
-                <div class="bl-panel-head">
-                    <span class="bl-step">03</span>
                     <div>
                         <h2>Yangi savol qo'shish</h2>
                         <p>Savol turini tanlang, matn va javob variantlarini kiriting.</p>
@@ -562,7 +468,7 @@ Pathoma: Chapter 1 — ...        ← saqlanmaydi
             {{-- 03 · Kiritilgan savollar --}}
             <div class="bl-panel">
                 <div class="bl-panel-head">
-                    <span class="bl-step">04</span>
+                    <span class="bl-step">03</span>
                     <div>
                         <h2>Kiritilgan savollar</h2>
                         <p>Savol sarlavhasini bosib tahrirlash oynasini oching.</p>
@@ -581,33 +487,11 @@ Pathoma: Chapter 1 — ...        ← saqlanmaydi
                             'matching' => 'Moslashtirish',
                             'ordering' => 'Ketma-ketlik',
                         ][$question['type'] ?? 'single_choice'] ?? "Bitta to'g'ri javob";
-
-                        // Javobi belgilanmagan savol (odatda Word'dan import qilingan):
-                        // ro'yxatning o'zida A/B/C tugmalari bilan tanlanadi.
-                        $qOptions = $question['options'] ?? [];
-                        $correctIndex = null;
-                        foreach ($qOptions as $optIndex => $opt) {
-                            if (($opt['is_correct'] ?? false) === true) { $correctIndex = $optIndex; break; }
-                        }
-                        $quickPick = ($question['type'] ?? 'single_choice') === 'single_choice' && count($qOptions) >= 2;
-                        $needsAnswer = $quickPick && $correctIndex === null;
                     @endphp
                     <details class="bl-q">
                         <summary>
                             <span class="bl-q-no">{{ $index + 1 }}</span>
                             <span class="bl-q-text {{ $preview === '' ? 'is-empty' : '' }}">{{ $preview !== '' ? \Illuminate\Support\Str::limit($preview, 110) : 'Savol matni kiritilmagan' }}</span>
-                            @if($quickPick)
-                                <span class="bl-q-pick" data-q-pick="{{ $index }}" onclick="event.preventDefault()">
-                                    @foreach($qOptions as $optIndex => $opt)
-                                        <button type="button" data-q-index="{{ $index }}" data-q-option="{{ $optIndex + 1 }}"
-                                                class="{{ $correctIndex === $optIndex ? 'is-on' : '' }}"
-                                                title="{{ \Illuminate\Support\Str::limit(trim((string) ($opt['text'] ?? '')), 70) }}">{{ chr(65 + $optIndex) }}</button>
-                                    @endforeach
-                                </span>
-                            @endif
-                            @if($needsAnswer)
-                                <span class="bl-q-warn">javob belgilanmagan</span>
-                            @endif
                             <span class="bl-q-meta">{{ $typeLabel }} · {{ $question['points'] ?? 1 }} ball</span>
                         </summary>
                         <div>
@@ -777,131 +661,4 @@ Pathoma: Chapter 1 — ...        ← saqlanmaydi
         };
     }
 </script>
-
-@if($isEdit)
-<script>
-(() => {
-    const CSRF = '{{ csrf_token() }}';
-    const PREVIEW_URL = '{{ route('teacher.fan-testlari.import.preview', $collection) }}';
-    const SAVE_URL = '{{ route('teacher.fan-testlari.import.store', $collection) }}';
-    const ANSWER_URL = '{{ route('teacher.fan-testlari.questions.answer', [$collection, '__I__']) }}';
-
-    const $ = id => document.getElementById(id);
-    const file = $('impFile'), name = $('impName'), read = $('impRead'), msg = $('impMsg');
-    let parsed = [];
-
-    async function post(url, body) {
-        const fd = new FormData();
-        fd.append('_token', CSRF);
-        Object.entries(body || {}).forEach(([k, v]) => fd.append(k, v));
-        const r = await fetch(url, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
-        return j;
-    }
-
-    function say(text, bad) {
-        msg.textContent = text || '';
-        msg.classList.toggle('is-bad', Boolean(bad));
-    }
-
-    // ── Fayl tanlash ──
-    if (file) {
-        file.addEventListener('change', () => {
-            const picked = file.files && file.files[0];
-            name.textContent = picked ? picked.name : 'Word faylni tanlang';
-            read.disabled = !picked;
-            $('impPreview').hidden = true;
-            say('');
-        });
-    }
-
-    // ── Faylni o'qish (saqlamasdan) ──
-    if (read) {
-        read.addEventListener('click', async () => {
-            if (!file.files || !file.files[0]) return;
-            read.disabled = true;
-            say('O\'qilmoqda...');
-            try {
-                const fd = new FormData();
-                fd.append('_token', CSRF);
-                fd.append('document', file.files[0]);
-                const r = await fetch(PREVIEW_URL, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } });
-                const j = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
-
-                parsed = j.questions || [];
-                $('impCount').textContent = parsed.length;
-                $('impList').innerHTML = parsed.slice(0, 40).map((q, i) =>
-                    '<div class="bl-imp-item"><b>' + (i + 1) + '.</b> ' + esc(q.prompt || '') +
-                    '<span>' + (q.options || []).length + ' variant · ' +
-                    [q.prompt_ru ? 'RU' : '', q.prompt_en ? 'EN' : ''].filter(Boolean).join(' · ') +
-                    '</span></div>'
-                ).join('') + (parsed.length > 40
-                    ? '<div class="bl-imp-item"><b>...</b> yana ' + (parsed.length - 40) + ' ta</div>' : '');
-                $('impPreview').hidden = parsed.length === 0;
-                say(parsed.length
-                    ? ((j.warnings || []).length ? j.warnings.length + ' ta ogohlantirish: ' + j.warnings[0] : '')
-                    : 'Faylda savol topilmadi — format namunasini tekshiring.', !parsed.length);
-            } catch (e) {
-                say(e.message, true);
-            } finally {
-                read.disabled = false;
-            }
-        });
-    }
-
-    // ── Qo'shish ──
-    const save = $('impSave');
-    if (save) {
-        save.addEventListener('click', async () => {
-            if (!parsed.length) return;
-            save.disabled = true;
-            try {
-                const j = await post(SAVE_URL, { questions_json: JSON.stringify(parsed) });
-                location.reload();
-            } catch (e) {
-                say(e.message, true);
-                save.disabled = false;
-            }
-        });
-    }
-
-    // ── Format namunasi ──
-    const help = $('impHelpBtn');
-    if (help) help.addEventListener('click', () => { $('impHelp').hidden = !$('impHelp').hidden; });
-
-    // ── Ro'yxatdan to'g'ri javobni tanlash ──
-    document.addEventListener('click', async ev => {
-        const button = ev.target.closest ? ev.target.closest('.bl-q-pick button') : null;
-        if (!button) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-
-        const wrap = button.parentElement;
-        const index = button.dataset.qIndex;
-        const option = button.dataset.qOption;
-        wrap.querySelectorAll('button').forEach(b => { b.disabled = true; });
-        try {
-            await post(ANSWER_URL.replace('__I__', index), { option_number: option });
-            wrap.querySelectorAll('button').forEach(b => b.classList.remove('is-on'));
-            button.classList.add('is-on');
-            const warn = wrap.parentElement.querySelector('.bl-q-warn');
-            if (warn) warn.remove();
-        } catch (e) {
-            alert('Javobni saqlab bo\'lmadi: ' + e.message);
-        } finally {
-            wrap.querySelectorAll('button').forEach(b => { b.disabled = false; });
-        }
-    });
-
-    function esc(text) {
-        const d = document.createElement('div');
-        d.textContent = String(text == null ? '' : text);
-        return d.innerHTML;
-    }
-})();
-</script>
-@endif
-
 </x-app-layout>

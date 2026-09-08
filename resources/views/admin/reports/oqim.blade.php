@@ -270,6 +270,7 @@
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('opt')" title="Optimizatsiyalangan holatdan boshlab qo'lda tuzatish">⟲ Optimizatsiyadan</button>
                                     <button type="button" class="af-btn af-load" onclick="loadSnapshot()" title="Oldin saqlangan/tasdiqlangan holatni yuklash">↺ Saqlangan holat</button>
+                                    <button type="button" id="mn-del-empty" class="af-btn af-unapprove" onclick="removeEmptyGroups()" title="Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish — bekor qilish mumkin">🗑 Bo'sh guruhlarni o'chirish</button>
                                     <button type="button" id="mn-undo" class="af-btn af-draft" onclick="manualUndo()" disabled>↶ Bekor qilish</button>
                                     <button type="button" class="af-btn af-draft" onclick="saveSnapshot('draft')">💾 Qoralama saqlash</button>
                                     <button type="button" class="af-btn af-approve" onclick="saveSnapshot('approve')">✓ Tasdiqlash</button>
@@ -1077,6 +1078,9 @@
                               + '<span class="mn-oqim-total" data-mnot="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>'
                               + (CAN_APPROVE ? '<button type="button" class="mn-x mn-x-oqim" title="Oqimni (barcha guruhlari bilan) ro\'yxatdan o\'chirish" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '">×</button>' : '')
                               + '</div>';
+                        if (!rows.length) {
+                            html += '<div class="mn-empty-hint">Bo\'sh oqim — guruhni shu yerga tashlang</div>';
+                        }
                         for (var r2 = 0; r2 < rows.length; r2++) {
                             var row = rows[r2];
                             var rl = row.lang || oq.lang || 'uz';
@@ -1095,7 +1099,7 @@
                         html += '</div>';
                     }
                     if (CAN_APPROVE) {
-                        html += '<div class="mn-new" data-b="' + b + '" data-c="' + c + '">＋ Yangi oqim — guruhni shu yerga tashlang</div>';
+                        html += '<div class="mn-new" data-b="' + b + '" data-c="' + c + '" title="Bosing — bo\'sh oqim ochiladi; yoki guruhni shu yerga tashlang">＋ Yangi oqim — bosing yoki guruhni shu yerga tashlang</div>';
                     }
                     html += '</div>';
                 }
@@ -1160,6 +1164,7 @@
                 });
             } else {
                 var rows = tgtCourse.oqims[to].rows;
+                if (!rows.length) tgtCourse.oqims[to].lang = row.lang || tgtCourse.oqims[to].lang || 'uz'; // bo'sh oqim — birinchi guruh tilini oladi
                 if (sameOqim && tr !== undefined && tr > src.r) tr--;
                 if (tr === undefined || tr === null || tr > rows.length) rows.push(row);
                 else rows.splice(tr, 0, row);
@@ -1219,6 +1224,38 @@
             var s = dragSrc; dragSrc = null;
             mnMove(s, tb, tc, -1);
         });
+
+        // "Yangi oqim" ni BOSISH — bo'sh oqim ochiladi (guruhlar keyin sudrab joylanadi)
+        $(document).on('click', '#mn-body .mn-new', function() {
+            if (!CAN_APPROVE) return;
+            var b = +$(this).data('b'), c = +$(this).data('c');
+            var course = afterState[b].courses[c];
+            // Kursdagi ustun til — yangi oqimning boshlang'ich tili
+            var cnt = {};
+            (course.oqims || []).forEach(function(o) { (o.rows || []).forEach(function(r) { var lg = r.lang || o.lang || 'uz'; cnt[lg] = (cnt[lg] || 0) + 1; }); });
+            var lang = Object.keys(cnt).sort(function(x, y) { return cnt[y] - cnt[x]; })[0] || 'uz';
+            mnPushUndo();
+            course.oqims.push({ label: 'Oqim-' + (course.oqims.length + 1), lang: lang, total: 0, rows: [] });
+            renderManual();
+            mnFlash("Bo'sh oqim ochildi — guruhlarni unga sudrab joylang");
+        });
+
+        // Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish
+        function removeEmptyGroups() {
+            var n = 0;
+            afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                (oq.rows || []).forEach(function(r) { if (!(+r.count > 0)) n++; });
+            }); }); });
+            if (!n) { mnFlash("Talabasi yo'q guruh topilmadi."); return; }
+            if (!confirm(n + " ta bo'sh (0 talaba) guruh ro'yxatdan o'chirilsinmi? Keyin \"↶ Bekor qilish\" bilan qaytarish mumkin.")) return;
+            mnPushUndo();
+            afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) {
+                (co.oqims || []).forEach(function(oq) { oq.rows = (oq.rows || []).filter(function(r) { return +r.count > 0; }); });
+                co.oqims = (co.oqims || []).filter(function(oq) { return oq.rows.length > 0; });
+            }); });
+            mnRecalc(); renderManual(); renderAfterBody();
+            mnFlash(n + " ta bo'sh guruh o'chirildi");
+        }
 
         // Guruhni ro'yxatdan o'chirish (bashoratdagi soxta "1K-01a" kabi guruhlar uchun)
         $(document).on('click', '#mn-body .mn-x-row', function(e) {
@@ -1828,10 +1865,12 @@
         .mn-lang-uz  { color:#1d4ed8; background:#eff6ff; }
         .mn-lang-rus { color:#be123c; background:#fff1f2; }
         .mn-lang-ing { color:#6d28d9; background:#f5f3ff; }
-        .mn-x { flex-shrink:0; width:18px; height:18px; line-height:16px; padding:0; border:1px solid transparent; border-radius:5px; background:transparent; color:#cbd5e1; font-size:14px; font-weight:800; cursor:pointer; }
+        .mn-x { flex-shrink:0; width:20px; height:20px; line-height:18px; padding:0; border:1px solid #e2e8f0; border-radius:5px; background:#fff; color:#94a3b8; font-size:15px; font-weight:800; cursor:pointer; }
+        .mn-empty-hint { padding:10px 8px; text-align:center; font-size:11px; font-weight:700; color:#a21caf; background:#fdf4ff; border-top:1px dashed #f0abfc; }
         .mn-x:hover { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
         .mn-x-oqim { margin-left:4px; }
-        .mn-new { border:2px dashed #cbd5e1; border-radius:8px; margin-top:6px; padding:10px 8px; text-align:center; font-size:11.5px; font-weight:700; color:#94a3b8; transition:all .12s; }
+        .mn-new { border:2px dashed #cbd5e1; border-radius:8px; margin-top:6px; padding:10px 8px; text-align:center; font-size:11.5px; font-weight:700; color:#94a3b8; transition:all .12s; cursor:pointer; user-select:none; }
+        .mn-new:hover { border-color:#a21caf; color:#a21caf; background:#fdf4ff; }
         .mn-new.mn-over { border-color:#a21caf; color:#a21caf; background:#fdf4ff; }
         #mn-flash { display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; font-size:13px; font-weight:700; padding:10px 18px; border-radius:10px; z-index:2000; box-shadow:0 8px 24px rgba(0,0,0,0.35); max-width:80vw; text-align:center; }
     </style>

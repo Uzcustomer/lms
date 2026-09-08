@@ -1558,6 +1558,7 @@
             if (st.state === 'running') return '🔄 Talabalar importi bajarilmoqda (boshlandi ' + (st.started_at || '') + ')... Tugagach sonlar o\'zi yangilanadi.';
             if (st.state === 'done')    return '✓ Talabalar importi tugadi ' + (st.finished_at || '') + (st.imported != null ? ' — ' + st.imported + ' ta talaba' : '') + '.';
             if (st.state === 'failed')  return '✗ Talabalar importi xato bilan tugadi: ' + (st.error || '') + '.';
+            if (st.state === 'stale')   return '⚠ Talabalar importi ' + (st.queued_at || '') + ' da navbatga qo\'yilgan, lekin 2 soatdan beri bajarilmadi (navbat ishchisi ishlamayotgan bo\'lishi mumkin). Qayta urinish mumkin.';
             return '';
         }
         function pollStudentImport(auto) {
@@ -1577,9 +1578,9 @@
                     stLastState = null;
                     if (afterState && afterState.length) mergeNewGroups(); else $('#mn-hemis-status').css('color', '#16a34a').text(txt);
                 } else if (!auto && txt) {
-                    $('#mn-hemis-status').css('color', st.state === 'failed' ? '#dc2626' : '#64748b').text(txt + (st.students_updated ? ' (bazada oxirgi yangilanish: ' + st.students_updated + ')' : ''));
-                } else if (st.state === 'failed') {
-                    $('#mn-hemis-status').css('color', '#dc2626').text(txt);
+                    $('#mn-hemis-status').css('color', st.state === 'failed' ? '#dc2626' : (st.state === 'stale' ? '#b45309' : '#64748b')).text(txt + (st.students_updated ? ' (bazada oxirgi yangilanish: ' + st.students_updated + ')' : ''));
+                } else if (st.state === 'failed' || st.state === 'stale') {
+                    $('#mn-hemis-status').css('color', st.state === 'failed' ? '#dc2626' : '#b45309').text(txt);
                 }
                 stLastState = null;
             });

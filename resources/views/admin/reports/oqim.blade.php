@@ -1308,7 +1308,7 @@
         // "⇢" — guruhni ro'yxatdan tanlab boshqa oqim/fakultetga ko'chirish (uzoq masofa uchun)
         $(document).on('click', '#mn-body .mn-mv', function(e) {
             e.stopPropagation();
-            $('#mn-body .mn-mv-sel').remove();
+            $('.mn-mv-sel').remove();
             var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o'), r = +$(this).data('r');
             var lvl = ctLevelNum(afterState[b].courses[c]);
             var $sel = $('<select class="mn-mv-sel"></select>');
@@ -1325,14 +1325,25 @@
                     $sel.append($grp);
                 });
             });
-            $(this).closest('.mn-row').append($sel);
+            // Oqim kartochkasi overflow:hidden — ro'yxat kesilmasligi uchun body ga, fixed joylashuvda chiqaramiz
+            var rr = $(this).closest('.mn-row')[0].getBoundingClientRect();
+            var top = rr.bottom + 2, left = rr.left, width = Math.max(rr.width, 260);
+            if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - width);
+            if (top + 40 > window.innerHeight) top = Math.max(8, rr.top - 40);
+            $sel.css({ position: 'fixed', top: top + 'px', left: left + 'px', width: width + 'px' }).appendTo('body');
+            $sel.attr('size', Math.min(12, Math.max(4, $sel.find('option').length))); // ochiq ro'yxat — focus() ga bog'liq emas
             $sel.focus();
-            $sel.on('change', function() {
-                var v = this.value; $(this).remove();
+            var closeSel = function() { $sel.remove(); $(window).off('scroll.mnmv resize.mnmv'); $('#mn-body').off('scroll.mnmv'); };
+            $sel.on('change click', function() {
+                var v = this.value;
                 if (!v) return;
+                closeSel();
                 var pp = v.split('|');
                 mnMove({ b: b, c: c, o: o, r: r }, +pp[0], +pp[1], +pp[2]);
-            }).on('blur', function() { var el = this; setTimeout(function() { $(el).remove(); }, 150); });
+            }).on('blur', function() { setTimeout(closeSel, 150); })
+              .on('keydown', function(e) { if (e.key === 'Escape') closeSel(); });
+            $(window).on('scroll.mnmv resize.mnmv', closeSel);
+            $('#mn-body').on('scroll.mnmv', closeSel);
         });
 
         // "Yangi oqim" ni BOSISH — bo'sh oqim ochiladi (guruhlar keyin sudrab joylanadi)
@@ -2012,7 +2023,9 @@
         .mn-lang-rus { color:#be123c; background:#fff1f2; }
         .mn-lang-ing { color:#6d28d9; background:#f5f3ff; }
         .mn-x { flex-shrink:0; width:20px; height:20px; line-height:18px; padding:0; border:1px solid #e2e8f0; border-radius:5px; background:#fff; color:#94a3b8; font-size:15px; font-weight:800; cursor:pointer; }
-        .mn-mv-sel { position:absolute; left:8px; right:8px; z-index:5; margin-top:24px; border:1px solid #a21caf; border-radius:6px; font-size:11.5px; padding:3px 4px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.18); }
+        .mn-mv-sel { z-index:3000; border:1px solid #a21caf; border-radius:6px; font-size:11.5px; padding:3px 4px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.18); max-height:60vh; }
+        .mn-mv-sel option { padding:3px 6px; }
+        .mn-mv-sel optgroup { font-size:11px; color:#a21caf; }
         .mn-row { position:relative; }
         .mn-drop-line { margin:2px 6px; padding:4px 8px; border:2px dashed #a21caf; border-radius:6px; background:#fdf4ff; color:#a21caf; font-size:11px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
         .mn-empty-hint { padding:10px 8px; text-align:center; font-size:11px; font-weight:700; color:#a21caf; background:#fdf4ff; border-top:1px dashed #f0abfc; }

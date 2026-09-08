@@ -273,6 +273,7 @@
                                 <button type="button" id="mn-hemis-groups" class="af-btn af-load" onclick="hemisPull('groups')" title="HEMISdan guruhlar ro'yxatini yangilash (fon rejimida ishlaydi)">⇩ Guruhlarni HEMISdan tortish</button>
                                 <button type="button" id="mn-hemis-students" class="af-btn af-load" onclick="hemisPull('students')" title="HEMISdan talabalarni yangilash (fon rejimida, uzoqroq davom etadi)">⇩ Talabalarni HEMISdan tortish</button>
                                 <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadan yangilash: yangi guruhlar ro'yxatga qo'shiladi, mavjud guruhlardagi talaba soni HEMISdagi (bazadagi) songa yangilanadi — joylashuv o'zgarmaydi">⟳ Bazadan yangilash (yangi guruhlar + talaba sonlari)</button>
+                                <button type="button" id="mn-diag" class="af-btn" style="background:#fff;color:#0f766e;border-color:#99f6e4;" onclick="openDiagnose()" title="Tashxis: ekrandagi son ≠ bazadagi son bo'lgan guruhlar; har biri uchun HEMIS bilan jonli solishtirish va qayta tortish">🩺 Tashxis</button>
                                 <span id="mn-hemis-status" style="font-size:11.5px;font-weight:600;"></span>
                                 <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
@@ -1416,6 +1417,111 @@
                 $('#gc-body').html(h);
             }).fail(function(xhr) { $('#gc-body').html('<div style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ').</div>'); });
         });
+
+        // ===== 🩺 Tashxis: EKRAN vs BAZA vs HEMIS =====
+        var SCREEN_DIFF_URL = '{{ route("admin.reports.oqim.screen.diff") }}';
+        var GROUP_DIAG_URL = '{{ route("admin.reports.oqim.group.diagnose") }}';
+        var GROUP_RESYNC_URL = '{{ route("admin.reports.oqim.group.resync") }}';
+        function diagOverlay() {
+            var $ov = $('#dg-overlay');
+            if (!$ov.length) {
+                $ov = $('<div id="dg-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:9998;"><div style="position:absolute;top:4%;left:50%;transform:translateX(-50%);width:94%;max-width:1000px;max-height:90vh;background:#fff;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #e2e8f0;"><div style="font-weight:800;color:#0f766e;">🩺 Tashxis — EKRAN vs BAZA vs HEMIS</div><button type="button" onclick="$(\'#dg-overlay\').hide()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;">×</button></div>' +
+                    '<div id="dg-body" style="padding:12px 18px;overflow:auto;flex:1;font-size:13px;"></div></div></div>').appendTo('body');
+            }
+            return $ov;
+        }
+        function openDiagnose() {
+            var $ov = diagOverlay();
+            $('#dg-body').html('<div style="color:#94a3b8;">Ekrandagi guruhlar baza bilan solishtirilmoqda...</div>');
+            $ov.show();
+            var rows = [], noId = 0, merged = 0;
+            (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                (oq.rows || []).forEach(function(r) {
+                    if (+r.gid > 0) rows.push({ gid: +r.gid, count: +r.count || 0, name: r.name });
+                    else if (r.gids && r.gids.length) merged++;
+                    else noId++;
+                });
+            }); }); });
+            if (!rows.length) { $('#dg-body').html('<div style="color:#b45309;">Ekranda HEMIS ID\'li guruh yo\'q. Avval "⟳ Bazadan yangilash" bosing (ID biriktiriladi) yoki "Hisoblash" → "Joriy holatdan".</div>'); return; }
+            $.ajax({ url: SCREEN_DIFF_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, contentType: 'application/json', data: JSON.stringify({ rows: rows }) })
+            .done(function(r) {
+                var h = '';
+                h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:#334155;">' +
+                     '<span style="padding:5px 10px;border-radius:8px;background:#f1f5f9;">Tekshirildi: <b>' + r.checked + '</b> guruh</span>' +
+                     '<span style="padding:5px 10px;border-radius:8px;background:#f0fdf4;">Mos: <b>' + r.same + '</b></span>' +
+                     '<span style="padding:5px 10px;border-radius:8px;background:' + (r.diff.length ? '#fff7ed' : '#f0fdf4') + ';">Farq bor: <b>' + r.diff.length + '</b></span>' +
+                     (noId ? '<span style="padding:5px 10px;border-radius:8px;background:#fefce8;">ID\'siz qator: <b>' + noId + '</b> (tekshirilmadi — "Bazadan yangilash" ID biriktiradi)</span>' : '') +
+                     (merged ? '<span style="padding:5px 10px;border-radius:8px;background:#fefce8;">Birlashtirilgan (optimizatsiya) qator: <b>' + merged + '</b> (tekshirilmadi)</span>' : '') +
+                     '</div>';
+                h += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;font-size:11.5px;color:#475569;line-height:1.6;">' +
+                     'Oxirgi talabalar importi: <b>' + (r.last_import.finished_at || '—') + '</b> (' + r.last_import.state + (r.last_import.imported != null ? ', ' + r.last_import.imported + ' ta' : '') + (r.last_import.error ? ', xato: ' + esc(r.last_import.error) : '') + ') · ' +
+                     'Bazadagi talaba yozuvlari oxirgi yangilangan: <b>' + (r.students_max_updated || '—') + '</b> · ' +
+                     'HEMIS API: <code>' + esc(r.hemis_base) + '</code> · token: ' + (r.hemis_token_set ? '✓' : '<span style="color:#dc2626">yo\'q</span>') + ' · queue: <code>' + esc(r.queue) + '</code></div>';
+                if (!r.diff.length) {
+                    h += '<div style="padding:16px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-weight:700;">✓ Ekrandagi barcha ID\'li guruhlarning soni bazadagi faol (status 11) talaba soni bilan bir xil. Agar HEMISda boshqa son ko\'rsangiz — demak BAZA HEMISdan orqada: guruh qatoridagi "🔬 HEMIS bilan" tugmasi bilan jonli tekshiring.</div>';
+                    // baribir jonli tekshirish uchun ro'yxat beramiz (birinchi 40 ta)
+                    h += '<div style="margin-top:12px;font-weight:800;color:#334155;">Jonli tekshirish uchun guruhlar:</div>' + diagTable(rows.slice(0, 40).map(function(x) { return { gid: x.gid, name: x.name, screen: x.count, db: x.count, group_in_db: true, group_active: true }; }));
+                } else {
+                    h += '<div style="margin-bottom:6px;font-weight:800;color:#9a3412;">Ekran ≠ baza bo\'lgan guruhlar:</div>' + diagTable(r.diff);
+                    h += '<div style="margin-top:10px;font-size:12px;color:#475569;">Tezkor yechim: <button type="button" class="af-btn af-load" onclick="$(\'#dg-overlay\').hide(); mergeNewGroups();">⟳ Bazadan yangilash</button> — ekrandagi sonlarni bazadagi songa keltiradi. Baza HEMISdan farq qilsa — har qator uchun "🔬 HEMIS bilan" → "⇩ Qayta tortish".</div>';
+                }
+                $('#dg-body').html(h);
+            }).fail(function(xhr) { $('#dg-body').html('<div style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ').</div>'); });
+        }
+        function diagTable(list) {
+            var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;border-bottom:2px solid #e2e8f0;">' +
+                    '<th style="padding:5px 6px;">Guruh</th><th style="padding:5px 6px;text-align:right;">Ekran</th><th style="padding:5px 6px;text-align:right;">Baza</th><th style="padding:5px 6px;text-align:right;">HEMIS</th><th style="padding:5px 6px;">Holat</th><th style="padding:5px 6px;"></th></tr></thead><tbody>';
+            list.forEach(function(d) {
+                var flag = !d.group_in_db ? '<span style="color:#dc2626;font-weight:700;">guruh bazada yo\'q</span>' : (d.group_active === false ? '<span style="color:#b45309;font-weight:700;">guruh nofaol</span>' : (d.screen !== d.db ? '<span style="color:#9a3412;">ekran eskirgan</span>' : ''));
+                h += '<tr id="dg-r-' + d.gid + '" style="border-bottom:1px solid #f1f5f9;">' +
+                     '<td style="padding:5px 6px;font-weight:700;">' + esc(d.name) + ' <span style="color:#94a3b8;font-weight:400;">#' + d.gid + '</span></td>' +
+                     '<td style="padding:5px 6px;text-align:right;">' + d.screen + '</td>' +
+                     '<td style="padding:5px 6px;text-align:right;font-weight:700;color:' + (d.screen === d.db ? '#166534' : '#9a3412') + ';" class="dg-db">' + d.db + '</td>' +
+                     '<td style="padding:5px 6px;text-align:right;" class="dg-hemis">—</td>' +
+                     '<td style="padding:5px 6px;" class="dg-flag">' + flag + '</td>' +
+                     '<td style="padding:5px 6px;white-space:nowrap;"><button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="diagGroup(' + d.gid + ', ' + d.screen + ')">🔬 HEMIS bilan</button> ' +
+                     (CAN_APPROVE ? '<button type="button" class="af-btn af-draft" style="padding:3px 8px;font-size:11.5px;" onclick="resyncGroup(' + d.gid + ', ' + d.screen + ')">⇩ Qayta tortish</button>' : '') + '</td></tr>' +
+                     '<tr id="dg-d-' + d.gid + '" style="display:none;"><td colspan="6" style="padding:6px 10px 10px;background:#f8fafc;"></td></tr>';
+            });
+            return h + '</tbody></table>';
+        }
+        function diagGroup(gid, screen) {
+            var $d = $('#dg-d-' + gid).show(); $d.find('td').html('<span style="color:#94a3b8;">HEMISdan jonli o\'qilmoqda...</span>');
+            $.get(GROUP_DIAG_URL, { gid: gid, screen: screen }).done(function(r) {
+                $('#dg-r-' + gid + ' .dg-hemis').text(r.hemis_ok ? r.hemis : 'xato').css('color', r.hemis_ok && r.hemis === r.db ? '#166534' : '#dc2626');
+                $('#dg-r-' + gid + ' .dg-db').text(r.db);
+                var col = r.action === 'ok' ? '#166534' : (r.action === 'config' ? '#dc2626' : '#9a3412');
+                var h = '<div style="font-weight:800;color:' + col + ';margin-bottom:6px;">' + (r.verdict || []).map(esc).join('<br>') + '</div>';
+                h += '<div style="font-size:11.5px;color:#64748b;margin-bottom:6px;">HEMIS guruhda jami: ' + (r.hemis_total_in_group != null ? r.hemis_total_in_group : '—') + ' (faol: ' + (r.hemis != null ? r.hemis : '—') + ') · Baza statuslar: ' + Object.keys(r.db_by_status || {}).map(function(k) { return esc(k) + ' ' + r.db_by_status[k]; }).join(', ') + ' · <code style="font-size:10.5px;">' + esc(r.hemis_url) + '</code></div>';
+                if ((r.extra_in_db || []).length) {
+                    h += '<div style="font-weight:700;color:#9a3412;margin-top:4px;">Bazada faol, lekin HEMISda bu guruhda faol emas (' + r.extra_in_db.length + '):</div><ul style="margin:2px 0 6px 18px;">';
+                    r.extra_in_db.forEach(function(x) { h += '<li>' + esc(x.name) + ' <span style="color:#94a3b8;">#' + x.hemis_id + '</span> — ' + esc(x.reason) + (x.db_updated ? ' · bazada yangilangan: ' + x.db_updated : '') + '</li>'; });
+                    h += '</ul>';
+                }
+                if ((r.missing_in_db || []).length) {
+                    h += '<div style="font-weight:700;color:#1d4ed8;margin-top:4px;">HEMISda faol, lekin bazada bu guruhda faol emas (' + r.missing_in_db.length + '):</div><ul style="margin:2px 0 6px 18px;">';
+                    r.missing_in_db.forEach(function(x) { h += '<li>' + esc(x.name) + ' <span style="color:#94a3b8;">#' + x.hemis_id + '</span> — bazada: ' + esc(x.db_state) + '</li>'; });
+                    h += '</ul>';
+                }
+                if (r.action === 'resync' && CAN_APPROVE) h += '<button type="button" class="af-btn af-approve" style="padding:4px 10px;font-size:12px;" onclick="resyncGroup(' + gid + ', ' + (screen == null ? 'null' : screen) + ')">⇩ Shu guruhni HEMISdan qayta tortish</button>';
+                if (r.action === 'refresh') h += '<button type="button" class="af-btn af-load" style="padding:4px 10px;font-size:12px;" onclick="$(\'#dg-overlay\').hide(); mergeNewGroups();">⟳ Bazadan yangilash</button>';
+                $d.find('td').html(h);
+            }).fail(function(xhr) { $d.find('td').html('<span style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ').</span>'); });
+        }
+        function resyncGroup(gid, screen) {
+            var $d = $('#dg-d-' + gid).show(); $d.find('td').html('<span style="color:#0369a1;">Guruh HEMISdan qayta tortilmoqda...</span>');
+            $.ajax({ url: GROUP_RESYNC_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { gid: gid } }).done(function(r) {
+                $('#dg-r-' + gid + ' .dg-db').text(r.db);
+                // Ekrandagi qatorni ham darhol yangilaymiz
+                var changed = 0;
+                (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                    (oq.rows || []).forEach(function(rw) { if (+rw.gid === gid && (+rw.count || 0) !== r.db) { rw.count = r.db; changed++; } });
+                }); }); });
+                if (changed) { mnRecalc(); renderManual(); renderAfterBody(); }
+                $d.find('td').html('<span style="color:#166534;font-weight:700;">✓ Qayta tortildi: ' + r.imported + ' ta yuklandi, ' + r.deactivated + ' ta chetlashtirildi. Bazada faol: ' + r.db + (changed ? ' — ekran yangilandi.' : '.') + '</span> <button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="diagGroup(' + gid + ', ' + r.db + ')">🔬 Qayta tekshirish</button>');
+            }).fail(function(xhr) { $d.find('td').html('<span style="color:#dc2626;">Xatolik: ' + ((xhr.responseJSON && xhr.responseJSON.error) || ('HTTP ' + xhr.status)) + '</span>'); });
+        }
 
         // Guruhni ro'yxatdan o'chirish (bashoratdagi soxta "1K-01a" kabi guruhlar uchun)
         $(document).on('click', '#mn-body .mn-x-row', function(e) {

@@ -285,6 +285,38 @@ class HemisService
     }
 
     /**
+     * Guruhdagi talabalarni HEMISdan JONLI o'qiydi (bazaga yozmaydi) — tashxis uchun.
+     * Qaytaradi: ['ok'=>bool, 'error'=>?string, 'url'=>string, 'items'=>[{id, full_name, status_code, status_name, group_id, group_name, level_name}]]
+     */
+    public function fetchGroupStudentsLive(int $groupHemisId): array
+    {
+        $page = 1; $items = []; $ok = true; $error = null;
+        do {
+            $response = $this->fetchStudentsForGroup($groupHemisId, $page);
+            if (!$response || empty($response['success'])) {
+                $ok = false; $error = $response['error'] ?? ('HEMIS javob bermadi (sahifa ' . $page . ')');
+                break;
+            }
+            foreach ($response['data']['items'] ?? [] as $d) {
+                $items[] = [
+                    'id'          => $d['id'] ?? null,
+                    'full_name'   => $d['full_name'] ?? '',
+                    'status_code' => (string) ($d['studentStatus']['code'] ?? ''),
+                    'status_name' => $d['studentStatus']['name'] ?? '',
+                    'group_id'    => $d['group']['id'] ?? null,
+                    'group_name'  => $d['group']['name'] ?? '',
+                    'level_name'  => $d['level']['name'] ?? '',
+                    'updated_at'  => isset($d['updated_at']) ? date('d.m.Y H:i', $d['updated_at']) : null,
+                ];
+            }
+            $pg = $response['data']['pagination'] ?? ['page' => 1, 'pageCount' => 1];
+            $more = ($pg['page'] ?? 1) < ($pg['pageCount'] ?? 1);
+            $page++;
+        } while ($more);
+        return ['ok' => $ok, 'error' => $error, 'url' => $this->apiUrl('data/student-list') . '?_group=' . $groupHemisId, 'items' => $items];
+    }
+
+    /**
      * Guruh bo'yicha talabalar ro'yxatini HEMIS dan sinxronlash
      */
     public function importStudentsForGroup(int $groupHemisId): array
@@ -349,7 +381,7 @@ class HemisService
             $response = Http::withoutVerifying()
                 ->timeout(30)
                 ->withToken($this->token)
-                ->get($this->baseUrl . '/v1/data/student-list', [
+                ->get($this->apiUrl('data/student-list'), [
                     'page' => $page,
                     'limit' => 200,
                     '_group' => $groupHemisId,
@@ -360,7 +392,7 @@ class HemisService
                     'group_id' => $groupHemisId,
                     'status' => $response->status(),
                 ]);
-                return ['success' => false];
+                return ['success' => false, 'error' => 'HTTP ' . $response->status()];
             }
 
             return $response->json();

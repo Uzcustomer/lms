@@ -838,6 +838,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/oqim/hemis-pull', [ReportController::class, 'oqimHemisPull'])->name('reports.oqim.hemis.pull');
         Route::get('/reports/oqim/hemis-status', [ReportController::class, 'oqimHemisStatus'])->name('reports.oqim.hemis.status');
         Route::get('/reports/oqim/group-check', [ReportController::class, 'oqimGroupCheck'])->name('reports.oqim.group.check');
+        Route::post('/reports/oqim/screen-diff', [ReportController::class, 'oqimScreenDiff'])->name('reports.oqim.screen.diff');
+        Route::get('/reports/oqim/group-diagnose', [ReportController::class, 'oqimGroupDiagnose'])->name('reports.oqim.group.diagnose');
+        Route::post('/reports/oqim/group-resync', [ReportController::class, 'oqimGroupResync'])->name('reports.oqim.group.resync');
         Route::get('/reports/oqim/history', [ReportController::class, 'oqimHistory'])->name('reports.oqim.history');
         Route::get('/reports/oqim/history-export', [ReportController::class, 'oqimHistoryExport'])->name('reports.oqim.history.export');
         Route::get('/reports/oqim/history/{id}', [ReportController::class, 'oqimHistoryShow'])->name('reports.oqim.history.show');

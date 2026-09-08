@@ -24,8 +24,21 @@ class HemisService
 
     public function __construct()
     {
-        $this->baseUrl = config('services.hemis.base_url');
-        $this->token = config('services.hemis.token');
+        $this->baseUrl = (string) config('services.hemis.base_url');
+        $this->token = (string) config('services.hemis.token');
+    }
+
+    /**
+     * HEMIS REST manzili: base_url ".../rest" yoki ".../rest/v1/" bo'lishidan qat'i nazar
+     * har doim ".../rest/v1/<path>" qaytaradi (kodda "/v1/" ba'zan ikki marta yig'ilib qolardi).
+     */
+    protected function apiUrl(string $path): string
+    {
+        $base = rtrim($this->baseUrl, '/');
+        if (!preg_match('~/v1$~', $base)) {
+            $base .= '/v1';
+        }
+        return $base . '/' . ltrim($path, '/');
     }
 
     public function importStudents(): int
@@ -75,7 +88,7 @@ class HemisService
     protected function fetchStudents($page)
     {
         $response = Http::withoutVerifying()->withToken($this->token)
-            ->get($this->baseUrl . '/v1/data/student-list', [
+            ->get($this->apiUrl('data/student-list'), [
                 'page' => $page,
                 'limit' => 200,
                 // "_group"=>650
@@ -539,7 +552,7 @@ class HemisService
         try {
             $response = Http::withoutVerifying()->withToken($this->token)
                 ->timeout(60)
-                ->get($this->baseUrl . 'data/group-list', [
+                ->get($this->apiUrl('data/group-list'), [
                     'page' => $page,
                     'limit' => 200,
                 ]);

@@ -11436,6 +11436,36 @@ class ReportController extends Controller
         return response()->json(['ok' => true, 'message' => $message] + $result + $stats);
     }
 
+    /**
+     * AJAX: bitta guruhning BAZADAGI holati — faol talabalar ro'yxati, statuslar kesimi,
+     * oxirgi import vaqti. "Ekranda 16, HEMISda 14 — nega?" kabi savollarni tekshirish uchun.
+     */
+    public function oqimGroupCheck(Request $request)
+    {
+        $gid = (int) $request->get('gid');
+        if ($gid <= 0) {
+            return response()->json(['ok' => false, 'error' => 'gid kerak'], 422);
+        }
+        $group = DB::table('groups')->where('group_hemis_id', $gid)->first();
+        $byStatus = DB::table('students')->where('group_id', $gid)
+            ->selectRaw('student_status_code, student_status_name, COUNT(*) as c')
+            ->groupBy('student_status_code', 'student_status_name')->orderByDesc('c')->get();
+        $active = DB::table('students')->where('group_id', $gid)->where('student_status_code', 11)
+            ->orderBy('full_name')
+            ->limit(80)
+            ->get(['hemis_id', 'full_name', 'student_status_name', 'level_name', 'updated_at']);
+        $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: [];
+        return response()->json([
+            'ok'            => true,
+            'group'         => $group ? ['name' => $group->name, 'active' => (bool) $group->active, 'department' => $group->department_name, 'lang' => $group->education_lang_name, 'updated_at' => $group->updated_at] : null,
+            'active_count'  => DB::table('students')->where('group_id', $gid)->where('student_status_code', 11)->count(),
+            'by_status'     => $byStatus,
+            'active'        => $active->map(fn($r) => ['hemis_id' => $r->hemis_id, 'name' => $r->full_name, 'level' => $r->level_name, 'updated_at' => $r->updated_at ? Carbon::parse($r->updated_at)->format('d.m.Y H:i') : null]),
+            'last_import'   => ['state' => $st['state'] ?? 'idle', 'finished_at' => !empty($st['finished_at']) ? Carbon::parse($st['finished_at'])->format('d.m.Y H:i') : null, 'imported' => $st['imported'] ?? null],
+            'students_max_updated' => optional(DB::table('students')->max('updated_at'), fn($v) => Carbon::parse($v)->format('d.m.Y H:i')),
+        ]);
+    }
+
     private const OQIM_STUDENT_IMPORT_KEY = 'oqim_students_import_status';
     private const OQIM_STUDENT_IMPORT_STALE_MIN = 120;
 

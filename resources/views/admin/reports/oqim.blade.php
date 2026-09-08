@@ -1097,7 +1097,7 @@
                             html += '<div class="mn-row lang-' + esc(rl) + '" draggable="' + (CAN_APPROVE ? 'true' : 'false') + '"'
                                   + ' data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
                                   + '<span class="mn-handle" title="Ushlab suring">⠿</span>'
-                                  + '<span class="mn-name" title="' + esc(row.name) + '">' + esc(row.name)
+                                  + '<span class="mn-name' + (+row.gid > 0 ? ' mn-name-chk' : '') + '" title="' + esc(row.name) + (+row.gid > 0 ? ' — bosing: bazadagi talabalar ro\'yxati va tekshiruv' : '') + '"' + (+row.gid > 0 ? ' data-gid="' + (+row.gid) + '" data-cnt="' + esc(row.count) + '"' : '') + '>' + esc(row.name)
                                   + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from || 'mehmon') + '</span>' : '') + '</span>'
                                   + (CAN_APPROVE
                                         ? '<input class="mn-cnt" type="number" min="0" value="' + esc(row.count) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
@@ -1377,6 +1377,45 @@
             mnRecalc(); renderManual(); renderAfterBody();
             mnFlash(n + " ta bo'sh guruh o'chirildi");
         }
+
+        // Guruh nomini bosish — bazadagi haqiqiy holat (faol talabalar, statuslar, oxirgi import)
+        var GROUP_CHECK_URL = '{{ route("admin.reports.oqim.group.check") }}';
+        $(document).on('click', '#mn-body .mn-name-chk', function(e) {
+            e.stopPropagation();
+            var gid = +$(this).data('gid'), onScreen = +$(this).data('cnt') || 0, nm = $(this).attr('title').split(' — ')[0];
+            var $ov = $('#gc-overlay');
+            if (!$ov.length) {
+                $ov = $('<div id="gc-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:9998;"><div style="position:absolute;top:6%;left:50%;transform:translateX(-50%);width:92%;max-width:760px;max-height:86vh;background:#fff;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);">' +
+                    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #e2e8f0;"><div id="gc-title" style="font-weight:800;color:#1e293b;"></div><button type="button" onclick="$(\'#gc-overlay\').hide()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;">×</button></div>' +
+                    '<div id="gc-body" style="padding:12px 18px;overflow:auto;flex:1;font-size:13px;"></div></div></div>').appendTo('body');
+            }
+            $('#gc-title').text('🔍 ' + nm + ' — bazadagi holat');
+            $('#gc-body').html('<div style="color:#94a3b8;">Yuklanmoqda...</div>');
+            $ov.show();
+            $.get(GROUP_CHECK_URL, { gid: gid }).done(function(r) {
+                var h = '';
+                var db = +r.active_count || 0;
+                var col = db === onScreen ? '#166534' : '#b45309';
+                h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' +
+                     '<div style="padding:8px 12px;border-radius:8px;background:#f1f5f9;"><div style="font-size:11px;color:#64748b;font-weight:700;">EKRANDA</div><div style="font-size:20px;font-weight:800;">' + onScreen + '</div></div>' +
+                     '<div style="padding:8px 12px;border-radius:8px;background:#f0fdf4;"><div style="font-size:11px;color:#64748b;font-weight:700;">BAZADA (faol, status 11)</div><div style="font-size:20px;font-weight:800;color:' + col + '">' + db + '</div></div>' +
+                     '<div style="padding:8px 12px;border-radius:8px;background:#fefce8;flex:1;min-width:220px;font-size:12px;color:#713f12;">' +
+                     'Oxirgi talabalar importi: <b>' + (r.last_import && r.last_import.finished_at ? r.last_import.finished_at + ' (' + r.last_import.state + (r.last_import.imported != null ? ', ' + r.last_import.imported + ' ta' : '') + ')' : '—') + '</b><br>' +
+                     'Bazada talaba yozuvlari oxirgi yangilangan: <b>' + (r.students_max_updated || '—') + '</b></div></div>';
+                if (r.group) h += '<div style="margin-bottom:8px;color:#475569;">Guruh: <b>' + esc(r.group.name) + '</b> · ' + esc(r.group.department || '') + ' · ' + esc(r.group.lang || '') + ' · ' + (r.group.active ? 'faol' : '<span style="color:#dc2626">nofaol</span>') + '</div>';
+                else h += '<div style="margin-bottom:8px;color:#dc2626;">Guruh bazada (groups jadvalida) topilmadi — "Guruhlarni HEMISdan tortish" ni bosing.</div>';
+                if (db !== onScreen) h += '<div style="margin-bottom:8px;padding:8px 10px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;">Ekrandagi son bazadagidan farq qiladi — <b>"⟳ Bazadan yangilash"</b> ni bosing (yoki qatordagi sonni qo\'lda tuzating).</div>';
+                h += '<div style="margin-bottom:6px;font-weight:800;color:#334155;">Statuslar kesimi (bazada):</div><table style="border-collapse:collapse;margin-bottom:12px;">';
+                (r.by_status || []).forEach(function(b) { h += '<tr><td style="padding:2px 10px 2px 0;">' + esc(b.student_status_name || b.student_status_code) + ' <span style="color:#94a3b8;">(' + esc(b.student_status_code) + ')</span></td><td style="padding:2px 0;font-weight:700;text-align:right;">' + b.c + '</td></tr>'; });
+                h += '</table>';
+                h += '<div style="margin-bottom:6px;font-weight:800;color:#334155;">Faol talabalar (' + db + ' ta' + ((r.active || []).length < db ? ', birinchi ' + (r.active || []).length + ' tasi' : '') + '):</div>';
+                h += '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;border-bottom:1px solid #e2e8f0;"><th style="padding:3px 6px;">#</th><th style="padding:3px 6px;">F.I.Sh.</th><th style="padding:3px 6px;">HEMIS ID</th><th style="padding:3px 6px;">Kurs</th><th style="padding:3px 6px;">Yangilangan</th></tr></thead><tbody>';
+                (r.active || []).forEach(function(a, i) { h += '<tr style="border-bottom:1px solid #f8fafc;"><td style="padding:3px 6px;color:#94a3b8;">' + (i + 1) + '</td><td style="padding:3px 6px;">' + esc(a.name) + '</td><td style="padding:3px 6px;color:#64748b;">' + esc(a.hemis_id) + '</td><td style="padding:3px 6px;">' + esc(a.level || '') + '</td><td style="padding:3px 6px;color:#64748b;">' + esc(a.updated_at || '') + '</td></tr>'; });
+                h += '</tbody></table>';
+                h += '<div style="margin-top:10px;font-size:11.5px;color:#64748b;line-height:1.5;">HEMISdagi "Talabalar" ustuni bilan solishtiring. Bazadagi faol son HEMISdagidan <b>ko\'p</b> bo\'lsa — ro\'yxatdagi ortiqcha talaba HEMISda boshqa guruhga o\'tgan yoki statusi o\'zgargan, lekin import hali buni olib kelmagan: "⇩ Talabalarni HEMISdan tortish" ni ishga tushiring va tugashini kuting. Talabaning "Yangilangan" vaqti oxirgi importdan eski bo\'lsa — import bu talabani HEMISdan olmagan (API ro\'yxatida yo\'q).</div>';
+                $('#gc-body').html(h);
+            }).fail(function(xhr) { $('#gc-body').html('<div style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ').</div>'); });
+        });
 
         // Guruhni ro'yxatdan o'chirish (bashoratdagi soxta "1K-01a" kabi guruhlar uchun)
         $(document).on('click', '#mn-body .mn-x-row', function(e) {
@@ -2089,6 +2128,8 @@
         .mn-handle { color:#cbd5e1; font-size:13px; flex-shrink:0; }
         .mn-row[draggable="true"] .mn-handle { color:#94a3b8; }
         .mn-name { flex:1; min-width:0; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .mn-name-chk { cursor:pointer; text-decoration:underline dotted #94a3b8; text-underline-offset:2px; }
+        .mn-name-chk:hover { color:#a21caf; }
         .mn-cnt { width:48px; height:22px; border:1px solid #e2e8f0; border-radius:5px; text-align:center; font-size:11.5px; font-weight:700; color:#0f172a; -moz-appearance:textfield; flex-shrink:0; }
         .mn-cnt::-webkit-outer-spin-button, .mn-cnt::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
         .mn-cnt:focus { outline:none; border-color:#a21caf; box-shadow:0 0 0 2px rgba(162,28,175,0.15); }

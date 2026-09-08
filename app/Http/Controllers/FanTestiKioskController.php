@@ -30,7 +30,9 @@ class FanTestiKioskController extends Controller
 
         // Yopilgan test 404 bermaydi: sinf kompyuterlarida havola ochiq
         // turgan bo'lishi mumkin, shuning uchun tushunarli xabar chiqadi.
-        if (!$fanTesti->is_active) {
+        // Fani biriktirilmagan qoralama ham shu yerda to'xtaydi: qaysi guruh
+        // ishlashi aniq bo'lmagani uchun uni hech kimga ochib bo'lmaydi.
+        if (!$fanTesti->is_active || !$fanTesti->curriculum_subject_id) {
             return view('kiosk.fan-testi.closed', [
                 'test' => $fanTesti->load('subject'),
             ]);
@@ -45,8 +47,8 @@ class FanTestiKioskController extends Controller
     {
         $this->assertTableReady();
 
-        // Yopilgan testda yangi urinish boshlanmaydi.
-        if (!$fanTesti->is_active) {
+        // Yopilgan yoki fansiz testda yangi urinish boshlanmaydi.
+        if (!$fanTesti->is_active || !$fanTesti->curriculum_subject_id) {
             return redirect()->route('kiosk.fan-testi.show', $fanTesti);
         }
 

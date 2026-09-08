@@ -273,6 +273,18 @@
     .bl-pill { display: inline-flex; padding: 3px 11px; border-radius: 3px; font-size: 11px; font-weight: 500; letter-spacing: .03em; }
     .bl-pill.ok { background: var(--ok-bg); color: var(--ok); }
     .bl-pill.off { background: #eef1f6; color: var(--muted); }
+    .bl-pill.draft { background: var(--warn-bg); color: var(--warn); }
+    .bl-t-draft { color: var(--warn); font-size: 12.5px; font-weight: 500; }
+
+    /* Fan biriktirish oynasi */
+    .bl-modal { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 39, 72, .55); }
+    .bl-modal.is-open { display: flex; }
+    .bl-modal-box { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 6px; background: #fff; box-shadow: 0 20px 50px rgba(15, 39, 72, .3); }
+    .bl-modal-head { padding: 16px 20px; border-bottom: 1px solid var(--line-soft); background: linear-gradient(180deg, #fbfcfe, #f5f8fc); }
+    .bl-modal-head h3 { margin: 0; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; }
+    .bl-modal-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .bl-modal-body { display: grid; gap: 14px; padding: 18px 20px; }
+    .bl-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 20px; border-top: 1px solid var(--line-soft); background: #fafcfe; }
     .bl-btn-warn { border-color: #e5cfa4; background: #fff; color: var(--warn); }
     .bl-btn-warn:hover { background: var(--warn-bg); }
     .bl-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; white-space: nowrap; }
@@ -336,6 +348,9 @@
         @if(session('success'))
             <div class="bl-alert is-ok">{{ session('success') }}</div>
         @endif
+        @if(session('error'))
+            <div class="bl-alert is-bad">{{ session('error') }}</div>
+        @endif
         @if($errors->any())
             <div class="bl-alert is-bad">
                 Ma'lumotlarni tekshiring:
@@ -377,9 +392,9 @@
 
             <div class="bl-panel-body bl-grid bl-grid-2">
                 <div class="bl-field bl-span">
-                    <label for="curriculum_subject_id">Fan</label>
-                    <select name="curriculum_subject_id" id="curriculum_subject_id" required>
-                        <option value="">Fan tanlang</option>
+                    <label for="curriculum_subject_id">Fan <span style="color:var(--muted);font-weight:400">(keyinroq biriktirsa ham bo'ladi)</span></label>
+                    <select name="curriculum_subject_id" id="curriculum_subject_id">
+                        <option value="">— Hozircha biriktirilmasin (qoralama) —</option>
                         @foreach($subjects as $subject)
                             @php
                                 $subjectGroups = (int) ($subject->group_count ?? 0);
@@ -395,6 +410,9 @@
                             </option>
                         @endforeach
                     </select>
+                    <p class="bl-note">Dars jadvali tayyor bo'lmagan bo'lsa fanni bo'sh qoldiring —
+                        to'plam qoralama bo'lib turadi, savollarni hozirdan kiritaverasiz.
+                        Fan biriktirilgach uni talabalarga ochish mumkin bo'ladi.</p>
                     @if($subjects->isEmpty())
                         <p class="bl-note is-warn">Sizga tegishli kafedra fanlari topilmadi.</p>
                     @endif
@@ -449,7 +467,11 @@
                 @forelse($allowedGroups as $groupName)
                     <span class="bl-group-chip">{{ $groupName }}</span>
                 @empty
-                    <span class="bl-groups-note">Bu fan-semestr-reja uchun guruh biriktirilmagan — testni istalgan talaba ishlay oladi. Ro'yxatdan guruhi bor variantni tanlang.</span>
+                    @if(!$collection->curriculum_subject_id)
+                        <span class="bl-groups-note">To'plam qoralama — fan biriktirilgach guruhlar shu yerda ko'rinadi.</span>
+                    @else
+                        <span class="bl-groups-note">Bu fan-semestr-reja uchun guruh biriktirilmagan — testni istalgan talaba ishlay oladi. Ro'yxatdan guruhi bor variantni tanlang.</span>
+                    @endif
                 @endforelse
             </div>
 
@@ -544,6 +566,7 @@
                         </thead>
                         <tbody>
                         @foreach($collections as $item)
+                            @php $isDraft = !$item->curriculum_subject_id; @endphp
                             <tr class="{{ $isEdit && $item->id === $collection->id ? 'is-current' : '' }}">
                                 <td>
                                     <span class="bl-t-name">{{ $item->name }}</span>
@@ -552,17 +575,31 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <span class="bl-t-name">{{ $item->subject?->subject_name ?? '-' }}</span>
-                                    <span class="bl-t-sub">{{ $item->subject?->semester_name ?? $item->subject?->subject_code ?? '-' }}</span>
+                                    @if($isDraft)
+                                        <span class="bl-t-draft">Fan biriktirilmagan</span>
+                                        <span class="bl-t-sub">Savollarni kiritaverish mumkin</span>
+                                    @else
+                                        <span class="bl-t-name">{{ $item->subject?->subject_name ?? '-' }}</span>
+                                        <span class="bl-t-sub">{{ collect([$item->subject?->semester_name, $item->subject?->curriculum_label ?? null])->filter()->implode(' · ') ?: '-' }}</span>
+                                    @endif
                                 </td>
                                 <td style="text-align:center"><span class="bl-num">{{ $item->questionCount() }}</span></td>
                                 <td style="text-align:center">{{ $item->duration_minutes }} daqiqa</td>
                                 <td>
-                                    <span class="bl-pill {{ $item->is_active ? 'ok' : 'off' }}">{{ $item->is_active ? 'Ochiq' : 'Yopiq' }}</span>
+                                    @if($isDraft)
+                                        <span class="bl-pill draft">Qoralama</span>
+                                    @else
+                                        <span class="bl-pill {{ $item->is_active ? 'ok' : 'off' }}">{{ $item->is_active ? 'Ochiq' : 'Yopiq' }}</span>
+                                    @endif
                                 </td>
                                 <td style="text-align:right">
                                     <div class="bl-acts">
-                                        @if($item->questionCount() > 0)
+                                        @if($isDraft)
+                                            <button type="button" class="bl-btn bl-btn-main bl-btn-sm bl-attach"
+                                                    data-attach-id="{{ $item->id }}"
+                                                    data-attach-name="{{ $item->name }}"
+                                                    data-attach-url="{{ route('teacher.fan-testlari.attach-subject', $item) }}">Biriktirish</button>
+                                        @elseif($item->questionCount() > 0)
                                             @if($item->is_active)
                                                 <a href="{{ route('kiosk.fan-testi.show', $item) }}" target="_blank" class="bl-btn bl-btn-ok bl-btn-sm" title="Talabalar uchun test sahifasini ochish">Ochish</a>
                                                 <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}" onsubmit="return confirm('Test sahifasi yopilsinmi? Talabalar havola orqali kira olmaydi.')">
@@ -661,4 +698,73 @@
         };
     }
 </script>
+
+    {{-- Qoralamaga fan biriktirish --}}
+    <div class="bl-modal" id="attachModal">
+        <form method="POST" action="" class="bl-modal-box" id="attachForm">
+            @csrf
+            <div class="bl-modal-head">
+                <h3>To'plamni fanga biriktirish</h3>
+                <p>Fan tanlangach guruhlar aniqlanadi va to'plamni talabalarga ochish mumkin bo'ladi.</p>
+            </div>
+            <div class="bl-modal-body">
+                <div class="bl-field">
+                    <label for="attachSubject">Bu semestrda o'tadigan fanlaringiz</label>
+                    <select name="curriculum_subject_id" id="attachSubject" required>
+                        <option value="">Fan tanlang</option>
+                        @foreach($subjects as $subject)
+                            @php
+                                $aGroups = (int) ($subject->group_count ?? 0);
+                                $aLabel = collect([
+                                    $subject->subject_name,
+                                    $subject->semester_name,
+                                    $subject->curriculum_label ?? null,
+                                ])->filter()->implode(' · ')
+                                    . ' — ' . ($aGroups > 0 ? $aGroups . ' guruh' : 'guruh yo\'q');
+                            @endphp
+                            <option value="{{ $subject->id }}" @class(['bl-opt-empty' => $aGroups < 1])>{{ $aLabel }}</option>
+                        @endforeach
+                    </select>
+                    @if($subjects->isEmpty())
+                        <p class="bl-note is-warn">Sizga biriktirilgan fanlar hali topilmadi.</p>
+                    @endif
+                </div>
+                <div class="bl-field">
+                    <label for="attachName">To'plam nomi</label>
+                    <input id="attachName" name="name" required maxlength="255" placeholder="Masalan: 1-mavzu">
+                </div>
+            </div>
+            <div class="bl-modal-foot">
+                <button type="button" class="bl-btn bl-btn-ghost" id="attachCancel">Bekor qilish</button>
+                <button type="submit" class="bl-btn bl-btn-main">Biriktirish</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+    (() => {
+        const modal = document.getElementById('attachModal');
+        const form = document.getElementById('attachForm');
+        if (!modal || !form) return;
+
+        document.addEventListener('click', ev => {
+            const open = ev.target.closest ? ev.target.closest('.bl-attach') : null;
+            if (open) {
+                form.action = open.dataset.attachUrl;
+                document.getElementById('attachName').value = open.dataset.attachName || '';
+                document.getElementById('attachSubject').value = '';
+                modal.classList.add('is-open');
+                return;
+            }
+            if (ev.target === modal || (ev.target.id === 'attachCancel')) {
+                modal.classList.remove('is-open');
+            }
+        });
+
+        document.addEventListener('keydown', ev => {
+            if (ev.key === 'Escape') modal.classList.remove('is-open');
+        });
+    })();
+    </script>
+
 </x-app-layout>

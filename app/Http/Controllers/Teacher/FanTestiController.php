@@ -43,6 +43,8 @@ class FanTestiController extends Controller
         $subjects = $this->subjectsFor($teacher);
         $validated = $this->validateSettings($request, $subjects);
 
+        $validated['curriculum_subject_id'] = $validated['curriculum_subject_id'] ?? null;
+
         $collection = FanTesti::create([
             ...$validated,
             'shuffle_questions' => $request->boolean('shuffle_questions'),
@@ -205,6 +207,9 @@ class FanTestiController extends Controller
         $this->authorizeCollection($fanTesti);
 
         $willOpen = !$fanTesti->is_active;
+        if ($willOpen && !$fanTesti->curriculum_subject_id) {
+            return back()->with('error', "Avval to'plamga fan biriktiring — aks holda qaysi guruh ishlashi aniqlanmaydi.");
+        }
         $fanTesti->update([
             'is_active' => $willOpen,
             'updated_by' => $this->teacher()->id,
@@ -213,6 +218,36 @@ class FanTestiController extends Controller
         return back()->with('success', $willOpen
             ? 'Test sahifasi ochildi — talabalar havola orqali kira oladi.'
             : 'Test sahifasi yopildi.');
+    }
+
+    /**
+     * Qoralamaga fan biriktiradi — shundan keyin guruhlar aniqlanadi va
+     * to'plamni talabalarga ochish mumkin bo'ladi.
+     */
+    public function attachSubject(Request $request, FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $subjects = $this->subjectsFor($this->teacher());
+
+        $data = $request->validate([
+            'curriculum_subject_id' => [
+                'required', 'integer',
+                Rule::in($subjects->pluck('id')->map(fn ($id) => (int) $id)->all()),
+            ],
+            'name' => ['required', 'string', 'max:255'],
+        ], [], [
+            'curriculum_subject_id' => 'Fan',
+            'name' => "To'plam nomi",
+        ]);
+
+        $fanTesti->update([
+            'curriculum_subject_id' => (int) $data['curriculum_subject_id'],
+            'name' => trim($data['name']),
+            'updated_by' => $this->teacher()->id,
+        ]);
+
+        return back()->with('success', "To'plam fanga biriktirildi. Endi uni talabalarga ochish mumkin.");
     }
 
     public function destroy(FanTesti $fanTesti)
@@ -421,9 +456,16 @@ class FanTestiController extends Controller
 
     private function collectionsFor($subjects)
     {
+        $ownerIds = $this->collectionOwnerIds($this->teacher());
+
         $collections = FanTesti::query()
             ->with('subject')
-            ->whereIn('curriculum_subject_id', $subjects->pluck('id'))
+            ->where(function ($query) use ($subjects, $ownerIds) {
+                $query->whereIn('curriculum_subject_id', $subjects->pluck('id'))
+                    // Fani hali biriktirilmagan o'z qoralamalari
+                    ->orWhere(fn ($draft) => $draft->whereNull('curriculum_subject_id')
+                        ->whereIn('created_by', $ownerIds));
+            })
             ->latest()
             ->get();
 
@@ -531,15 +573,42 @@ class FanTestiController extends Controller
 
     private function authorizeCollection(FanTesti $fanTesti): void
     {
-        $allowedSubjectIds = $this->subjectsFor($this->teacher())->pluck('id');
+        $teacher = $this->teacher();
+
+        // Fansiz qoralamani faqat egasi (kafedra mudiri uchun — kafedradoshi)
+        // tahrirlaydi: fan bo'yicha tekshirish bu yerda ishlamaydi.
+        if (!$fanTesti->curriculum_subject_id) {
+            abort_unless($this->collectionOwnerIds($teacher)->contains((int) $fanTesti->created_by), 403);
+            return;
+        }
+
+        $allowedSubjectIds = $this->subjectsFor($teacher)->pluck('id');
         abort_unless($allowedSubjectIds->contains((int) $fanTesti->curriculum_subject_id), 403);
+    }
+
+    /**
+     * Qoralama to'plam egalari: o'qituvchining o'zi, kafedra mudiri uchun
+     * esa butun kafedra — u kafedrasining testlarini boshqaradi.
+     */
+    private function collectionOwnerIds($teacher)
+    {
+        if (session('active_role') === 'kafedra_mudiri' && $teacher->department_hemis_id) {
+            return Teacher::query()
+                ->where('department_hemis_id', $teacher->department_hemis_id)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+        }
+
+        return collect([(int) $teacher->id]);
     }
 
     private function validateSettings(Request $request, $subjects): array
     {
         return $request->validate([
+            // Fan ixtiyoriy: dars jadvali tayyor bo'lmaguncha to'plam
+            // "qoralama" bo'lib turadi va keyinroq biriktiriladi.
             'curriculum_subject_id' => [
-                'required', 'integer',
+                'nullable', 'integer',
                 Rule::in($subjects->pluck('id')->map(fn ($id) => (int) $id)->all()),
             ],
             'name' => ['required', 'string', 'max:255'],

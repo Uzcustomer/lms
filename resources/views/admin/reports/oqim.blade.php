@@ -993,7 +993,9 @@
                 });
             }).fail(function(xhr) {
                 $('#loading-state').hide();
-                $('#empty-state').show().find('p:first').text('Xatolik (HTTP ' + xhr.status + ')');
+                $('#empty-state').show().find('p:first').text(xhr.status === 419
+                    ? 'Sessiya eskirgan. Sahifani yangilang (Ctrl+Shift+R) va qayta urinib ko\'ring.'
+                    : ('Xatolik (HTTP ' + xhr.status + ')'));
             });
         }
 
@@ -1390,7 +1392,9 @@
                 $st.css('color', '#16a34a').text('✓ ' + added + ' ta yangi guruh ro\'yxatga qo\'shildi ("Yangi (HEMIS)" oqimlarida): ' + addedNames.slice(0, 8).join(', ') + (addedNames.length > 8 ? ' ...' : '') + ' — kerakli oqimga sudrab joylang.');
                 mnFlash(added + ' ta yangi guruh qo\'shildi');
             }).fail(function(xhr) {
-                $st.css('color', '#dc2626').text('Yangi guruhlarni yuklab bo\'lmadi (HTTP ' + xhr.status + ').');
+                $st.css('color', '#dc2626').text(xhr.status === 419
+                    ? 'Sessiya eskirgan. Sahifani yangilang (Ctrl+Shift+R) va qayta urinib ko\'ring.'
+                    : ('Yangi guruhlarni yuklab bo\'lmadi (HTTP ' + xhr.status + ').'));
             }).always(function() { $btn.prop('disabled', false).css('opacity', 1); });
         }
 
@@ -1413,7 +1417,14 @@
                     if (what === 'groups' && res.sync) mergeNewGroups();
                 })
                 .fail(function(xhr) {
-                    var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : ('Xatolik (HTTP ' + xhr.status + ')');
+                    // 419 — sessiya (CSRF token) eskirgan: uzoq ochiq turgan sahifada
+                    // yoki server keshi tozalangandan keyin chiqadi. Foydalanuvchi
+                    // "HTTP 419" dan nima qilishni bilmaydi — aniq yo'l ko'rsatiladi.
+                    var msg = xhr.status === 419
+                        ? 'Sessiya eskirgan. Sahifani yangilang (Ctrl+Shift+R) va qayta urinib ko\'ring.'
+                        : ((xhr.responseJSON && xhr.responseJSON.error)
+                            ? xhr.responseJSON.error
+                            : ('Xatolik (HTTP ' + xhr.status + ')'));
                     $('#mn-hemis-status').css('color', '#dc2626').text(msg);
                 })
                 .always(function() { $btn.prop('disabled', false).css('opacity', 1); });

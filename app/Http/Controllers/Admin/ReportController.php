@@ -11964,6 +11964,29 @@ class ReportController extends Controller
      * Natijada mavjud optimizator o'zgarishsiz kelasi yil oqimini quradi.
      */
     /**
+     * Guruh nomidagi prefiks fakultet nomiga mos keladimi.
+     *
+     * Nomerlangan fakultetlarda guruh nomi fakultetni ochiq aytadi: "d1/…" —
+     * 1-son davolash, "d2/…" — 2-son davolash. HEMIS guruhni boshqa fakultetga
+     * ko'chirganda eski yozuvni o'chirmaydi, shu sabab takror yozuvlardan
+     * qaysinisi to'g'ri ekanini shu prefiks aytib beradi.
+     *
+     * Qaytadi: true — mos, false — mos emas, null — nomdan aniqlab bo'lmadi
+     * (prefiks yo'q yoki fakultet nomerlanmagan).
+     */
+    private function oqimGroupNameFitsFaculty(?string $groupName, ?string $facultyName): ?bool
+    {
+        if (!preg_match('~^\s*[a-z]+(\d+)\s*/~ui', (string) $groupName, $gm)) {
+            return null;
+        }
+        if (!preg_match('/(\d+)\s*-?\s*son/ui', (string) $facultyName, $fm)) {
+            return null;
+        }
+
+        return (int) $gm[1] === (int) $fm[1];
+    }
+
+    /**
      * Talabasi yo'q (bo'sh) FAOL guruhlarni hisobot qatorlariga aylantiradi (cnt=0).
      * Guruhning kursi: o'quv reja (curricula.education_year_code) qabul yilidan,
      * u bo'lmasa guruh nomidagi 2 xonali yildan (d1/d26-08b → 26 → 2026) aniqlanadi.
@@ -12070,10 +12093,20 @@ class ReportController extends Controller
                 '_fixed'          => $fixed, // reja rejimida kursi surilmaydi
             ];
 
-            // Takror nom: HEMIS IDsi kattaroq yozuv yangiroq — o'shanisi qoladi.
+            // Takror nom. Avval guruh nomi bo'yicha tanlanadi: "d1/…" — 1-son,
+            // "d2/…" — 2-son davolash. Nom fakultetni ochiq aytib turgani uchun
+            // u HEMIS yozuvidan ishonchliroq. Nom hech narsa demasa — HEMIS IDsi
+            // kattaroq (yangiroq) yozuv qoladi.
             if (isset($byName[$key])) {
                 $kept = $out[$byName[$key]];
-                if ((int) $g->group_hemis_id > (int) $kept->group_id) {
+                $newFits = $this->oqimGroupNameFitsFaculty($g->group_name, $g->department_name);
+                $keptFits = $this->oqimGroupNameFitsFaculty($kept->group_name, $kept->department_name);
+
+                $replace = $newFits === $keptFits
+                    ? (int) $g->group_hemis_id > (int) $kept->group_id
+                    : ($newFits === true || $keptFits === false);
+
+                if ($replace) {
                     $out[$byName[$key]] = $row;
                 }
                 continue;

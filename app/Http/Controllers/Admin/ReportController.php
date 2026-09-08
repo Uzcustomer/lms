@@ -7252,7 +7252,10 @@ class ReportController extends Controller
             ->get();
 
         // 2. HEMIS API dan real-time ma'lumot
-        $baseUrl = config('services.hemis.base_url');
+        // base_url ".../rest" yoki ".../rest/v1" ko'rinishida bo'lishi mumkin —
+        // ikkalasidan ham bitta to'g'ri manzil chiqishi kerak.
+        $baseUrl = rtrim((string) config('services.hemis.base_url'), '/');
+        $baseUrl = (preg_replace('~/v1$~', '', $baseUrl) ?? $baseUrl) . '/';
         $token   = config('services.hemis.token');
 
         $apiSubjects = [];

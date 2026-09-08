@@ -28,6 +28,25 @@ class HemisService
         $this->token = config('services.hemis.token');
     }
 
+    /**
+     * HEMIS API manzilini yig'adi.
+     *
+     * `HEMIS_API_BASE_URL` turli o'rnatishlarda turlicha yozilgan — ".../rest",
+     * ".../rest/", ".../rest/v1" yoki ".../rest/v1/". Shu sabab bu yerda oxiri
+     * bir holatga keltiriladi va yo'l `v1/` bilan birga qo'shiladi: aks holda
+     * ".../restdata/group-list" kabi manzil chiqib, API 404 qaytaradi.
+     *
+     * $path — "data/group-list" ko'rinishida, boshida "/" siz.
+     */
+    protected function apiUrl(string $path): string
+    {
+        $base = rtrim(trim($this->baseUrl), '/');
+        // Oxiridagi "v1" bo'lsa olib tashlanadi — u pastda bir marta qo'shiladi.
+        $base = preg_replace('~/v1$~', '', $base) ?? $base;
+
+        return $base . '/v1/' . ltrim($path, '/');
+    }
+
     public function importStudents(): int
     {
         $page = 1;
@@ -72,7 +91,7 @@ class HemisService
     protected function fetchStudents($page)
     {
         $response = Http::withoutVerifying()->withToken($this->token)
-            ->get($this->baseUrl . '/v1/data/student-list', [
+            ->get($this->apiUrl('data/student-list'), [
                 'page' => $page,
                 'limit' => 200,
                 // "_group"=>650
@@ -333,7 +352,7 @@ class HemisService
             $response = Http::withoutVerifying()
                 ->timeout(30)
                 ->withToken($this->token)
-                ->get($this->baseUrl . '/v1/data/student-list', [
+                ->get($this->apiUrl('data/student-list'), [
                     'page' => $page,
                     'limit' => 200,
                     '_group' => $groupHemisId,
@@ -384,7 +403,7 @@ class HemisService
     {
         try {
             $response = Http::withoutVerifying()->withToken($this->token)
-                ->get($this->baseUrl . 'data/semester-list', [
+                ->get($this->apiUrl('data/semester-list'), [
                     'page' => $page,
                     'limit' => 200,
                 ]);
@@ -450,7 +469,7 @@ class HemisService
     {
         try {
             $response = Http::withoutVerifying()->withToken($this->token)
-                ->get($this->baseUrl . 'data/department-list', [
+                ->get($this->apiUrl('data/department-list'), [
                     'page' => $page,
                     'limit' => 200,
                 ]);
@@ -536,7 +555,7 @@ class HemisService
         try {
             $response = Http::withoutVerifying()->withToken($this->token)
                 ->timeout(60)
-                ->get($this->baseUrl . 'data/group-list', [
+                ->get($this->apiUrl('data/group-list'), [
                     'page' => $page,
                     'limit' => 200,
                 ]);
@@ -622,7 +641,7 @@ class HemisService
     {
         try {
             $response = Http::withoutVerifying()->withToken($this->token)
-                ->get($this->baseUrl . 'data/curriculum-list', [
+                ->get($this->apiUrl('data/curriculum-list'), [
                     'page' => $page,
                     'limit' => 200,
                 ]);
@@ -708,7 +727,7 @@ class HemisService
     {
         try {
             $response = Http::withoutVerifying()->withToken($this->token)
-                ->get($this->baseUrl . 'data/marking-system-list', [
+                ->get($this->apiUrl('data/marking-system-list'), [
                     'page' => $page,
                     'limit' => 200,
                 ]);
@@ -946,7 +965,7 @@ class HemisService
             $response = Http::withoutVerifying()
                 ->timeout(60)
                 ->withToken($this->token)
-                ->get($this->baseUrl . 'v1/data/academic-record-list', [
+                ->get($this->apiUrl('data/academic-record-list'), [
                     'page' => $page,
                     'limit' => 200,
                 ]);
@@ -1004,7 +1023,7 @@ class HemisService
             $response = Http::withoutVerifying()
                 ->timeout(30)
                 ->withToken($this->token)
-                ->get($this->baseUrl . '/v1/data/contract-list', array_merge([
+                ->get($this->apiUrl('data/contract-list'), array_merge([
                     'page' => $params['page'] ?? 1,
                     'limit' => $params['limit'] ?? 50,
                 ], array_filter([
@@ -1055,7 +1074,7 @@ class HemisService
                     $response = Http::withoutVerifying()
                         ->timeout(30)
                         ->withToken($this->token)
-                        ->get($this->baseUrl . 'v1/data/student-subject-list', [
+                        ->get($this->apiUrl('data/student-subject-list'), [
                             '_student' => $studentHemisId,
                             'page'     => $page,
                             'limit'    => 100,
@@ -1174,7 +1193,7 @@ class HemisService
                         ->connectTimeout(5)
                         ->timeout($timeout)
                         ->withToken($this->token)
-                        ->get($this->baseUrl . '/v1/data/student-performance-list', $params);
+                        ->get($this->apiUrl('data/student-performance-list'), $params);
 
                     if (!$response->successful()) {
                         Log::warning('HEMIS student-performance-list failed', [
@@ -1264,7 +1283,7 @@ class HemisService
                     ->connectTimeout(10)
                     ->timeout($timeout)
                     ->withToken($this->token)
-                    ->get($this->baseUrl . '/v1/data/student-performance-list', $params);
+                    ->get($this->apiUrl('data/student-performance-list'), $params);
 
                 if (!$response->successful()) {
                     Log::warning('HEMIS bulk student-performance-list failed', [

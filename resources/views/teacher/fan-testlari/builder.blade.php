@@ -328,6 +328,22 @@
     @media (max-width: 1100px) { .bl-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 720px) { .bl-slots { grid-template-columns: 1fr; } }
 
+    .bl-slot-more {
+        display: flex; align-items: center; justify-content: center; gap: 11px;
+        width: 100%; margin-top: 16px; padding: 15px;
+        border: 1px dashed #cfdaea; border-radius: 11px; background: #fbfdff;
+        color: var(--ink-soft); font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 600;
+        cursor: pointer; transition: border-color .16s, background .16s, color .16s;
+    }
+    .bl-slot-more:hover { border-color: var(--ok); background: #f4fbf8; color: var(--ok); }
+    .bl-slot-more-plus {
+        display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+        background: linear-gradient(160deg, #17a06a, var(--ok)); color: #fff;
+        box-shadow: 0 4px 12px rgba(15, 122, 82, .28); transition: transform .16s;
+    }
+    .bl-slot-more-plus svg { width: 17px; height: 17px; }
+    .bl-slot-more:hover .bl-slot-more-plus { transform: scale(1.08); }
+
     /* ---- Savol oynasi ---- */
     .bl-qmodal {
         position: fixed; inset: 0; z-index: 220; display: none;
@@ -608,10 +624,6 @@
                         <p>Bo'sh katakchadagi <b>+</b> ni bosing — savol oynasi ochiladi.</p>
                     </div>
                     <span class="bl-panel-count" id="slotCount">{{ count($questions) }} / {{ $slotCount }}</span>
-                    <button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" id="addSlots" style="margin-left:10px">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                        Katakcha
-                    </button>
                 </div>
 
                 <div class="bl-panel-body">
@@ -644,6 +656,13 @@
                             </button>
                         @endfor
                     </div>
+
+                    <button type="button" class="bl-slot-more" id="addSlots">
+                        <span class="bl-slot-more-plus">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                        </span>
+                        <span>Yana savol qo'shish</span>
+                    </button>
                 </div>
             </div>
 
@@ -963,19 +982,20 @@
             addBtn.addEventListener('click', () => {
                 const grid = document.querySelector('.bl-slots');
                 const last = grid ? grid.querySelector('.bl-slot.is-empty:last-of-type') : null;
-                if (!grid || !last) return;
-                let total = grid.querySelectorAll('.bl-slot').length;
-                for (let i = 0; i < 3; i++) {
+                if (grid && last) {
+                    const total = grid.querySelectorAll('.bl-slot').length + 1;
                     const copy = last.cloneNode(true);
-                    total += 1;
                     const no = copy.querySelector('.bl-slot-no');
                     if (no) no.textContent = total + '-savol';
                     grid.appendChild(copy);
+
+                    const counter = document.getElementById('slotCount');
+                    if (counter) {
+                        counter.textContent = counter.textContent.split('/')[0].trim() + ' / ' + total;
+                    }
                 }
-                const counter = document.getElementById('slotCount');
-                if (counter) {
-                    counter.textContent = counter.textContent.split('/')[0].trim() + ' / ' + total;
-                }
+                // Katakcha qo'shilishi bilan savol oynasi ochiladi
+                open('new');
             });
         }
 

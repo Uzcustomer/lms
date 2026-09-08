@@ -57,7 +57,7 @@ class HemisService
         while ($hasMore) {
             $response = $this->fetchStudents($page);
 
-            if ($response['success']) {
+            if (!empty($response['success'])) {
                 foreach ($response['data']['items'] as $studentData) {
                     $this->updateOrCreateStudent($studentData);
                     $importedHemisIds[] = $studentData['id'];
@@ -68,12 +68,15 @@ class HemisService
                 $hasMore = $pagination['page'] < $pagination['pageCount'];
                 $page++;
             } else {
-                Log::error('Failed to fetch students from HEMIS', $response);
-                break;
+                Log::error('Failed to fetch students from HEMIS', is_array($response) ? $response : ['response' => $response]);
+                // Chala ro'yxat bilan davom etib bo'lmaydi: quyidagi "chetlashtirish" hali
+                // olinmagan sahifalardagi talabalarni ham o'chirib qo'yardi. Xatoni yuqoriga beramiz —
+                // chaqiruvchi (komanda / fon vazifasi) uni "muvaffaqiyatsiz" deb belgilaydi.
+                throw new \RuntimeException('HEMIS student-list so\'rovi muvaffaqiyatsiz (sahifa ' . $page . ', ' . $totalImported . ' ta yuklangan edi)');
             }
         }
 
-        // HEMIS da yo'q talabalarni "Chetlashgan" deb belgilash
+        // HEMIS da yo'q talabalarni "Chetlashgan" deb belgilash — faqat TO'LIQ ro'yxat olinganda
         if (!empty($importedHemisIds)) {
             $deactivatedCount = Student::whereNotIn('hemis_id', $importedHemisIds)
                 ->where('student_status_code', '!=', '60')

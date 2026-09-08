@@ -11400,7 +11400,7 @@ class ReportController extends Controller
             // sahifa uni so'rab turadi va tugagach ekrandagi sonlarni o'zi yangilaydi.
             $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY);
             if ($st && in_array($st['state'] ?? '', ['queued', 'running'], true)
-                && now()->diffInMinutes(Carbon::parse($st['queued_at'])) < 120) {
+                && !$this->oqimImportIsStale($st)) {
                 return response()->json(['ok' => false, 'error' => 'Talabalar importi allaqachon ' . ($st['state'] === 'running' ? 'bajarilmoqda' : 'navbatda') . ' (' . Carbon::parse($st['queued_at'])->format('H:i') . ' dan).'], 409);
             }
             \Illuminate\Support\Facades\Cache::put(self::OQIM_STUDENT_IMPORT_KEY, [
@@ -11440,6 +11440,18 @@ class ReportController extends Controller
     }
 
     private const OQIM_STUDENT_IMPORT_KEY = 'oqim_students_import_status';
+    private const OQIM_STUDENT_IMPORT_STALE_MIN = 120;
+
+    /** Navbatga qo'yilganidan beri 2 soatdan oshgan (bajarilmagan) import — eskirgan. */
+    private function oqimImportIsStale(array $st): bool
+    {
+        $since = $st['started_at'] ?? $st['queued_at'] ?? null;
+        if (!$since) {
+            return true;
+        }
+        // Carbon 3: diffInMinutes ishorali — eski vaqtdan hozirgacha (musbat) hisoblaymiz
+        return Carbon::parse($since)->diffInMinutes(now(), true) >= self::OQIM_STUDENT_IMPORT_STALE_MIN;
+    }
 
     /**
      * AJAX: fon rejimidagi talabalar importi holati (navbatda / bajarilmoqda / tugadi / xato).
@@ -11448,8 +11460,14 @@ class ReportController extends Controller
     {
         $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: ['state' => 'idle'];
         $fmt = fn($v) => $v ? Carbon::parse($v)->format('d.m.Y H:i') : null;
+        $state = $st['state'] ?? 'idle';
+        // Navbatda/bajarilmoqda holati 2 soatdan oshsa — ishchi (worker) uni bajarmagan yoki
+        // catch blokisiz to'xtagan: "eskirgan" deb qaytaramiz, sahifa qayta urinishga ruxsat beradi.
+        if (in_array($state, ['queued', 'running'], true) && $this->oqimImportIsStale($st)) {
+            $state = 'stale';
+        }
         $out = [
-            'state'       => $st['state'] ?? 'idle',
+            'state'       => $state,
             'queued_at'   => $fmt($st['queued_at'] ?? null),
             'started_at'  => $fmt($st['started_at'] ?? null),
             'finished_at' => $fmt($st['finished_at'] ?? null),

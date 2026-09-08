@@ -1481,13 +1481,30 @@
                 var snapshot = JSON.stringify(afterState);
                 // Mavjud guruhlarning talaba sonini bazadagi (HEMISdan tortilgan) songa yangilaymiz — faqat
                 // aniq bitta guruhga (gid) mos qatorlar; birlashtirilgan (gids) qatorlar tegilmaydi.
-                var cntById = {};
+                // ID'siz qatorlar (ID qo'shilishidan oldin saqlangan qoralama/versiya) nom+til bo'yicha
+                // moslanadi va ularga ID biriktiriladi — keyingi yangilashlar ID bo'yicha bo'ladi.
+                var cntById = {}, byName = {}, adopted = 0, unmatched = [];
                 src.forEach(function(sb) { (sb.courses || []).forEach(function(sc) { (sc.oqims || []).forEach(function(so) {
-                    (so.rows || []).forEach(function(r) { if (+r.gid > 0) cntById[+r.gid] = +r.count || 0; });
+                    (so.rows || []).forEach(function(r) {
+                        if (+r.gid > 0) {
+                            cntById[+r.gid] = +r.count || 0;
+                            byName[mnNormName(r.name) + '|' + (r.lang || so.lang || 'uz')] = { gid: +r.gid, count: +r.count || 0 };
+                        }
+                    });
                 }); }); });
                 afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
                     (oq.rows || []).forEach(function(r) {
-                        if (+r.gid > 0 && cntById.hasOwnProperty(+r.gid) && (+r.count || 0) !== cntById[+r.gid]) { r.count = cntById[+r.gid]; updated++; }
+                        if (!(+r.gid > 0) && !(r.gids && r.gids.length)) {
+                            var f = byName[mnNormName(r.name) + '|' + (r.lang || oq.lang || 'uz')];
+                            if (f) { r.gid = f.gid; manualKnownIds[f.gid] = true; adopted++; }
+                        }
+                        if (+r.gid > 0) {
+                            if (cntById.hasOwnProperty(+r.gid)) {
+                                if ((+r.count || 0) !== cntById[+r.gid]) { r.count = cntById[+r.gid]; updated++; }
+                            } else if (unmatched.length < 8) { unmatched.push(r.name); }
+                        } else if (!(r.gids && r.gids.length) && unmatched.length < 8) {
+                            unmatched.push(r.name);
+                        }
                     });
                 }); }); });
                 src.forEach(function(sb) {
@@ -1515,8 +1532,11 @@
                         newRows.forEach(function(r) { addedNames.push(r.name); });
                     });
                 });
+                var unm = unmatched.length ? ' Bazada (joriy filtr bo\'yicha) topilmagan guruhlar: ' + unmatched.join(', ') + (unmatched.length >= 8 ? ' ...' : '') + ' — ular bashorat (soxta) guruh yoki filtrdan tashqarida bo\'lishi mumkin.' : '';
                 if (!added && !updated) {
-                    $st.css('color', '#64748b').text('O\'zgarish yo\'q — ekrandagi guruhlar va talaba sonlari bazadagi bilan bir xil. (HEMISda yangi guruh ochilgan bo\'lsa avval "Guruhlarni HEMISdan tortish", talabalar biriktirilgan bo\'lsa "Talabalarni HEMISdan tortish" ni bosing.)');
+                    if (adopted) { MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift(); renderAfterBody(); }
+                    $st.css('color', '#64748b').text('Sonlar bazadagi bilan bir xil' + (adopted ? ' (' + adopted + ' ta guruhga HEMIS ID biriktirildi — qoralamani saqlang)' : '') + '.' + unm
+                        + ' (HEMISda o\'zgarish bo\'lgan bo\'lsa avval "Guruhlarni/Talabalarni HEMISdan tortish" ni bosing.)');
                     return;
                 }
                 MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift();
@@ -1524,7 +1544,8 @@
                 var msg = '✓ ';
                 if (added) msg += added + ' ta yangi guruh qo\'shildi ("Yangi (HEMIS)" oqimlarida: ' + addedNames.slice(0, 6).join(', ') + (addedNames.length > 6 ? ' ...' : '') + ' — kerakli oqimga sudrab joylang). ';
                 if (updated) msg += updated + ' ta guruhning talaba soni bazadagi songa yangilandi.';
-                $st.css('color', '#16a34a').text(msg);
+                if (adopted) msg += ' ' + adopted + ' ta guruhga HEMIS ID biriktirildi.';
+                $st.css('color', '#16a34a').text(msg + unm);
                 mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : ''));
             }).fail(function(xhr) {
                 $st.css('color', '#dc2626').text(xhr.status === 419
@@ -1541,6 +1562,7 @@
             if (st.state === 'running') return '🔄 Talabalar importi bajarilmoqda (boshlandi ' + (st.started_at || '') + ')... Tugagach sonlar o\'zi yangilanadi.';
             if (st.state === 'done')    return '✓ Talabalar importi tugadi ' + (st.finished_at || '') + (st.imported != null ? ' — ' + st.imported + ' ta talaba' : '') + '.';
             if (st.state === 'failed')  return '✗ Talabalar importi xato bilan tugadi: ' + (st.error || '') + '.';
+            if (st.state === 'stale')   return '⚠ Talabalar importi ' + (st.queued_at || '') + ' da navbatga qo\'yilgan, lekin 2 soatdan beri bajarilmadi (navbat ishchisi ishlamayotgan bo\'lishi mumkin). Qayta urinish mumkin.';
             return '';
         }
         function pollStudentImport(auto) {
@@ -1560,9 +1582,9 @@
                     stLastState = null;
                     if (afterState && afterState.length) mergeNewGroups(); else $('#mn-hemis-status').css('color', '#16a34a').text(txt);
                 } else if (!auto && txt) {
-                    $('#mn-hemis-status').css('color', st.state === 'failed' ? '#dc2626' : '#64748b').text(txt + (st.students_updated ? ' (bazada oxirgi yangilanish: ' + st.students_updated + ')' : ''));
-                } else if (st.state === 'failed') {
-                    $('#mn-hemis-status').css('color', '#dc2626').text(txt);
+                    $('#mn-hemis-status').css('color', st.state === 'failed' ? '#dc2626' : (st.state === 'stale' ? '#b45309' : '#64748b')).text(txt + (st.students_updated ? ' (bazada oxirgi yangilanish: ' + st.students_updated + ')' : ''));
+                } else if (st.state === 'failed' || st.state === 'stale') {
+                    $('#mn-hemis-status').css('color', st.state === 'failed' ? '#dc2626' : '#b45309').text(txt);
                 }
                 stLastState = null;
             });

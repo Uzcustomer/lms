@@ -272,7 +272,7 @@
                             <div id="mn-actions" style="display:none;padding:8px 20px;background:#fbfdff;border-bottom:1px solid #e2e8f0;align-items:center;gap:8px;flex-wrap:wrap;">
                                 <button type="button" id="mn-hemis-groups" class="af-btn af-load" onclick="hemisPull('groups')" title="HEMISdan guruhlar ro'yxatini yangilash (fon rejimida ishlaydi)">⇩ Guruhlarni HEMISdan tortish</button>
                                 <button type="button" id="mn-hemis-students" class="af-btn af-load" onclick="hemisPull('students')" title="HEMISdan talabalarni yangilash (fon rejimida, uzoqroq davom etadi)">⇩ Talabalarni HEMISdan tortish</button>
-                                <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadagi (HEMISdan tortilgan) yangi guruhlarni ekrandagi ro'yxatga qo'shish — mavjud joylashuv o'zgarmaydi">⟳ Yangi guruhlarni ro'yxatga qo'shish</button>
+                                <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadan yangilash: yangi guruhlar ro'yxatga qo'shiladi, mavjud guruhlardagi talaba soni HEMISdagi (bazadagi) songa yangilanadi — joylashuv o'zgarmaydi">⟳ Bazadan yangilash (yangi guruhlar + talaba sonlari)</button>
                                 <span id="mn-hemis-status" style="font-size:11.5px;font-weight:600;"></span>
                                 <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
@@ -1477,8 +1477,19 @@
                     if (have[k]) return false;
                     have[k] = true; return true;
                 }
-                var added = 0, addedNames = [];
+                var added = 0, addedNames = [], updated = 0;
                 var snapshot = JSON.stringify(afterState);
+                // Mavjud guruhlarning talaba sonini bazadagi (HEMISdan tortilgan) songa yangilaymiz — faqat
+                // aniq bitta guruhga (gid) mos qatorlar; birlashtirilgan (gids) qatorlar tegilmaydi.
+                var cntById = {};
+                src.forEach(function(sb) { (sb.courses || []).forEach(function(sc) { (sc.oqims || []).forEach(function(so) {
+                    (so.rows || []).forEach(function(r) { if (+r.gid > 0) cntById[+r.gid] = +r.count || 0; });
+                }); }); });
+                afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                    (oq.rows || []).forEach(function(r) {
+                        if (+r.gid > 0 && cntById.hasOwnProperty(+r.gid) && (+r.count || 0) !== cntById[+r.gid]) { r.count = cntById[+r.gid]; updated++; }
+                    });
+                }); }); });
                 src.forEach(function(sb) {
                     (sb.courses || []).forEach(function(sc) {
                         var lvl = ctLevelNum(sc);
@@ -1504,19 +1515,57 @@
                         newRows.forEach(function(r) { addedNames.push(r.name); });
                     });
                 });
-                if (!added) {
-                    $st.css('color', '#64748b').text('Yangi guruh topilmadi — ekrandagi ro\'yxat bazadagi bilan bir xil. (HEMISda yangi guruh ochilgan bo\'lsa avval "Guruhlarni HEMISdan tortish" ni bosing.)');
+                if (!added && !updated) {
+                    $st.css('color', '#64748b').text('O\'zgarish yo\'q — ekrandagi guruhlar va talaba sonlari bazadagi bilan bir xil. (HEMISda yangi guruh ochilgan bo\'lsa avval "Guruhlarni HEMISdan tortish", talabalar biriktirilgan bo\'lsa "Talabalarni HEMISdan tortish" ni bosing.)');
                     return;
                 }
                 MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift();
                 mnRecalc(); renderManual(); renderAfterBody();
-                $st.css('color', '#16a34a').text('✓ ' + added + ' ta yangi guruh ro\'yxatga qo\'shildi ("Yangi (HEMIS)" oqimlarida): ' + addedNames.slice(0, 8).join(', ') + (addedNames.length > 8 ? ' ...' : '') + ' — kerakli oqimga sudrab joylang.');
-                mnFlash(added + ' ta yangi guruh qo\'shildi');
+                var msg = '✓ ';
+                if (added) msg += added + ' ta yangi guruh qo\'shildi ("Yangi (HEMIS)" oqimlarida: ' + addedNames.slice(0, 6).join(', ') + (addedNames.length > 6 ? ' ...' : '') + ' — kerakli oqimga sudrab joylang). ';
+                if (updated) msg += updated + ' ta guruhning talaba soni bazadagi songa yangilandi.';
+                $st.css('color', '#16a34a').text(msg);
+                mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : ''));
             }).fail(function(xhr) {
                 $st.css('color', '#dc2626').text(xhr.status === 419
                     ? 'Sessiya eskirgan. Sahifani yangilang (Ctrl+Shift+R) va qayta urinib ko\'ring.'
                     : ('Yangi guruhlarni yuklab bo\'lmadi (HTTP ' + xhr.status + ').'));
             }).always(function() { $btn.prop('disabled', false).css('opacity', 1); });
+        }
+
+        // Fon rejimidagi talabalar importi holatini kuzatish — tugagach sonlar avtomatik yangilanadi
+        var HEMIS_STATUS_URL = '{{ route("admin.reports.oqim.hemis.status") }}';
+        var stPollTimer = null, stLastState = null;
+        function stText(st) {
+            if (st.state === 'queued')  return '⏳ Talabalar importi navbatda (' + (st.queued_at || '') + (st.by ? ', ' + st.by : '') + ')... Navbat ishchisi (queue worker) ishlayotgan bo\'lishi kerak.';
+            if (st.state === 'running') return '🔄 Talabalar importi bajarilmoqda (boshlandi ' + (st.started_at || '') + ')... Tugagach sonlar o\'zi yangilanadi.';
+            if (st.state === 'done')    return '✓ Talabalar importi tugadi ' + (st.finished_at || '') + (st.imported != null ? ' — ' + st.imported + ' ta talaba' : '') + '.';
+            if (st.state === 'failed')  return '✗ Talabalar importi xato bilan tugadi: ' + (st.error || '') + '.';
+            return '';
+        }
+        function pollStudentImport(auto) {
+            $.get(HEMIS_STATUS_URL).done(function(st) {
+                var txt = stText(st);
+                if (st.state === 'queued' || st.state === 'running') {
+                    $('#mn-hemis-status').css('color', '#0369a1').text(txt);
+                    $('#mn-hemis-students').prop('disabled', true).css('opacity', 0.6);
+                    stLastState = st.state;
+                    stPollTimer = setTimeout(function() { pollStudentImport(true); }, 10000);
+                    return;
+                }
+                $('#mn-hemis-students').prop('disabled', false).css('opacity', 1);
+                if (st.state === 'done' && (stLastState === 'running' || stLastState === 'queued')) {
+                    // Biz kuzatgan import hozir tugadi — ekrandagi sonlarni avtomatik yangilaymiz
+                    $('#mn-hemis-status').css('color', '#16a34a').text(txt + ' Ekran yangilanmoqda...');
+                    stLastState = null;
+                    if (afterState && afterState.length) mergeNewGroups(); else $('#mn-hemis-status').css('color', '#16a34a').text(txt);
+                } else if (!auto && txt) {
+                    $('#mn-hemis-status').css('color', st.state === 'failed' ? '#dc2626' : '#64748b').text(txt + (st.students_updated ? ' (bazada oxirgi yangilanish: ' + st.students_updated + ')' : ''));
+                } else if (st.state === 'failed') {
+                    $('#mn-hemis-status').css('color', '#dc2626').text(txt);
+                }
+                stLastState = null;
+            });
         }
 
         // HEMISdan guruh/talabalarni tortish (guruhlar — sinxron, talabalar — fon rejimida)
@@ -1536,6 +1585,8 @@
                     $('#mn-hemis-status').css('color', '#16a34a').text('✓ ' + (res.message || 'Boshlandi.') + extra);
                     // Guruhlar sinxron tortildi — yangilarini darhol ekrandagi ro'yxatga qo'shamiz
                     if (what === 'groups' && res.sync) mergeNewGroups();
+                    // Talabalar — fon rejimida: holatini kuzatamiz, tugagach sonlar yangilanadi
+                    if (what === 'students') { stLastState = 'queued'; clearTimeout(stPollTimer); stPollTimer = setTimeout(function() { pollStudentImport(true); }, 3000); }
                 })
                 .fail(function(xhr) {
                     // 419 — sessiya (CSRF token) eskirgan: uzoq ochiq turgan sahifada
@@ -1780,6 +1831,8 @@
             // Sahifa ochilganda — oxirgi tasdiqlangan oqim darhol ekranda ko'rinsin
             loadApprovedList(true);
             loadDraftsList();
+            // Fon rejimidagi talabalar importi ketayotgan bo'lsa — kuzatishni davom ettiramiz
+            pollStudentImport(false);
 
             // Kelasi yil (rejalashtirilgan) rejim: yil tanlovini ko'rsatish + banner + kontingent paneli
             function toggleProjection() {

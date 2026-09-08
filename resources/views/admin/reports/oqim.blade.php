@@ -1190,8 +1190,27 @@
         $(document).on('dragend', '#mn-body .mn-row', function() {
             $(this).removeClass('mn-dragging');
             $('#mn-body .mn-over').removeClass('mn-over');
+            mnRemoveDropLine();
             dragSrc = null;
         });
+        // Sudrab yurganda tushish joyi: kursor Y bo'yicha qat'iy indeks hisoblanadi va
+        // o'sha joyda "shu yerga tushadi" ko'rsatkichi chiziladi. Drop ham aynan shu indeksga.
+        var dropHint = null; // { b, c, o, idx }
+        function mnRemoveDropLine() { $('#mn-body .mn-drop-line').remove(); dropHint = null; }
+        function mnPlaceDropLine($oqim, b, c, o, clientY) {
+            var idx = null, $before = null;
+            $oqim.find('.mn-row').each(function() {
+                var rect = this.getBoundingClientRect();
+                if (clientY < rect.top + rect.height / 2) { idx = +$(this).data('r'); $before = $(this); return false; }
+            });
+            if (idx === null) idx = ((afterState[b].courses[c].oqims[o] || {}).rows || []).length;
+            if (dropHint && dropHint.b === b && dropHint.c === c && dropHint.o === o && dropHint.idx === idx && $('#mn-body .mn-drop-line').length) return;
+            $('#mn-body .mn-drop-line').remove();
+            var srcRow = afterState[dragSrc.b].courses[dragSrc.c].oqims[dragSrc.o].rows[dragSrc.r] || {};
+            var $line = $('<div class="mn-drop-line"></div>').text('⤵ ' + (srcRow.name || 'guruh') + ' — shu yerga tushadi');
+            if ($before) $before.before($line); else $oqim.append($line);
+            dropHint = { b: b, c: c, o: o, idx: idx };
+        }
         $(document).on('dragover', '#mn-body .mn-oqim, #mn-body .mn-new', function(e) {
             if (!dragSrc) return;
             var lvl = +$(this).closest('.mn-course').data('lvl');
@@ -1199,10 +1218,20 @@
             if (lvl !== srcLvl) return; // boshqa kursga tashlash taqiqlanadi
             e.preventDefault();
             if (e.originalEvent.dataTransfer) e.originalEvent.dataTransfer.dropEffect = 'move';
+            $('#mn-body .mn-over').not(this).removeClass('mn-over');
             $(this).addClass('mn-over');
+            if ($(this).hasClass('mn-oqim')) {
+                mnPlaceDropLine($(this), +$(this).data('b'), +$(this).data('c'), +$(this).data('o'), e.originalEvent.clientY);
+            } else {
+                mnRemoveDropLine();
+            }
         });
-        $(document).on('dragleave', '#mn-body .mn-oqim, #mn-body .mn-new', function() {
+        $(document).on('dragleave', '#mn-body .mn-oqim, #mn-body .mn-new', function(e) {
+            // Ichki elementga o'tishda ham dragleave keladi — faqat haqiqatan chiqib ketganda tozalaymiz
+            var rt = e.originalEvent.relatedTarget;
+            if (rt && this.contains(rt)) return;
             $(this).removeClass('mn-over');
+            if ($(this).hasClass('mn-oqim')) mnRemoveDropLine();
         });
         $(document).on('drop', '#mn-body .mn-oqim', function(e) {
             $(this).removeClass('mn-over');
@@ -1211,8 +1240,13 @@
             e.stopPropagation();
             var tb = +$(this).data('b'), tc = +$(this).data('c'), to = +$(this).data('o');
             var tr;
-            var $row = $(e.target).closest('.mn-row');
-            if ($row.length) tr = +$row.data('r');
+            if (dropHint && dropHint.b === tb && dropHint.c === tc && dropHint.o === to) {
+                tr = dropHint.idx; // ko'rsatkich turgan joy
+            } else {
+                var $row = $(e.target).closest('.mn-row');
+                if ($row.length) tr = +$row.data('r');
+            }
+            mnRemoveDropLine();
             var s = dragSrc; dragSrc = null;
             mnMove(s, tb, tc, to, tr);
         });
@@ -1220,6 +1254,7 @@
             $(this).removeClass('mn-over');
             if (!dragSrc) return;
             e.preventDefault();
+            mnRemoveDropLine();
             var tb = +$(this).data('b'), tc = +$(this).data('c');
             var s = dragSrc; dragSrc = null;
             mnMove(s, tb, tc, -1);
@@ -1866,6 +1901,7 @@
         .mn-lang-rus { color:#be123c; background:#fff1f2; }
         .mn-lang-ing { color:#6d28d9; background:#f5f3ff; }
         .mn-x { flex-shrink:0; width:20px; height:20px; line-height:18px; padding:0; border:1px solid #e2e8f0; border-radius:5px; background:#fff; color:#94a3b8; font-size:15px; font-weight:800; cursor:pointer; }
+        .mn-drop-line { margin:2px 6px; padding:4px 8px; border:2px dashed #a21caf; border-radius:6px; background:#fdf4ff; color:#a21caf; font-size:11px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
         .mn-empty-hint { padding:10px 8px; text-align:center; font-size:11px; font-weight:700; color:#a21caf; background:#fdf4ff; border-top:1px dashed #f0abfc; }
         .mn-x:hover { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
         .mn-x-oqim { margin-left:4px; }

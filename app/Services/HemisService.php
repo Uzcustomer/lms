@@ -24,8 +24,21 @@ class HemisService
 
     public function __construct()
     {
-        $this->baseUrl = config('services.hemis.base_url');
-        $this->token = config('services.hemis.token');
+        $this->baseUrl = (string) config('services.hemis.base_url');
+        $this->token = (string) config('services.hemis.token');
+    }
+
+    /**
+     * HEMIS REST manzili: base_url ".../rest" yoki ".../rest/v1/" bo'lishidan qat'i nazar
+     * har doim ".../rest/v1/<path>" qaytaradi (kodda "/v1/" ba'zan ikki marta yig'ilib qolardi).
+     */
+    protected function apiUrl(string $path): string
+    {
+        $base = rtrim($this->baseUrl, '/');
+        if (!preg_match('~/v1$~', $base)) {
+            $base .= '/v1';
+        }
+        return $base . '/' . ltrim($path, '/');
     }
 
     /**
@@ -291,6 +304,38 @@ class HemisService
     }
 
     /**
+     * Guruhdagi talabalarni HEMISdan JONLI o'qiydi (bazaga yozmaydi) — tashxis uchun.
+     * Qaytaradi: ['ok'=>bool, 'error'=>?string, 'url'=>string, 'items'=>[{id, full_name, status_code, status_name, group_id, group_name, level_name}]]
+     */
+    public function fetchGroupStudentsLive(int $groupHemisId): array
+    {
+        $page = 1; $items = []; $ok = true; $error = null;
+        do {
+            $response = $this->fetchStudentsForGroup($groupHemisId, $page);
+            if (!$response || empty($response['success'])) {
+                $ok = false; $error = $response['error'] ?? ('HEMIS javob bermadi (sahifa ' . $page . ')');
+                break;
+            }
+            foreach ($response['data']['items'] ?? [] as $d) {
+                $items[] = [
+                    'id'          => $d['id'] ?? null,
+                    'full_name'   => $d['full_name'] ?? '',
+                    'status_code' => (string) ($d['studentStatus']['code'] ?? ''),
+                    'status_name' => $d['studentStatus']['name'] ?? '',
+                    'group_id'    => $d['group']['id'] ?? null,
+                    'group_name'  => $d['group']['name'] ?? '',
+                    'level_name'  => $d['level']['name'] ?? '',
+                    'updated_at'  => isset($d['updated_at']) ? date('d.m.Y H:i', $d['updated_at']) : null,
+                ];
+            }
+            $pg = $response['data']['pagination'] ?? ['page' => 1, 'pageCount' => 1];
+            $more = ($pg['page'] ?? 1) < ($pg['pageCount'] ?? 1);
+            $page++;
+        } while ($more);
+        return ['ok' => $ok, 'error' => $error, 'url' => $this->apiUrl('data/student-list') . '?_group=' . $groupHemisId, 'items' => $items];
+    }
+
+    /**
      * Guruh bo'yicha talabalar ro'yxatini HEMIS dan sinxronlash
      */
     public function importStudentsForGroup(int $groupHemisId): array
@@ -366,7 +411,7 @@ class HemisService
                     'group_id' => $groupHemisId,
                     'status' => $response->status(),
                 ]);
-                return ['success' => false];
+                return ['success' => false, 'error' => 'HTTP ' . $response->status()];
             }
 
             return $response->json();

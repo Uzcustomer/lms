@@ -11439,6 +11439,181 @@ class ReportController extends Controller
         return response()->json(['ok' => true, 'message' => $message] + $result + $stats);
     }
 
+    /**
+     * AJAX: bitta guruhning BAZADAGI holati — faol talabalar ro'yxati, statuslar kesimi,
+     * oxirgi import vaqti. "Ekranda 16, HEMISda 14 — nega?" kabi savollarni tekshirish uchun.
+     */
+    public function oqimGroupCheck(Request $request)
+    {
+        $gid = (int) $request->get('gid');
+        if ($gid <= 0) {
+            return response()->json(['ok' => false, 'error' => 'gid kerak'], 422);
+        }
+        $group = DB::table('groups')->where('group_hemis_id', $gid)->first();
+        $byStatus = DB::table('students')->where('group_id', $gid)
+            ->selectRaw('student_status_code, student_status_name, COUNT(*) as c')
+            ->groupBy('student_status_code', 'student_status_name')->orderByDesc('c')->get();
+        $active = DB::table('students')->where('group_id', $gid)->where('student_status_code', 11)
+            ->orderBy('full_name')
+            ->limit(80)
+            ->get(['hemis_id', 'full_name', 'student_status_name', 'level_name', 'updated_at']);
+        $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: [];
+        return response()->json([
+            'ok'            => true,
+            'group'         => $group ? ['name' => $group->name, 'active' => (bool) $group->active, 'department' => $group->department_name, 'lang' => $group->education_lang_name, 'updated_at' => $group->updated_at] : null,
+            'active_count'  => DB::table('students')->where('group_id', $gid)->where('student_status_code', 11)->count(),
+            'by_status'     => $byStatus,
+            'active'        => $active->map(fn($r) => ['hemis_id' => $r->hemis_id, 'name' => $r->full_name, 'level' => $r->level_name, 'updated_at' => $r->updated_at ? Carbon::parse($r->updated_at)->format('d.m.Y H:i') : null]),
+            'last_import'   => ['state' => $st['state'] ?? 'idle', 'finished_at' => !empty($st['finished_at']) ? Carbon::parse($st['finished_at'])->format('d.m.Y H:i') : null, 'imported' => $st['imported'] ?? null],
+            'students_max_updated' => optional(DB::table('students')->max('updated_at'), fn($v) => Carbon::parse($v)->format('d.m.Y H:i')),
+        ]);
+    }
+
+    /**
+     * AJAX (POST): ekrandagi guruhlar [{gid,count}] ni bazadagi FAOL talaba soni bilan solishtiradi.
+     * Faqat farq borlar qaytadi — "🩺 Tashxis" jadvali uchun.
+     */
+    public function oqimScreenDiff(Request $request)
+    {
+        $rows = $request->input('rows', []);
+        if (!is_array($rows)) {
+            return response()->json(['ok' => false, 'error' => 'rows kerak'], 422);
+        }
+        $gids = [];
+        foreach ($rows as $r) { if ((int) ($r['gid'] ?? 0) > 0) $gids[] = (int) $r['gid']; }
+        $gids = array_values(array_unique($gids));
+        $db = [];
+        foreach (array_chunk($gids, 500) as $chunk) {
+            $q = DB::table('students')->whereIn('group_id', $chunk)->where('student_status_code', 11)
+                ->selectRaw('group_id, COUNT(*) as c')->groupBy('group_id')->get();
+            foreach ($q as $x) { $db[(int) $x->group_id] = (int) $x->c; }
+        }
+        $gInfo = DB::table('groups')->whereIn('group_hemis_id', $gids)->get(['group_hemis_id', 'name', 'active'])->keyBy('group_hemis_id');
+        $diff = []; $same = 0;
+        foreach ($rows as $r) {
+            $gid = (int) ($r['gid'] ?? 0);
+            if ($gid <= 0) continue;
+            $screen = (int) ($r['count'] ?? 0);
+            $dbc = $db[$gid] ?? 0;
+            $g = $gInfo[$gid] ?? null;
+            if ($screen === $dbc && $g && $g->active) { $same++; continue; }
+            $diff[] = [
+                'gid' => $gid, 'name' => $r['name'] ?? ($g->name ?? ('#' . $gid)), 'screen' => $screen, 'db' => $dbc,
+                'group_in_db' => (bool) $g, 'group_active' => $g ? (bool) $g->active : null,
+            ];
+        }
+        $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: [];
+        return response()->json([
+            'ok' => true, 'diff' => $diff, 'same' => $same, 'checked' => count($gids),
+            'last_import' => ['state' => $st['state'] ?? 'idle', 'finished_at' => !empty($st['finished_at']) ? Carbon::parse($st['finished_at'])->format('d.m.Y H:i') : null, 'imported' => $st['imported'] ?? null, 'error' => $st['error'] ?? null],
+            'students_max_updated' => optional(DB::table('students')->max('updated_at'), fn($v) => Carbon::parse($v)->format('d.m.Y H:i')),
+            'hemis_base' => (string) config('services.hemis.base_url'),
+            'hemis_token_set' => (bool) config('services.hemis.token'),
+            'queue' => (string) config('queue.default'),
+        ]);
+    }
+
+    /**
+     * AJAX: bitta guruh — HEMIS (jonli) vs BAZA vs EKRAN, talaba-talaba solishtiruv va aniq xulosa.
+     */
+    public function oqimGroupDiagnose(Request $request)
+    {
+        $gid = (int) $request->get('gid');
+        $screen = $request->has('screen') ? (int) $request->get('screen') : null;
+        if ($gid <= 0) {
+            return response()->json(['ok' => false, 'error' => 'gid kerak'], 422);
+        }
+        set_time_limit(120);
+        $live = app(\App\Services\HemisService::class)->fetchGroupStudentsLive($gid);
+
+        $dbRows = DB::table('students')->where('group_id', $gid)
+            ->get(['hemis_id', 'full_name', 'student_status_code', 'student_status_name', 'group_name', 'level_name', 'updated_at', 'hemis_updated_at'])
+            ->keyBy('hemis_id');
+        $dbActive = $dbRows->filter(fn($r) => (int) $r->student_status_code === 11);
+
+        $hemisById = collect($live['items'])->keyBy('id');
+        $hemisActive = $hemisById->filter(fn($r) => (string) $r['status_code'] === '11');
+
+        // Bazada faol, lekin HEMIS guruh ro'yxatida faol emas/yo'q
+        $extraInDb = [];
+        foreach ($dbActive as $hid => $r) {
+            $h = $hemisById[$hid] ?? null;
+            $dbOther = null;
+            $extraInDb[] = [
+                'hemis_id' => $hid, 'name' => $r->full_name,
+                'db_updated' => $r->updated_at ? Carbon::parse($r->updated_at)->format('d.m.Y H:i') : null,
+                'in_hemis_group' => (bool) $h,
+                'hemis_status' => $h ? ($h['status_name'] . ' (' . $h['status_code'] . ')') : null,
+                'reason' => !$h ? 'HEMISda bu guruhda yo\'q (boshqa guruhga o\'tgan yoki o\'chirilgan)' : ('HEMISda statusi faol emas: ' . $h['status_name']),
+            ];
+        }
+        $extraInDb = array_values(array_filter($extraInDb, fn($x) => !$x['in_hemis_group'] || !isset($hemisActive[$x['hemis_id']])));
+
+        // HEMISda faol, lekin bazada bu guruhda faol emas
+        $missingInDb = [];
+        foreach ($hemisActive as $hid => $h) {
+            $d = $dbRows[$hid] ?? null;
+            if ($d && (int) $d->student_status_code === 11) continue;
+            $other = DB::table('students')->where('hemis_id', $hid)->first(['group_name', 'student_status_name', 'student_status_code']);
+            $missingInDb[] = [
+                'hemis_id' => $hid, 'name' => $h['full_name'],
+                'db_state' => $other ? ($other->group_name . ' · ' . $other->student_status_name . ' (' . $other->student_status_code . ')') : 'bazada umuman yo\'q',
+            ];
+        }
+
+        // Xulosa
+        $hemisN = $live['ok'] ? $hemisActive->count() : null;
+        $dbN = $dbActive->count();
+        $verdict = []; $action = null;
+        if (!$live['ok']) {
+            $verdict[] = 'HEMIS API javob bermadi: ' . ($live['error'] ?? 'noma\'lum') . '. Manzil: ' . $live['url'] . '. HEMIS_API_BASE_URL / token ni tekshiring.';
+            $action = 'config';
+        } else {
+            if ($screen !== null && $screen !== $dbN) {
+                $verdict[] = "EKRAN ($screen) ≠ BAZA ($dbN): ekrandagi son eskirgan — \"⟳ Bazadan yangilash\" bosilganda $dbN bo'ladi.";
+                $action = $action ?: 'refresh';
+            }
+            if ($dbN !== $hemisN) {
+                $verdict[] = "BAZA ($dbN) ≠ HEMIS ($hemisN): baza HEMISdan orqada — " . count($extraInDb) . " ta ortiqcha, " . count($missingInDb) . " ta yetishmaydi. \"⇩ Shu guruhni HEMISdan qayta tortish\" bosing.";
+                $action = 'resync';
+            }
+            if (!$verdict) {
+                $verdict[] = "Hammasi mos: EKRAN = BAZA = HEMIS = $dbN.";
+                $action = 'ok';
+            }
+        }
+        $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: [];
+        return response()->json([
+            'ok' => true, 'gid' => $gid,
+            'screen' => $screen, 'db' => $dbN, 'hemis' => $hemisN, 'hemis_total_in_group' => $live['ok'] ? $hemisById->count() : null,
+            'hemis_ok' => $live['ok'], 'hemis_error' => $live['error'], 'hemis_url' => $live['url'],
+            'extra_in_db' => $extraInDb, 'missing_in_db' => $missingInDb,
+            'db_by_status' => $dbRows->groupBy('student_status_name')->map->count(),
+            'verdict' => $verdict, 'action' => $action,
+            'last_import' => ['state' => $st['state'] ?? 'idle', 'finished_at' => !empty($st['finished_at']) ? Carbon::parse($st['finished_at'])->format('d.m.Y H:i') : null],
+        ]);
+    }
+
+    /**
+     * AJAX (POST): bitta guruhni HEMISdan sinxron qayta tortish (faqat shu guruh talabalari).
+     */
+    public function oqimGroupResync(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || !$user->hasAnyRole(['superadmin', 'admin', 'registrator_ofisi'])) {
+            return response()->json(['ok' => false, 'error' => 'Ruxsat yo\'q'], 403);
+        }
+        $gid = (int) $request->get('gid');
+        if ($gid <= 0) {
+            return response()->json(['ok' => false, 'error' => 'gid kerak'], 422);
+        }
+        set_time_limit(120);
+        $res = app(\App\Services\HemisService::class)->importStudentsForGroup($gid);
+        \App\Services\ActivityLogService::log('import', 'student', "Oqim sahifasidan guruh #$gid HEMISdan qayta tortildi: " . json_encode($res));
+        $dbN = DB::table('students')->where('group_id', $gid)->where('student_status_code', 11)->count();
+        return response()->json(['ok' => true, 'gid' => $gid, 'imported' => $res['imported'] ?? 0, 'deactivated' => $res['deactivated'] ?? 0, 'db' => $dbN]);
+    }
+
     private const OQIM_STUDENT_IMPORT_KEY = 'oqim_students_import_status';
     private const OQIM_STUDENT_IMPORT_STALE_MIN = 120;
 

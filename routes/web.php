@@ -830,6 +830,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/oqim/overrides/save', [ReportController::class, 'oqimOverrideSave'])->name('reports.oqim.overrides.save');
         Route::post('/reports/oqim/overrides/delete', [ReportController::class, 'oqimOverrideDelete'])->name('reports.oqim.overrides.delete');
         Route::get('/reports/oqim/snapshot', [ReportController::class, 'oqimSnapshotShow'])->name('reports.oqim.snapshot.show');
+        Route::get('/reports/oqim/drafts', [ReportController::class, 'oqimDrafts'])->name('reports.oqim.drafts');
         Route::post('/reports/oqim/snapshot/save', [ReportController::class, 'oqimSnapshotSave'])->name('reports.oqim.snapshot.save');
         // Bo'lajak kontingent (yangi 1-kurs) — oqim sahifasi bilan bir xil ruxsat ostida
         Route::get('/reports/oqim/contingent', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'contingentData'])->name('reports.oqim.contingent');

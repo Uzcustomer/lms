@@ -216,6 +216,14 @@
                                     <button type="button" class="af-btn af-draft" onclick="openHistory()" title="To'liq tarix ro'yxati">📋 Tarix</button>
                                 </span>
                             </div>
+                            <div id="ap-drafts" style="display:none;padding:8px 20px;background:#fffbeb;border-bottom:1px solid #fde68a;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <label style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#92400e;">💾 Saqlangan qoralamalar</label>
+                                <select id="ap-draft" style="border:1px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;color:#78350f;background:#fff;min-width:320px;max-width:600px;">
+                                    <option value="">—</option>
+                                </select>
+                                <button type="button" class="af-btn af-edit" onclick="openDraft()" title="Tanlangan qoralamani qo'lda tuzatish ekraniga yuklab, ishni davom ettirish">✎ Qoralamani ochish (davom ettirish)</button>
+                                <span style="font-size:11.5px;color:#92400e;">Qoralama — tasdiqlanmagan ish; "✓ Tasdiqlash" bosilgach yuqoridagi sanalar ro'yxatiga tushadi.</span>
+                            </div>
                             <div id="ap-note" style="display:none;padding:6px 20px;font-size:12px;color:#475569;background:#fbfdff;border-bottom:1px solid #e2e8f0;"></div>
                             <div id="ap-body" style="padding:16px 20px;max-height:calc(100vh - 340px);overflow:auto;"></div>
                         </div>
@@ -649,6 +657,7 @@
                 $status.css('color', '#16a34a').text('✓ ' + (action === 'approve' ? 'Tasdiqlandi' + (res.approved_at ? ' · ' + res.approved_at : '') : (action === 'unapprove' ? 'Tasdiq bekor qilindi' : 'Saqlandi')));
                 // Tasdiqlanganda tarixga yangi sana-vaqtli versiya yoziladi — ro'yxatni yangilab, uni ko'rsatamiz
                 if (action === 'approve') loadApprovedList(true);
+                loadDraftsList();
                 var $b = $('#snap-badge');
                 if (res.status === 'approved') {
                     $b.css({display:'inline-block', background:'#dcfce7', color:'#166534', border:'1px solid #86efac'})
@@ -668,7 +677,8 @@
         }
 
         function loadSnapshot() {
-            $.get(SNAP_SHOW_URL, getFilters(true)).done(function(res) {
+            // Tarixdagi versiya/qoralama ustida ishlanayotgan bo'lsa — o'sha kontekstning saqlangan holati
+            $.get(SNAP_SHOW_URL, manualContext || getFilters(true)).done(function(res) {
                 if (res && res.found && res.data) {
                     afterState = res.data;
                     manualKnownIds = idsFromBlocks(afterState);
@@ -1601,6 +1611,41 @@
             });
         }
 
+        // ===== Saqlangan qoralamalar (tasdiqlanmagan ish) =====
+        var DRAFTS_URL = '{{ route("admin.reports.oqim.drafts") }}';
+        var AP_DRAFTS = [];
+        function loadDraftsList() {
+            $.get(DRAFTS_URL).done(function(rows) {
+                AP_DRAFTS = (rows || []).filter(function(r) { return r.has_data; });
+                var $sel = $('#ap-draft').empty();
+                if (!AP_DRAFTS.length) { $('#ap-drafts').hide(); return; }
+                AP_DRAFTS.forEach(function(r) {
+                    var st = r.status === 'approved' ? 'tasdiqlangan holat' : 'QORALAMA';
+                    var s2 = r.summary || {};
+                    $sel.append($('<option>').val(r.id).text(
+                        (r.updated_at || '') + ' · ' + st + ' · ' + (r.kind === 'plan' ? 'Reja ' + (r.academic_year || '') : 'Real')
+                        + ' · ' + (r.faculty_name || '') + (r.creator ? ' · ' + r.creator : '')
+                        + ' · ' + (s2.students || 0) + ' talaba / ' + (s2.oqim || 0) + ' oqim'));
+                });
+                $('#ap-drafts').css('display', 'flex');
+            });
+        }
+        function openDraft() {
+            var id = $('#ap-draft').val();
+            if (!id) { mnFlash('Qoralamani tanlang.'); return; }
+            $.get(SNAP_SHOW_URL, { id: id }).done(function(res) {
+                if (!res || !res.found || !res.data) { mnFlash('Qoralama topilmadi.'); return; }
+                afterState = res.data;
+                manualContext = (res.context && Object.keys(res.context).length) ? res.context : null;
+                manualKnownIds = idsFromBlocks(afterState);
+                MN_UNDO = [];
+                mnRecalc();
+                renderAfterBody();
+                switchTab('manual');
+                $('#mn-save-status').css('color', '#92400e').text((res.status === 'approved' ? 'Tasdiqlangan holat' : 'Qoralama') + ' (' + (res.updated_at || '') + ') yuklandi — davom ettiring; "💾 Qoralama saqlash" shu qoralamani yangilaydi, "✓ Tasdiqlash" tarixga yozadi.');
+            }).fail(function(xhr) { mnFlash('Qoralamani yuklab bo\'lmadi (HTTP ' + xhr.status + ').'); });
+        }
+
         // Ekrandagi versiyani qo'lda tuzatishga (drag & drop) yuklaydi — tasdiqlansa yangi sana bilan tarixga tushadi
         function editVersion() {
             if (!AP_CURRENT || !AP_CURRENT.blocks) { mnFlash('Avval versiyani tanlang.'); return; }
@@ -1712,6 +1757,7 @@
 
             // Sahifa ochilganda — oxirgi tasdiqlangan oqim darhol ekranda ko'rinsin
             loadApprovedList(true);
+            loadDraftsList();
 
             // Kelasi yil (rejalashtirilgan) rejim: yil tanlovini ko'rsatish + banner + kontingent paneli
             function toggleProjection() {

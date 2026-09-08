@@ -11211,15 +11211,72 @@ class ReportController extends Controller
      */
     public function oqimSnapshotShow(Request $request)
     {
-        $snap = \App\Models\OqimSnapshot::where('context_key', $this->oqimContextKey($request))->first();
+        // id berilsa — qoralamalar ro'yxatidan tanlangan aniq snapshot; aks holda filtr konteksti bo'yicha
+        if ($request->filled('id')) {
+            $snap = \App\Models\OqimSnapshot::find($request->id);
+            $dekanFacultyId = get_dekan_faculty_id();
+            if ($snap && $dekanFacultyId && (string) ($snap->context['faculty'] ?? '') !== (string) $dekanFacultyId) {
+                abort(403);
+            }
+        } else {
+            $snap = \App\Models\OqimSnapshot::where('context_key', $this->oqimContextKey($request))->first();
+        }
         if (!$snap) {
             return response()->json(['found' => false]);
         }
         return response()->json([
-            'found'  => true,
-            'status' => $snap->status,
-            'data'   => $snap->data,
+            'found'      => true,
+            'id'         => $snap->id,
+            'status'     => $snap->status,
+            'updated_at' => optional($snap->updated_at)->format('d.m.Y H:i'),
+            'context'    => $snap->context ?: [],
+            'data'       => $snap->data,
         ]);
+    }
+
+    /**
+     * AJAX: saqlangan qoralamalar (va tasdiqlangan joriy holatlar) ro'yxati —
+     * "ishlayotgan qoralamani topish" uchun. Har bir kontekst uchun bitta yozuv.
+     */
+    public function oqimDrafts(Request $request)
+    {
+        $q = \App\Models\OqimSnapshot::query()->orderByDesc('updated_at')->limit(200);
+        $dekanFacultyId = get_dekan_faculty_id();
+        $rows = $q->get();
+        $userIds = $rows->pluck('created_by')->merge($rows->pluck('approved_by'))->filter()->unique();
+        $names = \App\Models\User::whereIn('id', $userIds)->pluck('name', 'id');
+        $facNames = Department::whereIn('id', $rows->map(fn($r) => $r->context['faculty'] ?? null)->filter()->unique())
+            ->pluck('name', 'id');
+
+        $out = [];
+        foreach ($rows as $r) {
+            $ctx = $r->context ?: [];
+            $facId = $ctx['faculty'] ?? null;
+            if ($dekanFacultyId && (string) $facId !== (string) $dekanFacultyId) {
+                continue;
+            }
+            $students = 0; $oqim = 0; $grch = 0;
+            foreach ($r->data ?: [] as $bl) {
+                foreach ($bl['courses'] ?? [] as $co) {
+                    $students += (int) ($co['total'] ?? 0);
+                    foreach ($co['oqims'] ?? [] as $oq) { $oqim++; $grch += count($oq['rows'] ?? []); }
+                }
+            }
+            $out[] = [
+                'id'            => $r->id,
+                'status'        => $r->status,
+                'kind'          => !empty($ctx['projection']) ? 'plan' : 'real',
+                'academic_year' => $ctx['academic_year'] ?? null,
+                'faculty_name'  => $facId ? ($facNames[$facId] ?? ('#' . $facId)) : 'Barcha fakultetlar',
+                'education_type'=> $ctx['education_type'] ?? null,
+                'summary'       => ['students' => $students, 'oqim' => $oqim, 'guruhcha' => $grch],
+                'note'          => $r->note,
+                'creator'       => $names[$r->created_by] ?? null,
+                'updated_at'    => optional($r->updated_at)->format('d.m.Y H:i'),
+                'has_data'      => !empty($r->data),
+            ];
+        }
+        return response()->json($out);
     }
 
     /**

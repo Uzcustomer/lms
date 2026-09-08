@@ -12021,10 +12021,29 @@ class ReportController extends Controller
             $fixed = true;
         }
 
+        // HEMIS ba'zan bitta guruhni ikki id bilan faol saqlaydi — guruh boshqa
+        // fakultetga ko'chirilganda eski yozuv o'chirilmaydi. Ikkalasi ham hisobga
+        // olinsa, bir guruh ikki fakultet ostida chiqadi (mas. "d2/d26-03a" 1-son
+        // davolash blokida). Shu sabab nom bo'yicha dedupe qilinadi.
+        $nameKey = fn ($name) => mb_strtolower(trim((string) $name));
+
+        // Talabasi bor guruh nomlari — ular asosiy so'rovda allaqachon chiqqan,
+        // bo'sh nusxasi qaytadan qo'shilmasligi kerak.
+        $studentNames = [];
+        foreach ($studentRows as $r) {
+            $studentNames[$nameKey($r->group_name)] = true;
+        }
+
         $out = [];
+        $byName = [];   // nom => $out dagi indeks
         foreach ($eq->get() as $g) {
             if (isset($seen[(int) $g->group_hemis_id])) {
                 continue; // talabasi bor — asosiy so'rovda allaqachon chiqqan
+            }
+
+            $key = $nameKey($g->group_name);
+            if (isset($studentNames[$key])) {
+                continue; // shu nomli guruh talabalari bilan chiqqan — nusxasi kerak emas
             }
 
             // Qabul yili: o'quv rejadan, bo'lmasa guruh nomidan (…d26-… / …f26-…)
@@ -12038,7 +12057,7 @@ class ReportController extends Controller
                 continue; // bitirgan yoki hali boshlanmagan eski/noto'g'ri guruh
             }
 
-            $out[] = (object) [
+            $row = (object) [
                 'department_id'   => $g->dep_hemis_id,
                 'department_name' => $g->department_name,
                 'specialty_id'    => $g->spec_hemis_id,
@@ -12050,9 +12069,21 @@ class ReportController extends Controller
                 'cnt'             => 0,
                 '_fixed'          => $fixed, // reja rejimida kursi surilmaydi
             ];
+
+            // Takror nom: HEMIS IDsi kattaroq yozuv yangiroq — o'shanisi qoladi.
+            if (isset($byName[$key])) {
+                $kept = $out[$byName[$key]];
+                if ((int) $g->group_hemis_id > (int) $kept->group_id) {
+                    $out[$byName[$key]] = $row;
+                }
+                continue;
+            }
+
+            $byName[$key] = count($out);
+            $out[] = $row;
         }
 
-        return collect($out);
+        return collect(array_values($out));
     }
 
     private function applyOqimProjection($rows, Request $request)

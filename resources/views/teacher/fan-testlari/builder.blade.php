@@ -187,7 +187,7 @@
 
     .bl-qf-top { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 18px; align-items: stretch; }
     /* Rasm ustuni ham yorliq bilan boshlanadi — ikki ustun bir tekisda turadi */
-    .bl-qf-media { display: grid; grid-template-rows: auto 1fr; gap: 7px; }
+    .bl-qf-media { display: grid; grid-template-rows: auto 1fr; gap: 0; }
     .bl-qf-media .bl-drop { height: 100%; }
     .bl-drop {
         position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;

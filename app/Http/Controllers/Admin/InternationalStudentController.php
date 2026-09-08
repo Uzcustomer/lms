@@ -49,147 +49,69 @@ class InternationalStudentController extends Controller
         $falseShowEnabled = \App\Models\Setting::get('false_show_enabled', '0') === '1';
 
         // Filterlash
-        if ($request->filled('search')) {
-            $query->where('full_name', 'like', '%' . $request->search . '%');
-        }
-
-        if ($request->filled('level_code')) {
-            $query->where('level_code', (string) $request->level_code);
-        }
-
-        if ($request->filled('group_name')) {
-            $query->where('group_name', 'like', '%' . $request->group_name . '%');
-        }
-
-        if ($request->filled('firm')) {
-            if ($request->firm === 'none') {
-                $query->where(function ($q) {
-                    $q->whereDoesntHave('visaInfo')
-                      ->orWhereHas('visaInfo', fn($vq) => $vq->whereNull('firm')->orWhere('firm', ''));
-                });
-            } else {
-                $query->whereHas('visaInfo', fn($q) => $q->where('firm', $request->firm));
-            }
-        }
-
-        if ($request->filled('country')) {
-            $query->where('country_name', $request->country);
-        }
-
-        if ($request->filled('department')) {
-            $query->where('department_id', $request->department);
-        }
-
-        if ($request->filled('data_status')) {
-            if ($request->data_status === 'filled') {
-                $query->whereHas('visaInfo', fn($q) => $q->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
-            } elseif ($request->data_status === 'not_filled') {
-                $query->where(function ($q) {
-                    $q->whereDoesntHave('visaInfo')
-                      ->orWhereHas('visaInfo', fn($q2) => $q2->whereNull('passport_number')->whereNull('visa_number')->whereNull('registration_end_date'));
-                });
-            } elseif ($request->data_status === 'approved') {
-                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'approved')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
-            } elseif ($request->data_status === 'pending') {
-                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'pending')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
-            } elseif ($request->data_status === 'rejected') {
-                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'rejected')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
-            }
-        }
-
-        if ($request->has('visa_expiry') && $request->visa_expiry !== '' && $request->visa_expiry !== null) {
-            $days = (int) $request->visa_expiry;
-            $query->whereHas('visaInfo', function ($q) use ($days) {
-                $q->whereNotNull('visa_end_date')
-                  ->whereDate('visa_end_date', '<=', now()->addDays($days));
-            });
-        }
-
-        if ($request->has('registration_expiry') && $request->registration_expiry !== '' && $request->registration_expiry !== null) {
-            $days = (int) $request->registration_expiry;
-            $query->whereHas('visaInfo', function ($q) use ($days) {
-                $q->whereNotNull('registration_end_date')
-                  ->whereDate('registration_end_date', '<=', now()->addDays($days));
-            });
-        }
-
-        // Excel-style ustun filtri: aniq tanlangan sanalar (yoki "__empty__" - kiritilmaganlar)
-        if ($request->filled('visa_end_dates')) {
-            $values = array_values(array_filter((array) $request->visa_end_dates, fn($v) => $v !== null && $v !== ''));
-            $includeEmpty = in_array('__empty__', $values, true);
-            $actualDates = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
-            if ($includeEmpty && !empty($actualDates)) {
-                $query->where(function ($outer) use ($actualDates) {
-                    $outer->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $actualDates))
-                          ->orWhereDoesntHave('visaInfo')
-                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('visa_end_date'));
-                });
-            } elseif (!empty($actualDates)) {
-                $query->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $actualDates));
-            } elseif ($includeEmpty) {
-                $query->where(function ($outer) {
-                    $outer->whereDoesntHave('visaInfo')
-                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('visa_end_date'));
-                });
-            }
-        }
-
-        if ($request->filled('registration_end_dates')) {
-            $values = array_values(array_filter((array) $request->registration_end_dates, fn($v) => $v !== null && $v !== ''));
-            $includeEmpty = in_array('__empty__', $values, true);
-            $actualDates = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
-            if ($includeEmpty && !empty($actualDates)) {
-                $query->where(function ($outer) use ($actualDates) {
-                    $outer->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $actualDates))
-                          ->orWhereDoesntHave('visaInfo')
-                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('registration_end_date'));
-                });
-            } elseif (!empty($actualDates)) {
-                $query->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $actualDates));
-            } elseif ($includeEmpty) {
-                $query->where(function ($outer) {
-                    $outer->whereDoesntHave('visaInfo')
-                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('registration_end_date'));
-                });
-            }
-        }
-
-        if ($request->filled('hemis_status')) {
-            if ($request->hemis_status === 'inactive') {
-                $query->where('student_status_code', '60');
-            } elseif ($request->hemis_status === 'active') {
-                $query->where('student_status_code', '!=', '60');
-            }
-        }
+        $this->applyIntFilters($query, $request);
 
         // Filtrlangan query klon — statistika uchun
         $filteredIds = (clone $query)->pluck('students.id');
 
-        // False show: kiritmaganlarni oxirga tushirish
+        // Tartib: eng yangi topshirilgan arizalar tepada. Ariza vaqti
+        // student_visa_infos.updated_at da, shu sabab join qilinadi.
+        // Join'dan keyin ustunlar to'liq nom bilan ko'rsatiladi — "id" ikkala
+        // jadvalda ham bor.
+        $query->leftJoin('student_visa_infos as svi_sort', 'svi_sort.student_id', '=', 'students.id')
+            ->select('students.*');
+
+        // False show: ma'lumot kiritmaganlarni oxirga tushirish
         if ($falseShowEnabled) {
-            $query->orderByRaw("CASE WHEN id NOT IN (SELECT student_id FROM student_visa_infos WHERE passport_number IS NOT NULL OR visa_number IS NOT NULL OR registration_end_date IS NOT NULL) THEN 1 ELSE 0 END");
+            $query->orderByRaw("CASE WHEN students.id NOT IN (SELECT student_id FROM student_visa_infos WHERE passport_number IS NOT NULL OR visa_number IS NOT NULL OR registration_end_date IS NOT NULL) THEN 1 ELSE 0 END");
         }
 
+        // Arizasi yo'q talabalar oxirida, ular orasida ism bo'yicha.
         $students = $query->with('visaInfo')
-            ->orderBy('full_name')
+            ->orderByRaw('svi_sort.updated_at IS NULL')
+            ->orderByDesc('svi_sort.updated_at')
+            ->orderBy('students.full_name')
             ->paginate(25)
             ->withQueryString();
 
         $firms = StudentVisaInfo::FIRM_OPTIONS;
 
-        // Davlatlar va fakultetlar (filtr uchun)
-        $baseQuery = $this->internationalStudentsQuery();
-        $countries = (clone $baseQuery)->whereNotNull('country_name')->where('country_name', '!=', '')->distinct()->pluck('country_name')->sort()->values();
-        $departments = (clone $baseQuery)->whereNotNull('department_name')->where('department_name', '!=', '')->select('department_id', 'department_name')->distinct()->get()->sortBy('department_name');
+        // Filtr ro'yxatlari FILTRLANGAN natijadan quriladi — firma tanlangandan
+        // keyin qolgan ustunlarda faqat shu natijadagi qiymatlar ko'rinsin.
+        //
+        // Har bir ro'yxat o'zining filtrisiz hisoblanadi: aks holda firma
+        // tanlangach firma ro'yxatida faqat o'sha bitta firma qolib, boshqasiga
+        // o'tib bo'lmasdi. Qolgan filtrlar esa qo'llanadi.
+        $optionsQuery = fn (string ...$except) => $this->applyIntFilters(
+            $this->internationalStudentsQuery(), $request, $except
+        );
+
+        $countries = $optionsQuery('country')
+            ->whereNotNull('country_name')->where('country_name', '!=', '')
+            ->distinct()->pluck('country_name')->sort()->values();
+        $departments = $optionsQuery('department')
+            ->whereNotNull('department_name')->where('department_name', '!=', '')
+            ->select('department_id', 'department_name')->distinct()->get()->sortBy('department_name');
+        $groupNames = $optionsQuery('group_name', 'group_names')
+            ->whereNotNull('group_name')->where('group_name', '!=', '')
+            ->distinct()->pluck('group_name')->sort()->values();
+        $levelCodes = $optionsQuery('level_code')
+            ->whereNotNull('level_code')->where('level_code', '!=', '')
+            ->distinct()->pluck('level_code')->sort()->values();
+
+        // Firmalar: ro'yxat qat'iy (FIRM_OPTIONS), lekin qaysilari natijada
+        // uchrashini ko'rsatish uchun mavjudlari alohida olinadi.
+        $usedFirms = StudentVisaInfo::whereIn('student_id', $optionsQuery('firm', 'firms')->pluck('students.id'))
+            ->whereNotNull('firm')->where('firm', '!=', '')
+            ->distinct()->pluck('firm')->sort()->values();
 
         // Excel-style ustun filtri uchun mavjud sanalar ro'yxati
-        $intStudentIds = (clone $baseQuery)->pluck('students.id');
-        $visaEndDates = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+        $visaEndDates = StudentVisaInfo::whereIn('student_id', $optionsQuery('visa_end_dates')->pluck('students.id'))
             ->whereNotNull('visa_end_date')
             ->distinct()
             ->orderBy('visa_end_date')
             ->pluck('visa_end_date');
-        $regEndDates = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+        $regEndDates = StudentVisaInfo::whereIn('student_id', $optionsQuery('registration_end_dates')->pluck('students.id'))
             ->whereNotNull('registration_end_date')
             ->distinct()
             ->orderBy('registration_end_date')
@@ -257,7 +179,7 @@ class InternationalStudentController extends Controller
         // Tepada "Viza arizalar" tugmasi uchun pending arizalar soni (badge)
         $visaPendingCount = \App\Models\VisaApplication::where('status', 'pending')->count();
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'visaPendingCount'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms'));
     }
 
     /**
@@ -266,6 +188,196 @@ class InternationalStudentController extends Controller
     /**
      * Qizil holatdagi talabalarga bildirishnoma yuborish.
      */
+    /**
+     * So'rovdagi filtrlarni queryga qo'llaydi.
+     *
+     * $except — qo'llanmaydigan filtrlar. Ustun filtri ro'yxatini qurishda
+     * o'sha ustunning o'z filtri chiqarib tashlanadi: aks holda firma tanlangach
+     * firma ro'yxatida faqat o'sha bitta firma qolib, boshqasiga o'tib bo'lmasdi.
+     */
+    private function applyIntFilters($query, Request $request, array $except = [])
+    {
+        if (!in_array('search', $except, true) && $request->filled('search')) {
+            $query->where('full_name', 'like', '%' . $request->search . '%');
+        }
+
+        if (!in_array('level_code', $except, true) && $request->filled('level_code')) {
+            $query->where('level_code', (string) $request->level_code);
+        }
+
+        if (!in_array('group_name', $except, true) && $request->filled('group_name')) {
+            $query->where('group_name', 'like', '%' . $request->group_name . '%');
+        }
+
+        // Ustun filtri: guruh nomlarini ro'yxatdan belgilash (matn qidiruvdan alohida)
+        if (!in_array('group_names', $except, true) && $request->filled('group_names')) {
+            $values = array_values(array_filter((array) $request->group_names, fn($v) => $v !== null && $v !== ''));
+            if ($values) {
+                $query->whereIn('group_name', $values);
+            }
+        }
+
+        // Ustun filtri: "Ma'lumot" ustuni — kiritilgan / kiritilmagan
+        if (!in_array('data_filled', $except, true) && $request->filled('data_filled')) {
+            $values = array_values(array_filter((array) $request->data_filled, fn($v) => $v !== null && $v !== ''));
+            $wantFilled = in_array('filled', $values, true);
+            $wantEmpty = in_array('not_filled', $values, true);
+            $hasData = fn($q) => $q->whereNotNull('passport_number')
+                ->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date');
+
+            if ($wantFilled && !$wantEmpty) {
+                $query->whereHas('visaInfo', fn($q) => $q->where($hasData));
+            } elseif ($wantEmpty && !$wantFilled) {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('visaInfo')
+                      ->orWhereHas('visaInfo', fn($q2) => $q2->whereNull('passport_number')
+                            ->whereNull('visa_number')->whereNull('registration_end_date'));
+                });
+            }
+        }
+
+        // Ustun filtri: firmalar (ko'p tanlov; "__empty__" — firmasi yo'q)
+        if (!in_array('firms', $except, true) && $request->filled('firms')) {
+            $values = array_values(array_filter((array) $request->firms, fn($v) => $v !== null && $v !== ''));
+            $includeEmpty = in_array('__empty__', $values, true);
+            $names = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
+
+            if ($names || $includeEmpty) {
+                $query->where(function ($outer) use ($names, $includeEmpty) {
+                    if ($names) {
+                        $outer->whereHas('visaInfo', fn($q) => $q->whereIn('firm', $names));
+                    }
+                    if ($includeEmpty) {
+                        $outer->orWhereDoesntHave('visaInfo')
+                              ->orWhereHas('visaInfo', fn($q) => $q->whereNull('firm')->orWhere('firm', ''));
+                    }
+                });
+            }
+        }
+
+        // Ustun filtri: holat (ko'p tanlov; "__empty__" — holati yo'q)
+        if (!in_array('statuses', $except, true) && $request->filled('statuses')) {
+            $values = array_values(array_filter((array) $request->statuses, fn($v) => $v !== null && $v !== ''));
+            $includeEmpty = in_array('__empty__', $values, true);
+            $names = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
+
+            if ($names || $includeEmpty) {
+                $query->where(function ($outer) use ($names, $includeEmpty) {
+                    if ($names) {
+                        $outer->whereHas('visaInfo', fn($q) => $q->whereIn('status', $names));
+                    }
+                    if ($includeEmpty) {
+                        $outer->orWhereDoesntHave('visaInfo')
+                              ->orWhereHas('visaInfo', fn($q) => $q->whereNull('status'));
+                    }
+                });
+            }
+        }
+
+        if (!in_array('firm', $except, true) && $request->filled('firm')) {
+            if ($request->firm === 'none') {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('visaInfo')
+                      ->orWhereHas('visaInfo', fn($vq) => $vq->whereNull('firm')->orWhere('firm', ''));
+                });
+            } else {
+                $query->whereHas('visaInfo', fn($q) => $q->where('firm', $request->firm));
+            }
+        }
+
+        if (!in_array('country', $except, true) && $request->filled('country')) {
+            $query->where('country_name', $request->country);
+        }
+
+        if (!in_array('department', $except, true) && $request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+
+        if (!in_array('data_status', $except, true) && $request->filled('data_status')) {
+            if ($request->data_status === 'filled') {
+                $query->whereHas('visaInfo', fn($q) => $q->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
+            } elseif ($request->data_status === 'not_filled') {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('visaInfo')
+                      ->orWhereHas('visaInfo', fn($q2) => $q2->whereNull('passport_number')->whereNull('visa_number')->whereNull('registration_end_date'));
+                });
+            } elseif ($request->data_status === 'approved') {
+                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'approved')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
+            } elseif ($request->data_status === 'pending') {
+                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'pending')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
+            } elseif ($request->data_status === 'rejected') {
+                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'rejected')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
+            }
+        }
+
+        if (!in_array('visa_expiry', $except, true) && $request->has('visa_expiry') && $request->visa_expiry !== '' && $request->visa_expiry !== null) {
+            $days = (int) $request->visa_expiry;
+            $query->whereHas('visaInfo', function ($q) use ($days) {
+                $q->whereNotNull('visa_end_date')
+                  ->whereDate('visa_end_date', '<=', now()->addDays($days));
+            });
+        }
+
+        if (!in_array('registration_expiry', $except, true) && $request->has('registration_expiry') && $request->registration_expiry !== '' && $request->registration_expiry !== null) {
+            $days = (int) $request->registration_expiry;
+            $query->whereHas('visaInfo', function ($q) use ($days) {
+                $q->whereNotNull('registration_end_date')
+                  ->whereDate('registration_end_date', '<=', now()->addDays($days));
+            });
+        }
+
+        // Excel-style ustun filtri: aniq tanlangan sanalar (yoki "__empty__" - kiritilmaganlar)
+        if (!in_array('visa_end_dates', $except, true) && $request->filled('visa_end_dates')) {
+            $values = array_values(array_filter((array) $request->visa_end_dates, fn($v) => $v !== null && $v !== ''));
+            $includeEmpty = in_array('__empty__', $values, true);
+            $actualDates = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
+            if ($includeEmpty && !empty($actualDates)) {
+                $query->where(function ($outer) use ($actualDates) {
+                    $outer->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $actualDates))
+                          ->orWhereDoesntHave('visaInfo')
+                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('visa_end_date'));
+                });
+            } elseif (!empty($actualDates)) {
+                $query->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $actualDates));
+            } elseif ($includeEmpty) {
+                $query->where(function ($outer) {
+                    $outer->whereDoesntHave('visaInfo')
+                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('visa_end_date'));
+                });
+            }
+        }
+
+        if (!in_array('registration_end_dates', $except, true) && $request->filled('registration_end_dates')) {
+            $values = array_values(array_filter((array) $request->registration_end_dates, fn($v) => $v !== null && $v !== ''));
+            $includeEmpty = in_array('__empty__', $values, true);
+            $actualDates = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
+            if ($includeEmpty && !empty($actualDates)) {
+                $query->where(function ($outer) use ($actualDates) {
+                    $outer->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $actualDates))
+                          ->orWhereDoesntHave('visaInfo')
+                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('registration_end_date'));
+                });
+            } elseif (!empty($actualDates)) {
+                $query->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $actualDates));
+            } elseif ($includeEmpty) {
+                $query->where(function ($outer) {
+                    $outer->whereDoesntHave('visaInfo')
+                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('registration_end_date'));
+                });
+            }
+        }
+
+        if (!in_array('hemis_status', $except, true) && $request->filled('hemis_status')) {
+            if ($request->hemis_status === 'inactive') {
+                $query->where('student_status_code', '60');
+            } elseif ($request->hemis_status === 'active') {
+                $query->where('student_status_code', '!=', '60');
+            }
+        }
+
+        return $query;
+    }
+
     public function notifyDanger()
     {
         $telegram = app(TelegramService::class);

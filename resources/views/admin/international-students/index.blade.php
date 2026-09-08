@@ -328,12 +328,37 @@
                                 <th>Kurs</th>
                                 <th>Fakultet</th>
                                 <th>Yo'nalish</th>
-                                <th>Guruh</th>
-                                <th>Ma'lumot</th>
                                 @php
                                     $selectedRegDates = array_filter((array) request('registration_end_dates', []));
                                     $selectedVisaDates = array_filter((array) request('visa_end_dates', []));
+                                    $selectedGroups = array_filter((array) request('group_names', []));
+                                    $selectedDataFilled = array_filter((array) request('data_filled', []));
+                                    $selectedFirms = array_filter((array) request('firms', []));
+                                    $selectedStatuses = array_filter((array) request('statuses', []));
                                 @endphp
+
+                                <th style="position:relative;white-space:nowrap;">
+                                    <span>Guruh</span>
+                                    @include('admin.international-students._col-filter', [
+                                        'key' => 'group',
+                                        'field' => 'group_names',
+                                        'items' => $groupNames->mapWithKeys(fn($g) => [$g => $g])->all(),
+                                        'selected' => $selectedGroups,
+                                        'emptyLabel' => null,
+                                        'searchPlaceholder' => 'Guruh qidirish...',
+                                    ])
+                                </th>
+                                <th style="position:relative;white-space:nowrap;">
+                                    <span>Ma'lumot</span>
+                                    @include('admin.international-students._col-filter', [
+                                        'key' => 'datafill',
+                                        'field' => 'data_filled',
+                                        'items' => ['filled' => 'Kiritilgan', 'not_filled' => 'Kiritilmagan'],
+                                        'selected' => $selectedDataFilled,
+                                        'emptyLabel' => null,
+                                        'searchPlaceholder' => null,
+                                    ])
+                                </th>
                                 <th style="position:relative;white-space:nowrap;">
                                     <span>Reg. tugash</span>
                                     <button type="button" class="col-filter-btn {{ count($selectedRegDates) ? 'col-filter-active' : '' }}" onclick="toggleColFilter(event, 'reg_end')" title="Sana bo'yicha filtr">
@@ -404,8 +429,32 @@
                                         </div>
                                     </div>
                                 </th>
-                                <th>Firma</th>
-                                <th>Holat</th>
+                                <th style="position:relative;white-space:nowrap;">
+                                    <span>Firma</span>
+                                    @include('admin.international-students._col-filter', [
+                                        'key' => 'firm',
+                                        'field' => 'firms',
+                                        'items' => collect($firms)->only($usedFirms->all())->all(),
+                                        'selected' => $selectedFirms,
+                                        'emptyLabel' => 'Tanlanmagan',
+                                        'searchPlaceholder' => null,
+                                    ])
+                                </th>
+                                <th style="position:relative;white-space:nowrap;">
+                                    <span>Holat</span>
+                                    @include('admin.international-students._col-filter', [
+                                        'key' => 'status',
+                                        'field' => 'statuses',
+                                        'items' => [
+                                            'approved' => 'Tasdiqlangan',
+                                            'pending' => 'Kutilmoqda',
+                                            'rejected' => 'Rad etilgan',
+                                        ],
+                                        'selected' => $selectedStatuses,
+                                        'emptyLabel' => 'Holatsiz',
+                                        'searchPlaceholder' => null,
+                                    ])
+                                </th>
                                 <th style="text-align:center;">Pasport</th>
                                 <th style="text-align:center;">Jarayon</th>
                             </tr>

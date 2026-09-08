@@ -270,6 +270,7 @@
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('opt')" title="Optimizatsiyalangan holatdan boshlab qo'lda tuzatish">⟲ Optimizatsiyadan</button>
                                     <button type="button" class="af-btn af-load" onclick="loadSnapshot()" title="Oldin saqlangan/tasdiqlangan holatni yuklash">↺ Saqlangan holat</button>
+                                    <button type="button" id="mn-del-empty" class="af-btn af-unapprove" onclick="removeEmptyGroups()" title="Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish — bekor qilish mumkin">🗑 Bo'sh guruhlarni o'chirish</button>
                                     <button type="button" id="mn-undo" class="af-btn af-draft" onclick="manualUndo()" disabled>↶ Bekor qilish</button>
                                     <button type="button" class="af-btn af-draft" onclick="saveSnapshot('draft')">💾 Qoralama saqlash</button>
                                     <button type="button" class="af-btn af-approve" onclick="saveSnapshot('approve')">✓ Tasdiqlash</button>
@@ -442,6 +443,8 @@
                 // Qo'lda tuzatish vkladkasi uchun manba holatlarni saqlab qo'yamiz
                 joriyState = JSON.parse(JSON.stringify(joriy.blocks || []));
                 optState = JSON.parse(JSON.stringify(opt.blocks || []));
+                calcGroupIds = joriy.group_ids || [];
+                manualKnownIds = idSetFromList(calcGroupIds); // afterState = optimizatsiya — shu guruhlar hisobga olingan
                 MN_UNDO = [];
                 var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                 $('#loading-state').hide();
@@ -668,6 +671,7 @@
             $.get(SNAP_SHOW_URL, getFilters(true)).done(function(res) {
                 if (res && res.found && res.data) {
                     afterState = res.data;
+                    manualKnownIds = idsFromBlocks(afterState);
                     editMode = false;
                     renderAfterBody();
                     if (activeTab === 'manual') { MN_UNDO = []; renderManual(); }
@@ -974,6 +978,7 @@
                     }
                     $('#loading-state').hide();
                     afterState = blocks; editMode = true;
+                    manualContext = null; manualKnownIds = idSetFromList(base.group_ids || []); MN_UNDO = [];
                     $('#table-area').show(); switchTab('after'); renderAfterBody();
                     $('#after-actions').css('display', CAN_APPROVE ? 'flex' : 'none');
                     $('#btn-edit').addClass('on').text('✎ Tahrirlash yoqilgan'); $('#edit-hint').show();
@@ -1030,6 +1035,7 @@
             if ((!afterState || !afterState.length) && AP_CURRENT && AP_CURRENT.blocks && AP_CURRENT.blocks.length) {
                 afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
                 manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+                manualKnownIds = idsFromBlocks(afterState);
                 MN_UNDO = [];
                 mnRecalc();
                 renderAfterBody();
@@ -1072,6 +1078,9 @@
                               + '<span class="mn-oqim-total" data-mnot="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>'
                               + (CAN_APPROVE ? '<button type="button" class="mn-x mn-x-oqim" title="Oqimni (barcha guruhlari bilan) ro\'yxatdan o\'chirish" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '">×</button>' : '')
                               + '</div>';
+                        if (!rows.length) {
+                            html += '<div class="mn-empty-hint">Bo\'sh oqim — guruhni shu yerga tashlang</div>';
+                        }
                         for (var r2 = 0; r2 < rows.length; r2++) {
                             var row = rows[r2];
                             var rl = row.lang || oq.lang || 'uz';
@@ -1090,7 +1099,7 @@
                         html += '</div>';
                     }
                     if (CAN_APPROVE) {
-                        html += '<div class="mn-new" data-b="' + b + '" data-c="' + c + '">＋ Yangi oqim — guruhni shu yerga tashlang</div>';
+                        html += '<div class="mn-new" data-b="' + b + '" data-c="' + c + '" title="Bosing — bo\'sh oqim ochiladi; yoki guruhni shu yerga tashlang">＋ Yangi oqim — bosing yoki guruhni shu yerga tashlang</div>';
                     }
                     html += '</div>';
                 }
@@ -1120,6 +1129,7 @@
             if (!base || !base.length) { mnFlash('Avval "Hisoblash" tugmasini bosing.'); return; }
             afterState = JSON.parse(JSON.stringify(base));
             manualContext = null;
+            manualKnownIds = idSetFromList(calcGroupIds);
             MN_UNDO = [];
             mnRecalc();
             renderManual();
@@ -1154,6 +1164,7 @@
                 });
             } else {
                 var rows = tgtCourse.oqims[to].rows;
+                if (!rows.length) tgtCourse.oqims[to].lang = row.lang || tgtCourse.oqims[to].lang || 'uz'; // bo'sh oqim — birinchi guruh tilini oladi
                 if (sameOqim && tr !== undefined && tr > src.r) tr--;
                 if (tr === undefined || tr === null || tr > rows.length) rows.push(row);
                 else rows.splice(tr, 0, row);
@@ -1213,6 +1224,38 @@
             var s = dragSrc; dragSrc = null;
             mnMove(s, tb, tc, -1);
         });
+
+        // "Yangi oqim" ni BOSISH — bo'sh oqim ochiladi (guruhlar keyin sudrab joylanadi)
+        $(document).on('click', '#mn-body .mn-new', function() {
+            if (!CAN_APPROVE) return;
+            var b = +$(this).data('b'), c = +$(this).data('c');
+            var course = afterState[b].courses[c];
+            // Kursdagi ustun til — yangi oqimning boshlang'ich tili
+            var cnt = {};
+            (course.oqims || []).forEach(function(o) { (o.rows || []).forEach(function(r) { var lg = r.lang || o.lang || 'uz'; cnt[lg] = (cnt[lg] || 0) + 1; }); });
+            var lang = Object.keys(cnt).sort(function(x, y) { return cnt[y] - cnt[x]; })[0] || 'uz';
+            mnPushUndo();
+            course.oqims.push({ label: 'Oqim-' + (course.oqims.length + 1), lang: lang, total: 0, rows: [] });
+            renderManual();
+            mnFlash("Bo'sh oqim ochildi — guruhlarni unga sudrab joylang");
+        });
+
+        // Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish
+        function removeEmptyGroups() {
+            var n = 0;
+            afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                (oq.rows || []).forEach(function(r) { if (!(+r.count > 0)) n++; });
+            }); }); });
+            if (!n) { mnFlash("Talabasi yo'q guruh topilmadi."); return; }
+            if (!confirm(n + " ta bo'sh (0 talaba) guruh ro'yxatdan o'chirilsinmi? Keyin \"↶ Bekor qilish\" bilan qaytarish mumkin.")) return;
+            mnPushUndo();
+            afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) {
+                (co.oqims || []).forEach(function(oq) { oq.rows = (oq.rows || []).filter(function(r) { return +r.count > 0; }); });
+                co.oqims = (co.oqims || []).filter(function(oq) { return oq.rows.length > 0; });
+            }); });
+            mnRecalc(); renderManual(); renderAfterBody();
+            mnFlash(n + " ta bo'sh guruh o'chirildi");
+        }
 
         // Guruhni ro'yxatdan o'chirish (bashoratdagi soxta "1K-01a" kabi guruhlar uchun)
         $(document).on('click', '#mn-body .mn-x-row', function(e) {
@@ -1275,22 +1318,42 @@
             var $st = $('#mn-hemis-status');
             var $btn = $('#mn-merge-new').prop('disabled', true).css('opacity', 0.6);
             $st.css('color', '#0369a1').text('Yangi guruhlar tekshirilmoqda...');
-            $.get(DATA_URL, getFilters(false)).done(function(res) {
+            // Tarixdagi versiya tahrirlanayotgan bo'lsa — o'sha versiyaning konteksti (fakultet,
+            // ta'lim turi, reja yili...) bo'yicha so'raymiz; faqat optimize=0 (joriy holat).
+            var mf = manualContext ? $.extend(true, {}, manualContext, { optimize: 0 }) : getFilters(false);
+            if (manualContext) { delete mf.goal; delete mf.merge_faculties; }
+            $.get(DATA_URL, mf).done(function(res) {
                 var src = res.blocks || [];
                 if (!src.length) { $st.css('color', '#b45309').text('Bazada guruh topilmadi — filtrlarni tekshiring.'); return; }
                 if (!afterState || !afterState.length) {
                     // Ekranda hech narsa yo'q — joriy holatni to'liq yuklaymiz
                     afterState = JSON.parse(JSON.stringify(src));
-                    manualContext = null; MN_UNDO = [];
+                    manualKnownIds = idSetFromList(res.group_ids || []);
+                    MN_UNDO = [];
                     mnRecalc(); renderManual(); renderAfterBody();
                     $st.css('color', '#16a34a').text('✓ Joriy holat (barcha guruhlar) yuklandi.');
                     return;
                 }
-                // Ekrandagi barcha guruh nomlari
+                // Yangi guruh — HEMIS ID bo'yicha aniqlanadi (nom bo'yicha emas: optimizatsiya
+                // guruhlarni birlashtirib nomini o'zgartirgan bo'lsa ham ular "yangi" sanalmaydi).
+                // ID ma'lumoti umuman bo'lmagan eski versiyalar uchun — nom bo'yicha zaxira usul.
+                var knownIds = $.extend({}, manualKnownIds, idsFromBlocks(afterState));
+                var useIds = Object.keys(knownIds).length > 0;
                 var have = {};
                 afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
                     (oq.rows || []).forEach(function(r) { have[mnNormName(r.name)] = true; });
                 }); }); });
+                function isNewRow(r) {
+                    if (useIds) {
+                        if (!(+r.gid > 0)) return false;        // sun'iy (bashorat) qatorlar hech qachon qo'shilmaydi
+                        if (knownIds[+r.gid]) return false;
+                        knownIds[+r.gid] = true; manualKnownIds[+r.gid] = true;
+                        return true;
+                    }
+                    var k = mnNormName(r.name);
+                    if (have[k]) return false;
+                    have[k] = true; return true;
+                }
                 var added = 0, addedNames = [];
                 var snapshot = JSON.stringify(afterState);
                 src.forEach(function(sb) {
@@ -1298,8 +1361,7 @@
                         var lvl = ctLevelNum(sc);
                         var newRows = [];
                         (sc.oqims || []).forEach(function(so) { (so.rows || []).forEach(function(r) {
-                            var k = mnNormName(r.name);
-                            if (!have[k]) { have[k] = true; newRows.push(JSON.parse(JSON.stringify(r))); }
+                            if (isNewRow(r)) newRows.push(JSON.parse(JSON.stringify(r)));
                         }); });
                         if (!newRows.length) return;
                         // Mos blok (fakultet+yo'nalish) va kursni topamiz, bo'lmasa yaratamiz
@@ -1362,6 +1424,21 @@
         var AP_VERSIONS = [];       // versiyalar ro'yxati (sana bo'yicha kamayish tartibida)
         var AP_CURRENT = null;      // hozir ekranda turgan versiya (to'liq: blocks, context...)
         var manualContext = null;   // qo'lda tuzatish qaysi kontekst ostida tasdiqlanadi (null — joriy filtrlar)
+        var manualKnownIds = {};    // ekrandagi holat hisobga olgan HEMIS guruh IDlari (yangi guruhlarni aniqlash uchun)
+        var calcGroupIds = [];      // oxirgi hisoblashga kirgan guruh IDlari (joriy va optimizatsiya — bir xil to'plam)
+
+        // Bloklardagi qatorlardan guruh IDlarini yig'adi (gid — haqiqiy guruh, gids — birlashtirilgan manba guruhlar)
+        function idsFromBlocks(blocks) {
+            var set = {};
+            (blocks || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                (oq.rows || []).forEach(function(r) {
+                    if (+r.gid > 0) set[+r.gid] = true;
+                    (r.gids || []).forEach(function(g) { if (+g > 0) set[+g] = true; });
+                });
+            }); }); });
+            return set;
+        }
+        function idSetFromList(list) { var set = {}; (list || []).forEach(function(g) { if (+g > 0) set[+g] = true; }); return set; }
 
         function apVersionLabel(r) {
             var s = r.summary || {};
@@ -1429,6 +1506,7 @@
             if (!AP_CURRENT || !AP_CURRENT.blocks) { mnFlash('Avval versiyani tanlang.'); return; }
             afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
             manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+            manualKnownIds = idsFromBlocks(afterState);
             MN_UNDO = [];
             mnRecalc();
             renderAfterBody();
@@ -1787,10 +1865,12 @@
         .mn-lang-uz  { color:#1d4ed8; background:#eff6ff; }
         .mn-lang-rus { color:#be123c; background:#fff1f2; }
         .mn-lang-ing { color:#6d28d9; background:#f5f3ff; }
-        .mn-x { flex-shrink:0; width:18px; height:18px; line-height:16px; padding:0; border:1px solid transparent; border-radius:5px; background:transparent; color:#cbd5e1; font-size:14px; font-weight:800; cursor:pointer; }
+        .mn-x { flex-shrink:0; width:20px; height:20px; line-height:18px; padding:0; border:1px solid #e2e8f0; border-radius:5px; background:#fff; color:#94a3b8; font-size:15px; font-weight:800; cursor:pointer; }
+        .mn-empty-hint { padding:10px 8px; text-align:center; font-size:11px; font-weight:700; color:#a21caf; background:#fdf4ff; border-top:1px dashed #f0abfc; }
         .mn-x:hover { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
         .mn-x-oqim { margin-left:4px; }
-        .mn-new { border:2px dashed #cbd5e1; border-radius:8px; margin-top:6px; padding:10px 8px; text-align:center; font-size:11.5px; font-weight:700; color:#94a3b8; transition:all .12s; }
+        .mn-new { border:2px dashed #cbd5e1; border-radius:8px; margin-top:6px; padding:10px 8px; text-align:center; font-size:11.5px; font-weight:700; color:#94a3b8; transition:all .12s; cursor:pointer; user-select:none; }
+        .mn-new:hover { border-color:#a21caf; color:#a21caf; background:#fdf4ff; }
         .mn-new.mn-over { border-color:#a21caf; color:#a21caf; background:#fdf4ff; }
         #mn-flash { display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; font-size:13px; font-weight:700; padding:10px 18px; border-radius:10px; z-index:2000; box-shadow:0 8px 24px rgba(0,0,0,0.35); max-width:80vw; text-align:center; }
     </style>

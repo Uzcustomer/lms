@@ -11823,6 +11823,18 @@ class ReportController extends Controller
             $rows, $excludedIds, $trackMap, $talimFilter, $langMap, $overrideLang
         );
 
+        // Hisobotga kirgan barcha HAQIQIY guruhlarning HEMIS IDlari — "qo'lda tuzatish"
+        // ekrani yangi guruhlarni nom bo'yicha emas, shu IDlar bo'yicha aniqlaydi
+        // (optimizatsiya guruhlarni birlashtirib nomini o'zgartirsa ham ikki marta sanalmaydi).
+        $reportGroupIds = [];
+        foreach ($blocks as $bl) {
+            foreach ($bl['courses'] ?? [] as $co) {
+                foreach ($co['groups'] ?? [] as $g) {
+                    if ((int) ($g['group_id'] ?? 0) > 0) { $reportGroupIds[(int) $g['group_id']] = true; }
+                }
+            }
+        }
+
         // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----
         // goal — optimizatsiya maqsadi: fill (oqimlarni maksimal to'ldirish, default),
         // balance (teng taqsimlash), integrity (guruhchalar butunligi qat'iy).
@@ -11930,6 +11942,7 @@ class ReportController extends Controller
             'optimize'  => $params['optimize'],
             'plan'      => $plan,
             'generated_at' => now()->format('d.m.Y H:i'),
+            'group_ids'    => array_keys($reportGroupIds),
         ];
     }
 
@@ -11995,8 +12008,15 @@ class ReportController extends Controller
             });
         }
 
-        // Joriy o'quv yili boshi: iyuldan keyin — shu yil (2026-sentyabr → 2026-2027)
+        // Joriy o'quv yili boshi: iyuldan keyin — shu yil (2026-sentyabr → 2026-2027).
+        // Reja (kelasi yil) rejimida — kurs reja yiliga nisbatan hisoblanadi va bu
+        // qatorlar keyin +1 kursga surilmaydi (aks holda yangi qabul 2-kursga tushib qolardi).
         $acadStart = now()->month >= 7 ? now()->year : now()->year - 1;
+        $fixed = false;
+        if ($request->boolean('projection') && preg_match('/^(\d{4})/', (string) $request->get('academic_year', ''), $ym)) {
+            $acadStart = (int) $ym[1];
+            $fixed = true;
+        }
 
         $out = [];
         foreach ($eq->get() as $g) {
@@ -12025,6 +12045,7 @@ class ReportController extends Controller
                 'group_id'        => $g->group_hemis_id,
                 'group_name'      => $g->group_name,
                 'cnt'             => 0,
+                '_fixed'          => $fixed, // reja rejimida kursi surilmaydi
             ];
         }
 
@@ -12045,6 +12066,10 @@ class ReportController extends Controller
         // 1) Joriy talabalarni +1 kursga surish
         $out = [];
         foreach ($rows as $r) {
+            if (!empty($r->_fixed)) {
+                $out[] = clone $r; // bo'sh guruh — kursi reja yiliga nisbatan allaqachon to'g'ri
+                continue;
+            }
             $course = (int) $r->level_code - 10;
             if ($course < 1) {
                 continue;
@@ -13165,6 +13190,7 @@ class ReportController extends Controller
                 'letter' => $g['letter'],
                 'count'  => $g['count'],
                 'name'   => $g['name'], // HEMISdagi haqiqiy nom (til belgisisiz)
+                'gid'    => (int) ($g['group_id'] ?? 0), // barqaror HEMIS guruh ID (sun'iy: <0)
             ];
         }
         return array_values($bases);
@@ -13305,6 +13331,15 @@ class ReportController extends Controller
                 // yuqoridagilarga singdirilib, o'chiriladi). Keyin har subCount tadan bitta
                 // asosiy guruhga (a,b yoki a,b,c) yig'iladi — oxirgi guruh kamroq bo'lishi mumkin.
                 $T = array_sum(array_map(fn($x) => $x['total'], $list));
+                // Manba guruhlarning HEMIS IDlari — optimizatsiya talabalarni qayta
+                // taqsimlaydi, shuning uchun har qatorga klasterning barcha manba IDlari yoziladi.
+                $srcGids = [];
+                foreach ($list as $x) {
+                    foreach ($x['members'] ?? [] as $m) {
+                        if (!empty($m['gid']) && (int) $m['gid'] > 0) { $srcGids[(int) $m['gid']] = true; }
+                    }
+                }
+                $srcGids = array_keys($srcGids);
                 // Guruh soni original guruhlar sonidan OSHMASIN (optimizatsiya guruh qo'shmaydi).
                 $chunks = $this->oqimOptimalSubgroups($T, $subCount, $subMax, $subTol, count($list));
                 $names = array_map(fn($x) => $x['base'], $list);
@@ -13323,7 +13358,7 @@ class ReportController extends Controller
                     $rows = [];
                     foreach (array_values($chunk) as $j => $size) {
                         $lbl = ($subCount <= 1) ? $bname : ($bname . ($letters[$j] ?? ($j + 1)));
-                        $rows[] = ['name' => $lbl . $suffix, 'count' => $size];
+                        $rows[] = ['name' => $lbl . $suffix, 'count' => $size, 'gids' => $srcGids];
                     }
                     $out[] = [
                         'base'       => $bname,
@@ -13357,7 +13392,8 @@ class ReportController extends Controller
     private function oqimJoriyRows(array $b, int $subCount, string $eff, string $suffix): array
     {
         if ($eff === 'full') {
-            return [['name' => $b['base'] . $suffix, 'count' => $b['total']]];
+            $gids = array_values(array_filter(array_map(fn($m) => (int) ($m['gid'] ?? 0), $b['members'] ?? []), fn($x) => $x > 0));
+            return [['name' => $b['base'] . $suffix, 'count' => $b['total'], 'gids' => $gids]];
         }
 
         $members = $b['members'] ?? [];
@@ -13367,7 +13403,11 @@ class ReportController extends Controller
         foreach ($members as $m) {
             // HEMISdagi haqiqiy nomni ishlatamiz; bo'lmasa base + harf
             $name = $m['name'] ?? ($b['base'] . $m['letter']);
-            $out[] = ['name' => $name . $suffix, 'count' => (int) $m['count']];
+            $row = ['name' => $name . $suffix, 'count' => (int) $m['count']];
+            if (!empty($m['gid']) && (int) $m['gid'] > 0) {
+                $row['gid'] = (int) $m['gid'];
+            }
+            $out[] = $row;
         }
         return $out;
     }

@@ -1095,6 +1095,7 @@
                                         ? '<input class="mn-cnt" type="number" min="0" value="' + esc(row.count) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
                                         : '<span class="mn-cnt-ro">' + esc(row.count) + '</span>')
                                   + '<span class="mn-lang mn-lang-' + esc(rl) + '">' + (MN_LANG_LBL[rl] || rl) + '</span>'
+                                  + (CAN_APPROVE ? '<button type="button" class="mn-x mn-mv" title="Boshqa oqim/fakultetga ko\'chirish (ro\'yxatdan tanlab — uzoq masofa uchun)" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">⇢</button>' : '')
                                   + (CAN_APPROVE ? '<button type="button" class="mn-x mn-x-row" title="Guruhni ro\'yxatdan o\'chirish (masalan bashoratdagi soxta guruh)" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">×</button>' : '')
                                   + '</div>';
                         }
@@ -1192,8 +1193,27 @@
         $(document).on('dragend', '#mn-body .mn-row', function() {
             $(this).removeClass('mn-dragging');
             $('#mn-body .mn-over').removeClass('mn-over');
+            mnRemoveDropLine();
             dragSrc = null;
         });
+        // Sudrab yurganda tushish joyi: kursor Y bo'yicha qat'iy indeks hisoblanadi va
+        // o'sha joyda "shu yerga tushadi" ko'rsatkichi chiziladi. Drop ham aynan shu indeksga.
+        var dropHint = null; // { b, c, o, idx }
+        function mnRemoveDropLine() { $('#mn-body .mn-drop-line').remove(); dropHint = null; }
+        function mnPlaceDropLine($oqim, b, c, o, clientY) {
+            var idx = null, $before = null;
+            $oqim.find('.mn-row').each(function() {
+                var rect = this.getBoundingClientRect();
+                if (clientY < rect.top + rect.height / 2) { idx = +$(this).data('r'); $before = $(this); return false; }
+            });
+            if (idx === null) idx = ((afterState[b].courses[c].oqims[o] || {}).rows || []).length;
+            if (dropHint && dropHint.b === b && dropHint.c === c && dropHint.o === o && dropHint.idx === idx && $('#mn-body .mn-drop-line').length) return;
+            $('#mn-body .mn-drop-line').remove();
+            var srcRow = afterState[dragSrc.b].courses[dragSrc.c].oqims[dragSrc.o].rows[dragSrc.r] || {};
+            var $line = $('<div class="mn-drop-line"></div>').text('⤵ ' + (srcRow.name || 'guruh') + ' — shu yerga tushadi');
+            if ($before) $before.before($line); else $oqim.append($line);
+            dropHint = { b: b, c: c, o: o, idx: idx };
+        }
         $(document).on('dragover', '#mn-body .mn-oqim, #mn-body .mn-new', function(e) {
             if (!dragSrc) return;
             var lvl = +$(this).closest('.mn-course').data('lvl');
@@ -1201,10 +1221,20 @@
             if (lvl !== srcLvl) return; // boshqa kursga tashlash taqiqlanadi
             e.preventDefault();
             if (e.originalEvent.dataTransfer) e.originalEvent.dataTransfer.dropEffect = 'move';
+            $('#mn-body .mn-over').not(this).removeClass('mn-over');
             $(this).addClass('mn-over');
+            if ($(this).hasClass('mn-oqim')) {
+                mnPlaceDropLine($(this), +$(this).data('b'), +$(this).data('c'), +$(this).data('o'), e.originalEvent.clientY);
+            } else {
+                mnRemoveDropLine();
+            }
         });
-        $(document).on('dragleave', '#mn-body .mn-oqim, #mn-body .mn-new', function() {
+        $(document).on('dragleave', '#mn-body .mn-oqim, #mn-body .mn-new', function(e) {
+            // Ichki elementga o'tishda ham dragleave keladi — faqat haqiqatan chiqib ketganda tozalaymiz
+            var rt = e.originalEvent.relatedTarget;
+            if (rt && this.contains(rt)) return;
             $(this).removeClass('mn-over');
+            if ($(this).hasClass('mn-oqim')) mnRemoveDropLine();
         });
         $(document).on('drop', '#mn-body .mn-oqim', function(e) {
             $(this).removeClass('mn-over');
@@ -1213,8 +1243,13 @@
             e.stopPropagation();
             var tb = +$(this).data('b'), tc = +$(this).data('c'), to = +$(this).data('o');
             var tr;
-            var $row = $(e.target).closest('.mn-row');
-            if ($row.length) tr = +$row.data('r');
+            if (dropHint && dropHint.b === tb && dropHint.c === tc && dropHint.o === to) {
+                tr = dropHint.idx; // ko'rsatkich turgan joy
+            } else {
+                var $row = $(e.target).closest('.mn-row');
+                if ($row.length) tr = +$row.data('r');
+            }
+            mnRemoveDropLine();
             var s = dragSrc; dragSrc = null;
             mnMove(s, tb, tc, to, tr);
         });
@@ -1222,9 +1257,74 @@
             $(this).removeClass('mn-over');
             if (!dragSrc) return;
             e.preventDefault();
+            mnRemoveDropLine();
             var tb = +$(this).data('b'), tc = +$(this).data('c');
             var s = dragSrc; dragSrc = null;
             mnMove(s, tb, tc, -1);
+        });
+
+        // Sudrab chetga borganda avtomatik skroll: ichki maydon (#mn-body), oyna va kurslar qatori (gorizontal).
+        // Brauzer ichki overflow konteynerini drag paytida o'zi aylantirmaydi — shu sabab qo'lda qilamiz.
+        var mnAS = { x: 0, y: 0, hx: null, raf: null };
+        $(document).on('dragover', function(e) {
+            if (!dragSrc) return;
+            mnAS.x = e.originalEvent.clientX; mnAS.y = e.originalEvent.clientY;
+            var hx = $(e.target).closest('.mn-courses')[0];
+            if (hx) mnAS.hx = hx;
+            if (!mnAS.raf) mnAS.raf = requestAnimationFrame(mnAutoScrollTick);
+        });
+        function mnAutoScrollTick() {
+            mnAS.raf = null;
+            if (!dragSrc) return;
+            var EDGE = 80, MAX = 24;
+            function speed(d) { return Math.ceil(Math.min(1, Math.max(0, d) / EDGE) * MAX); }
+            var body = document.getElementById('mn-body');
+            if (body) {
+                var r = body.getBoundingClientRect();
+                var top = Math.max(r.top, 0), bottom = Math.min(r.bottom, window.innerHeight);
+                if (mnAS.y < top + EDGE) body.scrollTop -= speed(top + EDGE - mnAS.y);
+                else if (mnAS.y > bottom - EDGE) body.scrollTop += speed(mnAS.y - (bottom - EDGE));
+            }
+            // Oyna (sahifa) — maydonning pastki qismi ekrandan tashqarida bo'lsa
+            if (mnAS.y < EDGE) window.scrollBy(0, -speed(EDGE - mnAS.y));
+            else if (mnAS.y > window.innerHeight - EDGE) window.scrollBy(0, speed(mnAS.y - (window.innerHeight - EDGE)));
+            // Kurslar qatori — gorizontal
+            if (mnAS.hx) {
+                var hr = mnAS.hx.getBoundingClientRect();
+                if (mnAS.x < hr.left + EDGE) mnAS.hx.scrollLeft -= speed(hr.left + EDGE - mnAS.x);
+                else if (mnAS.x > hr.right - EDGE) mnAS.hx.scrollLeft += speed(mnAS.x - (hr.right - EDGE));
+            }
+            mnAS.raf = requestAnimationFrame(mnAutoScrollTick);
+        }
+
+        // "⇢" — guruhni ro'yxatdan tanlab boshqa oqim/fakultetga ko'chirish (uzoq masofa uchun)
+        $(document).on('click', '#mn-body .mn-mv', function(e) {
+            e.stopPropagation();
+            $('#mn-body .mn-mv-sel').remove();
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o'), r = +$(this).data('r');
+            var lvl = ctLevelNum(afterState[b].courses[c]);
+            var $sel = $('<select class="mn-mv-sel"></select>');
+            $sel.append('<option value="">Qayerga ko\'chirilsin?</option>');
+            afterState.forEach(function(bl, bi) {
+                (bl.courses || []).forEach(function(co, ci) {
+                    if (ctLevelNum(co) !== lvl) return;
+                    var $grp = $('<optgroup></optgroup>').attr('label', bl.title + ' · ' + (co.level_name || ''));
+                    (co.oqims || []).forEach(function(oq, oi) {
+                        if (bi === b && ci === c && oi === o) return;
+                        $grp.append($('<option>').val(bi + '|' + ci + '|' + oi).text((oq.label || 'Oqim') + ' · ' + (oq.total || 0) + ' ta · ' + (MN_LANG_LBL[oq.lang || 'uz'] || oq.lang)));
+                    });
+                    $grp.append($('<option>').val(bi + '|' + ci + '|-1').text('＋ Yangi oqim'));
+                    $sel.append($grp);
+                });
+            });
+            $(this).closest('.mn-row').append($sel);
+            $sel.focus();
+            $sel.on('change', function() {
+                var v = this.value; $(this).remove();
+                if (!v) return;
+                var pp = v.split('|');
+                mnMove({ b: b, c: c, o: o, r: r }, +pp[0], +pp[1], +pp[2]);
+            }).on('blur', function() { var el = this; setTimeout(function() { $(el).remove(); }, 150); });
         });
 
         // "Yangi oqim" ni BOSISH — bo'sh oqim ochiladi (guruhlar keyin sudrab joylanadi)
@@ -1877,6 +1977,9 @@
         .mn-lang-rus { color:#be123c; background:#fff1f2; }
         .mn-lang-ing { color:#6d28d9; background:#f5f3ff; }
         .mn-x { flex-shrink:0; width:20px; height:20px; line-height:18px; padding:0; border:1px solid #e2e8f0; border-radius:5px; background:#fff; color:#94a3b8; font-size:15px; font-weight:800; cursor:pointer; }
+        .mn-mv-sel { position:absolute; left:8px; right:8px; z-index:5; margin-top:24px; border:1px solid #a21caf; border-radius:6px; font-size:11.5px; padding:3px 4px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.18); }
+        .mn-row { position:relative; }
+        .mn-drop-line { margin:2px 6px; padding:4px 8px; border:2px dashed #a21caf; border-radius:6px; background:#fdf4ff; color:#a21caf; font-size:11px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
         .mn-empty-hint { padding:10px 8px; text-align:center; font-size:11px; font-weight:700; color:#a21caf; background:#fdf4ff; border-top:1px dashed #f0abfc; }
         .mn-x:hover { color:#dc2626; background:#fef2f2; border-color:#fecaca; }
         .mn-x-oqim { margin-left:4px; }

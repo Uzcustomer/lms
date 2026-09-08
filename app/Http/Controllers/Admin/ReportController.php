@@ -11393,8 +11393,31 @@ class ReportController extends Controller
                 . (!$stats['ok'] ? ' — qisman: ' . $stats['error'] : '') . '.';
             $result = ['imported' => $stats['total'], 'created' => $stats['created'], 'updated' => $stats['updated'], 'sync' => true];
         } else {
-            \Illuminate\Support\Facades\Artisan::queue('students:import');
-            $message = 'Talabalar HEMISdan tortilmoqda (fon rejimida). Bu jarayon uzoqroq davom etadi — keyinroq "Hisoblash" ni qayta bosing.';
+            // Talabalar importi og'ir — fon (queue) rejimida. Holati keshda kuzatiladi:
+            // sahifa uni so'rab turadi va tugagach ekrandagi sonlarni o'zi yangilaydi.
+            $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY);
+            if ($st && in_array($st['state'] ?? '', ['queued', 'running'], true)
+                && now()->diffInMinutes(Carbon::parse($st['queued_at'])) < 120) {
+                return response()->json(['ok' => false, 'error' => 'Talabalar importi allaqachon ' . ($st['state'] === 'running' ? 'bajarilmoqda' : 'navbatda') . ' (' . Carbon::parse($st['queued_at'])->format('H:i') . ' dan).'], 409);
+            }
+            \Illuminate\Support\Facades\Cache::put(self::OQIM_STUDENT_IMPORT_KEY, [
+                'state' => 'queued', 'queued_at' => now()->toDateTimeString(), 'by' => $user->name,
+            ], now()->addDay());
+            $key = self::OQIM_STUDENT_IMPORT_KEY;
+            dispatch(function () use ($key) {
+                $cur = \Illuminate\Support\Facades\Cache::get($key, []);
+                \Illuminate\Support\Facades\Cache::put($key, ['state' => 'running', 'started_at' => now()->toDateTimeString()] + $cur, now()->addDay());
+                try {
+                    $n = app(\App\Services\HemisService::class)->importStudents();
+                    \Illuminate\Support\Facades\Cache::put($key, ['state' => 'done', 'finished_at' => now()->toDateTimeString(), 'imported' => (int) $n]
+                        + \Illuminate\Support\Facades\Cache::get($key, []), now()->addDay());
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Cache::put($key, ['state' => 'failed', 'finished_at' => now()->toDateTimeString(), 'error' => $e->getMessage()]
+                        + \Illuminate\Support\Facades\Cache::get($key, []), now()->addDay());
+                    throw $e;
+                }
+            });
+            $message = 'Talabalar HEMISdan tortilmoqda (fon rejimida, bir necha daqiqa). Tugagach ekrandagi talaba sonlari avtomatik yangilanadi.';
             \App\Services\ActivityLogService::log('import', 'student', 'Oqim sahifasidan talabalar sinxronizatsiyasi boshlandi');
         }
 
@@ -11411,6 +11434,31 @@ class ReportController extends Controller
         }
 
         return response()->json(['ok' => true, 'message' => $message] + $result + $stats);
+    }
+
+    private const OQIM_STUDENT_IMPORT_KEY = 'oqim_students_import_status';
+
+    /**
+     * AJAX: fon rejimidagi talabalar importi holati (navbatda / bajarilmoqda / tugadi / xato).
+     */
+    public function oqimHemisStatus()
+    {
+        $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: ['state' => 'idle'];
+        $fmt = fn($v) => $v ? Carbon::parse($v)->format('d.m.Y H:i') : null;
+        $out = [
+            'state'       => $st['state'] ?? 'idle',
+            'queued_at'   => $fmt($st['queued_at'] ?? null),
+            'started_at'  => $fmt($st['started_at'] ?? null),
+            'finished_at' => $fmt($st['finished_at'] ?? null),
+            'imported'    => $st['imported'] ?? null,
+            'error'       => $st['error'] ?? null,
+            'by'          => $st['by'] ?? null,
+        ];
+        try {
+            $out['students_updated'] = $fmt(DB::table('students')->max('updated_at'));
+        } catch (\Throwable $e) {
+        }
+        return response()->json($out);
     }
 
     /**

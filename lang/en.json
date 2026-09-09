@@ -574,5 +574,6 @@
     "Ko'rish": "View",
     "Haqiqiy": "Authentic",
     "To'lov chekini rad etish sababi": "Reason for rejecting the payment receipt",
-    "To'lov cheki tekshirilishi kutilmoqda": "Payment receipt awaiting verification"
+    "To'lov cheki tekshirilishi kutilmoqda": "Payment receipt awaiting verification",
+    "Siz :group guruhiga o'tkazildingiz. Ma'lumot tez orada yangilanadi.": "You have been moved to group :group. This will be updated shortly."
 }

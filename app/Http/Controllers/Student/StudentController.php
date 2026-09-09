@@ -1554,7 +1554,17 @@ class StudentController extends Controller
 
         $botUsername = config('services.telegram.bot_username', '');
 
-        return view('student.profile', compact('profileData', 'student', 'botUsername'));
+        // Taqsimot rejasi: profildagi guruh HEMISdan keladi va reja unga hali
+        // qo'llanmagan. Talaba eski guruhini ko'rib chalkashmasligi uchun yangi
+        // guruhi va "tez orada yangilanadi" izohi ko'rsatiladi.
+        $groupChange = null;
+        if (\Illuminate\Support\Facades\Schema::hasTable('distribution_draft_assignments')) {
+            $groupChange = \App\Models\DistributionDraftAssignment::query()
+                ->where('student_id', $student->id)
+                ->first(['from_group_name', 'to_group_name']);
+        }
+
+        return view('student.profile', compact('profileData', 'student', 'botUsername', 'groupChange'));
     }
 
     public function updateContact(Request $request)

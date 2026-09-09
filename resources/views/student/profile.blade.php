@@ -100,7 +100,18 @@
                                     <ul class="space-y-1.5 text-[14px]">
                                         <li><span class="font-medium">{{ __('Fakultet:') }}</span> {{ $profileData['faculty']['name'] }}</li>
                                         <li><span class="font-medium">{{ __("Yo'nalish:") }}</span> {{ $profileData['specialty']['name'] }}</li>
-                                        <li><span class="font-medium">{{ __('Guruh:') }}</span> {{ $profileData['group']['name'] }}</li>
+                                        <li>
+                                            <span class="font-medium">{{ __('Guruh:') }}</span> {{ $profileData['group']['name'] }}
+                                            {{-- Taqsimot rejasi: bu guruh HEMISdan, yangisi hali ko'chirilmagan --}}
+                                            @if(!empty($groupChange) && $groupChange->to_group_name)
+                                                <span class="inline-flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                                    &rarr; {{ $groupChange->to_group_name }}
+                                                </span>
+                                                <span class="block mt-1 text-[12px] text-gray-500 leading-snug">
+                                                    {{ __("Siz :group guruhiga o'tkazildingiz. Ma'lumot tez orada yangilanadi.", ['group' => $groupChange->to_group_name]) }}
+                                                </span>
+                                            @endif
+                                        </li>
                                         <li><span class="font-medium">{{ __('Kurs:') }}</span> {{ $profileData['level']['name'] }}</li>
                                         <li><span class="font-medium">{{ __("Ta'lim turi:") }}</span> {{ $profileData['educationType']['name'] }}</li>
                                         <li>

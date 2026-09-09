@@ -335,6 +335,7 @@
                                     $selectedDataFilled = array_filter((array) request('data_filled', []));
                                     $selectedFirms = array_filter((array) request('firms', []));
                                     $selectedStatuses = array_filter((array) request('statuses', []));
+                                    $selectedEntryDates = array_filter((array) request('entry_dates', []));
                                 @endphp
 
                                 <th style="position:relative;white-space:nowrap;">
@@ -357,6 +358,20 @@
                                         'selected' => $selectedDataFilled,
                                         'emptyLabel' => null,
                                         'searchPlaceholder' => null,
+                                    ])
+                                </th>
+                                <th style="position:relative;white-space:nowrap;">
+                                    <span>Kirish sanasi</span>
+                                    @include('admin.international-students._col-filter', [
+                                        'key' => 'entry',
+                                        'field' => 'entry_dates',
+                                        'items' => $entryDates->mapWithKeys(fn($d) => [
+                                            \Illuminate\Support\Carbon::parse($d)->format('Y-m-d')
+                                                => \Illuminate\Support\Carbon::parse($d)->format('d.m.Y'),
+                                        ])->all(),
+                                        'selected' => $selectedEntryDates,
+                                        'emptyLabel' => 'Kiritilmagan',
+                                        'searchPlaceholder' => 'Sana qidirish...',
                                     ])
                                 </th>
                                 <th style="position:relative;white-space:nowrap;">
@@ -494,6 +509,14 @@
                                             <span class="int-status-pill int-status-green">Kiritilgan</span>
                                         @else
                                             <span class="int-status-pill int-status-red">Kiritilmagan</span>
+                                        @endif
+                                    </td>
+                                    {{-- Kirish sanasi: talaba O'zbekistonga qachon kirgan --}}
+                                    <td>
+                                        @if($visa?->entry_date)
+                                            <span class="int-date">{{ $visa->entry_date->format('d.m.Y') }}</span>
+                                        @else
+                                            <span class="int-empty">—</span>
                                         @endif
                                     </td>
                                     <td>

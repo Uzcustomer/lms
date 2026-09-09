@@ -111,6 +111,11 @@ class InternationalStudentController extends Controller
             ->distinct()
             ->orderBy('visa_end_date')
             ->pluck('visa_end_date');
+        $entryDates = StudentVisaInfo::whereIn('student_id', $optionsQuery('entry_dates')->pluck('students.id'))
+            ->whereNotNull('entry_date')
+            ->distinct()
+            ->orderByDesc('entry_date')
+            ->pluck('entry_date');
         $regEndDates = StudentVisaInfo::whereIn('student_id', $optionsQuery('registration_end_dates')->pluck('students.id'))
             ->whereNotNull('registration_end_date')
             ->distinct()
@@ -179,7 +184,7 @@ class InternationalStudentController extends Controller
         // Tepada "Viza arizalar" tugmasi uchun pending arizalar soni (badge)
         $visaPendingCount = \App\Models\VisaApplication::where('status', 'pending')->count();
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms'));
     }
 
     /**
@@ -363,6 +368,27 @@ class InternationalStudentController extends Controller
                 $query->where(function ($outer) {
                     $outer->whereDoesntHave('visaInfo')
                           ->orWhereHas('visaInfo', fn($q) => $q->whereNull('registration_end_date'));
+                });
+            }
+        }
+
+        // Ustun filtri: kirish sanasi (talaba O'zbekistonga qachon kirgan)
+        if (!in_array('entry_dates', $except, true) && $request->filled('entry_dates')) {
+            $values = array_values(array_filter((array) $request->entry_dates, fn($v) => $v !== null && $v !== ''));
+            $includeEmpty = in_array('__empty__', $values, true);
+            $actualDates = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
+            if ($includeEmpty && !empty($actualDates)) {
+                $query->where(function ($outer) use ($actualDates) {
+                    $outer->whereHas('visaInfo', fn($q) => $q->whereIn('entry_date', $actualDates))
+                          ->orWhereDoesntHave('visaInfo')
+                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('entry_date'));
+                });
+            } elseif (!empty($actualDates)) {
+                $query->whereHas('visaInfo', fn($q) => $q->whereIn('entry_date', $actualDates));
+            } elseif ($includeEmpty) {
+                $query->where(function ($outer) {
+                    $outer->whereDoesntHave('visaInfo')
+                          ->orWhereHas('visaInfo', fn($q) => $q->whereNull('entry_date'));
                 });
             }
         }

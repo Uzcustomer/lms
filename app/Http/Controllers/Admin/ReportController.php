@@ -11382,8 +11382,21 @@ class ReportController extends Controller
         if ($what === 'groups') {
             // Guruhlar SAHIFAMA-SAHIFA tortiladi (har so'rov: 1 ta HEMIS so'rovi + ommaviy upsert) —
             // web so'rov vaqt limitiga tushmaydi; brauzer sahifalarni ketma-ket so'raydi.
-            set_time_limit(120);
+            @set_time_limit(120);
+            @ini_set('memory_limit', '512M');
             $page = max(1, (int) $request->get('page', 1));
+            // Ushlab bo'lmaydigan fatal xato (xotira/vaqt limiti, sintaksis) bo'lsa — keshga yozamiz,
+            // sahifa uni /hemis-status orqali ko'rsatadi (aks holda faqat "HTTP 500" ko'rinadi).
+            \Illuminate\Support\Facades\Cache::forget('oqim_groups_pull_fatal');
+            register_shutdown_function(function () use ($page) {
+                $e = error_get_last();
+                if ($e && in_array($e['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_RECOVERABLE_ERROR, E_PARSE], true)) {
+                    \Illuminate\Support\Facades\Cache::put('oqim_groups_pull_fatal', [
+                        'page' => $page, 'message' => $e['message'], 'file' => basename($e['file']), 'line' => $e['line'],
+                        'at' => now()->toDateTimeString(),
+                    ], now()->addHour());
+                }
+            });
             try {
                 $r = app(\App\Services\HemisService::class)->importGroupsPage($page);
             } catch (\Throwable $e) {
@@ -11659,6 +11672,14 @@ class ReportController extends Controller
             $out['students_updated'] = $fmt(DB::table('students')->max('updated_at'));
         } catch (\Throwable $e) {
         }
+        // Guruh importidagi oxirgi fatal xato (agar bo'lsa) + PHP muhiti — tashxis uchun
+        $out['groups_pull_fatal'] = \Illuminate\Support\Facades\Cache::get('oqim_groups_pull_fatal');
+        $out['php'] = [
+            'max_execution_time' => ini_get('max_execution_time'),
+            'memory_limit'       => ini_get('memory_limit'),
+            'set_time_limit'     => function_exists('set_time_limit') && !in_array('set_time_limit', array_map('trim', explode(',', (string) ini_get('disable_functions'))), true),
+            'version'            => PHP_VERSION,
+        ];
         return response()->json($out);
     }
 

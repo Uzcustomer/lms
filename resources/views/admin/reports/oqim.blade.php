@@ -1798,8 +1798,18 @@
                 })
                 .fail(function(xhr) {
                     $btn.prop('disabled', false).css('opacity', 1);
-                    var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : ('Xatolik (HTTP ' + xhr.status + ') — sahifa ' + page + '. Server javobi JSON emas: laravel.log ni tekshiring.');
-                    $('#mn-hemis-status').css('color', '#dc2626').text(msg + (acc.imported ? ' (' + acc.imported + ' ta guruh yozilib ulgurdi)' : ''));
+                    var rj = xhr.responseJSON || {};
+                    var msg = rj.error || (rj.message ? 'Server xatosi: ' + rj.message + (rj.file ? ' (' + String(rj.file).split('/').pop() + ':' + rj.line + ')' : '') : null)
+                           || ('Xatolik (HTTP ' + xhr.status + ') — sahifa ' + page + '. Server javobi JSON emas.');
+                    // Javob JSON bo'lmasa — fatal xato bo'lishi mumkin; uni statusdan olamiz
+                    $.get(HEMIS_STATUS_URL).done(function(st) {
+                        var f = st.groups_pull_fatal;
+                        if (f && f.message) msg += ' | FATAL: ' + f.message + ' (' + f.file + ':' + f.line + ', ' + f.at + ')';
+                        if (st.php) msg += ' | PHP ' + st.php.version + ', max_execution_time=' + st.php.max_execution_time + ', memory_limit=' + st.php.memory_limit + (st.php.set_time_limit ? '' : ', set_time_limit O\'CHIQ');
+                        $('#mn-hemis-status').css('color', '#dc2626').text(msg + (acc.imported ? ' (' + acc.imported + ' ta guruh yozilib ulgurdi)' : ''));
+                    }).fail(function() {
+                        $('#mn-hemis-status').css('color', '#dc2626').text(msg);
+                    });
                 });
         }
 

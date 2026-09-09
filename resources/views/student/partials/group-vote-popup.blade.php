@@ -113,7 +113,7 @@
 
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-top:1px solid #eef2f8;background:#fbfcfe;">
             <span style="color:#8798b1;font-size:11px;">Yopish uchun istalgan joyga bosing</span>
-            <span id="gvMovedTimer" style="color:#8798b1;font-size:11px;font-weight:700;">10</span>
+            <span id="gvMovedTimer" style="color:#8798b1;font-size:11px;font-weight:700;">15</span>
         </div>
     </div>
 </div>
@@ -123,7 +123,7 @@
     const box = document.getElementById('gvMoved');
     const timerEl = document.getElementById('gvMovedTimer');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    let left = 10;
+    let left = 15;
     let closed = false;
 
     // Yopilgani serverga bildiriladi: sessiyaga belgi qo'yiladi va popup shu

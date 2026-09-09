@@ -111,4 +111,22 @@ class GroupVoteController extends Controller
             'message' => 'Ovozingiz qabul qilindi. Siz ' . $target['group_name'] . ' guruhiga qo\'shildingiz.',
         ]);
     }
+
+    /**
+     * Yangi guruh haqidagi popup ko'rildi deb belgilaydi — u qayta chiqmaydi.
+     * Keyinchalik guruh yana o'zgarsa (draft yangilansa) popup qaytadi.
+     */
+    public function markGroupChangeSeen(): JsonResponse
+    {
+        $student = Auth::guard('student')->user();
+        abort_unless($student, 403);
+
+        if (Schema::hasTable('distribution_draft_assignments')) {
+            DistributionDraftAssignment::query()
+                ->where('student_id', $student->id)
+                ->update(['seen_at' => now()]);
+        }
+
+        return response()->json(['ok' => true]);
+    }
 }

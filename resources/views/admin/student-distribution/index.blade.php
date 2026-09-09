@@ -403,6 +403,10 @@
                 <div class="sd-head-tools">
                     <span class="sd-voting-status" id="votingStatus" hidden></span>
                     <button class="sd-head-btn" id="closeVotingBtn" type="button" hidden>Ovoz berishni yopish</button>
+                    <button class="sd-head-btn" id="notifyBtn" type="button" hidden
+                            title="Guruhi o'zgargan talabalarga Telegram orqali xabar yuborish">
+                        Telegram xabar <b id="notifyCount">0</b>
+                    </button>
                     <button class="sd-head-btn" id="votesBtn" type="button">Talabalar ovozlari <b id="votesCount">0</b></button>
                 </div>
             </div>
@@ -628,6 +632,8 @@
         const resetDraftsUrl = @json(route('admin.student-distribution.drafts.reset'));
         const syncGroupsUrl  = @json(route('admin.student-distribution.groups.sync'));
         const votesUrl        = @json(route('admin.student-distribution.votes'));
+        const notifyUrl       = @json(route('admin.student-distribution.notify'));
+        const notifyStatusUrl = @json(route('admin.student-distribution.notify.status'));
         const openVotingUrl   = @json(route('admin.student-distribution.voting.open'));
         const openVotingStudentsUrl = @json(route('admin.student-distribution.voting.open-students'));
         const closeVotingUrl  = @json(route('admin.student-distribution.voting.close'));
@@ -1374,6 +1380,7 @@
                         full_group_mode: modalFull,
                     });
                 groups = data.groups;
+                loadNotifyStatus();
                 render();
                 closePickPanel();
                 if (bulk) modalVotePicked = new Set();
@@ -1449,6 +1456,7 @@
             try {
                 const data = await postJson(unassignUrl, {student_id: Number(button.dataset.undo)});
                 groups = data.groups;
+                loadNotifyStatus();
                 render();
                 await loadStudents();
             } catch (error) {
@@ -1476,6 +1484,7 @@
             try {
                 const data = await postJson(syncGroupsUrl, {});
                 groups = data.groups;
+                loadNotifyStatus();
                 Object.values(panels).forEach(refreshOptions);
                 render();
                 alert(data.message);
@@ -1495,6 +1504,7 @@
             try {
                 const data = await postJson(resetDraftsUrl, {});
                 groups = data.groups;
+                loadNotifyStatus();
                 render();
                 alert(data.message);
             } catch (error) {
@@ -1543,6 +1553,44 @@
         // --- Talabalar ovozlari ---
         const votesModal = $('votesModal');
         let votesData = [];
+
+        // --- Telegram xabari: guruhi o'zgargan talabalarga ---
+        async function loadNotifyStatus() {
+            try {
+                const response = await fetch(notifyStatusUrl, {headers: {'Accept': 'application/json'}});
+                const data = await response.json();
+                if (!response.ok) return;
+
+                const button = $('notifyBtn');
+                button.hidden = (data.total || 0) === 0;
+                $('notifyCount').textContent = data.pending || 0;
+                button.title = (data.pending || 0) === 0
+                    ? 'Hamma xabardor qilingan — qayta yuborish uchun bosing'
+                    : (data.pending + ' ta talaba xabar kutmoqda'
+                        + (data.no_telegram ? ' (' + data.no_telegram + ' tasida Telegram ulanmagan)' : ''));
+            } catch (error) { /* jim */ }
+        }
+
+        $('notifyBtn').addEventListener('click', async () => {
+            const pending = Number($('notifyCount').textContent) || 0;
+            const resend = pending === 0;
+            const question = resend
+                ? "Hamma xabardor qilingan. Xabar QAYTA yuborilsinmi?"
+                : pending + " ta talabaga Telegram orqali yangi guruhi haqida xabar yuborilsinmi?";
+            if (!confirm(question)) return;
+
+            const button = $('notifyBtn');
+            button.disabled = true;
+            try {
+                const data = await postJson(notifyUrl, resend ? {resend: 1} : {});
+                alert(data.message);
+                await loadNotifyStatus();
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
 
         async function loadVotes() {
             try {
@@ -1597,6 +1645,7 @@
             try {
                 const data = await postJson(deleteVotesUrl, {vote_ids: [Number(button.dataset.delVote)]});
                 groups = data.groups;
+                loadNotifyStatus();
                 render();
                 await loadVotes();
                 renderVotes();
@@ -1832,6 +1881,7 @@
                 if (!response.ok) throw new Error(data.message || "Saqlab bo'lmadi.");
 
                 groups = data.groups;
+                loadNotifyStatus();
                 sources = new Set(groups.filter(g => g.is_source).map(g => g.group_hemis_id));
                 pendingAdd.clear();
                 pendingRemove.clear();
@@ -1860,6 +1910,7 @@
         window.addEventListener('resize', sizePanels);
         sizePanels();
         loadVotes();
+        loadNotifyStatus();
 
         Object.values(panels).forEach(refreshOptions);
         render();

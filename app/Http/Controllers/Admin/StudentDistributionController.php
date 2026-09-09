@@ -13,6 +13,7 @@ use App\Models\DistributionVotingGroup;
 use App\Models\DistributionVotingStudent;
 use App\Models\Student;
 use App\Services\DistributionCatalog;
+use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -953,6 +954,109 @@ class StudentDistributionController extends Controller
      * Filtrlar sahifadagi panel bilan bir xil ishlaydi, shuning uchun
      * o'qituvchi ekranda nimani ko'rsa, faylda ham o'sha chiqadi.
      */
+    /**
+     * Guruhi o'zgargan talabalarga Telegram xabarini yuboradi.
+     *
+     * Bir talabaga bir marta yuboriladi (notified_at). Reja o'zgarib, talaba
+     * boshqa guruhga ko'chirilsa — yangi xabar ketadi (notified_group_id
+     * solishtiriladi). Telegram ulanmagan talabalar o'tkazib yuboriladi va
+     * javobda sanaladi: ular popup orqali xabardor bo'ladi.
+     */
+    public function notifyStudents(Request $request, TelegramService $telegram): JsonResponse
+    {
+        abort_unless(
+            Schema::hasTable('distribution_draft_assignments'),
+            503,
+            'Taqsimot rejasi jadvali hali migratsiya qilinmagan.'
+        );
+
+        $data = $request->validate([
+            'resend' => ['nullable', 'boolean'],
+        ]);
+
+        $drafts = DistributionDraftAssignment::query()->with('student')->get();
+
+        if ($drafts->isEmpty()) {
+            return response()->json(['message' => 'Guruhi o\'zgargan talaba yo\'q.'], 422);
+        }
+
+        $resend = (bool) ($data['resend'] ?? false);
+        $sent = 0;
+        $skippedNoTelegram = 0;
+        $alreadySent = 0;
+        $failed = 0;
+
+        foreach ($drafts as $draft) {
+            if (!$resend && !$draft->needsNotification()) {
+                $alreadySent++;
+                continue;
+            }
+
+            $chatId = $draft->student?->telegram_chat_id;
+            if (!$chatId) {
+                $skippedNoTelegram++;
+                continue;
+            }
+
+            $message = "<b>Guruhingiz o'zgardi</b>\n\n"
+                . "Hurmatli " . e($draft->student_name) . ",\n"
+                . "siz <b>" . e((string) $draft->to_group_name) . "</b> guruhiga o'tkazildingiz.\n\n"
+                . "Avvalgi guruh: " . e((string) ($draft->from_group_name ?: '—')) . "\n\n"
+                . "Yangi guruhingiz bo'yicha dars jadvaliga rioya qiling.";
+
+            if ($telegram->sendToUser((string) $chatId, $message)) {
+                // Query builder orqali yoziladi: model save() qilsa updated_at
+                // ham yangilanib, talabadagi popup "guruh yana o'zgardi" deb
+                // qayta chiqib ketardi.
+                DistributionDraftAssignment::query()->where('id', $draft->id)->update([
+                    'notified_at' => now(),
+                    'notified_group_id' => (int) $draft->to_group_hemis_id,
+                ]);
+                $sent++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $parts = [$sent . ' ta talabaga xabar yuborildi'];
+        if ($alreadySent) {
+            $parts[] = $alreadySent . ' tasiga avval yuborilgan';
+        }
+        if ($skippedNoTelegram) {
+            $parts[] = $skippedNoTelegram . ' tasida Telegram ulanmagan';
+        }
+        if ($failed) {
+            $parts[] = $failed . ' tasiga yuborib bo\'lmadi';
+        }
+
+        return response()->json([
+            'message' => implode(' · ', $parts) . '.',
+            'sent' => $sent,
+            'already_sent' => $alreadySent,
+            'no_telegram' => $skippedNoTelegram,
+            'failed' => $failed,
+        ]);
+    }
+
+    /**
+     * Xabar tugmasi uchun holat: nechta talaba xabar kutmoqda.
+     */
+    public function notifyStatus(): JsonResponse
+    {
+        if (!Schema::hasTable('distribution_draft_assignments')) {
+            return response()->json(['total' => 0, 'pending' => 0, 'no_telegram' => 0]);
+        }
+
+        $drafts = DistributionDraftAssignment::query()->with('student:id,telegram_chat_id')->get();
+        $pending = $drafts->filter(fn ($d) => $d->needsNotification());
+
+        return response()->json([
+            'total' => $drafts->count(),
+            'pending' => $pending->count(),
+            'no_telegram' => $pending->filter(fn ($d) => empty($d->student?->telegram_chat_id))->count(),
+        ]);
+    }
+
     /**
      * Son filtri — sahifadagi numberMatches bilan bir xil qoida:
      *   ""       — cheklov yo'q

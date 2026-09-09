@@ -113,22 +113,35 @@ class GroupVoteController extends Controller
     }
 
     /**
-     * Yangi guruh haqidagi popup ko'rildi deb belgilaydi — u qayta chiqmaydi.
-     * Keyinchalik guruh yana o'zgarsa (draft yangilansa) popup qaytadi.
+     * Yangi guruh haqidagi popup yopilganini belgilaydi.
+     *
+     * Sessiyaga belgi qo'yiladi — shu sessiya davomida popup qayta chiqmaydi.
+     * Talaba chiqib qayta kirsa (yangi sessiya) popup yana ko'rsatiladi.
+     *
+     * Bazaga faqat BIRINCHI ko'rish vaqti yoziladi: registrator ro'yxatida
+     * "talaba xabarni qachon ko'rdi" turishi kerak, har kirishdagi vaqt emas.
      */
-    public function markGroupChangeSeen(): JsonResponse
+    public function markGroupChangeSeen(Request $request): JsonResponse
     {
         $student = Auth::guard('student')->user();
         abort_unless($student, 403);
 
-        // Faqat BIRINCHI ko'rish vaqti yoziladi: popup har safar chiqadi, lekin
-        // registrator ro'yxatida "talaba qachon birinchi marta ko'rdi" turishi
-        // kerak. Har safar yangilansa, o'sha vaqt yo'qolib ketardi.
         if (Schema::hasTable('distribution_draft_assignments')) {
-            DistributionDraftAssignment::query()
+            $draft = DistributionDraftAssignment::query()
                 ->where('student_id', $student->id)
-                ->whereNull('seen_at')
-                ->update(['seen_at' => now()]);
+                ->first();
+
+            if ($draft) {
+                // Belgida guruh IDsi: sessiya davomida talaba boshqa guruhga
+                // ko'chirilsa, yangi guruh haqida popup baribir chiqadi.
+                $request->session()->put('gv_moved_seen', (int) $draft->to_group_hemis_id);
+
+                if ($draft->seen_at === null) {
+                    DistributionDraftAssignment::query()
+                        ->where('id', $draft->id)
+                        ->update(['seen_at' => now()]);
+                }
+            }
         }
 
         return response()->json(['ok' => true]);

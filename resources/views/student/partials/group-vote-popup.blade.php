@@ -25,10 +25,13 @@
             ->where('student_id', $gvStudent->id)
             ->first();
 
-        // Har safar profilga kirganda ko'rsatiladi — talaba yangi guruhini
-        // unutmasligi uchun. seen_at faqat "birinchi marta qachon ko'rdi"
-        // ma'lumoti sifatida yoziladi (registrator ro'yxatida ko'rinadi).
-        if ($gvDraft) {
+        // Har login uchun bir marta: popup yopilganda sessiyaga belgi qo'yiladi
+        // va shu sessiya davomida qayta chiqmaydi. Talaba chiqib qayta kirsa
+        // (yangi sessiya) yana ko'rsatiladi.
+        //
+        // Belgida guruh IDsi ham bor: sessiya davomida registrator talabani
+        // boshqa guruhga ko'chirsa, yangi guruh haqida popup baribir chiqadi.
+        if ($gvDraft && session('gv_moved_seen') !== (int) $gvDraft->to_group_hemis_id) {
             $gvMode = 'moved';
         }
     }
@@ -123,18 +126,30 @@
     let left = 10;
     let closed = false;
 
-    // Popup har kirishda chiqadi; serverga faqat BIRINCHI ko'rish vaqti
-    // yoziladi (registrator ro'yxatida "talaba ko'rdi" ustuni uchun).
-    // So'rov ketmasa ham popup yopilaveradi — bu faqat kuzatuv ma'lumoti.
+    // Yopilgani serverga bildiriladi: sessiyaga belgi qo'yiladi va popup shu
+    // login davomida qayta chiqmaydi. Talaba chiqib qayta kirsa yana chiqadi.
+    //
+    // sendBeacon — sahifa yopilib qolsa ham so'rov yetib boradi; u yo'q
+    // brauzerlarda oddiy fetch ishlatiladi. So'rov yetmasa popup keyingi
+    // sahifada qayta chiqadi, boshqa zarari yo'q.
     function close() {
         if (closed) return;
         closed = true;
         clearInterval(tick);
         box.remove();
-        fetch(@json(route('student.group-change.seen')), {
-            method: 'POST',
-            headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
-        }).catch(() => {});
+
+        const url = @json(route('student.group-change.seen'));
+        if (navigator.sendBeacon) {
+            const form = new FormData();
+            form.append('_token', csrf);
+            navigator.sendBeacon(url, form);
+        } else {
+            fetch(url, {
+                method: 'POST',
+                headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
+                keepalive: true,
+            }).catch(() => {});
+        }
     }
 
     const tick = setInterval(() => {

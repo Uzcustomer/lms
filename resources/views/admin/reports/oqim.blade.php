@@ -1782,7 +1782,28 @@
             });
         }
 
-        // HEMISdan guruh/talabalarni tortish (guruhlar — sinxron, talabalar — fon rejimida)
+        // Guruhlarni HEMISdan SAHIFAMA-SAHIFA tortish (har so'rov qisqa — vaqt limitiga tushmaydi)
+        function pullGroupsPage(page, acc) {
+            var $btn = $('#mn-hemis-groups');
+            $('#mn-hemis-status').css('color', '#0369a1').text('Guruhlar HEMISdan tortilmoqda: sahifa ' + page + (acc.pageCount ? '/' + acc.pageCount : '') + ' ... (' + acc.imported + ' ta)');
+            $.ajax({ url: HEMIS_PULL_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { what: 'groups', page: page } })
+                .done(function(res) {
+                    acc.imported += (+res.imported || 0); acc.created += (+res.created || 0); acc.updated += (+res.updated || 0);
+                    acc.pageCount = res.pageCount;
+                    if (!res.done && res.page < res.pageCount && page < 200) { pullGroupsPage(page + 1, acc); return; }
+                    $btn.prop('disabled', false).css('opacity', 1);
+                    var extra = res.groups_total ? ' Bazada ' + res.groups_total + ' ta guruh.' : '';
+                    $('#mn-hemis-status').css('color', '#16a34a').text('✓ HEMISdan ' + acc.imported + ' ta guruh tortildi (yangi: ' + acc.created + ', yangilangan: ' + acc.updated + ').' + extra);
+                    loadFromHemis(acc);
+                })
+                .fail(function(xhr) {
+                    $btn.prop('disabled', false).css('opacity', 1);
+                    var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : ('Xatolik (HTTP ' + xhr.status + ') — sahifa ' + page + '. Server javobi JSON emas: laravel.log ni tekshiring.');
+                    $('#mn-hemis-status').css('color', '#dc2626').text(msg + (acc.imported ? ' (' + acc.imported + ' ta guruh yozilib ulgurdi)' : ''));
+                });
+        }
+
+        // HEMISdan guruh/talabalarni tortish (guruhlar — sahifama-sahifa sinxron, talabalar — fon rejimida)
         function hemisPull(what) {
             var label = what === 'groups' ? 'Guruhlar' : 'Talabalar';
             var q = what === 'groups'
@@ -1790,6 +1811,7 @@
                 : "Talabalar HEMISdan tortilsinmi? Jarayon fon rejimida ishlaydi va bir necha daqiqa davom etishi mumkin.";
             if (!confirm(q)) return;
             var $btn = $(what === 'groups' ? '#mn-hemis-groups' : '#mn-hemis-students').prop('disabled', true).css('opacity', 0.6);
+            if (what === 'groups') { pullGroupsPage(1, { imported: 0, created: 0, updated: 0 }); return; }
             $('#mn-hemis-status').css('color', '#0369a1').text(what === 'groups' ? "Guruhlar HEMISdan tortilmoqda, kuting..." : "So'rov yuborilmoqda...");
             $.ajax({ url: HEMIS_PULL_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { what: what } })
                 .done(function(res) {

@@ -1044,16 +1044,42 @@ class StudentDistributionController extends Controller
     public function notifyStatus(): JsonResponse
     {
         if (!Schema::hasTable('distribution_draft_assignments')) {
-            return response()->json(['total' => 0, 'pending' => 0, 'no_telegram' => 0]);
+            return response()->json(['total' => 0, 'pending' => 0, 'no_telegram' => 0, 'students' => []]);
         }
 
-        $drafts = DistributionDraftAssignment::query()->with('student:id,telegram_chat_id')->get();
-        $pending = $drafts->filter(fn ($d) => $d->needsNotification());
+        $drafts = DistributionDraftAssignment::query()
+            ->with('student:id,telegram_chat_id,telegram_username')
+            ->orderBy('student_name')
+            ->get();
+
+        // Har bir talaba uchun holat: xabar yuborilganmi, Telegram ulanganmi.
+        $students = $drafts->map(function (DistributionDraftAssignment $draft) {
+            $hasTelegram = !empty($draft->student?->telegram_chat_id);
+            $needs = $draft->needsNotification();
+
+            return [
+                'student_id' => (int) $draft->student_id,
+                'full_name' => $draft->student_name,
+                'student_id_number' => (string) $draft->student_id_number,
+                'from_group_name' => $draft->from_group_name,
+                'to_group_name' => $draft->to_group_name,
+                'has_telegram' => $hasTelegram,
+                'telegram_username' => $draft->student?->telegram_username,
+                'notified_at' => optional($draft->notified_at)->format('d.m.Y H:i'),
+                'seen_at' => optional($draft->seen_at)->format('d.m.Y H:i'),
+                // sent — xabar shu guruh uchun yuborilgan;
+                // pending — yuborilishi kerak, Telegram bor;
+                // no_telegram — yuborib bo'lmaydi, Telegram ulanmagan.
+                'state' => !$needs ? 'sent' : ($hasTelegram ? 'pending' : 'no_telegram'),
+            ];
+        })->values();
 
         return response()->json([
-            'total' => $drafts->count(),
-            'pending' => $pending->count(),
-            'no_telegram' => $pending->filter(fn ($d) => empty($d->student?->telegram_chat_id))->count(),
+            'total' => $students->count(),
+            'sent' => $students->where('state', 'sent')->count(),
+            'pending' => $students->where('state', 'pending')->count(),
+            'no_telegram' => $students->where('state', 'no_telegram')->count(),
+            'students' => $students,
         ]);
     }
 

@@ -93,6 +93,10 @@
     .sd-vote-del svg { width:14px; height:14px; }
     .sd-vote-row:last-child { border-bottom:0; }
     .sd-vote-row .sd-meta { display:block; }
+    /* Telegram xabar ro'yxati: oxirgi ustunda holat matni — kengroq joy kerak */
+    #nfBody .sd-vote-row { grid-template-columns:8px minmax(0,1fr) auto 150px; }
+    #nfBody .sd-vote-row .sd-meta { color:var(--muted); font-size:10.5px; font-weight:500; }
+    #notifyModal .sd-tab.is-on span { background:var(--navy); color:#fff; }
     .sd-vote-route { color:var(--ink-soft); font-size:12px; text-align:right; }
     .sd-vote-route b { color:var(--navy); }
     .sd-head h1 { margin:0; color:#fff; font-size:21px; font-weight:700; letter-spacing:-.01em; }
@@ -544,6 +548,29 @@
         </div>
 
         {{-- Ovoz berishni tanlab yopish --}}
+        {{-- Telegram xabar holati --}}
+        <div class="sd-modal" id="notifyModal">
+            <div class="sd-modal-box" style="width:min(820px,100%);height:calc(100vh - 100px);" role="dialog" aria-modal="true">
+                <div class="sd-modal-head">
+                    <div>
+                        <h3>Telegram xabar</h3>
+                        <p id="nfMeta">Guruhi o'zgargan talabalar</p>
+                    </div>
+                    <button class="sd-close" type="button" id="nfClose" aria-label="Yopish">&times;</button>
+                </div>
+                <div class="sd-modal-tabs" style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line-soft);background:#fbfcfe;">
+                    <button class="sd-tab is-on" data-nf="pending" type="button">Kutmoqda <span id="nfCountPending">0</span></button>
+                    <button class="sd-tab" data-nf="sent" type="button">Yuborilgan <span id="nfCountSent">0</span></button>
+                    <button class="sd-tab" data-nf="no_telegram" type="button">Telegramsiz <span id="nfCountNone">0</span></button>
+                </div>
+                <div class="sd-modal-body" id="nfBody"></div>
+                <div class="sd-modal-foot">
+                    <span class="sd-hint" id="nfHint"></span>
+                    <button class="sd-btn" id="nfSend" type="button">Xabar yuborish</button>
+                </div>
+            </div>
+        </div>
+
         <div class="sd-modal" id="closeVotingModal">
             <div class="sd-modal-box" style="width:min(760px,100%);height:calc(100vh - 120px);" role="dialog" aria-modal="true">
                 <div class="sd-modal-head">
@@ -1565,31 +1592,113 @@
                 button.hidden = (data.total || 0) === 0;
                 $('notifyCount').textContent = data.pending || 0;
                 button.title = (data.pending || 0) === 0
-                    ? 'Hamma xabardor qilingan — qayta yuborish uchun bosing'
+                    ? 'Hamma xabardor qilingan — ro\'yxatni ochish uchun bosing'
                     : (data.pending + ' ta talaba xabar kutmoqda'
                         + (data.no_telegram ? ' (' + data.no_telegram + ' tasida Telegram ulanmagan)' : ''));
             } catch (error) { /* jim */ }
         }
 
+        // Modal: kim xabar olgan, kim kutmoqda, kimda Telegram yo'q.
+        const notifyModal = $('notifyModal');
+        let nfData = null;
+        let nfTab = 'pending';
+
+        const NF_LABELS = {
+            pending: {title: 'Xabar kutmoqda', empty: 'Xabar kutayotgan talaba yo\'q.'},
+            sent: {title: 'Xabar yuborilgan', empty: 'Hali hech kimga yuborilmagan.'},
+            no_telegram: {title: 'Telegram ulanmagan', empty: 'Hammaning Telegrami ulangan.'},
+        };
+
+        function nfRender() {
+            if (!nfData) return;
+            const list = (nfData.students || []).filter(s => s.state === nfTab);
+
+            $('nfCountPending').textContent = nfData.pending || 0;
+            $('nfCountSent').textContent = nfData.sent || 0;
+            $('nfCountNone').textContent = nfData.no_telegram || 0;
+            $('nfMeta').textContent = (nfData.total || 0) + ' ta talabaning guruhi o\'zgargan';
+
+            notifyModal.querySelectorAll('[data-nf]').forEach(tab =>
+                tab.classList.toggle('is-on', tab.dataset.nf === nfTab));
+
+            $('nfBody').innerHTML = list.length ? list.map(s => {
+                // O'ng ustunda holatga qarab: yuborilgan vaqt, Telegram nomi
+                // yoki nima yetishmayotgani.
+                let right;
+                if (s.state === 'sent') {
+                    right = '<span style="color:#0f7a52;font-weight:700;">&#10003; ' + esc(s.notified_at || '') + '</span>' +
+                        (s.seen_at ? '<span class="sd-meta">ko\'rdi: ' + esc(s.seen_at) + '</span>' : '');
+                } else if (s.state === 'no_telegram') {
+                    right = '<span style="color:#b45309;font-weight:700;">Telegram yo\'q</span>';
+                } else {
+                    right = '<span style="color:#1d4ed8;font-weight:700;">kutmoqda</span>' +
+                        (s.telegram_username ? '<span class="sd-meta">@' + esc(s.telegram_username) + '</span>' : '');
+                }
+
+                return '<div class="sd-vote-row">' +
+                    '<span></span>' +
+                    '<span><b>' + esc(s.full_name) + '</b>' +
+                        '<span class="sd-meta">' + esc(s.student_id_number || '') + '</span></span>' +
+                    '<span class="sd-vote-route">' + esc(s.from_group_name || '') +
+                        ' &rarr; <b>' + esc(s.to_group_name || '') + '</b></span>' +
+                    '<span style="text-align:right;font-size:11px;">' + right + '</span>' +
+                    '</div>';
+            }).join('') : '<div class="sd-empty">' + NF_LABELS[nfTab].empty + '</div>';
+
+            // Yuborish tugmasi: kutayotganlar bo'lsa ular uchun, bo'lmasa qayta yuborish.
+            const pending = nfData.pending || 0;
+            $('nfSend').textContent = pending ? 'Xabar yuborish (' + pending + ')' : 'Qayta yuborish';
+            $('nfSend').disabled = (nfData.total || 0) === 0;
+            $('nfHint').textContent = pending
+                ? pending + ' ta talabaga yuboriladi'
+                : ((nfData.no_telegram || 0) ? nfData.no_telegram + ' tasida Telegram ulanmagan — ular popup orqali ko\'radi' : '');
+        }
+
         $('notifyBtn').addEventListener('click', async () => {
-            const pending = Number($('notifyCount').textContent) || 0;
+            try {
+                const response = await fetch(notifyStatusUrl, {headers: {'Accept': 'application/json'}});
+                nfData = await response.json();
+                if (!response.ok) throw new Error(nfData.message || 'Ro\'yxatni olib bo\'lmadi.');
+                nfTab = (nfData.pending || 0) ? 'pending' : ((nfData.sent || 0) ? 'sent' : 'no_telegram');
+                nfRender();
+                notifyModal.classList.add('is-open');
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        notifyModal.querySelectorAll('[data-nf]').forEach(tab => {
+            tab.addEventListener('click', () => { nfTab = tab.dataset.nf; nfRender(); });
+        });
+
+        $('nfSend').addEventListener('click', async () => {
+            const pending = nfData ? (nfData.pending || 0) : 0;
             const resend = pending === 0;
             const question = resend
                 ? "Hamma xabardor qilingan. Xabar QAYTA yuborilsinmi?"
                 : pending + " ta talabaga Telegram orqali yangi guruhi haqida xabar yuborilsinmi?";
             if (!confirm(question)) return;
 
-            const button = $('notifyBtn');
-            button.disabled = true;
+            $('nfSend').disabled = true;
             try {
                 const data = await postJson(notifyUrl, resend ? {resend: 1} : {});
                 alert(data.message);
+                // Modal ochiq qoladi — natija darhol ro'yxatda ko'rinsin.
+                const response = await fetch(notifyStatusUrl, {headers: {'Accept': 'application/json'}});
+                nfData = await response.json();
+                nfTab = 'sent';
+                nfRender();
                 await loadNotifyStatus();
             } catch (error) {
                 alert(error.message);
             } finally {
-                button.disabled = false;
+                $('nfSend').disabled = false;
             }
+        });
+
+        $('nfClose').addEventListener('click', () => notifyModal.classList.remove('is-open'));
+        notifyModal.addEventListener('click', event => {
+            if (event.target === notifyModal) notifyModal.classList.remove('is-open');
         });
 
         async function loadVotes() {

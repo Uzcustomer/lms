@@ -8,6 +8,7 @@ use App\Models\DistributionVote;
 use App\Models\DistributionVotingGroup;
 use App\Models\DistributionVotingStudent;
 use App\Services\DistributionCatalog;
+use App\Services\DistributionNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,8 +26,10 @@ use Illuminate\Support\Facades\Schema;
  */
 class GroupVoteController extends Controller
 {
-    public function __construct(private DistributionCatalog $catalog)
-    {
+    public function __construct(
+        private DistributionCatalog $catalog,
+        private DistributionNotifier $notifier
+    ) {
     }
 
     public function store(Request $request): JsonResponse
@@ -79,7 +82,9 @@ class GroupVoteController extends Controller
 
         // Ovoz darrov kuchga kiradi: reja yoziladi va joy band bo'ladi.
         // Registrator tasdig'i talab qilinmaydi.
-        DB::transaction(function () use ($student, $target) {
+        $draft = null;
+
+        DB::transaction(function () use ($student, $target, &$draft) {
             DistributionVote::create([
                 'student_id' => $student->id,
                 'from_group_hemis_id' => (int) $student->group_id,
@@ -93,7 +98,7 @@ class GroupVoteController extends Controller
             ]);
 
             if (Schema::hasTable('distribution_draft_assignments')) {
-                DistributionDraftAssignment::updateOrCreate(
+                $draft = DistributionDraftAssignment::updateOrCreate(
                     ['student_id' => $student->id],
                     [
                         'from_group_hemis_id' => (int) $student->group_id,
@@ -106,6 +111,13 @@ class GroupVoteController extends Controller
                 );
             }
         });
+
+        // Xabar tranzaksiyadan TASHQARIDA yuboriladi: Telegram sekin javob
+        // bersa yoki xato qaytarsa, ovoz baribir yozilgan bo'lib qoladi.
+        if ($draft) {
+            $draft->setRelation('student', $student);
+            $this->notifier->notifyQuietly($draft);
+        }
 
         return response()->json([
             'message' => 'Ovozingiz qabul qilindi. Siz ' . $target['group_name'] . ' guruhiga qo\'shildingiz.',

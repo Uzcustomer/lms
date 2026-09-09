@@ -13,7 +13,7 @@ use App\Models\DistributionVotingGroup;
 use App\Models\DistributionVotingStudent;
 use App\Models\Student;
 use App\Services\DistributionCatalog;
-use App\Services\TelegramService;
+use App\Services\DistributionNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -962,7 +962,7 @@ class StudentDistributionController extends Controller
      * solishtiriladi). Telegram ulanmagan talabalar o'tkazib yuboriladi va
      * javobda sanaladi: ular popup orqali xabardor bo'ladi.
      */
-    public function notifyStudents(Request $request, TelegramService $telegram): JsonResponse
+    public function notifyStudents(Request $request, DistributionNotifier $notifier): JsonResponse
     {
         abort_unless(
             Schema::hasTable('distribution_draft_assignments'),
@@ -972,12 +972,29 @@ class StudentDistributionController extends Controller
 
         $data = $request->validate([
             'resend' => ['nullable', 'boolean'],
+            'faculty' => ['nullable', 'string', 'max:255'],
+            'course' => ['nullable', 'integer', 'min:1', 'max:8'],
         ]);
 
         $drafts = DistributionDraftAssignment::query()->with('student')->get();
 
+        // Fakultet/kurs filtri — maqsadli guruh bo'yicha, notifyStatus bilan
+        // bir xil manbadan (katalog).
+        $faculty = preg_replace('/\s+/u', ' ', trim((string) ($data['faculty'] ?? '')));
+        $course = $data['course'] ?? null;
+
+        if ($faculty !== '' || $course !== null) {
+            $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+            $drafts = $drafts->filter(function (DistributionDraftAssignment $draft) use ($catalog, $faculty, $course) {
+                $group = $catalog->get((int) $draft->to_group_hemis_id);
+
+                return ($faculty === '' || ($group['faculty_name'] ?? '') === $faculty)
+                    && ($course === null || (int) ($group['course'] ?? 0) === (int) $course);
+            })->values();
+        }
+
         if ($drafts->isEmpty()) {
-            return response()->json(['message' => 'Guruhi o\'zgargan talaba yo\'q.'], 422);
+            return response()->json(['message' => 'Tanlangan filtr bo\'yicha talaba topilmadi.'], 422);
         }
 
         $resend = (bool) ($data['resend'] ?? false);
@@ -992,30 +1009,11 @@ class StudentDistributionController extends Controller
                 continue;
             }
 
-            $chatId = $draft->student?->telegram_chat_id;
-            if (!$chatId) {
-                $skippedNoTelegram++;
-                continue;
-            }
-
-            $message = "<b>Guruhingiz o'zgardi</b>\n\n"
-                . "Hurmatli " . e($draft->student_name) . ",\n"
-                . "siz <b>" . e((string) $draft->to_group_name) . "</b> guruhiga o'tkazildingiz.\n\n"
-                . "Avvalgi guruh: " . e((string) ($draft->from_group_name ?: '—')) . "\n\n"
-                . "Yangi guruhingiz bo'yicha dars jadvaliga rioya qiling.";
-
-            if ($telegram->sendToUser((string) $chatId, $message)) {
-                // Query builder orqali yoziladi: model save() qilsa updated_at
-                // ham yangilanib, talabadagi popup "guruh yana o'zgardi" deb
-                // qayta chiqib ketardi.
-                DistributionDraftAssignment::query()->where('id', $draft->id)->update([
-                    'notified_at' => now(),
-                    'notified_group_id' => (int) $draft->to_group_hemis_id,
-                ]);
-                $sent++;
-            } else {
-                $failed++;
-            }
+            match ($notifier->notify($draft)) {
+                'sent' => $sent++,
+                'no_telegram' => $skippedNoTelegram++,
+                default => $failed++,
+            };
         }
 
         $parts = [$sent . ' ta talabaga xabar yuborildi'];
@@ -1052,10 +1050,15 @@ class StudentDistributionController extends Controller
             ->orderBy('student_name')
             ->get();
 
+        // Fakultet va kurs draftda saqlanmaydi — maqsadli guruh bo'yicha
+        // katalogdan olinadi (filtr shular bo'yicha ishlaydi).
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+
         // Har bir talaba uchun holat: xabar yuborilganmi, Telegram ulanganmi.
-        $students = $drafts->map(function (DistributionDraftAssignment $draft) {
+        $students = $drafts->map(function (DistributionDraftAssignment $draft) use ($catalog) {
             $hasTelegram = !empty($draft->student?->telegram_chat_id);
             $needs = $draft->needsNotification();
+            $group = $catalog->get((int) $draft->to_group_hemis_id);
 
             return [
                 'student_id' => (int) $draft->student_id,
@@ -1063,6 +1066,8 @@ class StudentDistributionController extends Controller
                 'student_id_number' => (string) $draft->student_id_number,
                 'from_group_name' => $draft->from_group_name,
                 'to_group_name' => $draft->to_group_name,
+                'faculty_name' => $group['faculty_name'] ?? '',
+                'course' => $group['course'] ?? null,
                 'has_telegram' => $hasTelegram,
                 'telegram_username' => $draft->student?->telegram_username,
                 'notified_at' => optional($draft->notified_at)->format('d.m.Y H:i'),
@@ -1079,6 +1084,8 @@ class StudentDistributionController extends Controller
             'sent' => $students->where('state', 'sent')->count(),
             'pending' => $students->where('state', 'pending')->count(),
             'no_telegram' => $students->where('state', 'no_telegram')->count(),
+            'faculties' => $students->pluck('faculty_name')->filter()->unique()->sort()->values(),
+            'courses' => $students->pluck('course')->filter()->unique()->sort()->values(),
             'students' => $students,
         ]);
     }

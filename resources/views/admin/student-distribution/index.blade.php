@@ -1740,6 +1740,11 @@
                 if (f.specialty) params.set('specialty', f.specialty);
                 if (f.course) params.set('course', f.course);
                 if (f.search) params.set('search', f.search);
+                // Ekrandagi qolgan filtrlar ham o'tadi — Excel ko'rinib turgan
+                // ro'yxatning nusxasi bo'lsin.
+                if (f.minStudents) params.set('min_students', f.minStudents);
+                if (f.minCapacity) params.set('min_capacity', f.minCapacity);
+                if (f.status) params.set('status', f.status);
                 params.set('side', exportSide);
                 params.set('mode', button.dataset.mode);
                 if (exportSide === 'right' && rightView === 'picked') params.set('only_sources', '1');

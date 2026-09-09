@@ -953,6 +953,67 @@ class StudentDistributionController extends Controller
      * Filtrlar sahifadagi panel bilan bir xil ishlaydi, shuning uchun
      * o'qituvchi ekranda nimani ko'rsa, faylda ham o'sha chiqadi.
      */
+    /**
+     * Son filtri — sahifadagi numberMatches bilan bir xil qoida:
+     *   ""       — cheklov yo'q
+     *   "9"      — aynan 9        "!=9" — 9 dan boshqa
+     *   ">9" "<9" ">=9" "<=9"     — taqqoslash
+     *   "5-9"    — oraliq
+     * Tushunarsiz yozuv cheklov qo'ymaydi.
+     */
+    private function numberMatches(?string $raw, $value): bool
+    {
+        $text = preg_replace('/\s+/u', '', (string) $raw);
+        $text = strtr($text, ['≠' => '!=', '≥' => '>=', '≤' => '<=', '<>' => '!=', '=>' => '>=', '=<' => '<=']);
+        if ($text === '') {
+            return true;
+        }
+
+        if (preg_match('/^(\d+)-(\d+)$/', $text, $m)) {
+            if ($value === null) {
+                return false;
+            }
+            return $value >= min((int) $m[1], (int) $m[2]) && $value <= max((int) $m[1], (int) $m[2]);
+        }
+
+        if (preg_match('/^(!=|>=|<=|>|<|=)?(\d+)$/', $text, $m)) {
+            $n = (int) $m[2];
+            $op = $m[1] ?: '=';
+            if ($value === null) {
+                return $op === '!=';
+            }
+
+            return match ($op) {
+                '!=' => $value !== $n,
+                '>' => $value > $n,
+                '<' => $value < $n,
+                '>=' => $value >= $n,
+                '<=' => $value <= $n,
+                default => $value === $n,
+            };
+        }
+
+        return true;
+    }
+
+    /** Holat filtri: free — bo'sh joy bor, full — to'la, over — ortiqcha. */
+    private function statusMatches(?string $status, $freePlaces): bool
+    {
+        if (!$status) {
+            return true;
+        }
+        if ($freePlaces === null) {
+            return false;
+        }
+
+        return match ($status) {
+            'free' => $freePlaces > 0,
+            'full' => $freePlaces === 0,
+            'over' => $freePlaces < 0,
+            default => true,
+        };
+    }
+
     public function exportStudents(Request $request)
     {
         $filters = $request->validate([
@@ -965,6 +1026,9 @@ class StudentDistributionController extends Controller
             'only_sources' => ['nullable', 'boolean'],
             'side' => ['nullable', 'string', 'in:left,right'],
             'mode' => ['nullable', 'string', 'in:old,new,both'],
+            'min_students' => ['nullable', 'string', 'max:32'],
+            'min_capacity' => ['nullable', 'string', 'max:32'],
+            'status' => ['nullable', 'string', 'in:free,full,over'],
         ]);
 
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
@@ -977,13 +1041,22 @@ class StudentDistributionController extends Controller
             ->unique()
             ->values();
 
+        // Nomlar katalogda tozalangan (DistributionCatalog::cleanName), so'rovdan
+        // kelgan qiymat ham shu ko'rinishga keltiriladi.
+        $specialty = preg_replace('/\s+/u', ' ', trim((string) ($filters['specialty'] ?? '')));
+
         $groups = $this->groupCatalog()
             ->when($faculties->isNotEmpty(), fn ($rows) => $rows->whereIn('faculty_name', $faculties->all()))
-            ->when(!empty($filters['specialty']), fn ($rows) => $rows->where('specialty_name', $filters['specialty']))
+            ->when($specialty !== '', fn ($rows) => $rows->where('specialty_name', $specialty))
             ->when(!empty($filters['course']), fn ($rows) => $rows->where('course', (int) $filters['course']))
             ->when($search !== '', fn ($rows) => $rows->filter(
                 fn ($row) => str_contains(mb_strtolower((string) $row['group_name']), $search)
             ))
+            // Ekrandagi son va holat filtrlari — Excel ko'rinib turgan
+            // ro'yxatning nusxasi bo'lsin.
+            ->filter(fn ($row) => $this->numberMatches($filters['min_students'] ?? '', $row['student_count'] ?? null)
+                && $this->numberMatches($filters['min_capacity'] ?? '', $row['capacity'] ?? null)
+                && $this->statusMatches($filters['status'] ?? '', $row['free_places'] ?? null))
             ->values();
 
         // Ekrandagi ro'yxat bilan bir xil: taqsimlanadigan (belgilangan) guruhlar

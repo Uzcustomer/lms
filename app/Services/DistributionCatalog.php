@@ -21,6 +21,24 @@ use Illuminate\Support\Facades\Schema;
 class DistributionCatalog
 {
     /**
+     * HEMISdan kelgan nomlarni tozalaydi: chetidagi va ichidagi ortiqcha
+     * bo'shliqlar olib tashlanadi.
+     *
+     * Ma'lumotda bunday nomlar bor — masalan "Pediatriya  " (oxirida ikki
+     * bo'shliq). Ekranda farq ko'rinmaydi, lekin nom filtr qiymati sifatida
+     * so'rovga borganda tozalanib, aniq solishtiruvda mos kelmay qoladi va
+     * natija bo'sh chiqadi.
+     */
+    private function cleanName(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return preg_replace('/\s+/u', ' ', trim($value)) ?? $value;
+    }
+
+    /**
      * Guruhlar katalogi: faqat o'qiyotgan bakalavr talabalar, faol guruhlar.
      * Sig'im va bo'sh joy reja (draft) hisobga olingan holda qaytadi.
      */
@@ -90,12 +108,12 @@ class DistributionCatalog
 
                 return [
                     'group_hemis_id' => $groupId,
-                    'group_name' => $row->group_name,
-                    'faculty_name' => $row->department_name,
-                    'specialty_name' => $row->specialty_name,
+                    'group_name' => $this->cleanName($row->group_name),
+                    'faculty_name' => $this->cleanName($row->department_name),
+                    'specialty_name' => $this->cleanName($row->specialty_name),
                     'level_code' => (string) $row->level_code,
                     'course' => $course,
-                    'level_name' => $row->level_name,
+                    'level_name' => $this->cleanName($row->level_name),
                     'language_code' => $active?->education_lang_code ?: null,
                     'language_name' => $active?->education_lang_name ?: null,
                     'lms_student_count' => $lmsCount,
@@ -193,9 +211,9 @@ class DistributionCatalog
 
             $rows->push([
                 'group_hemis_id' => $groupId,
-                'group_name' => $active->name,
-                'faculty_name' => $active->department_name,
-                'specialty_name' => $active->specialty_name,
+                'group_name' => $this->cleanName($active->name),
+                'faculty_name' => $this->cleanName($active->department_name),
+                'specialty_name' => $this->cleanName($active->specialty_name),
                 'level_code' => '',
                 'course' => $course,
                 'level_name' => $course ? $course . '-kurs' : null,

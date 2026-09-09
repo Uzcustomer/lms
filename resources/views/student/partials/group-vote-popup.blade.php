@@ -25,7 +25,10 @@
             ->where('student_id', $gvStudent->id)
             ->first();
 
-        if ($gvDraft && $gvDraft->needsPopup()) {
+        // Har safar profilga kirganda ko'rsatiladi — talaba yangi guruhini
+        // unutmasligi uchun. seen_at faqat "birinchi marta qachon ko'rdi"
+        // ma'lumoti sifatida yoziladi (registrator ro'yxatida ko'rinadi).
+        if ($gvDraft) {
             $gvMode = 'moved';
         }
     }
@@ -120,8 +123,9 @@
     let left = 10;
     let closed = false;
 
-    // Ko'rilgani serverga bir marta bildiriladi — popup qayta chiqmaydi.
-    // So'rov ketmasa ham popup yopiladi: keyingi kirishda yana chiqadi, xolos.
+    // Popup har kirishda chiqadi; serverga faqat BIRINCHI ko'rish vaqti
+    // yoziladi (registrator ro'yxatida "talaba ko'rdi" ustuni uchun).
+    // So'rov ketmasa ham popup yopilaveradi — bu faqat kuzatuv ma'lumoti.
     function close() {
         if (closed) return;
         closed = true;

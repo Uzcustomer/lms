@@ -49,15 +49,6 @@ class DistributionDraftAssignment extends Model
             || (int) $this->notified_group_id !== (int) $this->to_group_hemis_id;
     }
 
-    /**
-     * Talabaga popup ko'rsatiladimi: hali ko'rmagan yoki ko'rgandan keyin
-     * guruhi yana o'zgargan bo'lsa.
-     */
-    public function needsPopup(): bool
-    {
-        return $this->seen_at === null || $this->seen_at->lt($this->updated_at);
-    }
-
     public function student()
     {
         return $this->belongsTo(Student::class, 'student_id');

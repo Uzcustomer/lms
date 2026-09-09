@@ -121,9 +121,13 @@ class GroupVoteController extends Controller
         $student = Auth::guard('student')->user();
         abort_unless($student, 403);
 
+        // Faqat BIRINCHI ko'rish vaqti yoziladi: popup har safar chiqadi, lekin
+        // registrator ro'yxatida "talaba qachon birinchi marta ko'rdi" turishi
+        // kerak. Har safar yangilansa, o'sha vaqt yo'qolib ketardi.
         if (Schema::hasTable('distribution_draft_assignments')) {
             DistributionDraftAssignment::query()
                 ->where('student_id', $student->id)
+                ->whereNull('seen_at')
                 ->update(['seen_at' => now()]);
         }
 

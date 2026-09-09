@@ -11383,23 +11383,26 @@ class ReportController extends Controller
 
         $result = [];
         if ($what === 'groups') {
-            // Guruhlar ro'yxati kichik (bir necha ming) — SINXRON tortamiz, shunda javob
-            // kelishi bilan yangi guruhlarni ekrandagi ro'yxatga qo'shish mumkin.
-            set_time_limit(300);
+            // Guruhlar SAHIFAMA-SAHIFA tortiladi (har so'rov: 1 ta HEMIS so'rovi + ommaviy upsert) —
+            // web so'rov vaqt limitiga tushmaydi; brauzer sahifalarni ketma-ket so'raydi.
+            set_time_limit(120);
+            $page = max(1, (int) $request->get('page', 1));
             try {
-                $stats = app(\App\Services\HemisService::class)->importGroups();
+                $r = app(\App\Services\HemisService::class)->importGroupsPage($page);
             } catch (\Throwable $e) {
                 report($e);
-                return response()->json(['ok' => false, 'error' => 'Guruh importida xato: ' . $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')'], 500);
+                return response()->json(['ok' => false, 'error' => 'Guruh importida xato (sahifa ' . $page . '): ' . $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')'], 500);
             }
-            \App\Services\ActivityLogService::log('import', 'group',
-                'Oqim sahifasidan guruhlar HEMISdan tortildi: ' . $stats['total'] . ' ta (yangi ' . $stats['created'] . ')');
-            if (!$stats['ok'] && $stats['total'] === 0) {
-                return response()->json(['ok' => false, 'error' => 'HEMIS bilan bog\'lanib bo\'lmadi: ' . ($stats['error'] ?? 'xatolik')], 502);
+            if (!$r['ok']) {
+                return response()->json(['ok' => false, 'error' => 'HEMIS bilan bog\'lanib bo\'lmadi (sahifa ' . $page . '): ' . ($r['error'] ?? 'xatolik')], 502);
             }
-            $message = 'HEMISdan ' . $stats['total'] . ' ta guruh tortildi (yangi: ' . $stats['created'] . ', yangilangan: ' . $stats['updated'] . ')'
-                . (!$stats['ok'] ? ' — qisman: ' . $stats['error'] : '') . '.';
-            $result = ['imported' => $stats['total'], 'created' => $stats['created'], 'updated' => $stats['updated'], 'sync' => true];
+            $done = $page >= $r['pageCount'];
+            if ($done) {
+                \App\Services\ActivityLogService::log('import', 'group', 'Oqim sahifasidan guruhlar HEMISdan tortildi (' . $r['pageCount'] . ' sahifa)');
+            }
+            $message = 'Sahifa ' . $page . '/' . $r['pageCount'] . ': ' . $r['total'] . ' ta guruh (yangi ' . $r['created'] . ').';
+            $result = ['sync' => true, 'page' => $page, 'pageCount' => $r['pageCount'], 'done' => $done,
+                       'imported' => $r['total'], 'created' => $r['created'], 'updated' => $r['updated']];
         } else {
             // Talabalar importi og'ir — fon (queue) rejimida. Holati keshda kuzatiladi:
             // sahifa uni so'rab turadi va tugagach ekrandagi sonlarni o'zi yangilaydi.

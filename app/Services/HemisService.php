@@ -558,44 +558,99 @@ class HemisService
     }
 
     /**
-     * HEMISdan guruhlar ro'yxatini tortadi (sinxron). Natija: ['total','created','updated','pages','ok','error'].
+     * HEMISdan guruhlar ro'yxatini tortadi (sinxron, barcha sahifalar).
+     * Natija: ['total','created','updated','pages','ok','error'].
      */
     public function importGroups(): array
     {
-        $page = 1;
-        $hasMore = true;
         $stats = ['total' => 0, 'created' => 0, 'updated' => 0, 'pages' => 0, 'ok' => true, 'error' => null];
-
-        while ($hasMore) {
-            $response = $this->fetchGroups($page);
-
-            if (is_array($response) && !empty($response['success'])) {
-                foreach ($response['data']['items'] ?? [] as $groupData) {
-                    $res = $this->updateOrCreateGroup($groupData);
-                    if ($res === null) {
-                        continue;
-                    }
-                    $stats['total']++;
-                    if ($res) {
-                        $stats['created']++;
-                    } else {
-                        $stats['updated']++;
-                    }
-                }
-
-                $pagination = $response['data']['pagination'] ?? ['page' => $page, 'pageCount' => $page];
-                $hasMore = ($pagination['page'] ?? $page) < ($pagination['pageCount'] ?? $page);
-                $stats['pages']++;
-                $page++;
-            } else {
-                Log::error('Failed to fetch groups from HEMIS', is_array($response) ? $response : ['response' => $response]);
-                $stats['ok'] = false;
-                $stats['error'] = is_array($response) ? ($response['error'] ?? 'API request failed') : 'HEMIS JSON qaytarmadi';
+        $page = 1;
+        do {
+            $r = $this->importGroupsPage($page);
+            if (!$r['ok']) {
+                $stats['ok'] = false; $stats['error'] = $r['error'];
                 break;
             }
-        }
-
+            $stats['total'] += $r['total']; $stats['created'] += $r['created']; $stats['updated'] += $r['updated'];
+            $stats['pages']++;
+            $more = $page < $r['pageCount'];
+            $page++;
+        } while ($more);
         return $stats;
+    }
+
+    /**
+     * HEMISdan guruhlarning BITTA sahifasini (200 ta) tortib, bazaga ommaviy upsert qiladi.
+     * Har bir chaqiruv qisqa (bitta HEMIS so'rovi + 1-2 ta SQL) — web so'rov vaqt limitiga tushmaydi.
+     * Natija: ['ok','error','page','pageCount','total','created','updated'].
+     */
+    public function importGroupsPage(int $page): array
+    {
+        $response = $this->fetchGroups($page);
+        if (!is_array($response) || empty($response['success'])) {
+            $err = is_array($response) ? ($response['error'] ?? 'API request failed') : 'HEMIS JSON qaytarmadi';
+            Log::error('Failed to fetch groups from HEMIS', ['page' => $page, 'error' => $err]);
+            return ['ok' => false, 'error' => $err, 'page' => $page, 'pageCount' => $page, 'total' => 0, 'created' => 0, 'updated' => 0];
+        }
+        $items = $response['data']['items'] ?? [];
+        $pg = $response['data']['pagination'] ?? [];
+        $pageCount = max(1, (int) ($pg['pageCount'] ?? 1));
+
+        $rows = [];
+        $now = now();
+        foreach ($items as $d) {
+            $row = $this->groupRowFromHemis($d);
+            if ($row !== null) {
+                $row['created_at'] = $now;
+                $row['updated_at'] = $now;
+                $rows[$row['group_hemis_id']] = $row; // takror ID bo'lsa oxirgisi
+            }
+        }
+        $rows = array_values($rows);
+        if (!$rows) {
+            return ['ok' => true, 'error' => null, 'page' => $page, 'pageCount' => $pageCount, 'total' => 0, 'created' => 0, 'updated' => 0];
+        }
+        $ids = array_column($rows, 'group_hemis_id');
+        $existing = Group::whereIn('group_hemis_id', $ids)->count();
+        $cols = array_keys($rows[0]);
+        $updateCols = array_values(array_diff($cols, ['group_hemis_id', 'created_at']));
+        Group::upsert($rows, ['group_hemis_id'], $updateCols);
+
+        return [
+            'ok' => true, 'error' => null, 'page' => $page, 'pageCount' => $pageCount,
+            'total' => count($rows), 'created' => count($rows) - $existing, 'updated' => $existing,
+        ];
+    }
+
+    /**
+     * HEMIS group-list elementi → `groups` jadvali qatori (import:groups komandasi bilan bir xil maydonlar).
+     * Zarur maydonlar bo'lmasa null.
+     */
+    protected function groupRowFromHemis(array $data): ?array
+    {
+        if (empty($data['id']) || empty($data['department']['id']) || empty($data['specialty']['id'])) {
+            Log::warning('Missing related data for group', $data);
+            return null;
+        }
+        return [
+            'group_hemis_id' => (int) $data['id'],
+            'name' => (string) ($data['name'] ?? ''),
+            'department_hemis_id' => (int) $data['department']['id'],
+            'department_name' => (string) ($data['department']['name'] ?? ''),
+            'department_code' => (string) ($data['department']['code'] ?? ''),
+            'department_structure_type_code' => (string) ($data['department']['structureType']['code'] ?? ''),
+            'department_structure_type_name' => (string) ($data['department']['structureType']['name'] ?? ''),
+            'department_locality_type_code' => (string) ($data['department']['localityType']['code'] ?? ''),
+            'department_locality_type_name' => (string) ($data['department']['localityType']['name'] ?? ''),
+            'department_active' => (bool) ($data['department']['active'] ?? true),
+            'active' => (bool) ($data['active'] ?? true),
+            'specialty_hemis_id' => (int) $data['specialty']['id'],
+            'specialty_code' => (string) ($data['specialty']['code'] ?? ''),
+            'specialty_name' => (string) ($data['specialty']['name'] ?? ''),
+            'education_lang_code' => (string) ($data['educationLang']['code'] ?? ''),
+            'education_lang_name' => (string) ($data['educationLang']['name'] ?? ''),
+            'curriculum_hemis_id' => (int) ($data['_curriculum'] ?? 0),
+        ];
     }
 
     protected function fetchGroups($page)
@@ -625,42 +680,6 @@ class HemisService
             ]);
             return ['success' => false, 'error' => $e->getMessage()];
         }
-    }
-
-    /**
-     * Guruhni lokal `groups` jadvaliga yozadi (import:groups komandasi bilan bir xil maydonlar).
-     * Qaytaradi: true — yangi yaratildi, false — yangilandi, null — o'tkazib yuborildi.
-     */
-    protected function updateOrCreateGroup($data): ?bool
-    {
-        if (empty($data['id']) || empty($data['department']['id']) || empty($data['specialty']['id'])) {
-            Log::warning('Missing related data for group', $data);
-            return null;
-        }
-
-        $group = Group::updateOrCreate(
-            ['group_hemis_id' => $data['id']],
-            [
-                'name' => $data['name'] ?? '',
-                'department_hemis_id' => $data['department']['id'],
-                'department_name' => $data['department']['name'] ?? '',
-                'department_code' => $data['department']['code'] ?? '',
-                'department_structure_type_code' => $data['department']['structureType']['code'] ?? '',
-                'department_structure_type_name' => $data['department']['structureType']['name'] ?? '',
-                'department_locality_type_code' => $data['department']['localityType']['code'] ?? '',
-                'department_locality_type_name' => $data['department']['localityType']['name'] ?? '',
-                'department_active' => (bool) ($data['department']['active'] ?? true),
-                'active' => (bool) ($data['active'] ?? true),
-                'specialty_hemis_id' => $data['specialty']['id'],
-                'specialty_code' => $data['specialty']['code'] ?? '',
-                'specialty_name' => $data['specialty']['name'] ?? '',
-                'education_lang_code' => $data['educationLang']['code'] ?? '',
-                'education_lang_name' => $data['educationLang']['name'] ?? '',
-                'curriculum_hemis_id' => $data['_curriculum'] ?? 0,
-            ]
-        );
-
-        return $group->wasRecentlyCreated;
     }
 
     public function importCurricula()

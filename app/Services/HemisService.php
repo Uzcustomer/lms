@@ -29,19 +29,6 @@ class HemisService
     }
 
     /**
-     * HEMIS REST manzili: base_url ".../rest" yoki ".../rest/v1/" bo'lishidan qat'i nazar
-     * har doim ".../rest/v1/<path>" qaytaradi (kodda "/v1/" ba'zan ikki marta yig'ilib qolardi).
-     */
-    protected function apiUrl(string $path): string
-    {
-        $base = rtrim($this->baseUrl, '/');
-        if (!preg_match('~/v1$~', $base)) {
-            $base .= '/v1';
-        }
-        return $base . '/' . ltrim($path, '/');
-    }
-
-    /**
      * HEMIS API manzilini yig'adi.
      *
      * `HEMIS_API_BASE_URL` turli o'rnatishlarda turlicha yozilgan — ".../rest",

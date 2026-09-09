@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AkademikMobillikAriza;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\AcademicMobilityApplicationsExport;
 use App\Models\StudentTransferApplication;
 use App\Models\AkademikMobillikTasdiq;
 use App\Models\Student;
@@ -45,6 +47,16 @@ class AcademicMobilityController extends Controller
             'filters' => $this->filterOptions(),
             'selectedStatus' => $selectedStatus,
         ]);
+    }
+
+    /** Arizalar ro'yxatini Excelga chiqaradi (qidiruv qo'llanilgan holicha). */
+    public function applicationsExport(Request $request)
+    {
+        $search = trim((string) $request->input('search')) ?: null;
+
+        $name = 'akademik-mobillik-arizalari-' . now()->format('Y-m-d-Hi') . '.xlsx';
+
+        return Excel::download(new AcademicMobilityApplicationsExport($search), $name);
     }
 
     public function applications(Request $request): View

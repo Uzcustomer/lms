@@ -43,14 +43,23 @@
                             <p>Yuborilgan arizalar va biriktirilgan hujjatlar</p>
                         </div>
                     </div>
-                    @if($isRegistrar)
-                        <a href="{{ route('admin.academic-mobility.index') }}" class="am-back-btn">
+                    <div class="am-hero-acts">
+                        <a href="{{ route('admin.academic-mobility.applications.export', request()->only('search')) }}"
+                           class="am-excel-btn" title="Arizalarni Excelga yuklab olish">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7 7-7m-7 7h18"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
                             </svg>
-                            Talabalar ro'yxati
+                            Excel
                         </a>
-                    @endif
+                        @if($isRegistrar)
+                            <a href="{{ route('admin.academic-mobility.index') }}" class="am-back-btn">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7 7-7m-7 7h18"/>
+                                </svg>
+                                Talabalar ro'yxati
+                            </a>
+                        @endif
+                    </div>
                 </header>
 
                 <div class="am-stats">
@@ -401,6 +410,15 @@
         .am-overview,.am-list-card { overflow:hidden;border:1px solid #dbe4ef;border-radius:12px;background:#fff;box-shadow:0 4px 16px rgba(15,23,42,.06); }
         .am-overview { margin-bottom:14px; }
         .am-hero { min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;color:#fff;background:linear-gradient(135deg,#1f4f91,#2b67ae 58%,#3b82c4); }
+        .am-hero-acts { display:flex;flex:none;align-items:center;gap:9px; }
+        .am-excel-btn {
+            display:inline-flex;align-items:center;gap:7px;padding:8px 15px;
+            border:1px solid rgba(255,255,255,.35);border-radius:8px;
+            background:rgba(255,255,255,.14);color:#fff;
+            font-size:12.5px;font-weight:600;text-decoration:none;transition:.16s;
+        }
+        .am-excel-btn svg { width:15px;height:15px; }
+        .am-excel-btn:hover { background:#15803d;border-color:#15803d;color:#fff; }
         .am-hero-title { display:flex;align-items:center;gap:12px; }
         .am-hero-title h1 { margin:0;font-size:18px;line-height:1.25;font-weight:800;color:#fff; }
         .am-hero-title p { margin:3px 0 0;font-size:12px;color:#dbeafe; }

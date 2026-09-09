@@ -12054,14 +12054,14 @@ class ReportController extends Controller
             ->whereNotNull('s.group_id')
             ->select(
                 's.department_id', 's.department_name',
-                's.specialty_id', 's.specialty_name',
+                's.specialty_id', 's.specialty_name', 's.specialty_code',
                 's.level_code', 's.level_name',
                 's.group_id', 's.group_name',
                 DB::raw('COUNT(*) as cnt')
             )
             ->groupBy(
                 's.department_id', 's.department_name',
-                's.specialty_id', 's.specialty_name',
+                's.specialty_id', 's.specialty_name', 's.specialty_code',
                 's.level_code', 's.level_name',
                 's.group_id', 's.group_name'
             );
@@ -12335,7 +12335,7 @@ class ReportController extends Controller
             ->select(
                 'g.group_hemis_id', 'g.name as group_name',
                 'g.department_hemis_id as dep_hemis_id', 'g.department_name',
-                'g.specialty_hemis_id as spec_hemis_id', 'g.specialty_name',
+                'g.specialty_hemis_id as spec_hemis_id', 'g.specialty_name', 'g.specialty_code',
                 'c.education_year_code', 'c.education_period', 'c.education_type_code'
             );
 
@@ -12412,6 +12412,7 @@ class ReportController extends Controller
                 'department_name' => $g->department_name,
                 'specialty_id'    => $g->spec_hemis_id,
                 'specialty_name'  => $g->specialty_name,
+                'specialty_code'  => $g->specialty_code,
                 'level_code'      => (string) (10 + $level),
                 'level_name'      => $level . '-kurs',
                 'group_id'        => $g->group_hemis_id,
@@ -12564,6 +12565,7 @@ class ReportController extends Controller
                         'department_name' => $sh->department_name,
                         'specialty_id'    => $sh->specialty_id,
                         'specialty_name'  => $p->specialty_name ?: $p->specialty_code,
+                        'specialty_code'  => $p->specialty_code,
                         'level_code'      => '11',
                         'level_name'      => '1-kurs',
                         'group_id'        => $synthId--,
@@ -12597,11 +12599,19 @@ class ReportController extends Controller
             $lvlCode = (string) $r->level_code;
             $lvlName = $r->level_name ?: ($r->level_code . '-kurs');
 
-            // Blok kaliti — HAQIQIY fakultet + yo'nalish NOMI + ta'lim turi bo'yicha
-            // (fakultetlar birlashmaydi). Qo'shma va oddiy ta'lim hech qachon aralashmaydi.
+            // Blok kaliti — HAQIQIY fakultet + yo'nalish SHIFRI (kodi) + ta'lim turi bo'yicha
+            // (fakultetlar birlashmaydi). Yo'nalish nomi turli jadvallarda turlicha yozilgan bo'lishi
+            // mumkin ("Stomatologiya" / "Stomatologiya (yo'nalishlar bo'yicha)") — shifr bir xil bo'lsa
+            // bitta blok. Qo'shma va oddiy ta'lim hech qachon aralashmaydi.
             $dept = $r->department_name;
-            $blockKey = mb_strtolower(trim((string) $dept)) . '|'
-                . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
+            $specKey = trim((string) ($r->specialty_code ?? ''));
+            if ($specKey === '') {
+                $specKey = (string) ($r->specialty_id ?: '');
+            }
+            if ($specKey === '') {
+                $specKey = mb_strtolower(trim((string) $r->specialty_name));
+            }
+            $blockKey = mb_strtolower(trim((string) $dept)) . '|' . $specKey . '|' . $track;
             if (!isset($blocks[$blockKey])) {
                 $title = $this->oqimBlockTitle($dept, $r->specialty_name);
                 if ($track === 'qoshma') {
@@ -12610,7 +12620,7 @@ class ReportController extends Controller
                 // merge_key — "N-son" prefiksisiz yo'nalish: bir yo'nalishli fakultetlarni
                 // fakultetlararo oqim ko'chirishda "qo'shni" deb topish uchun.
                 $mergeKey = mb_strtolower(trim((string) $this->oqimMergeDeptName($dept))) . '|'
-                    . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
+                    . $specKey . '|' . $track;
                 $blocks[$blockKey] = [
                     'department_name' => $dept,
                     'specialty_name'  => $r->specialty_name,

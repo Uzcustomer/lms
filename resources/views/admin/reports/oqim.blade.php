@@ -1786,6 +1786,33 @@
             });
         }
 
+        // Guruh tortish rejimini tanlash: joylashuvni SAQLAB yangilarini qo'shish yoki HAMMASINI qayta joylash
+        function openGroupPullChoice() {
+            var hasLayout = afterState && afterState.length;
+            var $ov = $('#gp-overlay');
+            if (!$ov.length) {
+                $ov = $('<div id="gp-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;align-items:center;justify-content:center;padding:20px;">' +
+                    '<div style="background:#fff;border-radius:14px;width:100%;max-width:560px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;">' +
+                    '<div style="padding:14px 18px;background:linear-gradient(135deg,#0f766e,#14b8a6);color:#fff;font-weight:800;font-size:15px;">⇩ Guruhlarni HEMISdan tortish</div>' +
+                    '<div id="gp-body" style="padding:14px 18px;display:flex;flex-direction:column;gap:10px;"></div>' +
+                    '<div style="display:flex;justify-content:flex-end;padding:10px 18px;border-top:1px solid #f1f5f9;background:#fbfdff;"><button type="button" class="af-btn af-draft" onclick="$(\'#gp-overlay\').hide()">Bekor qilish</button></div></div></div>').appendTo('body');
+            }
+            var h = '<div style="font-size:12.5px;color:#475569;">HEMISdan barcha faol guruhlar ro\'yxati tortiladi (bazaga yoziladi). Keyin ekran bilan nima qilinsin?</div>';
+            h += '<button type="button" class="gp-opt" onclick="startGroupPull(\'merge\')"' + (hasLayout ? '' : ' disabled style="opacity:.5"') + '>' +
+                 '<b>🧩 Joylashuvni SAQLAB, yangilarini qo\'shish</b><small>Ekrandagi (qoralamadagi) oqimlar tartibi o\'zgarmaydi. Yangi guruhlar "Yangi (HEMIS)" oqimiga tushadi, talaba sonlari bazadan yangilanadi, o\'chirilgan/nofaol guruhlar belgilanmaydi.' + (hasLayout ? '' : ' (Ekranda joylashuv yo\'q)') + '</small></button>';
+            h += '<button type="button" class="gp-opt" onclick="startGroupPull(\'replace\')">' +
+                 '<b>🔄 HAMMASINI HEMIS bo\'yicha qayta joylash</b><small>Ekrandagi joylashuv almashtiriladi: barcha faol guruhlar fakultet → kurs → til bo\'yicha standart oqimlarga joylanadi (nomlar HEMISdagidek). Oldingi holat "↶ Bekor qilish" bilan qaytadi; bazadagi saqlangan qoralamaga tegilmaydi.</small></button>';
+            $('#gp-body').html(h);
+            $ov.css('display', 'flex');
+        }
+        var GP_MODE = 'replace';
+        function startGroupPull(mode) {
+            GP_MODE = mode;
+            $('#gp-overlay').hide();
+            $('#mn-hemis-groups').prop('disabled', true).css('opacity', 0.6);
+            pullGroupsPage(1, { imported: 0, created: 0, updated: 0 });
+        }
+
         // Guruhlarni HEMISdan SAHIFAMA-SAHIFA tortish (har so'rov qisqa — vaqt limitiga tushmaydi)
         function pullGroupsPage(page, acc) {
             var $btn = $('#mn-hemis-groups');
@@ -1798,7 +1825,8 @@
                     $btn.prop('disabled', false).css('opacity', 1);
                     var extra = res.groups_total ? ' Bazada ' + res.groups_total + ' ta guruh.' : '';
                     $('#mn-hemis-status').css('color', '#16a34a').text('✓ HEMISdan ' + acc.imported + ' ta guruh tortildi (yangi: ' + acc.created + ', yangilangan: ' + acc.updated + ').' + extra);
-                    loadFromHemis(acc);
+                    if (GP_MODE === 'merge' && afterState && afterState.length) mergeNewGroups(); // joylashuv saqlanadi
+                    else loadFromHemis(acc); // hammasi HEMIS bo'yicha qayta joylanadi
                 })
                 .fail(function(xhr) {
                     $btn.prop('disabled', false).css('opacity', 1);
@@ -1820,12 +1848,9 @@
         // HEMISdan guruh/talabalarni tortish (guruhlar — sahifama-sahifa sinxron, talabalar — fon rejimida)
         function hemisPull(what) {
             var label = what === 'groups' ? 'Guruhlar' : 'Talabalar';
-            var q = what === 'groups'
-                ? "HEMISdagi BARCHA faol guruhlar tortilib, fakultet → kurs → til bo'yicha oqimlarga joylanadi (nomlar HEMISdagidek). Ekrandagi hozirgi joylashuv almashtiriladi — kerak bo'lsa \"↶ Bekor qilish\" bilan qaytarasiz. Davom etilsinmi?"
-                : "Talabalar HEMISdan tortilsinmi? Jarayon fon rejimida ishlaydi va bir necha daqiqa davom etishi mumkin.";
-            if (!confirm(q)) return;
-            var $btn = $(what === 'groups' ? '#mn-hemis-groups' : '#mn-hemis-students').prop('disabled', true).css('opacity', 0.6);
-            if (what === 'groups') { pullGroupsPage(1, { imported: 0, created: 0, updated: 0 }); return; }
+            if (what === 'groups') { openGroupPullChoice(); return; }
+            if (!confirm("Talabalar HEMISdan tortilsinmi? Jarayon fon rejimida ishlaydi va bir necha daqiqa davom etishi mumkin.")) return;
+            var $btn = $('#mn-hemis-students').prop('disabled', true).css('opacity', 0.6);
             $('#mn-hemis-status').css('color', '#0369a1').text(what === 'groups' ? "Guruhlar HEMISdan tortilmoqda, kuting..." : "So'rov yuborilmoqda...");
             $.ajax({ url: HEMIS_PULL_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { what: what } })
                 .done(function(res) {
@@ -2346,6 +2371,10 @@
         .mn-mv-sel option { padding:3px 6px; }
         .mn-mv-sel optgroup { font-size:11px; color:#a21caf; }
         .mn-row { position:relative; }
+        .gp-opt { display:flex; flex-direction:column; gap:3px; text-align:left; padding:10px 12px; border:1.5px solid #e2e8f0; border-radius:10px; background:#fff; cursor:pointer; }
+        .gp-opt:hover:not(:disabled) { border-color:#0f766e; background:#f0fdfa; }
+        .gp-opt b { font-size:13.5px; color:#0f172a; }
+        .gp-opt small { font-size:11.5px; color:#64748b; line-height:1.45; }
         .mn-drop-line { margin:2px 6px; padding:4px 8px; border:2px dashed #a21caf; border-radius:6px; background:#fdf4ff; color:#a21caf; font-size:11px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none; }
         .mn-empty-hint { padding:10px 8px; text-align:center; font-size:11px; font-weight:700; color:#a21caf; background:#fdf4ff; border-top:1px dashed #f0abfc; }
         .mn-x:hover { color:#dc2626; background:#fef2f2; border-color:#fecaca; }

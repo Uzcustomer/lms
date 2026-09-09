@@ -5,10 +5,13 @@ namespace App\Console\Commands;
 use App\Models\Group;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
+use App\Console\Commands\Concerns\ReportsImportChanges;
 use Illuminate\Support\Facades\Http;
 
 class ImportGroups extends Command
 {
+    use ReportsImportChanges;
+
     /**
      * The name and signature of the console command.
      *
@@ -34,7 +37,7 @@ class ImportGroups extends Command
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
-        $totalImported = 0;
+        $this->resetImportStats();
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/group-list?limit=$pageSize&page=$page");
@@ -46,7 +49,7 @@ class ImportGroups extends Command
                 $this->info("Processing page $page of $totalPages for groups...");
 
                 foreach ($groups as $groupData) {
-                    Group::updateOrCreate(
+                    $group = Group::updateOrCreate(
                         ['group_hemis_id' => $groupData['id']],
                         [
                             'name' => $groupData['name'],
@@ -67,9 +70,8 @@ class ImportGroups extends Command
                             'curriculum_hemis_id' => $groupData['_curriculum'],
                         ]
                     );
-                    $totalImported++;
 
-                    $this->info("Imported group: {$groupData['name']}");
+                    $this->trackImport($group, $groupData['name'] ?? null);
                 }
 
                 $page++;
@@ -80,7 +82,8 @@ class ImportGroups extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ Guruhlar importi tugadi. Jami: {$totalImported} ta");
+        $this->renderImportSummary("Guruhlar");
+        $telegram->notify($this->importTelegramMessage("Guruhlar"));
         $this->info('Groups import completed successfully.');
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use App\Console\Commands\Concerns\ReportsImportChanges;
 use App\Models\CurriculumSubject;
 use App\Models\Curriculum;
 use App\Models\Specialty;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Http;
 
 class ImportCurriculumSubjects extends Command
 {
+    use ReportsImportChanges;
+
     /**
      * The name and signature of the console command.
      *
@@ -41,7 +44,7 @@ class ImportCurriculumSubjects extends Command
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
-        $totalImported = 0;
+        $this->resetImportStats();
         $importedHemisIds = [];
 
         do {
@@ -54,7 +57,7 @@ class ImportCurriculumSubjects extends Command
                 $this->info("Processing page $page of $totalPages for curriculum subjects...");
 
                 foreach ($curriculumSubjects as $subjectData) {
-                    CurriculumSubject::updateOrCreate(
+                    $subject = CurriculumSubject::updateOrCreate(
                         ['curriculum_subject_hemis_id' => $subjectData['id']],
                         [
                             'curricula_hemis_id' => $subjectData['_curriculum'],
@@ -83,9 +86,7 @@ class ImportCurriculumSubjects extends Command
                         ]
                     );
                     $importedHemisIds[] = $subjectData['id'];
-                    $totalImported++;
-
-                    $this->info("Imported curriculum subject: {$subjectData['subject']['name']}");
+                    $this->trackImport($subject, $subjectData['subject']['name'] ?? null);
                 }
 
                 $page++;
@@ -104,7 +105,12 @@ class ImportCurriculumSubjects extends Command
                 ->update(['is_active' => false]);
         }
 
-        $telegram->notify("✅ O'quv reja fanlari importi tugadi. Jami: {$totalImported} ta, nofaol: {$deactivated} ta");
-        $this->info("Curriculum subjects import completed. Imported: {$totalImported}, deactivated: {$deactivated}");
+        $this->renderImportSummary("O'quv reja fanlari");
+        if ($deactivated) {
+            $this->line("  <fg=yellow>NOFAOL QILINDI:</> " . $deactivated . " ta (HEMISda endi yo'q)");
+        }
+        $telegram->notify($this->importTelegramMessage("O'quv reja fanlari")
+            . ($deactivated ? "
+Nofaol qilindi: " . $deactivated . " ta" : ""));
     }
 }

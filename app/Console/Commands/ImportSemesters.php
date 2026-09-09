@@ -6,10 +6,13 @@ use App\Models\CurriculumWeek;
 use App\Models\Semester;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
+use App\Console\Commands\Concerns\ReportsImportChanges;
 use Illuminate\Support\Facades\Http;
 
 class ImportSemesters extends Command
 {
+    use ReportsImportChanges;
+
     /**
      * The name and signature of the console command.
      *
@@ -35,7 +38,7 @@ class ImportSemesters extends Command
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 50;
-        $totalImported = 0;
+        $this->resetImportStats();
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/semester-list?limit=$pageSize&page=$page");
@@ -88,9 +91,8 @@ class ImportSemesters extends Command
                             ]
                         );
                     }
-                    $totalImported++;
 
-                    $this->info("Imported semester: {$semesterData['name']} with {$semester->curriculumWeeks->count()} weeks");
+                    $this->trackImport($semester, $semesterData['name'] ?? null);
                 }
 
                 $page++;
@@ -101,7 +103,8 @@ class ImportSemesters extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ Semestrlar importi tugadi. Jami: {$totalImported} ta");
+        $this->renderImportSummary("Semestrlar");
+        $telegram->notify($this->importTelegramMessage("Semestrlar"));
         $this->info('Semesters and curriculum weeks import completed successfully.');
     }
 }

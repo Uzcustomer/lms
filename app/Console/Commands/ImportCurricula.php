@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use App\Console\Commands\Concerns\ReportsImportChanges;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\Specialty;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Http;
 
 class ImportCurricula extends Command
 {
+    use ReportsImportChanges;
+
     /**
      * The name and signature of the console command.
      *
@@ -41,7 +44,7 @@ class ImportCurricula extends Command
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
-        $totalImported = 0;
+        $this->resetImportStats();
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/curriculum-list?limit=$pageSize&page=$page");
@@ -53,7 +56,7 @@ class ImportCurricula extends Command
                 $this->info("Processing page $page of $totalPages for curricula...");
 
                 foreach ($curricula as $curriculumData) {
-                    Curriculum::updateOrCreate(
+                    $curriculum = Curriculum::updateOrCreate(
                         ['curricula_hemis_id' => $curriculumData['id']],
                         [
                             'name' => $curriculumData['name'],
@@ -74,9 +77,9 @@ class ImportCurricula extends Command
                             'education_period' => $curriculumData['education_period'],
                         ]
                     );
-                    $totalImported++;
 
-                    $this->info("Imported curriculum: {$curriculumData['name']}");
+                    // Yangi / yangilangan / o'zgarmagan bo'yicha sanaymiz.
+                    $this->trackImport($curriculum, $curriculumData['name'] ?? null);
                 }
 
                 $page++;
@@ -87,7 +90,7 @@ class ImportCurricula extends Command
             }
         } while ($page <= $totalPages);
 
-        $telegram->notify("✅ O'quv rejalar importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Curricula import completed successfully.');
+        $this->renderImportSummary("O'quv rejalar");
+        $telegram->notify($this->importTelegramMessage("O'quv rejalar"));
     }
 }

@@ -9,11 +9,14 @@ use App\Models\Teacher;
 use App\Models\TutorHistory;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
+use App\Console\Commands\Concerns\ReportsImportChanges;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 
 class ImportTeachers extends Command
 {
+    use ReportsImportChanges;
+
     protected $signature = 'import:teachers';
 
     protected $description = 'Imports employees from HEMIS API (/v1/data/employee-list)';
@@ -26,7 +29,7 @@ class ImportTeachers extends Command
         $token = config('services.hemis.token');
         $page = 1;
         $pageSize = 40;
-        $totalImported = 0;
+        $this->resetImportStats();
         $importedEmployeeIds = [];
 
         do {
@@ -75,6 +78,10 @@ class ImportTeachers extends Command
                         'is_active' => true,
                     ]
                 );
+
+                // Sanash shu yerda: pastdagi login/parol save() lari
+                // wasChanged() natijasini o'zgartirib yuboradi.
+                $this->trackImport($teacher, $teacher->full_name);
 
                 $importedEmployeeIds[] = $employeeData['employee_id_number'];
 
@@ -147,9 +154,7 @@ class ImportTeachers extends Command
                         }
                     }
                 }
-                $totalImported++;
 
-                $this->info("Imported: {$teacher->full_name}");
             }
 
             $page++;
@@ -169,7 +174,7 @@ class ImportTeachers extends Command
             }
         }
 
-        $telegram->notify("Xodimlar importi tugadi. Jami: {$totalImported} ta");
-        $this->info('Employee import completed successfully.');
+        $this->renderImportSummary("Xodimlar");
+        $telegram->notify($this->importTelegramMessage("Xodimlar"));
     }
 }

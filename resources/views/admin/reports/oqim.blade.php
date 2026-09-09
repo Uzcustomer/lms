@@ -272,7 +272,7 @@
                             <div id="mn-actions" style="display:none;padding:8px 20px;background:#fbfdff;border-bottom:1px solid #e2e8f0;align-items:center;gap:8px;flex-wrap:wrap;">
                                 <button type="button" id="mn-hemis-groups" class="af-btn af-load" onclick="hemisPull('groups')" title="HEMISdagi BARCHA faol guruhlarni (asl nomi bilan) tortib, fakultet → kurs → til bo'yicha oqimlarga joylaydi. Ekrandagi joriy joylashuv almashtiriladi (↶ Bekor qilish bilan qaytariladi)">⇩ Guruhlarni HEMISdan tortish (barchasi, fakultet/kurs/til bo'yicha)</button>
                                 <button type="button" id="mn-hemis-students" class="af-btn af-load" onclick="hemisPull('students')" title="HEMISdan talabalarni yangilash (fon rejimida, uzoqroq davom etadi)">⇩ Talabalarni HEMISdan tortish</button>
-                                <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadan yangilash: yangi guruhlar ro'yxatga qo'shiladi, mavjud guruhlardagi talaba soni HEMISdagi (bazadagi) songa yangilanadi — joylashuv o'zgarmaydi">⟳ Bazadan yangilash (yangi guruhlar + talaba sonlari)</button>
+                                <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadan yangilash: yangi guruhlar qo'shiladi, talaba sonlari bazadagi songa yangilanadi, nofaol/yo'q guruhlar olib tashlanadi, takror bloklar birlashtiriladi — joylashuv o'zgarmaydi">⟳ Bazadan yangilash (yangi + sonlar, nofaollarni olib tashlash)</button>
                                 <button type="button" id="mn-diag" class="af-btn" style="background:#fff;color:#0f766e;border-color:#99f6e4;" onclick="openDiagnose()" title="Tashxis: ekrandagi son ≠ bazadagi son bo'lgan guruhlar; har biri uchun HEMIS bilan jonli solishtirish va qayta tortish">🩺 Tashxis</button>
                                 <span id="mn-hemis-status" style="font-size:11.5px;font-weight:600;"></span>
                                 <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1583,6 +1583,41 @@
         // Joriy holat (bo'sh guruhlar bilan) serverdan olinadi; ekranda yo'q guruhlar
         // tegishli fakultet/kursga "Yangi (HEMIS)" oqimi sifatida qo'shiladi.
         // Mavjud joylashuv (drag & drop natijasi) o'zgarmaydi.
+        // Blok kaliti: fakultet + yo'nalish SHIFRI + ta'lim turi. Serverdan block_key kelsa — o'sha;
+        // eski qoralamalar uchun sarlavhadan: qavsdagi izoh ("(yo'nalishlar bo'yicha)") olib tashlanadi,
+        // shunda "Stomatologiya" va "Stomatologiya (yo'nalishlar bo'yicha)" bitta blok bo'ladi.
+        function mnBlockKey(bl) {
+            if (bl.block_key) return 'k|' + bl.block_key;
+            var t = String(bl.title || '');
+            var track = /Qo['’‘]?shma/i.test(t) ? 'qoshma' : 'oddiy';
+            t = t.replace(/\s*—\s*Qo['’‘]?shma ta['’‘]?lim\s*$/i, '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+            return 't|' + t + '|' + track;
+        }
+        // Bir xil fakultet+yo'nalish uchun ikki blok bo'lsa — ikkinchisining kurslari/oqimlari birinchisiga qo'shiladi
+        function mnMergeDuplicateBlocks() {
+            var byKey = {}, out = [], merged = 0;
+            (afterState || []).forEach(function(bl) {
+                var k = mnBlockKey(bl);
+                // block_key bo'lgan blok bilan sarlavha-kalitli eski blokni ham moslash uchun ikkinchi kalit
+                var k2 = 't|' + String(bl.title || '').replace(/\s*—\s*Qo['’‘]?shma ta['’‘]?lim\s*$/i, '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase() + '|' + (/Qo['’‘]?shma/i.test(bl.title || '') ? 'qoshma' : 'oddiy');
+                var tgt = byKey[k] || byKey[k2];
+                if (!tgt) { byKey[k] = bl; byKey[k2] = bl; out.push(bl); return; }
+                merged++;
+                (bl.courses || []).forEach(function(co) {
+                    var tc = (tgt.courses || []).find(function(c) { return ctLevelNum(c) === ctLevelNum(co); });
+                    if (!tc) { tgt.courses.push(co); return; }
+                    (co.oqims || []).forEach(function(oq) {
+                        // Bir xil nomli oqim bo'lsa — nomiga raqam qo'shamiz
+                        if (tc.oqims.some(function(o) { return o.label === oq.label; })) oq.label = (oq.label || 'Oqim') + '-' + (tc.oqims.length + 1);
+                        tc.oqims.push(oq);
+                    });
+                });
+                if (!tgt.block_key && bl.block_key) tgt.block_key = bl.block_key;
+            });
+            if (merged) afterState = out;
+            return merged;
+        }
+
         // Bir HEMIS guruhi ikki qator bo'lib qolgan bo'lsa (nom formati o'zgarganda) — birini olib tashlaymiz.
         // "Yangi (HEMIS)" oqimidagi nusxa emas, asl joylashuvdagi qator saqlanadi.
         function mnDedupeByGid() {
@@ -1613,6 +1648,7 @@
                 if (!src.length) { $st.css('color', '#b45309').text('Bazada faol guruh topilmadi — filtrlarni (ta\'lim turi, fakultet) tekshiring.'); return; }
                 if (afterState && afterState.length) mnPushUndo();
                 afterState = JSON.parse(JSON.stringify(src));
+                mnMergeDuplicateBlocks();
                 manualContext = null; // joriy filtrlar konteksti
                 manualKnownIds = idSetFromList(res.group_ids || []);
                 mnRecalc(); renderManual(); renderAfterBody();
@@ -1646,6 +1682,8 @@
                     $st.css('color', '#16a34a').text('✓ Joriy holat (barcha guruhlar) yuklandi.');
                     return;
                 }
+                var snapshot = JSON.stringify(afterState);
+                var blocksMerged = mnMergeDuplicateBlocks(); // "Stomatologiya" / "Stomatologiya (…)" kabi takror bloklar
                 // Yangi guruh — HEMIS ID bo'yicha aniqlanadi (nom bo'yicha emas: optimizatsiya
                 // guruhlarni birlashtirib nomini o'zgartirgan bo'lsa ham ular "yangi" sanalmaydi).
                 // ID ma'lumoti umuman bo'lmagan eski versiyalar uchun — nom bo'yicha zaxira usul.
@@ -1667,7 +1705,6 @@
                     have[k] = true; return true;
                 }
                 var added = 0, addedNames = [], updated = 0;
-                var snapshot = JSON.stringify(afterState);
                 // Mavjud guruhlarning talaba sonini bazadagi (HEMISdan tortilgan) songa yangilaymiz — faqat
                 // aniq bitta guruhga (gid) mos qatorlar; birlashtirilgan (gids) qatorlar tegilmaydi.
                 // ID'siz qatorlar (ID qo'shilishidan oldin saqlangan qoralama/versiya) nom+til bo'yicha
@@ -1704,9 +1741,12 @@
                             if (isNewRow(r)) newRows.push(JSON.parse(JSON.stringify(r)));
                         }); });
                         if (!newRows.length) return;
-                        // Mos blok (fakultet+yo'nalish) va kursni topamiz, bo'lmasa yaratamiz
-                        var tb = afterState.find(function(b) { return b.title === sb.title; });
-                        if (!tb) { tb = { title: sb.title, courses: [] }; afterState.push(tb); }
+                        // Mos blok (fakultet + yo'nalish SHIFRI) va kursni topamiz, bo'lmasa yaratamiz
+                        var sk = mnBlockKey(sb);
+                        var tb = afterState.find(function(b) { return mnBlockKey(b) === sk; })
+                              || afterState.find(function(b) { return mnBlockKey({ title: b.title }) === mnBlockKey({ title: sb.title }); });
+                        if (!tb) { tb = { title: sb.title, block_key: sb.block_key, department_name: sb.department_name, courses: [] }; afterState.push(tb); }
+                        else if (!tb.block_key && sb.block_key) tb.block_key = sb.block_key;
                         var tc = (tb.courses || []).find(function(c) { return ctLevelNum(c) === lvl; });
                         if (!tc) { tc = { level_code: sc.level_code, level_name: sc.level_name, total: 0, oqims: [] }; tb.courses.push(tc); }
                         // Yangi guruhlar tilga qarab alohida "Yangi (HEMIS)" oqimlariga tushadi
@@ -1724,11 +1764,21 @@
                 var dedup = mnDedupeByGid();
                 var unm = unmatched.length ? ' Bazada (joriy filtr bo\'yicha) topilmagan guruhlar: ' + unmatched.join(', ') + (unmatched.length >= 8 ? ' ...' : '') + ' — ular bashorat (soxta) guruh yoki filtrdan tashqarida bo\'lishi mumkin.' : '';
                 if (opts.silent) {
-                    if (adopted || updated || dedup) { mnRecalc(); renderManual(); renderAfterBody(); }
-                    if (updated || dedup) mnFlash('Talaba sonlari bazadan yangilandi' + (updated ? ': ' + updated + ' ta' : '') + (dedup ? ', ' + dedup + ' ta takroriy qator olib tashlandi' : ''));
+                    if (adopted || updated || dedup || blocksMerged) { mnRecalc(); renderManual(); renderAfterBody(); }
+                    if (updated || dedup || blocksMerged) mnFlash('Bazadan yangilandi' + (updated ? ': ' + updated + ' ta son' : '') + (dedup ? ', ' + dedup + ' ta takroriy qator olib tashlandi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta takroriy blok birlashtirildi' : ''));
                     return;
                 }
-                if (!added && !updated && !dedup) {
+                // To'liq rejim: nofaol / HEMISda yo'q guruhlarni ham olib tashlaymiz (server bilan tekshirib)
+                if (!opts.countsOnly) {
+                    mnRemoveMissingGroups(function(removedNames) {
+                        finish(removedNames);
+                    });
+                    return;
+                }
+                finish([]);
+                function finish(removedNames) {
+                var removed = removedNames.length;
+                if (!added && !updated && !dedup && !blocksMerged && !removed) {
                     if (adopted) { MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift(); renderAfterBody(); }
                     $st.css('color', '#64748b').text('Sonlar bazadagi bilan bir xil' + (adopted ? ' (' + adopted + ' ta guruhga HEMIS ID biriktirildi — qoralamani saqlang)' : '') + '.' + unm
                         + ' (HEMISda o\'zgarish bo\'lgan bo\'lsa avval "Guruhlarni/Talabalarni HEMISdan tortish" ni bosing.)');
@@ -1741,13 +1791,47 @@
                 if (updated) msg += updated + ' ta guruhning talaba soni bazadagi songa yangilandi.';
                 if (adopted) msg += ' ' + adopted + ' ta guruhga HEMIS ID biriktirildi.';
                 if (dedup) msg += ' ' + dedup + ' ta takroriy qator (bir guruh ikki marta) olib tashlandi.';
+                if (blocksMerged) msg += ' ' + blocksMerged + ' ta takroriy blok (bir xil fakultet/yo\'nalish) birlashtirildi.';
+                if (removed) msg += ' ' + removed + ' ta nofaol/HEMISda yo\'q guruh olib tashlandi: ' + removedNames.slice(0, 8).join(', ') + (removed > 8 ? ' ...' : '') + '.';
                 $st.css('color', '#16a34a').text(msg + unm);
-                mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : '') + (dedup ? ', ' + dedup + ' ta takror olib tashlandi' : ''));
+                mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : '') + (dedup ? ', ' + dedup + ' ta takror olib tashlandi' : '') + (removed ? ', ' + removed + ' ta nofaol/yo\'q guruh o\'chirildi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta blok birlashtirildi' : ''));
+                }
             }).fail(function(xhr) {
                 $st.css('color', '#dc2626').text(xhr.status === 419
                     ? 'Sessiya eskirgan. Sahifani yangilang (Ctrl+Shift+R) va qayta urinib ko\'ring.'
                     : ('Yangi guruhlarni yuklab bo\'lmadi (HTTP ' + xhr.status + ').'));
             }).always(function() { $btn.prop('disabled', false).css('opacity', 1); });
+        }
+
+        // Nofaol yoki HEMISda (bazada) yo'q guruhlarni ekrandan olib tashlash — server bilan ID bo'yicha
+        // tekshiriladi (filtrga bog'liq emas). ID'siz qatorlar (bashoratdagi soxta guruhlar) ham olib tashlanadi.
+        function mnRemoveMissingGroups(done) {
+            var rows = [], removedNames = [];
+            (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                (oq.rows || []).forEach(function(r) { if (+r.gid > 0) rows.push({ gid: +r.gid, count: +r.count || 0, name: r.name }); });
+            }); }); });
+            var apply = function(badIds) {
+                (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) {
+                    (co.oqims || []).forEach(function(oq) {
+                        oq.rows = (oq.rows || []).filter(function(r) {
+                            var noId = !(+r.gid > 0) && !(r.gids && r.gids.length);
+                            if (noId || (+r.gid > 0 && badIds[+r.gid])) { removedNames.push(r.hemis_name || r.name); return false; }
+                            return true;
+                        });
+                    });
+                    co.oqims = (co.oqims || []).filter(function(oq) { return (oq.rows || []).length > 0; });
+                }); });
+                afterState = (afterState || []).filter(function(bl) { return (bl.courses || []).some(function(co) { return (co.oqims || []).length > 0; }); });
+                done(removedNames);
+            };
+            if (!rows.length) { apply({}); return; }
+            $.ajax({ url: SCREEN_DIFF_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, contentType: 'application/json', data: JSON.stringify({ rows: rows }) })
+                .done(function(r) {
+                    var bad = {};
+                    (r.diff || []).forEach(function(d) { if (!d.group_in_db || d.group_active === false) bad[d.gid] = true; });
+                    apply(bad);
+                })
+                .fail(function() { apply({}); });
         }
 
         // Fon rejimidagi talabalar importi holatini kuzatish — tugagach sonlar avtomatik yangilanadi
@@ -1799,7 +1883,7 @@
             }
             var h = '<div style="font-size:12.5px;color:#475569;">HEMISdan barcha faol guruhlar ro\'yxati tortiladi (bazaga yoziladi). Keyin ekran bilan nima qilinsin?</div>';
             h += '<button type="button" class="gp-opt" onclick="startGroupPull(\'merge\')"' + (hasLayout ? '' : ' disabled style="opacity:.5"') + '>' +
-                 '<b>🧩 Joylashuvni SAQLAB, yangilarini qo\'shish</b><small>Ekrandagi (qoralamadagi) oqimlar tartibi o\'zgarmaydi. Yangi guruhlar "Yangi (HEMIS)" oqimiga tushadi, talaba sonlari bazadan yangilanadi, o\'chirilgan/nofaol guruhlar belgilanmaydi.' + (hasLayout ? '' : ' (Ekranda joylashuv yo\'q)') + '</small></button>';
+                 '<b>🧩 Joylashuvni SAQLAB: yangilarini qo\'shish, nofaol/yo\'q guruhlarni olib tashlash</b><small>Ekrandagi (qoralamadagi) oqimlar tartibi o\'zgarmaydi. Yangi guruhlar "Yangi (HEMIS)" oqimiga tushadi, talaba sonlari bazadan yangilanadi, HEMISda nofaol yoki yo\'q guruhlar (va ID\'siz soxta qatorlar) ro\'yxatdan olib tashlanadi, bir xil fakultet/yo\'nalishdagi takror bloklar birlashtiriladi.' + (hasLayout ? '' : ' (Ekranda joylashuv yo\'q)') + '</small></button>';
             h += '<button type="button" class="gp-opt" onclick="startGroupPull(\'replace\')">' +
                  '<b>🔄 HAMMASINI HEMIS bo\'yicha qayta joylash</b><small>Ekrandagi joylashuv almashtiriladi: barcha faol guruhlar fakultet → kurs → til bo\'yicha standart oqimlarga joylanadi (nomlar HEMISdagidek). Oldingi holat "↶ Bekor qilish" bilan qaytadi; bazadagi saqlangan qoralamaga tegilmaydi.</small></button>';
             $('#gp-body').html(h);

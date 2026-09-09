@@ -12624,8 +12624,10 @@ class ReportController extends Controller
                 $blocks[$blockKey] = [
                     'department_name' => $dept,
                     'specialty_name'  => $r->specialty_name,
+                    'specialty_code'  => (string) ($r->specialty_code ?? ''),
                     'track'           => $track,
                     'title'           => $title,
+                    'block_key'       => $blockKey, // fakultet|yo'nalish shifri|ta'lim turi — frontendda takror bloklarni birlashtirish uchun
                     'merge_key'       => $mergeKey,
                     'courses'         => [],
                 ];
@@ -12853,6 +12855,8 @@ class ReportController extends Controller
             $prepared[$bi] = [
                 'title'           => $block['title'],
                 'department_name' => $block['department_name'] ?? $block['title'],
+                'specialty_code'  => $block['specialty_code'] ?? '',
+                'block_key'       => $block['block_key'] ?? '',
                 'merge_key'       => $block['merge_key'] ?? ($block['title'] ?? ''),
                 'courses'         => $cx,
             ];
@@ -12915,6 +12919,8 @@ class ReportController extends Controller
             $result[] = [
                 'title'           => $blk['title'],
                 'department_name' => $blk['department_name'],
+                'specialty_code'  => $blk['specialty_code'] ?? '',
+                'block_key'       => $blk['block_key'] ?? '',
                 'merge_key'       => $blk['merge_key'],
                 'courses'         => $courses,
             ];

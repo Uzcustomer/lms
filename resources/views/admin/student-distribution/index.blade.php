@@ -1673,15 +1673,24 @@
                     '</div>';
             }).join('') : '<div class="sd-empty">' + NF_LABELS[nfTab].empty + '</div>';
 
-            // Yuborish tugmasi filtrlangan ro'yxat bo'yicha: kutayotganlar
-            // bo'lsa ular uchun, bo'lmasa shu qamrovni qayta yuborish.
-            $('nfSend').textContent = counts.pending
-                ? 'Xabar yuborish (' + counts.pending + ')'
-                : 'Qayta yuborish' + (scoped.length ? ' (' + scoped.length + ')' : '');
-            $('nfSend').disabled = scoped.length === 0;
-            $('nfHint').textContent = counts.pending
-                ? counts.pending + ' ta talabaga yuboriladi'
-                : (counts.no_telegram ? counts.no_telegram + ' tasida Telegram ulanmagan — ular popup orqali ko\'radi' : '');
+            // Yuborish tugmasi ochiq tabga qarab: "Yuborilgan" da turgan bo'lsa
+            // o'shalarga qayta yuboradi, aks holda kutayotganlarga (ular ham
+            // bo'lmasa butun qamrovga qayta).
+            if (nfTab === 'sent') {
+                $('nfSend').textContent = 'Qayta yuborish (' + counts.sent + ')';
+                $('nfSend').disabled = counts.sent === 0;
+                $('nfHint').textContent = counts.sent
+                    ? counts.sent + ' ta talabaga xabar qayta yuboriladi'
+                    : '';
+            } else {
+                $('nfSend').textContent = counts.pending
+                    ? 'Xabar yuborish (' + counts.pending + ')'
+                    : 'Qayta yuborish' + (scoped.length ? ' (' + scoped.length + ')' : '');
+                $('nfSend').disabled = scoped.length === 0;
+                $('nfHint').textContent = counts.pending
+                    ? counts.pending + ' ta talabaga yuboriladi'
+                    : (counts.no_telegram ? counts.no_telegram + ' tasida Telegram ulanmagan — ular popup orqali ko\'radi' : '');
+            }
         }
 
         // Filtr ro'yxatlarini to'ldirish (modal ochilganda bir marta).
@@ -1723,14 +1732,21 @@
             if (!nfData) return;
             const scoped = nfScope();
             const pending = scoped.filter(s => s.state === 'pending').length;
-            const resend = pending === 0;
+
+            // "Yuborilgan" tabida turgan bo'lsa — aynan o'shalarga qayta
+            // yuboriladi. Boshqa tablarda: kutayotganlar bor bo'lsa ularga,
+            // yo'q bo'lsa butun qamrovga qayta.
+            const resend = nfTab === 'sent' || pending === 0;
+            const count = nfTab === 'sent'
+                ? scoped.filter(s => s.state === 'sent').length
+                : (pending || scoped.length);
 
             const faculty = $('nfFaculty').value;
             const course = $('nfCourse').value;
             const scopeText = [faculty, course ? course + '-kurs' : ''].filter(Boolean).join(' · ');
 
             const question = (resend
-                ? "Hamma xabardor qilingan. Xabar QAYTA yuborilsinmi?"
+                ? count + " ta talabaga xabar QAYTA yuborilsinmi?"
                 : pending + " ta talabaga Telegram orqali yangi guruhi haqida xabar yuborilsinmi?")
                 + (scopeText ? "\n\nQamrov: " + scopeText : '');
             if (!confirm(question)) return;
@@ -1739,6 +1755,8 @@
             if (resend) payload.resend = 1;
             if (faculty) payload.faculty = faculty;
             if (course) payload.course = course;
+            // "Yuborilgan" tabidan — faqat o'shalarga, kutayotganlarga tegmasin.
+            if (nfTab === 'sent') payload.only = 'sent';
 
             $('nfSend').disabled = true;
             try {

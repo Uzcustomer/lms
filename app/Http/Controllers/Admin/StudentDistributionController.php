@@ -974,6 +974,9 @@ class StudentDistributionController extends Controller
             'resend' => ['nullable', 'boolean'],
             'faculty' => ['nullable', 'string', 'max:255'],
             'course' => ['nullable', 'integer', 'min:1', 'max:8'],
+            // 'sent' — faqat allaqachon xabar olganlarga qayta yuborish
+            // ("Yuborilgan" tabidan). Bo'sh bo'lsa qamrov cheklanmaydi.
+            'only' => ['nullable', 'string', 'in:sent'],
         ]);
 
         $drafts = DistributionDraftAssignment::query()->with('student')->get();
@@ -991,6 +994,11 @@ class StudentDistributionController extends Controller
                 return ($faculty === '' || ($group['faculty_name'] ?? '') === $faculty)
                     && ($course === null || (int) ($group['course'] ?? 0) === (int) $course);
             })->values();
+        }
+
+        // "Yuborilgan" tabidan qayta yuborish — faqat xabar olganlarga.
+        if (($data['only'] ?? null) === 'sent') {
+            $drafts = $drafts->reject(fn (DistributionDraftAssignment $d) => $d->needsNotification())->values();
         }
 
         if ($drafts->isEmpty()) {

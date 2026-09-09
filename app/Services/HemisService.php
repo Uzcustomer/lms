@@ -550,8 +550,8 @@ class HemisService
         while ($hasMore) {
             $response = $this->fetchGroups($page);
 
-            if (!empty($response['success'])) {
-                foreach ($response['data']['items'] as $groupData) {
+            if (is_array($response) && !empty($response['success'])) {
+                foreach ($response['data']['items'] ?? [] as $groupData) {
                     $res = $this->updateOrCreateGroup($groupData);
                     if ($res === null) {
                         continue;
@@ -564,14 +564,14 @@ class HemisService
                     }
                 }
 
-                $pagination = $response['data']['pagination'];
-                $hasMore = $pagination['page'] < $pagination['pageCount'];
+                $pagination = $response['data']['pagination'] ?? ['page' => $page, 'pageCount' => $page];
+                $hasMore = ($pagination['page'] ?? $page) < ($pagination['pageCount'] ?? $page);
                 $stats['pages']++;
                 $page++;
             } else {
-                Log::error('Failed to fetch groups from HEMIS', $response);
+                Log::error('Failed to fetch groups from HEMIS', is_array($response) ? $response : ['response' => $response]);
                 $stats['ok'] = false;
-                $stats['error'] = $response['error'] ?? 'API request failed';
+                $stats['error'] = is_array($response) ? ($response['error'] ?? 'API request failed') : 'HEMIS JSON qaytarmadi';
                 break;
             }
         }
@@ -594,10 +594,11 @@ class HemisService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
-                return ['success' => false, 'error' => 'API request failed (HTTP ' . $response->status() . ')'];
+                return ['success' => false, 'error' => 'API request failed (HTTP ' . $response->status() . ', ' . $this->apiUrl('data/group-list') . ')'];
             }
 
-            return $response->json();
+            $json = $response->json();
+            return is_array($json) ? $json : ['success' => false, 'error' => 'HEMIS JSON qaytarmadi (' . $this->apiUrl('data/group-list') . ')'];
         } catch (\Exception $e) {
             Log::error('Exception occurred while fetching groups', [
                 'message' => $e->getMessage(),

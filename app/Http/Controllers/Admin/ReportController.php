@@ -11383,7 +11383,12 @@ class ReportController extends Controller
             // Guruhlar ro'yxati kichik (bir necha ming) — SINXRON tortamiz, shunda javob
             // kelishi bilan yangi guruhlarni ekrandagi ro'yxatga qo'shish mumkin.
             set_time_limit(300);
-            $stats = app(\App\Services\HemisService::class)->importGroups();
+            try {
+                $stats = app(\App\Services\HemisService::class)->importGroups();
+            } catch (\Throwable $e) {
+                report($e);
+                return response()->json(['ok' => false, 'error' => 'Guruh importida xato: ' . $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')'], 500);
+            }
             \App\Services\ActivityLogService::log('import', 'group',
                 'Oqim sahifasidan guruhlar HEMISdan tortildi: ' . $stats['total'] . ' ta (yangi ' . $stats['created'] . ')');
             if (!$stats['ok'] && $stats['total'] === 0) {

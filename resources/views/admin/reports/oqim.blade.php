@@ -1585,10 +1585,10 @@
         // "Yangi (HEMIS)" oqimidagi nusxa emas, asl joylashuvdagi qator saqlanadi.
         function mnDedupeByGid() {
             var seen = {}, removed = 0;
-            var pass = function(preferKeep) {
+            var pass = function(processNew) {
                 afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
                     var isNew = /^Yangi/i.test(oq.label || '');
-                    if (preferKeep === isNew) return; // 1-o'tish: asl oqimlar, 2-o'tish: "Yangi" oqimlar
+                    if (isNew !== processNew) return; // 1-o'tish (false): asl oqimlar saqlanadi; 2-o'tish (true): "Yangi" oqimdagi nusxalar olib tashlanadi
                     oq.rows = (oq.rows || []).filter(function(r) {
                         if (!(+r.gid > 0)) return true;
                         if (seen[+r.gid]) { removed++; return false; }

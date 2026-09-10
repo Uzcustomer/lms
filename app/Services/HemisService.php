@@ -631,7 +631,8 @@ class HemisService
         $now = now();
         $hasActiveField = false; $inactiveInPage = 0;
         foreach ($items as $d) {
-            if (is_array($d) && array_key_exists('active', $d)) { $hasActiveField = true; if (!$d['active']) $inactiveInPage++; }
+            $flag = is_array($d) ? $this->hemisActiveFlag($d) : null;
+            if ($flag !== null) { $hasActiveField = true; if (!$flag) $inactiveInPage++; }
             $row = $this->groupRowFromHemis($d);
             if ($row !== null) {
                 $row['created_at'] = $now;
@@ -657,6 +658,36 @@ class HemisService
     }
 
     /**
+     * HEMIS yozuvidan faollik belgisini o'qiydi — turli ko'rinishlarga chidamli:
+     * active / _active / is_active / isActive (bool, 0/1, "0"/"1", "true"/"false"),
+     * status / _status ("active"/"inactive", "faol"/"nofaol", 11/12 kabi). Topilmasa null.
+     */
+    protected function hemisActiveFlag(array $d): ?bool
+    {
+        foreach (['active', '_active', 'is_active', 'isActive', 'activeStatus'] as $k) {
+            if (array_key_exists($k, $d) && $d[$k] !== null && $d[$k] !== '') {
+                $v = $d[$k];
+                if (is_bool($v)) return $v;
+                if (is_numeric($v)) return (int) $v !== 0;
+                $s = mb_strtolower(trim((string) $v));
+                if (in_array($s, ['true', 'yes', 'faol', 'active', 'aktiv'], true)) return true;
+                if (in_array($s, ['false', 'no', 'nofaol', 'inactive', 'passiv', 'noaktiv'], true)) return false;
+                return (bool) $v;
+            }
+        }
+        foreach (['status', '_status'] as $k) {
+            if (array_key_exists($k, $d) && $d[$k] !== null && $d[$k] !== '') {
+                $v = $d[$k];
+                if (is_array($v)) { $v = $v['code'] ?? ($v['name'] ?? null); if ($v === null) continue; }
+                $s = mb_strtolower(trim((string) $v));
+                if (in_array($s, ['nofaol', 'inactive', 'passiv', 'noaktiv', 'deleted', 'archived', '0', '12', 'false'], true)) return false;
+                if (in_array($s, ['faol', 'active', 'aktiv', '1', '11', 'true'], true)) return true;
+            }
+        }
+        return null;
+    }
+
+    /**
      * HEMIS group-list elementi → `groups` jadvali qatori (import:groups komandasi bilan bir xil maydonlar).
      * Zarur maydonlar bo'lmasa null.
      */
@@ -677,7 +708,7 @@ class HemisService
             'department_locality_type_code' => (string) ($data['department']['localityType']['code'] ?? ''),
             'department_locality_type_name' => (string) ($data['department']['localityType']['name'] ?? ''),
             'department_active' => (bool) ($data['department']['active'] ?? true),
-            'active' => (bool) ($data['active'] ?? true),
+            'active' => $this->hemisActiveFlag($data) ?? true,
             'specialty_hemis_id' => (int) $data['specialty']['id'],
             'specialty_code' => (string) ($data['specialty']['code'] ?? ''),
             'specialty_name' => (string) ($data['specialty']['name'] ?? ''),

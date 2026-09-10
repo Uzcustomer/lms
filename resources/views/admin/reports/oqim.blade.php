@@ -1103,7 +1103,9 @@
                                   + ' data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r2 + '">'
                                   + '<span class="mn-handle" title="Ushlab suring">⠿</span>'
                                   + '<span class="mn-name' + (+row.gid > 0 ? ' mn-name-chk' : '') + '" title="' + esc(row.hemis_name || row.name) + (+row.gid > 0 ? ' — bosing: bazadagi talabalar ro\'yxati va tekshiruv' : '') + '"' + (+row.gid > 0 ? ' data-gid="' + (+row.gid) + '" data-cnt="' + esc(row.count) + '"' : '') + '>' + esc(row.hemis_name || row.name)
-                                  + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from || 'mehmon') + '</span>' : '') + '</span>'
+                                  + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from || 'mehmon') + '</span>' : '')
+                                  + (row._db === 'inactive' ? ' <span class="mn-dbflag mn-dbflag-inactive" title="Bazada (HEMISda) NOFAOL guruh' + (+row.gid > 0 ? ' #' + (+row.gid) : '') + '">nofaol</span>' : '')
+                                  + (row._db === 'missing' ? ' <span class="mn-dbflag mn-dbflag-missing" title="Bazada bunday guruh yo\'q (bashorat/soxta yoki o\'chirilgan)">yo\'q</span>' : '') + '</span>'
                                   + '<span class="mn-cnt-ro" title="Talaba soni bazadan (HEMISdan) avtomatik olinadi' + ((+row.gid > 0 || (row.gids && row.gids.length)) ? '' : ' — bu qatorda HEMIS ID yo\'q, son yangilanmaydi') + '">' + esc(row.count)
                                   + ((+row.gid > 0 || (row.gids && row.gids.length)) ? '' : '<span class="mn-noid" title="HEMIS ID yo\'q — bashorat (soxta) guruh yoki eski yozuv; son avtomatik yangilanmaydi">?</span>') + '</span>'
                                   + '<span class="mn-lang mn-lang-' + esc(rl) + '">' + (MN_LANG_LBL[rl] || rl) + '</span>'
@@ -1420,7 +1422,13 @@
                      '<div style="padding:8px 12px;border-radius:8px;background:#fefce8;flex:1;min-width:220px;font-size:12px;color:#713f12;">' +
                      'Oxirgi talabalar importi: <b>' + (r.last_import && r.last_import.finished_at ? r.last_import.finished_at + ' (' + r.last_import.state + (r.last_import.imported != null ? ', ' + r.last_import.imported + ' ta' : '') + ')' : '—') + '</b><br>' +
                      'Bazada talaba yozuvlari oxirgi yangilangan: <b>' + (r.students_max_updated || '—') + '</b></div></div>';
-                if (r.group) h += '<div style="margin-bottom:8px;color:#475569;">Guruh: <b>' + esc(r.group.name) + '</b> · ' + esc(r.group.department || '') + ' · ' + esc(r.group.lang || '') + ' · ' + (r.group.active ? 'faol' : '<span style="color:#dc2626">nofaol</span>') + '</div>';
+                if (r.group) h += '<div style="margin-bottom:8px;color:#475569;">Guruh: <b>' + esc(r.group.name) + '</b> #' + gid + ' · ' + esc(r.group.department || '') + ' · ' + esc(r.group.lang || '') + ' · reja ' + esc(r.group.curriculum) + ' · ' + (r.group.active ? 'faol' : '<span style="color:#dc2626">nofaol</span>') + (r.excluded ? ' · <span style="color:#b91c1c;font-weight:700;">hisobdan chiqarilgan</span>' + (r.override_note ? ' (' + esc(r.override_note) + ')' : '') : '') + '</div>';
+                if (CAN_APPROVE) {
+                    h += '<div style="margin-bottom:10px;">' + (r.excluded
+                        ? '<button type="button" class="af-btn af-draft" onclick="excludeGroup(' + gid + ', false, this)">↩ Hisobga qaytarish</button>'
+                        : '<button type="button" class="af-btn af-unapprove" onclick="excludeGroup(' + gid + ', true, this)" title="HEMISda o\'chirilgan/nofaol, lekin API hali qaytarayotgan sharpa guruh — hisobdan chiqariladi, ekrandan olib tashlanadi, keyingi tortishlarda qaytmaydi">🚫 Sharpa/nofaol — hisobdan chiqarish</button>')
+                        + ' <span style="font-size:11px;color:#64748b;">HEMISda bunday guruh yo\'q yoki nofaol bo\'lsa-yu bu yerda faol ko\'rinsa</span></div>';
+                }
                 else h += '<div style="margin-bottom:8px;color:#dc2626;">Guruh bazada (groups jadvalida) topilmadi — "Guruhlarni HEMISdan tortish" ni bosing.</div>';
                 if (db !== onScreen) h += '<div style="margin-bottom:8px;padding:8px 10px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;">Ekrandagi son bazadagidan farq qiladi — <b>"⟳ Bazadan yangilash"</b> ni bosing (yoki qatordagi sonni qo\'lda tuzating).</div>';
                 h += '<div style="margin-bottom:6px;font-weight:800;color:#334155;">Statuslar kesimi (bazada):</div><table style="border-collapse:collapse;margin-bottom:12px;">';
@@ -1471,6 +1479,10 @@
                      (noId ? '<span style="padding:5px 10px;border-radius:8px;background:#fefce8;">ID\'siz qator: <b>' + noId + '</b> (tekshirilmadi — "Bazadan yangilash" ID biriktiradi)</span>' : '') +
                      (merged ? '<span style="padding:5px 10px;border-radius:8px;background:#fefce8;">Birlashtirilgan (optimizatsiya) qator: <b>' + merged + '</b> (tekshirilmadi)</span>' : '') +
                      '</div>';
+                h += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#ecfeff;border:1px solid #a5f3fc;font-size:12px;color:#155e75;">' +
+                     '<b>🔎 HEMIS API xom javobi:</b> <input id="dg-probe-name" placeholder="guruh nomi (d21-17b)" style="border:1px solid #67e8f9;border-radius:6px;padding:3px 8px;font-size:12px;width:180px;"> ' +
+                     '<button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="hemisProbe()">HEMISdan tekshirish</button> ' +
+                     '<span style="color:#64748b;">— API guruh yozuvida "active" maydoni bormi, nom bo\'yicha HEMIS va baza yonma-yon.</span><div id="dg-probe-out" style="margin-top:6px;"></div></div>';
                 h += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;font-size:11.5px;color:#475569;line-height:1.6;">' +
                      'Oxirgi talabalar importi: <b>' + (r.last_import.finished_at || '—') + '</b> (' + r.last_import.state + (r.last_import.imported != null ? ', ' + r.last_import.imported + ' ta' : '') + (r.last_import.error ? ', xato: ' + esc(r.last_import.error) : '') + ') · ' +
                      'Bazadagi talaba yozuvlari oxirgi yangilangan: <b>' + (r.students_max_updated || '—') + '</b> · ' +
@@ -1486,11 +1498,32 @@
                 $('#dg-body').html(h);
             }).fail(function(xhr) { $('#dg-body').html('<div style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ').</div>'); });
         }
+        var HEMIS_PROBE_URL = '{{ route("admin.reports.oqim.hemis.probe") }}';
+        function hemisProbe() {
+            var nm = $('#dg-probe-name').val() || '';
+            $('#dg-probe-out').html('<span style="color:#94a3b8;">HEMISdan o\'qilmoqda...</span>');
+            $.get(HEMIS_PROBE_URL, { name: nm }).done(function(r) {
+                var h = '';
+                if (!r.ok) { $('#dg-probe-out').html('<span style="color:#dc2626;">HEMIS xato: ' + esc(r.error || '') + ' (' + esc(r.url) + ')</span>'); return; }
+                var hasActive = (r.sample_keys || []).indexOf('active') >= 0;
+                h += '<div>API yozuv maydonlari (' + (r.total != null ? 'jami ' + r.total + ' guruh' : '') + '): <code style="font-size:11px;">' + esc((r.sample_keys || []).join(', ')) + '</code></div>';
+                h += '<div style="font-weight:800;color:' + (hasActive ? '#166534' : '#b91c1c') + ';">' + (hasActive ? '✓ "active" maydoni BOR — nofaollik API dan olinadi.' : '✗ "active" maydoni YO\'Q — API nofaollikni bildirmaydi; import hammasini faol deb yozadi.') + '</div>';
+                if (nm) {
+                    h += '<div style="margin-top:6px;"><b>HEMIS API da "' + esc(nm) + '":</b> ' + ((r.matches || []).length ? '' : '<i>topilmadi (API search parametrini qo\'llamasa, faqat 1-sahifa tekshiriladi' + (r.search_page_count ? ', sahifalar: ' + r.search_page_count : '') + ')</i>');
+                    (r.matches || []).forEach(function(m) { h += '<div>• #' + m.id + ' ' + esc(m.name) + ' — active: <b>' + esc(String(m.active)) + '</b> · ' + esc(m.department || '') + ' · ' + esc(m.lang || '') + ' · reja ' + esc(m.curriculum) + (Object.keys(m.other_flags || {}).length ? ' · ' + esc(JSON.stringify(m.other_flags)) : '') + '</div>'; });
+                    h += '</div><div style="margin-top:4px;"><b>Bazada:</b>';
+                    (r.db || []).forEach(function(d) { h += '<div>• #' + d.group_hemis_id + ' ' + esc(d.name) + ' — active: <b>' + (d.active ? 'faol' : 'nofaol') + '</b> · ' + esc(d.department_name || '') + ' · ' + esc(d.education_lang_name || '') + ' · reja ' + esc(d.curriculum_hemis_id) + ' · ' + esc(d.updated_at) + '</div>'; });
+                    h += '</div>';
+                }
+                if (r.sample) h += '<details style="margin-top:6px;"><summary style="cursor:pointer;color:#0e7490;">Birinchi yozuv namunasi</summary><pre style="font-size:10.5px;white-space:pre-wrap;">' + esc(JSON.stringify(r.sample, null, 1)) + '</pre></details>';
+                $('#dg-probe-out').html(h);
+            }).fail(function(xhr) { $('#dg-probe-out').html('<span style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ')</span>'); });
+        }
         function diagTable(list) {
             var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;border-bottom:2px solid #e2e8f0;">' +
                     '<th style="padding:5px 6px;">Guruh</th><th style="padding:5px 6px;text-align:right;">Ekran</th><th style="padding:5px 6px;text-align:right;">Baza</th><th style="padding:5px 6px;text-align:right;">HEMIS</th><th style="padding:5px 6px;">Holat</th><th style="padding:5px 6px;"></th></tr></thead><tbody>';
             list.forEach(function(d) {
-                var flag = !d.group_in_db ? '<span style="color:#dc2626;font-weight:700;">guruh bazada yo\'q</span>' : (d.group_active === false ? '<span style="color:#b45309;font-weight:700;">guruh nofaol</span>' : (d.screen !== d.db ? '<span style="color:#9a3412;">ekran eskirgan</span>' : ''));
+                var flag = !d.group_in_db ? '<span style="color:#dc2626;font-weight:700;">guruh bazada yo\'q</span>' : (d.excluded ? '<span style="color:#b91c1c;font-weight:700;">hisobdan chiqarilgan</span>' : (d.group_active === false ? '<span style="color:#b45309;font-weight:700;">guruh nofaol</span>' : (d.screen !== d.db ? '<span style="color:#9a3412;">ekran eskirgan</span>' : '')));
                 h += '<tr id="dg-r-' + d.gid + '" style="border-bottom:1px solid #f1f5f9;">' +
                      '<td style="padding:5px 6px;font-weight:700;">' + esc(d.name) + ' <span style="color:#94a3b8;font-weight:400;">#' + d.gid + '</span></td>' +
                      '<td style="padding:5px 6px;text-align:right;">' + d.screen + '</td>' +
@@ -1538,6 +1571,31 @@
                 if (changed) { mnRecalc(); renderManual(); renderAfterBody(); }
                 $d.find('td').html('<span style="color:#166534;font-weight:700;">✓ Qayta tortildi: ' + r.imported + ' ta yuklandi, ' + r.deactivated + ' ta chetlashtirildi. Bazada faol: ' + r.db + (changed ? ' — ekran yangilandi.' : '.') + '</span> <button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="diagGroup(' + gid + ', ' + r.db + ')">🔬 Qayta tekshirish</button>');
             }).fail(function(xhr) { $d.find('td').html('<span style="color:#dc2626;">Xatolik: ' + ((xhr.responseJSON && xhr.responseJSON.error) || ('HTTP ' + xhr.status)) + '</span>'); });
+        }
+
+        // Sharpa/nofaol guruhni hisobdan chiqarish ("Guruh tuzatish" override) va ekrandan olib tashlash
+        var OVERRIDE_SAVE_URL = '{{ route("admin.reports.oqim.overrides.save") }}';
+        function excludeGroup(gid, exclude, btn) {
+            var name = '';
+            (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) { (oq.rows || []).forEach(function(r) { if (+r.gid === gid) name = r.hemis_name || r.name; }); }); }); });
+            $(btn).prop('disabled', true);
+            $.ajax({ url: OVERRIDE_SAVE_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF },
+                     data: { group_hemis_id: gid, group_name: name, excluded: exclude ? 1 : 0, note: exclude ? 'Oqim: sharpa/nofaol guruh (' + new Date().toLocaleDateString() + ')' : '' } })
+            .done(function() {
+                if (exclude) {
+                    mnPushUndo();
+                    var n = 0;
+                    (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) {
+                        (co.oqims || []).forEach(function(oq) { oq.rows = (oq.rows || []).filter(function(r) { if (+r.gid === gid) { n++; return false; } return true; }); });
+                        co.oqims = (co.oqims || []).filter(function(oq) { return (oq.rows || []).length > 0; });
+                    }); });
+                    mnRecalc(); renderManual(); renderAfterBody();
+                    $('#gc-overlay').hide();
+                    mnFlash('#' + gid + ' ' + name + ' hisobdan chiqarildi' + (n ? ', ekrandan olib tashlandi' : '') + ' (↶ Bekor qilish — faqat ekranni qaytaradi)');
+                } else {
+                    $(btn).prop('disabled', false).text('✓ Hisobga qaytarildi — "Bazadan yangilash" bilan ro\'yxatga qo\'shing');
+                }
+            }).fail(function(xhr) { $(btn).prop('disabled', false); mnFlash('Xatolik (HTTP ' + xhr.status + ')'); });
         }
 
         // Guruhni ro'yxatdan o'chirish (bashoratdagi soxta "1K-01a" kabi guruhlar uchun)
@@ -1842,22 +1900,36 @@
             // HECH NARSA avtomatik o'chirilmaydi: avval nomzodlar yig'iladi, foydalanuvchi tasdiqlasa o'chadi.
             var apply = function(badIds, lookup) {
                 var cand = []; // {row, why}
+                var candNorm = {};
                 (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
                     (oq.rows || []).forEach(function(r) {
                         var noId = !(+r.gid > 0) && !(r.gids && r.gids.length);
                         if (noId) {
                             var f = lookup ? lookup[r.name] : undefined;
-                            if (f && f.gid && f.active) { r.gid = f.gid; r.count = f.count; manualKnownIds[f.gid] = true; return; } // bazada bor — ID biriktiramiz
+                            if (f && f.gid && f.active) { r.gid = f.gid; r.count = f.count; r._db = 'ok'; manualKnownIds[f.gid] = true; return; } // bazada bor — ID biriktiramiz
                             if (f === undefined) return; // server tekshira olmadi — tegmaymiz
+                            r._db = (f && !f.active) ? 'inactive' : 'missing';
+                            if (f && f.gid) r.gid = f.gid; // nofaol bo'lsa ham ID ko'rinib tursin
                             cand.push({ row: r, why: f && !f.active ? 'nofaol' : 'bazada yo\'q (bashorat/soxta?)' });
+                            candNorm[mnNormName(r.name)] = true;
                             return;
                         }
-                        if (+r.gid > 0 && badIds[+r.gid]) cand.push({ row: r, why: badIds[+r.gid] === 'inactive' ? 'nofaol' : 'bazada yo\'q' });
+                        if (+r.gid > 0) {
+                            r._db = badIds[+r.gid] ? (badIds[+r.gid] === 'inactive' ? 'inactive' : 'missing') : 'ok';
+                            if (badIds[+r.gid]) { cand.push({ row: r, why: badIds[+r.gid] === 'inactive' ? 'nofaol' : 'bazada yo\'q' }); candNorm[mnNormName(r.name)] = true; }
+                        }
+                    });
+                }); }); });
+                // Nomi nofaol/yo'q guruh bilan bir xil, talabasi yo'q (0) boshqa qatorlar — takror nusxalar, ular ham nomzod
+                (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                    (oq.rows || []).forEach(function(r) {
+                        if (cand.some(function(c) { return c.row === r; })) return;
+                        if (!(+r.count > 0) && candNorm[mnNormName(r.name)]) cand.push({ row: r, why: 'nomi nofaol/yo\'q guruh bilan bir xil, 0 talaba (takror' + (+r.gid > 0 ? ', bazada #' + r.gid + ' ' + (r._db === 'ok' ? 'faol' : r._db || '?') : ', ID yo\'q') + ')' });
                     });
                 }); }); });
                 if (!cand.length) { done([]); return; }
                 var withStudents = cand.filter(function(c) { return +c.row.count > 0; }).length;
-                var list = cand.slice(0, 40).map(function(c) { return '• ' + (c.row.hemis_name || c.row.name) + ' — ' + c.why + (+c.row.count > 0 ? ' (' + c.row.count + ' talaba!)' : ''); }).join('\n');
+                var list = cand.slice(0, 40).map(function(c) { return '• ' + (c.row.hemis_name || c.row.name) + (+c.row.gid > 0 ? ' #' + c.row.gid : '') + ' — ' + c.why + (+c.row.count > 0 ? ' (' + c.row.count + ' talaba!)' : ''); }).join('\n');
                 var ok = confirm(cand.length + ' ta guruh HEMISda nofaol yoki bazada yo\'q' + (withStudents ? ' (shundan ' + withStudents + ' tasida talaba bor!)' : '') + '.\n\n' + list + (cand.length > 40 ? '\n...' : '') +
                                  '\n\nRo\'yxatdan OLIB TASHLANSINMI? ("Bekor qilish" — hech narsa o\'chirilmaydi, joylashuv saqlanadi)');
                 if (!ok) { done([]); return; }
@@ -2506,6 +2578,9 @@
         .mn-cnt::-webkit-outer-spin-button, .mn-cnt::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
         .mn-cnt:focus { outline:none; border-color:#a21caf; box-shadow:0 0 0 2px rgba(162,28,175,0.15); }
         .mn-cnt-ro { min-width:40px; text-align:center; font-weight:700; color:#334155; font-size:11.5px; flex-shrink:0; }
+        .mn-dbflag { display:inline-block; font-size:9px; font-weight:800; border-radius:999px; padding:0 5px; margin-left:3px; vertical-align:middle; }
+        .mn-dbflag-inactive { background:#fee2e2; color:#b91c1c; }
+        .mn-dbflag-missing { background:#ffedd5; color:#c2410c; }
         .mn-noid { display:inline-block; margin-left:3px; width:14px; height:14px; line-height:13px; border-radius:50%; background:#fef3c7; color:#b45309; font-size:10px; font-weight:800; text-align:center; cursor:help; }
         .mn-lang { font-size:9.5px; font-weight:800; border-radius:999px; padding:1px 6px; flex-shrink:0; }
         .mn-lang-uz  { color:#1d4ed8; background:#eff6ff; }

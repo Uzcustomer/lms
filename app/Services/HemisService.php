@@ -582,6 +582,7 @@ class HemisService
             $out['total'] = $j['data']['pagination']['totalCount'] ?? null;
             if ($items) {
                 $out['sample_keys'] = array_keys($items[0]);
+                $out['active_field_detected'] = $this->hemisActiveFlag($items[0]) !== null; // importer bilan bir xil mantiq
                 $s = $items[0];
                 foreach (['department', 'specialty', 'educationLang', 'educationForm', 'educationType'] as $k) { if (isset($s[$k]['name'])) $s[$k] = $s[$k]['name']; }
                 $out['sample'] = $s;
@@ -596,7 +597,8 @@ class HemisService
                         if (mb_strpos(mb_strtolower(preg_replace('/\\s+/u', '', (string) ($it['name'] ?? ''))), $needle) !== false) {
                             $out['matches'][] = [
                                 'id' => $it['id'] ?? null, 'name' => $it['name'] ?? null,
-                                'active' => array_key_exists('active', $it) ? $it['active'] : 'MAYDON YO\'Q',
+                                'active' => $this->hemisActiveFlag($it), // null — maydon yo'q
+                                'active_raw' => array_intersect_key($it, array_flip(['active', '_active', 'is_active', 'isActive', 'activeStatus', 'status', '_status'])),
                                 'department' => $it['department']['name'] ?? null, 'lang' => $it['educationLang']['name'] ?? null,
                                 'curriculum' => $it['_curriculum'] ?? null,
                                 'other_flags' => array_intersect_key($it, array_flip(['status', 'is_active', 'deleted', 'archived', '_active'])),

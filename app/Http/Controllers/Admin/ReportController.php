@@ -11410,12 +11410,26 @@ class ReportController extends Controller
                 return response()->json(['ok' => false, 'error' => 'HEMIS bilan bog\'lanib bo\'lmadi (sahifa ' . $page . '): ' . ($r['error'] ?? 'xatolik')], 502);
             }
             $done = $page >= $r['pageCount'];
+            // HEMIS ro'yxatida ko'rinmagan guruhlar — nofaol (HEMIS group-list nofaollarni qaytarmaydi).
+            // Sahifalar bo'ylab ko'rilgan IDlar keshda yig'iladi; oxirgi sahifada qolganlari active=false.
+            $seenKey = 'oqim_groups_pull_seen_' . $user->id;
+            $seen = $page === 1 ? [] : (\Illuminate\Support\Facades\Cache::get($seenKey) ?: []);
+            foreach ($r['ids'] ?? [] as $id) { $seen[(int) $id] = true; }
+            \Illuminate\Support\Facades\Cache::put($seenKey, $seen, now()->addHour());
+            $deactivated = 0;
             if ($done) {
-                \App\Services\ActivityLogService::log('import', 'group', 'Oqim sahifasidan guruhlar HEMISdan tortildi (' . $r['pageCount'] . ' sahifa)');
+                if (count($seen) > 0) {
+                    $seenIds = array_keys($seen);
+                    $deactivated = \App\Models\Group::where('active', true)->whereNotIn('group_hemis_id', $seenIds)->update(['active' => false]);
+                    $reactivated = \App\Models\Group::where('active', false)->whereIn('group_hemis_id', $seenIds)->update(['active' => true]);
+                }
+                \Illuminate\Support\Facades\Cache::forget($seenKey);
+                \App\Services\ActivityLogService::log('import', 'group', 'Oqim sahifasidan guruhlar HEMISdan tortildi (' . $r['pageCount'] . ' sahifa, ' . count($seen) . ' ta; nofaol qilindi: ' . $deactivated . ')');
             }
             $message = 'Sahifa ' . $page . '/' . $r['pageCount'] . ': ' . $r['total'] . ' ta guruh (yangi ' . $r['created'] . ').';
             $result = ['sync' => true, 'page' => $page, 'pageCount' => $r['pageCount'], 'done' => $done,
-                       'imported' => $r['total'], 'created' => $r['created'], 'updated' => $r['updated']];
+                       'imported' => $r['total'], 'created' => $r['created'], 'updated' => $r['updated'],
+                       'seen' => count($seen), 'deactivated' => $deactivated, 'reactivated' => $reactivated ?? 0];
         } else {
             // Talabalar importi og'ir — fon (queue) rejimida. Holati keshda kuzatiladi:
             // sahifa uni so'rab turadi va tugagach ekrandagi sonlarni o'zi yangilaydi.
@@ -11510,6 +11524,39 @@ class ReportController extends Controller
             foreach ($q as $x) { $db[(int) $x->group_id] = (int) $x->c; }
         }
         $gInfo = DB::table('groups')->whereIn('group_hemis_id', $gids)->get(['group_hemis_id', 'name', 'active'])->keyBy('group_hemis_id');
+
+        // ID'siz qatorlar — NOM bo'yicha (filtr va tildan qat'i nazar) bazadagi guruhga moslash
+        $names = $request->input('names', []);
+        $nameLookup = [];
+        if (is_array($names) && $names) {
+            $byNorm = [];
+            foreach (DB::table('groups')->get(['group_hemis_id', 'name', 'active', 'education_lang_name']) as $g) {
+                $k = $this->oqimNormGroupName($g->name);
+                $byNorm[$k][] = $g;
+            }
+            $wantIds = [];
+            foreach ($names as $nm) {
+                $k = $this->oqimNormGroupName((string) $nm);
+                $cands = $byNorm[$k] ?? [];
+                if (count($cands) > 1) {
+                    // faol bo'lganini afzal ko'ramiz
+                    $act = array_values(array_filter($cands, fn($g) => (bool) $g->active));
+                    if (count($act) === 1) $cands = $act;
+                }
+                if (count($cands) === 1) {
+                    $wantIds[] = (int) $cands[0]->group_hemis_id;
+                    $nameLookup[(string) $nm] = ['gid' => (int) $cands[0]->group_hemis_id, 'active' => (bool) $cands[0]->active, 'db_name' => $cands[0]->name, 'count' => 0];
+                } else {
+                    $nameLookup[(string) $nm] = null; // topilmadi yoki bir nechta — aniqlab bo'lmaydi
+                }
+            }
+            if ($wantIds) {
+                $cnts = DB::table('students')->whereIn('group_id', $wantIds)->where('student_status_code', 11)
+                    ->selectRaw('group_id, COUNT(*) as c')->groupBy('group_id')->pluck('c', 'group_id');
+                foreach ($nameLookup as $nm => &$v) { if ($v) $v['count'] = (int) ($cnts[$v['gid']] ?? 0); }
+                unset($v);
+            }
+        }
         $diff = []; $same = 0;
         foreach ($rows as $r) {
             $gid = (int) ($r['gid'] ?? 0);
@@ -11525,13 +11572,23 @@ class ReportController extends Controller
         }
         $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: [];
         return response()->json([
-            'ok' => true, 'diff' => $diff, 'same' => $same, 'checked' => count($gids),
+            'ok' => true, 'diff' => $diff, 'same' => $same, 'checked' => count($gids), 'name_lookup' => $nameLookup,
             'last_import' => ['state' => $st['state'] ?? 'idle', 'finished_at' => !empty($st['finished_at']) ? Carbon::parse($st['finished_at'])->format('d.m.Y H:i') : null, 'imported' => $st['imported'] ?? null, 'error' => $st['error'] ?? null],
             'students_max_updated' => optional(DB::table('students')->max('updated_at'), fn($v) => Carbon::parse($v)->format('d.m.Y H:i')),
             'hemis_base' => (string) config('services.hemis.base_url'),
             'hemis_token_set' => (bool) config('services.hemis.token'),
             'queue' => (string) config('queue.default'),
         ]);
+    }
+
+    /** Guruh nomini solishtirish uchun normallashtirish (frontenddagi mnNormName bilan bir xil). */
+    private function oqimNormGroupName(string $n): string
+    {
+        $n = preg_replace("/\\s*\\((?:o['’‘]?z|oz|uz|rus|ru|ing|eng|ang)\\s*\\)\\s*$/iu", '', $n) ?? $n;
+        $n = preg_replace('/\\s*\\(\\s*([a-zA-Zа-яА-Я])\\s*\\)/u', '$1', $n) ?? $n;
+        $n = strtr($n, ['а' => 'a', 'А' => 'a', 'е' => 'e', 'Е' => 'e', 'с' => 'c', 'С' => 'c', 'о' => 'o', 'О' => 'o', 'р' => 'p', 'Р' => 'p', 'х' => 'x', 'Х' => 'x']);
+        $n = preg_replace('/\\s+/u', '', $n) ?? $n;
+        return mb_strtolower($n);
     }
 
     /**

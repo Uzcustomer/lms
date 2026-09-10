@@ -11419,9 +11419,11 @@ class ReportController extends Controller
             $deactivated = 0;
             if ($done) {
                 if (count($seen) > 0) {
+                    // Ro'yxatda ko'ringan guruhlarning faolligi upsert'da HEMIS 'active' maydonidan yozilgan —
+                    // ularni qayta faollashtirMAYMIZ (aks holda API nofaol degan guruhlar yana faol bo'lib qoladi).
+                    // Faqat ro'yxatda umuman ko'rinmaganlar (HEMISda o'chirilgan) nofaol qilinadi.
                     $seenIds = array_keys($seen);
                     $deactivated = \App\Models\Group::where('active', true)->whereNotIn('group_hemis_id', $seenIds)->update(['active' => false]);
-                    $reactivated = \App\Models\Group::where('active', false)->whereIn('group_hemis_id', $seenIds)->update(['active' => true]);
                 }
                 \Illuminate\Support\Facades\Cache::forget($seenKey);
                 \App\Services\ActivityLogService::log('import', 'group', 'Oqim sahifasidan guruhlar HEMISdan tortildi (' . $r['pageCount'] . ' sahifa, ' . count($seen) . ' ta; nofaol qilindi: ' . $deactivated . ')');
@@ -11429,7 +11431,7 @@ class ReportController extends Controller
             $message = 'Sahifa ' . $page . '/' . $r['pageCount'] . ': ' . $r['total'] . ' ta guruh (yangi ' . $r['created'] . ').';
             $result = ['sync' => true, 'page' => $page, 'pageCount' => $r['pageCount'], 'done' => $done,
                        'imported' => $r['total'], 'created' => $r['created'], 'updated' => $r['updated'],
-                       'seen' => count($seen), 'deactivated' => $deactivated, 'reactivated' => $reactivated ?? 0,
+                       'seen' => count($seen), 'deactivated' => $deactivated,
                        'has_active_field' => (bool) ($r['has_active_field'] ?? false), 'inactive_in_page' => (int) ($r['inactive_in_page'] ?? 0)];
         } else {
             // Talabalar importi og'ir — fon (queue) rejimida. Holati keshda kuzatiladi:
@@ -11499,6 +11501,7 @@ class ReportController extends Controller
             'ok'            => true,
             'excluded'      => (bool) ($ov->excluded ?? false),
             'override_note' => $ov->note ?? null,
+            'override_lang' => $ov->lang ?? null,
             'group'         => $group ? ['name' => $group->name, 'active' => (bool) $group->active, 'department' => $group->department_name, 'lang' => $group->education_lang_name, 'updated_at' => $group->updated_at, 'curriculum' => $group->curriculum_hemis_id] : null,
             'active_count'  => DB::table('students')->where('group_id', $gid)->where('student_status_code', 11)->count(),
             'by_status'     => $byStatus,

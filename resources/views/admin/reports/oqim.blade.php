@@ -1212,6 +1212,7 @@
         });
         // Sudrab yurganda tushish joyi: kursor Y bo'yicha qat'iy indeks hisoblanadi va
         // o'sha joyda "shu yerga tushadi" ko'rsatkichi chiziladi. Drop ham aynan shu indeksga.
+        var MN_PULL_NOTE = ''; // oxirgi HEMIS tortish xulosasi — yangilash xabari boshida saqlanadi
         var dropHint = null; // { b, c, o, idx }
         function mnRemoveDropLine() { $('#mn-body .mn-drop-line').remove(); dropHint = null; }
         function mnPlaceDropLine($oqim, b, c, o, clientY) {
@@ -1728,7 +1729,7 @@
                 mnRecalc(); renderManual(); renderAfterBody();
                 var groups = 0, students = 0, oqims = 0;
                 afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { students += (+co.total || 0); (co.oqims || []).forEach(function(oq) { oqims++; groups += (oq.rows || []).length; }); }); });
-                var pulled = pullRes && pullRes.imported != null ? 'HEMISdan ' + pullRes.imported + ' ta guruh tortildi (yangi ' + (pullRes.created || 0) + '). ' : '';
+                var pulled = (MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : (pullRes && pullRes.imported != null ? 'HEMISdan ' + pullRes.imported + ' ta guruh tortildi (yangi ' + (pullRes.created || 0) + '). ' : '')); MN_PULL_NOTE = '';
                 $st.css('color', '#16a34a').text('✓ ' + pulled + 'Ekranga ' + groups + ' ta faol guruh (' + students + ' talaba) fakultet → kurs → til bo\'yicha ' + oqims + ' ta oqimga joylandi, nomlar HEMISdagidek. Oldingi joylashuv kerak bo\'lsa — "↶ Bekor qilish".');
                 mnFlash(groups + ' ta guruh HEMISdan joylandi');
             }).fail(function(xhr) { $st.css('color', '#dc2626').text('Guruhlarni joylab bo\'lmadi (HTTP ' + xhr.status + ').'); });
@@ -1863,7 +1864,7 @@
                 var removed = removedNames.length;
                 if (!added && !updated && !dedup && !blocksMerged && !removed) {
                     if (adopted) { MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift(); renderAfterBody(); }
-                    $st.css('color', '#64748b').text('Sonlar bazadagi bilan bir xil' + (adopted ? ' (' + adopted + ' ta guruhga HEMIS ID biriktirildi — qoralamani saqlang)' : '') + '.' + unm
+                    $st.css('color', '#64748b').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + 'Sonlar bazadagi bilan bir xil' + (adopted ? ' (' + adopted + ' ta guruhga HEMIS ID biriktirildi — qoralamani saqlang)' : '') + '.' + unm
                         + ' (HEMISda o\'zgarish bo\'lgan bo\'lsa avval "Guruhlarni/Talabalarni HEMISdan tortish" ni bosing.)');
                     return;
                 }
@@ -1876,7 +1877,7 @@
                 if (dedup) msg += ' ' + dedup + ' ta takroriy qator (bir guruh ikki marta) olib tashlandi.';
                 if (blocksMerged) msg += ' ' + blocksMerged + ' ta takroriy blok (bir xil fakultet/yo\'nalish) birlashtirildi.';
                 if (removed) msg += ' ' + removed + ' ta nofaol/HEMISda yo\'q guruh olib tashlandi: ' + removedNames.slice(0, 8).join(', ') + (removed > 8 ? ' ...' : '') + '.';
-                $st.css('color', '#16a34a').text(msg + unm);
+                $st.css('color', '#16a34a').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + msg + unm); MN_PULL_NOTE = '';
                 mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : '') + (dedup ? ', ' + dedup + ' ta takror olib tashlandi' : '') + (removed ? ', ' + removed + ' ta nofaol/yo\'q guruh o\'chirildi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta blok birlashtirildi' : ''));
                 }
             }).fail(function(xhr) {
@@ -2029,6 +2030,7 @@
                     $btn.prop('disabled', false).css('opacity', 1);
                     var extra = (res.groups_total ? ' Bazada ' + res.groups_total + ' ta guruh.' : '')
                               + (acc.hasActive ? ' HEMIS javobida "active" maydoni bor (nofaol: ' + acc.inactive + ').' : ' HEMIS javobida "active" maydoni YO\'Q — nofaollik faqat ro\'yxatda ko\'rinmaslik bo\'yicha aniqlanadi.');
+                    MN_PULL_NOTE = '[HEMIS tortish: ' + acc.imported + ' ta guruh, yangi ' + acc.created + (res.deactivated ? ', ko\'rinmagani uchun nofaol qilindi ' + res.deactivated : '') + (res.reactivated ? ', qayta faol ' + res.reactivated : '') + '; ' + (acc.hasActive ? '"active" maydoni BOR, nofaol: ' + acc.inactive : '"active" maydoni YO\'Q') + ']';
                     $('#mn-hemis-status').css('color', '#16a34a').text('✓ HEMISdan ' + acc.imported + ' ta guruh tortildi (yangi: ' + acc.created + ', yangilangan: ' + acc.updated + (res.deactivated ? ', HEMISda ko\'rinmagani uchun nofaol qilindi: ' + res.deactivated : '') + (res.reactivated ? ', qayta faollashtirildi: ' + res.reactivated : '') + ').' + extra);
                     if (GP_MODE === 'merge' && afterState && afterState.length) mergeNewGroups(); // joylashuv saqlanadi
                     else loadFromHemis(acc); // hammasi HEMIS bo'yicha qayta joylanadi

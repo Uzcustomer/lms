@@ -1422,7 +1422,13 @@
                      '<div style="padding:8px 12px;border-radius:8px;background:#fefce8;flex:1;min-width:220px;font-size:12px;color:#713f12;">' +
                      'Oxirgi talabalar importi: <b>' + (r.last_import && r.last_import.finished_at ? r.last_import.finished_at + ' (' + r.last_import.state + (r.last_import.imported != null ? ', ' + r.last_import.imported + ' ta' : '') + ')' : '—') + '</b><br>' +
                      'Bazada talaba yozuvlari oxirgi yangilangan: <b>' + (r.students_max_updated || '—') + '</b></div></div>';
-                if (r.group) h += '<div style="margin-bottom:8px;color:#475569;">Guruh: <b>' + esc(r.group.name) + '</b> · ' + esc(r.group.department || '') + ' · ' + esc(r.group.lang || '') + ' · ' + (r.group.active ? 'faol' : '<span style="color:#dc2626">nofaol</span>') + '</div>';
+                if (r.group) h += '<div style="margin-bottom:8px;color:#475569;">Guruh: <b>' + esc(r.group.name) + '</b> #' + gid + ' · ' + esc(r.group.department || '') + ' · ' + esc(r.group.lang || '') + ' · reja ' + esc(r.group.curriculum) + ' · ' + (r.group.active ? 'faol' : '<span style="color:#dc2626">nofaol</span>') + (r.excluded ? ' · <span style="color:#b91c1c;font-weight:700;">hisobdan chiqarilgan</span>' + (r.override_note ? ' (' + esc(r.override_note) + ')' : '') : '') + '</div>';
+                if (CAN_APPROVE) {
+                    h += '<div style="margin-bottom:10px;">' + (r.excluded
+                        ? '<button type="button" class="af-btn af-draft" onclick="excludeGroup(' + gid + ', false, this)">↩ Hisobga qaytarish</button>'
+                        : '<button type="button" class="af-btn af-unapprove" onclick="excludeGroup(' + gid + ', true, this)" title="HEMISda o\'chirilgan/nofaol, lekin API hali qaytarayotgan sharpa guruh — hisobdan chiqariladi, ekrandan olib tashlanadi, keyingi tortishlarda qaytmaydi">🚫 Sharpa/nofaol — hisobdan chiqarish</button>')
+                        + ' <span style="font-size:11px;color:#64748b;">HEMISda bunday guruh yo\'q yoki nofaol bo\'lsa-yu bu yerda faol ko\'rinsa</span></div>';
+                }
                 else h += '<div style="margin-bottom:8px;color:#dc2626;">Guruh bazada (groups jadvalida) topilmadi — "Guruhlarni HEMISdan tortish" ni bosing.</div>';
                 if (db !== onScreen) h += '<div style="margin-bottom:8px;padding:8px 10px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;">Ekrandagi son bazadagidan farq qiladi — <b>"⟳ Bazadan yangilash"</b> ni bosing (yoki qatordagi sonni qo\'lda tuzating).</div>';
                 h += '<div style="margin-bottom:6px;font-weight:800;color:#334155;">Statuslar kesimi (bazada):</div><table style="border-collapse:collapse;margin-bottom:12px;">';
@@ -1517,7 +1523,7 @@
             var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;border-bottom:2px solid #e2e8f0;">' +
                     '<th style="padding:5px 6px;">Guruh</th><th style="padding:5px 6px;text-align:right;">Ekran</th><th style="padding:5px 6px;text-align:right;">Baza</th><th style="padding:5px 6px;text-align:right;">HEMIS</th><th style="padding:5px 6px;">Holat</th><th style="padding:5px 6px;"></th></tr></thead><tbody>';
             list.forEach(function(d) {
-                var flag = !d.group_in_db ? '<span style="color:#dc2626;font-weight:700;">guruh bazada yo\'q</span>' : (d.group_active === false ? '<span style="color:#b45309;font-weight:700;">guruh nofaol</span>' : (d.screen !== d.db ? '<span style="color:#9a3412;">ekran eskirgan</span>' : ''));
+                var flag = !d.group_in_db ? '<span style="color:#dc2626;font-weight:700;">guruh bazada yo\'q</span>' : (d.excluded ? '<span style="color:#b91c1c;font-weight:700;">hisobdan chiqarilgan</span>' : (d.group_active === false ? '<span style="color:#b45309;font-weight:700;">guruh nofaol</span>' : (d.screen !== d.db ? '<span style="color:#9a3412;">ekran eskirgan</span>' : '')));
                 h += '<tr id="dg-r-' + d.gid + '" style="border-bottom:1px solid #f1f5f9;">' +
                      '<td style="padding:5px 6px;font-weight:700;">' + esc(d.name) + ' <span style="color:#94a3b8;font-weight:400;">#' + d.gid + '</span></td>' +
                      '<td style="padding:5px 6px;text-align:right;">' + d.screen + '</td>' +
@@ -1565,6 +1571,31 @@
                 if (changed) { mnRecalc(); renderManual(); renderAfterBody(); }
                 $d.find('td').html('<span style="color:#166534;font-weight:700;">✓ Qayta tortildi: ' + r.imported + ' ta yuklandi, ' + r.deactivated + ' ta chetlashtirildi. Bazada faol: ' + r.db + (changed ? ' — ekran yangilandi.' : '.') + '</span> <button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="diagGroup(' + gid + ', ' + r.db + ')">🔬 Qayta tekshirish</button>');
             }).fail(function(xhr) { $d.find('td').html('<span style="color:#dc2626;">Xatolik: ' + ((xhr.responseJSON && xhr.responseJSON.error) || ('HTTP ' + xhr.status)) + '</span>'); });
+        }
+
+        // Sharpa/nofaol guruhni hisobdan chiqarish ("Guruh tuzatish" override) va ekrandan olib tashlash
+        var OVERRIDE_SAVE_URL = '{{ route("admin.reports.oqim.overrides.save") }}';
+        function excludeGroup(gid, exclude, btn) {
+            var name = '';
+            (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) { (oq.rows || []).forEach(function(r) { if (+r.gid === gid) name = r.hemis_name || r.name; }); }); }); });
+            $(btn).prop('disabled', true);
+            $.ajax({ url: OVERRIDE_SAVE_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF },
+                     data: { group_hemis_id: gid, group_name: name, excluded: exclude ? 1 : 0, note: exclude ? 'Oqim: sharpa/nofaol guruh (' + new Date().toLocaleDateString() + ')' : '' } })
+            .done(function() {
+                if (exclude) {
+                    mnPushUndo();
+                    var n = 0;
+                    (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) {
+                        (co.oqims || []).forEach(function(oq) { oq.rows = (oq.rows || []).filter(function(r) { if (+r.gid === gid) { n++; return false; } return true; }); });
+                        co.oqims = (co.oqims || []).filter(function(oq) { return (oq.rows || []).length > 0; });
+                    }); });
+                    mnRecalc(); renderManual(); renderAfterBody();
+                    $('#gc-overlay').hide();
+                    mnFlash('#' + gid + ' ' + name + ' hisobdan chiqarildi' + (n ? ', ekrandan olib tashlandi' : '') + ' (↶ Bekor qilish — faqat ekranni qaytaradi)');
+                } else {
+                    $(btn).prop('disabled', false).text('✓ Hisobga qaytarildi — "Bazadan yangilash" bilan ro\'yxatga qo\'shing');
+                }
+            }).fail(function(xhr) { $(btn).prop('disabled', false); mnFlash('Xatolik (HTTP ' + xhr.status + ')'); });
         }
 
         // Guruhni ro'yxatdan o'chirish (bashoratdagi soxta "1K-01a" kabi guruhlar uchun)

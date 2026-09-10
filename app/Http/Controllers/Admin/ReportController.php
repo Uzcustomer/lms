@@ -11494,9 +11494,12 @@ class ReportController extends Controller
             ->limit(80)
             ->get(['hemis_id', 'full_name', 'student_status_name', 'level_name', 'updated_at']);
         $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: [];
+        $ov = DB::table('group_overrides')->where('group_hemis_id', $gid)->first();
         return response()->json([
             'ok'            => true,
-            'group'         => $group ? ['name' => $group->name, 'active' => (bool) $group->active, 'department' => $group->department_name, 'lang' => $group->education_lang_name, 'updated_at' => $group->updated_at] : null,
+            'excluded'      => (bool) ($ov->excluded ?? false),
+            'override_note' => $ov->note ?? null,
+            'group'         => $group ? ['name' => $group->name, 'active' => (bool) $group->active, 'department' => $group->department_name, 'lang' => $group->education_lang_name, 'updated_at' => $group->updated_at, 'curriculum' => $group->curriculum_hemis_id] : null,
             'active_count'  => DB::table('students')->where('group_id', $gid)->where('student_status_code', 11)->count(),
             'by_status'     => $byStatus,
             'active'        => $active->map(fn($r) => ['hemis_id' => $r->hemis_id, 'name' => $r->full_name, 'level' => $r->level_name, 'updated_at' => $r->updated_at ? Carbon::parse($r->updated_at)->format('d.m.Y H:i') : null]),
@@ -11525,6 +11528,9 @@ class ReportController extends Controller
             foreach ($q as $x) { $db[(int) $x->group_id] = (int) $x->c; }
         }
         $gInfo = DB::table('groups')->whereIn('group_hemis_id', $gids)->get(['group_hemis_id', 'name', 'active'])->keyBy('group_hemis_id');
+        // "Guruh tuzatish"da hisobdan chiqarilgan (sharpa/xato) guruhlar — nofaol deb hisoblanadi
+        $excluded = DB::table('group_overrides')->where('excluded', true)->pluck('group_hemis_id')->map(fn($v) => (int) $v)->flip()->all();
+        foreach ($gInfo as $gid => $g) { if (isset($excluded[(int) $gid])) $g->active = false; }
 
         // ID'siz qatorlar — NOM bo'yicha (filtr va tildan qat'i nazar) bazadagi guruhga moslash
         $names = $request->input('names', []);
@@ -11532,6 +11538,7 @@ class ReportController extends Controller
         if (is_array($names) && $names) {
             $byNorm = [];
             foreach (DB::table('groups')->get(['group_hemis_id', 'name', 'active', 'education_lang_name']) as $g) {
+                if (isset($excluded[(int) $g->group_hemis_id])) $g->active = false;
                 $k = $this->oqimNormGroupName($g->name);
                 $byNorm[$k][] = $g;
             }
@@ -11569,6 +11576,7 @@ class ReportController extends Controller
             $diff[] = [
                 'gid' => $gid, 'name' => $r['name'] ?? ($g->name ?? ('#' . $gid)), 'screen' => $screen, 'db' => $dbc,
                 'group_in_db' => (bool) $g, 'group_active' => $g ? (bool) $g->active : null,
+                'excluded' => isset($excluded[$gid]),
             ];
         }
         $st = \Illuminate\Support\Facades\Cache::get(self::OQIM_STUDENT_IMPORT_KEY) ?: [];

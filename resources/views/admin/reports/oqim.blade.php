@@ -1694,6 +1694,37 @@
             return merged;
         }
 
+        // Ekrandagi kursi bazadagi kursidan farq qiladigan guruhlarni (ID bo'yicha) to'g'ri kursga ko'chirish.
+        // Ro'yxat ko'rsatiladi, tasdiqlansa ko'chadi; boshqa fakultetga o'tkazilmaydi (o'z blokida qoladi).
+        function mnFixCourseMismatch(src) {
+            var lvlById = {}, nameById = {};
+            (src || []).forEach(function(sb) { (sb.courses || []).forEach(function(sc) { var l = ctLevelNum(sc); (sc.oqims || []).forEach(function(so) {
+                (so.rows || []).forEach(function(r) { if (+r.gid > 0) { lvlById[+r.gid] = l; nameById[+r.gid] = r.hemis_name || r.name; } });
+            }); }); });
+            var cand = [];
+            (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { var cur = ctLevelNum(co); (co.oqims || []).forEach(function(oq) {
+                (oq.rows || []).forEach(function(r) {
+                    if (+r.gid > 0 && lvlById[+r.gid] && lvlById[+r.gid] !== cur) cand.push({ bl: bl, co: co, oq: oq, row: r, from: cur, to: lvlById[+r.gid] });
+                });
+            }); }); });
+            if (!cand.length) return 0;
+            var list = cand.slice(0, 30).map(function(c) { return '• ' + (c.row.hemis_name || c.row.name) + ' #' + c.row.gid + ': ekranda ' + c.from + '-kurs → bazada ' + c.to + '-kurs (' + (c.row.count || 0) + ' talaba)'; }).join('\n');
+            if (!confirm(cand.length + " ta guruh ekranda NOTO'G'RI kursda turibdi (talabalarning HEMISdagi kursi boshqa):\n\n" + list + (cand.length > 30 ? '\n...' : '') + "\n\nBazadagi kursiga KO'CHIRILSINMI? (\"Bekor qilish\" — joyida qoladi)")) return 0;
+            var moved = 0;
+            cand.forEach(function(c) {
+                var i = c.oq.rows.indexOf(c.row); if (i < 0) return;
+                c.oq.rows.splice(i, 1);
+                var tc = (c.bl.courses || []).find(function(x) { return ctLevelNum(x) === c.to; });
+                if (!tc) { tc = { level_code: String(10 + c.to), level_name: c.to + '-kurs', total: 0, oqims: [] }; c.bl.courses.push(tc); c.bl.courses.sort(function(a, b) { return ctLevelNum(a) - ctLevelNum(b); }); }
+                var lg = c.row.lang || c.oq.lang || 'uz';
+                var ex = tc.oqims.find(function(o) { return /^Yangi/i.test(o.label || '') && (o.lang || 'uz') === lg; });
+                if (ex) ex.rows.push(c.row); else tc.oqims.push({ label: 'Yangi (HEMIS)', lang: lg, total: 0, rows: [c.row] });
+                moved++;
+            });
+            (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { co.oqims = (co.oqims || []).filter(function(oq) { return (oq.rows || []).length > 0; }); }); });
+            return moved;
+        }
+
         // Bir HEMIS guruhi ikki qator bo'lib qolgan bo'lsa (nom formati o'zgarganda) — birini olib tashlaymiz.
         // "Yangi (HEMIS)" oqimidagi nusxa emas, asl joylashuvdagi qator saqlanadi.
         function mnDedupeByGid() {
@@ -1847,6 +1878,9 @@
                         newRows.forEach(function(r) { addedNames.push(r.name); });
                     });
                 });
+                // Kurs mosligi: guruh ekranda bir kursda, bazada (talabalar HEMIS kursi) boshqa kursda bo'lsa —
+                // (masalan eski "reja" rejimidagi yangilash +1 kursga surib qo'ygan) to'g'ri kursga ko'chiramiz (tasdiq bilan).
+                var movedCourse = opts.countsOnly ? 0 : mnFixCourseMismatch(src);
                 var dedup = mnDedupeByGid();
                 var unm = unmatched.length ? ' Bazada (joriy filtr bo\'yicha) topilmagan guruhlar: ' + unmatched.join(', ') + (unmatched.length >= 8 ? ' ...' : '') + ' — ular bashorat (soxta) guruh yoki filtrdan tashqarida bo\'lishi mumkin.' : '';
                 if (opts.silent) {
@@ -1864,7 +1898,7 @@
                 finish([]);
                 function finish(removedNames) {
                 var removed = removedNames.length;
-                if (!added && !updated && !dedup && !blocksMerged && !removed) {
+                if (!added && !updated && !dedup && !blocksMerged && !removed && !movedCourse) {
                     if (adopted) { MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift(); renderAfterBody(); }
                     $st.css('color', '#64748b').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + 'Sonlar bazadagi bilan bir xil' + (adopted ? ' (' + adopted + ' ta guruhga HEMIS ID biriktirildi — qoralamani saqlang)' : '') + '.' + unm
                         + ' (HEMISda o\'zgarish bo\'lgan bo\'lsa avval "Guruhlarni/Talabalarni HEMISdan tortish" ni bosing.)'); MN_PULL_NOTE = '';
@@ -1878,6 +1912,7 @@
                 if (adopted) msg += ' ' + adopted + ' ta guruhga HEMIS ID biriktirildi.';
                 if (dedup) msg += ' ' + dedup + ' ta takroriy qator (bir guruh ikki marta) olib tashlandi.';
                 if (blocksMerged) msg += ' ' + blocksMerged + ' ta takroriy blok (bir xil fakultet/yo\'nalish) birlashtirildi.';
+                if (movedCourse) msg += ' ' + movedCourse + ' ta guruh bazadagi kursiga ko\'chirildi.';
                 if (removed) msg += ' ' + removed + ' ta nofaol/HEMISda yo\'q guruh olib tashlandi: ' + removedNames.slice(0, 8).join(', ') + (removed > 8 ? ' ...' : '') + '.';
                 $st.css('color', '#16a34a').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + msg + unm); MN_PULL_NOTE = '';
                 mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : '') + (dedup ? ', ' + dedup + ' ta takror olib tashlandi' : '') + (removed ? ', ' + removed + ' ta nofaol/yo\'q guruh o\'chirildi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta blok birlashtirildi' : ''));

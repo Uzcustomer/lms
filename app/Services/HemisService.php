@@ -567,6 +567,50 @@ class HemisService
     }
 
     /**
+     * TASHXIS: HEMIS group-list xom javobi — birinchi yozuvning maydonlari (active bormi?) va
+     * nom bo'yicha qidiruv natijasi (API 'search' parametrini qo'llab-quvvatlasa). Bazaga yozmaydi.
+     */
+    public function probeGroups(?string $search = null): array
+    {
+        $out = ['ok' => false, 'url' => $this->apiUrl('data/group-list'), 'sample_keys' => [], 'sample' => null, 'matches' => [], 'total' => null, 'error' => null];
+        try {
+            $r = Http::withoutVerifying()->withToken($this->token)->timeout(30)
+                ->get($this->apiUrl('data/group-list'), ['page' => 1, 'limit' => 1]);
+            if (!$r->successful()) { $out['error'] = 'HTTP ' . $r->status(); return $out; }
+            $j = $r->json();
+            $items = $j['data']['items'] ?? [];
+            $out['total'] = $j['data']['pagination']['totalCount'] ?? null;
+            if ($items) {
+                $out['sample_keys'] = array_keys($items[0]);
+                $s = $items[0];
+                foreach (['department', 'specialty', 'educationLang', 'educationForm', 'educationType'] as $k) { if (isset($s[$k]['name'])) $s[$k] = $s[$k]['name']; }
+                $out['sample'] = $s;
+            }
+            $out['ok'] = true;
+            if ($search !== null && $search !== '') {
+                $r2 = Http::withoutVerifying()->withToken($this->token)->timeout(30)
+                    ->get($this->apiUrl('data/group-list'), ['page' => 1, 'limit' => 200, 'search' => $search]);
+                if ($r2->successful()) {
+                    $needle = mb_strtolower(preg_replace('/\\s+/u', '', $search));
+                    foreach ($r2->json()['data']['items'] ?? [] as $it) {
+                        if (mb_strpos(mb_strtolower(preg_replace('/\\s+/u', '', (string) ($it['name'] ?? ''))), $needle) !== false) {
+                            $out['matches'][] = [
+                                'id' => $it['id'] ?? null, 'name' => $it['name'] ?? null,
+                                'active' => array_key_exists('active', $it) ? $it['active'] : 'MAYDON YO\'Q',
+                                'department' => $it['department']['name'] ?? null, 'lang' => $it['educationLang']['name'] ?? null,
+                                'curriculum' => $it['_curriculum'] ?? null,
+                                'other_flags' => array_intersect_key($it, array_flip(['status', 'is_active', 'deleted', 'archived', '_active'])),
+                            ];
+                        }
+                    }
+                    $out['search_page_count'] = $r2->json()['data']['pagination']['pageCount'] ?? null;
+                }
+            }
+        } catch (\Throwable $e) { $out['error'] = $e->getMessage(); }
+        return $out;
+    }
+
+    /**
      * HEMISdan guruhlarning BITTA sahifasini (200 ta) tortib, bazaga ommaviy upsert qiladi.
      * Har bir chaqiruv qisqa (bitta HEMIS so'rovi + 1-2 ta SQL) — web so'rov vaqt limitiga tushmaydi.
      * Natija: ['ok','error','page','pageCount','total','created','updated'].

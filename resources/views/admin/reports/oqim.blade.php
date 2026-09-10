@@ -1473,6 +1473,10 @@
                      (noId ? '<span style="padding:5px 10px;border-radius:8px;background:#fefce8;">ID\'siz qator: <b>' + noId + '</b> (tekshirilmadi — "Bazadan yangilash" ID biriktiradi)</span>' : '') +
                      (merged ? '<span style="padding:5px 10px;border-radius:8px;background:#fefce8;">Birlashtirilgan (optimizatsiya) qator: <b>' + merged + '</b> (tekshirilmadi)</span>' : '') +
                      '</div>';
+                h += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#ecfeff;border:1px solid #a5f3fc;font-size:12px;color:#155e75;">' +
+                     '<b>🔎 HEMIS API xom javobi:</b> <input id="dg-probe-name" placeholder="guruh nomi (d21-17b)" style="border:1px solid #67e8f9;border-radius:6px;padding:3px 8px;font-size:12px;width:180px;"> ' +
+                     '<button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="hemisProbe()">HEMISdan tekshirish</button> ' +
+                     '<span style="color:#64748b;">— API guruh yozuvida "active" maydoni bormi, nom bo\'yicha HEMIS va baza yonma-yon.</span><div id="dg-probe-out" style="margin-top:6px;"></div></div>';
                 h += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;font-size:11.5px;color:#475569;line-height:1.6;">' +
                      'Oxirgi talabalar importi: <b>' + (r.last_import.finished_at || '—') + '</b> (' + r.last_import.state + (r.last_import.imported != null ? ', ' + r.last_import.imported + ' ta' : '') + (r.last_import.error ? ', xato: ' + esc(r.last_import.error) : '') + ') · ' +
                      'Bazadagi talaba yozuvlari oxirgi yangilangan: <b>' + (r.students_max_updated || '—') + '</b> · ' +
@@ -1487,6 +1491,27 @@
                 }
                 $('#dg-body').html(h);
             }).fail(function(xhr) { $('#dg-body').html('<div style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ').</div>'); });
+        }
+        var HEMIS_PROBE_URL = '{{ route("admin.reports.oqim.hemis.probe") }}';
+        function hemisProbe() {
+            var nm = $('#dg-probe-name').val() || '';
+            $('#dg-probe-out').html('<span style="color:#94a3b8;">HEMISdan o\'qilmoqda...</span>');
+            $.get(HEMIS_PROBE_URL, { name: nm }).done(function(r) {
+                var h = '';
+                if (!r.ok) { $('#dg-probe-out').html('<span style="color:#dc2626;">HEMIS xato: ' + esc(r.error || '') + ' (' + esc(r.url) + ')</span>'); return; }
+                var hasActive = (r.sample_keys || []).indexOf('active') >= 0;
+                h += '<div>API yozuv maydonlari (' + (r.total != null ? 'jami ' + r.total + ' guruh' : '') + '): <code style="font-size:11px;">' + esc((r.sample_keys || []).join(', ')) + '</code></div>';
+                h += '<div style="font-weight:800;color:' + (hasActive ? '#166534' : '#b91c1c') + ';">' + (hasActive ? '✓ "active" maydoni BOR — nofaollik API dan olinadi.' : '✗ "active" maydoni YO\'Q — API nofaollikni bildirmaydi; import hammasini faol deb yozadi.') + '</div>';
+                if (nm) {
+                    h += '<div style="margin-top:6px;"><b>HEMIS API da "' + esc(nm) + '":</b> ' + ((r.matches || []).length ? '' : '<i>topilmadi (API search parametrini qo\'llamasa, faqat 1-sahifa tekshiriladi' + (r.search_page_count ? ', sahifalar: ' + r.search_page_count : '') + ')</i>');
+                    (r.matches || []).forEach(function(m) { h += '<div>• #' + m.id + ' ' + esc(m.name) + ' — active: <b>' + esc(String(m.active)) + '</b> · ' + esc(m.department || '') + ' · ' + esc(m.lang || '') + ' · reja ' + esc(m.curriculum) + (Object.keys(m.other_flags || {}).length ? ' · ' + esc(JSON.stringify(m.other_flags)) : '') + '</div>'; });
+                    h += '</div><div style="margin-top:4px;"><b>Bazada:</b>';
+                    (r.db || []).forEach(function(d) { h += '<div>• #' + d.group_hemis_id + ' ' + esc(d.name) + ' — active: <b>' + (d.active ? 'faol' : 'nofaol') + '</b> · ' + esc(d.department_name || '') + ' · ' + esc(d.education_lang_name || '') + ' · reja ' + esc(d.curriculum_hemis_id) + ' · ' + esc(d.updated_at) + '</div>'; });
+                    h += '</div>';
+                }
+                if (r.sample) h += '<details style="margin-top:6px;"><summary style="cursor:pointer;color:#0e7490;">Birinchi yozuv namunasi</summary><pre style="font-size:10.5px;white-space:pre-wrap;">' + esc(JSON.stringify(r.sample, null, 1)) + '</pre></details>';
+                $('#dg-probe-out').html(h);
+            }).fail(function(xhr) { $('#dg-probe-out').html('<span style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ')</span>'); });
         }
         function diagTable(list) {
             var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;border-bottom:2px solid #e2e8f0;">' +

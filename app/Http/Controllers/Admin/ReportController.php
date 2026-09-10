@@ -11693,6 +11693,18 @@ class ReportController extends Controller
         return response()->json(['ok' => true, 'gid' => $gid, 'imported' => $res['imported'] ?? 0, 'deactivated' => $res['deactivated'] ?? 0, 'db' => $dbN]);
     }
 
+    /** AJAX: HEMIS group-list xom javobini tekshirish (maydonlar, nom bo'yicha qidiruv) — tashxis. */
+    public function oqimHemisProbe(Request $request)
+    {
+        set_time_limit(90);
+        $res = app(\App\Services\HemisService::class)->probeGroups((string) $request->get('name', ''));
+        // Bazadagi holat bilan yonma-yon
+        $name = (string) $request->get('name', '');
+        $res['db'] = $name !== '' ? DB::table('groups')->where('name', 'like', '%' . $name . '%')
+            ->get(['group_hemis_id', 'name', 'active', 'department_name', 'education_lang_name', 'curriculum_hemis_id', 'updated_at']) : [];
+        return response()->json($res);
+    }
+
     private const OQIM_STUDENT_IMPORT_KEY = 'oqim_students_import_status';
     private const OQIM_STUDENT_IMPORT_STALE_MIN = 120;
 

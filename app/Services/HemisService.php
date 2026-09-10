@@ -595,7 +595,7 @@ class HemisService
         }
         $rows = array_values($rows);
         if (!$rows) {
-            return ['ok' => true, 'error' => null, 'page' => $page, 'pageCount' => $pageCount, 'total' => 0, 'created' => 0, 'updated' => 0];
+            return ['ok' => true, 'error' => null, 'page' => $page, 'pageCount' => $pageCount, 'total' => 0, 'created' => 0, 'updated' => 0, 'ids' => []];
         }
         $ids = array_column($rows, 'group_hemis_id');
         $existing = Group::whereIn('group_hemis_id', $ids)->count();
@@ -606,6 +606,7 @@ class HemisService
         return [
             'ok' => true, 'error' => null, 'page' => $page, 'pageCount' => $pageCount,
             'total' => count($rows), 'created' => count($rows) - $existing, 'updated' => $existing,
+            'ids' => $ids,
         ];
     }
 

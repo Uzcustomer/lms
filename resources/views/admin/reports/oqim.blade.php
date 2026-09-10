@@ -1709,19 +1709,24 @@
                 // aniq bitta guruhga (gid) mos qatorlar; birlashtirilgan (gids) qatorlar tegilmaydi.
                 // ID'siz qatorlar (ID qo'shilishidan oldin saqlangan qoralama/versiya) nom+til bo'yicha
                 // moslanadi va ularga ID biriktiriladi — keyingi yangilashlar ID bo'yicha bo'ladi.
-                var cntById = {}, byName = {}, adopted = 0, unmatched = [];
+                var cntById = {}, byName = {}, byNameOnly = {}, adopted = 0, unmatched = [];
                 src.forEach(function(sb) { (sb.courses || []).forEach(function(sc) { (sc.oqims || []).forEach(function(so) {
                     (so.rows || []).forEach(function(r) {
                         if (+r.gid > 0) {
                             cntById[+r.gid] = +r.count || 0;
-                            byName[mnNormName(r.name) + '|' + (r.lang || so.lang || 'uz')] = { gid: +r.gid, count: +r.count || 0 };
+                            var nk = mnNormName(r.name);
+                            byName[nk + '|' + (r.lang || so.lang || 'uz')] = { gid: +r.gid, count: +r.count || 0 };
+                            (byNameOnly[nk] = byNameOnly[nk] || []).push({ gid: +r.gid, count: +r.count || 0 });
                         }
                     });
                 }); }); });
                 afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
                     (oq.rows || []).forEach(function(r) {
                         if (!(+r.gid > 0) && !(r.gids && r.gids.length)) {
-                            var f = byName[mnNormName(r.name) + '|' + (r.lang || oq.lang || 'uz')];
+                            // avval nom+til, keyin faqat nom (bitta bo'lsa) — "mehmon" guruh boshqa tildagi oqimda turishi mumkin
+                            var nk = mnNormName(r.name);
+                            var f = byName[nk + '|' + (r.lang || oq.lang || 'uz')];
+                            if (!f && byNameOnly[nk] && byNameOnly[nk].length === 1) f = byNameOnly[nk][0];
                             if (f) { r.gid = f.gid; manualKnownIds[f.gid] = true; adopted++; }
                         }
                         if (+r.gid > 0) {
@@ -1806,16 +1811,27 @@
         // Nofaol yoki HEMISda (bazada) yo'q guruhlarni ekrandan olib tashlash — server bilan ID bo'yicha
         // tekshiriladi (filtrga bog'liq emas). ID'siz qatorlar (bashoratdagi soxta guruhlar) ham olib tashlanadi.
         function mnRemoveMissingGroups(done) {
-            var rows = [], removedNames = [];
+            var rows = [], names = [], removedNames = [];
             (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
-                (oq.rows || []).forEach(function(r) { if (+r.gid > 0) rows.push({ gid: +r.gid, count: +r.count || 0, name: r.name }); });
+                (oq.rows || []).forEach(function(r) {
+                    if (+r.gid > 0) rows.push({ gid: +r.gid, count: +r.count || 0, name: r.name });
+                    else if (!(r.gids && r.gids.length)) names.push(r.name);
+                });
             }); }); });
-            var apply = function(badIds) {
+            // badIds — nofaol / bazada yo'q IDlar; lookup — ID'siz qatorlar uchun nom bo'yicha natija
+            var apply = function(badIds, lookup) {
                 (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) {
                     (co.oqims || []).forEach(function(oq) {
                         oq.rows = (oq.rows || []).filter(function(r) {
                             var noId = !(+r.gid > 0) && !(r.gids && r.gids.length);
-                            if (noId || (+r.gid > 0 && badIds[+r.gid])) { removedNames.push(r.hemis_name || r.name); return false; }
+                            if (noId) {
+                                var f = lookup ? lookup[r.name] : undefined;
+                                if (f && f.gid && f.active) { r.gid = f.gid; r.count = f.count; manualKnownIds[f.gid] = true; return true; } // bazada bor — ID biriktiramiz
+                                if (f === undefined) return true; // server tekshira olmadi — tegmaymiz (xavfsizlik)
+                                removedNames.push((r.hemis_name || r.name) + (f && !f.active ? ' (nofaol)' : ' (bazada yo\'q)'));
+                                return false;
+                            }
+                            if (+r.gid > 0 && badIds[+r.gid]) { removedNames.push((r.hemis_name || r.name) + (badIds[+r.gid] === 'inactive' ? ' (nofaol)' : ' (bazada yo\'q)')); return false; }
                             return true;
                         });
                     });
@@ -1824,14 +1840,14 @@
                 afterState = (afterState || []).filter(function(bl) { return (bl.courses || []).some(function(co) { return (co.oqims || []).length > 0; }); });
                 done(removedNames);
             };
-            if (!rows.length) { apply({}); return; }
-            $.ajax({ url: SCREEN_DIFF_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, contentType: 'application/json', data: JSON.stringify({ rows: rows }) })
+            if (!rows.length && !names.length) { apply({}, null); return; }
+            $.ajax({ url: SCREEN_DIFF_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, contentType: 'application/json', data: JSON.stringify({ rows: rows, names: names }) })
                 .done(function(r) {
                     var bad = {};
-                    (r.diff || []).forEach(function(d) { if (!d.group_in_db || d.group_active === false) bad[d.gid] = true; });
-                    apply(bad);
+                    (r.diff || []).forEach(function(d) { if (!d.group_in_db) bad[d.gid] = 'missing'; else if (d.group_active === false) bad[d.gid] = 'inactive'; });
+                    apply(bad, r.name_lookup || {});
                 })
-                .fail(function() { apply({}); });
+                .fail(function() { apply({}, null); }); // server javob bermasa hech narsa o'chirilmaydi
         }
 
         // Fon rejimidagi talabalar importi holatini kuzatish — tugagach sonlar avtomatik yangilanadi
@@ -1908,7 +1924,7 @@
                     if (!res.done && res.page < res.pageCount && page < 200) { pullGroupsPage(page + 1, acc); return; }
                     $btn.prop('disabled', false).css('opacity', 1);
                     var extra = res.groups_total ? ' Bazada ' + res.groups_total + ' ta guruh.' : '';
-                    $('#mn-hemis-status').css('color', '#16a34a').text('✓ HEMISdan ' + acc.imported + ' ta guruh tortildi (yangi: ' + acc.created + ', yangilangan: ' + acc.updated + ').' + extra);
+                    $('#mn-hemis-status').css('color', '#16a34a').text('✓ HEMISdan ' + acc.imported + ' ta guruh tortildi (yangi: ' + acc.created + ', yangilangan: ' + acc.updated + (res.deactivated ? ', HEMISda ko\'rinmagani uchun nofaol qilindi: ' + res.deactivated : '') + (res.reactivated ? ', qayta faollashtirildi: ' + res.reactivated : '') + ').' + extra);
                     if (GP_MODE === 'merge' && afterState && afterState.length) mergeNewGroups(); // joylashuv saqlanadi
                     else loadFromHemis(acc); // hammasi HEMIS bo'yicha qayta joylanadi
                 })

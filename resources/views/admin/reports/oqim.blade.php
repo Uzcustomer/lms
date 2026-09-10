@@ -279,6 +279,7 @@
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('opt')" title="Optimizatsiyalangan holatdan boshlab qo'lda tuzatish">⟲ Optimizatsiyadan</button>
                                     <button type="button" class="af-btn af-load" onclick="loadSnapshot()" title="Oldin saqlangan/tasdiqlangan holatni yuklash">↺ Saqlangan holat</button>
+                                    <button type="button" id="mn-del-inactive" class="af-btn af-unapprove" onclick="removeInactiveGroups()" title="Bazada (HEMISda) nofaol yoki yo'q guruhlarni ro'yxatdan o'chirish — avval ro'yxat ko'rsatiladi, tasdiqlasangiz o'chadi; bekor qilish mumkin">🗑 Nofaol/yo'q guruhlarni o'chirish</button>
                                     <button type="button" id="mn-del-empty" class="af-btn af-unapprove" onclick="removeEmptyGroups()" title="Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish — bekor qilish mumkin">🗑 Bo'sh guruhlarni o'chirish</button>
                                     <button type="button" id="mn-undo" class="af-btn af-draft" onclick="manualUndo()" disabled>↶ Bekor qilish</button>
                                     <button type="button" class="af-btn af-draft" onclick="saveSnapshot('draft')">💾 Qoralama saqlash</button>
@@ -1364,6 +1365,20 @@
             mnFlash("Bo'sh oqim ochildi — guruhlarni unga sudrab joylang");
         });
 
+        // Bazada nofaol yoki yo'q guruhlarni (server tekshiruvi + tasdiq bilan) ro'yxatdan o'chirish
+        function removeInactiveGroups() {
+            if (!afterState || !afterState.length) { mnFlash('Ekranda guruh yo\'q.'); return; }
+            var snap = JSON.stringify(afterState);
+            $('#mn-hemis-status').css('color', '#0369a1').text('Nofaol/yo\'q guruhlar bazada tekshirilmoqda...');
+            mnRemoveMissingGroups(function(removedNames) {
+                if (!removedNames.length) { $('#mn-hemis-status').css('color', '#64748b').text('Nofaol yoki bazada yo\'q guruh topilmadi (yoki o\'chirish bekor qilindi). Guruh HEMISda nofaol bo\'lsa-yu bu yerda faol ko\'rinsa — avval "Guruhlarni HEMISdan tortish" ni bajaring.'); return; }
+                MN_UNDO.push(snap); if (MN_UNDO.length > 30) MN_UNDO.shift(); $('#mn-undo').prop('disabled', false);
+                mnRecalc(); renderManual(); renderAfterBody();
+                $('#mn-hemis-status').css('color', '#16a34a').text('✓ ' + removedNames.length + ' ta nofaol/yo\'q guruh olib tashlandi: ' + removedNames.slice(0, 12).join(', ') + (removedNames.length > 12 ? ' ...' : ''));
+                mnFlash(removedNames.length + ' ta guruh o\'chirildi (↶ Bekor qilish bilan qaytariladi)');
+            });
+        }
+
         // Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish
         function removeEmptyGroups() {
             var n = 0;
@@ -1650,7 +1665,7 @@
                 if (afterState && afterState.length) mnPushUndo();
                 afterState = JSON.parse(JSON.stringify(src));
                 mnMergeDuplicateBlocks();
-                manualContext = null; // joriy filtrlar konteksti
+                manualContext = realContextFromFilters(); // aniq REAL kontekst (reja katagi yoqilgan bo'lsa ham reja sifatida saqlanmaydi)
                 manualKnownIds = idSetFromList(res.group_ids || []);
                 mnRecalc(); renderManual(); renderAfterBody();
                 var groups = 0, students = 0, oqims = 0;
@@ -1678,6 +1693,7 @@
                 if (!afterState || !afterState.length) {
                     // Ekranda hech narsa yo'q — joriy holatni to'liq yuklaymiz
                     afterState = JSON.parse(JSON.stringify(src));
+                    manualContext = realContextFromFilters();
                     manualKnownIds = idSetFromList(res.group_ids || []);
                     MN_UNDO = [];
                     mnRecalc(); renderManual(); renderAfterBody();
@@ -1935,10 +1951,12 @@
             $.ajax({ url: HEMIS_PULL_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { what: 'groups', page: page } })
                 .done(function(res) {
                     acc.imported += (+res.imported || 0); acc.created += (+res.created || 0); acc.updated += (+res.updated || 0);
+                    acc.inactive = (acc.inactive || 0) + (+res.inactive_in_page || 0); acc.hasActive = acc.hasActive || !!res.has_active_field;
                     acc.pageCount = res.pageCount;
                     if (!res.done && res.page < res.pageCount && page < 200) { pullGroupsPage(page + 1, acc); return; }
                     $btn.prop('disabled', false).css('opacity', 1);
-                    var extra = res.groups_total ? ' Bazada ' + res.groups_total + ' ta guruh.' : '';
+                    var extra = (res.groups_total ? ' Bazada ' + res.groups_total + ' ta guruh.' : '')
+                              + (acc.hasActive ? ' HEMIS javobida "active" maydoni bor (nofaol: ' + acc.inactive + ').' : ' HEMIS javobida "active" maydoni YO\'Q — nofaollik faqat ro\'yxatda ko\'rinmaslik bo\'yicha aniqlanadi.');
                     $('#mn-hemis-status').css('color', '#16a34a').text('✓ HEMISdan ' + acc.imported + ' ta guruh tortildi (yangi: ' + acc.created + ', yangilangan: ' + acc.updated + (res.deactivated ? ', HEMISda ko\'rinmagani uchun nofaol qilindi: ' + res.deactivated : '') + (res.reactivated ? ', qayta faollashtirildi: ' + res.reactivated : '') + ').' + extra);
                     if (GP_MODE === 'merge' && afterState && afterState.length) mergeNewGroups(); // joylashuv saqlanadi
                     else loadFromHemis(acc); // hammasi HEMIS bo'yicha qayta joylanadi
@@ -2002,6 +2020,8 @@
         function currentAcademicYear() { var d = new Date(); var y = d.getMonth() + 1 >= 7 ? d.getFullYear() : d.getFullYear() - 1; return y + '-' + (y + 1); }
         // Versiya konteksti: REJA bo'lib, uning o'quv yili allaqachon boshlangan bo'lsa — endi bu REAL holat.
         // (Aks holda yangilash/saqlash "reja" rejimida talabalarni +1 kursga surib, guruhlarni noto'g'ri kursga qo'yadi.)
+        // Joriy filtrlardan REAL (reja emas) saqlash konteksti
+        function realContextFromFilters() { var c = getFilters(true); delete c.projection; delete c.academic_year; return c; }
         function normalizeManualContext(ctx) {
             if (!ctx || !Object.keys(ctx).length) return null;
             var c = $.extend(true, {}, ctx);

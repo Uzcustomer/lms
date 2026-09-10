@@ -585,7 +585,9 @@ class HemisService
 
         $rows = [];
         $now = now();
+        $hasActiveField = false; $inactiveInPage = 0;
         foreach ($items as $d) {
+            if (is_array($d) && array_key_exists('active', $d)) { $hasActiveField = true; if (!$d['active']) $inactiveInPage++; }
             $row = $this->groupRowFromHemis($d);
             if ($row !== null) {
                 $row['created_at'] = $now;
@@ -606,7 +608,7 @@ class HemisService
         return [
             'ok' => true, 'error' => null, 'page' => $page, 'pageCount' => $pageCount,
             'total' => count($rows), 'created' => count($rows) - $existing, 'updated' => $existing,
-            'ids' => $ids,
+            'ids' => $ids, 'has_active_field' => $hasActiveField, 'inactive_in_page' => $inactiveInPage,
         ];
     }
 

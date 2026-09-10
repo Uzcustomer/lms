@@ -11429,7 +11429,8 @@ class ReportController extends Controller
             $message = 'Sahifa ' . $page . '/' . $r['pageCount'] . ': ' . $r['total'] . ' ta guruh (yangi ' . $r['created'] . ').';
             $result = ['sync' => true, 'page' => $page, 'pageCount' => $r['pageCount'], 'done' => $done,
                        'imported' => $r['total'], 'created' => $r['created'], 'updated' => $r['updated'],
-                       'seen' => count($seen), 'deactivated' => $deactivated, 'reactivated' => $reactivated ?? 0];
+                       'seen' => count($seen), 'deactivated' => $deactivated, 'reactivated' => $reactivated ?? 0,
+                       'has_active_field' => (bool) ($r['has_active_field'] ?? false), 'inactive_in_page' => (int) ($r['inactive_in_page'] ?? 0)];
         } else {
             // Talabalar importi og'ir — fon (queue) rejimida. Holati keshda kuzatiladi:
             // sahifa uni so'rab turadi va tugagach ekrandagi sonlarni o'zi yangilaydi.

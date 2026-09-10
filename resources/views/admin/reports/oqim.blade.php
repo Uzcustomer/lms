@@ -1047,7 +1047,7 @@
             // Hisoblash qilinmagan bo'lsa — ekrandagi tasdiqlangan versiya ustida ishlaymiz
             if ((!afterState || !afterState.length) && AP_CURRENT && AP_CURRENT.blocks && AP_CURRENT.blocks.length) {
                 afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
-                manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+                manualContext = normalizeManualContext(AP_CURRENT.context);
                 manualKnownIds = idsFromBlocks(afterState);
                 MN_UNDO = [];
                 mnRecalc();
@@ -1643,7 +1643,8 @@
         function loadFromHemis(pullRes) {
             var $st = $('#mn-hemis-status');
             $st.css('color', '#0369a1').text('Guruhlar fakultet/kurs/til bo\'yicha joylanmoqda...');
-            $.get(DATA_URL, getFilters(false)).done(function(res) {
+            var lf = getFilters(false); lf.projection = 0; delete lf.academic_year; // real holat
+            $.get(DATA_URL, lf).done(function(res) {
                 var src = res.blocks || [];
                 if (!src.length) { $st.css('color', '#b45309').text('Bazada faol guruh topilmadi — filtrlarni (ta\'lim turi, fakultet) tekshiring.'); return; }
                 if (afterState && afterState.length) mnPushUndo();
@@ -1669,7 +1670,8 @@
             // Tarixdagi versiya tahrirlanayotgan bo'lsa — o'sha versiyaning konteksti (fakultet,
             // ta'lim turi, reja yili...) bo'yicha so'raymiz; faqat optimize=0 (joriy holat).
             var mf = manualContext ? $.extend(true, {}, manualContext, { optimize: 0 }) : getFilters(false);
-            if (manualContext) { delete mf.goal; delete mf.merge_faculties; }
+            if (manualContext) { delete mf.goal; delete mf.merge_faculties; delete mf._was_plan; }
+            mf.projection = 0; delete mf.academic_year; // yangilash DOIM real holatdan — reja rejimi kurslarni suradi
             $.get(DATA_URL, mf).done(function(res) {
                 var src = res.blocks || [];
                 if (!src.length) { $st.css('color', '#b45309').text('Bazada guruh topilmadi — filtrlarni tekshiring.'); return; }
@@ -1687,8 +1689,8 @@
                 // Yangi guruh — HEMIS ID bo'yicha aniqlanadi (nom bo'yicha emas: optimizatsiya
                 // guruhlarni birlashtirib nomini o'zgartirgan bo'lsa ham ular "yangi" sanalmaydi).
                 // ID ma'lumoti umuman bo'lmagan eski versiyalar uchun — nom bo'yicha zaxira usul.
-                var knownIds = $.extend({}, manualKnownIds, idsFromBlocks(afterState));
-                var useIds = Object.keys(knownIds).length > 0;
+                var knownIds = {}; // ID biriktirish (adoption) dan KEYIN to'ldiriladi — biriktirilgan guruh "yangi" emas
+                var useIds = false;
                 var have = {};
                 afterState.forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
                     (oq.rows || []).forEach(function(r) { have[mnNormName(r.name)] = true; });
@@ -1738,6 +1740,8 @@
                         }
                     });
                 }); }); });
+                knownIds = $.extend({}, manualKnownIds, idsFromBlocks(afterState));
+                useIds = Object.keys(knownIds).length > 0;
                 if (!opts.countsOnly) src.forEach(function(sb) {
                     (sb.courses || []).forEach(function(sc) {
                         var lvl = ctLevelNum(sc);
@@ -1818,22 +1822,33 @@
                     else if (!(r.gids && r.gids.length)) names.push(r.name);
                 });
             }); }); });
-            // badIds — nofaol / bazada yo'q IDlar; lookup — ID'siz qatorlar uchun nom bo'yicha natija
+            // badIds — nofaol / bazada yo'q IDlar; lookup — ID'siz qatorlar uchun nom bo'yicha natija.
+            // HECH NARSA avtomatik o'chirilmaydi: avval nomzodlar yig'iladi, foydalanuvchi tasdiqlasa o'chadi.
             var apply = function(badIds, lookup) {
+                var cand = []; // {row, why}
+                (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                    (oq.rows || []).forEach(function(r) {
+                        var noId = !(+r.gid > 0) && !(r.gids && r.gids.length);
+                        if (noId) {
+                            var f = lookup ? lookup[r.name] : undefined;
+                            if (f && f.gid && f.active) { r.gid = f.gid; r.count = f.count; manualKnownIds[f.gid] = true; return; } // bazada bor — ID biriktiramiz
+                            if (f === undefined) return; // server tekshira olmadi — tegmaymiz
+                            cand.push({ row: r, why: f && !f.active ? 'nofaol' : 'bazada yo\'q (bashorat/soxta?)' });
+                            return;
+                        }
+                        if (+r.gid > 0 && badIds[+r.gid]) cand.push({ row: r, why: badIds[+r.gid] === 'inactive' ? 'nofaol' : 'bazada yo\'q' });
+                    });
+                }); }); });
+                if (!cand.length) { done([]); return; }
+                var withStudents = cand.filter(function(c) { return +c.row.count > 0; }).length;
+                var list = cand.slice(0, 40).map(function(c) { return '• ' + (c.row.hemis_name || c.row.name) + ' — ' + c.why + (+c.row.count > 0 ? ' (' + c.row.count + ' talaba!)' : ''); }).join('\n');
+                var ok = confirm(cand.length + ' ta guruh HEMISda nofaol yoki bazada yo\'q' + (withStudents ? ' (shundan ' + withStudents + ' tasida talaba bor!)' : '') + '.\n\n' + list + (cand.length > 40 ? '\n...' : '') +
+                                 '\n\nRo\'yxatdan OLIB TASHLANSINMI? ("Bekor qilish" — hech narsa o\'chirilmaydi, joylashuv saqlanadi)');
+                if (!ok) { done([]); return; }
+                var rm = new Set(cand.map(function(c) { return c.row; }));
                 (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) {
                     (co.oqims || []).forEach(function(oq) {
-                        oq.rows = (oq.rows || []).filter(function(r) {
-                            var noId = !(+r.gid > 0) && !(r.gids && r.gids.length);
-                            if (noId) {
-                                var f = lookup ? lookup[r.name] : undefined;
-                                if (f && f.gid && f.active) { r.gid = f.gid; r.count = f.count; manualKnownIds[f.gid] = true; return true; } // bazada bor — ID biriktiramiz
-                                if (f === undefined) return true; // server tekshira olmadi — tegmaymiz (xavfsizlik)
-                                removedNames.push((r.hemis_name || r.name) + (f && !f.active ? ' (nofaol)' : ' (bazada yo\'q)'));
-                                return false;
-                            }
-                            if (+r.gid > 0 && badIds[+r.gid]) { removedNames.push((r.hemis_name || r.name) + (badIds[+r.gid] === 'inactive' ? ' (nofaol)' : ' (bazada yo\'q)')); return false; }
-                            return true;
-                        });
+                        oq.rows = (oq.rows || []).filter(function(r) { if (rm.has(r)) { removedNames.push(r.hemis_name || r.name); return false; } return true; });
                     });
                     co.oqims = (co.oqims || []).filter(function(oq) { return (oq.rows || []).length > 0; });
                 }); });
@@ -1983,6 +1998,16 @@
         var AP_CURRENT = null;      // hozir ekranda turgan versiya (to'liq: blocks, context...)
         var manualContext = null;   // qo'lda tuzatish qaysi kontekst ostida tasdiqlanadi (null — joriy filtrlar)
         var manualKnownIds = {};    // ekrandagi holat hisobga olgan HEMIS guruh IDlari (yangi guruhlarni aniqlash uchun)
+        // Joriy o'quv yili ("2026-2027"): iyuldan boshlab shu yil
+        function currentAcademicYear() { var d = new Date(); var y = d.getMonth() + 1 >= 7 ? d.getFullYear() : d.getFullYear() - 1; return y + '-' + (y + 1); }
+        // Versiya konteksti: REJA bo'lib, uning o'quv yili allaqachon boshlangan bo'lsa — endi bu REAL holat.
+        // (Aks holda yangilash/saqlash "reja" rejimida talabalarni +1 kursga surib, guruhlarni noto'g'ri kursga qo'yadi.)
+        function normalizeManualContext(ctx) {
+            if (!ctx || !Object.keys(ctx).length) return null;
+            var c = $.extend(true, {}, ctx);
+            if (+c.projection && String(c.academic_year || '') <= currentAcademicYear()) { c.projection = 0; c.academic_year = ''; c._was_plan = 1; }
+            return c;
+        }
         var calcGroupIds = [];      // oxirgi hisoblashga kirgan guruh IDlari (joriy va optimizatsiya — bir xil to'plam)
 
         // Bloklardagi qatorlardan guruh IDlarini yig'adi (gid — haqiqiy guruh, gids — birlashtirilgan manba guruhlar)
@@ -2084,7 +2109,7 @@
             $.get(SNAP_SHOW_URL, { id: id }).done(function(res) {
                 if (!res || !res.found || !res.data) { mnFlash('Qoralama topilmadi.'); return; }
                 afterState = res.data;
-                manualContext = (res.context && Object.keys(res.context).length) ? res.context : null;
+                manualContext = normalizeManualContext(res.context);
                 manualKnownIds = idsFromBlocks(afterState);
                 MN_UNDO = [];
                 mnRecalc();
@@ -2099,7 +2124,7 @@
         function editVersion() {
             if (!AP_CURRENT || !AP_CURRENT.blocks) { mnFlash('Avval versiyani tanlang.'); return; }
             afterState = JSON.parse(JSON.stringify(AP_CURRENT.blocks));
-            manualContext = (AP_CURRENT.context && Object.keys(AP_CURRENT.context).length) ? AP_CURRENT.context : null;
+            manualContext = normalizeManualContext(AP_CURRENT.context);
             manualKnownIds = idsFromBlocks(afterState);
             MN_UNDO = [];
             mnRecalc();

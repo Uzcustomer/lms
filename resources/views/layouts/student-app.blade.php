@@ -645,6 +645,14 @@
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __("Hujjat va ma'lumotlarim") }}</span>
                 </a>
+                <a href="{{ route('student.group-info') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.group-info') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                    <div class="rounded-xl bg-teal-100 dark:bg-teal-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
+                        <svg class="w-6 h-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __("Guruh ma'lumotlarim") }}</span>
+                </a>
                 @php $mobileStudent = auth()->guard('student')->user(); @endphp
                 @if($mobileStudent && (str_starts_with(strtolower($mobileStudent->group_name ?? ''), 'xd') || str_contains(strtolower($mobileStudent->citizenship_name ?? ''), 'orijiy')))
                 <a href="{{ route('student.visa-info.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.visa-info.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">

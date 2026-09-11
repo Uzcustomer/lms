@@ -123,39 +123,4 @@ class GroupVoteController extends Controller
             'message' => 'Ovozingiz qabul qilindi. Siz ' . $target['group_name'] . ' guruhiga qo\'shildingiz.',
         ]);
     }
-
-    /**
-     * Yangi guruh haqidagi popup yopilganini belgilaydi.
-     *
-     * Sessiyaga belgi qo'yiladi — shu sessiya davomida popup qayta chiqmaydi.
-     * Talaba chiqib qayta kirsa (yangi sessiya) popup yana ko'rsatiladi.
-     *
-     * Bazaga faqat BIRINCHI ko'rish vaqti yoziladi: registrator ro'yxatida
-     * "talaba xabarni qachon ko'rdi" turishi kerak, har kirishdagi vaqt emas.
-     */
-    public function markGroupChangeSeen(Request $request): JsonResponse
-    {
-        $student = Auth::guard('student')->user();
-        abort_unless($student, 403);
-
-        if (Schema::hasTable('distribution_draft_assignments')) {
-            $draft = DistributionDraftAssignment::query()
-                ->where('student_id', $student->id)
-                ->first();
-
-            if ($draft) {
-                // Belgida guruh IDsi: sessiya davomida talaba boshqa guruhga
-                // ko'chirilsa, yangi guruh haqida popup baribir chiqadi.
-                $request->session()->put('gv_moved_seen', (int) $draft->to_group_hemis_id);
-
-                if ($draft->seen_at === null) {
-                    DistributionDraftAssignment::query()
-                        ->where('id', $draft->id)
-                        ->update(['seen_at' => now()]);
-                }
-            }
-        }
-
-        return response()->json(['ok' => true]);
-    }
 }

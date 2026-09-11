@@ -1418,8 +1418,6 @@ Route::prefix('student')->name('student.')->group(function () {
         // Guruh tanlash ovozi — og'ir middlewarelarsiz, aks holda POST
         // so'rov survey/contact sahifasiga redirect bo'lib HTML qaytaradi.
         Route::post('/group-vote', [\App\Http\Controllers\Student\GroupVoteController::class, 'store'])->name('group-vote.store');
-        // Yangi guruh haqidagi popup ko'rilgani — qayta chiqmasligi uchun
-        Route::post('/group-change-seen', [\App\Http\Controllers\Student\GroupVoteController::class, 'markGroupChangeSeen'])->name('group-change.seen');
 
         Route::get('/change-password', [StudentAuthController::class, 'editPassword'])->name('password.edit');
         Route::put('/change-password', [StudentAuthController::class, 'updatePassword'])->name('password.update');
@@ -1470,6 +1468,8 @@ Route::prefix('student')->name('student.')->group(function () {
         // Xizmatlar sahifasi
         Route::get('/services', fn () => view('student.services'))->name('services');
         Route::get('/documents', [\App\Http\Controllers\Student\StudentDocumentController::class, 'index'])->name('documents.index');
+        // Guruh ma'lumotlarim: guruh (taqsimotdagi yangisi) va tyutor
+        Route::get('/group-info', [\App\Http\Controllers\Student\GroupInfoController::class, 'show'])->name('group-info');
         Route::get('/documents/{file}/download', [\App\Http\Controllers\Student\StudentDocumentController::class, 'download'])->name('documents.download');
 
         // Visa application (xalqaro talabalar)

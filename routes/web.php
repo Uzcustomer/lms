@@ -820,6 +820,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/oqim', [ReportController::class, 'oqimReport'])->name('reports.oqim');
         Route::get('/reports/oqim/data', [ReportController::class, 'oqimReportData'])->name('reports.oqim.data');
         Route::get('/reports/oqim/export', [ReportController::class, 'oqimReportExport'])->name('reports.oqim.export');
+        Route::post('/reports/oqim/export-blocks', [ReportController::class, 'oqimExportBlocks'])->name('reports.oqim.export.blocks');
         Route::get('/reports/oqim/overrides', [ReportController::class, 'oqimOverrides'])->name('reports.oqim.overrides');
         Route::post('/reports/oqim/overrides/save', [ReportController::class, 'oqimOverrideSave'])->name('reports.oqim.overrides.save');
         Route::post('/reports/oqim/overrides/delete', [ReportController::class, 'oqimOverrideDelete'])->name('reports.oqim.overrides.delete');

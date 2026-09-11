@@ -1509,7 +1509,10 @@
                 h += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#ecfeff;border:1px solid #a5f3fc;font-size:12px;color:#155e75;">' +
                      '<b>🔎 HEMIS API xom javobi:</b> <input id="dg-probe-name" placeholder="guruh nomi (d21-17b)" style="border:1px solid #67e8f9;border-radius:6px;padding:3px 8px;font-size:12px;width:180px;"> ' +
                      '<button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="hemisProbe()">HEMISdan tekshirish</button> ' +
-                     '<span style="color:#64748b;">— API guruh yozuvida "active" maydoni bormi, nom bo\'yicha HEMIS va baza yonma-yon.</span><div id="dg-probe-out" style="margin-top:6px;"></div></div>';
+                     '<span style="color:#64748b;">— API guruh yozuvida "active" maydoni bormi, nom bo\'yicha HEMIS va baza yonma-yon.</span><div id="dg-probe-out" style="margin-top:6px;"></div>' +
+                     '<div style="margin-top:8px;"><b>👤 Talaba:</b> <input id="dg-sprobe-q" placeholder="HEMIS id (7958) yoki ID raqami" style="border:1px solid #67e8f9;border-radius:6px;padding:3px 8px;font-size:12px;width:200px;"> ' +
+                     '<button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="hemisStudentProbe()">HEMISdan tekshirish</button> ' +
+                     '<span style="color:#64748b;">— API talaba yozuvida guruh qaysi maydonda va qanday kelyapti (baza bilan yonma-yon).</span><div id="dg-sprobe-out" style="margin-top:6px;"></div></div></div>';
                 h += '<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;font-size:11.5px;color:#475569;line-height:1.6;">' +
                      'Oxirgi talabalar importi: <b>' + (r.last_import.finished_at || '—') + '</b> (' + r.last_import.state + (r.last_import.imported != null ? ', ' + r.last_import.imported + ' ta' : '') + (r.last_import.error ? ', xato: ' + esc(r.last_import.error) : '') + ') · ' +
                      'Bazadagi talaba yozuvlari oxirgi yangilangan: <b>' + (r.students_max_updated || '—') + '</b> · ' +
@@ -1545,6 +1548,21 @@
                 if (r.sample) h += '<details style="margin-top:6px;"><summary style="cursor:pointer;color:#0e7490;">Birinchi yozuv namunasi</summary><pre style="font-size:10.5px;white-space:pre-wrap;">' + esc(JSON.stringify(r.sample, null, 1)) + '</pre></details>';
                 $('#dg-probe-out').html(h);
             }).fail(function(xhr) { $('#dg-probe-out').html('<span style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ')</span>'); });
+        }
+        var HEMIS_SPROBE_URL = '{{ route("admin.reports.oqim.hemis.student.probe") }}';
+        function hemisStudentProbe() {
+            var q = ($('#dg-sprobe-q').val() || '').trim();
+            if (!q) return;
+            $('#dg-sprobe-out').html('<span style="color:#94a3b8;">HEMISdan o\'qilmoqda...</span>');
+            $.get(HEMIS_SPROBE_URL, { q: q }).done(function(r) {
+                var h = '';
+                if (!r.ok) { $('#dg-sprobe-out').html('<span style="color:#dc2626;">Xato: ' + esc(r.error || '') + '</span>'); return; }
+                function block(title, o) { return '<div style="margin-top:4px;"><b>' + title + ':</b> ' + (o ? '<pre style="font-size:10.5px;white-space:pre-wrap;margin:2px 0;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:6px;">' + esc(JSON.stringify(o, null, 1)) + '</pre>' : '<i>yo\'q</i>') + '</div>'; }
+                h += block('student-info (' + esc(r.info_url) + ')' + (r.info_error ? ' — ' + esc(r.info_error) : ''), r.info);
+                h += block('student-list search (' + (r.list || []).length + ' ta)' + (r.list_error ? ' — ' + esc(r.list_error) : ''), (r.list || []).length ? r.list : null);
+                h += block('Bazada (students)', (r.db || []).length ? r.db : null);
+                $('#dg-sprobe-out').html(h);
+            }).fail(function(xhr) { $('#dg-sprobe-out').html('<span style="color:#dc2626;">Xatolik (HTTP ' + xhr.status + ')</span>'); });
         }
         function diagTable(list) {
             var h = '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="color:#64748b;text-align:left;border-bottom:2px solid #e2e8f0;">' +

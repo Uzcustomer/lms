@@ -11716,6 +11716,19 @@ class ReportController extends Controller
         return response()->json($res);
     }
 
+    /** AJAX: talabaning HEMIS API xom javobi (guruhga oid maydonlar) + bazadagi yozuvi — tashxis. */
+    public function oqimHemisStudentProbe(Request $request)
+    {
+        set_time_limit(90);
+        $q = trim((string) $request->get('q', ''));
+        if ($q === '') return response()->json(['ok' => false, 'error' => 'q kerak'], 422);
+        $res = app(\App\Services\HemisService::class)->probeStudent($q);
+        $res['db'] = DB::table('students')
+            ->where('hemis_id', $q)->orWhere('student_id_number', $q)->orWhere('full_name', 'like', '%' . $q . '%')
+            ->limit(5)->get(['hemis_id', 'full_name', 'student_id_number', 'group_id', 'group_name', 'level_name', 'semester_name', 'education_year_name', 'student_status_name', 'updated_at', 'hemis_updated_at']);
+        return response()->json($res);
+    }
+
     private const OQIM_STUDENT_IMPORT_KEY = 'oqim_students_import_status';
     private const OQIM_STUDENT_IMPORT_STALE_MIN = 120;
 

@@ -833,6 +833,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/oqim/hemis-pull', [ReportController::class, 'oqimHemisPull'])->name('reports.oqim.hemis.pull');
         Route::get('/reports/oqim/hemis-status', [ReportController::class, 'oqimHemisStatus'])->name('reports.oqim.hemis.status');
         Route::get('/reports/oqim/hemis-probe', [ReportController::class, 'oqimHemisProbe'])->name('reports.oqim.hemis.probe');
+        Route::get('/reports/oqim/hemis-student-probe', [ReportController::class, 'oqimHemisStudentProbe'])->name('reports.oqim.hemis.student.probe');
         Route::get('/reports/oqim/group-check', [ReportController::class, 'oqimGroupCheck'])->name('reports.oqim.group.check');
         Route::post('/reports/oqim/screen-diff', [ReportController::class, 'oqimScreenDiff'])->name('reports.oqim.screen.diff');
         Route::get('/reports/oqim/group-diagnose', [ReportController::class, 'oqimGroupDiagnose'])->name('reports.oqim.group.diagnose');

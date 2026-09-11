@@ -1028,6 +1028,10 @@
         }
 
         // Barcha jami (oqim/kurs) qiymatlarini afterState bo'yicha qayta hisoblaydi
+        // Guruh nomlarini tabiiy (raqamli) alifbo tartibida solishtirish: d1/d25-02a < d1/d25-10a
+        function mnNameCmp(a, b) {
+            return String(a.hemis_name || a.name || '').localeCompare(String(b.hemis_name || b.name || ''), undefined, { numeric: true, sensitivity: 'base' });
+        }
         function mnRecalc() {
             for (var b = 0; b < afterState.length; b++) {
                 var courses = afterState[b].courses || [];
@@ -1035,6 +1039,8 @@
                     var ct = 0;
                     var oqims = courses[c].oqims || [];
                     for (var o = 0; o < oqims.length; o++) {
+                        // Qo'lda tartiblanmagan oqimda guruhlar doim alifbo tartibida turadi
+                        if (!oqims[o].manual_order && (oqims[o].rows || []).length > 1) oqims[o].rows.sort(mnNameCmp);
                         var ot = (oqims[o].rows || []).reduce(function(s, r){ return s + (+r.count || 0); }, 0);
                         oqims[o].total = ot;
                         ct += ot;
@@ -1091,6 +1097,8 @@
                                     ? '<input class="mn-label" value="' + esc(oq.label) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" title="Oqim nomi — tahrirlash mumkin">'
                                     : '<span class="mn-label-ro">' + esc(oq.label) + '</span>')
                               + (mixed ? '<span class="mn-mixed" title="Diqqat: bir oqimda har xil tildagi guruhlar bor!">⚠ aralash til</span>' : '')
+                              + (oq.manual_order ? '<span class="mn-manual" title="Tartib qo\'lda belgilangan (sudrab joylashtirilgan) — alifbo bo\'yicha avtomatik tartiblanmaydi">✋ qo\'lda</span>'
+                                    + (CAN_APPROVE ? '<button type="button" class="mn-x mn-az" title="Alifbo tartibiga qaytarish (qo\'lda tartib bekor qilinadi)" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '">A→Z</button>' : '') : '')
                               + '<span class="mn-oqim-total" data-mnot="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>'
                               + (CAN_APPROVE ? '<button type="button" class="mn-x mn-x-oqim" title="Oqimni (barcha guruhlari bilan) ro\'yxatdan o\'chirish" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '">×</button>' : '')
                               + '</div>';
@@ -1178,10 +1186,12 @@
                     label: 'Oqim-' + (tgtCourse.oqims.length + 1),
                     lang: row.lang || 'uz',
                     total: 0,
+                    manual_order: true, // qo'lda joylashtirilgan — alifbo bo'yicha qayta tartiblanmaydi
                     rows: [row]
                 });
             } else {
                 var rows = tgtCourse.oqims[to].rows;
+                tgtCourse.oqims[to].manual_order = true; // qo'lda joylashtirilgan — tartib saqlanadi
                 if (!rows.length) tgtCourse.oqims[to].lang = row.lang || tgtCourse.oqims[to].lang || 'uz'; // bo'sh oqim — birinchi guruh tilini oladi
                 if (sameOqim && tr !== undefined && tr > src.r) tr--;
                 if (tr === undefined || tr === null || tr > rows.length) rows.push(row);
@@ -1627,6 +1637,17 @@
             mnRecalc(); renderManual(); renderAfterBody();
             mnFlash('"' + row.name + '" o\'chirildi (↶ Bekor qilish bilan qaytarish mumkin)');
         });
+        // Oqimni alifbo tartibiga qaytarish (qo'lda tartib bekor)
+        $(document).on('click', '#mn-body .mn-az', function(e) {
+            e.stopPropagation();
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o');
+            mnPushUndo();
+            var oq = afterState[b].courses[c].oqims[o];
+            oq.manual_order = false;
+            mnRecalc(); renderManual(); renderAfterBody();
+            mnFlash('"' + (oq.label || 'Oqim') + '" alifbo tartibiga qaytarildi');
+        });
+
         // Oqimni barcha guruhlari bilan o'chirish
         $(document).on('click', '#mn-body .mn-x-oqim', function(e) {
             e.stopPropagation();
@@ -2619,6 +2640,8 @@
         .mn-label-ro { font-weight:800; font-size:11px; color:#2b5ea7; }
         .mn-oqim-total { margin-left:auto; font-size:10.5px; font-weight:800; color:#16a34a; white-space:nowrap; }
         .mn-mixed { font-size:9.5px; font-weight:800; color:#b45309; background:#fef3c7; border-radius:999px; padding:1px 6px; white-space:nowrap; }
+        .mn-manual { font-size:9.5px; font-weight:800; color:#6d28d9; background:#f5f3ff; border-radius:999px; padding:1px 6px; white-space:nowrap; }
+        .mn-az { width:auto; padding:0 5px; font-size:9.5px; line-height:18px; color:#6d28d9; border-color:#ddd6fe; }
         .mn-row { display:flex; align-items:center; gap:6px; padding:3px 8px; border-top:1px solid #f1f5f9; font-size:12px; background:#fff; }
         .mn-row:first-of-type { border-top:none; }
         .mn-row[draggable="true"] { cursor:grab; }

@@ -1889,12 +1889,13 @@
                 // aniq bitta guruhga (gid) mos qatorlar; birlashtirilgan (gids) qatorlar tegilmaydi.
                 // ID'siz qatorlar (ID qo'shilishidan oldin saqlangan qoralama/versiya) nom+til bo'yicha
                 // moslanadi va ularga ID biriktiriladi — keyingi yangilashlar ID bo'yicha bo'ladi.
-                var cntById = {}, langById = {}, byName = {}, byNameOnly = {}, adopted = 0, unmatched = [], langFixed = 0;
+                var cntById = {}, langById = {}, nameById = {}, byName = {}, byNameOnly = {}, adopted = 0, unmatched = [], langFixed = 0, renamed = 0, renamedNames = [];
                 src.forEach(function(sb) { (sb.courses || []).forEach(function(sc) { (sc.oqims || []).forEach(function(so) {
                     (so.rows || []).forEach(function(r) {
                         if (+r.gid > 0) {
                             cntById[+r.gid] = +r.count || 0;
                             langById[+r.gid] = r.lang || so.lang || 'uz';
+                            nameById[+r.gid] = { name: String(r.name || ''), hemis: String(r.hemis_name || '') };
                             var nk = mnNormName(r.name);
                             byName[nk + '|' + (r.lang || so.lang || 'uz')] = { gid: +r.gid, count: +r.count || 0 };
                             (byNameOnly[nk] = byNameOnly[nk] || []).push({ gid: +r.gid, count: +r.count || 0 });
@@ -1916,6 +1917,16 @@
                                 // Guruhning HEMIS tili qatorning o'zida saqlanadi (oqim tilidan farq qilsa "aralash til" ko'rinadi)
                                 if (langById[+r.gid] && (r.lang || oq.lang || 'uz') !== langById[+r.gid]) { r.lang = langById[+r.gid]; langFixed++; }
                                 else if (!r.lang && langById[+r.gid]) r.lang = langById[+r.gid];
+                                // Guruh nomi HEMISda o'zgargan bo'lsa (masalan "(rus)" qo'shilgan) — nomni ham ID bo'yicha yangilaymiz
+                                var nn = nameById[+r.gid];
+                                if (nn && nn.name) {
+                                    var oldShown = String(r.hemis_name || r.name || ''), newShown = nn.hemis || nn.name;
+                                    if (String(r.name || '') !== nn.name || String(r.hemis_name || '') !== nn.hemis) {
+                                        r.name = nn.name;
+                                        if (nn.hemis) r.hemis_name = nn.hemis; else delete r.hemis_name;
+                                        if (oldShown !== newShown) { renamed++; if (renamedNames.length < 6) renamedNames.push(oldShown + ' → ' + newShown); }
+                                    }
+                                }
                             } else if (unmatched.length < 8) { unmatched.push(r.name); }
                         } else if (!(r.gids && r.gids.length) && unmatched.length < 8) {
                             unmatched.push(r.name);
@@ -1958,8 +1969,8 @@
                 var dedup = mnDedupeByGid();
                 var unm = unmatched.length ? ' Bazada (joriy filtr bo\'yicha) topilmagan guruhlar: ' + unmatched.join(', ') + (unmatched.length >= 8 ? ' ...' : '') + ' — ular bashorat (soxta) guruh yoki filtrdan tashqarida bo\'lishi mumkin.' : '';
                 if (opts.silent) {
-                    if (adopted || updated || dedup || blocksMerged || langFixed) { mnRecalc(); renderManual(); renderAfterBody(); }
-                    if (updated || dedup || blocksMerged) mnFlash('Bazadan yangilandi' + (updated ? ': ' + updated + ' ta son' : '') + (dedup ? ', ' + dedup + ' ta takroriy qator olib tashlandi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta takroriy blok birlashtirildi' : ''));
+                    if (adopted || updated || dedup || blocksMerged || langFixed || renamed) { mnRecalc(); renderManual(); renderAfterBody(); }
+                    if (updated || dedup || blocksMerged || renamed) mnFlash('Bazadan yangilandi' + (updated ? ': ' + updated + ' ta son' : '') + (renamed ? ', ' + renamed + ' ta guruh nomi' : '') + (dedup ? ', ' + dedup + ' ta takroriy qator olib tashlandi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta takroriy blok birlashtirildi' : ''));
                     return;
                 }
                 // To'liq rejim: nofaol / HEMISda yo'q guruhlarni ham olib tashlaymiz (server bilan tekshirib)
@@ -1972,7 +1983,7 @@
                 finish([]);
                 function finish(removedNames) {
                 var removed = removedNames.length;
-                if (!added && !updated && !dedup && !blocksMerged && !removed && !movedCourse && !langFixed) {
+                if (!added && !updated && !dedup && !blocksMerged && !removed && !movedCourse && !langFixed && !renamed) {
                     if (adopted) { MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift(); renderAfterBody(); }
                     $st.css('color', '#64748b').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + 'Sonlar bazadagi bilan bir xil' + (adopted ? ' (' + adopted + ' ta guruhga HEMIS ID biriktirildi — qoralamani saqlang)' : '') + '.' + unm
                         + ' (HEMISda o\'zgarish bo\'lgan bo\'lsa avval "Guruhlarni/Talabalarni HEMISdan tortish" ni bosing.)'); MN_PULL_NOTE = '';
@@ -1988,6 +1999,7 @@
                 if (blocksMerged) msg += ' ' + blocksMerged + ' ta takroriy blok (bir xil fakultet/yo\'nalish) birlashtirildi.';
                 if (movedCourse) msg += ' ' + movedCourse + ' ta guruh bazadagi kursiga ko\'chirildi.';
                 if (langFixed) msg += ' ' + langFixed + ' ta guruh tili HEMISdagi tilga to\'g\'rilandi.';
+                if (renamed) msg += ' ' + renamed + ' ta guruh nomi HEMISdagi nomga yangilandi: ' + renamedNames.join(', ') + (renamed > 6 ? ' ...' : '') + '.';
                 if (removed) msg += ' ' + removed + ' ta nofaol/HEMISda yo\'q guruh olib tashlandi: ' + removedNames.slice(0, 8).join(', ') + (removed > 8 ? ' ...' : '') + '.';
                 $st.css('color', '#16a34a').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + msg + unm); MN_PULL_NOTE = '';
                 mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : '') + (dedup ? ', ' + dedup + ' ta takror olib tashlandi' : '') + (removed ? ', ' + removed + ' ta nofaol/yo\'q guruh o\'chirildi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta blok birlashtirildi' : ''));

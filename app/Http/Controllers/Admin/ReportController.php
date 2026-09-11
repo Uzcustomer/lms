@@ -11921,6 +11921,45 @@ class ReportController extends Controller
     }
 
     /**
+     * POST: ekrandagi (qoralama) holatni Excel (.xlsx) jadval ko'rinishida yuklab olish.
+     * data — bloklar JSON (qo'lda tuzatish ekranidagi holat), title — sarlavha.
+     */
+    public function oqimExportBlocks(Request $request)
+    {
+        ini_set('memory_limit', '512M');
+        set_time_limit(120);
+        $raw = $request->input('data');
+        $blocks = is_string($raw) ? json_decode($raw, true) : $raw;
+        if (!is_array($blocks)) {
+            abort(422, 'data (bloklar) kerak');
+        }
+        $title = trim((string) $request->input('title', 'Qoralama'));
+        $students = 0; $oqims = 0; $grch = 0;
+        foreach ($blocks as $bl) {
+            foreach ($bl['courses'] ?? [] as $co) {
+                $students += (int) ($co['total'] ?? 0);
+                foreach ($co['oqims'] ?? [] as $oq) { $oqims++; $grch += count($oq['rows'] ?? []); }
+            }
+        }
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Qoralama');
+        $this->fillOqimSheet($sheet, $blocks, [
+            $title,
+            'Yuklandi: ' . now()->format('d.m.Y H:i') . ' · ' . $students . ' talaba · ' . $oqims . ' oqim · ' . $grch . ' guruh · ' . (optional($request->user())->name ?? ''),
+        ]);
+        $spreadsheet->setActiveSheetIndex(0);
+        $fileName = 'oqim-qoralama-' . now()->format('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'oqim_draft_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
      * Oqim hisobotini Excel (.xlsx) ko'rinishida yuklab olish.
      * Har bir variant (guruh / a.b / a.b.c) alohida varaqda emas — tanlangan variant.
      */
@@ -13851,7 +13890,7 @@ class ReportController extends Controller
                     $rows = [];
                     foreach (array_values($chunk) as $j => $size) {
                         $lbl = ($subCount <= 1) ? $bname : ($bname . ($letters[$j] ?? ($j + 1)));
-                        $rows[] = ['name' => $lbl . $suffix, 'count' => $size, 'gids' => $srcGids];
+                        $rows[] = ['name' => $lbl . $suffix, 'count' => $size, 'gids' => $srcGids, 'lang' => $list[0]['lang']];
                     }
                     $out[] = [
                         'base'       => $bname,
@@ -13886,7 +13925,7 @@ class ReportController extends Controller
     {
         if ($eff === 'full') {
             $gids = array_values(array_filter(array_map(fn($m) => (int) ($m['gid'] ?? 0), $b['members'] ?? []), fn($x) => $x > 0));
-            return [['name' => $b['base'] . $suffix, 'count' => $b['total'], 'gids' => $gids]];
+            return [['name' => $b['base'] . $suffix, 'count' => $b['total'], 'gids' => $gids, 'lang' => $b['lang'] ?? null]];
         }
 
         $members = $b['members'] ?? [];
@@ -13896,7 +13935,7 @@ class ReportController extends Controller
         foreach ($members as $m) {
             // HEMISdagi haqiqiy nomni ishlatamiz; bo'lmasa base + harf
             $name = $m['name'] ?? ($b['base'] . $m['letter']);
-            $row = ['name' => $name . $suffix, 'count' => (int) $m['count']];
+            $row = ['name' => $name . $suffix, 'count' => (int) $m['count'], 'lang' => $b['lang'] ?? null];
             if (!empty($m['gid']) && (int) $m['gid'] > 0) {
                 $row['gid'] = (int) $m['gid'];
             }

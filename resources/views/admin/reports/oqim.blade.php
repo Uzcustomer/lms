@@ -282,6 +282,7 @@
                                     <button type="button" id="mn-del-inactive" class="af-btn af-unapprove" onclick="removeInactiveGroups()" title="Bazada (HEMISda) nofaol yoki yo'q guruhlarni ro'yxatdan o'chirish — avval ro'yxat ko'rsatiladi, tasdiqlasangiz o'chadi; bekor qilish mumkin">🗑 Nofaol/yo'q guruhlarni o'chirish</button>
                                     <button type="button" id="mn-del-empty" class="af-btn af-unapprove" onclick="removeEmptyGroups()" title="Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish — bekor qilish mumkin">🗑 Bo'sh guruhlarni o'chirish</button>
                                     <button type="button" id="mn-undo" class="af-btn af-draft" onclick="manualUndo()" disabled>↶ Bekor qilish</button>
+                                    <button type="button" class="af-btn af-draft" onclick="exportManualExcel()" title="Ekrandagi (qoralama) holatni Excel jadval ko'rinishida yuklab olish">⬇ Excel (jadval)</button>
                                     <button type="button" class="af-btn af-draft" onclick="saveSnapshot('draft')">💾 Qoralama saqlash</button>
                                     <button type="button" class="af-btn af-approve" onclick="saveSnapshot('approve')">✓ Tasdiqlash</button>
                                     <span id="mn-save-status" style="font-size:12px;font-weight:700;"></span>
@@ -1382,6 +1383,18 @@
             });
         }
 
+        // Ekrandagi (qoralama) holatni Excel jadval ko'rinishida yuklash — yashirin forma orqali POST (fayl yuklanadi)
+        var EXPORT_BLOCKS_URL = '{{ route("admin.reports.oqim.export.blocks") }}';
+        function exportManualExcel() {
+            if (!afterState || !afterState.length) { mnFlash('Ekranda holat yo\'q.'); return; }
+            var title = 'Oqim qoralamasi — ' + ($('#faculty option:selected').text() || 'Barcha fakultetlar') + ' · ' + ($('#education_type option:selected').text() || '');
+            var $f = $('<form method="POST" target="_blank" style="display:none;"></form>').attr('action', EXPORT_BLOCKS_URL);
+            $f.append($('<input type="hidden" name="_token">').val(CSRF));
+            $f.append($('<input type="hidden" name="title">').val(title));
+            $f.append($('<textarea name="data"></textarea>').val(JSON.stringify(afterState)));
+            $f.appendTo('body'); $f[0].submit(); setTimeout(function() { $f.remove(); }, 2000);
+        }
+
         // Talabasi yo'q (0) barcha guruhlarni ro'yxatdan o'chirish
         function removeEmptyGroups() {
             var n = 0;
@@ -1819,11 +1832,12 @@
                 // aniq bitta guruhga (gid) mos qatorlar; birlashtirilgan (gids) qatorlar tegilmaydi.
                 // ID'siz qatorlar (ID qo'shilishidan oldin saqlangan qoralama/versiya) nom+til bo'yicha
                 // moslanadi va ularga ID biriktiriladi — keyingi yangilashlar ID bo'yicha bo'ladi.
-                var cntById = {}, byName = {}, byNameOnly = {}, adopted = 0, unmatched = [];
+                var cntById = {}, langById = {}, byName = {}, byNameOnly = {}, adopted = 0, unmatched = [], langFixed = 0;
                 src.forEach(function(sb) { (sb.courses || []).forEach(function(sc) { (sc.oqims || []).forEach(function(so) {
                     (so.rows || []).forEach(function(r) {
                         if (+r.gid > 0) {
                             cntById[+r.gid] = +r.count || 0;
+                            langById[+r.gid] = r.lang || so.lang || 'uz';
                             var nk = mnNormName(r.name);
                             byName[nk + '|' + (r.lang || so.lang || 'uz')] = { gid: +r.gid, count: +r.count || 0 };
                             (byNameOnly[nk] = byNameOnly[nk] || []).push({ gid: +r.gid, count: +r.count || 0 });
@@ -1842,6 +1856,9 @@
                         if (+r.gid > 0) {
                             if (cntById.hasOwnProperty(+r.gid)) {
                                 if ((+r.count || 0) !== cntById[+r.gid]) { r.count = cntById[+r.gid]; updated++; }
+                                // Guruhning HEMIS tili qatorning o'zida saqlanadi (oqim tilidan farq qilsa "aralash til" ko'rinadi)
+                                if (langById[+r.gid] && (r.lang || oq.lang || 'uz') !== langById[+r.gid]) { r.lang = langById[+r.gid]; langFixed++; }
+                                else if (!r.lang && langById[+r.gid]) r.lang = langById[+r.gid];
                             } else if (unmatched.length < 8) { unmatched.push(r.name); }
                         } else if (!(r.gids && r.gids.length) && unmatched.length < 8) {
                             unmatched.push(r.name);
@@ -1884,7 +1901,7 @@
                 var dedup = mnDedupeByGid();
                 var unm = unmatched.length ? ' Bazada (joriy filtr bo\'yicha) topilmagan guruhlar: ' + unmatched.join(', ') + (unmatched.length >= 8 ? ' ...' : '') + ' — ular bashorat (soxta) guruh yoki filtrdan tashqarida bo\'lishi mumkin.' : '';
                 if (opts.silent) {
-                    if (adopted || updated || dedup || blocksMerged) { mnRecalc(); renderManual(); renderAfterBody(); }
+                    if (adopted || updated || dedup || blocksMerged || langFixed) { mnRecalc(); renderManual(); renderAfterBody(); }
                     if (updated || dedup || blocksMerged) mnFlash('Bazadan yangilandi' + (updated ? ': ' + updated + ' ta son' : '') + (dedup ? ', ' + dedup + ' ta takroriy qator olib tashlandi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta takroriy blok birlashtirildi' : ''));
                     return;
                 }
@@ -1898,7 +1915,7 @@
                 finish([]);
                 function finish(removedNames) {
                 var removed = removedNames.length;
-                if (!added && !updated && !dedup && !blocksMerged && !removed && !movedCourse) {
+                if (!added && !updated && !dedup && !blocksMerged && !removed && !movedCourse && !langFixed) {
                     if (adopted) { MN_UNDO.push(snapshot); if (MN_UNDO.length > 30) MN_UNDO.shift(); renderAfterBody(); }
                     $st.css('color', '#64748b').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + 'Sonlar bazadagi bilan bir xil' + (adopted ? ' (' + adopted + ' ta guruhga HEMIS ID biriktirildi — qoralamani saqlang)' : '') + '.' + unm
                         + ' (HEMISda o\'zgarish bo\'lgan bo\'lsa avval "Guruhlarni/Talabalarni HEMISdan tortish" ni bosing.)'); MN_PULL_NOTE = '';
@@ -1913,6 +1930,7 @@
                 if (dedup) msg += ' ' + dedup + ' ta takroriy qator (bir guruh ikki marta) olib tashlandi.';
                 if (blocksMerged) msg += ' ' + blocksMerged + ' ta takroriy blok (bir xil fakultet/yo\'nalish) birlashtirildi.';
                 if (movedCourse) msg += ' ' + movedCourse + ' ta guruh bazadagi kursiga ko\'chirildi.';
+                if (langFixed) msg += ' ' + langFixed + ' ta guruh tili HEMISdagi tilga to\'g\'rilandi.';
                 if (removed) msg += ' ' + removed + ' ta nofaol/HEMISda yo\'q guruh olib tashlandi: ' + removedNames.slice(0, 8).join(', ') + (removed > 8 ? ' ...' : '') + '.';
                 $st.css('color', '#16a34a').text((MN_PULL_NOTE ? MN_PULL_NOTE + ' ' : '') + msg + unm); MN_PULL_NOTE = '';
                 mnFlash((added ? added + ' ta yangi guruh' : '') + (added && updated ? ', ' : '') + (updated ? updated + ' ta son yangilandi' : '') + (dedup ? ', ' + dedup + ' ta takror olib tashlandi' : '') + (removed ? ', ' + removed + ' ta nofaol/yo\'q guruh o\'chirildi' : '') + (blocksMerged ? ', ' + blocksMerged + ' ta blok birlashtirildi' : ''));

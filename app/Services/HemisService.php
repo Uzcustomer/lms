@@ -613,6 +613,53 @@ class HemisService
     }
 
     /**
+     * TASHXIS: bitta talabaning HEMIS API xom javobi — student-info (ID raqami bo'yicha) va
+     * student-list (search) natijalari; guruhga oid barcha maydonlar ajratib ko'rsatiladi.
+     */
+    public function probeStudent(string $q): array
+    {
+        $out = ['ok' => false, 'error' => null, 'info' => null, 'list' => [], 'info_url' => $this->apiUrl('data/student-info'), 'list_url' => $this->apiUrl('data/student-list')];
+        $pick = function (array $s): array {
+            $g = [];
+            foreach ($s as $k => $v) {
+                if (stripos($k, 'group') !== false || in_array($k, ['id', 'full_name', 'student_id_number', 'level', 'semester', 'educationYear', 'department', 'specialty', 'studentStatus', 'updated_at', 'hash', '_curriculum'], true)) {
+                    if (is_array($v)) {
+                        $g[$k] = array_intersect_key($v, array_flip(['id', 'name', 'code']));
+                    } else {
+                        $g[$k] = $k === 'updated_at' && is_numeric($v) ? date('d.m.Y H:i', (int) $v) : $v;
+                    }
+                }
+            }
+            $g['_all_keys'] = array_keys($s);
+            return $g;
+        };
+        try {
+            // 1) student-info — ID raqami bo'yicha (12 xonali) yoki HEMIS id
+            $params = ctype_digit($q) && strlen($q) >= 10 ? ['student_id_number' => $q] : ['id' => $q];
+            $r = Http::withoutVerifying()->withToken($this->token)->timeout(30)->get($this->apiUrl('data/student-info'), $params);
+            if ($r->successful() && is_array($r->json()) && !empty($r->json()['success'])) {
+                $d = $r->json()['data'] ?? null;
+                if (is_array($d)) $out['info'] = $pick($d);
+            } else {
+                $out['info_error'] = 'HTTP ' . $r->status();
+            }
+            // 2) student-list?search=
+            $r2 = Http::withoutVerifying()->withToken($this->token)->timeout(30)->get($this->apiUrl('data/student-list'), ['search' => $q, 'limit' => 20]);
+            if ($r2->successful() && is_array($r2->json())) {
+                foreach ($r2->json()['data']['items'] ?? [] as $it) {
+                    if ((string) ($it['id'] ?? '') === $q || (string) ($it['student_id_number'] ?? '') === $q || stripos((string) ($it['full_name'] ?? ''), $q) !== false) {
+                        $out['list'][] = $pick($it);
+                    }
+                }
+            } else {
+                $out['list_error'] = 'HTTP ' . $r2->status();
+            }
+            $out['ok'] = true;
+        } catch (\Throwable $e) { $out['error'] = $e->getMessage(); }
+        return $out;
+    }
+
+    /**
      * HEMISdan guruhlarning BITTA sahifasini (200 ta) tortib, bazaga ommaviy upsert qiladi.
      * Har bir chaqiruv qisqa (bitta HEMIS so'rovi + 1-2 ta SQL) — web so'rov vaqt limitiga tushmaydi.
      * Natija: ['ok','error','page','pageCount','total','created','updated'].

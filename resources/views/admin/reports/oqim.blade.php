@@ -1454,7 +1454,10 @@
                         : '<button type="button" class="af-btn af-unapprove" data-lang="' + esc(r.override_lang || '') + '" onclick="excludeGroup(' + gid + ', true, this)" title="HEMISda o\'chirilgan/nofaol, lekin API hali qaytarayotgan sharpa guruh — hisobdan chiqariladi, ekrandan olib tashlanadi, keyingi tortishlarda qaytmaydi">🚫 Sharpa/nofaol — hisobdan chiqarish</button>')
                         + ' <span style="font-size:11px;color:#64748b;">HEMISda bunday guruh yo\'q yoki nofaol bo\'lsa-yu bu yerda faol ko\'rinsa</span></div>';
                 }
-                if (db !== onScreen) h += '<div style="margin-bottom:8px;padding:8px 10px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;">Ekrandagi son bazadagidan farq qiladi — <b>"⟳ Bazadan yangilash"</b> ni bosing (yoki qatordagi sonni qo\'lda tuzating).</div>';
+                if (db !== onScreen) h += '<div style="margin-bottom:8px;padding:8px 10px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;">Ekrandagi son bazadagidan farq qiladi — <b>"⟳ Bazadan yangilash"</b> ni bosing.</div>';
+                if (CAN_APPROVE && r.group) h += '<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+                    '<button type="button" class="af-btn af-approve" onclick="resyncGroupInline(' + gid + ', this)" title="Faqat shu guruh talabalarini HEMISdan hozir qayta tortadi (bir necha soniya) — HEMISda talaba soni o\'zgargan bo\'lsa (masalan 0 bo\'lib qolgan) shu yerda darhol to\'g\'rilanadi">⇩ Shu guruh talabalarini HEMISdan qayta tortish</button>' +
+                    '<span style="font-size:11px;color:#64748b;">Guruhlar importi talaba sonini o\'zgartirmaydi — sonlar talabalar importidan keladi.</span></div>';
                 h += '<div style="margin-bottom:6px;font-weight:800;color:#334155;">Statuslar kesimi (bazada):</div><table style="border-collapse:collapse;margin-bottom:12px;">';
                 (r.by_status || []).forEach(function(b) { h += '<tr><td style="padding:2px 10px 2px 0;">' + esc(b.student_status_name || b.student_status_code) + ' <span style="color:#94a3b8;">(' + esc(b.student_status_code) + ')</span></td><td style="padding:2px 0;font-weight:700;text-align:right;">' + b.c + '</td></tr>'; });
                 h += '</table>';
@@ -1595,6 +1598,21 @@
                 if (changed) { mnRecalc(); renderManual(); renderAfterBody(); }
                 $d.find('td').html('<span style="color:#166534;font-weight:700;">✓ Qayta tortildi: ' + r.imported + ' ta yuklandi, ' + r.deactivated + ' ta chetlashtirildi. Bazada faol: ' + r.db + (changed ? ' — ekran yangilandi.' : '.') + '</span> <button type="button" class="af-btn af-load" style="padding:3px 8px;font-size:11.5px;" onclick="diagGroup(' + gid + ', ' + r.db + ')">🔬 Qayta tekshirish</button>');
             }).fail(function(xhr) { $d.find('td').html('<span style="color:#dc2626;">Xatolik: ' + ((xhr.responseJSON && xhr.responseJSON.error) || ('HTTP ' + xhr.status)) + '</span>'); });
+        }
+
+        // Guruh oynasidan: shu guruh talabalarini HEMISdan qayta tortish va ekrandagi sonni yangilash
+        function resyncGroupInline(gid, btn) {
+            var $b = $(btn).prop('disabled', true).text('HEMISdan tortilmoqda...');
+            $.ajax({ url: GROUP_RESYNC_URL, method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF }, data: { gid: gid } }).done(function(r) {
+                var changed = 0;
+                (afterState || []).forEach(function(bl) { (bl.courses || []).forEach(function(co) { (co.oqims || []).forEach(function(oq) {
+                    (oq.rows || []).forEach(function(rw) { if (+rw.gid === gid && (+rw.count || 0) !== r.db) { rw.count = r.db; changed++; } });
+                }); }); });
+                if (changed) { mnRecalc(); renderManual(); renderAfterBody(); }
+                $b.text('✓ ' + r.imported + ' ta yuklandi, ' + r.deactivated + ' ta chetlashtirildi — bazada faol: ' + r.db + (changed ? ' (ekran yangilandi)' : ''));
+                // Oynadagi "BAZADA" raqamini ham yangilaymiz
+                $('#gc-body').find('div:contains("BAZADA")').first().next().text(r.db);
+            }).fail(function(xhr) { $b.prop('disabled', false).text('Xatolik: ' + ((xhr.responseJSON && xhr.responseJSON.error) || ('HTTP ' + xhr.status))); });
         }
 
         // Sharpa/nofaol guruhni hisobdan chiqarish ("Guruh tuzatish" override) va ekrandan olib tashlash

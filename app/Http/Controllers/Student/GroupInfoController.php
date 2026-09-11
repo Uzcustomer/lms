@@ -14,9 +14,9 @@ use Illuminate\View\View;
 /**
  * "Guruh ma'lumotlarim" — talabaning guruhi va tyutori.
  *
- * Talaba taqsimotda boshqa guruhga o'tkazilgan bo'lsa, YANGI guruh va uning
- * tyutori ko'rsatiladi: profildagi guruh HEMISdan keladi va reja unga hali
- * qo'llanmagan. Aks holda joriy guruh ko'rsatiladi.
+ * Talaba taqsimotda boshqa guruhga o'tkazilgan bo'lsa YANGI guruh ko'rsatiladi:
+ * profildagi guruh HEMISdan keladi va reja unga hali qo'llanmagan. Tyutor esa
+ * ko'chirishda o'zgarmaydi — u doim hozirgi HEMIS guruhi bo'yicha olinadi.
  */
 class GroupInfoController extends Controller
 {
@@ -32,7 +32,6 @@ class GroupInfoController extends Controller
             ? DistributionDraftAssignment::query()->where('student_id', $student->id)->first()
             : null;
 
-        $groupHemisId = $draft ? (int) $draft->to_group_hemis_id : (int) $student->group_id;
         $groupName = $draft ? $draft->to_group_name : $student->group_name;
 
         // Talaba sahifani ochdi — registrator ro'yxatidagi "ko'rdi" ustuni
@@ -49,7 +48,9 @@ class GroupInfoController extends Controller
             'student' => $student,
             'draft' => $draft,
             'groupName' => $groupName,
-            'tutors' => $this->tutorsFor($groupHemisId, $groupName),
+            // Tyutor ko'chirishda o'zgarmaydi — hozirgi (HEMIS) guruh bo'yicha
+            // olinadi, admin talaba sahifasi bilan bir xil.
+            'tutors' => $this->tutorsFor((int) $student->group_id, $student->group_name),
         ]);
     }
 
@@ -57,10 +58,10 @@ class GroupInfoController extends Controller
      * Guruh tyutorlari.
      *
      * Tyutor guruhga `group_teacher` jadvali orqali biriktiriladi (HEMISdagi
-     * tutorGroups). HEMIS bitta guruhni ba'zan ikki id bilan saqlaydi
-     * ("d1/25-01(b)" va "d1/d25-01(b)") — tyutor ikkinchisiga biriktirilgan
-     * bo'lishi mumkin, shu sabab id bo'yicha topilmasa nomi bir xil faol
-     * guruhlardan qidiriladi.
+     * tutorGroups, import:teachers yozadi). HEMIS bitta guruhni ba'zan ikki id
+     * bilan saqlaydi ("d1/25-01(b)" va "d1/d25-01(b)") — tyutor ikkinchisiga
+     * biriktirilgan bo'lishi mumkin, shu sabab id bo'yicha topilmasa nomi bir
+     * xil faol guruhlardan qidiriladi.
      */
     private function tutorsFor(int $groupHemisId, ?string $groupName): Collection
     {
@@ -80,20 +81,29 @@ class GroupInfoController extends Controller
         return $this->activeTutors($sameName);
     }
 
+    /**
+     * Guruhlarga biriktirilgan tyutorlar: faollari bo'lsa faqat ular, aks
+     * holda hammasi. Admin sahifasi faollikni tekshirmaydi — u ko'rsatgan
+     * tyutor bu yerda yashirinib qolmasligi kerak, lekin faol va nofaol
+     * birga bo'lsa ketgan xodim chiqmaydi.
+     */
     private function activeTutors(Collection $groups): Collection
     {
         if ($groups->isEmpty()) {
             return collect();
         }
 
-        return Group::query()
+        $tutors = Group::query()
             ->whereIn('id', $groups->pluck('id'))
             ->with(['teachers' => fn ($query) => $query
-                ->where('teachers.is_active', true)
-                ->select('teachers.id', 'teachers.full_name', 'teachers.phone', 'teachers.telegram_username')])
+                ->select('teachers.id', 'teachers.full_name', 'teachers.phone', 'teachers.telegram_username', 'teachers.is_active')])
             ->get()
             ->flatMap(fn (Group $group) => $group->teachers)
             ->unique('id')
             ->values();
+
+        $active = $tutors->filter(fn ($tutor) => (bool) $tutor->is_active)->values();
+
+        return $active->isNotEmpty() ? $active : $tutors;
     }
 }

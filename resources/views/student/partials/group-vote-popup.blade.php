@@ -36,7 +36,7 @@
 
         // Ovoz bergan yoki registrator qo'lda boshqa guruhga ko'chirgan talaba
         // uchun tanlov tugagan — popup ikkalasida ham chiqmaydi.
-        $gvVoted = \App\Models\DistributionVote::query()->where('student_id', $gvStudent->id)->exists()
+        $gvVoted = \App\Models\DistributionVote::query()->active()->where('student_id', $gvStudent->id)->exists()
             || $gvDraft !== null;
 
         if ($gvAllowed && !$gvVoted) {

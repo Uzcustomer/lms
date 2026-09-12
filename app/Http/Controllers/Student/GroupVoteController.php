@@ -57,7 +57,9 @@ class GroupVoteController extends Controller
             return response()->json(['message' => 'Guruhingiz uchun ovoz berish ochiq emas.'], 422);
         }
 
-        if (DistributionVote::query()->where('student_id', $student->id)->exists()) {
+        // Eski deb belgilangan ovoz to'sqinlik qilmaydi — registrator rejani
+        // bekor qilib, qayta ovoz berishga ruxsat bergan.
+        if (DistributionVote::query()->active()->where('student_id', $student->id)->exists()) {
             return response()->json(['message' => 'Siz allaqachon ovoz bergansiz. Ovoz faqat bir marta beriladi.'], 422);
         }
 

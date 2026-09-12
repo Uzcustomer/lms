@@ -1502,9 +1502,19 @@
         $('modalBody').addEventListener('click', async event => {
             const button = event.target.closest('button[data-undo]');
             if (!button) return;
+            const studentId = Number(button.dataset.undo);
+            // Ovoz bergan talabaning rejasi bekor qilinsa, ovozi eski deb
+            // belgilanadi — aks holda u qayta ovoz bera olmay qotib qolardi.
+            const st = modalStudents.find(s => s.student_id === studentId);
+            if (st && st.vote_to && !confirm(
+                    st.full_name + ' ' + st.vote_to + " guruhiga ovoz bergan.\n\n" +
+                    "Reja bekor qilinsa, bu ovoz \"eski\" deb belgilanadi (ro'yxatda saqlanib qoladi) " +
+                    "va ovoz berish ochiq bo'lsa talaba qaytadan ovoz bera oladi.\n\nDavom etilsinmi?")) {
+                return;
+            }
             button.disabled = true;
             try {
-                const data = await postJson(unassignUrl, {student_id: Number(button.dataset.undo)});
+                const data = await postJson(unassignUrl, {student_id: studentId, archive_vote: !!(st && st.vote_to)});
                 groups = data.groups;
                 loadNotifyStatus();
                 render();
@@ -1801,7 +1811,7 @@
                 const data = await response.json();
                 if (!response.ok) return;
                 votesData = data.votes;
-                $('votesCount').textContent = votesData.filter(v => v.status === 'pending').length;
+                $('votesCount').textContent = votesData.filter(v => v.status === 'pending' && !v.archived).length;
                 const open = data.voting_open_count || 0;
                 const openStudents = data.voting_student_count || 0;
                 const parts = [];
@@ -1822,24 +1832,43 @@
             return '';
         }
 
-        function renderVotes() {
-            $('votesMeta').textContent = votesData.length + ' ta ovoz';
+        function voteRow(v) {
+            const old = !!v.archived;
+            return '<div class="sd-vote-row"' + (old ? ' style="opacity:.6;"' : '') + '>' +
+                (old
+                    ? '<span style="color:#94a3b8;font-weight:800;">&#8634;</span>'
+                    : '<span style="color:#0f7a52;font-weight:800;">&#10003;</span>') +
+                '<span><b>' + esc(v.student_name) + '</b>' +
+                    (old ? ' <span style="display:inline-block;padding:1px 7px;border-radius:999px;background:#e2e8f0;color:#475569;font-size:10px;font-weight:700;vertical-align:1px;">eski</span>' : '') +
+                '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
+                '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b>' +
+                    (v.to_group_now && v.to_group_now !== v.to_group_name ? '<span class="sd-meta">hozirgi nomi: ' + esc(v.to_group_now) + '</span>' : '') +
+                    (old
+                        ? '<span class="sd-meta" style="color:#64748b;">reja bekor qilingan' + (v.archived_at ? ' \u00b7 ' + esc(v.archived_at) : '') + '</span>'
+                        : voteStateNote(v)) +
+                '</span>' +
+                '<button class="sd-vote-del" type="button" data-del-vote="' + v.id + '" title="Ovozni o\u2019chirish">' +
+                    '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>' +
+                '</button>' +
+                '</div>';
+        }
 
-            $('votesBody').innerHTML = votesData.length
-                ? votesData.map(v =>
-                    '<div class="sd-vote-row">' +
-                    '<span style="color:#0f7a52;font-weight:800;">&#10003;</span>' +
-                    '<span><b>' + esc(v.student_name) + '</b>' +
-                    '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
-                    '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b>' +
-                        (v.to_group_now && v.to_group_now !== v.to_group_name ? '<span class="sd-meta">hozirgi nomi: ' + esc(v.to_group_now) + '</span>' : '') +
-                        voteStateNote(v) +
-                    '</span>' +
-                    '<button class="sd-vote-del" type="button" data-del-vote="' + v.id + '" title="Ovozni o\u2019chirish">' +
-                        '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>' +
-                    '</button>' +
-                    '</div>').join('')
-                : '<div class="sd-modal-note">Hali ovoz berilmagan.</div>';
+        function renderVotes() {
+            const active = votesData.filter(v => !v.archived);
+            const archived = votesData.filter(v => v.archived);
+            $('votesMeta').textContent = active.length + ' ta ovoz' + (archived.length ? ' \u00b7 ' + archived.length + ' ta eski' : '');
+
+            if (!votesData.length) {
+                $('votesBody').innerHTML = '<div class="sd-modal-note">Hali ovoz berilmagan.</div>';
+                return;
+            }
+
+            // Eski ovozlar \u2014 rejasi bekor qilingan; talaba qaytadan ovoz bera oladi.
+            $('votesBody').innerHTML =
+                (active.length ? active.map(voteRow).join('') : '<div class="sd-modal-note">Faol ovoz yo\u2019q.</div>') +
+                (archived.length
+                    ? '<div class="sd-modal-section">Eski ovozlar (' + archived.length + ')</div>' + archived.map(voteRow).join('')
+                    : '');
         }
 
         $('votesBtn').addEventListener('click', async () => {
@@ -1855,7 +1884,8 @@
             event.preventDefault();
             const vote = votesData.find(v => v.id === Number(button.dataset.delVote));
             const label = vote ? vote.student_name : 'Bu';
-            if (!confirm(label + " ovozi o'chirilsinmi?" + (vote && vote.status === 'approved' ? " Rejasi ham bekor bo'ladi va joyi qaytadi." : ''))) return;
+            const withPlan = vote && vote.status === 'approved' && !vote.archived;
+            if (!confirm(label + (vote && vote.archived ? " eski" : '') + " ovozi o'chirilsinmi?" + (withPlan ? " Rejasi ham bekor bo'ladi va joyi qaytadi." : ''))) return;
             button.disabled = true;
             try {
                 const data = await postJson(deleteVotesUrl, {vote_ids: [Number(button.dataset.delVote)]});

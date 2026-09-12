@@ -189,6 +189,15 @@
                         }
                     }
                 }
+
+                // Admin "Xalqaro talabalar" sahifasidagi tugma: bloklash va
+                // popuplar vaqtincha o'chirilgan bo'lsa, talaba platformadan
+                // erkin foydalanadi. Tepadagi banner eslatma sifatida qoladi.
+                if (\App\Models\Setting::get('visa_block_enabled', '1') !== '1') {
+                    $blockSite = false;
+                    $showPassportModal = false;
+                    $showFillModal = false;
+                }
             }
         @endphp
 

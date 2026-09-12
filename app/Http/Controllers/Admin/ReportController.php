@@ -11712,8 +11712,65 @@ class ReportController extends Controller
         // Bazadagi holat bilan yonma-yon
         $name = (string) $request->get('name', '');
         $res['db'] = $name !== '' ? DB::table('groups')->where('name', 'like', '%' . $name . '%')
-            ->get(['group_hemis_id', 'name', 'active', 'department_name', 'education_lang_name', 'curriculum_hemis_id', 'updated_at']) : [];
+            ->get(['group_hemis_id', 'name', 'active', 'department_name', 'department_hemis_id', 'education_lang_name', 'curriculum_hemis_id', 'updated_at'])
+            ->map(function ($g) { $g->oqim = $this->oqimGroupVisibility($g); return $g; })
+            ->values() : [];
         return response()->json($res);
+    }
+
+    /**
+     * Guruh oqim ro'yxatida (bo'sh guruh sifatida) chiqadimi — chiqmasa, aniq sababi.
+     * oqimEmptyGroupRows dagi shartlarning aynan o'zi tekshiriladi.
+     */
+    private function oqimGroupVisibility(object $g): array
+    {
+        $why = [];
+        if (!$g->active) {
+            $why[] = 'bazada nofaol (HEMISda nofaol yoki ro\'yxatda ko\'rinmagan)';
+        }
+        $dep = DB::table('departments')->where('department_hemis_id', $g->department_hemis_id)->first(['structure_type_code', 'active', 'name']);
+        if (!$dep) {
+            $why[] = 'fakulteti (' . $g->department_name . ', #' . $g->department_hemis_id . ') departments jadvalida yo\'q — "Mutaxassislik/Kafedralar" sinxronizatsiyasini bajaring';
+        } else {
+            if ((int) $dep->structure_type_code !== 11) $why[] = 'fakultet tuzilma turi ' . $dep->structure_type_code . ' (fakultet=11 emas)';
+            if (!$dep->active) $why[] = 'fakultet nofaol';
+        }
+        $cur = $g->curriculum_hemis_id ? DB::table('curricula')->where('curricula_hemis_id', $g->curriculum_hemis_id)->first(['name', 'education_year_code', 'education_period', 'education_type_code', 'education_type_name']) : null;
+        $admYear = (int) ($cur->education_year_code ?? 0);
+        $src = 'o\'quv reja';
+        if ($admYear < 1990 && preg_match('/(?:^|[\/\-\s])[a-zA-Z]{0,4}(\d{2})\s*-/u', (string) $g->name, $m)) {
+            $admYear = 2000 + (int) $m[1];
+            $src = 'guruh nomi';
+        }
+        $acadStart = now()->month >= 7 ? now()->year : now()->year - 1;
+        $level = $admYear >= 1990 ? ($acadStart - $admYear + 1) : 1;
+        $period = (int) ($cur->education_period ?? 6 ?: 6);
+        if ($level < 1 || $level > $period) {
+            $why[] = 'hisoblangan kurs ' . $level . ' (' . $src . ' bo\'yicha qabul yili ' . $admYear . ', o\'qish muddati ' . $period . ') — 1..' . $period . ' oralig\'ida emas';
+        }
+        if (!$g->curriculum_hemis_id) {
+            $why[] = 'HEMISda guruhga o\'quv reja biriktirilmagan — kurs nomdan olinadi, ta\'lim turi filtri o\'tkazadi';
+        } elseif (!$cur) {
+            $why[] = 'o\'quv reja #' . $g->curriculum_hemis_id . ' bazada yo\'q — "O\'quv rejalar" sinxronizatsiyasini bajaring (kurs nomdan olinadi)';
+        }
+        $sameNameWithStudents = DB::table('students')->where('student_status_code', 11)
+            ->whereRaw('LOWER(TRIM(group_name)) = ?', [mb_strtolower(trim((string) $g->name))])
+            ->where('group_id', '!=', $g->group_hemis_id)->count();
+        if ($sameNameWithStudents > 0) {
+            $why[] = 'shu nomli boshqa guruhda ' . $sameNameWithStudents . ' ta faol talaba bor — bo\'sh nusxa ro\'yxatga qo\'shilmaydi';
+        }
+        $students = DB::table('students')->where('student_status_code', 11)->where('group_id', $g->group_hemis_id)->count();
+
+        return [
+            'visible' => !$why,
+            'level' => $level,
+            'admission_year' => $admYear,
+            'admission_source' => $src,
+            'students' => $students,
+            'curriculum' => $cur ? ($cur->name . ' (' . $cur->education_year_code . ', ' . $cur->education_type_name . ', ' . $cur->education_period . ' yil)') : null,
+            'faculty_ok' => $dep ? ((int) $dep->structure_type_code === 11 && (bool) $dep->active) : false,
+            'reasons' => $why,
+        ];
     }
 
     /** AJAX: talabaning HEMIS API xom javobi (guruhga oid maydonlar) + bazadagi yozuvi — tashxis. */

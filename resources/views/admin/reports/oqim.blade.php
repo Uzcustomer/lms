@@ -1594,7 +1594,19 @@
                     h += '<div style="margin-top:6px;"><b>HEMIS API da "' + esc(nm) + '":</b> ' + ((r.matches || []).length ? '' : '<i>topilmadi (API search parametrini qo\'llamasa, faqat 1-sahifa tekshiriladi' + (r.search_page_count ? ', sahifalar: ' + r.search_page_count : '') + ')</i>');
                     (r.matches || []).forEach(function(m) { h += '<div>• #' + m.id + ' ' + esc(m.name) + ' — active: <b>' + (m.active === null ? 'MAYDON YO\'Q' : (m.active ? 'faol' : 'NOFAOL')) + '</b> <code style="font-size:10px;">' + esc(JSON.stringify(m.active_raw || {})) + '</code> · ' + esc(m.department || '') + ' · ' + esc(m.lang || '') + ' · reja ' + esc(m.curriculum) + (Object.keys(m.other_flags || {}).length ? ' · ' + esc(JSON.stringify(m.other_flags)) : '') + '</div>'; });
                     h += '</div><div style="margin-top:4px;"><b>Bazada:</b>';
-                    (r.db || []).forEach(function(d) { h += '<div>• #' + d.group_hemis_id + ' ' + esc(d.name) + ' — active: <b>' + (d.active ? 'faol' : 'nofaol') + '</b> · ' + esc(d.department_name || '') + ' · ' + esc(d.education_lang_name || '') + ' · reja ' + esc(d.curriculum_hemis_id) + ' · ' + esc(d.updated_at) + '</div>'; });
+                    (r.db || []).forEach(function(d) {
+                        h += '<div>• #' + d.group_hemis_id + ' ' + esc(d.name) + ' — active: <b>' + (d.active ? 'faol' : 'nofaol') + '</b> · ' + esc(d.department_name || '') + ' · ' + esc(d.education_lang_name || '') + ' · reja ' + esc(d.curriculum_hemis_id) + ' · ' + esc(d.updated_at) + '</div>';
+                        var o = d.oqim;
+                        if (o) {
+                            h += '<div style="margin:2px 0 6px 14px;padding:4px 8px;border-radius:6px;background:' + (o.visible ? '#f0fdf4' : '#fef2f2') + ';">'
+                               + (o.visible ? '<b style="color:#166534;">✓ Oqimda chiqadi:</b> ' : '<b style="color:#b91c1c;">✗ Oqimda chiqmaydi:</b> ')
+                               + esc(o.level) + '-kurs (qabul ' + esc(o.admission_year) + ', ' + esc(o.admission_source) + ' bo\'yicha) · talaba: ' + esc(o.students)
+                               + (o.curriculum ? ' · reja: ' + esc(o.curriculum) : '')
+                               + ((o.reasons || []).length ? '<div style="color:#b91c1c;margin-top:2px;">' + (o.reasons || []).map(function(x) { return '– ' + esc(x); }).join('<br>') + '</div>' : '')
+                               + (o.visible ? '<div style="color:#64748b;margin-top:2px;">Ekranda yo\'q bo\'lsa: "⟳ Bazadan yangilash" ni bosing — guruh ' + esc(o.level) + '-kurs ustunidagi "Yangi (HEMIS)" oqimiga tushadi; Ctrl+F bilan qidiring.</div>' : '')
+                               + '</div>';
+                        }
+                    });
                     h += '</div>';
                 }
                 if (r.sample) h += '<details style="margin-top:6px;"><summary style="cursor:pointer;color:#0e7490;">Birinchi yozuv namunasi</summary><pre style="font-size:10.5px;white-space:pre-wrap;">' + esc(JSON.stringify(r.sample, null, 1)) + '</pre></details>';

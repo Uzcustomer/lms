@@ -48,6 +48,9 @@ class InternationalStudentController extends Controller
         // False show global
         $falseShowEnabled = \App\Models\Setting::get('false_show_enabled', '0') === '1';
 
+        // Talabalar kabinetidagi viza bloklash popuplari yoqilganmi (tugma holati)
+        $visaBlockEnabled = \App\Models\Setting::get('visa_block_enabled', '1') === '1';
+
         // Filterlash
         $this->applyIntFilters($query, $request);
 
@@ -184,7 +187,7 @@ class InternationalStudentController extends Controller
         // Tepada "Viza arizalar" tugmasi uchun pending arizalar soni (badge)
         $visaPendingCount = \App\Models\VisaApplication::where('status', 'pending')->count();
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms', 'visaBlockEnabled'));
     }
 
     /**
@@ -463,6 +466,21 @@ class InternationalStudentController extends Controller
         }
 
         return redirect()->back()->with('success', "{$sent} ta talabaga ogohlantirish yuborildi.");
+    }
+
+    /**
+     * Talabalar kabinetidagi viza bloklash va popuplarini yoqadi/o'chiradi.
+     * O'chirilganda talabalar platformadan erkin foydalanadi, yoqilganda
+     * bloklash qayta ishlaydi. Sozlama butun tizim uchun umumiy.
+     */
+    public function toggleVisaBlock()
+    {
+        $current = \App\Models\Setting::get('visa_block_enabled', '1');
+        \App\Models\Setting::set('visa_block_enabled', $current === '1' ? '0' : '1');
+
+        return redirect()->back()->with('success', $current === '1'
+            ? "Viza bloklash o'chirildi — talabalar platformadan erkin foydalanadi"
+            : 'Viza bloklash yoqildi — muddati o\'tganlar yana bloklanadi');
     }
 
     public function toggleFalseShow()

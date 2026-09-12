@@ -575,5 +575,15 @@
     "Haqiqiy": "Authentic",
     "To'lov chekini rad etish sababi": "Reason for rejecting the payment receipt",
     "To'lov cheki tekshirilishi kutilmoqda": "Payment receipt awaiting verification",
-    "Siz :group guruhiga o'tkazildingiz. Ma'lumot tez orada yangilanadi.": "You have been moved to group :group. This will be updated shortly."
+    "Siz :group guruhiga o'tkazildingiz. Ma'lumot tez orada yangilanadi.": "You have been moved to group :group. This will be updated shortly.",
+    "Guruh ma'lumotlarim": "My group",
+    "Guruhingiz": "Your group",
+    "Tyutor": "Tutor",
+    "Telefon raqami kiritilmagan": "No phone number",
+    "Qo'ng'iroq qilish": "Call",
+    "Tyutor biriktirilmagan": "No tutor assigned",
+    "Guruhingizga hali tyutor biriktirilmagan. Savol bo'lsa dekanatga murojaat qiling.": "No tutor has been assigned to your group yet. Contact the dean's office with any questions.",
+    "Yangi guruh": "New group",
+    "Avvalgi": "Previous",
+    "Guruh tyutori": "Group tutor"
 }

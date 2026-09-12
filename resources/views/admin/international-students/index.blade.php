@@ -187,6 +187,22 @@
                         @endif
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;">
+                        {{-- Talabalar kabinetidagi viza bloklash popuplarini yoqish/o'chirish --}}
+                        <form method="POST" action="{{ route('admin.international-students.toggle-visa-block') }}" style="margin:0;"
+                              onsubmit="return confirm(@js($visaBlockEnabled
+                                  ? "Viza bloklash o'chirilsinmi? Muddati o'tgan talabalar platformadan erkin foydalanadi."
+                                  : "Viza bloklash yoqilsinmi? Muddati o'tgan talabalar yana bloklanadi."))">
+                            @csrf
+                            <button type="submit"
+                                    title="{{ $visaBlockEnabled ? 'Hozir: bloklash YOQILGAN. Bosilsa talabalar erkin foydalanadi.' : 'Hozir: bloklash O\'CHIRILGAN. Bosilsa qayta yoqiladi.' }}"
+                                    style="display:inline-flex;align-items:center;gap:7px;padding:6px 12px;font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap;transition:all 0.15s;{{ $visaBlockEnabled ? 'color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;' : 'color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;' }}">
+                                {{-- Toggle ko'rinishi --}}
+                                <span style="position:relative;display:inline-block;width:28px;height:16px;border-radius:999px;flex-shrink:0;background:{{ $visaBlockEnabled ? '#dc2626' : '#cbd5e1' }};">
+                                    <span style="position:absolute;top:2px;{{ $visaBlockEnabled ? 'left:14px;' : 'left:2px;' }}width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);"></span>
+                                </span>
+                                {{ $visaBlockEnabled ? 'Viza bloklash: yoqilgan' : "Viza bloklash: o'chirilgan" }}
+                            </button>
+                        </form>
                         @if($isSubscribed)
                             <form method="POST" action="{{ route('admin.international-students.unsubscribe') }}" style="margin:0;">
                                 @csrf

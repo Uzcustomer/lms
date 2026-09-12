@@ -12,31 +12,23 @@
 @php
     $gvStudent = auth()->guard('student')->user();
     $gvTargets = collect();
-    $gvMode = null;   // 'moved' | 'vote' | 'notice'
+    $gvMode = null;   // 'vote' | 'notice'
     $gvDraft = null;
 
     $gvHasTables = \Illuminate\Support\Facades\Schema::hasTable('distribution_voting_groups')
         && \Illuminate\Support\Facades\Schema::hasTable('distribution_votes');
 
-    // Guruhi o'zgargan talabaga yangi guruhi aytiladi — bu boshqa hamma
-    // holatdan ustun: tanlov tugagan, faqat xabar qolgan.
+    // Guruhi o'zgargan talabaga popup chiqmaydi — yangi guruhi va tyutori
+    // "Guruh ma'lumotlarim" sahifasida (Boshqa menyusi). Reja bu yerda faqat
+    // ovoz popupini to'sish uchun olinadi: tanlovi hal bo'lgan talaba ovoz
+    // bermaydi.
     if ($gvStudent && \Illuminate\Support\Facades\Schema::hasTable('distribution_draft_assignments')) {
         $gvDraft = \App\Models\DistributionDraftAssignment::query()
             ->where('student_id', $gvStudent->id)
             ->first();
-
-        // Har login uchun bir marta: popup yopilganda sessiyaga belgi qo'yiladi
-        // va shu sessiya davomida qayta chiqmaydi. Talaba chiqib qayta kirsa
-        // (yangi sessiya) yana ko'rsatiladi.
-        //
-        // Belgida guruh IDsi ham bor: sessiya davomida registrator talabani
-        // boshqa guruhga ko'chirsa, yangi guruh haqida popup baribir chiqadi.
-        if ($gvDraft && session('gv_moved_seen') !== (int) $gvDraft->to_group_hemis_id) {
-            $gvMode = 'moved';
-        }
     }
 
-    if ($gvMode === null && $gvStudent && $gvStudent->group_id && $gvHasTables) {
+    if ($gvStudent && $gvStudent->group_id && $gvHasTables) {
         // Ruxsat guruh bo'yicha yoki shu talabaga alohida berilgan bo'lishi mumkin.
         $gvAllowed = \App\Models\DistributionVotingGroup::query()->where('group_hemis_id', (int) $gvStudent->group_id)->exists()
             || (\Illuminate\Support\Facades\Schema::hasTable('distribution_voting_students')
@@ -82,86 +74,6 @@
         }
     }
 @endphp
-
-@if($gvMode === 'moved')
-<div id="gvMoved" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,39,72,.55);">
-    <div style="width:min(420px,100%);overflow:hidden;border-radius:14px;background:#fff;box-shadow:0 24px 64px rgba(15,39,72,.35);font-family:inherit;">
-        <div style="padding:18px 20px;background:#0f2748;color:#fff;">
-            <h3 style="margin:0;font-size:16px;font-weight:800;">Guruhingiz o'zgardi</h3>
-            <p style="margin:6px 0 0;color:rgba(255,255,255,.75);font-size:12px;">Yangi guruhingiz haqida ma'lumot</p>
-        </div>
-
-        <div style="padding:18px 20px;">
-            <div style="display:flex;align-items:center;gap:12px;">
-                <div style="flex:1;min-width:0;text-align:center;padding:11px 8px;border:1px solid #e3e9f2;border-radius:10px;background:#f7f9fc;">
-                    <div style="color:#8798b1;font-size:10.5px;font-weight:600;">Avvalgi</div>
-                    <div style="margin-top:3px;color:#6b7c95;font-size:13px;font-weight:700;">{{ $gvDraft->from_group_name ?: '—' }}</div>
-                </div>
-                <div style="flex:none;color:#0f7a52;font-size:20px;font-weight:800;">&rarr;</div>
-                <div style="flex:1;min-width:0;text-align:center;padding:11px 8px;border:1px solid #a7e0c4;border-radius:10px;background:#e9f7f0;">
-                    <div style="color:#0f7a52;font-size:10.5px;font-weight:600;">Yangi</div>
-                    <div style="margin-top:3px;color:#0b5c3e;font-size:14px;font-weight:800;">{{ $gvDraft->to_group_name }}</div>
-                </div>
-            </div>
-
-            <p style="margin:15px 0 0;color:#41506b;font-size:12.5px;line-height:1.65;">
-                Endi dars jadvali, davomat va baholaringiz
-                <b style="color:#17233a;">{{ $gvDraft->to_group_name }}</b> guruhi bo'yicha yuritiladi.
-                Savol bo'lsa registrator ofisiga murojaat qiling.
-            </p>
-        </div>
-
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-top:1px solid #eef2f8;background:#fbfcfe;">
-            <span style="color:#8798b1;font-size:11px;">Yopish uchun istalgan joyga bosing</span>
-            <span id="gvMovedTimer" style="color:#8798b1;font-size:11px;font-weight:700;">15</span>
-        </div>
-    </div>
-</div>
-
-<script>
-(() => {
-    const box = document.getElementById('gvMoved');
-    const timerEl = document.getElementById('gvMovedTimer');
-    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    let left = 15;
-    let closed = false;
-
-    // Yopilgani serverga bildiriladi: sessiyaga belgi qo'yiladi va popup shu
-    // login davomida qayta chiqmaydi. Talaba chiqib qayta kirsa yana chiqadi.
-    //
-    // sendBeacon — sahifa yopilib qolsa ham so'rov yetib boradi; u yo'q
-    // brauzerlarda oddiy fetch ishlatiladi. So'rov yetmasa popup keyingi
-    // sahifada qayta chiqadi, boshqa zarari yo'q.
-    function close() {
-        if (closed) return;
-        closed = true;
-        clearInterval(tick);
-        box.remove();
-
-        const url = @json(route('student.group-change.seen'));
-        if (navigator.sendBeacon) {
-            const form = new FormData();
-            form.append('_token', csrf);
-            navigator.sendBeacon(url, form);
-        } else {
-            fetch(url, {
-                method: 'POST',
-                headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
-                keepalive: true,
-            }).catch(() => {});
-        }
-    }
-
-    const tick = setInterval(() => {
-        left--;
-        if (timerEl) timerEl.textContent = left;
-        if (left <= 0) close();
-    }, 1000);
-
-    box.addEventListener('click', close);
-})();
-</script>
-@endif
 
 @if($gvMode === 'vote')
 <div id="gvBackdrop" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,39,72,.6);">

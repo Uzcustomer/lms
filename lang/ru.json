@@ -383,5 +383,16 @@
     "Haqiqiy": "Подлинная",
     "To'lov chekini rad etish sababi": "Причина отклонения квитанции",
     "To'lov cheki tekshirilishi kutilmoqda": "Квитанция ожидает проверки",
-    "Siz :group guruhiga o'tkazildingiz. Ma'lumot tez orada yangilanadi.": "Вы переведены в группу :group. Информация будет обновлена в ближайшее время."
+    "Siz :group guruhiga o'tkazildingiz. Ma'lumot tez orada yangilanadi.": "Вы переведены в группу :group. Информация будет обновлена в ближайшее время.",
+    "Guruh ma'lumotlarim": "Данные о группе",
+    "Guruhingiz": "Ваша группа",
+    "Tyutor": "Тьютор",
+    "Telefon raqami kiritilmagan": "Номер телефона не указан",
+    "Qo'ng'iroq qilish": "Позвонить",
+    "Tyutor biriktirilmagan": "Тьютор не назначен",
+    "Guruhingizga hali tyutor biriktirilmagan. Savol bo'lsa dekanatga murojaat qiling.": "Вашей группе пока не назначен тьютор. По вопросам обращайтесь в деканат.",
+    "Yangi guruh": "Новая группа",
+    "Avvalgi": "Прежняя",
+    "Yangi": "Новая",
+    "Guruh tyutori": "Тьютор группы"
 }

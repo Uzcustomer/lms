@@ -76,6 +76,10 @@ class StudentDistributionController extends Controller
             ? DistributionDraftAssignment::query()->get()->keyBy('student_id')
             : collect();
 
+        // Faol ovozlar — rejani bekor qilishda (×) talaba ovoz bergani
+        // ogohlantiriladi va ovozi eski deb belgilanadi.
+        $voteTo = $this->activeVoteTargets();
+
         // Guruhning asl talabalari — rejaga ko'ra ketganlari ham ko'rinadi,
         // qayerga ko'chirilgani bilan birga.
         $students = Student::query()
@@ -83,7 +87,7 @@ class StudentDistributionController extends Controller
             ->where('group_id', $groupId)
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'student_id_number'])
-            ->map(function ($student) use ($drafts, $groupId) {
+            ->map(function ($student) use ($drafts, $groupId, $voteTo) {
                 $draft = $drafts->get($student->id);
 
                 // Reja bajarilgan: talaba LMS da allaqachon maqsad guruhda (HEMIS
@@ -100,6 +104,7 @@ class StudentDistributionController extends Controller
                     'moved_to_id' => ($draft && !$done) ? (int) $draft->to_group_hemis_id : null,
                     'full_group_mode' => ($draft && !$done) ? (bool) $draft->full_group_mode : false,
                     'done_from' => $done ? $draft->from_group_name : null,
+                    'vote_to' => $voteTo->get((int) $student->id),
                 ];
             })
             ->values();
@@ -119,6 +124,7 @@ class StudentDistributionController extends Controller
                     'full_name' => $draft->student_name,
                     'student_id_number' => (string) $draft->student_id_number,
                     'from_group_name' => $draft->from_group_name,
+                    'vote_to' => $voteTo->get((int) $draft->student_id),
                     'incoming' => true,
                 ])
                 ->values();
@@ -433,12 +439,25 @@ class StudentDistributionController extends Controller
             'Taqsimot rejasi jadvali hali migratsiya qilinmagan.'
         );
 
-        $data = $request->validate(['student_id' => ['required', 'integer']]);
+        $data = $request->validate([
+            'student_id' => ['required', 'integer'],
+            // Talaba ovoz bergan bo'lsa — ovozi eski deb belgilanadi va u
+            // qaytadan ovoz bera oladi (ovoz berish ochiq bo'lsa).
+            'archive_vote' => ['nullable', 'boolean'],
+        ]);
 
-        DistributionDraftAssignment::query()->where('student_id', $data['student_id'])->delete();
+        $archived = 0;
+
+        DB::transaction(function () use ($data, &$archived) {
+            DistributionDraftAssignment::query()->where('student_id', $data['student_id'])->delete();
+
+            if (!empty($data['archive_vote'])) {
+                $archived = $this->archiveVotes(collect([(int) $data['student_id']]));
+            }
+        });
 
         return response()->json([
-            'message' => 'Reja bekor qilindi.',
+            'message' => 'Reja bekor qilindi.' . ($archived ? ' Ovozi eski deb belgilandi.' : ''),
             'groups' => $this->groupCatalog()->values(),
         ]);
     }
@@ -595,7 +614,7 @@ class StudentDistributionController extends Controller
         ]);
 
         $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
-        $opened = 0;
+        $openedIds = [];
 
         foreach (collect($data['group_hemis_ids'])->unique() as $id) {
             $group = $catalog->get((int) $id);
@@ -607,11 +626,23 @@ class StudentDistributionController extends Controller
                 ['group_hemis_id' => (int) $id],
                 ['group_name' => $group['group_name'], 'opened_by' => Auth::id()]
             );
-            $opened++;
+            $openedIds[] = (int) $id;
         }
 
+        // Rejasi bekor qilingan, lekin ovozi faol qolgan talabalar qaytadan
+        // ovoz bera olishi uchun ularning ovozi eski deb belgilanadi.
+        $archived = $openedIds
+            ? $this->archiveStaleVotes(
+                Student::query()
+                    ->where('student_status_code', 11)
+                    ->whereIn('group_id', $openedIds)
+                    ->pluck('id')
+            )
+            : 0;
+
         return response()->json([
-            'message' => $opened . ' ta guruh talabalariga ovoz berish ochildi.',
+            'message' => count($openedIds) . ' ta guruh talabalariga ovoz berish ochildi.'
+                . ($archived ? ' ' . $archived . " ta talabaning rejasi bekor qilingan ovozi eski deb belgilandi — ular qaytadan ovoz bera oladi." : ''),
             'voting_open_count' => DistributionVotingGroup::query()->count(),
         ]);
     }
@@ -634,7 +665,7 @@ class StudentDistributionController extends Controller
         // Qo'lda ko'chirilgan talabaning guruhi hal qilingan — unga ovoz
         // berish ochilmaydi, aks holda ovozi rejani buzib yuborardi.
         $assigned = $this->assignedStudentIds($students->pluck('id'));
-        $opened = 0;
+        $openedIds = collect();
 
         foreach ($students as $student) {
             if ($assigned->has((int) $student->id)) {
@@ -645,13 +676,16 @@ class StudentDistributionController extends Controller
                 ['student_id' => $student->id],
                 ['group_hemis_id' => (int) $student->group_id, 'opened_by' => Auth::id()]
             );
-            $opened++;
+            $openedIds->push((int) $student->id);
         }
 
+        $opened = $openedIds->count();
         $skipped = $students->count() - $opened;
+        $archived = $this->archiveStaleVotes($openedIds);
 
         return response()->json([
             'message' => $opened . ' ta talabaga ovoz berish ochildi.'
+                . ($archived ? ' ' . $archived . " tasining avvalgi ovozi eski deb belgilandi." : '')
                 . ($skipped ? ' ' . $skipped . " ta talaba qo'lda ko'chirilgani uchun o'tkazib yuborildi." : ''),
             'voting_student_count' => DistributionVotingStudent::query()->count(),
         ]);
@@ -737,7 +771,7 @@ class StudentDistributionController extends Controller
         }
 
         $voted = Schema::hasTable('distribution_votes')
-            ? DistributionVote::query()->pluck('student_id')->map(fn ($id) => (int) $id)->flip()
+            ? DistributionVote::query()->active()->pluck('student_id')->map(fn ($id) => (int) $id)->flip()
             : collect();
 
         $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
@@ -807,7 +841,12 @@ class StudentDistributionController extends Controller
             return response()->json(['votes' => [], 'voting_open_count' => 0]);
         }
 
-        $all = DistributionVote::query()
+        $query = DistributionVote::query();
+        if (DistributionVote::supportsArchive()) {
+            // Eski ovozlar ro'yxat oxirida, alohida bo'limda.
+            $query->orderByRaw('CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END');
+        }
+        $all = $query
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
             ->orderBy('created_at')
             ->get();
@@ -833,8 +872,13 @@ class StudentDistributionController extends Controller
 
                 // holat: done — HEMISda bajarilgan; replaced — reja boshqa guruhga o'zgartirilgan;
                 // moved — talaba HEMISda boshqa guruhga o'tgan; pending — reja kutmoqda
+                // archived — reja bekor qilingan, ovoz eski deb belgilangan (talaba
+                // qaytadan ovoz bera oladi); qolgan holatlar faqat faol ovozga tegishli.
+                $archived = $vote->isArchived();
                 $state = 'pending';
-                if ($curGroupId > 0 && $curGroupId === (int) $vote->to_group_hemis_id) {
+                if ($archived) {
+                    $state = 'archived';
+                } elseif ($curGroupId > 0 && $curGroupId === (int) $vote->to_group_hemis_id) {
                     $state = 'done';
                 } elseif ($draft && (int) $draft->to_group_hemis_id !== (int) $vote->to_group_hemis_id) {
                     $state = 'replaced';
@@ -853,9 +897,11 @@ class StudentDistributionController extends Controller
                     // maqsadli guruhning hozirgi nomi (HEMISda qayta nomlangan bo'lsa farq qiladi)
                     'to_group_now' => $toNow['group_name'] ?? null,
                     'current_group_name' => $curGroupName,
-                    'draft_to_group_name' => $draft ? $draft->to_group_name : null,
+                    'draft_to_group_name' => ($draft && !$archived) ? $draft->to_group_name : null,
                     'state' => $state,
                     'status' => $vote->status,
+                    'archived' => $archived,
+                    'archived_at' => $archived ? $vote->archived_at->format('d.m.Y H:i') : null,
                     'voted_at' => optional($vote->created_at)->format('d.m.Y H:i'),
                 ];
             })
@@ -895,7 +941,10 @@ class StudentDistributionController extends Controller
             }
 
             DB::transaction(function () use ($vote) {
-                if ($vote->status === 'approved' && Schema::hasTable('distribution_draft_assignments')) {
+                // Eski ovozning rejasi allaqachon bekor qilingan — hozirgi reja
+                // talabaning yangi ovoziga tegishli, unga tegilmaydi.
+                if ($vote->status === 'approved' && !$vote->isArchived()
+                    && Schema::hasTable('distribution_draft_assignments')) {
                     DistributionDraftAssignment::query()
                         ->where('student_id', $vote->student_id)
                         ->where('to_group_hemis_id', $vote->to_group_hemis_id)
@@ -938,7 +987,7 @@ class StudentDistributionController extends Controller
 
         foreach (collect($data['vote_ids'])->unique() as $voteId) {
             $vote = DistributionVote::query()->find((int) $voteId);
-            if (!$vote || $vote->status !== 'pending') {
+            if (!$vote || $vote->status !== 'pending' || $vote->isArchived()) {
                 continue;
             }
 
@@ -1309,6 +1358,58 @@ class StudentDistributionController extends Controller
             ->pluck('student_id')
             ->map(fn ($id) => (int) $id)
             ->flip();
+    }
+
+    /**
+     * Faol ovozlar: student_id => ovoz berilgan guruhning hozirgi nomi
+     * (HEMISda qayta nomlangan bo'lsa ham to'g'ri chiqadi).
+     */
+    private function activeVoteTargets(): Collection
+    {
+        if (!Schema::hasTable('distribution_votes')) {
+            return collect();
+        }
+
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+
+        return DistributionVote::query()
+            ->active()
+            ->get(['student_id', 'to_group_hemis_id', 'to_group_name'])
+            ->mapWithKeys(fn (DistributionVote $vote) => [
+                (int) $vote->student_id => ($catalog->get((int) $vote->to_group_hemis_id)['group_name'] ?? null)
+                    ?: $vote->to_group_name,
+            ]);
+    }
+
+    /** Talabalarning faol ovozlarini eski deb belgilaydi. Nechtasi belgilanganini qaytaradi. */
+    private function archiveVotes(Collection $studentIds): int
+    {
+        if ($studentIds->isEmpty() || !Schema::hasTable('distribution_votes') || !DistributionVote::supportsArchive()) {
+            return 0;
+        }
+
+        return DistributionVote::query()
+            ->active()
+            ->whereIn('student_id', $studentIds->map(fn ($id) => (int) $id)->unique()->values()->all())
+            ->update(['archived_at' => now(), 'archived_by' => Auth::id()]);
+    }
+
+    /**
+     * Ovozi faol, lekin rejasi yo'q talabalar — reja keyin bekor qilingan
+     * (×, "barchasini qaytarish"). Bunday ovoz talabani qayta ovoz berishdan
+     * to'sib turardi; ovoz berish qayta ochilganda u eski deb belgilanadi.
+     */
+    private function archiveStaleVotes(Collection $studentIds): int
+    {
+        if ($studentIds->isEmpty()) {
+            return 0;
+        }
+
+        $assigned = $this->assignedStudentIds($studentIds);
+
+        return $this->archiveVotes(
+            $studentIds->reject(fn ($id) => $assigned->has((int) $id))->values()
+        );
     }
 
     private function groupCatalog(): Collection

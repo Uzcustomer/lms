@@ -386,7 +386,7 @@ class RetakeNotificationService
             Log::warning("[RetakeNotification] StudentNotification: " . $e->getMessage());
         }
 
-        if (!empty($student->telegram_chat_id)) {
+        if (!empty($student->telegram_chat_id) && config('services.retake.telegram_enabled', true)) {
             $this->telegram->sendToUser(
                 (string) $student->telegram_chat_id,
                 $this->telegramText($title, $message),
@@ -436,7 +436,7 @@ class RetakeNotificationService
             Log::warning("[RetakeNotification] Notification: " . $e->getMessage());
         }
 
-        if (!empty($teacher->telegram_chat_id)) {
+        if (!empty($teacher->telegram_chat_id) && config('services.retake.telegram_enabled', true)) {
             $this->telegram->sendToUser(
                 (string) $teacher->telegram_chat_id,
                 $this->telegramText($title, $message),

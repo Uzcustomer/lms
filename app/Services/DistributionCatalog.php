@@ -183,13 +183,37 @@ class DistributionCatalog
             ? Curriculum::query()->pluck('education_type_name', 'curricula_hemis_id')
             : collect();
 
+        // Bo'sh guruhning kursi/semestri — avvalo O'QUV REJA bo'yicha: shu rejadagi
+        // talabali guruhlar qaysi kurs/semestrda bo'lsa, yangi ochilgan bo'sh guruh ham
+        // o'shanda (masalan "xd/21-01a (2 talik)" 5-kurs/10-semestr bo'lsa, xuddi shu
+        // rejadagi yangi "xd/21-01(a)" ham 5-kurs/10-semestr). Reja bo'yicha talabali
+        // guruh bo'lmasa — nomdagi qabul yilidan taxminan.
+        $byCurriculum = [];
+        foreach ($rows as $row) {
+            $cid = (int) ($row['curriculum_hemis_id'] ?? 0);
+            if ($cid <= 0 || !$row['course']) {
+                continue;
+            }
+            $k = $row['course'] . '|' . ($row['semester_code'] ?? '') . '|' . ($row['semester_name'] ?? '');
+            $byCurriculum[$cid][$k] = ($byCurriculum[$cid][$k] ?? 0) + (int) $row['lms_student_count'];
+        }
+        $curriculumCourse = [];
+        foreach ($byCurriculum as $cid => $variants) {
+            arsort($variants);
+            [$c, $sc, $sn] = explode('|', (string) array_key_first($variants), 3);
+            $curriculumCourse[$cid] = ['course' => (int) $c, 'semester_code' => $sc !== '' ? $sc : null, 'semester_name' => $sn !== '' ? $sn : null];
+        }
+
         $candidates = [];
         foreach ($activeGroups as $groupId => $active) {
             if ($known->has($groupId)) {
                 continue;
             }
 
-            $course = $this->courseFromName((string) $active->name);
+            $cid = (int) ($active->curriculum_hemis_id ?? 0);
+            $course = isset($curriculumCourse[$cid])
+                ? $curriculumCourse[$cid]['course']
+                : $this->courseFromName((string) $active->name);
             if ($course === null) {
                 continue;
             }
@@ -215,7 +239,9 @@ class DistributionCatalog
         foreach ($candidates as $active) {
             $groupId = (int) $active->group_hemis_id;
 
-            $course = $this->courseFromName((string) $active->name);
+            $cid = (int) ($active->curriculum_hemis_id ?? 0);
+            $fromPlan = $curriculumCourse[$cid] ?? null;
+            $course = $fromPlan ? $fromPlan['course'] : $this->courseFromName((string) $active->name);
             $movedIn = (int) $incoming->get($groupId, 0);
             $movedOut = (int) $outgoing->get($groupId, 0);
             $students = max(0, $movedIn - $movedOut);
@@ -231,10 +257,11 @@ class DistributionCatalog
                 'level_code' => '',
                 'course' => $course,
                 'level_name' => $course ? $course . '-kurs' : null,
-                // Talabasi yo'q: kurs va semestr guruh nomidagi qabul yilidan taxminan
-                'course_source' => 'name',
-                'semester_code' => $course ? (string) $this->semesterFromCourse($course) : null,
-                'semester_name' => $course ? $this->semesterFromCourse($course) . '-semestr' : null,
+                // Talabasi yo'q: kurs/semestr shu o'quv rejadagi talabali guruhlardan;
+                // reja bo'yicha ma'lumot bo'lmasa — nomdagi qabul yilidan taxminan
+                'course_source' => $fromPlan ? 'curriculum' : 'name',
+                'semester_code' => $fromPlan ? $fromPlan['semester_code'] : ($course ? (string) $this->semesterFromCourse($course) : null),
+                'semester_name' => $fromPlan ? $fromPlan['semester_name'] : ($course ? $this->semesterFromCourse($course) . '-semestr' : null),
                 'language_code' => $active->education_lang_code ?: null,
                 'language_name' => $active->education_lang_name ?: null,
                 'curriculum_hemis_id' => $active->curriculum_hemis_id ? (int) $active->curriculum_hemis_id : null,

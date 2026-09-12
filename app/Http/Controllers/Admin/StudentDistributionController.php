@@ -83,19 +83,24 @@ class StudentDistributionController extends Controller
             ->where('group_id', $groupId)
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'student_id_number'])
-            ->map(function ($student) use ($drafts) {
+            ->map(function ($student) use ($drafts, $groupId) {
                 $draft = $drafts->get($student->id);
+                // Reja HEMISda bajarilgan: talaba allaqachon shu (maqsadli) guruhda —
+                // "ko'chirilgan" emas, oddiy a'zo; qayerdan kelgani belgi sifatida qoladi.
+                $done = $draft && (int) $draft->to_group_hemis_id === $groupId;
 
                 return [
                     'student_id' => $student->id,
                     'full_name' => $student->full_name,
                     'student_id_number' => (string) $student->student_id_number,
-                    'moved_to' => $draft ? $draft->to_group_name : null,
-                    'moved_to_id' => $draft ? (int) $draft->to_group_hemis_id : null,
-                    'full_group_mode' => $draft ? (bool) $draft->full_group_mode : false,
+                    'moved_to' => ($draft && !$done) ? $draft->to_group_name : null,
+                    'moved_to_id' => ($draft && !$done) ? (int) $draft->to_group_hemis_id : null,
+                    'full_group_mode' => ($draft && !$done) ? (bool) $draft->full_group_mode : false,
+                    'done_from' => $done ? $draft->from_group_name : null,
                 ];
             })
             ->values();
+        $presentIds = $students->pluck('student_id')->flip();
 
         // Rejaga ko'ra shu guruhga kelgan talabalar — chap panelda guruh
         // ochilganda alohida ko'rsatiladi va qaytarish mumkin bo'ladi.
@@ -105,6 +110,8 @@ class StudentDistributionController extends Controller
                 ->where('to_group_hemis_id', $groupId)
                 ->orderBy('student_name')
                 ->get()
+                // HEMISda bajarilgani (talaba allaqachon shu guruhda) yuqorida oddiy a'zo bo'lib chiqadi
+                ->reject(fn (DistributionDraftAssignment $draft) => $presentIds->has((int) $draft->student_id))
                 ->map(fn (DistributionDraftAssignment $draft) => [
                     'student_id' => $draft->student_id,
                     'full_name' => $draft->student_name,
@@ -794,21 +801,58 @@ class StudentDistributionController extends Controller
             return response()->json(['votes' => [], 'voting_open_count' => 0]);
         }
 
-        $votes = DistributionVote::query()
+        $all = DistributionVote::query()
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
             ->orderBy('created_at')
-            ->get()
-            ->map(fn (DistributionVote $vote) => [
-                'id' => $vote->id,
-                'student_id' => $vote->student_id,
-                'student_name' => $vote->student_name,
-                'student_id_number' => $vote->student_id_number,
-                'from_group_name' => $vote->from_group_name,
-                'to_group_name' => $vote->to_group_name,
-                'to_group_hemis_id' => $vote->to_group_hemis_id,
-                'status' => $vote->status,
-                'voted_at' => optional($vote->created_at)->format('d.m.Y H:i'),
-            ])
+            ->get();
+
+        // Ovozdagi nomlar ovoz berilgan paytdagi nomlar. Keyin guruh HEMISda qayta
+        // nomlangan, talaba HEMISda ko'chirilgan yoki registrator rejani o'zgartirgan
+        // bo'lishi mumkin — joriy holatni yoniga qo'shib beramiz.
+        $catalog = $this->groupCatalog()->keyBy('group_hemis_id');
+        $studentIds = $all->pluck('student_id')->filter()->unique()->values();
+        $current = $studentIds->isEmpty()
+            ? collect()
+            : Student::query()->whereIn('id', $studentIds->all())->get(['id', 'group_id', 'group_name'])->keyBy('id');
+        $drafts = Schema::hasTable('distribution_draft_assignments') && $studentIds->isNotEmpty()
+            ? DistributionDraftAssignment::query()->whereIn('student_id', $studentIds->all())->get()->keyBy('student_id')
+            : collect();
+
+        $votes = $all->map(function (DistributionVote $vote) use ($catalog, $current, $drafts) {
+                $st = $current->get((int) $vote->student_id);
+                $draft = $drafts->get((int) $vote->student_id);
+                $toNow = $catalog->get((int) $vote->to_group_hemis_id);
+                $curGroupId = $st ? (int) $st->group_id : 0;
+                $curGroupName = $st ? (($catalog->get($curGroupId)['group_name'] ?? null) ?: $st->group_name) : null;
+
+                // holat: done — HEMISda bajarilgan; replaced — reja boshqa guruhga o'zgartirilgan;
+                // moved — talaba HEMISda boshqa guruhga o'tgan; pending — reja kutmoqda
+                $state = 'pending';
+                if ($curGroupId > 0 && $curGroupId === (int) $vote->to_group_hemis_id) {
+                    $state = 'done';
+                } elseif ($draft && (int) $draft->to_group_hemis_id !== (int) $vote->to_group_hemis_id) {
+                    $state = 'replaced';
+                } elseif ($curGroupId > 0 && $curGroupId !== (int) $vote->from_group_hemis_id) {
+                    $state = 'moved';
+                }
+
+                return [
+                    'id' => $vote->id,
+                    'student_id' => $vote->student_id,
+                    'student_name' => $vote->student_name,
+                    'student_id_number' => $vote->student_id_number,
+                    'from_group_name' => $vote->from_group_name,
+                    'to_group_name' => $vote->to_group_name,
+                    'to_group_hemis_id' => $vote->to_group_hemis_id,
+                    // maqsadli guruhning hozirgi nomi (HEMISda qayta nomlangan bo'lsa farq qiladi)
+                    'to_group_now' => $toNow['group_name'] ?? null,
+                    'current_group_name' => $curGroupName,
+                    'draft_to_group_name' => $draft ? $draft->to_group_name : null,
+                    'state' => $state,
+                    'status' => $vote->status,
+                    'voted_at' => optional($vote->created_at)->format('d.m.Y H:i'),
+                ];
+            })
             ->values();
 
         return response()->json([

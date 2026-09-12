@@ -68,11 +68,16 @@ class DistributionCatalog
         $incoming = collect();
         $outgoing = collect();
         if (Schema::hasTable('distribution_draft_assignments')) {
+            // HEMISda allaqachon bajarilgan reja (talaba hozir maqsadli guruhda) —
+            // sonlarga qo'shilmaydi, aks holda talaba ikki marta sanaladi.
+            $done = $this->completedDraftStudentIds();
             $incoming = DistributionDraftAssignment::query()
+                ->whereNotIn('student_id', $done)
                 ->selectRaw('to_group_hemis_id, COUNT(*) as total')
                 ->groupBy('to_group_hemis_id')
                 ->pluck('total', 'to_group_hemis_id');
             $outgoing = DistributionDraftAssignment::query()
+                ->whereNotIn('student_id', $done)
                 ->selectRaw('from_group_hemis_id, COUNT(*) as total')
                 ->groupBy('from_group_hemis_id')
                 ->pluck('total', 'from_group_hemis_id');
@@ -428,6 +433,24 @@ class DistributionCatalog
         }
 
         return $this->languageKey($source) === $this->languageKey($target);
+    }
+
+    /**
+     * HEMISda allaqachon bajarilgan rejalar (talabaning joriy guruhi rejaning
+     * maqsadli guruhi bilan bir xil) — talaba id ro'yxati.
+     */
+    public function completedDraftStudentIds(): array
+    {
+        if (!Schema::hasTable('distribution_draft_assignments')) {
+            return [];
+        }
+
+        return DistributionDraftAssignment::query()
+            ->join('students', 'students.id', '=', 'distribution_draft_assignments.student_id')
+            ->whereColumn('students.group_id', 'distribution_draft_assignments.to_group_hemis_id')
+            ->pluck('distribution_draft_assignments.student_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     /** Ko'chirish/ovoz faqat bir xil o'quv reja ichida bo'lishi shart bo'lgan fakultet. */

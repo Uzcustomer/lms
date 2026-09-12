@@ -83,8 +83,15 @@ class StudentDistributionController extends Controller
             ->where('group_id', $groupId)
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'student_id_number'])
-            ->map(function ($student) use ($drafts) {
+            ->map(function ($student) use ($drafts, $groupId) {
                 $draft = $drafts->get($student->id);
+
+                // Reja bajarilgan: talaba LMS da allaqachon maqsad guruhda (HEMIS
+                // ko'chirishni qo'llagan). U shu guruhning oddiy talabasi — "o'z
+                // guruhiga ko'chirilgan" bo'lib ko'rinmasin.
+                if ($draft && $this->catalog->isDraftApplied($draft, $groupId)) {
+                    $draft = null;
+                }
 
                 return [
                     'student_id' => $student->id,
@@ -99,12 +106,14 @@ class StudentDistributionController extends Controller
 
         // Rejaga ko'ra shu guruhga kelgan talabalar — chap panelda guruh
         // ochilganda alohida ko'rsatiladi va qaytarish mumkin bo'ladi.
+        // Bajarilgan rejalar (talaba allaqachon shu guruhda) chiqarilmaydi —
+        // ular yuqoridagi asl talabalar ro'yxatida bor.
         $incoming = collect();
         if (Schema::hasTable('distribution_draft_assignments')) {
-            $incoming = DistributionDraftAssignment::query()
-                ->where('to_group_hemis_id', $groupId)
-                ->orderBy('student_name')
-                ->get()
+            $incoming = $this->catalog->pendingDrafts()
+                ->where('distribution_draft_assignments.to_group_hemis_id', $groupId)
+                ->orderBy('distribution_draft_assignments.student_name')
+                ->get(['distribution_draft_assignments.*'])
                 ->map(fn (DistributionDraftAssignment $draft) => [
                     'student_id' => $draft->student_id,
                     'full_name' => $draft->student_name,
@@ -185,6 +194,9 @@ class StudentDistributionController extends Controller
             ->map(function ($student) use ($catalog, $drafts) {
                 $group = $catalog->get((int) $student->group_id);
                 $draft = $drafts->get($student->id);
+                if ($draft && $this->catalog->isDraftApplied($draft, $student->group_id)) {
+                    $draft = null;   // HEMISda allaqachon ko'chirilgan
+                }
 
                 return [
                     'student_id' => $student->id,

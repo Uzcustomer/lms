@@ -39,6 +39,32 @@ class DistributionCatalog
     }
 
     /**
+     * Hali bajarilmagan rejalar.
+     *
+     * Reja "bajarilgan" hisoblanadi, agar talabaning LMS dagi guruhi
+     * (students.group_id — HEMIS talaba importidan) allaqachon rejadagi maqsad
+     * guruhga teng bo'lsa: ko'chirish HEMISda amalga oshirilgan va import uni
+     * olib kelgan. Bunday rejani yana "ko'chirilmoqda" deb hisoblash talabani
+     * yangi guruhda ikki marta ko'rsatadi va sanaydi.
+     */
+    public function pendingDrafts()
+    {
+        return DistributionDraftAssignment::query()
+            ->join('students as dda_st', 'dda_st.id', '=', 'distribution_draft_assignments.student_id')
+            ->where(function ($q) {
+                $q->whereNull('dda_st.group_id')
+                  ->orWhereColumn('dda_st.group_id', '!=', 'distribution_draft_assignments.to_group_hemis_id');
+            });
+    }
+
+    /** Reja bajarilganmi: talaba LMS da allaqachon maqsad guruhda. */
+    public function isDraftApplied(DistributionDraftAssignment $draft, $studentGroupId): bool
+    {
+        return $studentGroupId !== null
+            && (int) $studentGroupId === (int) $draft->to_group_hemis_id;
+    }
+
+    /**
      * Guruhlar katalogi: faqat o'qiyotgan bakalavr talabalar, faol guruhlar.
      * Sig'im va bo'sh joy reja (draft) hisobga olingan holda qaytadi.
      */
@@ -64,17 +90,21 @@ class DistributionCatalog
             ? DistributionGroupCapacity::query()->pluck('capacity', 'group_hemis_id')
             : collect();
 
-        // Reja bo'yicha kelgan va ketgan talabalar soni.
+        // Reja bo'yicha kelgan va ketgan talabalar soni — faqat hali BAJARILMAGAN
+        // rejalar. HEMISda ko'chirish amalga oshib, talabalar importi talabani
+        // yangi guruhga olib kelgan bo'lsa, u LMS sanog'ida allaqachon bor:
+        // rejani ham qo'shsak ikki marta sanalardi (eski guruhdan esa ikki marta
+        // ayirilardi).
         $incoming = collect();
         $outgoing = collect();
         if (Schema::hasTable('distribution_draft_assignments')) {
-            $incoming = DistributionDraftAssignment::query()
-                ->selectRaw('to_group_hemis_id, COUNT(*) as total')
-                ->groupBy('to_group_hemis_id')
+            $incoming = $this->pendingDrafts()
+                ->selectRaw('distribution_draft_assignments.to_group_hemis_id, COUNT(*) as total')
+                ->groupBy('distribution_draft_assignments.to_group_hemis_id')
                 ->pluck('total', 'to_group_hemis_id');
-            $outgoing = DistributionDraftAssignment::query()
-                ->selectRaw('from_group_hemis_id, COUNT(*) as total')
-                ->groupBy('from_group_hemis_id')
+            $outgoing = $this->pendingDrafts()
+                ->selectRaw('distribution_draft_assignments.from_group_hemis_id, COUNT(*) as total')
+                ->groupBy('distribution_draft_assignments.from_group_hemis_id')
                 ->pluck('total', 'from_group_hemis_id');
         }
 

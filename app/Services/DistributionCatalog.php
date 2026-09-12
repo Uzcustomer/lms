@@ -54,6 +54,12 @@ class DistributionCatalog
             ->get(['group_hemis_id', 'name', 'department_name', 'specialty_name', 'curriculum_hemis_id', 'education_lang_code', 'education_lang_name'])
             ->keyBy(fn ($group) => (int) $group->group_hemis_id);
 
+        // O'quv reja nomlari — Xalqaro ta'lim fakultetida ko'chirish/ovoz faqat
+        // bir xil o'quv reja doirasida bo'ladi (rejalar aralashib ketmasligi uchun).
+        $curriculumNames = Schema::hasTable('curricula')
+            ? Curriculum::query()->pluck('name', 'curricula_hemis_id')
+            : collect();
+
         $overrides = Schema::hasTable('distribution_group_capacities')
             ? DistributionGroupCapacity::query()->pluck('capacity', 'group_hemis_id')
             : collect();
@@ -107,7 +113,7 @@ class DistributionCatalog
             ->orderBy('level_code')
             ->orderBy('group_name')
             ->get()
-            ->map(function ($row) use ($sourceIds, $activeGroups, $overrides, $incoming, $outgoing, $semesterByGroup) {
+            ->map(function ($row) use ($sourceIds, $activeGroups, $overrides, $incoming, $outgoing, $semesterByGroup, $curriculumNames) {
                 $groupId = (int) $row->group_id;
                 $course = $this->toCourse($row->level_code);
                 $sem = $semesterByGroup->get($groupId);
@@ -137,6 +143,8 @@ class DistributionCatalog
                     'semester_name' => $sem ? $this->semesterLabel($sem->semester_code, $sem->semester_name) : null,
                     'language_code' => $active?->education_lang_code ?: null,
                     'language_name' => $active?->education_lang_name ?: null,
+                    'curriculum_hemis_id' => $active?->curriculum_hemis_id ? (int) $active->curriculum_hemis_id : null,
+                    'curriculum_name' => $active?->curriculum_hemis_id ? $this->cleanName($curriculumNames->get((int) $active->curriculum_hemis_id)) : null,
                     'lms_student_count' => $lmsCount,
                     'student_count' => $students,
                     'moved_in' => $movedIn,
@@ -229,6 +237,8 @@ class DistributionCatalog
                 'semester_name' => $course ? $this->semesterFromCourse($course) . '-semestr' : null,
                 'language_code' => $active->education_lang_code ?: null,
                 'language_name' => $active->education_lang_name ?: null,
+                'curriculum_hemis_id' => $active->curriculum_hemis_id ? (int) $active->curriculum_hemis_id : null,
+                'curriculum_name' => $active->curriculum_hemis_id ? $this->cleanName($curriculumNames->get((int) $active->curriculum_hemis_id)) : null,
                 'lms_student_count' => 0,
                 'student_count' => $students,
                 'moved_in' => $movedIn,
@@ -376,8 +386,27 @@ class DistributionCatalog
             return false;
         }
 
-        return $manualMode
-            || $this->languageKey($source) === $this->languageKey($target);
+        if ($manualMode) {
+            return true;
+        }
+
+        // Xalqaro ta'lim fakulteti: faqat bir xil o'quv reja ichida (ovoz berishda
+        // rejalar aralashib ketmasligi uchun). "To'liq guruh" rejimi bundan mustasno.
+        if ($this->requiresSameCurriculum($source) || $this->requiresSameCurriculum($target)) {
+            $sc = (int) ($source['curriculum_hemis_id'] ?? 0);
+            $tc = (int) ($target['curriculum_hemis_id'] ?? 0);
+            if ($sc > 0 && $tc > 0 && $sc !== $tc) {
+                return false;
+            }
+        }
+
+        return $this->languageKey($source) === $this->languageKey($target);
+    }
+
+    /** Ko'chirish/ovoz faqat bir xil o'quv reja ichida bo'lishi shart bo'lgan fakultet. */
+    public function requiresSameCurriculum(array $group): bool
+    {
+        return str_contains($this->facultyKey($group), 'xalqaro');
     }
 
     /** Fakultetni solishtirish kaliti (bo'shliq va katta-kichik harf farqsiz). */

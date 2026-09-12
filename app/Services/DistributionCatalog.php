@@ -443,12 +443,9 @@ class DistributionCatalog
             return false;
         }
 
-        if ($manualMode) {
-            return true;
-        }
-
-        // Xalqaro ta'lim fakulteti: faqat bir xil o'quv reja ichida (ovoz berishda
-        // rejalar aralashib ketmasligi uchun). "To'liq guruh" rejimi bundan mustasno.
+        // Xalqaro ta'lim fakulteti: faqat bir xil o'quv reja ichida — ovoz berishda
+        // ham, registratorning ro'yxatida ham, "To'liq guruh" rejimida ham (rejalar
+        // aralashib ketmasligi uchun bu qoida hech qayerda chetlab o'tilmaydi).
         if ($this->requiresSameCurriculum($source) || $this->requiresSameCurriculum($target)) {
             $sc = (int) ($source['curriculum_hemis_id'] ?? 0);
             $tc = (int) ($target['curriculum_hemis_id'] ?? 0);
@@ -457,7 +454,8 @@ class DistributionCatalog
             }
         }
 
-        return $this->languageKey($source) === $this->languageKey($target);
+        return $manualMode
+            || $this->languageKey($source) === $this->languageKey($target);
     }
 
     /** Ko'chirish/ovoz faqat bir xil o'quv reja ichida bo'lishi shart bo'lgan fakultet. */

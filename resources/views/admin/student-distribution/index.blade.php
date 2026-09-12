@@ -1116,6 +1116,16 @@
                     '</span></div>';
             }
 
+            if (st.done_from) {
+                // Reja HEMISda bajarilgan: talaba shu guruhga kelgan va HEMISda ham shu guruhda
+                return '<div class="sd-student">' + voteCheck + '<i>' + (index + 1) + '.</i>' +
+                    '<b>' + esc(st.full_name) + '</b>' +
+                    '<span>' + esc(st.student_id_number) + '</span>' +
+                    '<span class="sd-moved" style="background:#e9f7f0;color:#0f7a52;" title="Reja HEMISda bajarilgan: ' + esc(st.done_from) + ' guruhidan kelgan">&#10003; ' + esc(st.done_from) + ' dan kelgan' +
+                        '<button class="sd-undo" type="button" data-undo="' + st.student_id + '" title="Reja yozuvini o\u2019chirish (talaba HEMISda shu guruhda qoladi)">&times;</button>' +
+                    '</span></div>';
+            }
+
             if (st.moved_to) {
                 return '<div class="sd-student">' + voteCheck + '<i>' + (index + 1) + '.</i>' +
                     '<b>' + esc(st.full_name) + '</b>' +
@@ -1803,6 +1813,15 @@
             } catch (error) { /* jim */ }
         }
 
+        // Ovozdan keyingi holat: HEMISda bajarilgan / reja boshqa guruhga o'zgartirilgan /
+        // talaba HEMISda boshqa guruhga o'tgan
+        function voteStateNote(v) {
+            if (v.state === 'done') return '<span class="sd-meta" style="color:#0f7a52;">&#10003; HEMISda bajarilgan (hozir: ' + esc(v.current_group_name || '') + ')</span>';
+            if (v.state === 'replaced') return '<span class="sd-meta" style="color:#b45309;">reja o\u2019zgartirilgan: hozir &rarr; ' + esc(v.draft_to_group_name || '') + (v.current_group_name ? ' (HEMISda: ' + esc(v.current_group_name) + ')' : '') + '</span>';
+            if (v.state === 'moved') return '<span class="sd-meta" style="color:#b45309;">HEMISda hozir: ' + esc(v.current_group_name || '') + '</span>';
+            return '';
+        }
+
         function renderVotes() {
             $('votesMeta').textContent = votesData.length + ' ta ovoz';
 
@@ -1812,7 +1831,10 @@
                     '<span style="color:#0f7a52;font-weight:800;">&#10003;</span>' +
                     '<span><b>' + esc(v.student_name) + '</b>' +
                     '<span class="sd-meta">' + esc(v.student_id_number || '') + ' \u00b7 ' + esc(v.voted_at || '') + '</span></span>' +
-                    '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b></span>' +
+                    '<span class="sd-vote-route">' + esc(v.from_group_name || '') + ' &rarr; <b>' + esc(v.to_group_name || '') + '</b>' +
+                        (v.to_group_now && v.to_group_now !== v.to_group_name ? '<span class="sd-meta">hozirgi nomi: ' + esc(v.to_group_now) + '</span>' : '') +
+                        voteStateNote(v) +
+                    '</span>' +
                     '<button class="sd-vote-del" type="button" data-del-vote="' + v.id + '" title="Ovozni o\u2019chirish">' +
                         '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>' +
                     '</button>' +

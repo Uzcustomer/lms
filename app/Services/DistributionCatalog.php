@@ -108,7 +108,9 @@ class DistributionCatalog
 
                 return [
                     'group_hemis_id' => $groupId,
-                    'group_name' => $this->cleanName($row->group_name),
+                    // Nom — groups jadvalidan (HEMIS guruh importi yangilaydi); students dagi
+                    // group_name faqat talaba importida yangilanadi va eskirib qolishi mumkin.
+                    'group_name' => $this->cleanName($active?->name ?: $row->group_name),
                     'faculty_name' => $this->cleanName($row->department_name),
                     'specialty_name' => $this->cleanName($row->specialty_name),
                     'level_code' => (string) $row->level_code,
@@ -142,29 +144,17 @@ class DistributionCatalog
             ->map(fn ($row) => $nameKeyOf($row['group_name'], $row['specialty_name']))
             ->flip();
 
-        // Bo'sh guruh ikki holatda qo'shiladi:
-        //  - joriy qabul yili (1-kurs) guruhi — yangi o'quv yilida ochilgan;
-        //  - LMS da hech qachon talabasi bo'lmagan guruh — HEMIS da yangi
-        //    yaratilgan (masalan, yuqori kurs uchun ochilgan ingliz guruhi).
-        // Talabasi bo'lib, keyin bo'shab qolgan guruh eskirgan hisoblanadi:
-        // import chiqib ketgan talabani o'chirmaydi, holatini 60 qiladi,
-        // shuning uchun har qanday holatdagi talaba yozuvi "bo'lgan" degani.
+        // HEMIS da faol bo'lgan har qanday bo'sh guruh qo'shiladi — guruh
+        // importi HEMIS dagi "active" bayrog'ini bazaga aynan yozadi, shuning
+        // uchun faollik HEMIS dagi holat bilan bir xil. (Avval "talabasi bo'lib
+        // keyin bo'shagan" guruhlar eskirgan deb yashirilar edi — bu HEMIS da
+        // faol turgan guruhlarni ro'yxatdan tushirib qo'yardi.)
         // Har bir o'quv rejaning ta'lim turi. Yangi guruhning rejasi hali
         // import qilinmagan bo'lishi mumkin — bunda guruh chiqaverishi kerak,
         // faqat reja ANIQ bakalavr emasligi ma'lum bo'lsagina tashlanadi.
         $curriculumTypes = Schema::hasTable('curricula')
             ? Curriculum::query()->pluck('education_type_name', 'curricula_hemis_id')
             : collect();
-
-        $unknownIds = $activeGroups->keys()->reject(fn ($id) => $known->has($id))->values();
-        $everHadStudents = $unknownIds->isEmpty()
-            ? collect()
-            : Student::query()
-                ->whereIn('group_id', $unknownIds->all())
-                ->distinct()
-                ->pluck('group_id')
-                ->map(fn ($id) => (int) $id)
-                ->flip();
 
         $candidates = [];
         foreach ($activeGroups as $groupId => $active) {
@@ -174,9 +164,6 @@ class DistributionCatalog
 
             $course = $this->courseFromName((string) $active->name);
             if ($course === null) {
-                continue;
-            }
-            if ($course !== 1 && $everHadStudents->has($groupId)) {
                 continue;
             }
 

@@ -303,10 +303,16 @@ class AuthController extends Controller
         $user = $request->user();
         $guard = $user instanceof Student ? 'student' : 'teacher';
 
+        // Same profile flags as the login response so a restored session
+        // (cold start with a stored token) lands on the right screen.
         return response()->json([
             'user' => $user,
             'guard' => $guard,
             'roles' => $user->getRoleNames(),
+            'profile_complete' => $user->isProfileComplete(),
+            'telegram_verified' => $user->isTelegramVerified(),
+            'telegram_days_left' => $user->telegramDaysLeft(),
+            'bot_username' => config('services.telegram.bot_username', ''),
         ]);
     }
 

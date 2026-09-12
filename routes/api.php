@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
 use App\Http\Controllers\Api\MoodleDescriptorFailedCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
 use App\Http\Controllers\Api\MoodleTriggerPushController;
+use App\Http\Controllers\Api\V1\AiChatApiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
@@ -181,6 +182,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/english-group-application', [EnglishGroupApplicationApiController::class, 'index']);
             Route::post('/english-group-application', [EnglishGroupApplicationApiController::class, 'store']);
             Route::get('/english-group-application/{id}/certificate', [EnglishGroupApplicationApiController::class, 'certificate']);
+
+            // AI assistant (Gemini proxy — key stays on the server)
+            Route::post('/ai/chat', [AiChatApiController::class, 'chat'])
+                ->middleware('throttle:20,1');
         });
 
         // ── Chat endpoints ───────────────────────────────

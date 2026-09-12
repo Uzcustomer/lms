@@ -199,6 +199,14 @@ return [
         'enforce_computer_binding' => env('EXAM_ENFORCE_COMPUTER_BINDING', false),
     ],
 
+    'gemini' => [
+        // Mobil ilovadagi "TDTU AI Yordamchi" uchun. Kalit faqat serverda —
+        // ilova /api/v1/student/ai/chat proxy orqali ishlaydi.
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 120),
+    ],
+
     'anthropic' => [
         // Claude API kaliti (api.anthropic.com). Bo'sh bo'lsa AI tekshiruv o'chiq.
         'api_key' => env('ANTHROPIC_API_KEY'),

@@ -54,6 +54,12 @@ class DistributionCatalog
             ->get(['group_hemis_id', 'name', 'department_name', 'specialty_name', 'curriculum_hemis_id', 'education_lang_code', 'education_lang_name'])
             ->keyBy(fn ($group) => (int) $group->group_hemis_id);
 
+        // O'quv reja nomlari — Xalqaro ta'lim fakultetida ko'chirish/ovoz faqat
+        // bir xil o'quv reja doirasida bo'ladi (rejalar aralashib ketmasligi uchun).
+        $curriculumNames = Schema::hasTable('curricula')
+            ? Curriculum::query()->pluck('name', 'curricula_hemis_id')
+            : collect();
+
         $overrides = Schema::hasTable('distribution_group_capacities')
             ? DistributionGroupCapacity::query()->pluck('capacity', 'group_hemis_id')
             : collect();
@@ -71,6 +77,20 @@ class DistributionCatalog
                 ->groupBy('from_group_hemis_id')
                 ->pluck('total', 'from_group_hemis_id');
         }
+
+        // Guruhning joriy semestri — talabalar orasida eng ko'p uchraydigani
+        // (HEMIS talaba kartasidagi semestr). Kurs kabi bu ham talaba importidan keladi.
+        $semesterByGroup = Student::query()
+            ->where('student_status_code', 11)
+            ->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
+            ->whereIn('group_id', $activeGroups->keys())
+            ->whereNotNull('group_id')
+            ->select(['group_id', 'semester_code', 'semester_name', DB::raw('COUNT(*) as total')])
+            ->groupBy('group_id', 'semester_code', 'semester_name')
+            ->orderByDesc('total')
+            ->get()
+            ->groupBy(fn ($r) => (int) $r->group_id)
+            ->map(fn ($list) => $list->first());
 
         $rows = Student::query()
             ->where('student_status_code', 11)
@@ -93,9 +113,10 @@ class DistributionCatalog
             ->orderBy('level_code')
             ->orderBy('group_name')
             ->get()
-            ->map(function ($row) use ($sourceIds, $activeGroups, $overrides, $incoming, $outgoing) {
+            ->map(function ($row) use ($sourceIds, $activeGroups, $overrides, $incoming, $outgoing, $semesterByGroup, $curriculumNames) {
                 $groupId = (int) $row->group_id;
                 $course = $this->toCourse($row->level_code);
+                $sem = $semesterByGroup->get($groupId);
                 $lmsCount = (int) $row->student_count;
                 $active = $activeGroups->get($groupId);
 
@@ -116,8 +137,14 @@ class DistributionCatalog
                     'level_code' => (string) $row->level_code,
                     'course' => $course,
                     'level_name' => $this->cleanName($row->level_name),
+                    // Kurs/semestr manbai: talabalarning HEMIS kartasi (talaba importi)
+                    'course_source' => 'students',
+                    'semester_code' => $sem?->semester_code ? (string) $sem->semester_code : null,
+                    'semester_name' => $sem ? $this->semesterLabel($sem->semester_code, $sem->semester_name) : null,
                     'language_code' => $active?->education_lang_code ?: null,
                     'language_name' => $active?->education_lang_name ?: null,
+                    'curriculum_hemis_id' => $active?->curriculum_hemis_id ? (int) $active->curriculum_hemis_id : null,
+                    'curriculum_name' => $active?->curriculum_hemis_id ? $this->cleanName($curriculumNames->get((int) $active->curriculum_hemis_id)) : null,
                     'lms_student_count' => $lmsCount,
                     'student_count' => $students,
                     'moved_in' => $movedIn,
@@ -204,8 +231,14 @@ class DistributionCatalog
                 'level_code' => '',
                 'course' => $course,
                 'level_name' => $course ? $course . '-kurs' : null,
+                // Talabasi yo'q: kurs va semestr guruh nomidagi qabul yilidan taxminan
+                'course_source' => 'name',
+                'semester_code' => $course ? (string) $this->semesterFromCourse($course) : null,
+                'semester_name' => $course ? $this->semesterFromCourse($course) . '-semestr' : null,
                 'language_code' => $active->education_lang_code ?: null,
                 'language_name' => $active->education_lang_name ?: null,
+                'curriculum_hemis_id' => $active->curriculum_hemis_id ? (int) $active->curriculum_hemis_id : null,
+                'curriculum_name' => $active->curriculum_hemis_id ? $this->cleanName($curriculumNames->get((int) $active->curriculum_hemis_id)) : null,
                 'lms_student_count' => 0,
                 'student_count' => $students,
                 'moved_in' => $movedIn,
@@ -252,6 +285,29 @@ class DistributionCatalog
         $key = preg_replace('/[\s.\-_()]+/u', '', $key) ?? $key;
 
         return $key;
+    }
+
+    /**
+     * Kursdan joriy semestr: sentabr–yanvar — toq (kuz), fevral–avgust — juft (bahor).
+     */
+    public function semesterFromCourse(int $course): int
+    {
+        $month = (int) date('n');
+        $autumn = $month >= 9 || $month <= 1;
+
+        return $course * 2 - ($autumn ? 1 : 0);
+    }
+
+    /** "11" / "11-semestr" / "Semestr 11" -> "11-semestr" */
+    private function semesterLabel($code, ?string $name): ?string
+    {
+        $name = $this->cleanName($name);
+        if ($name !== null && $name !== '') {
+            return preg_match('/^\d+$/', $name) ? $name . '-semestr' : $name;
+        }
+        $n = (int) $code;
+
+        return $n > 0 ? $n . '-semestr' : null;
     }
 
     public function courseFromName(string $name): ?int
@@ -330,8 +386,27 @@ class DistributionCatalog
             return false;
         }
 
-        return $manualMode
-            || $this->languageKey($source) === $this->languageKey($target);
+        if ($manualMode) {
+            return true;
+        }
+
+        // Xalqaro ta'lim fakulteti: faqat bir xil o'quv reja ichida (ovoz berishda
+        // rejalar aralashib ketmasligi uchun). "To'liq guruh" rejimi bundan mustasno.
+        if ($this->requiresSameCurriculum($source) || $this->requiresSameCurriculum($target)) {
+            $sc = (int) ($source['curriculum_hemis_id'] ?? 0);
+            $tc = (int) ($target['curriculum_hemis_id'] ?? 0);
+            if ($sc > 0 && $tc > 0 && $sc !== $tc) {
+                return false;
+            }
+        }
+
+        return $this->languageKey($source) === $this->languageKey($target);
+    }
+
+    /** Ko'chirish/ovoz faqat bir xil o'quv reja ichida bo'lishi shart bo'lgan fakultet. */
+    public function requiresSameCurriculum(array $group): bool
+    {
+        return str_contains($this->facultyKey($group), 'xalqaro');
     }
 
     /** Fakultetni solishtirish kaliti (bo'shliq va katta-kichik harf farqsiz). */

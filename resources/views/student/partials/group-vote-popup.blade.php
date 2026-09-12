@@ -94,7 +94,7 @@
                     <span style="flex:1;min-width:0;">
                         <b style="display:block;color:#17233a;font-size:13.5px;">{{ $gvTarget['group_name'] }}</b>
                         <span style="display:block;margin-top:2px;color:#8798b1;font-size:11px;">
-                            {{ $gvTarget['specialty_name'] }}@if($gvTarget['course']) · {{ $gvTarget['course'] }}-kurs @endif @if($gvTarget['language_name']) · {{ $gvTarget['language_name'] }} @endif
+                            {{ $gvTarget['specialty_name'] }}@if($gvTarget['course']) · {{ $gvTarget['course'] }}-kurs @endif @if($gvTarget['language_name']) · {{ $gvTarget['language_name'] }} @endif @if(!empty($gvTarget['curriculum_name']) && str_contains(mb_strtolower((string) ($gvTarget['faculty_name'] ?? '')), 'xalqaro')) · reja: {{ $gvTarget['curriculum_name'] }} @endif
                         </span>
                     </span>
                     <span style="padding:3px 9px;border-radius:999px;background:#e9f7f0;color:#0f7a52;font-size:11px;font-weight:700;white-space:nowrap;">{{ $gvTarget['free_places'] }} bo'sh</span>

@@ -686,11 +686,16 @@
         let rightView = 'all';
 
         const courseLabel = g => g.course ? g.course + '-kurs' : (g.level_name || '');
+        // Semestr: talabali guruhda — talabalar kartasidagi (HEMIS) semestr, bo'sh guruhda —
+        // nomdagi qabul yilidan taxminiy (yoniga "~" qo'yiladi)
+        const semesterLabel = g => g.semester_name ? ((g.course_source === 'name' ? '~' : '') + g.semester_name) : '';
 
         // "25-01a" deb yozilsa ham "d1/d25-01(a)" topilsin — belgilar tashlanadi.
         const normName = v => String(v || '').toLowerCase().replace(/[^a-z0-9\u0400-\u04ff]/g, '');
         // Fakultet · yo'nalish · kurs · ta'lim tili
-        const metaLabel = g => [g.faculty_name || '\u2014', g.specialty_name || '\u2014', courseLabel(g), g.language_name || '']
+        // Xalqaro ta'lim fakultetida o'quv reja ham ko'rsatiladi — ko'chirish/ovoz faqat shu reja ichida
+        const curriculumLabel = g => (/xalqaro/i.test(g.faculty_name || '') && g.curriculum_name) ? ('reja: ' + g.curriculum_name) : '';
+        const metaLabel = g => [g.faculty_name || '\u2014', g.specialty_name || '\u2014', courseLabel(g), semesterLabel(g), g.language_name || '', curriculumLabel(g)]
             .filter(Boolean).join(' \u00b7 ');
 
         // Ta'lim tili kaliti — backenddagi DistributionCatalog::languageKey bilan

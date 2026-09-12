@@ -275,6 +275,7 @@
                                 <button type="button" id="mn-merge-new" class="af-btn af-load" onclick="mergeNewGroups()" title="Bazadan yangilash: yangi guruhlar qo'shiladi, talaba sonlari bazadagi songa yangilanadi, nofaol/yo'q guruhlar olib tashlanadi, takror bloklar birlashtiriladi — joylashuv o'zgarmaydi">⟳ Bazadan yangilash (yangi + sonlar, nofaollarni olib tashlash)</button>
                                 <button type="button" id="mn-diag" class="af-btn" style="background:#fff;color:#0f766e;border-color:#99f6e4;" onclick="openDiagnose()" title="Tashxis: ekrandagi son ≠ bazadagi son bo'lgan guruhlar; har biri uchun HEMIS bilan jonli solishtirish va qayta tortish">🩺 Tashxis</button>
                                 <span id="mn-hemis-status" style="font-size:11.5px;font-weight:600;"></span>
+                                <button type="button" id="mn-restore" class="af-btn" style="display:none;background:#fff7ed;color:#9a3412;border-color:#fdba74;" onclick="mnRestoreBackup()" title="Sessiya tugagan yoki sahifa yangilangan bo'lsa — brauzerda avtomatik saqlangan oxirgi holatni qaytaradi"></button>
                                 <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('joriy')" title="Joriy (HEMISdagi) holatdan boshlab qo'lda tuzatish">⟲ Joriy holatdan</button>
                                     <button type="button" class="af-btn af-draft" onclick="manualSource('opt')" title="Optimizatsiyalangan holatdan boshlab qo'lda tuzatish">⟲ Optimizatsiyadan</button>
@@ -1134,7 +1135,58 @@
             $('#mn-body').html(html);
             $('#mn-total-badge').text(rejaPrefix() + 'Jami talaba: ' + grand + ' ta · qo\'lda tuzatish');
             $('#mn-undo').prop('disabled', !MN_UNDO.length);
+            mnBackup();
         }
+
+        // --- Brauzer zaxirasi: sessiya tugasa (CSRF 419) yoki sahifa yangilansa ish yo'qolmasin ---
+        var MN_BACKUP_KEY = 'oqim_mn_backup';
+        function mnBackup() {
+            if (!afterState || !afterState.length) return;
+            try {
+                localStorage.setItem(MN_BACKUP_KEY, JSON.stringify({ at: Date.now(), state: afterState, ctx: manualContext, ids: Object.keys(manualKnownIds || {}) }));
+            } catch (e) { /* localStorage to'lgan yoki o'chirilgan — jim */ }
+        }
+        function mnReadBackup() {
+            try {
+                var raw = localStorage.getItem(MN_BACKUP_KEY);
+                if (!raw) return null;
+                var b = JSON.parse(raw);
+                if (!b || !b.state || !b.state.length || !b.at) return null;
+                if (Date.now() - b.at > 3 * 24 * 3600 * 1000) { localStorage.removeItem(MN_BACKUP_KEY); return null; } // 3 kundan eski — kerak emas
+                return b;
+            } catch (e) { return null; }
+        }
+        function mnShowRestoreButton() {
+            var b = mnReadBackup();
+            var $btn = $('#mn-restore');
+            if (!b) { $btn.hide(); return; }
+            var d = new Date(b.at);
+            var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+            $btn.text('⟲ Saqlanmagan holatni tiklash (' + pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ')').show();
+        }
+        function mnRestoreBackup() {
+            var b = mnReadBackup();
+            if (!b) { $('#mn-restore').hide(); return; }
+            if (afterState && afterState.length && !confirm('Ekrandagi hozirgi holat brauzerda saqlangan holat bilan almashtirilsinmi?')) return;
+            afterState = b.state;
+            manualContext = b.ctx || realContextFromFilters();
+            manualKnownIds = idSetFromList(b.ids || []);
+            $.extend(manualKnownIds, idsFromBlocks(afterState));
+            MN_UNDO = [];
+            mnRecalc(); renderManual(); renderAfterBody();
+            if (activeTab !== 'manual') switchTab('manual');
+            $('#mn-restore').hide();
+            $('#mn-hemis-status').css('color', '#16a34a').text('✓ Brauzerda saqlangan holat tiklandi — endi "💾 Qoralama saqlash" ni bosing.');
+        }
+        // Sessiya tugagan (419 / CSRF token mismatch): holatni zaxiralab, aniq ko'rsatma beramiz
+        $(document).ajaxError(function(ev, xhr) {
+            var rj = xhr && xhr.responseJSON || {};
+            var csrf = (xhr && xhr.status === 419) || /csrf/i.test(String(rj.message || rj.error || ''));
+            if (!csrf) return;
+            mnBackup();
+            var msg = '⚠ Sessiya muddati tugagan (CSRF). Ekrandagi holat brauzerda saqlandi — sahifani yangilang (F5), so\'ng "⟲ Saqlanmagan holatni tiklash" tugmasini bosib davom eting.';
+            setTimeout(function() { $('#mn-hemis-status').css('color', '#dc2626').text(msg); $('#mn-save-status').css('color', '#dc2626').text(msg); }, 0);
+        });
 
         function mnPushUndo() {
             MN_UNDO.push(JSON.stringify(afterState));
@@ -2449,6 +2501,7 @@
             });
 
             // Sahifa ochilganda — oxirgi tasdiqlangan oqim darhol ekranda ko'rinsin
+            mnShowRestoreButton(); // brauzerda saqlanmagan holat qolgan bo'lsa — tiklash tugmasi
             loadApprovedList(true);
             loadDraftsList();
             // Fon rejimidagi talabalar importi ketayotgan bo'lsa — kuzatishni davom ettiramiz

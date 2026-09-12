@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
@@ -29,6 +30,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   Timer? _verificationTimer;
   String? _telegramError;
 
+  // This screen lives in an IndexedStack and is never disposed while the
+  // user is logged in, so the poll must stop on its own: 100 × 3 s = 5 min.
+  int _pollTicks = 0;
+  static const _maxPollTicks = 100;
+
   static const _telegramBlue = Color(0xFF0088CC);
 
   @override
@@ -48,9 +54,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   void _startVerificationPolling() {
     _verificationTimer?.cancel();
+    _pollTicks = 0;
     _verificationTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (!mounted) {
+      if (!mounted || ++_pollTicks > _maxPollTicks) {
         _verificationTimer?.cancel();
+        if (mounted) setState(() => _isCheckingVerification = false);
         return;
       }
       try {
@@ -72,6 +80,24 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         if (mounted) setState(() => _isCheckingVerification = false);
       }
     });
+  }
+
+  Future<void> _openBot() async {
+    final link = _botLink;
+    if (link == null) return;
+    final uri = Uri.tryParse(link);
+    final opened = uri != null &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppLocalizations.of(context).pick(
+          uz: 'Telegram botni ochib bo\'lmadi: $link',
+          ru: 'Не удалось открыть Telegram бот: $link',
+          en: 'Could not open the Telegram bot: $link',
+        )),
+      ),
+    );
   }
 
   Future<void> _saveTelegram() async {
@@ -681,21 +707,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: _botLink != null
-                ? () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(AppLocalizations.of(context).pick(
-                          uz: 'Telegram botga o\'ting: $_botLink',
-                          ru: 'Перейдите в Telegram бот: $_botLink',
-                          en: 'Open the Telegram bot: $_botLink',
-                        )),
-                        duration: const Duration(seconds: 5),
-                        action: SnackBarAction(label: 'OK', onPressed: () {}),
-                      ),
-                    );
-                  }
-                : null,
+            onPressed: _botLink != null ? _openBot : null,
             icon: const Icon(Icons.telegram, size: 20),
             label: Text(
               _botUsername != null && _botUsername!.isNotEmpty

@@ -108,7 +108,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
                 final gpa = totalCredits > 0 ? totalPoints / totalCredits : 0.0;
 
                 return RefreshIndicator(
-                  onRefresh: () => provider.loadSubjects(),
+                  onRefresh: () => provider.loadSubjects(force: true),
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
                     children: [

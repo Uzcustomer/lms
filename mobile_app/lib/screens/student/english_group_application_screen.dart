@@ -2,10 +2,11 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../config/api_config.dart';
 import '../../services/api_service.dart';
+import '../../services/file_open_service.dart';
 import '../../services/english_group_application_service.dart';
 import '../../widgets/clinic_header.dart';
 import '../../widgets/loading_widget.dart';
@@ -143,8 +144,12 @@ class _EnglishGroupApplicationScreenState
   }
 
   Future<void> _openCertificate(int id) async {
-    final uri = Uri.parse(_service.certificateUrl(id));
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    try {
+      await FileOpenService().downloadAndOpen(
+        ApiConfig.studentEnglishGroupCertificate(id),
+        'til_sertifikati_$id.pdf',
+      );
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

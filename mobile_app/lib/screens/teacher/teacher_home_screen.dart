@@ -6,7 +6,6 @@ import '../../providers/auth_provider.dart';
 import 'teacher_dashboard_screen.dart';
 import 'teacher_students_screen.dart';
 import 'teacher_groups_screen.dart';
-import 'teacher_services_screen.dart';
 import 'teacher_profile_screen.dart';
 
 class TeacherHomeScreen extends StatefulWidget {
@@ -25,14 +24,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       _NavItem(Icons.dashboard_outlined, Icons.dashboard, l.home, 'dashboard'),
     ];
 
-    // Jurnal - teachers, registrars, heads, subject responsible
-    const jurnalRoles = [
-      'superadmin', 'admin', 'kichik_admin', 'registrator_ofisi',
-      'dekan', 'oqituvchi', 'kafedra_mudiri', 'fan_masuli',
-    ];
-    if (activeRole != null && jurnalRoles.contains(activeRole) && activeRole != 'oquv_bolimi' && activeRole != 'oquv_bolimi_boshligi') {
-      items.add(_NavItem(Icons.edit_note_outlined, Icons.edit_note, 'Jurnal', 'journal'));
-    }
+    // The journal is opened from a subject card (dashboard) or a group's
+    // subject list — it needs a group + subject, so it has no tab of its own.
 
     // Talabalar - most roles except test_markazi, oquv_bolimi, oquv_bolimi_boshligi
     if (activeRole != 'test_markazi' && activeRole != 'oquv_bolimi' && activeRole != 'oquv_bolimi_boshligi') {
@@ -52,8 +45,6 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     switch (key) {
       case 'dashboard':
         return const TeacherDashboardScreen();
-      case 'journal':
-        return const TeacherServicesScreen(); // placeholder for now
       case 'students':
         return const TeacherStudentsScreen();
       case 'groups':

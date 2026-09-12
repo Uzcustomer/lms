@@ -81,39 +81,85 @@ class LmsApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: Consumer<AuthProvider>(
-              builder: (context, auth, _) {
-                if (auth.state == AuthState.authenticated && auth.isStudent) {
-                  context.read<StudentProvider>().syncSessionUser(auth.user);
-                  StudentDataCache().ensureFresh();
-                  NotificationBadge.startPolling();
-                } else {
-                  context.read<StudentProvider>().syncSessionUser(null);
-                  NotificationBadge.stopPolling();
-                  NotificationBadge.unread.value = 0;
-                }
-                switch (auth.state) {
-                  case AuthState.initial:
-                    return const SplashScreen();
-                  case AuthState.authenticated:
-                    return BiometricGate(
-                      child: auth.isTeacher
-                          ? const TeacherHomeScreen()
-                          : const StudentHomeScreen(),
-                    );
-                  case AuthState.profileIncomplete:
-                    return const CompleteProfileScreen();
-                  case AuthState.loading:
-                  case AuthState.unauthenticated:
-                  case AuthState.error:
-                  case AuthState.requires2fa:
-                    return const LoginScreen();
-                }
-              },
+            home: _SessionEffects(
+              child: Consumer<AuthProvider>(
+                builder: (context, auth, _) {
+                  switch (auth.state) {
+                    case AuthState.initial:
+                      return const SplashScreen();
+                    case AuthState.authenticated:
+                      return BiometricGate(
+                        child: auth.isTeacher
+                            ? const TeacherHomeScreen()
+                            : const StudentHomeScreen(),
+                      );
+                    case AuthState.profileIncomplete:
+                      return const CompleteProfileScreen();
+                    case AuthState.loading:
+                    case AuthState.unauthenticated:
+                    case AuthState.error:
+                    case AuthState.requires2fa:
+                      return const LoginScreen();
+                  }
+                },
+              ),
             ),
           );
         },
       ),
     );
   }
+}
+
+/// Starts/stops the student-session side effects (session user sync, data
+/// cache warm-up, notification polling) exactly once per session change,
+/// instead of on every rebuild of the auth consumer.
+class _SessionEffects extends StatefulWidget {
+  final Widget child;
+  const _SessionEffects({required this.child});
+
+  @override
+  State<_SessionEffects> createState() => _SessionEffectsState();
+}
+
+class _SessionEffectsState extends State<_SessionEffects> {
+  late final AuthProvider _auth;
+  String? _sessionKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _auth = context.read<AuthProvider>();
+    _auth.addListener(_sync);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+  }
+
+  @override
+  void dispose() {
+    _auth.removeListener(_sync);
+    super.dispose();
+  }
+
+  void _sync() {
+    if (!mounted) return;
+    final isStudent =
+        _auth.state == AuthState.authenticated && _auth.isStudent;
+    final key = isStudent ? 'student:${_auth.user?['id']}' : 'none';
+    if (key == _sessionKey) return;
+    _sessionKey = key;
+
+    final student = context.read<StudentProvider>();
+    if (isStudent) {
+      student.syncSessionUser(_auth.user);
+      StudentDataCache().ensureFresh();
+      NotificationBadge.startPolling();
+    } else {
+      student.syncSessionUser(null);
+      NotificationBadge.stopPolling();
+      NotificationBadge.unread.value = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

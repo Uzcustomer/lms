@@ -28,9 +28,11 @@ dependencies:
   table_calendar: ^3.1.0
   url_launcher: ^6.2.0
   webview_flutter: ^4.10.0
-  google_generative_ai: ^0.4.7
+  path_provider: ^2.1.5
+  open_filex: ^4.7.0
   local_auth: ^2.3.0
   image_picker: ^1.1.0
+  package_info_plus: ^8.3.0
 
 dev_dependencies:
   flutter_test:

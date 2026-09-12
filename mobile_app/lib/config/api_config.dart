@@ -39,6 +39,7 @@ class ApiConfig {
   static const String studentExcuseReasons = '/student/excuses/reasons';
   static const String studentExcuses = '/student/excuses';
   static const String studentExcuseMissedAssessments = '/student/excuses/missed-assessments';
+  static String studentExcuseDownloadPdf(int id) => '$studentExcuses/$id/download-pdf';
 
   // Retake application endpoints
   static const String studentRetake = '/student/retake';
@@ -56,6 +57,11 @@ class ApiConfig {
 
   // English group application
   static const String studentEnglishGroupApplications = '/student/english-group-application';
+  static String studentEnglishGroupCertificate(int id) =>
+      '$studentEnglishGroupApplications/$id/certificate';
+
+  // AI assistant (server-side Gemini proxy, SSE stream)
+  static const String studentAiChat = '/student/ai/chat';
 
   // Chat endpoints
   static const String chatContacts = '/chat/contacts';

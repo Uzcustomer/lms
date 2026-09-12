@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 
@@ -20,10 +21,16 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _fade;
   late final AnimationController _spin;
   late final AnimationController _pulse;
+  String _version = '';
+
+  /// Keep the splash on screen at least this long so the logo animation
+  /// isn't cut off on fast networks; the auth check runs concurrently.
+  static const _minDisplay = Duration(milliseconds: 1200);
 
   @override
   void initState() {
     super.initState();
+    _loadVersion();
     _fade = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -40,12 +47,21 @@ class _SplashScreenState extends State<SplashScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkAuth());
   }
 
-  Future<void> _checkAuth() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
+  Future<void> _loadVersion() async {
     try {
-      await context.read<AuthProvider>().checkAuth();
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() => _version = 'v ${info.version} · build ${info.buildNumber}');
+      }
     } catch (_) {}
+  }
+
+  Future<void> _checkAuth() async {
+    final auth = context.read<AuthProvider>();
+    await Future.wait([
+      Future.delayed(_minDisplay),
+      auth.checkAuth().catchError((_) {}),
+    ]);
   }
 
   @override
@@ -186,7 +202,7 @@ class _SplashScreenState extends State<SplashScreen>
         ),
         const SizedBox(height: 6),
         Text(
-          'v 2.4.1 · build 26.05.2026',
+          _version,
           style: TextStyle(
             fontSize: 9,
             color: _faint.withOpacity(0.55),

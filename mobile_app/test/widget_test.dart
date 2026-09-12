@@ -1,30 +1,91 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:lms_mobile/main.dart';
+import 'package:lms_mobile/utils/yn_grade_calculator.dart';
+import 'package:lms_mobile/widgets/stat_card.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('YnGradeCalculator', () {
+    test('returns null when JN and MT are both zero', () {
+      expect(
+        YnGradeCalculator.compute(
+          jn: 0, mt: 0, on: 0, oski: 0, test: 0, davPercent: 0,
+        ),
+        isNull,
+      );
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('returns -3 when absence is 25% or more', () {
+      expect(
+        YnGradeCalculator.compute(
+          jn: 90, mt: 90, on: 0, oski: 90, test: 90, davPercent: 25,
+        ),
+        -3,
+      );
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('returns -1 when final exam is missing but base is passing', () {
+      expect(
+        YnGradeCalculator.compute(
+          jn: 80, mt: 80, on: 0, oski: 0, test: 0, davPercent: 0,
+        ),
+        -1,
+      );
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('returns 0 when any weighted component is below 60', () {
+      expect(
+        YnGradeCalculator.compute(
+          jn: 55, mt: 80, on: 0, oski: 80, test: 80, davPercent: 0,
+        ),
+        0,
+      );
+    });
+
+    test('sums weighted parts for a fully passing subject', () {
+      // 80*0.5 + 80*0.2 + 80*0.15 + 80*0.15 = 40 + 16 + 12 + 12 = 80
+      expect(
+        YnGradeCalculator.compute(
+          jn: 80, mt: 80, on: 0, oski: 80, test: 80, davPercent: 0,
+        ),
+        80,
+      );
+    });
+
+    test('uses 80/20 weights for sinov subjects', () {
+      final yn = YnGradeCalculator.computeFromSubject({
+        'closing_form': 'sinov',
+        'grades': {'jn': 90, 'mt': 70},
+        'dav_percent': 5,
+      });
+      // 90*0.8 + 70*0.2 = 72 + 14 = 86
+      expect(yn, 86);
+    });
+
+    test('respects yn_can_calculate = false', () {
+      final yn = YnGradeCalculator.computeFromSubject({
+        'yn_can_calculate': false,
+        'grades': {'jn': 90, 'mt': 90},
+      });
+      expect(yn, isNull);
+    });
+  });
+
+  testWidgets('StatCard renders title and value', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: StatCard(
+            title: 'GPA',
+            value: '4.2',
+            icon: Icons.school,
+            color: Colors.blue,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('GPA'), findsOneWidget);
+    expect(find.text('4.2'), findsOneWidget);
+    expect(find.byIcon(Icons.school), findsOneWidget);
   });
 }

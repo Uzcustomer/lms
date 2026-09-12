@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../config/api_config.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/file_open_service.dart';
 import '../../widgets/clinic_header.dart';
 import '../../widgets/loading_widget.dart';
 
@@ -37,25 +37,35 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
     try {
       final provider = context.read<StudentProvider>();
       final response = await provider.getExcuseDetail(widget.excuseId);
+      if (!mounted) return;
       setState(() {
         _excuse = response['data'] as Map<String, dynamic>?;
       });
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _downloadPdf() async {
-    final url = '${ApiConfig.baseUrl}${ApiConfig.studentExcuses}/${widget.excuseId}/download-pdf';
-    final apiService = ApiService();
-    final authToken = await apiService.getToken();
-    final uri = Uri.parse('$url?token=$authToken');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      await FileOpenService().downloadAndOpen(
+        ApiConfig.studentExcuseDownloadPdf(widget.excuseId),
+        'ruxsatnoma_${widget.excuseId}.pdf',
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Faylni ochib bo\'lmadi')),
+        );
+      }
     }
   }
 

@@ -266,8 +266,9 @@ class StudentDistributionController extends Controller
         // guruhga ham o'tkaza oladi (UI tanlashdan oldin ogohlantiradi).
         if (!$this->groupsCompatible($source, $target, true)) {
             return response()->json([
-                'message' => 'Maqsadli guruh talabaning yo\'nalishi yoki kursiga mos emas '
-                    . '(fakultet faqat bir yo\'nalishning "N-son" juftlari orasida almashishi mumkin).',
+                'message' => 'Maqsadli guruh talabaning yo\'nalishi, kursi yoki o\'quv rejasiga mos emas '
+                    . '(fakultet faqat bir yo\'nalishning "N-son" juftlari orasida almashishi mumkin; '
+                    . 'Xalqaro ta\'lim fakultetida faqat bir xil o\'quv reja ichida).',
             ], 422);
         }
 

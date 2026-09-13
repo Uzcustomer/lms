@@ -187,7 +187,8 @@ test('doska ma\'lumotida umumiy karta va reja soati qaytadi', function () {
     $card = collect($data['cards'])->first();
     expect($card['is_mixed'])->toBeTrue();
     expect($card['lecture_weeks'])->toBeNull();
-    expect($data['plan_hours']['Davolash ishi|3|Ichki kasalliklar propedevtikasi'])->toBe(['lecture' => 12.0, 'practice' => 60.0]);
+    // JSON'da 12.0 → 12 bo'lib qaytadi — qiymat bo'yicha solishtiramiz
+    expect($data['plan_hours']['Davolash ishi|3|Ichki kasalliklar propedevtikasi'])->toEqual(['lecture' => 12, 'practice' => 60]);
 });
 
 // ───────────────────────── Kafedra ajratishi ─────────────────────────

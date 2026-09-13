@@ -35,7 +35,7 @@
                 <div class="tt-top-toolbar">
                     <div class="tt-board-select">
                         <span class="tt-board-icon" aria-hidden="true"><img src="{{ asset('image/tahrirlash.png') }}" alt="" aria-hidden="true"></span>
-                        <select id="boardSel">
+                        <select id="boardSel" autocomplete="off">
                             <option value="">— Tanlang yoki yangi yarating —</option>
                             @foreach($boards as $b)
                                 <option value="{{ $b->id }}">{{ $b->name }} ({{ $b->cards_count }} karta)</option>
@@ -44,6 +44,7 @@
                     </div>
 
                     <div class="tt-toolbar-actions">
+                        <button type="button" id="reloadBoardBtn" class="hidden asc-tool toolbar-action" title="Doska ma'lumotlarini qayta yuklash — sahifadan chiqmasdan, tanlovlar (fakultet, kurs, hafta...) saqlanadi"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-arrow-clockwise"></i></span>Yangilash</button>
                         <button type="button" id="newBoardBtn" class="asc-tool toolbar-action"><span class="toolbar-icon tt-icon-success" aria-hidden="true"><img src="{{ asset('image/05_doska.png') }}" alt="" aria-hidden="true"></span>Yangi doska</button>
                         <button type="button" id="genBtn" class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/02_cards.png') }}" alt="" aria-hidden="true"></span>Kartochkalar</button>
                         <button type="button" id="refreshNamesBtn" class="hidden asc-tool toolbar-action" title="Ishchi rejadagi joriy fan nomlarini kartochkalarga ko'chiradi (joylashuvlar saqlanadi)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/06_subjects_book.png') }}" alt="" aria-hidden="true"></span>Fan nomlari</button>
@@ -1736,6 +1737,9 @@
         #newBoardBtn .toolbar-icon { color: #059669; }
         #genBtn .toolbar-icon { color: #7c3aed; }
         #refreshNamesBtn .toolbar-icon { color: #d97706; }
+        #reloadBoardBtn .toolbar-icon { color: #0284c7; }
+        @keyframes tt-spin { to { transform: rotate(360deg); } }
+        #reloadBoardBtn.is-loading .toolbar-icon .bi { display: inline-block; animation: tt-spin .8s linear infinite; }
         #delBoardBtn .toolbar-icon { color: #dc2626; }
         #settingsBtn .toolbar-icon { color: #475569; }
         #managerBtn .toolbar-icon { color: #2563eb; }
@@ -2189,6 +2193,10 @@
             const subjModeKey = (spec, course, subject) =>
                 String(spec || '').trim().toLowerCase() + '|' + course + '|' + String(subject || '').trim().toLowerCase();
             let curWeek = 0;       // 0 = barcha haftalar (shablon); 1..N = alohida hafta
+            // Doska va ko'rinish tanlovlari (fakultet/yo'nalish/kurs, dars turi, hafta, kesim)
+            // URLda saqlanadi — F5 bosilganda yoki havola ochilganda aynan shu doska va
+            // shu ko'rinishga qaytamiz (doskadan chiqib ketmaymiz).
+            let pendingView = parseViewFromUrl();
 
             const $ = id => document.getElementById(id);
             const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2446,6 +2454,25 @@
                 } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
                 this.disabled = false;
             };
+            // Doskani sahifadan chiqmasdan qayta yuklash (F5 o'rniga): tanlovlar
+            // (fakultet/yo'nalish/kurs, dars turi, hafta, kesim) va skroll saqlanadi.
+            async function reloadBoard() {
+                if (!board) return;
+                const btn = $('reloadBoardBtn'), wrap = $('gridWrap');
+                const scroll = { top: wrap.scrollTop, left: wrap.scrollLeft };
+                btn.disabled = true; btn.classList.add('is-loading');
+                $('boardMsg').textContent = 'Yangilanmoqda...';
+                try {
+                    await loadBoard(board.id);
+                    wrap.scrollTop = scroll.top; wrap.scrollLeft = scroll.left;
+                    if (cards.length) {
+                        $('boardMsg').textContent = 'Yangilandi ' +
+                            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
+                btn.disabled = false; btn.classList.remove('is-loading');
+            }
+            $('reloadBoardBtn').onclick = reloadBoard;
 
             // aSc uslubidagi boshqaruv tugmalari (doska tanlash qatorida) — bitta guruh sifatida ko'rsatish/yashirish
 
@@ -2459,12 +2486,70 @@
                 applyTimetableAccess();
             }
 
+            // ===== Holatni URLda saqlash (F5 / havola) =====
+            // ?board=ID&fac=..&dir=..&crs=..&type=..&week=..&view=..  (fac/dir/crs takrorlanishi mumkin)
+            function parseViewFromUrl() {
+                const p = new URLSearchParams(location.search);
+                const id = p.get('board');
+                if (!id) return null;
+                return {
+                    board: id,
+                    fac: p.getAll('fac'),
+                    dir: p.getAll('dir'),
+                    crs: p.getAll('crs').map(Number).filter(Number.isFinite),
+                    type: p.get('type') || 'all',
+                    week: +(p.get('week') || 0) || 0,
+                    view: p.get('view') || 'group',
+                };
+            }
+            // Joriy holatni URLga yozamiz (tarixga yangi yozuv qo'shmasdan). Faqat
+            // o'zgargan bo'lsa yoziladi — renderAll'dan tez-tez chaqirilsa ham arzon.
+            function syncUrl() {
+                const p = new URLSearchParams();
+                if (board) {
+                    p.set('board', board.id);
+                    if (cards.length) {
+                        selectedFaculties.forEach(f => p.append('fac', f));
+                        selectedDirs.forEach(d => p.append('dir', d));
+                        selectedCourses.forEach(c => p.append('crs', c));
+                        if (typeFilter !== 'all') p.set('type', typeFilter);
+                        if (curWeek) p.set('week', curWeek);
+                        if (viewMode !== 'group') p.set('view', viewMode);
+                    }
+                }
+                const qs = p.toString();
+                const next = location.pathname + (qs ? '?' + qs : '') + location.hash;
+                if (next !== location.pathname + location.search + location.hash) {
+                    history.replaceState(history.state, '', next);
+                }
+            }
+            // URLdan o'qilgan tanlovlarni doska yuklanganda qo'llaymiz (faqat o'sha doskaga).
+            function applyPendingView() {
+                const v = pendingView;
+                pendingView = null;
+                if (!v || !board || String(v.board) !== String(board.id)) return;
+                selectedFaculties = new Set(v.fac);
+                selectedDirs = new Set(v.dir);
+                selectedCourses = new Set(v.crs);
+                if (['all', 'lecture', 'practice'].includes(v.type)) setTypeFilter(v.type);
+                curWeek = v.week;
+                if ([...$('viewMode').options].some(o => o.value === v.view)) {
+                    viewMode = v.view;
+                    $('viewMode').value = v.view;
+                }
+            }
+            function setTypeFilter(t) {
+                typeFilter = t;
+                document.querySelectorAll('.tt-type').forEach(x => x.classList.toggle('active', x.dataset.type === t));
+            }
+
             function hideBoard() {
                 board = null;
                 $('genBtn').classList.add('hidden'); $('delBoardBtn').classList.add('hidden');
-                $('refreshNamesBtn').classList.add('hidden');
+                $('refreshNamesBtn').classList.add('hidden'); $('reloadBoardBtn').classList.add('hidden');
                 toggleAscToolbar(false);
                 $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
+                syncUrl();
             }
 
             async function loadBoard(id) {
@@ -2506,15 +2591,18 @@
                     cyclePlanData = null; cycleHolidays = []; cyclePairsShown = null;
                     if ($('cycleHolBar')) $('cycleHolBar').classList.add('hidden');
                 }
+                applyPendingView();
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
                 $('refreshNamesBtn').classList.remove('hidden');
+                $('reloadBoardBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
                 toggleAscToolbar(true);
                 buildSpecList();
                 if (!cards.length) {
                     $('specBar').classList.add('hidden'); $('mainArea').classList.add('hidden');
                     $('boardMsg').textContent = 'Kartochkalar hali yaratilmagan — "Kartochkalarni yaratish"ni bosing.';
+                    syncUrl();
                     return;
                 }
                 $('boardMsg').textContent = '';
@@ -2695,6 +2783,7 @@
                 viewMode = this.value;
                 selected = null;
                 renderGrid();
+                syncUrl();
             };
             // Kartaning tanlangan haftadagi (yoki shablon) effektiv joylashuvi: {day,pair} yoki null
             // Karta QAYSI haftalarda o'tiladi (hafta istisnolaridan: bekor qilinmaganlari).
@@ -4496,7 +4585,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); }
+            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda
@@ -6962,15 +7051,17 @@
 
             // ===== Dars turi filtri (Hammasi / Ma'ruza / Amaliy) =====
             document.querySelectorAll('.tt-type').forEach(b => b.onclick = () => {
-                typeFilter = b.dataset.type;
-                document.querySelectorAll('.tt-type').forEach(x => x.classList.toggle('active', x === b));
+                setTypeFilter(b.dataset.type);
                 if (selected && !typeVisible(selected)) selected = null;   // filtrga mos kelmasa tanlovni bekor qilamiz
                 renderAll();
             });
 
-            // URLdan doska ochish
+            // URLdan doska ochish (F5 / havola) — tanlovlar ham URLdan tiklanadi (applyPendingView)
             const urlBoard = new URLSearchParams(location.search).get('board');
-            if (urlBoard) loadBoard(urlBoard);
+            if (urlBoard) loadBoard(urlBoard).catch(e => {
+                hideBoard();
+                $('boardMsg').textContent = 'Doska ochilmadi: ' + e.message;
+            });
 
         })();
     </script>

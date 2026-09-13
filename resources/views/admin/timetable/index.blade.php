@@ -2492,13 +2492,16 @@
                 const p = new URLSearchParams(location.search);
                 const id = p.get('board');
                 if (!id) return null;
+                // Hafta — faqat musbat butun son (week=-1, 1.5, abc → shablon); yuqori
+                // chegara (panjaraning hafta soni) fillWeekSel'da tekshiriladi.
+                const week = Number(p.get('week'));
                 return {
                     board: id,
                     fac: p.getAll('fac'),
                     dir: p.getAll('dir'),
-                    crs: p.getAll('crs').map(Number).filter(Number.isFinite),
+                    crs: p.getAll('crs').map(Number).filter(Number.isInteger),
                     type: p.get('type') || 'all',
-                    week: +(p.get('week') || 0) || 0,
+                    week: Number.isInteger(week) && week > 0 ? week : 0,
                     view: p.get('view') || 'group',
                 };
             }
@@ -2762,7 +2765,10 @@
             // ===== Hafta tanlash (individual haftalar) =====
             function fillWeekSel() {
                 const w = +curGrid().weeks || +board.weeks || 15;
-                if (curWeek > w) curWeek = 0;
+                // curWeek faqat 0 (shablon) yoki 1..w oralig'idagi butun son bo'lishi mumkin —
+                // aks holda (URLdan kelgan noto'g'ri qiymat, qisqargan panjara) shablonga qaytamiz,
+                // yo'qsa select'da mos variant bo'lmaydi va hafta istisnosi 422 bilan qaytadi.
+                if (!Number.isInteger(curWeek) || curWeek < 0 || curWeek > w) curWeek = 0;
                 let opts = '<option value="0">Barcha haftalar (shablon)</option>';
                 for (let i = 1; i <= w; i++) opts += '<option value="' + i + '">' + i + '-hafta</option>';
                 $('weekSel').innerHTML = opts;

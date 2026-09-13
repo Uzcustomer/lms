@@ -335,6 +335,39 @@
                                 </div>
                                 <div id="cmTimeHint" class="col-span-2 text-[11px] text-indigo-600"></div>
                             </div>
+                            {{-- Umumiy (klinik) karta — kafedra ajratishi: qaysi haftalar ma'ruza, qolgani amaliy;
+                                 ma'ruza haftalari uchun alohida o'qituvchi va xona. Soatlar reja bilan solishtiriladi. --}}
+                            <div id="cmMix" class="hidden border-t border-cyan-100 pt-3 space-y-2">
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
+                                    <span class="text-xs font-semibold text-cyan-800"><i class="bi bi-scissors" aria-hidden="true"></i> Kafedra ajratishi: ma'ruza / amaliy haftalari</span>
+                                    <span id="cmMixState" class="text-[10px] text-gray-500"></span>
+                                </div>
+                                <div id="cmMixHours" class="text-[11px] leading-snug"></div>
+                                <div class="flex flex-wrap gap-1">
+                                    <button type="button" class="cm-pattern" data-mix-pattern="plan" title="Reja ma'ruza soatiga yetguncha birinchi faol haftalar ma'ruza, qolgani amaliy">Reja bo'yicha</button>
+                                    <button type="button" class="cm-pattern" data-mix-pattern="odd">Toq haftalar M</button>
+                                    <button type="button" class="cm-pattern" data-mix-pattern="even">Juft haftalar M</button>
+                                    <button type="button" class="cm-pattern" data-mix-pattern="all">Hammasi M</button>
+                                    <button type="button" class="cm-pattern" data-mix-pattern="none">Hammasi A</button>
+                                    <button type="button" class="cm-pattern" data-mix-pattern="reset" title="Ajratishni bekor qilish — karta yana ajratilmagan bo'ladi">Bekor</button>
+                                </div>
+                                <div id="cmMixWeeks" class="cm-week-strip" title="Haftani bosib M (ma'ruza) / A (amaliy) almashtiring"></div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Ma'ruza o'qituvchisi</label>
+                                        <input id="cmLecTeacherSearch" placeholder="Qidirish..." class="w-full rounded-md border-gray-300 text-sm mb-1">
+                                        <select id="cmLecTeacher" size="4" class="w-full rounded-md border-gray-300 text-sm"></select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Ma'ruza auditoriyasi</label>
+                                        <select id="cmLecAud" class="w-full rounded-md border-gray-300 text-sm"></select>
+                                        <label class="mt-2 flex items-start gap-1.5 text-[11px] text-gray-600"><input type="checkbox" id="cmMixFlow" class="mt-0.5 rounded border-gray-300"> <span>Oqimning shu vaqtdagi barcha guruh kartalariga ham qo'llash (<span id="cmMixFlowCount">0</span> ta)</span></label>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end">
+                                    <button type="button" id="cmMixSave" class="px-4 py-1.5 text-sm bg-cyan-700 text-white rounded-md hover:bg-cyan-800"><i class="bi bi-check2" aria-hidden="true"></i> Ajratishni saqlash</button>
+                                </div>
+                            </div>
                             <div id="cmMsg" class="hidden text-sm rounded px-3 py-2"></div>
                         </div>
                         <div class="flex justify-between gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-lg">
@@ -791,6 +824,8 @@
                                         <option value="">— barcha turlar —</option>
                                         <option value="Amaliy">Amaliy</option>
                                         <option value="Ma'ruza">Ma'ruza</option>
+                                        <option value="Amaliy (umumiy karta)">Amaliy (umumiy karta)</option>
+                                        <option value="Ma'ruza (umumiy karta)">Ma'ruza (umumiy karta)</option>
                                     </select>
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
@@ -947,6 +982,11 @@
         /* Ma'ruza — butun katak bitta sariq (chip'ning alohida foni yo'q); amaliy — fan rangi (inline) */
         .tt-chip.lec { background: transparent; border-left: none; color: #713f12; font-weight: 700; }
         .tt-chip.prc { border-left: 3px dotted #94a3b8; color: #1f2937; font-weight: 500; }
+        /* Umumiy (klinik) karta — ma'ruza+amaliy bitta kartada, kafedra ajratadi */
+        .tt-chip.mix { border-left: 3px double #0e7490; color: #164e63; font-weight: 600; }
+        .tt-mix-tag { display: inline-block; margin-left: 3px; padding: 0 4px; font-size: 8px; font-weight: 700;
+            border-radius: 4px; background: #cffafe; color: #155e75; vertical-align: middle; white-space: nowrap; }
+        .tt-mix-warn { color: #b91c1c; font-weight: 700; margin-left: 2px; cursor: help; }
         #grid td.tt-lec { background: #fde68a; }   /* butun oqimga tegishli ma'ruza katagi — bir xil sariq */
         .tt-chip.sel { outline: 2px solid #ef4444; }
         .tt-merge-badge { display: inline-block; margin-left: 4px; padding: 0 4px; font-size: 8px; font-weight: 700;
@@ -1006,6 +1046,21 @@
             font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
         .pn-card.prc { background: #faf5ff; }
+        .pn-card.mix { background: #ecfeff; border-color: #a5f3fc; }
+        /* Karta modali — kafedra ajratishi (ma'ruza/amaliy haftalari) */
+        .cm-week-strip { display: flex; flex-wrap: wrap; gap: 3px; }
+        .cm-week { min-width: 30px; padding: 2px 0; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff;
+            font-size: 11px; line-height: 1.2; text-align: center; cursor: pointer; }
+        .cm-week b { display: block; font-size: 9px; }
+        .cm-week.lec { background: #fde68a; border-color: #f59e0b; color: #713f12; }
+        .cm-week.prc { background: #ede9fe; border-color: #a78bfa; color: #3b0764; }
+        .cm-week.unsplit { color: #64748b; }
+        .cm-week.off { background: #f1f5f9; color: #94a3b8; border-style: dashed; cursor: not-allowed; text-decoration: line-through; }
+        .cm-pattern { padding: 2px 7px; border: 1px solid #cbd5e1; border-radius: 5px; background: #f8fafc; font-size: 11px; cursor: pointer; }
+        .cm-pattern:hover { background: #e2e8f0; }
+        .cm-hours-ok { color: #047857; }
+        .cm-hours-bad { color: #b91c1c; font-weight: 600; }
+        .cm-hours-muted { color: #64748b; }
         .pn-card.sel { outline: 2px solid #f59e0b; }
         /* Shu haftada o'tilmaydigan karta — odatda yashirin, "ko'rsatish" bosilganda so'nik chiqadi */
         .pn-card.skip { opacity: .5; border-style: dashed; filter: grayscale(.5); }
@@ -2181,6 +2236,8 @@
             let overrides = {};    // "cardId|week" => {day, pair, cancelled, auditorium_*}
             let missingGroups = []; // rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             let subjectSettings = {};  // "spec|course|subject" => {mode, season, rotation_group, occurrences, cycle_days}
+            let planHours = {};        // umumiy (klinik) kartalar uchun reja soati: "yo'nalish|kurs|fan" => {lecture, practice}
+            let mixedIdx = {};         // umumiy karta birliklari (guruh+fan) — render vaqtida hisoblanadi
             let autoCycleBackup = null;
             let autoCycleApplied = false;
             let cycleGroupFilter = '';
@@ -2582,6 +2639,7 @@
                 // Fan rejimi (hafta almashinuvi / sikl): "spec|course|subject" => {mode, rotation_group, occurrences, cycle_days}
                 subjectSettings = {};
                 (j.subject_settings || []).forEach(s => { subjectSettings[subjModeKey(s.specialty_name, s.course, s.subject_name)] = s; });
+                planHours = j.plan_hours || {};
                 // Eski kartaga ishora qiluvchi tanlovlarni bekor qilamiz (eski doskaga yozib
                 // yubormaslik uchun); doska almashsa yo'nalish tanlovini ham qayta tanlaymiz
                 selected = null; modalCard = null;
@@ -2818,14 +2876,99 @@
             function effectiveCard(c) {
                 if (!curWeek) return c;
                 const ov = overrides[c.id + '|' + curWeek];
-                if (!ov || ov.cancelled || !ov.auditorium_code) return c;
+                let out = c;
+                // Umumiy (klinik) kartaning ma'ruza haftasi — ma'ruza o'qituvchisi va xonasi
+                if (isMixed(c) && effType(c, curWeek) === 'lecture') {
+                    out = {
+                        ...c,
+                        teacher_id: c.lecture_teacher_id || null,
+                        teacher_name: c.lecture_teacher_name || null,
+                        auditorium_code: c.lecture_auditorium_code || null,
+                        auditorium_name: c.lecture_auditorium_name || null,
+                        auditorium_volume: c.lecture_auditorium_volume || null,
+                    };
+                }
+                if (!ov || ov.cancelled || !ov.auditorium_code) return out;
                 return {
-                    ...c,
+                    ...out,
                     auditorium_code: ov.auditorium_code,
                     auditorium_name: ov.auditorium_name || ov.auditorium_code,
                     auditorium_volume: ov.auditorium_volume || null,
                 };
             }
+
+            // ===== Umumiy (klinik) karta: ma'ruza+amaliy bitta kartada, kafedra ajratadi =====
+            // O'quv bo'limi kartani katta jadvalga joylaydi; kafedra karta ichida qaysi
+            // haftalar ma'ruza (lecture_weeks), qolgani amaliy ekanini belgilaydi va
+            // ma'ruza uchun o'qituvchi/xona beradi. Soatlar reja bilan solishtiriladi.
+            const isMixed = c => !!c.is_mixed;
+            const lectureWeekSet = c => new Set(Array.isArray(c.lecture_weeks) ? c.lecture_weeks.map(Number) : []);
+            // Kartaning shu haftadagi turi: lecture | practice | mixed (ajratilmagan yoki shablon ko'rinishi)
+            function effType(c, week) {
+                if (!isMixed(c)) return c.training_type;
+                if (!week || !Array.isArray(c.lecture_weeks)) return 'mixed';
+                return lectureWeekSet(c).has(+week) ? 'lecture' : 'practice';
+            }
+            const typeClass = c => c.training_type === 'lecture' ? 'lec' : (isMixed(c) ? 'mix' : 'prc');
+            // Karta yo'nalish+kursining semestr haftalari soni
+            const weeksForCard = c => {
+                const g = grids[gridKey(c.faculty_name, c.specialty_name, c.course)] || grids[gridKey('', c.specialty_name, c.course)];
+                return Math.max(1, +(g && g.weeks) || +board.weeks || 15);
+            };
+            // Karta o'tiladigan haftalar (bekor qilinganlari chiqarilgan) — to'liq ro'yxat
+            const activeWeekList = c => {
+                const out = [];
+                for (let w = 1, t = weeksForCard(c); w <= t; w++) {
+                    const ov = overrides[c.id + '|' + w];
+                    if (!(ov && ov.cancelled)) out.push(w);
+                }
+                return out;
+            };
+            const mixedUnitKey = c => [c.faculty_name || '', c.specialty_name, c.course, c.subject_name, c.group_name || ''].join('¦');
+            const planHoursOf = c => planHours[c.specialty_name + '|' + c.course + '|' + c.subject_name] || null;
+            // Guruh+fan birligida kafedra ajratgan soatlar: 1 hafta = karta uzunligi (soat)
+            function mixedUnitHours(unit) {
+                let lecture = 0, practice = 0, unsplit = 0;
+                unit.cards.forEach(c => {
+                    const len = cardLen(c);
+                    const act = activeWeekList(c);
+                    if (!Array.isArray(c.lecture_weeks)) { unsplit += act.length * len; return; }
+                    const ls = lectureWeekSet(c);
+                    act.forEach(w => { if (ls.has(w)) lecture += len; else practice += len; });
+                });
+                return { lecture, practice, unsplit };
+            }
+            function mixedUnits() {
+                const map = {};
+                cards.forEach(c => {
+                    if (!isMixed(c)) return;
+                    const k = mixedUnitKey(c);
+                    if (!map[k]) map[k] = { key: k, faculty: c.faculty_name || '', spec: c.specialty_name, course: c.course,
+                        subject: c.subject_name, group: c.group_name || '', oqim: c.oqim_label || '', plan: planHoursOf(c), cards: [] };
+                    map[k].cards.push(c);
+                });
+                Object.values(map).forEach(u => Object.assign(u, mixedUnitHours(u)));
+                return map;
+            }
+            const mixedUnitOk = u => !u.unsplit && !!u.plan
+                && Math.abs(u.lecture - u.plan.lecture) < 0.01 && Math.abs(u.practice - u.plan.practice) < 0.01;
+            // "Ma'ruza 8/12 (4 soat yetmaydi) · Amaliy 52/60 (8 soat yetmaydi) · ajratilmagan 6 soat"
+            function mixedHoursHtml(u) {
+                const plan = u.plan;
+                const part = (label, got, want) => {
+                    if (want === null || want === undefined) return label + ' <b>' + got + '</b> soat';
+                    const diff = Math.round((got - want) * 10) / 10;
+                    const tail = diff === 0 ? ' ✓' : (diff < 0 ? ' (' + (-diff) + ' soat yetmaydi)' : ' (+' + diff + ' soat ortiqcha)');
+                    return '<span class="' + (diff === 0 ? 'cm-hours-ok' : 'cm-hours-bad') + '">' + label + ' <b>' + got + '/' + want + '</b>' + tail + '</span>';
+                };
+                let h = part("Ma'ruza", u.lecture, plan ? plan.lecture : null) + ' · ' + part('Amaliy', u.practice, plan ? plan.practice : null);
+                if (u.unsplit) h += ' · <span class="cm-hours-muted">ajratilmagan <b>' + u.unsplit + '</b> soat</span>';
+                if (!plan) h += ' <span class="cm-hours-muted">(reja soati topilmadi)</span>';
+                return h;
+            }
+            const mixTitle = c => !isMixed(c) ? '' : (Array.isArray(c.lecture_weeks)
+                ? " · ma'ruza haftalari: " + (c.lecture_weeks.length ? c.lecture_weeks.join(',') : 'yo\'q') + (c.lecture_teacher_name ? ' · ' + c.lecture_teacher_name : '')
+                : ' · kafedra hali ma\'ruza/amaliyga ajratmagan');
             // Karta shu haftada shablondan farq qiladimi (individual)?
             const hasWeekOverride = c => curWeek && !!overrides[c.id + '|' + curWeek];
             // Karta shu haftada umuman o'tilmaydimi (bekor qilingan / almashinuvchi
@@ -4652,9 +4795,16 @@
             $('unplacedExportBtn').onclick = downloadUnplacedDiagnostics;
 
             function cardLabel(c, short) {
-                const t = c.training_type === 'lecture' ? 'M' : 'A';
+                const et = effType(c, curWeek);
+                const t = et === 'lecture' ? 'M' : et === 'practice' ? 'A' : 'M+A';
                 const name = short && c.subject_name.length > 26 ? c.subject_name.slice(0, 26) + '…' : c.subject_name;
-                return '<b>[' + t + ']</b> ' + esc(name);
+                let h = '<b>[' + t + ']</b> ' + esc(name);
+                // Umumiy karta: kafedra ajratgan soat rejaga mos kelmasa — ogohlantirish
+                if (isMixed(c) && Array.isArray(c.lecture_weeks)) {
+                    const u = mixedIdx[mixedUnitKey(c)];
+                    if (u && !mixedUnitOk(u)) h += '<span class="tt-mix-warn" title="Ma\'ruza/amaliy soati rejaga mos emas — kartani ochib tekshiring">⚠</span>';
+                }
+                return h;
             }
 
             // Joylashmagan kartalar — pastda gorizontal panel (aSc uslubida): tekis
@@ -4680,8 +4830,9 @@
                 skipBtn.textContent = (showSkipped ? 'Yashirish' : 'Ko\'rsatish') +
                     ': bu haftada o\'tilmaydi (' + skipped.length + ' ta)';
 
+                mixedIdx = mixedUnits();
                 const panelCard = (c, skip) =>
-                    '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (selected && selected.id === c.id ? ' sel' : '') +
+                    '<div class="pn-card ' + typeClass(c) + (skip ? ' skip' : '') + (selected && selected.id === c.id ? ' sel' : '') +
                     ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
                     cardLabel(c, true) +
                     '<div class="text-[9px] text-gray-500">' +
@@ -4689,6 +4840,7 @@
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
                     (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <img src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true">' : '') +
+                    (isMixed(c) && !Array.isArray(c.lecture_weeks) ? ' <span class="tt-mix-tag" title="Kafedra hali ma\'ruza/amaliyga ajratmagan">ajratilmagan</span>' : '') +
                     '</div></div>';
 
                 $('cardPanel').innerHTML =
@@ -4795,6 +4947,7 @@
             }
 
             function renderGrid() {
+                mixedIdx = mixedUnits();
                 $('grid').classList.toggle('tt-cross-details', viewMode !== 'group' && viewMode !== 'cycle');
                 // Sikl ko'rinishi — alohida kalendar (sana × guruh)
                 const cycleView = viewMode === 'cycle';
@@ -4941,11 +5094,11 @@
                     const alt = !curWeek && showWks;
                     const altMark = alt ? '<span class="tt-alt-mark" title="Har hafta emas — almashib keladi">⇄</span>' : '';
                     const tri = shade === 0 ? ' tt-shade-a tt-tri-a' : shade === 1 ? ' tt-shade-b tt-tri-b' : '';
-                    const head = '<div class="tt-chip ' + (c.training_type === 'lecture' ? 'lec' : 'prc') +
+                    const head = '<div class="tt-chip ' + typeClass(c) +
                         (alt ? ' tt-alt' : '') + tri +
                         (selected && selected.id === c.id ? ' sel' : '') + '" style="' + subjStyle(c) +
                         '" data-chip="' + c.id + '"' + mids + ' title="' +
-                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle
+                        esc(c.subject_name + (c.teacher_name ? ' · ' + c.teacher_name : '') + roomTitle + wkTitle + mixTitle(c)
                             + (alt ? ' · har hafta emas (almashib keladi)' : '')) + '">';
                     // Uchburchakka bo'lingan katakda fan nomi, qaysi haftalarda
                     // o'tilishi va xona raqami ko'rinadi. O'qituvchi tooltipda
@@ -5181,9 +5334,12 @@
             async function openModal(c) {
                 modalCard = c;
                 $('cmTitle').textContent = c.subject_name;
-                $('cmSub').textContent = (c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + (c.group_name || '')) +
+                const kind = isMixed(c) ? 'Umumiy karta (M+A) · ' + (c.group_name || '') + (c.oqim_label ? ' · ' + c.oqim_label : '')
+                    : (c.training_type === 'lecture' ? "Ma'ruza · " + (c.oqim_label || '') : 'Amaliy · ' + (c.group_name || ''));
+                $('cmSub').textContent = kind +
                     ' · ' + c.students + ' talaba' + (c.kafedra_name ? ' · ' + c.kafedra_name : '') +
                     (curWeek ? ' · ' + curWeek + '-hafta' + (hasWeekOverride(c) ? ' (individual)' : '') : '');
+                openMixSection(c);
                 $('cmCap').textContent = '(kamida ' + c.students + ' o\'rin)';
                 // Hafta rejimida: "olib tashlash" shu haftada bekor qilish; override bo'lsa shablonga qaytarish
                 $('cmUnplace').textContent = curWeek ? '✖ Shu haftada bekor qilish' : '↩ Jadvaldan olish';
@@ -5295,6 +5451,154 @@
                 } catch (e) { alert('Xatolik: ' + e.message); return; }
                 $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                 renderAll();
+            };
+
+            // ── Umumiy (klinik) karta — kafedra ajratishi (modal bo'limi) ──
+            // mixSel: Set(ma'ruza haftalari) yoki null (hali ajratilmagan). Saqlanmaguncha
+            // faqat modal ichida; soat hisobi shu tanlov bilan jonli ko'rsatiladi.
+            let mixSel = null;
+            let lecTeacherTimer = null;
+            // Shu oqimning shu vaqtdagi boshqa guruh kartalari — ma'ruza ularga ham birga o'tiladi
+            function mixFlowSiblings(c) {
+                if (!c.day || !c.pair || !c.oqim_label) return [];
+                return cards.filter(o => o.id !== c.id && isMixed(o) && o.day === c.day && o.pair === c.pair &&
+                    (o.start_half || 0) === (c.start_half || 0) && (o.faculty_name || '') === (c.faculty_name || '') &&
+                    o.specialty_name === c.specialty_name && o.course === c.course && o.subject_name === c.subject_name &&
+                    (o.oqim_label || '') === (c.oqim_label || ''));
+            }
+            function openMixSection(c) {
+                const box = $('cmMix');
+                const win = $('cardModal').querySelector('.tt-modal-win');
+                if (!isMixed(c)) {
+                    box.classList.add('hidden');
+                    if (win) win.style.maxWidth = '';
+                    return;
+                }
+                box.classList.remove('hidden');
+                // Hafta tugmalari va ikki ustunli ma'ruza rekvizitlari uchun kengroq oyna
+                if (win) win.style.maxWidth = '42rem';
+                mixSel = Array.isArray(c.lecture_weeks) ? new Set(c.lecture_weeks.map(Number)) : null;
+                const sib = mixFlowSiblings(c);
+                $('cmMixFlowCount').textContent = sib.length;
+                $('cmMixFlow').checked = sib.length > 0;
+                $('cmMixFlow').disabled = !sib.length;
+                $('cmLecTeacherSearch').value = '';
+                renderMixStrip();
+                loadLecTeachers('');
+                loadLecAuds();
+            }
+            function renderMixStrip() {
+                const c = modalCard;
+                if (!c || !isMixed(c)) return;
+                const total = weeksForCard(c);
+                const act = new Set(activeWeekList(c));
+                let h = '';
+                for (let w = 1; w <= total; w++) {
+                    const off = !act.has(w);
+                    const cls = off ? 'off' : (mixSel === null ? 'unsplit' : (mixSel.has(w) ? 'lec' : 'prc'));
+                    const txt = off ? '✕' : (mixSel === null ? '?' : (mixSel.has(w) ? 'M' : 'A'));
+                    h += '<button type="button" class="cm-week ' + cls + '" data-mix-week="' + w + '"' +
+                        (off ? ' disabled title="Bu haftada o\'tilmaydi"' : '') + '>' + w + '<b>' + txt + '</b></button>';
+                }
+                $('cmMixWeeks').innerHTML = h;
+                $('cmMixState').textContent = mixSel === null
+                    ? 'hali ajratilmagan — haftani bosing yoki shablon tanlang'
+                    : (mixSel.size + " hafta ma'ruza · " + [...act].filter(w => !mixSel.has(w)).length + ' hafta amaliy');
+                renderMixHours();
+                $('cmMixWeeks').querySelectorAll('[data-mix-week]').forEach(b => b.onclick = () => {
+                    const w = +b.dataset.mixWeek;
+                    if (mixSel === null) mixSel = new Set();
+                    if (mixSel.has(w)) mixSel.delete(w); else mixSel.add(w);
+                    renderMixStrip();
+                });
+            }
+            // Birlik (guruh+fan) soatlari — modal ichidagi hali saqlanmagan tanlov bilan
+            function renderMixHours() {
+                const c = modalCard;
+                if (!c) return;
+                const u = mixedUnits()[mixedUnitKey(c)];
+                if (!u) { $('cmMixHours').innerHTML = ''; return; }
+                const preview = { ...u, cards: u.cards.map(x => x.id === c.id ? { ...x, lecture_weeks: mixSel === null ? null : [...mixSel] } : x) };
+                Object.assign(preview, mixedUnitHours(preview));
+                $('cmMixHours').innerHTML = '<span class="text-gray-500">' + esc(c.group_name || '') + ' · reja bilan:</span> ' + mixedHoursHtml(preview);
+            }
+            document.querySelectorAll('[data-mix-pattern]').forEach(b => b.onclick = () => {
+                const c = modalCard;
+                if (!c || !isMixed(c)) return;
+                const act = activeWeekList(c);
+                const p = b.dataset.mixPattern;
+                if (p === 'reset') mixSel = null;
+                else if (p === 'none') mixSel = new Set();
+                else if (p === 'all') mixSel = new Set(act);
+                else if (p === 'odd') mixSel = new Set(act.filter(w => w % 2 === 1));
+                else if (p === 'even') mixSel = new Set(act.filter(w => w % 2 === 0));
+                else if (p === 'plan') {
+                    // Reja ma'ruza soatidan shu birlikning BOSHQA kartalarida ajratilgan ma'ruza
+                    // soati ayiriladi; qolganini shu karta boshidan yopadi (1 hafta = karta soati).
+                    const u = mixedUnits()[mixedUnitKey(c)];
+                    const plan = u && u.plan ? u.plan.lecture : 0;
+                    let others = 0;
+                    if (u) u.cards.forEach(x => {
+                        if (x.id === c.id || !Array.isArray(x.lecture_weeks)) return;
+                        const ls = lectureWeekSet(x);
+                        activeWeekList(x).forEach(w => { if (ls.has(w)) others += cardLen(x); });
+                    });
+                    const need = Math.max(0, Math.ceil((plan - others) / cardLen(c)));
+                    mixSel = new Set(act.slice(0, need));
+                }
+                renderMixStrip();
+            });
+            async function loadLecTeachers(search) {
+                const c = modalCard;
+                if (!c) return;
+                const p = new URLSearchParams();
+                if (c.kafedra_name && !search) p.set('kafedra', c.kafedra_name.split(' ')[0]);
+                if (search) p.set('search', search);
+                try {
+                    const list = await api(TEACHERS_URL + '?' + p);
+                    $('cmLecTeacher').innerHTML = '<option value="">— biriktirilmagan —</option>' + list.map(t =>
+                        '<option value="' + t.id + '"' + (c.lecture_teacher_id === t.id ? ' selected' : '') + '>' +
+                        esc(t.full_name) + (t.lavozim ? ' · ' + esc(t.lavozim) : '') + '</option>').join('');
+                } catch (e) { $('cmLecTeacher').innerHTML = '<option disabled>xato</option>'; }
+            }
+            async function loadLecAuds() {
+                const c = modalCard;
+                if (!c) return;
+                if (!audCache) audCache = await api(AUDS_URL);
+                $('cmLecAud').innerHTML = '<option value="">— tanlanmagan —</option>' + audCache.map(a =>
+                    '<option value="' + esc(a.code) + '"' + (c.lecture_auditorium_code === a.code ? ' selected' : '') + '>' +
+                    esc(a.name) + (a.volume ? ' (' + a.volume + ')' : '') + (a.building_name ? ' · ' + esc(a.building_name) : '') + '</option>').join('');
+            }
+            $('cmLecTeacherSearch').oninput = function () {
+                clearTimeout(lecTeacherTimer);
+                lecTeacherTimer = setTimeout(() => loadLecTeachers(this.value.trim()), 300);
+            };
+            $('cmMixSave').onclick = async function () {
+                const c = modalCard;
+                if (!c || !isMixed(c)) return;
+                this.disabled = true;
+                const m = $('cmMsg');
+                try {
+                    const body = { apply_flow: ($('cmMixFlow').checked && !$('cmMixFlow').disabled) ? 1 : 0 };
+                    if (mixSel === null) {
+                        body.reset = 1;
+                    } else {
+                        body.lecture_weeks = [...mixSel].sort((a, b) => a - b).join(',');
+                        body.lecture_teacher_id = $('cmLecTeacher').value || '';
+                        body.lecture_auditorium_code = $('cmLecAud').value || '';
+                    }
+                    const j = await api(BASE + '/cards/' + c.id + '/split', 'POST', body);
+                    (j.cards || []).forEach(u => { const x = cards.find(y => y.id === u.id); if (x) Object.assign(x, u); });
+                    m.className = 'text-sm rounded px-3 py-2 bg-green-50 text-green-700';
+                    m.textContent = 'Ajratish saqlandi · ' + j.updated + ' ta karta';
+                    m.classList.remove('hidden');
+                    renderMixStrip();
+                    renderAll();
+                } catch (e) {
+                    m.className = 'text-sm rounded px-3 py-2 bg-red-50 text-red-700';
+                    m.textContent = e.message; m.classList.remove('hidden');
+                }
+                this.disabled = false;
             };
 
             // ══════════════════════════════════════════════════════════════
@@ -5543,7 +5847,12 @@
                         const setting = { mode: 'normal', ...subjectSettingOf(r), season: subjectSeasonOf(r) };
                         const modeOptions = Object.entries(SUBJ_MODE_LABELS).map(([value, label]) =>
                             '<option value="' + value + '"' + (setting.mode === value ? ' selected' : '') + '>' + label + '</option>').join('');
-                        h += rowTag(i) + '<td>' + esc(r.subject_name) + '</td><td class="asc-subject-path"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td>' +
+                        const mixedPill = r.clinical
+                            ? (setting.mode === 'cycle'
+                                ? ' <span class="tt-mix-tag" title="Klinik fan, lekin sikl rejimida — kartochkalar ma\'ruza/amaliy alohida yaratiladi">klinik · sikl</span>'
+                                : ' <span class="tt-mix-tag" title="Klinik fan — kartochkalar UMUMIY (ma\'ruza+amaliy bitta kartada) yaratiladi, kafedra ajratadi. Belgi: O\'quv reja to\'g\'riligi → Fanlar → Klinik">umumiy karta</span>')
+                            : '';
+                        h += rowTag(i) + '<td>' + esc(r.subject_name) + mixedPill + '</td><td class="asc-subject-path"><div class="asc-subject-faculty">' + esc(faculty) + '</div><div class="asc-subject-specialty">' + esc(r.specialty_name) + ' · ' + r.course + '-kurs</div></td>' +
                             '<td><span class="asc-semester-pill asc-semester-' + esc(r.season || '') + '">' + esc(r.semester_label || (r.semester ? r.semester + '-semestr' : '—')) + '</span></td>' +
                             '<td>' + esc(r.kafedra_name || '—') + '</td><td>' + fmt(r.lecture) + '</td><td>' + fmt(r.practice + r.laboratory + r.seminar) +
                             '</td><td>' + weekLoadHtml(r) + '</td><td>' + weekSplitHtml(r) + '</td>' +
@@ -5838,7 +6147,8 @@
                     weeksText = '1–' + totalWeeks;
                 }
 
-                const lessonType = card.training_type === 'lecture' ? 'M' : 'A';
+                const exportType = effType(card, curWeek);
+                const lessonType = exportType === 'lecture' ? 'M' : exportType === 'practice' ? 'A' : 'M+A';
                 const flow = card.oqim_label || card.group_name || '—';
 
                 return [
@@ -6444,7 +6754,17 @@
             }
 
             function asgTypeLabel(unit) {
+                if (unit.is_mixed) return unit.persona === 'lecture' ? "Ma'ruza (umumiy karta)" : 'Amaliy (umumiy karta)';
                 return unit.training_type === 'lecture' ? "Ma'ruza" : 'Amaliy';
+            }
+            // Umumiy karta birligi uchun reja soati ustuni
+            function asgHoursHtml(unit, midx) {
+                if (!unit.is_mixed) return '<span class="text-gray-300">—</span>';
+                if (unit.persona === 'lecture') {
+                    return '<span class="text-slate-600" title="Nechta karta ma\'ruza/amaliyga ajratilgan">' + (unit.split_cards || 0) + '/' + unit.cards + ' karta ajratilgan</span>';
+                }
+                const u = midx[[unit.faculty_name || '', unit.specialty_name, unit.course, unit.subject_name, unit.group_name || ''].join('¦')];
+                return u ? mixedHoursHtml(u) : '<span class="text-gray-300">—</span>';
             }
 
             function asgScopeLabel(unit) {
@@ -6637,13 +6957,14 @@
                     setAsgTeacherPanel(null);
                 }
                 $('asgCount').textContent = rows.length + ' ta';
-                let h = '<thead><tr><th>Fan</th><th>Fakultet / yo\'nalish</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th></tr></thead><tbody>';
-                if (!rows.length) h += '<tr><td colspan="7" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
+                const midx = mixedUnits();
+                let h = '<thead><tr><th>Fan</th><th>Fakultet / yo\'nalish</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th><th title="Umumiy (klinik) karta: kafedra ajratgan ma\'ruza/amaliy soati reja bilan">Soat / reja</th></tr></thead><tbody>';
+                if (!rows.length) h += '<tr><td colspan="8" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
                 rows.forEach((u, i) => {
                     const scopeLabel = asgScopeLabel(u);
                     const ttLabel = u.training_type === 'lecture'
-                        ? '<span class="text-blue-600 font-semibold">Ma\'ruza</span>'
-                        : '<span class="text-purple-600 font-semibold">Amaliy</span>';
+                        ? '<span class="text-blue-600 font-semibold">' + esc(asgTypeLabel(u)) + '</span>'
+                        : '<span class="text-purple-600 font-semibold">' + esc(asgTypeLabel(u)) + '</span>';
                     const teacherLabel = u.teacher_mixed
                         ? '<span class="text-amber-600">⚠ turlicha</span>'
                         : (u.teacher_name ? esc(u.teacher_name) : '<span class="text-gray-400">— biriktirilmagan —</span>');
@@ -6651,7 +6972,7 @@
                         '<td>' + esc(u.subject_name) + '</td><td>' + asgSpecHtml(u) + '</td><td class="text-center">' + ttLabel + '</td>' +
                         '<td>' + esc(scopeLabel) + '</td><td>' + esc(u.kafedra_name || '—') + '</td>' +
                         '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '✓)</span>' : '') + '</td>' +
-                        '<td>' + teacherLabel + '</td></tr>';
+                        '<td>' + teacherLabel + '</td><td class="text-[11px]">' + asgHoursHtml(u, midx) + '</td></tr>';
                     return;
                     const sk = u.specialty_name + '·' + u.course;
                     if (sk !== lastSpec) {
@@ -6686,7 +7007,7 @@
                 setAsgTeacherPanel(u);
                 $('asgUnitInfo').innerHTML = '<b>' + esc(u.subject_name) + '</b><br>' +
                     '<span class="text-slate-600">' + asgSpecHtml(u) + '</span><br>' +
-                    (u.training_type === 'lecture' ? "Ma'ruza · " + esc(u.oqim_label || '') : 'Amaliy · ' + esc(u.group_name || '')) +
+                    esc(asgTypeLabel(u)) + ' · ' + esc(asgScopeLabel(u)) +
                     ' · ' + u.cards + ' karta' + (u.kafedra_name ? '<br><span class="text-gray-400">' + esc(u.kafedra_name) + '</span>' : '');
                 await loadAsgTeachers('');
             }
@@ -6723,9 +7044,11 @@
                 if (!asgSel) return;
                 $('asgApply').disabled = $('asgClear').disabled = true;
                 try {
+                    const lecturePersona = asgSel.is_mixed && asgSel.persona === 'lecture';
                     const j = await api(BASE + '/boards/' + board.id + '/assign-teacher', 'POST', {
                         faculty_name: asgSel.faculty_name || '', specialty_name: asgSel.specialty_name, course: asgSel.course,
                         subject_name: asgSel.subject_name, training_type: asgSel.training_type,
+                        persona: lecturePersona ? 'lecture' : '',
                         oqim_label: asgSel.oqim_label || '', group_name: asgSel.group_name || '',
                         teacher_id: teacherId || '',
                     });
@@ -6734,10 +7057,18 @@
                     asgSel.teacher_name = j.teacher_name;
                     asgSel.teacher_mixed = false;
                     cards.forEach(c => {
+                        if ((c.faculty_name || '') !== (asgSel.faculty_name || '') || c.specialty_name !== asgSel.specialty_name ||
+                            c.course !== asgSel.course || c.subject_name !== asgSel.subject_name) return;
+                        if (lecturePersona) {
+                            // Umumiy kartalarning ma'ruza o'qituvchisi — oqim kesimida
+                            if (isMixed(c) && (c.oqim_label || '') === (asgSel.oqim_label || '')) {
+                                c.lecture_teacher_id = asgSel.teacher_id; c.lecture_teacher_name = j.teacher_name;
+                            }
+                            return;
+                        }
                         const sameScope = asgSel.training_type === 'lecture'
                             ? (c.oqim_label === asgSel.oqim_label) : (c.group_name === asgSel.group_name);
-                        if ((c.faculty_name || '') === (asgSel.faculty_name || '') && c.specialty_name === asgSel.specialty_name && c.course === asgSel.course &&
-                            c.subject_name === asgSel.subject_name && c.training_type === asgSel.training_type && sameScope) {
+                        if (c.training_type === asgSel.training_type && sameScope) {
                             c.teacher_id = asgSel.teacher_id; c.teacher_name = j.teacher_name;
                         }
                     });
@@ -6997,9 +7328,13 @@
                 });
                 const noTeacher = Object.values(unitTeacher).filter(u => !u.has);
 
+                // 6) Umumiy (klinik) kartalar: kafedra ajratmagan yoki ajratgan soati rejaga mos emas
+                const mixedIssues = Object.values(mixedUnits()).filter(u => !mixedUnitOk(u))
+                    .sort((a, b) => (a.spec + a.course + a.subject + a.group).localeCompare(b.spec + b.course + b.subject + b.group, 'uz'));
+
                 const totalUnplaced = Object.values(unplacedBySpec).reduce((a, b) => a + b, 0);
-                const issues = teacherConf.length + roomConf.length + gaps.length + missingGroups.length;
-                return { unplacedBySpec, totalUnplaced, teacherConf, roomConf, gaps, noTeacher, missingGroups, issues, dayName };
+                const issues = teacherConf.length + roomConf.length + gaps.length + missingGroups.length + mixedIssues.length;
+                return { unplacedBySpec, totalUnplaced, teacherConf, roomConf, gaps, noTeacher, missingGroups, mixedIssues, issues, dayName };
             }
 
             function updateCheckBadge() {
@@ -7049,6 +7384,11 @@
                 h += sec('<i class="bi bi-person-question"></i>', 'O\'qituvchisi biriktirilmagan birliklar', d.noTeacher.length, 'hammasiga biriktirilgan',
                     d.noTeacher.slice(0, 40).map(u => '<div>' + esc(u.spec) + ' · ' + u.course + '-kurs — ' + esc(u.sub) + '</div>').join('') +
                     (d.noTeacher.length > 40 ? '<div class="text-gray-400">... yana ' + (d.noTeacher.length - 40) + '</div>' : ''));
+                // Umumiy (klinik) kartalar — kafedra ajratishi va reja soati
+                h += sec('<i class="bi bi-scissors"></i>', "Umumiy (klinik) kartalar — ma'ruza/amaliy soati rejaga mos emas", d.mixedIssues.length, 'hammasi rejaga mos',
+                    '<div class="mb-1 text-gray-500">Kafedra karta ichida qaysi haftalar ma\'ruza, qaysilari amaliy ekanini belgilaydi. Ajratilmagan yoki reja soatidan farq qiladigan birliklar:</div>' +
+                    d.mixedIssues.slice(0, 60).map(u => '<div>• <b>' + esc(u.subject) + '</b> · ' + esc(u.spec) + ' · ' + u.course + '-kurs · ' + esc(u.group) + ' — ' + mixedHoursHtml(u) + '</div>').join('') +
+                    (d.mixedIssues.length > 60 ? '<div class="text-gray-400">... yana ' + (d.mixedIssues.length - 60) + '</div>' : ''));
 
                 const okAll = !d.totalUnplaced && !d.issues && !d.noTeacher.length;
                 $('chkBody').innerHTML = (okAll

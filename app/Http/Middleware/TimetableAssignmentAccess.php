@@ -65,6 +65,8 @@ class TimetableAssignmentAccess
                 $allowed = array_merge($allowed, [
                     'admin.timetable.teacher-units',
                     'admin.timetable.assign-teacher',
+                    // Umumiy (klinik) kartani ma'ruza/amaliyga ajratish — kafedraning ishi
+                    'admin.timetable.cards.split',
                 ]);
             }
 

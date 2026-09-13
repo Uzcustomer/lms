@@ -12,6 +12,8 @@ class SubjectKafedraOverride extends Model
         'kafedra_name',
         'department_id',
         'practice_group_size',
+        // NULL — nomdan avtomatik; 1 — klinik (umumiy karta); 0 — klinik emas
+        'is_clinical',
         'updated_by',
     ];
 }

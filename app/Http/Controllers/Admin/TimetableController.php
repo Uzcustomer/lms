@@ -7,6 +7,7 @@ use App\Models\Auditorium;
 use App\Models\AuditoriumTeacher;
 use App\Models\Department;
 use App\Models\OqimSnapshot;
+use App\Models\SubjectKafedraOverride;
 use App\Models\Teacher;
 use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
@@ -15,6 +16,7 @@ use App\Models\TimetableCyclePlacement;
 use App\Models\TimetableGridSetting;
 use App\Models\TimetableRule;
 use App\Models\TimetableSubjectSetting;
+use App\Support\ClinicalSubjects;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -159,12 +161,8 @@ class TimetableController extends Controller
     {
         $t = $this->normSubject((string) $subject);
 
-        foreach (['klinik', 'kasallik', 'terapiya', 'xirurgiya', 'jarrohlik', 'pediatriya', 'akusher',
-                  'ginekolog', 'nevrolog', 'kardiolog', 'onkolog', 'urolog', 'endokrin', 'dermato',
-                  'psixiatr', 'stomatolog', 'ftiziatr', 'reanimatsiya', 'anesteziolog', 'yuqumli'] as $kw) {
-            if (str_contains($t, $kw)) {
-                return 10;
-            }
+        if (ClinicalSubjects::matches($t)) {
+            return 10;
         }
 
         if (preg_match('/(\btil|xorijiy|ingliz|inglis)/u', $t)) {
@@ -185,6 +183,52 @@ class TimetableController extends Controller
     {
         $k = $this->normSubject($subject);
         return (int) ($overrides[$k] ?? $this->defaultPracticeGroupSize($subject));
+    }
+
+    /** Fan → qo'lda qo'yilgan "klinik" belgisi (subject_kafedra_overrides.is_clinical): norm_name => 0|1. */
+    private function clinicalOverrides(): array
+    {
+        if (!Schema::hasColumn('subject_kafedra_overrides', 'is_clinical')) {
+            return [];
+        }
+        return SubjectKafedraOverride::whereNotNull('is_clinical')
+            ->pluck('is_clinical', 'norm_name')
+            ->map(fn($v) => (int) $v)
+            ->all();
+    }
+
+    /**
+     * Klinik fan — doskada ma'ruza va amaliy BITTA umumiy kartada yaratiladi:
+     * o'quv bo'limi katta (tashqi) jadvalni tuzadi, kafedra esa karta ichida
+     * haftalar bo'yicha ma'ruza/amaliyga ajratib, o'qituvchi va xonani beradi.
+     * Qo'lda belgilanmagan bo'lsa fan nomidagi kalit so'zlardan aniqlanadi.
+     */
+    private function isClinicalSubject(array $clinicalOverrides, string $subject): bool
+    {
+        $k = $this->normSubject($subject);
+        if (array_key_exists($k, $clinicalOverrides)) {
+            return (int) $clinicalOverrides[$k] === 1;
+        }
+        return ClinicalSubjects::matches($k);
+    }
+
+    /**
+     * Sikl rejimiga qo'yilgan fanlar: "specKey|course|normSubject" => true.
+     * Sikl kalendari ma'ruza va amaliy bloklarni alohida kartalardan quradi,
+     * shuning uchun bunday fanlar klinik bo'lsa ham avvalgidek ajratib yaratiladi.
+     */
+    private function cycleModeSubjectKeys(TimetableBoard $board): array
+    {
+        if (!Schema::hasTable('timetable_subject_settings')) {
+            return [];
+        }
+        $out = [];
+        $rows = TimetableSubjectSetting::where('board_id', $board->id)->where('mode', 'cycle')
+            ->get(['specialty_name', 'course', 'subject_name']);
+        foreach ($rows as $r) {
+            $out[$this->specKey($r->specialty_name) . '|' . (int) $r->course . '|' . $this->normSubject((string) $r->subject_name)] = true;
+        }
+        return $out;
     }
 
     private function specKey(?string $name): string
@@ -463,6 +507,9 @@ class TimetableController extends Controller
         // Kafedra xaritasi
         [$kafMap, $overrides] = $this->buildKafedraMap();
         $practiceSizeOverrides = $this->practiceGroupSizeOverrides();
+        // Klinik fanlar (umumiy karta) va sikl rejimidagi fanlar (ular ajratib yaratiladi)
+        $clinicalOverrides = $this->clinicalOverrides();
+        $cycleSubjects = $this->cycleModeSubjectKeys($board);
 
         // Fanlarni yo'nalish+kurs bo'yicha guruhlash.
         //
@@ -564,15 +611,26 @@ class TimetableController extends Controller
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
                             $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
                             $pairPracticeGroups = (float) $s->seminar > 0 || $practiceGroupSize >= 30;
+                            $subjKey = $this->normSubject((string) $s->subject_name);
+                            // Klinik fan — UMUMIY karta: ma'ruza va amaliy soati bitta guruh
+                            // kartasiga qo'shiladi, oqim ma'ruza kartasi yaratilmaydi. O'quv
+                            // bo'limi shu kartani katta jadvalga joylaydi; kafedra esa karta
+                            // ichida haftalar bo'yicha ma'ruza/amaliyga ajratadi (lecture_weeks).
+                            // Sikl rejimidagi fan bundan mustasno — sikl kalendari alohida
+                            // ma'ruza/amaliy kartalarga tayanadi.
+                            $mixed = $this->isClinicalSubject($clinicalOverrides, (string) $s->subject_name)
+                                && !isset($cycleSubjects[$sk . '|' . $course . '|' . $subjKey]);
                             // Haftalik yuk taqsimoti: jami soat / hafta = haftalik yuk.
                             // Ma'ruza 2 soat egallagani uchun ma'ruzali haftada amaliy
                             // kamayadi — shuning uchun "qo'shimcha" amaliy kartalar faqat
                             // ma'ruzasiz haftalarda o'tiladi (kartada weeks bilan belgilanadi).
-                            $wp = $this->weeklyPlan((float) $s->lecture, $prcHours, $weeks);
+                            // Umumiy kartada butun soat (ma'ruza+amaliy) bir tekis taqsimlanadi.
+                            $wp = $mixed
+                                ? $this->weeklyPlan(0.0, (float) $s->lecture + $prcHours, $weeks)
+                                : $this->weeklyPlan((float) $s->lecture, $prcHours, $weeks);
 
                             // Ma'ruza — bitta oqimga BITTA karta; necha hafta o'tilishi
                             // ma'ruza soatidan (1 para = 2 soat = 1 hafta).
-                            $subjKey = $this->normSubject((string) $s->subject_name);
                             // Bir xil ko'rinadigan oqim bir nechta snapshot blokida kelishi mumkin.
                             // Ma'ruza bunday bo'laklarga ajralmasin: fakultet+yo'nalish+kurs+
                             // oqim+til+fan bo'yicha bitta karta, guruhlar esa birlashtiriladi.
@@ -581,7 +639,7 @@ class TimetableController extends Controller
                             // Shu sababli ular ma'ruza kalitida ham alohida bo'lmasligi kerak.
                             $lecKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|'
                                 . $flowLabel . '|' . $subjKey;
-                            if ((float) $s->lecture > 0) {
+                            if (!$mixed && (float) $s->lecture > 0) {
                                 foreach ($oq['rows'] ?? [] as $lectureGroup) {
                                     $lectureGroupName = trim((string) ($lectureGroup['name'] ?? ''));
                                     if ($lectureGroupName === '') {
@@ -601,7 +659,7 @@ class TimetableController extends Controller
                                         'board_id' => $board->id,
                                         'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
                                         'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
-                                        'training_type' => 'lecture',
+                                        'training_type' => 'lecture', 'is_mixed' => 0,
                                         'group_name' => null, 'group_names' => json_encode($mergedLectureGroups ?: $groupNames),
                                         'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
                                         'students' => $mergedLectureStudents > 0 ? $mergedLectureStudents : $oqTotal,
@@ -688,7 +746,8 @@ class TimetableController extends Controller
                                             'board_id' => $board->id,
                                             'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
                                             'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
-                                            'training_type' => 'practice',
+                                            // Umumiy (klinik) karta ham guruh kartasi — is_mixed bilan ajralib turadi
+                                            'training_type' => 'practice', 'is_mixed' => $mixed ? 1 : 0,
                                             'group_name' => $groupLabel,
                                             'group_names' => count($names) > 1 ? json_encode($names, JSON_UNESCAPED_UNICODE) : null,
                                             'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
@@ -721,7 +780,7 @@ class TimetableController extends Controller
             return $rows;
         }
         $drop = [];
-        foreach (['faculty_name', 'weeks', 'len_half'] as $col) {
+        foreach (['faculty_name', 'weeks', 'len_half', 'is_mixed'] as $col) {
             if (!Schema::hasColumn('timetable_cards', $col)) {
                 $drop[] = $col;
             }
@@ -2843,7 +2902,8 @@ class TimetableController extends Controller
         // Auditoriya sig'imi (kod => hajm) — kartada "xona (sig'im)" ko'rsatish uchun.
         $roomVol = Auditorium::pluck('volume', 'code')->all();
 
-        $cards = TimetableCard::where('board_id', $board->id)->get()->map(fn($c) => [
+        $models = TimetableCard::where('board_id', $board->id)->get();
+        $cards = $models->map(fn($c) => [
             'id' => $c->id,
             'specialty_name' => $c->specialty_name,
             'course' => $c->course,
@@ -2876,6 +2936,16 @@ class TimetableController extends Controller
                         $lecHours[$this->specKey($c->specialty_name) . '|' . $c->course . '|' . $this->normSubject((string) $c->subject_name)] ?? 0
                     )
                     : null),
+            // Umumiy (klinik) karta va kafedra ajratishi: ma'ruza haftalari (null —
+            // hali ajratilmagan) hamda ma'ruza haftalari uchun o'qituvchi/xona
+            'is_mixed' => $c->isMixed(),
+            'lecture_weeks' => $c->lectureWeekList(),
+            'lecture_teacher_id' => $c->isMixed() ? $c->lecture_teacher_id : null,
+            'lecture_teacher_name' => $c->isMixed() ? $c->lecture_teacher_name : null,
+            'lecture_auditorium_code' => $c->isMixed() ? ($c->lecture_auditorium_code ?: null) : null,
+            'lecture_auditorium_name' => $c->isMixed() ? ($c->lecture_auditorium_name ?: null) : null,
+            'lecture_auditorium_volume' => $c->isMixed() && $c->lecture_auditorium_code
+                ? ($roomVol[$c->lecture_auditorium_code] ?? null) : null,
         ]);
 
         $grids = TimetableGridSetting::where('board_id', $board->id)
@@ -2924,12 +2994,39 @@ class TimetableController extends Controller
             'subject_settings' => $this->subjectSettingsFor($board),
             // Rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             'missing_groups' => $this->missingGroupSpecs($board),
+            // Umumiy (klinik) kartalar uchun reja soatlari — kafedra ajratishini tekshirish
+            'plan_hours' => $this->mixedPlanHours($board, $models),
         ])
             // Doska ma'lumoti tez-tez o'zgaradi (kartalar qayta yaratiladi, joylashadi).
             // Brauzer eski GET javobini keshdan bermasin — aks holda yangi kartalar
             // (masalan yangi kurs) ekranda ko'rinmay qoladi.
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache');
+    }
+
+    /**
+     * Umumiy (klinik) kartalar uchun ishchi reja soatlari: "yo'nalish|kurs|fan" =>
+     * ['lecture' => .., 'practice' => ..] (amaliy = amaliy + laboratoriya + seminar).
+     * Kafedra ajratgan ma'ruza/amaliy soatlari shu bilan solishtirilib, necha soat
+     * yetishmayotgani ogohlantiriladi. Kalit kartadagi nomlar bilan bir xil.
+     */
+    private function mixedPlanHours(TimetableBoard $board, $cards): array
+    {
+        $mixed = $cards->filter(fn($c) => $c->isMixed());
+        if ($mixed->isEmpty()) {
+            return [];
+        }
+        $hours = $this->cycleSubjectHoursMap($board);
+        $out = [];
+        foreach ($mixed as $c) {
+            $key = $c->specialty_name . '|' . (int) $c->course . '|' . $c->subject_name;
+            if (array_key_exists($key, $out)) {
+                continue;
+            }
+            $h = $hours[$this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name)] ?? null;
+            $out[$key] = $h ? ['lecture' => (float) $h['lecture'], 'practice' => (float) $h['practice']] : null;
+        }
+        return $out;
     }
 
     /** Doskaning fan-rejim sozlamalari (hafta almashinuvi / sikl) — frontend uchun. */
@@ -5187,7 +5284,7 @@ class TimetableController extends Controller
                     $card->oqim_label ?: '-',
                     $card->group_name ?: (is_array($card->group_names) ? implode(', ', $card->group_names) : '-'),
                     $card->subject_name,
-                    $card->training_type === 'lecture' ? 'Ma\'ruza' : 'Amaliy',
+                    $card->isMixed() ? 'Umumiy (M+A)' : ($card->training_type === 'lecture' ? 'Ma\'ruza' : 'Amaliy'),
                     $card->weeks !== null ? (int) $card->weeks : $board->weeks,
                     (int) $card->students,
                     $card->teacher_name ?: 'Biriktirilmagan',
@@ -6112,16 +6209,47 @@ class TimetableController extends Controller
     /** Tanlangan haftadagi effektiv joylashuvlar bo'yicha konflikt tekshiruvi (yarim-slot oralig'i). */
     private function findWeekConflicts(TimetableCard $card, int $week, int $day, int $pair, int $startHalf = 0): array
     {
+        $myOverride = TimetableCardOverride::where('card_id', $card->id)->where('week', $week)->first();
+        return $this->weekResourceConflicts(
+            $card, $week, $day, $pair, $startHalf,
+            $card->effectiveTeacherId($week),
+            $myOverride?->auditorium_code ?: $card->effectiveAuditoriumCode($week),
+            $card->isMixed() && $card->isLectureWeek($week),
+            true
+        );
+    }
+
+    /**
+     * Tanlangan haftadagi to'qnashuvlar (yarim-slot oralig'i bo'yicha). O'qituvchi va
+     * xona HAFTAGA qarab olinadi: umumiy (klinik) kartaning ma'ruza haftasida
+     * ma'ruza o'qituvchisi/xonasi, boshqa haftalarda amaliy rekvizitlari. Bir
+     * oqimning guruhlari uchun BITTA ma'ruza (bir xil fan, oqim, vaqt) — haqiqatda
+     * bitta dars, shuning uchun ular orasida o'qituvchi/xona to'qnashuvi yo'q.
+     * $excludeIds — birga saqlanayotgan (hali yozilmagan) kartalar.
+     */
+    private function weekResourceConflicts(
+        TimetableCard $card,
+        int $week,
+        int $day,
+        int $pair,
+        int $startHalf,
+        ?int $teacherId,
+        ?string $roomCode,
+        bool $meLecture,
+        bool $checkGroups,
+        array $excludeIds = []
+    ): array {
         $ovr = TimetableCardOverride::whereHas('card', fn($q) => $q->where('board_id', $card->board_id))
             ->where('week', $week)->get()->keyBy('card_id');
         $others = TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)->get();
 
         $myRange = $this->rangeFor($card, $pair, $startHalf);
         $myGroups = $card->occupiedGroups();
-        $myOverride = $ovr->get($card->id);
-        $myRoomCode = $myOverride?->auditorium_code ?: $card->auditorium_code;
         $errors = [];
         foreach ($others as $o) {
+            if (in_array((int) $o->id, $excludeIds, true)) {
+                continue;
+            }
             $ov = $ovr->get($o->id);
             if ($ov) {
                 if ($ov->cancelled) {
@@ -6141,21 +6269,43 @@ class TimetableController extends Controller
             if (!$this->halfOverlap($myRange, $this->rangeFor($o, (int) $op, $osh))) {
                 continue;
             }
-            if ($this->groupScopeKey($o) === $this->groupScopeKey($card)) {
+            if ($checkGroups && $this->groupScopeKey($o) === $this->groupScopeKey($card)) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
                 if (!empty($overlap)) {
                     $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';
                 }
             }
-            if ($card->teacher_id && $o->teacher_id && (int) $o->teacher_id === (int) $card->teacher_id) {
-                $errors[] = "O'qituvchi band: " . $o->teacher_name . ' (' . $o->subject_name . ')';
+            $oLecture = $o->isMixed() && $o->isLectureWeek($week);
+            if ($meLecture && $oLecture && $this->sameLecture($card, $o)) {
+                continue;   // bitta oqimning bitta ma'ruzasi — o'qituvchi va xona umumiy
             }
-            $otherRoomCode = $ov?->auditorium_code ?: $o->auditorium_code;
-            if ($myRoomCode && $otherRoomCode === $myRoomCode) {
-                $errors[] = 'Auditoriya band: ' . ($ov?->auditorium_name ?: $o->auditorium_name) . ' (' . $o->subject_name . ')';
+            $oTeacher = $o->effectiveTeacherId($week);
+            if ($teacherId && $oTeacher && (int) $oTeacher === (int) $teacherId) {
+                $errors[] = "O'qituvchi band: " . ($oLecture ? $o->lecture_teacher_name : $o->teacher_name) . ' (' . $o->subject_name . ')';
+            }
+            $otherRoomCode = $ov?->auditorium_code ?: $o->effectiveAuditoriumCode($week);
+            if ($roomCode && $otherRoomCode === $roomCode) {
+                $roomName = $ov?->auditorium_name ?: ($oLecture ? $o->lecture_auditorium_name : $o->auditorium_name);
+                $errors[] = 'Auditoriya band: ' . $roomName . ' (' . $o->subject_name . ')';
             }
         }
         return array_unique($errors);
+    }
+
+    /**
+     * Ikki umumiy karta bitta oqimning bitta ma'ruzasimi: fakultet, yo'nalish, kurs,
+     * oqim va fan bir xil (guruhlari turlicha — ma'ruzaga birga boradi).
+     */
+    private function sameLecture(TimetableCard $a, TimetableCard $b): bool
+    {
+        $flow = trim((string) ($a->oqim_label ?? ''));
+        return $a->isMixed() && $b->isMixed()
+            && $flow !== ''
+            && $flow === trim((string) ($b->oqim_label ?? ''))
+            && (string) ($a->faculty_name ?? '') === (string) ($b->faculty_name ?? '')
+            && $this->specKey($a->specialty_name) === $this->specKey($b->specialty_name)
+            && (int) $a->course === (int) $b->course
+            && $this->normSubject((string) $a->subject_name) === $this->normSubject((string) $b->subject_name);
     }
 
     /** Yo'nalish+kurs uchun panjara o'lchami (alohida sozlama yoki doska sukuti). */
@@ -6288,6 +6438,168 @@ class TimetableController extends Controller
         return !$assignment
             || $assignment['is_general']
             || (int) $assignment['teacher_id'] === (int) $card->teacher_id;
+    }
+
+    /**
+     * Umumiy (klinik) kartani KAFEDRA ajratishi: qaysi haftalarda ma'ruza (qolgan
+     * faol haftalar amaliy), ma'ruza o'qituvchisi va xonasi. Amaliy rekvizitlari
+     * kartaning asosiy o'qituvchi/xonasida qoladi. `apply_flow` — shu oqimning shu
+     * vaqtdagi barcha guruh kartalariga bir xil qo'llanadi (ma'ruza oqimga birga
+     * o'tiladi). `reset` — ajratishni bekor qiladi (karta yana "ajratilmagan").
+     */
+    public function splitCard(Request $request, TimetableCard $card)
+    {
+        if (!$card->isMixed()) {
+            return response()->json(['error' => "Bu karta umumiy (klinik) karta emas — ma'ruza/amaliy allaqachon alohida."], 422);
+        }
+        $data = $request->validate([
+            'lecture_weeks'           => 'nullable|string|max:400',
+            'reset'                   => 'nullable|boolean',
+            'lecture_teacher_id'      => 'nullable|integer|exists:teachers,id',
+            'lecture_auditorium_code' => 'nullable|string|max:50',
+            'apply_flow'              => 'nullable|boolean',
+        ]);
+        $board = $card->board;
+        $reset = (bool) ($data['reset'] ?? false);
+        $isHead = $this->timetableActiveRole($request) === 'kafedra_mudiri';
+
+        if ($isHead && ($err = $this->departmentHeadCardError($request, $card))) {
+            return response()->json(['error' => $err], 422);
+        }
+
+        $totalWeeks = $this->weeksForCard($board, $card);
+        $weeks = [];
+        if (!$reset) {
+            $weeks = collect(explode(',', (string) ($data['lecture_weeks'] ?? '')))
+                ->map(fn($w) => (int) trim($w))
+                ->filter(fn($w) => $w >= 1 && $w <= $totalWeeks)
+                ->unique()->sort()->values()->all();
+        }
+
+        $teacher = null;
+        if (!$reset && !empty($data['lecture_teacher_id'])) {
+            $teacher = Teacher::findOrFail($data['lecture_teacher_id']);
+            if ($isHead) {
+                $context = $this->departmentHeadContext($request);
+                if ((int) $teacher->department_hemis_id !== (int) $context['department_hemis_id']) {
+                    return response()->json(['error' => "Faqat o'z kafedrangizdagi o'qituvchini biriktira olasiz."], 422);
+                }
+            }
+        }
+        $room = null;
+        if (!$reset && !empty($data['lecture_auditorium_code'])) {
+            $room = Auditorium::where('code', $data['lecture_auditorium_code'])->first();
+            if (!$room) {
+                return response()->json(['error' => 'Auditoriya topilmadi.'], 422);
+            }
+        }
+
+        // Qamrov: shu karta + (apply_flow) oqimning shu vaqtdagi boshqa guruh kartalari
+        $targets = collect([$card]);
+        if (!empty($data['apply_flow']) && $card->day && $card->pair) {
+            $siblings = TimetableCard::where('board_id', $card->board_id)->where('id', '!=', $card->id)
+                ->where('is_mixed', true)
+                ->where('day', $card->day)->where('pair', $card->pair)
+                ->where('start_half', (int) ($card->start_half ?? 0))
+                ->get()
+                ->filter(fn($o) => $this->sameLecture($card, $o));
+            $targets = $targets->merge($siblings);
+        }
+        $targetIds = $targets->map(fn($t) => (int) $t->id)->all();
+
+        // Ma'ruza o'qituvchisi/xonasi ma'ruza haftalarida boshqa darslar bilan to'qnashmasin
+        if (!$reset && $weeks && ($teacher || $room)) {
+            $errors = [];
+            foreach ($targets as $t) {
+                if (!$t->day || !$t->pair) {
+                    continue;
+                }
+                $ovs = TimetableCardOverride::where('card_id', $t->id)->get()->keyBy('week');
+                foreach ($weeks as $w) {
+                    $ov = $ovs->get($w);
+                    if ($ov && $ov->cancelled) {
+                        continue;
+                    }
+                    $moved = $ov && $ov->day && $ov->pair;
+                    $found = $this->weekResourceConflicts(
+                        $t, $w,
+                        $moved ? (int) $ov->day : (int) $t->day,
+                        $moved ? (int) $ov->pair : (int) $t->pair,
+                        $moved ? (int) ($ov->start_half ?? 0) : (int) ($t->start_half ?? 0),
+                        $teacher?->id, $room?->code, true, false, $targetIds
+                    );
+                    foreach ($found as $f) {
+                        $errors[] = $w . '-hafta: ' . $f;
+                    }
+                    if (count($errors) >= 6) {
+                        break 2;
+                    }
+                }
+            }
+            if ($errors) {
+                return response()->json(['error' => implode(' · ', array_unique($errors))], 422);
+            }
+        }
+
+        DB::transaction(function () use ($targets, $reset, $weeks, $teacher, $room) {
+            foreach ($targets as $t) {
+                $t->lecture_weeks = $reset ? null : $weeks;
+                $t->lecture_teacher_id = $reset ? null : $teacher?->id;
+                $t->lecture_teacher_name = $reset || !$teacher ? null : ($teacher->short_name ?: $teacher->full_name);
+                $t->lecture_auditorium_code = $reset ? null : $room?->code;
+                $t->lecture_auditorium_name = $reset ? null : $room?->name;
+                $t->save();
+            }
+        });
+
+        $roomVol = $room ? (int) $room->volume : null;
+        return response()->json([
+            'ok' => true,
+            'updated' => $targets->count(),
+            'cards' => $targets->map(fn($t) => [
+                'id' => $t->id,
+                'lecture_weeks' => $t->lectureWeekList(),
+                'lecture_teacher_id' => $t->lecture_teacher_id,
+                'lecture_teacher_name' => $t->lecture_teacher_name,
+                'lecture_auditorium_code' => $t->lecture_auditorium_code,
+                'lecture_auditorium_name' => $t->lecture_auditorium_name,
+                'lecture_auditorium_volume' => $t->lecture_auditorium_code ? $roomVol : null,
+            ])->values(),
+        ]);
+    }
+
+    /** Karta yo'nalish+kursining semestr haftalari soni (grid sozlamasi yoki doska sukuti). */
+    private function weeksForCard(TimetableBoard $board, TimetableCard $card): int
+    {
+        $sk = $this->specKey($card->specialty_name);
+        foreach (TimetableGridSetting::where('board_id', $board->id)->where('course', (int) $card->course)->get() as $g) {
+            if ($this->specKey($g->specialty_name) !== $sk) {
+                continue;
+            }
+            if ((string) ($g->faculty_name ?? '') === (string) ($card->faculty_name ?? '') || $g->faculty_name === null) {
+                return max(1, (int) $g->weeks);
+            }
+        }
+        return max(1, (int) $board->weeks);
+    }
+
+    /**
+     * Kafedra mudiri faqat o'z kafedrasining fanini ajrata oladi. Kafedra nomlari
+     * manbasi turlicha (reja kafedrasi / HEMIS bo'limi) — bittasi ikkinchisini o'z
+     * ichiga olsa mos deb qabul qilinadi; kafedra aniqlanmasa cheklanmaydi.
+     */
+    private function departmentHeadCardError(Request $request, TimetableCard $card): ?string
+    {
+        $cardKaf = mb_strtolower(trim((string) ($card->kafedra_name ?? '')));
+        if ($cardKaf === '') {
+            return null;
+        }
+        $actor = $this->timetableActor($request);
+        $own = mb_strtolower(trim((string) ($actor->department ?? '')));
+        if ($own === '' || str_contains($cardKaf, $own) || str_contains($own, $cardKaf)) {
+            return null;
+        }
+        return "Bu fan boshqa kafedraga tegishli ({$card->kafedra_name}) — faqat o'z kafedrangiz fanini ajrata olasiz.";
     }
 
     /** Kartochka rekvizitlari: o'qituvchi / auditoriya biriktirish. */
@@ -6438,6 +6750,7 @@ class TimetableController extends Controller
             ->get();
 
         [$kafMap, $overrides] = $this->buildKafedraMap();
+        $clinicalOverrides = $this->clinicalOverrides();
         $weeks = max(1, (int) $board->weeks);
         $seasonLookup = $this->subjectSeasonLookup($board);
 
@@ -6480,6 +6793,8 @@ class TimetableController extends Controller
                 'semester_label' => (int) $r->semester . '-semestr',
                 'subject_name'   => $r->subject_name,
                 'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),
+                // Klinik fan — kartochkalar umumiy (ma'ruza+amaliy bitta kartada) yaratiladi
+                'clinical'       => $this->isClinicalSubject($clinicalOverrides, (string) $r->subject_name),
                 'lecture'        => $lec,
                 'practice'       => (float) $r->practice,
                 'laboratory'     => (float) $r->laboratory,
@@ -6908,6 +7223,8 @@ class TimetableController extends Controller
                     'placed'         => 0,
                     'teacher_id'     => $c->teacher_id, 'teacher_name' => $c->teacher_name,
                     'teacher_mixed'  => false,
+                    // Umumiy (klinik) karta: bu birlik — amaliy rekvizitlari (persona)
+                    'is_mixed'       => $c->isMixed(), 'persona' => $c->isMixed() ? 'practice' : null,
                 ];
             }
             $units[$k]['cards']++;
@@ -6917,7 +7234,48 @@ class TimetableController extends Controller
             if ($units[$k]['teacher_id'] !== $c->teacher_id) {
                 $units[$k]['teacher_mixed'] = true;
             }
+
+            // Umumiy kartaning MA'RUZA rekvizitlari — oqim kesimida alohida birlik
+            // (ma'ruza oqimga birga o'tiladi; o'qituvchi barcha guruh kartalariga yoziladi).
+            if ($c->isMixed()) {
+                $lk = 'MIXLEC¦' . ($c->faculty_name ?? '') . '¦' . $c->specialty_name . '¦' . $c->course
+                    . '¦' . $c->subject_name . '¦' . (string) $c->oqim_label;
+                if (!isset($units[$lk])) {
+                    $units[$lk] = [
+                        'faculty_name'   => $c->faculty_name,
+                        'specialty_name' => $c->specialty_name, 'course' => (int) $c->course,
+                        'subject_name'   => $c->subject_name, 'training_type' => 'lecture',
+                        'oqim_label'     => $c->oqim_label, 'group_name' => null,
+                        'kafedra_name'   => $c->kafedra_name, 'lang' => $c->lang,
+                        'students'       => 0, 'cards' => 0,
+                        'placed'         => 0,
+                        'teacher_id'     => $c->lecture_teacher_id, 'teacher_name' => $c->lecture_teacher_name,
+                        'teacher_mixed'  => false,
+                        'is_mixed'       => true, 'persona' => 'lecture',
+                        'split_cards'    => 0,
+                        '_groups'        => [],
+                    ];
+                }
+                $units[$lk]['cards']++;
+                if ($c->day && $c->pair) {
+                    $units[$lk]['placed']++;
+                }
+                if ($c->lectureWeekList()) {
+                    $units[$lk]['split_cards']++;
+                }
+                if ($units[$lk]['teacher_id'] !== $c->lecture_teacher_id) {
+                    $units[$lk]['teacher_mixed'] = true;
+                }
+                if ($c->group_name && !isset($units[$lk]['_groups'][$c->group_name])) {
+                    $units[$lk]['_groups'][$c->group_name] = true;
+                    $units[$lk]['students'] += (int) $c->students;
+                }
+            }
         }
+        foreach ($units as &$u) {
+            unset($u['_groups']);
+        }
+        unset($u);
         $out = array_values($units);
         usort($out, fn($a, $b) => [(string) ($a['faculty_name'] ?? ''), $a['specialty_name'], $a['course'], $b['training_type'], $a['subject_name'], (string) $a['oqim_label'], (string) $a['group_name']]
             <=> [(string) ($b['faculty_name'] ?? ''), $b['specialty_name'], $b['course'], $a['training_type'], $b['subject_name'], (string) $b['oqim_label'], (string) $b['group_name']]);
@@ -6925,7 +7283,11 @@ class TimetableController extends Controller
         return response()->json(['units' => $out]);
     }
 
-    /** Dars birligiga o'qituvchini ommaviy biriktirish (barcha kartalariga). */
+    /**
+     * Dars birligiga o'qituvchini ommaviy biriktirish (barcha kartalariga).
+     * persona=lecture — umumiy (klinik) kartalarning MA'RUZA o'qituvchisi (oqim
+     * kesimida, lecture_teacher_*); aks holda kartaning asosiy (amaliy) o'qituvchisi.
+     */
     public function assignTeacher(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([
@@ -6934,20 +7296,26 @@ class TimetableController extends Controller
             'course'         => 'required|integer|min:1|max:7',
             'subject_name'   => 'required|string|max:255',
             'training_type'  => 'required|in:lecture,practice',
+            'persona'        => 'nullable|in:lecture,practice',
             'oqim_label'     => 'nullable|string|max:50',
             'group_name'     => 'nullable|string|max:255',
             'teacher_id'     => 'nullable|integer|exists:teachers,id',
         ]);
+        $lecturePersona = ($data['persona'] ?? null) === 'lecture';
 
         $q = TimetableCard::where('board_id', $board->id)
             ->where('specialty_name', $data['specialty_name'])
             ->where('course', $data['course'])
-            ->where('subject_name', $data['subject_name'])
-            ->where('training_type', $data['training_type']);
+            ->where('subject_name', $data['subject_name']);
+        if ($lecturePersona) {
+            $q->where('is_mixed', true);
+        } else {
+            $q->where('training_type', $data['training_type']);
+        }
         array_key_exists('faculty_name', $data) && $data['faculty_name'] !== null && $data['faculty_name'] !== ''
             ? $q->where('faculty_name', $data['faculty_name'])
             : $q->whereNull('faculty_name');
-        if ($data['training_type'] === 'lecture') {
+        if ($lecturePersona || $data['training_type'] === 'lecture') {
             isset($data['oqim_label']) ? $q->where('oqim_label', $data['oqim_label']) : $q->whereNull('oqim_label');
         } else {
             isset($data['group_name']) ? $q->where('group_name', $data['group_name']) : $q->whereNull('group_name');
@@ -6965,9 +7333,13 @@ class TimetableController extends Controller
                 }
             }
             $teacherName = $t->short_name ?: $t->full_name;
-            $affected = $q->update(['teacher_id' => $t->id, 'teacher_name' => $teacherName]);
+            $affected = $lecturePersona
+                ? $q->update(['lecture_teacher_id' => $t->id, 'lecture_teacher_name' => $teacherName])
+                : $q->update(['teacher_id' => $t->id, 'teacher_name' => $teacherName]);
         } else {
-            $affected = $q->update(['teacher_id' => null, 'teacher_name' => null]);
+            $affected = $lecturePersona
+                ? $q->update(['lecture_teacher_id' => null, 'lecture_teacher_name' => null])
+                : $q->update(['teacher_id' => null, 'teacher_name' => null]);
         }
 
         return response()->json(['ok' => true, 'teacher_name' => $teacherName, 'affected' => $affected]);

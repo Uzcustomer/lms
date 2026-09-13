@@ -1079,14 +1079,30 @@ class CurriculumCheckController extends Controller
         return $map;
     }
 
-    /** Qo'lda kiritilgan fan tuzatishlari: norm_name → ['kafedra'=>, 'practice'=>]. */
+    /** Qo'lda kiritilgan fan tuzatishlari: norm_name → ['kafedra'=>, 'practice'=>, 'clinical'=>]. */
     private function subjectOverrides(): array
     {
         return \App\Models\SubjectKafedraOverride::get()->keyBy('norm_name')
             ->map(fn($o) => [
                 'kafedra'  => $o->kafedra_name ?: null,
                 'practice' => $o->practice_group_size ?: null,
+                // null — avtomatik (nomdan); 1/0 — qo'lda belgilangan
+                'clinical' => $o->is_clinical === null ? null : (int) $o->is_clinical,
             ])->all();
+    }
+
+    /**
+     * Klinik fanmi (qo'lda belgilanmagan bo'lsa — nomdagi kalit so'zlardan).
+     * Dars jadvalida klinik fan ma'ruza+amaliy BITTA umumiy kartada yaratiladi.
+     */
+    private function isClinical(?string $name, array $overrides): array
+    {
+        $k = $this->normSubject((string) $name);
+        $ov = $overrides[$k] ?? null;
+        if ($ov && $ov['clinical'] !== null) {
+            return ['value' => (int) $ov['clinical'] === 1, 'manual' => true];
+        }
+        return ['value' => \App\Support\ClinicalSubjects::matches($k), 'manual' => false];
     }
 
     /** Fanning amaliy guruh o'lchamining sukut qiymati (blok/nom kalit so'zlaridan). */
@@ -1095,12 +1111,8 @@ class CurriculumCheckController extends Controller
         $t = $this->normSubject(($block ?? '') . ' ' . ($name ?? ''));
 
         // Klinik fanlar — kichik guruh (~10)
-        foreach (['klinik', 'kasallik', 'terapiya', 'xirurgiya', 'jarrohlik', 'pediatriya', 'akusher',
-                  'ginekolog', 'nevrolog', 'kardiolog', 'onkolog', 'urolog', 'endokrin', 'dermato',
-                  'psixiatr', 'stomatolog', 'ftiziatr', 'reanimatsiya', 'anesteziolog', 'yuqumli'] as $kw) {
-            if (str_contains($t, $kw)) {
-                return 10;
-            }
+        if (\App\Support\ClinicalSubjects::matches($t)) {
+            return 10;
         }
 
         // Til fanlari (xorijiy til, rus/o'zbek tili, lotin tili) — kichik til guruhi
@@ -1154,6 +1166,10 @@ class CurriculumCheckController extends Controller
             'kafedra_manual' => $kaf($r->subject_name)['manual'],
             'practice_size'  => $psize($r->subject_name, $r->block)['size'],
             'practice_manual'=> $psize($r->subject_name, $r->block)['manual'],
+            'clinical'       => $this->isClinical($r->subject_name, $overrides)['value'],
+            'clinical_manual'=> $this->isClinical($r->subject_name, $overrides)['manual'],
+            // Qo'lda belgi olib tashlanganda UI qaytadigan avtomatik qiymat
+            'clinical_auto'  => \App\Support\ClinicalSubjects::matches($this->normSubject((string) $r->subject_name)),
             'reja'           => collect(explode('|||', $r->reja_pairs ?? ''))
                 ->filter()
                 ->map(function ($p) {
@@ -1271,8 +1287,8 @@ class CurriculumCheckController extends Controller
             : null;
         $ov->updated_by = Auth::id();
 
-        // Ikkala sozlama ham bo'sh bo'lsa — yozuvni o'chiramiz (avtomatik qaytadi)
-        if ($kafedra === '' && !$ov->practice_group_size) {
+        // Barcha sozlamalar bo'sh bo'lsa — yozuvni o'chiramiz (avtomatik qaytadi)
+        if ($kafedra === '' && !$ov->practice_group_size && $ov->is_clinical === null) {
             if ($ov->exists) {
                 $ov->delete();
             }
@@ -1305,7 +1321,7 @@ class CurriculumCheckController extends Controller
         }
         $ov->updated_by = Auth::id();
 
-        if (!$size && ($ov->kafedra_name === '' || $ov->kafedra_name === null)) {
+        if (!$size && ($ov->kafedra_name === '' || $ov->kafedra_name === null) && $ov->is_clinical === null) {
             if ($ov->exists) {
                 $ov->delete();
             }
@@ -1314,6 +1330,45 @@ class CurriculumCheckController extends Controller
         $ov->save();
 
         return response()->json(['ok' => true, 'practice_group_size' => $size]);
+    }
+
+    /**
+     * Fan uchun "klinik" belgisini qo'lda qo'yish/tozalash. Klinik fan dars
+     * jadvalida ma'ruza+amaliy bitta umumiy kartada yaratiladi (kafedra ajratadi).
+     * is_clinical: '' — avtomatik (nomdan), 1 — klinik, 0 — klinik emas.
+     */
+    public function setClinical(Request $request)
+    {
+        $data = $request->validate([
+            'subject_name' => 'required|string|max:255',
+            'is_clinical'  => 'nullable|in:0,1',
+        ]);
+
+        $norm = $this->normSubject($data['subject_name']);
+        if ($norm === '') {
+            return response()->json(['error' => "Fan nomi bo'sh."], 422);
+        }
+
+        $value = ($data['is_clinical'] ?? null) === null || $data['is_clinical'] === ''
+            ? null
+            : (int) $data['is_clinical'];
+        $ov = \App\Models\SubjectKafedraOverride::firstOrNew(['norm_name' => $norm]);
+        $ov->sample_name = $data['subject_name'];
+        $ov->is_clinical = $value;
+        if ($ov->kafedra_name === null) {
+            $ov->kafedra_name = '';
+        }
+        $ov->updated_by = Auth::id();
+
+        if ($value === null && ($ov->kafedra_name === '' || $ov->kafedra_name === null) && !$ov->practice_group_size) {
+            if ($ov->exists) {
+                $ov->delete();
+            }
+            return response()->json(['ok' => true, 'cleared' => true, 'is_clinical' => null]);
+        }
+        $ov->save();
+
+        return response()->json(['ok' => true, 'is_clinical' => $value]);
     }
 
     /**

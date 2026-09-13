@@ -811,6 +811,7 @@
                                     <th class="px-2 py-2 text-left font-medium text-gray-600">O'quv reja</th>
                                     <th data-sort="kafedra" class="fs-sort cursor-pointer select-none px-2 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Kafedra<span class="fs-ind"></span></th>
                                     <th data-sort="practice_size" class="fs-sort cursor-pointer select-none px-2 py-2 text-center font-medium text-gray-600 hover:bg-gray-100" title="Amaliy mashg'ulot guruhi nechta kishilik">Amaliy guruh<span class="fs-ind"></span></th>
+                                    <th data-sort="clinical" class="fs-sort cursor-pointer select-none px-2 py-2 text-center font-medium text-gray-600 hover:bg-gray-100" title="Klinik fan: dars jadvalida ma'ruza va amaliy bitta umumiy kartada yaratiladi, kafedra o'zi ajratadi. Bosib o'zgartiring: avtomatik → ha → yo'q">Klinik<span class="fs-ind"></span></th>
                                     <th data-sort="lecture" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-blue-700 hover:bg-gray-100">Ma'ruza<span class="fs-ind"></span></th>
                                     <th data-sort="practice" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-purple-700 hover:bg-gray-100">Amaliy<span class="fs-ind"></span></th>
                                     <th data-sort="laboratory" class="fs-sort cursor-pointer select-none px-2 py-2 text-right font-medium text-teal-700 hover:bg-gray-100">Lab<span class="fs-ind"></span></th>
@@ -1863,6 +1864,7 @@
                         const kafListUrl = @json(route('admin.oquv-reja.kafedra-list'));
                         const setKafUrl  = @json(route('admin.oquv-reja.set-kafedra'));
                         const setPsUrl   = @json(route('admin.oquv-reja.set-practice-size'));
+                        const setClUrl   = @json(route('admin.oquv-reja.set-clinical'));
                         const showUrlFs  = @json(route('admin.oquv-reja.show', '__ID__'));
                         const csrf = document.querySelector('input[name="_token"]')?.value;
                         const kafDatalist = document.getElementById('fsKafList');
@@ -1977,6 +1979,10 @@
                                     '<td class="px-2 py-1">' + rejaHtml + '</td>' +
                                     '<td class="px-2 py-1 kaf-cell cursor-pointer hover:bg-amber-50" title="Kafedrani tahrirlash uchun bosing" data-subject="' + esc(r.subject_name) + '">' + kafHtml + '</td>' +
                                     '<td class="px-2 py-1 text-center ps-cell cursor-pointer hover:bg-amber-50" title="Amaliy guruh o\'lchamini tahrirlash uchun bosing" data-subject="' + esc(r.subject_name) + '"><span class="' + (r.practice_manual ? 'text-emerald-700 font-semibold' : 'text-gray-500') + '">' + (r.practice_size || '') + '</span></td>' +
+                                    '<td class="px-2 py-1 text-center cl-cell cursor-pointer hover:bg-amber-50" title="' + (r.clinical_manual ? 'Qo\'lda belgilangan' : 'Avtomatik (nomdan)') + ' — bosib o\'zgartiring" data-subject="' + esc(r.subject_name) + '" data-manual="' + (r.clinical_manual ? 1 : 0) + '" data-value="' + (r.clinical ? 1 : 0) + '">' +
+                                        (r.clinical
+                                            ? '<span class="' + (r.clinical_manual ? 'text-emerald-700 font-semibold' : 'text-gray-500') + '">klinik</span>'
+                                            : '<span class="' + (r.clinical_manual ? 'text-red-600 font-semibold' : 'text-gray-300') + '">' + (r.clinical_manual ? 'yo\'q' : '—') + '</span>') + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.lecture) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.practice) + '</td>' +
                                     '<td class="px-2 py-1 text-right">' + n(r.laboratory) + '</td>' +
@@ -2057,6 +2063,41 @@
                             };
                             inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); save(); } if (ev.key === 'Escape') { done = true; renderRows(); } });
                             inp.addEventListener('blur', save);
+                        });
+
+                        // "Klinik" belgisini bosib almashtirish: avtomatik → ha → yo'q → avtomatik
+                        tbody.addEventListener('click', async function (e) {
+                            const cell = e.target.closest('.cl-cell');
+                            if (!cell || cell.dataset.busy) return;
+                            const subject = cell.dataset.subject;
+                            const manual = cell.dataset.manual === '1';
+                            const value = cell.dataset.value === '1';
+                            const next = !manual ? '1' : (value ? '0' : '');
+                            cell.dataset.busy = '1';
+                            cell.innerHTML = '<span class="text-gray-400">…</span>';
+                            const fd = new FormData();
+                            fd.append('_token', csrf);
+                            fd.append('subject_name', subject);
+                            fd.append('is_clinical', next);
+                            try {
+                                const r = await fetch(setClUrl, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
+                                if (!r.ok) throw new Error();
+                                const j = await r.json();
+                                rowsData.forEach(rd => {
+                                    if (rd.subject_name !== subject) return;
+                                    if (j.is_clinical === null || j.is_clinical === undefined) {
+                                        rd.clinical_manual = false;
+                                        rd.clinical = rd.clinical_auto;
+                                    } else {
+                                        rd.clinical_manual = true;
+                                        rd.clinical = !!+j.is_clinical;
+                                    }
+                                });
+                                renderRows();
+                            } catch (_) {
+                                cell.innerHTML = '<span class="text-red-500">xato</span>';
+                                delete cell.dataset.busy;
+                            }
                         });
 
                         // Kafedralar ro'yxatini (datalist) yuklaymiz

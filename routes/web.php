@@ -960,6 +960,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/compact-week', [\App\Http\Controllers\Admin\TimetableController::class, 'compactWeek'])->name('boards.compact-week');
                 Route::post('/cards/{card}/week-override', [\App\Http\Controllers\Admin\TimetableController::class, 'weekOverride'])->name('cards.week-override');
                 Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
+                // Umumiy (klinik) kartani kafedra ajratishi: ma'ruza haftalari + ma'ruza o'qituvchisi/xonasi
+                Route::post('/cards/{card}/split', [\App\Http\Controllers\Admin\TimetableController::class, 'splitCard'])->name('cards.split');
                 Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');
                 Route::get('/teachers/departments', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherDepartments'])->name('teachers.departments');
                 // Umumiy sozlamalar (qo'ng'iroqlar jadvali, kunlar)
@@ -1019,6 +1021,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/kafedra-list', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'kafedraList'])->name('kafedra-list');
                 Route::post('/set-kafedra', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setKafedra'])->name('set-kafedra');
                 Route::post('/set-practice-size', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setPracticeSize'])->name('set-practice-size');
+                Route::post('/set-clinical', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'setClinical'])->name('set-clinical');
                 Route::get('/teacher-norms', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'teacherNorms'])->name('teacher-norms');
                 Route::post('/teacher-norms/save', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'teacherNormsSave'])->name('teacher-norms.save');
                 Route::get('/teacher-demand', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'teacherDemand'])->name('teacher-demand');

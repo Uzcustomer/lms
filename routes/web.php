@@ -1011,6 +1011,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/choice-groups', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'saveChoiceGroups'])->name('choice-groups.save');
                 Route::get('/batch-view', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'batchView'])->name('batch-view');
                 Route::post('/store-bulk', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeBulk'])->name('store-bulk');
+                Route::post('/bulk-delete', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'bulkDestroy'])->name('bulk-delete');
                 Route::get('/planned-sources', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'plannedSources'])->name('planned-sources');
                 Route::post('/store-planned', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storePlanned'])->name('store-planned');
                 Route::post('/{curriculum}/link-hemis', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'linkToHemis'])->name('link-hemis');

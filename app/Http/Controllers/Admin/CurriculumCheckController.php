@@ -1808,6 +1808,32 @@ class CurriculumCheckController extends Controller
     }
 
     /**
+     * Ro'yxatda belgilangan (checkbox) bir nechta rejani birdaniga o'chirish.
+     * Fan qatorlari va saqlangan solishtirishlar DB darajasida cascade o'chadi —
+     * xuddi destroy() dagidek.
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer',
+        ], [
+            'ids.required' => "O'chirish uchun kamida bitta reja tanlang.",
+            'ids.min'      => "O'chirish uchun kamida bitta reja tanlang.",
+        ]);
+
+        $deleted = ManualCurriculum::whereIn('id', $data['ids'])->delete();
+
+        if ($deleted === 0) {
+            return redirect()->route('admin.oquv-reja.index')
+                ->with('error', "Tanlangan rejalar topilmadi (ehtimol allaqachon o'chirilgan).");
+        }
+
+        return redirect()->route('admin.oquv-reja.index')
+            ->with('success', "{$deleted} ta o'quv reja o'chirildi.");
+    }
+
+    /**
      * Yuklangan rejaga yangi fan qatori qo'shish (qo'lda tahrirlash).
      */
     public function storeSubject(Request $request, ManualCurriculum $curriculum)

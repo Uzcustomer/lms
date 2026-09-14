@@ -163,7 +163,11 @@ class StudentController extends Controller
 
         $student = Auth::guard('student')->user();
 
+        // Semestrlar eskisidan yangisiga qarab tartiblanadi: ro'yxat tushunarli
+        // bo'ladi va zaxira variant sifatida eng oxirgisi olinadi.
         $semesters = Semester::where('curriculum_hemis_id', $student->curriculum_id)
+            ->orderBy('education_year')
+            ->orderBy('code')
             ->get()
             ->map(function ($sem) {
                 return [
@@ -173,19 +177,52 @@ class StudentController extends Controller
                     'current' => $sem->current,
                     'education_year' => ['name' => $sem->education_year ?? ''],
                 ];
-            });
+            })
+            ->values();
 
+        // Barcha semestrlarning haftalari bitta so'rovda: joriy semestrni
+        // aniqlashda ham, hafta tanlashda ham shu ro'yxat ishlatiladi.
+        $weeksBySemester = CurriculumWeek::whereIn('semester_hemis_id', $semesters->pluck('id')->all())
+            ->orderBy('start_date')
+            ->get()
+            ->groupBy('semester_hemis_id');
+
+        $currentDate = Carbon::now();
         $currentSemester = $semesters->firstWhere('current', true);
-        $selectedSemesterId = $request->input('semester_id', $currentSemester['id'] ?? $semesters->first()['id'] ?? null);
+
+        // "current" bayrog'i import paytida hisoblanadi (import haftada bir
+        // marta ishlaydi), shuning uchun yangi o'quv yili boshida eskirgan
+        // bo'lishi mumkin. Bayroq bo'lmasa semestr sanalar bo'yicha tanlanadi
+        // — aks holda talabaga o'tgan yilgi jadval ochilardi.
+        if (!$currentSemester) {
+            $ranges = $semesters
+                ->map(function ($sem) use ($weeksBySemester) {
+                    $semWeeks = $weeksBySemester->get($sem['id']) ?? $weeksBySemester->get((int) $sem['id']);
+
+                    return [
+                        'semester' => $sem,
+                        'start' => $semWeeks?->min('start_date'),
+                        'end' => $semWeeks?->max('end_date'),
+                    ];
+                })
+                ->filter(fn ($row) => $row['start'] && $row['end'])
+                ->values();
+
+            $match = $ranges->first(fn ($row) => $currentDate->between($row['start'], $row['end']))
+                ?: $ranges->sortByDesc(fn ($row) => $row['start'])->first(fn ($row) => $row['start']->lte($currentDate))
+                ?: $ranges->first();
+
+            $currentSemester = $match['semester'] ?? null;
+        }
+
+        $selectedSemesterId = $request->input('semester_id', $currentSemester['id'] ?? $semesters->last()['id'] ?? null);
         $selectedSemesterData = $semesters->firstWhere('id', $selectedSemesterId);
 
         if (!$selectedSemesterData) {
             return back()->withErrors('Semestr topilmadi.');
         }
 
-        $weeks = CurriculumWeek::where('semester_hemis_id', $selectedSemesterId)
-            ->orderBy('start_date')
-            ->get()
+        $weeks = ($weeksBySemester->get($selectedSemesterId) ?? $weeksBySemester->get((int) $selectedSemesterId) ?? collect())
             ->map(function ($week) {
                 return [
                     'id' => $week->curriculum_week_hemis_id,
@@ -196,7 +233,6 @@ class StudentController extends Controller
 
         $selectedSemester = array_merge($selectedSemesterData, ['weeks' => $weeks->toArray()]);
 
-        $currentDate = Carbon::now();
         $currentWeek = $weeks->first(function ($week) use ($currentDate) {
             return $currentDate->between(
                 Carbon::createFromTimestamp($week['start_date']),
@@ -210,7 +246,13 @@ class StudentController extends Controller
             });
         }
 
-        $selectedWeekId = $request->input('week_id', $currentWeek['id'] ?? ($weeks->first()['id'] ?? null));
+        // Semestr allaqachon tugagan bo'lsa — oxirgi hafta ochiladi, birinchisi
+        // emas: talabaga eng yaqin sanalar ko'rinadi.
+        if (!$currentWeek) {
+            $currentWeek = $weeks->last();
+        }
+
+        $selectedWeekId = $request->input('week_id', $currentWeek['id'] ?? ($weeks->last()['id'] ?? null));
 
         $selectedWeek = $weeks->firstWhere('id', $selectedWeekId);
         $weekStart = $selectedWeek ? Carbon::createFromTimestamp($selectedWeek['start_date']) : null;

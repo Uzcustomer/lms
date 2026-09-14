@@ -18,7 +18,9 @@ use App\Http\Controllers\Api\V1\EnglishGroupApplicationApiController;
 use App\Http\Controllers\Api\V1\ExamAppealApiController;
 use App\Http\Controllers\Api\V1\RetakeApplicationApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
+use App\Http\Controllers\Api\V1\StudentAttendanceApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
+use App\Http\Controllers\Api\V1\TeacherAttendanceApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -186,6 +188,15 @@ Route::prefix('v1')->group(function () {
             // AI assistant (Gemini proxy — key stays on the server)
             Route::post('/ai/chat', [AiChatApiController::class, 'chat'])
                 ->middleware('throttle:20,1');
+
+            // Beacon attendance
+            Route::post('/device-token', [StudentAttendanceApiController::class, 'registerDevice']);
+            Route::get('/beacons', [StudentAttendanceApiController::class, 'beacons']);
+            Route::post('/presence', [StudentAttendanceApiController::class, 'presence'])
+                ->middleware('throttle:120,1');
+            Route::get('/attendance/pending', [StudentAttendanceApiController::class, 'pending']);
+            Route::get('/attendance/history', [StudentAttendanceApiController::class, 'history']);
+            Route::post('/attendance/{session}/confirm', [StudentAttendanceApiController::class, 'confirm']);
         });
 
         // ── Chat endpoints ───────────────────────────────
@@ -217,6 +228,15 @@ Route::prefix('v1')->group(function () {
             // Grade saving
             Route::post('/grades/lesson', [TeacherApiController::class, 'saveOpenedLessonGrade']);
             Route::post('/grades/mt', [TeacherApiController::class, 'saveMtGrade']);
+
+            // Beacon attendance
+            Route::post('/device-token', [TeacherAttendanceApiController::class, 'registerDevice']);
+            Route::get('/attendance/lessons', [TeacherAttendanceApiController::class, 'lessons']);
+            Route::post('/attendance/sessions', [TeacherAttendanceApiController::class, 'start']);
+            Route::get('/attendance/sessions/{session}', [TeacherAttendanceApiController::class, 'show']);
+            Route::post('/attendance/sessions/{session}/mark', [TeacherAttendanceApiController::class, 'mark']);
+            Route::post('/attendance/sessions/{session}/remind', [TeacherAttendanceApiController::class, 'remind']);
+            Route::post('/attendance/sessions/{session}/close', [TeacherAttendanceApiController::class, 'close']);
         });
 
         // ── Tutor endpoints ───────────────────────────────

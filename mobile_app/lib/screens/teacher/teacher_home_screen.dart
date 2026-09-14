@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/auth_provider.dart';
+import 'teacher_attendance_screen.dart';
 import 'teacher_dashboard_screen.dart';
 import 'teacher_students_screen.dart';
 import 'teacher_groups_screen.dart';
@@ -27,6 +28,9 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     // The journal is opened from a subject card (dashboard) or a group's
     // subject list — it needs a group + subject, so it has no tab of its own.
 
+    // Davomat — beacon attendance for today's lessons (anyone who teaches)
+    items.add(_NavItem(Icons.how_to_reg_outlined, Icons.how_to_reg, 'Davomat', 'attendance'));
+
     // Talabalar - most roles except test_markazi, oquv_bolimi, oquv_bolimi_boshligi
     if (activeRole != 'test_markazi' && activeRole != 'oquv_bolimi' && activeRole != 'oquv_bolimi_boshligi') {
       items.add(_NavItem(Icons.people_outline, Icons.people, l.students, 'students'));
@@ -45,6 +49,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     switch (key) {
       case 'dashboard':
         return const TeacherDashboardScreen();
+      case 'attendance':
+        return const TeacherAttendanceScreen();
       case 'students':
         return const TeacherStudentsScreen();
       case 'groups':

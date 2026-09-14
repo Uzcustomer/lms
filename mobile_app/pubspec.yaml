@@ -33,6 +33,12 @@ dependencies:
   local_auth: ^2.3.0
   image_picker: ^1.1.0
   package_info_plus: ^8.3.0
+  firebase_core: ^4.1.0
+  firebase_messaging: ^16.0.1
+  flutter_local_notifications: ^19.4.0
+  permission_handler: ^12.0.1
+  dchs_flutter_beacon:
+    path: packages/dchs_flutter_beacon
 
 dev_dependencies:
   flutter_test:

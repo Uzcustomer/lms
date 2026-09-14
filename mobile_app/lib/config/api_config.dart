@@ -63,6 +63,18 @@ class ApiConfig {
   // AI assistant (server-side Gemini proxy, SSE stream)
   static const String studentAiChat = '/student/ai/chat';
 
+  // Beacon attendance
+  static const String studentDeviceToken = '/student/device-token';
+  static const String studentBeacons = '/student/beacons';
+  static const String studentPresence = '/student/presence';
+  static const String studentAttendancePending = '/student/attendance/pending';
+  static const String studentAttendanceHistory = '/student/attendance/history';
+  static String studentAttendanceConfirm(int sessionId) => '/student/attendance/$sessionId/confirm';
+  static const String teacherDeviceToken = '/teacher/device-token';
+  static const String teacherAttendanceLessons = '/teacher/attendance/lessons';
+  static const String teacherAttendanceSessions = '/teacher/attendance/sessions';
+  static String teacherAttendanceSession(int id) => '$teacherAttendanceSessions/$id';
+
   // Chat endpoints
   static const String chatContacts = '/chat/contacts';
   static const String chatMessages = '/chat/messages';

@@ -985,6 +985,14 @@ class TimetableController extends Controller
                     TimetableCard::insert($chunk);
                 }
             });
+            // Kartochkalar o'chirilib qayta yaratildi — ular bilan birga
+            // timetable_card_overrides dagi hafta istisnolari ham cascade
+            // bo'yicha o'chib ketdi. Ularni tiklamasak, ma'ruza va uni
+            // ALMASHTIRUVCHI amaliy karta bir xil (to'liq) hafta niqobini
+            // oladi, bitta slotni bo'lisha olmaydi va avtomatik joylashda
+            // har fan+guruh uchun qisqa haftali amaliy karta joylashmay
+            // qoladi. Shuning uchun taqsimotni darhol qayta hisoblaymiz.
+            $this->assignCardWeeks($board);
         }
 
         return response()->json(['ok' => true, 'regenerated' => $weeksChanged]);
@@ -1172,6 +1180,132 @@ class TimetableController extends Controller
                 $cancelledWeeks[(int) $row->card_id][(int) $row->week] = true;
             }
         }
+
+        // ── Hafta niqoblarini tekshirish va (xotirada) tiklash ────────────
+        // Karta necha hafta o'tilishi `weeks` ustunida, qaysi haftalarda
+        // o'tilmasligi esa timetable_card_overrides da saqlanadi. Ular mos
+        // kelmasa (yozuv umuman yo'q, yoki panjara haftasi o'zgargandan keyin
+        // eskirgan), ma'ruza ham, uni ALMASHTIRUVCHI amaliy karta ham to'liq
+        // niqob oladi. Natijada ikkovi bitta slotni bo'lisha olmaydi, amaliy
+        // karta esa `lecture_next_slot_conflict` bilan joylashmay qoladi —
+        // har fan+guruh uchun qat'iy 0%.
+        //
+        // Bazaga tegmaymiz (foydalanuvchi qo'lda bekor qilgan haftalar
+        // saqlanib qolsin): faqat shu joylash yurishi uchun nomuvofiq
+        // kartalarning taqsimotini assignCardWeeks() bilan bir xil mantiqda
+        // qayta hisoblaymiz.
+        $totalOfCard = fn(TimetableCard $c): int => max(
+            1,
+            min(60, $weeksFor($c->faculty_name, $c->specialty_name, (int) $c->course))
+        );
+        $expectedSkip = function (TimetableCard $c) use ($totalOfCard): int {
+            $total = $totalOfCard($c);
+            return max(0, $total - min($total, (int) $c->weeks));
+        };
+        // `weeks` to'ldirilmagan kartani tegmay qoldiramiz.
+        $isConsistent = fn(TimetableCard $c): bool => $c->weeks === null || (int) $c->weeks <= 0
+            || count($cancelledWeeks[(int) $c->id] ?? []) === $expectedSkip($c);
+
+        $brokenWeekMasks = $all->first(fn(TimetableCard $c) => !$isConsistent($c)) !== null;
+        if ($brokenWeekMasks) {
+            $subjKeyOf = fn(TimetableCard $c): string => $this->specKey($c->specialty_name)
+                . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+
+            // Fan bo'yicha vakil ma'ruza va uning faol haftalari.
+            $lectureWeeks = [];    // subjKey => ma'ruza haftalari soni
+            $lectureActive = [];   // subjKey => [hafta, ...]
+            foreach ($all as $c) {
+                if ($c->training_type !== 'lecture') {
+                    continue;
+                }
+                $key = $subjKeyOf($c);
+                if (isset($lectureWeeks[$key]) && $lectureWeeks[$key] >= (int) $c->weeks) {
+                    continue;
+                }
+                $total = $totalOfCard($c);
+                $lectureWeeks[$key] = (int) $c->weeks;
+                if ($isConsistent($c)) {
+                    $skip = $cancelledWeeks[(int) $c->id] ?? [];
+                    $lectureActive[$key] = array_values(array_filter(
+                        range(1, $total),
+                        fn(int $w) => !isset($skip[$w])
+                    ));
+                } else {
+                    $lectureActive[$key] = $this->spreadWeeks($total, (int) $c->weeks);
+                }
+            }
+
+            // Ma'ruzani almashtiruvchi amaliy karta niqobi ma'ruzanikiga
+            // ANIQ teskari bo'lishi shart. Soni to'g'ri bo'lsa ham haftalari
+            // mos kelmasligi mumkin (mas. ikkovi ham toq haftalarga tushib
+            // qolgan) — bu holat ham tuzatiladi.
+            $standInMismatch = function (TimetableCard $c) use (
+                $subjKeyOf, $lectureWeeks, $lectureActive, $totalOfCard, $cancelledWeeks
+            ): bool {
+                if ($c->training_type !== 'practice') {
+                    return false;
+                }
+                $key = $subjKeyOf($c);
+                $lecCount = (int) ($lectureWeeks[$key] ?? 0);
+                $total = $totalOfCard($c);
+                if ($lecCount <= 0 || (int) $c->weeks !== $total - $lecCount) {
+                    return false;
+                }
+                $want = array_flip(array_diff(range(1, $total), $lectureActive[$key] ?? []));
+                $skip = $cancelledWeeks[(int) $c->id] ?? [];
+                for ($w = 1; $w <= $total; $w++) {
+                    if (isset($want[$w]) === isset($skip[$w])) {
+                        return true;   // faol bo'lishi kerak edi — bekor qilingan (yoki aksincha)
+                    }
+                }
+                return false;
+            };
+
+            $repairedMasks = 0;
+            foreach ($all as $c) {
+                if ($isConsistent($c) && !$standInMismatch($c)) {
+                    continue;
+                }
+                $total = $totalOfCard($c);
+                $cw = min($total, max(0, (int) $c->weeks));
+                if ($cw >= $total) {
+                    // Har hafta o'tiladigan karta. Istisno yozuvi bo'lsa — bu
+                    // foydalanuvchi qo'lda bekor qilgan hafta; tegmaymiz.
+                    continue;
+                }
+                $key = $subjKeyOf($c);
+                $lecCount = (int) ($lectureWeeks[$key] ?? 0);
+                $lecActive = $lectureActive[$key] ?? $this->spreadWeeks($total, $lecCount);
+
+                if ($c->training_type === 'lecture') {
+                    $active = $lecActive;
+                } elseif ($lecCount > 0 && $cw === $total - $lecCount) {
+                    // Ma'ruzani almashtiruvchi amaliy — aynan ma'ruzasiz haftalar.
+                    $active = array_values(array_diff(range(1, $total), $lecActive));
+                } else {
+                    $active = $this->spreadWeeks($total, $cw);
+                }
+
+                $activeSet = array_flip($active);
+                $skip = [];
+                for ($w = 1; $w <= $total; $w++) {
+                    if (!isset($activeSet[$w])) {
+                        $skip[$w] = true;
+                    }
+                }
+                $cancelledWeeks[(int) $c->id] = $skip;
+                $repairedMasks++;
+            }
+
+            if ($repairedMasks > 0) {
+                Log::warning('timetable.auto-place: hafta niqoblari tiklandi', [
+                    'board_id' => $board->id,
+                    'cards' => $repairedMasks,
+                ]);
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────
+
         $maskCache = [];
         $maskOf = function (TimetableCard $c) use (&$maskCache, $cancelledWeeks, $weeksFor): int {
             $id = (int) $c->id;
@@ -1932,10 +2066,13 @@ class TimetableController extends Controller
                 if ($lead->training_type === 'practice' && $uChainMatch) {
                     $uCh = $chainStateForCard($uChainMatch['chain'], $lead);
                     $uTotal = $weeksFor($lead->faculty_name, $lead->specialty_name, (int) $lead->course);
-                    $spot = $chainSpot(
-                        $segs, $uCh, (int) $lead->weeks === $uTotal - (int) $uCh['lw'],
-                        $uDays, $uPairs, $uScope
-                    );
+                    $uStandIn = (int) $lead->weeks === $uTotal - (int) $uCh['lw'];
+                    $spot = $chainSpot($segs, $uCh, $uStandIn, $uDays, $uPairs, $uScope);
+                    if ($spot === null && $uStandIn) {
+                        // Yuqoridagi bilan bir xil: ma'ruza slotiga sig'masa,
+                        // blokni ma'ruzadan keyingi bo'sh slotga tizamiz.
+                        $spot = $chainSpot($segs, $uCh, false, $uDays, $uPairs, $uScope);
+                    }
                     if ($spot !== null) {
                         $blockLen = array_sum(array_column($segs, 'len'));
                         $advanceChain($uChainKey, $lead, (int) $spot[0]['pair'] + $blockLen);
@@ -2058,6 +2195,13 @@ class TimetableController extends Controller
                     'lecture_subject' => $c->training_type === 'lecture' ? $lectureSubjectKey($c) : null,
                 ]];
                 $spot = $chainSpot($seg, $ch, $standIn, $days, $pairs, $scopeKey);
+                if ($spot === null && $standIn) {
+                    // Ma'ruza slotini bo'lisha olmadi (hafta niqoblari
+                    // kesishdi yoki slot band). Kartani joylashmagan qoldirgandan
+                    // ko'ra zanjirning navbatdagi bo'sh slotiga tizamiz —
+                    // guruh darsi baribir uzilmaydi.
+                    $spot = $chainSpot($seg, $ch, false, $days, $pairs, $scopeKey);
+                }
                 if ($spot !== null) {
                     $c->day = $spot[0]['day'];
                     $c->pair = $spot[0]['pair'];
@@ -3382,6 +3526,15 @@ class TimetableController extends Controller
             return;
         }
 
+        // Idempotentlik: allaqachon istisno yozuvi bor kartalarga tegmaymiz.
+        // Bu metod endi generateCards() dan tashqari saveGrid() dan ham
+        // chaqiriladi; qo'sh yozuv (card_id, week) unique indeksini buzardi,
+        // qolaversa foydalanuvchi qo'lda bekor qilgan haftalar ham yo'qolardi.
+        $haveOverrides = DB::table('timetable_card_overrides')
+            ->whereIn('card_id', $cards->pluck('id'))
+            ->distinct()->pluck('card_id')
+            ->flip()->all();
+
         // Fan bo'yicha eng katta ma'ruza kartasi vakil bo'ladi. Uning tanlangan
         // haftalari shu fanni almashtiruvchi qo'shimcha amaliyga teskari qo'llanadi.
         $lectureCardsBySubject = [];
@@ -3428,6 +3581,9 @@ class TimetableController extends Controller
         $now = now();
         $ins = [];
         foreach ($cards as $c) {
+            if (isset($haveOverrides[(int) $c->id])) {
+                continue;   // yozuvi bor — qayta yozmaymiz
+            }
             $total = $totalFor($c);
             $cw = (int) $c->weeks;
             if ($cw >= $total) {

@@ -142,6 +142,29 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-ratings/export-excel', [\App\Http\Controllers\Admin\StudentRatingController::class, 'exportExcel'])->name('student-ratings.export-excel');
         Route::get('/student-ratings/{studentHemisId}/subjects', [\App\Http\Controllers\Admin\StudentRatingController::class, 'subjectDetails'])->name('student-ratings.subjects');
 
+        // Beacon davomat — o'qituvchi darsni ochadi, talabalar telefondan tasdiqlaydi
+        Route::prefix('attendance')->name('attendance.')->group(function () {
+            Route::get('', [\App\Http\Controllers\Admin\AttendanceController::class, 'index'])->name('index');
+            Route::get('/teachers', [\App\Http\Controllers\Admin\AttendanceController::class, 'teachers'])->name('teachers');
+            Route::post('/select-teacher', [\App\Http\Controllers\Admin\AttendanceController::class, 'selectTeacher'])->name('select-teacher');
+            Route::get('/lessons', [\App\Http\Controllers\Admin\AttendanceController::class, 'lessons'])->name('lessons');
+            Route::post('/sessions', [\App\Http\Controllers\Admin\AttendanceController::class, 'start'])->name('sessions.start');
+            Route::get('/sessions/{id}', [\App\Http\Controllers\Admin\AttendanceController::class, 'show'])->name('sessions.show');
+            Route::post('/sessions/{id}/mark', [\App\Http\Controllers\Admin\AttendanceController::class, 'mark'])->name('sessions.mark');
+            Route::post('/sessions/{id}/remind', [\App\Http\Controllers\Admin\AttendanceController::class, 'remind'])->name('sessions.remind');
+            Route::post('/sessions/{id}/close', [\App\Http\Controllers\Admin\AttendanceController::class, 'close'])->name('sessions.close');
+        });
+
+        // Beacon'lar ro'yxati (xona ↔ uuid/major/minor)
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')
+            ->prefix('beacons')->name('beacons.')->group(function () {
+                Route::get('', [\App\Http\Controllers\Admin\BeaconController::class, 'index'])->name('index');
+                Route::post('', [\App\Http\Controllers\Admin\BeaconController::class, 'store'])->name('store');
+                Route::put('/{beacon}', [\App\Http\Controllers\Admin\BeaconController::class, 'update'])->name('update');
+                Route::post('/{beacon}/toggle', [\App\Http\Controllers\Admin\BeaconController::class, 'toggle'])->name('toggle');
+                Route::delete('/{beacon}', [\App\Http\Controllers\Admin\BeaconController::class, 'destroy'])->name('destroy');
+            });
+
         // Role switching
         Route::post('/switch-role', function (\Illuminate\Http\Request $request) {
             $user = auth()->user();

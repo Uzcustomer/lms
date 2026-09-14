@@ -1,53 +1,70 @@
 <?php
 
-namespace App\Http\Controllers\Api\V1;
+namespace App\Http\Controllers\Admin;
 
 use App\Exceptions\AttendanceException;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceSession;
-use App\Models\DeviceToken;
+use App\Models\Teacher;
 use App\Services\AttendanceSessionService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Teacher side of beacon attendance for the mobile app. All logic lives in
- * AttendanceSessionService (shared with the web page); this is transport.
+ * Web "Davomat" page. A teacher (teacher guard) sees their own lessons;
+ * an admin (web guard) first picks a teacher and then acts on their behalf
+ * — the resulting session is the teacher's, so it also shows in the app.
  */
-class TeacherAttendanceApiController extends Controller
+class AttendanceController extends Controller
 {
     public function __construct(private readonly AttendanceSessionService $service)
     {
     }
 
-    public function registerDevice(Request $request): JsonResponse
+    public function index()
     {
-        $data = $request->validate([
-            'token' => ['required', 'string', 'max:255'],
-            'platform' => ['nullable', 'in:android,ios,web'],
-        ]);
+        $teacher = $this->resolveTeacher();
 
-        DeviceToken::updateOrCreate(
-            ['token' => $data['token']],
-            [
-                'owner_type' => 'teacher',
-                'owner_id' => $request->user()->id,
-                'platform' => $data['platform'] ?? null,
-                'last_seen_at' => now(),
-            ]
-        );
+        return view('admin.attendance.index', [
+            'teacher' => $teacher,
+            'canPickTeacher' => !auth()->guard('teacher')->check(),
+            'today' => today()->toDateString(),
+        ]);
+    }
+
+    /** Teacher search for the admin picker. */
+    public function teachers(Request $request): JsonResponse
+    {
+        abort_if(auth()->guard('teacher')->check(), 403);
+        $q = trim((string) $request->input('q', ''));
+
+        $rows = Teacher::query()
+            ->when($q !== '', fn ($query) => $query->where('full_name', 'like', "%{$q}%"))
+            ->orderBy('full_name')
+            ->limit(20)
+            ->get(['id', 'full_name', 'department']);
+
+        return response()->json(['data' => $rows]);
+    }
+
+    public function selectTeacher(Request $request): JsonResponse
+    {
+        abort_if(auth()->guard('teacher')->check(), 403);
+        $data = $request->validate(['teacher_id' => ['required', 'integer', 'exists:teachers,id']]);
+        session(['attendance_teacher_id' => (int) $data['teacher_id']]);
 
         return response()->json(['success' => true]);
     }
 
     public function lessons(Request $request): JsonResponse
     {
+        $teacher = $this->requireTeacher();
         $date = $request->filled('date') ? Carbon::parse($request->input('date'))->startOfDay() : today();
 
         return response()->json(['data' => [
             'date' => $date->toDateString(),
-            'lessons' => $this->service->lessonsFor($request->user(), $date),
+            'lessons' => $this->service->lessonsFor($teacher, $date),
         ]]);
     }
 
@@ -59,11 +76,12 @@ class TeacherAttendanceApiController extends Controller
             'date' => ['nullable', 'date'],
             'window_minutes' => ['nullable', 'integer', 'min:1', 'max:60'],
         ]);
+        $teacher = $this->requireTeacher();
         $date = isset($data['date']) ? Carbon::parse($data['date'])->startOfDay() : today();
 
         try {
             $session = $this->service->start(
-                $request->user(),
+                $teacher,
                 (int) $data['subject_id'],
                 $data['lesson_pair_code'],
                 $date,
@@ -76,9 +94,9 @@ class TeacherAttendanceApiController extends Controller
         return $this->live($session);
     }
 
-    public function show(Request $request, int $id): JsonResponse
+    public function show(int $id): JsonResponse
     {
-        $session = $this->ownSession($request, $id);
+        $session = $this->ownSession($id);
         $session->closeIfExpired();
 
         return $this->live($session);
@@ -90,7 +108,7 @@ class TeacherAttendanceApiController extends Controller
             'student_id' => ['required', 'integer'],
             'status' => ['required', 'in:present,absent'],
         ]);
-        $session = $this->ownSession($request, $id);
+        $session = $this->ownSession($id);
 
         try {
             $this->service->mark($session, (int) $data['student_id'], $data['status']);
@@ -101,9 +119,9 @@ class TeacherAttendanceApiController extends Controller
         return $this->live($session);
     }
 
-    public function remind(Request $request, int $id): JsonResponse
+    public function remind(int $id): JsonResponse
     {
-        $session = $this->ownSession($request, $id);
+        $session = $this->ownSession($id);
 
         try {
             $reminded = $this->service->remind($session);
@@ -114,18 +132,40 @@ class TeacherAttendanceApiController extends Controller
         return $this->live($session, ['reminded' => $reminded]);
     }
 
-    public function close(Request $request, int $id): JsonResponse
+    public function close(int $id): JsonResponse
     {
-        $session = $this->ownSession($request, $id);
+        $session = $this->ownSession($id);
         $this->service->close($session);
 
         return $this->live($session);
     }
 
-    private function ownSession(Request $request, int $id): AttendanceSession
+    // ── helpers ──────────────────────────────────────────────
+
+    private function resolveTeacher(): ?Teacher
+    {
+        $teacher = auth()->guard('teacher')->user();
+        if ($teacher) {
+            return $teacher;
+        }
+        $id = session('attendance_teacher_id');
+
+        return $id ? Teacher::find($id) : null;
+    }
+
+    private function requireTeacher(): Teacher
+    {
+        $teacher = $this->resolveTeacher();
+        abort_if(!$teacher, 422, "Avval o'qituvchini tanlang.");
+
+        return $teacher;
+    }
+
+    private function ownSession(int $id): AttendanceSession
     {
         $session = AttendanceSession::with(['beacon', 'groups'])->findOrFail($id);
-        abort_if($session->teacher_id !== $request->user()->id, 403, 'Bu davomat sessiyasi sizga tegishli emas.');
+        $teacher = $this->requireTeacher();
+        abort_if($session->teacher_id !== $teacher->id, 403, 'Bu davomat sessiyasi sizga tegishli emas.');
 
         return $session;
     }

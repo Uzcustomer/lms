@@ -202,7 +202,9 @@ class AppServiceProvider extends ServiceProvider
             return $isFuture ? $text . ' keyin' : $text . ' avval';
         });
 
-        if (env('APP_ENV', 'local') != 'local') {
+        // config('app.env'), not env(): with a cached config .env is never read
+        // and env() returns null, which silently disabled the https scheme.
+        if (!$this->app->environment('local')) {
             URL::forceScheme('https');
             $this->app['request']->server->set('HTTPS', 'on');
         }

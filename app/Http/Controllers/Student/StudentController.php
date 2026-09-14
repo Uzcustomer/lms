@@ -385,6 +385,83 @@ class StudentController extends Controller
         ]);
     }
 
+    /**
+     * Sikl variantlaridan talabaga tegishlilarini qoldiradi.
+     *
+     * Stomatologiya o'quv rejasida bitta fan bir necha qatorga bo'linadi:
+     * "Fan", "Fan (a)", "Fan (b)", "Fan (c)". Talaba bularning hammasida emas,
+     * guruhiga dars qo'yilganlarida o'qiydi — reja bo'yicha ko'rsatilsa,
+     * Fanlar sahifasida bitta fan bir necha marta chiqadi.
+     *
+     * Shu sababli bir xil nomli variantlardan faqat talabaning izi borlari
+     * qoldiriladi: guruhiga qo'yilgan dars, mustaqil ta'lim topshirig'i,
+     * bahosi yoki davomati. Hech qaysisida iz bo'lmasa (masalan semestr
+     * boshida jadval hali kiritilmagan) — hammasi qoladi, aks holda fan
+     * butunlay yo'qolib qolardi.
+     */
+    private function keepStudentCycleVariants($curriculumSubjects, $student, $semesterCode)
+    {
+        // Faqat qisqa qo'shimcha olib tashlanadi — "(a)", "(b)", "(1)". Uzun
+        // qavs fan nomining o'zi bo'lishi mumkin: "Ichki kasalliklar (propedevtika)".
+        $baseName = fn ($name) => mb_strtolower(trim(preg_replace('/\s*\([^()]{1,3}\)\s*$/u', '', (string) $name)));
+
+        $variants = $curriculumSubjects
+            ->groupBy(fn ($cs) => $baseName($cs->subject_name))
+            ->filter(fn ($rows) => $rows->count() > 1);
+
+        if ($variants->isEmpty()) {
+            return $curriculumSubjects;
+        }
+
+        $rows = $variants->flatten();
+        $subjectIds = $rows->pluck('subject_id')->filter()->unique()->all();
+        $hemisIds = $rows->pluck('curriculum_subject_hemis_id')->filter()->unique()->all();
+
+        $withLessons = DB::table('schedules')
+            ->where('group_id', $student->group_id)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereIn('subject_id', $subjectIds)
+            ->distinct()->pluck('subject_id')->flip();
+
+        $withGrades = DB::table('student_grades')
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereIn('subject_id', $subjectIds)
+            ->distinct()->pluck('subject_id')->flip();
+
+        $withAttendance = DB::table('attendances')
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('subject_id', $subjectIds)
+            ->distinct()->pluck('subject_id')->flip();
+
+        $withIndependents = DB::table('independents')
+            ->where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('subject_hemis_id', $hemisIds)
+            ->distinct()->pluck('subject_hemis_id')->flip();
+
+        $hasTrace = fn ($cs) => $withLessons->has($cs->subject_id)
+            || $withGrades->has($cs->subject_id)
+            || $withAttendance->has($cs->subject_id)
+            || $withIndependents->has($cs->curriculum_subject_hemis_id);
+
+        return $curriculumSubjects
+            ->filter(function ($cs) use ($baseName, $variants, $hasTrace) {
+                $siblings = $variants->get($baseName($cs->subject_name));
+
+                // Bo'linmagan fan yoki hech bir variantda iz yo'q — o'z holicha qoladi.
+                if (!$siblings || $siblings->filter($hasTrace)->isEmpty()) {
+                    return true;
+                }
+
+                return $hasTrace($cs);
+            })
+            ->values();
+    }
+
     public function getSubjects(Request $request)
     {
         if ($redirect = $this->redirectIfPasswordChangeRequired()) {
@@ -455,6 +532,11 @@ class StudentController extends Controller
             ->where('semester_code', $semesterCode)
             ->where('is_active', true)
             ->get();
+
+        // Sikl variantlari: rejada bitta fan "Fan", "Fan (a)", "Fan (b)" bo'lib
+        // turadi, talaba esa ularning hammasida emas. Guruhiga tegishlilari
+        // qoldiriladi.
+        $curriculumSubjects = $this->keepStudentCycleVariants($curriculumSubjects, $student, $semesterCode);
 
         // ========== BATCH PRE-LOADING (N+1 muammosini hal qilish) ==========
         $subjectIds = $curriculumSubjects->pluck('subject_id')->unique()->toArray();

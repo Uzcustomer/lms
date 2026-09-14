@@ -8,6 +8,8 @@ import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'services/student_service.dart';
 import 'services/student_data_cache.dart';
+import 'services/attendance_service.dart';
+import 'services/push_service.dart';
 import 'widgets/notification_bell.dart';
 import 'widgets/biometric_gate.dart';
 import 'services/teacher_service.dart';
@@ -20,10 +22,12 @@ import 'screens/common/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/complete_profile_screen.dart';
 import 'screens/student/student_home_screen.dart';
+import 'screens/student/attendance_confirm_screen.dart';
 import 'screens/teacher/teacher_home_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PushService.initFirebase();
   GoogleFonts.config.allowRuntimeFetching = true;
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -40,6 +44,9 @@ void main() {
 
 class LmsApp extends StatelessWidget {
   const LmsApp({super.key});
+
+  /// Root navigator, used to open screens from push taps.
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +75,7 @@ class LmsApp extends StatelessWidget {
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {
           return MaterialApp(
+            navigatorKey: LmsApp.navigatorKey,
             title: 'TDTU LMS',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
@@ -81,39 +89,105 @@ class LmsApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: Consumer<AuthProvider>(
-              builder: (context, auth, _) {
-                if (auth.state == AuthState.authenticated && auth.isStudent) {
-                  context.read<StudentProvider>().syncSessionUser(auth.user);
-                  StudentDataCache().ensureFresh();
-                  NotificationBadge.startPolling();
-                } else {
-                  context.read<StudentProvider>().syncSessionUser(null);
-                  NotificationBadge.stopPolling();
-                  NotificationBadge.unread.value = 0;
-                }
-                switch (auth.state) {
-                  case AuthState.initial:
-                    return const SplashScreen();
-                  case AuthState.authenticated:
-                    return BiometricGate(
-                      child: auth.isTeacher
-                          ? const TeacherHomeScreen()
-                          : const StudentHomeScreen(),
-                    );
-                  case AuthState.profileIncomplete:
-                    return const CompleteProfileScreen();
-                  case AuthState.loading:
-                  case AuthState.unauthenticated:
-                  case AuthState.error:
-                  case AuthState.requires2fa:
-                    return const LoginScreen();
-                }
-              },
+            home: _SessionEffects(
+              child: Consumer<AuthProvider>(
+                builder: (context, auth, _) {
+                  switch (auth.state) {
+                    case AuthState.initial:
+                      return const SplashScreen();
+                    case AuthState.authenticated:
+                      return BiometricGate(
+                        child: auth.isTeacher
+                            ? const TeacherHomeScreen()
+                            : const StudentHomeScreen(),
+                      );
+                    case AuthState.profileIncomplete:
+                      return const CompleteProfileScreen();
+                    case AuthState.loading:
+                    case AuthState.unauthenticated:
+                    case AuthState.error:
+                    case AuthState.requires2fa:
+                      return const LoginScreen();
+                  }
+                },
+              ),
             ),
           );
         },
       ),
     );
   }
+}
+
+/// Starts/stops the student-session side effects (session user sync, data
+/// cache warm-up, notification polling) exactly once per session change,
+/// instead of on every rebuild of the auth consumer.
+class _SessionEffects extends StatefulWidget {
+  final Widget child;
+  const _SessionEffects({required this.child});
+
+  @override
+  State<_SessionEffects> createState() => _SessionEffectsState();
+}
+
+class _SessionEffectsState extends State<_SessionEffects> {
+  late final AuthProvider _auth;
+  String? _sessionKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _auth = context.read<AuthProvider>();
+    _auth.addListener(_sync);
+    PushService.lastTap.addListener(_onPushTap);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+  }
+
+  @override
+  void dispose() {
+    _auth.removeListener(_sync);
+    PushService.lastTap.removeListener(_onPushTap);
+    super.dispose();
+  }
+
+  void _sync() {
+    if (!mounted) return;
+    final authed = _auth.state == AuthState.authenticated;
+    final isStudent = authed && _auth.isStudent;
+    final key = authed ? '${_auth.guard}:${_auth.user?['id']}' : 'none';
+    if (key == _sessionKey) return;
+    _sessionKey = key;
+
+    final student = context.read<StudentProvider>();
+    if (isStudent) {
+      student.syncSessionUser(_auth.user);
+      StudentDataCache().ensureFresh();
+      NotificationBadge.startPolling();
+      AttendanceWatcher.start();
+    } else {
+      student.syncSessionUser(null);
+      NotificationBadge.stopPolling();
+      NotificationBadge.unread.value = 0;
+      AttendanceWatcher.stop();
+    }
+    if (authed) {
+      PushService.startSession(isTeacher: _auth.isTeacher);
+      _onPushTap(); // a push tapped before login is handled once we're in
+    }
+  }
+
+  /// A tapped attendance push opens the confirmation screen for students.
+  void _onPushTap() {
+    final event = PushService.lastTap.value;
+    if (event == null || !event.type.startsWith('attendance')) return;
+    if (_auth.state != AuthState.authenticated || !_auth.isStudent) return;
+    PushService.lastTap.value = null;
+    AttendanceWatcher.refresh();
+    LmsApp.navigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => const AttendanceConfirmScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

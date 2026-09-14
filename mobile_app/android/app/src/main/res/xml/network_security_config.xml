@@ -1,17 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <!-- HTTPS only, system CAs only. User-installed CAs are not trusted so a
+         proxy certificate on a rooted/managed device cannot intercept traffic. -->
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system"/>
-            <certificates src="user"/>
         </trust-anchors>
     </base-config>
-    <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">mark.tashmedunitf.uz</domain>
-        <domain includeSubdomains="true">unilibrary.uz</domain>
-        <trust-anchors>
-            <certificates src="system"/>
-            <certificates src="user"/>
-        </trust-anchors>
-    </domain-config>
 </network-security-config>

@@ -199,6 +199,29 @@ return [
         'enforce_computer_binding' => env('EXAM_ENFORCE_COMPUTER_BINDING', false),
     ],
 
+    'firebase' => [
+        // Service-account JSON for FCM push (mobile attendance prompts).
+        // Kept outside git: storage/app/firebase.json.
+        'credentials' => env('FIREBASE_CREDENTIALS', storage_path('app/firebase.json')),
+    ],
+
+    'attendance' => [
+        // Beacon attendance: how long the "confirm" window stays open.
+        'window_minutes' => (int) env('ATTENDANCE_WINDOW_MINUTES', 10),
+        // A beacon sighting counts as "in the room" for this many minutes.
+        'presence_ttl_minutes' => (int) env('ATTENDANCE_PRESENCE_TTL_MINUTES', 15),
+        // Weakest RSSI (dBm) accepted when confirming; lower = farther away.
+        'min_rssi' => (int) env('ATTENDANCE_MIN_RSSI', -95),
+    ],
+
+    'gemini' => [
+        // Mobil ilovadagi "TDTU AI Yordamchi" uchun. Kalit faqat serverda —
+        // ilova /api/v1/student/ai/chat proxy orqali ishlaydi.
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 120),
+    ],
+
     'anthropic' => [
         // Claude API kaliti (api.anthropic.com). Bo'sh bo'lsa AI tekshiruv o'chiq.
         'api_key' => env('ANTHROPIC_API_KEY'),

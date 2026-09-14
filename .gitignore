@@ -62,3 +62,6 @@ docker-compose.override.yml
 *.backup
 /public/uploads/
 __pycache__/
+
+# Firebase service account (server secret, never commit)
+/storage/app/firebase.json

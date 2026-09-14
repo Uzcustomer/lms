@@ -12,6 +12,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/clinic_header.dart';
+import '../../widgets/attendance_banner.dart';
 import 'student_home_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
@@ -287,6 +288,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const AttendanceBanner(),
                         _buildProfileCard(data, profile),
                         const SizedBox(height: 8),
                         _buildGpaRow(data, profile, l),

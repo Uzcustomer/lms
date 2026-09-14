@@ -529,7 +529,7 @@ class _AiChatScreenState extends State<AiChatScreen>
           ClinicIconButton(
             icon: Icons.delete_outline_rounded,
             onTap: () {
-              if (_messages.isNotEmpty) _clearChat();
+              if (_messages.isNotEmpty && !_isStreaming) _clearChat();
             },
           ),
         ],

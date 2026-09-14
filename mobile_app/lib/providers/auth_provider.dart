@@ -91,7 +91,10 @@ class AuthProvider extends ChangeNotifier {
           _user = response['user'] as Map<String, dynamic>?;
           _guard = await _apiService.getGuard();
           _parseRoles(response);
-          _state = AuthState.authenticated;
+          _applyProfileFlags(response);
+          _state = _profileComplete
+              ? AuthState.authenticated
+              : AuthState.profileIncomplete;
         } catch (_) {
           await _apiService.clearToken();
           _state = AuthState.unauthenticated;
@@ -111,15 +114,26 @@ class AuthProvider extends ChangeNotifier {
   bool _viaLogin = false;
   bool get viaLogin => _viaLogin;
 
+  /// Reads the profile-completion flags shared by the login and /me
+  /// responses. Keys absent from the payload leave the current values alone.
+  void _applyProfileFlags(Map<String, dynamic> response) {
+    if (response.containsKey('profile_complete')) {
+      _profileComplete = response['profile_complete'] == true;
+    }
+    if (response.containsKey('telegram_verified')) {
+      _telegramVerified = response['telegram_verified'] == true;
+    }
+    _telegramDaysLeft = response['telegram_days_left'] as int? ?? _telegramDaysLeft;
+    _botUsername = response['bot_username'] as String? ?? _botUsername;
+  }
+
   void _handleLoginResponse(Map<String, dynamic> response, String guard) {
     _viaLogin = true;
     _loggedOut = false;
     _user = response['user'] as Map<String, dynamic>?;
     _guard = guard;
-    _profileComplete = response['profile_complete'] == true;
-    _telegramVerified = response['telegram_verified'] == true;
-    _telegramDaysLeft = response['telegram_days_left'] as int? ?? 0;
-    _botUsername = response['bot_username'] as String?;
+    _parseRoles(response);
+    _applyProfileFlags(response);
 
     if (!_profileComplete) {
       _state = AuthState.profileIncomplete;

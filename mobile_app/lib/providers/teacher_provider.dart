@@ -5,7 +5,7 @@ import '../services/api_service.dart';
 class TeacherProvider extends ChangeNotifier {
   final TeacherService _service;
 
-  bool _isLoading = false;
+  int _inFlight = 0;
   String? _error;
 
   Map<String, dynamic>? _dashboard;
@@ -19,7 +19,7 @@ class TeacherProvider extends ChangeNotifier {
 
   TeacherProvider(this._service);
 
-  bool get isLoading => _isLoading;
+  bool get isLoading => _inFlight > 0;
   String? get error => _error;
   Map<String, dynamic>? get dashboard => _dashboard;
   Map<String, dynamic>? get profile => _profile;
@@ -30,121 +30,67 @@ class TeacherProvider extends ChangeNotifier {
   List<dynamic>? get activeSubjects => _activeSubjects;
   Map<String, dynamic>? get pagination => _pagination;
 
-  Future<void> loadDashboard() async {
-    _isLoading = true;
-    _error = null;
+  /// Runs one loader under the shared loading/error flags. Any failure —
+  /// API error, dropped connection, unexpected payload shape — ends up in
+  /// [error], so the spinner can never get stuck. Several loaders may be in
+  /// flight at once (dashboard + active subjects); [isLoading] stays true
+  /// until the last one finishes.
+  Future<void> _run(Future<void> Function() body) async {
+    if (_inFlight == 0) _error = null;
+    _inFlight++;
     notifyListeners();
 
     try {
-      final response = await _service.getDashboard();
-      _dashboard = response['data'] as Map<String, dynamic>?;
+      await body();
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (_) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
 
-    _isLoading = false;
+    _inFlight--;
     notifyListeners();
   }
 
-  Future<void> loadProfile() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> loadDashboard() => _run(() async {
+        final response = await _service.getDashboard();
+        _dashboard = response['data'] as Map<String, dynamic>?;
+      });
 
-    try {
-      final response = await _service.getProfile();
-      _profile = response['data'] as Map<String, dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
+  Future<void> loadProfile() => _run(() async {
+        final response = await _service.getProfile();
+        _profile = response['data'] as Map<String, dynamic>?;
+      });
 
-    _isLoading = false;
-    notifyListeners();
-  }
+  Future<void> loadStudents({String? search, int page = 1}) => _run(() async {
+        final response = await _service.getStudents(search: search, page: page);
+        _students = response['data'] as List<dynamic>?;
+        _pagination = response['meta'] as Map<String, dynamic>?;
+      });
 
-  Future<void> loadStudents({String? search, int page = 1}) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> loadGroups() => _run(() async {
+        final response = await _service.getGroups();
+        _groups = response['data'] as List<dynamic>?;
+      });
 
-    try {
-      final response = await _service.getStudents(search: search, page: page);
-      _students = response['data'] as List<dynamic>?;
-      _pagination = response['meta'] as Map<String, dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
+  Future<void> loadSemesters(int groupId) => _run(() async {
+        final response = await _service.getSemesters(groupId: groupId);
+        _semesters = response['data'] as List<dynamic>?;
+      });
 
-    _isLoading = false;
-    notifyListeners();
-  }
+  Future<void> loadActiveSubjects() => _run(() async {
+        final response = await _service.getActiveSubjects();
+        _activeSubjects = response['data'] as List<dynamic>?;
+      });
 
-  Future<void> loadGroups() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _service.getGroups();
-      _groups = response['data'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> loadSemesters(int groupId) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _service.getSemesters(groupId: groupId);
-      _semesters = response['data'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> loadActiveSubjects() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _service.getActiveSubjects();
-      _activeSubjects = response['data'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> loadSubjects({required int groupId, required int semesterId}) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _service.getSubjects(
-        groupId: groupId,
-        semesterId: semesterId,
-      );
-      _subjects = response['data'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
+  Future<void> loadSubjects({required int groupId, required int semesterId}) =>
+      _run(() async {
+        final response = await _service.getSubjects(
+          groupId: groupId,
+          semesterId: semesterId,
+        );
+        _subjects = response['data'] as List<dynamic>?;
+      });
 
   void clearData() {
     _dashboard = null;

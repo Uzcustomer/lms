@@ -124,6 +124,33 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  /// Raw download (PDF etc.) with the bearer header. Errors are mapped the
+  /// same way as JSON responses.
+  Future<Uint8List> getBytes(String endpoint, {Map<String, String>? queryParams}) async {
+    final token = await getToken();
+    var uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    if (queryParams != null && queryParams.isNotEmpty) {
+      uri = uri.replace(queryParameters: queryParams);
+    }
+    final headers = <String, String>{'Accept': '*/*'};
+    if (token != null) headers['Authorization'] = 'Bearer $token';
+
+    final response = await http.get(uri, headers: headers);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return response.bodyBytes;
+    }
+    if (response.statusCode == 401) {
+      await clearToken();
+      throw ApiException('Sessiya tugagan. Qayta kiring.', 401);
+    }
+    var message = 'Faylni yuklab bo\'lmadi';
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      message = body['message']?.toString() ?? message;
+    } catch (_) {}
+    throw ApiException(message, response.statusCode);
+  }
+
   Future<Map<String, dynamic>> uploadFile(String endpoint, Uint8List fileBytes, String fileName) async {
     final token = await getToken();
     final uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');

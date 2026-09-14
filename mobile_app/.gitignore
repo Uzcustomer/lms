@@ -47,3 +47,13 @@ app.*.map.json
 # API keys (local only, never commit)
 lib/config/api_keys.dart
 lib/config/api_key.dart
+
+# Release signing (local only, never commit)
+android/key.properties
+android/app/upload-keystore.jks
+*.jks
+*.keystore
+
+# Firebase config (per-environment, never commit)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist

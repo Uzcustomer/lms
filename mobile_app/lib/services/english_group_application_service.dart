@@ -30,7 +30,4 @@ class EnglishGroupApplicationService {
       fileField: 'certificate_pdf',
     );
   }
-
-  String certificateUrl(int id) =>
-      '${ApiConfig.baseUrl}${ApiConfig.studentEnglishGroupApplications}/$id/certificate';
 }

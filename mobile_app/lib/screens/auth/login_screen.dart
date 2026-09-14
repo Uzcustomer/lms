@@ -31,15 +31,11 @@ class _LoginScreenState extends State<LoginScreen> {
   bool get _isStudent => _role == _Role.student;
 
   final _bio = BiometricService();
-  bool _bioReady = false;
-  bool _bioBusy = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkBiometric();
-    });
+    _prefillLastLogin();
   }
 
   @override
@@ -49,42 +45,16 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _checkBiometric({bool autoPrompt = false}) async {
-    final ready = await _bio.isEnabled() &&
-        await _bio.isAvailable() &&
-        await _bio.hasCredentials();
-    if (!mounted) return;
-    setState(() => _bioReady = ready);
-    if (ready && autoPrompt) _biometricLogin();
-  }
-
-  /// Re-logs in using the stored credentials behind a biometric check.
-  Future<void> _biometricLogin() async {
-    if (_bioBusy) return;
-    final creds = await _bio.getCredentials();
-    if (creds == null || !mounted) return;
-
-    _bioBusy = true;
-    final ok = await _bio.authenticate(
-      reason: 'Ilovaga kirish uchun qurilma himoyasini tasdiqlang',
-    );
-    _bioBusy = false;
-    if (!ok || !mounted) return;
-
-    final auth = context.read<AuthProvider>();
-    auth.clearError();
-    final login = creds['login']!;
-    if (creds['role'] == 'staff') {
-      await auth.teacherLogin(login, creds['password']!);
-    } else {
-      await auth.studentLogin(login, creds['password']!);
-    }
-    if (!mounted) return;
-    if (auth.state == AuthState.requires2fa) {
-      Navigator.of(context).push(
-        SlideFadePageRoute(builder: (_) => Verify2faScreen(login: login)),
-      );
-    }
+  /// Fills the ID field with the last account used on this device and drops
+  /// any password an older build may have left in the keystore.
+  Future<void> _prefillLastLogin() async {
+    await _bio.purgeLegacyCredentials();
+    final last = await _bio.getLastLogin();
+    if (last == null || !mounted) return;
+    setState(() {
+      _role = last['role'] == 'staff' ? _Role.staff : _Role.student;
+      _idCtrl.text = last['login'] ?? '';
+    });
   }
 
   Future<void> _submit() async {
@@ -106,14 +76,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (auth.state == AuthState.authenticated ||
         auth.state == AuthState.profileIncomplete) {
       if (_remember) {
-        // Stash the latest account so biometric re-login cannot reuse an old one.
-        await _bio.saveCredentials(
+        await _bio.saveLastLogin(
           login: login,
-          password: password,
           role: _isStudent ? 'student' : 'staff',
         );
       } else {
-        await _bio.clearCredentials();
+        await _bio.clearLastLogin();
       }
     }
 
@@ -129,12 +97,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _faceIdLogin() async {
-    // If device biometric login is set up, use it.
-    if (_bioReady) {
-      _biometricLogin();
-      return;
-    }
-
     if (!_isStudent) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tezkor kirish faqat talabalar uchun')),
@@ -451,7 +413,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const Spacer(),
         Text(
-          '30 kun davomida',
+          'Faqat login saqlanadi',
           style: TextStyle(fontSize: 11, color: _ink.withOpacity(0.45)),
         ),
       ],
@@ -583,7 +545,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(width: 10),
             const Text(
-              'Biometrik kirish',
+              'Face ID orqali kirish',
               style: TextStyle(
                 color: _ink,
                 fontSize: 13.5,

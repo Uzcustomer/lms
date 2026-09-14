@@ -79,51 +79,41 @@ class BiometricService {
     await prefs.setBool(_enabledKey, value);
   }
 
-  // ── Stored credentials for biometric re-login ────────
-  // Kept in the OS keystore/keychain so the student can log back in
-  // with a fingerprint / Face ID even after a logout or token expiry.
+  // ── Last used login (ID + role only, never the password) ────
+  // Sessions are kept alive by the API token behind BiometricGate; after a
+  // logout or token expiry the user types the password again.
+  static const _kLastLogin = 'last_login_id';
+  static const _kLastRole = 'last_login_role';
+
+  Future<void> saveLastLogin({required String login, required String role}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLastLogin, login);
+    await prefs.setString(_kLastRole, role);
+  }
+
+  Future<Map<String, String>?> getLastLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final login = prefs.getString(_kLastLogin);
+    if (login == null || login.isEmpty) return null;
+    return {'login': login, 'role': prefs.getString(_kLastRole) ?? 'student'};
+  }
+
+  Future<void> clearLastLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kLastLogin);
+    await prefs.remove(_kLastRole);
+  }
+
+  // Older builds stored the password in the keystore for biometric
+  // re-login. Wipe it on first run of this version.
   static const _secure = FlutterSecureStorage();
-  static const _kLogin = 'bio_cred_login';
-  static const _kPass = 'bio_cred_pass';
-  static const _kRole = 'bio_cred_role';
+  static const _legacyKeys = ['bio_cred_login', 'bio_cred_pass', 'bio_cred_role'];
 
-  Future<void> saveCredentials({
-    required String login,
-    required String password,
-    required String role,
-  }) async {
-    try {
-      await _secure.write(key: _kLogin, value: login);
-      await _secure.write(key: _kPass, value: password);
-      await _secure.write(key: _kRole, value: role);
-    } catch (_) {}
-  }
-
-  Future<bool> hasCredentials() async {
-    try {
-      return (await _secure.read(key: _kLogin)) != null;
-    } catch (_) {
-      return false;
+  Future<void> purgeLegacyCredentials() async {
+    for (final key in _legacyKeys) {
+      try {
+        await _secure.delete(key: key);
+      } catch (_) {}
     }
-  }
-
-  Future<Map<String, String>?> getCredentials() async {
-    try {
-      final login = await _secure.read(key: _kLogin);
-      final pass = await _secure.read(key: _kPass);
-      final role = await _secure.read(key: _kRole);
-      if (login != null && pass != null) {
-        return {'login': login, 'password': pass, 'role': role ?? 'student'};
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  Future<void> clearCredentials() async {
-    try {
-      await _secure.delete(key: _kLogin);
-      await _secure.delete(key: _kPass);
-      await _secure.delete(key: _kRole);
-    } catch (_) {}
   }
 }

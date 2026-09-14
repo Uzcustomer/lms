@@ -60,7 +60,7 @@ class _AbsenceExcuseListScreenState extends State<AbsenceExcuseListScreen> {
             SlideFadePageRoute(builder: (_) => const AbsenceExcuseCreateScreen()),
           );
           if (result == true && mounted) {
-            context.read<StudentProvider>().loadExcuses();
+            context.read<StudentProvider>().loadExcuses(force: true);
           }
         },
         backgroundColor: ClinicTheme.teal,
@@ -103,7 +103,7 @@ class _AbsenceExcuseListScreenState extends State<AbsenceExcuseListScreen> {
                 }
 
                 return RefreshIndicator(
-                  onRefresh: () => provider.loadExcuses(),
+                  onRefresh: () => provider.loadExcuses(force: true),
                   child: ListView.builder(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
                     itemCount: excuses.length,
@@ -122,7 +122,7 @@ class _AbsenceExcuseListScreenState extends State<AbsenceExcuseListScreen> {
                             ),
                           );
                           if (mounted) {
-                            context.read<StudentProvider>().loadExcuses();
+                            context.read<StudentProvider>().loadExcuses(force: true);
                           }
                         },
                       );

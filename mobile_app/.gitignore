@@ -57,3 +57,6 @@ android/app/upload-keystore.jks
 # Firebase config (per-environment, never commit)
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
+
+# Gradle output (the Flutter build/ dir is ignored above; android/build holds gradle reports)
+/android/build/

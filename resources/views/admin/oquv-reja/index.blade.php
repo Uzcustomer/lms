@@ -684,12 +684,14 @@
 
                     <div data-subpanel="namunaviy">
                         @include('admin.oquv-reja._curricula-table', [
+                            'tableKey' => 'namunaviy',
                             'list' => $namunaviyList,
                             'emptyText' => "Hozircha namunaviy o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.",
                         ])
                     </div>
                     <div data-subpanel="ishchi" class="hidden">
                         @include('admin.oquv-reja._curricula-table', [
+                            'tableKey' => 'ishchi',
                             'list' => $ishchiList,
                             'emptyText' => "Hozircha ishchi o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.",
                         ])

@@ -14,6 +14,7 @@ use App\Imports\QuizResultImport;
 use App\Exports\QuizResultExport;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
@@ -3828,28 +3829,64 @@ class QuizResultController extends Controller
         // Eski push mexanizmi ham ishlayversin (zaxira sifatida).
         Setting::set('moodle_sync_requested', now()->toIso8601String());
 
+        $user = auth()->user();
+        $userName = $user->name ?? $user->full_name ?? 'unknown';
+
+        // Bir vaqtda ikkinchi tortish boshlanmaydi — har biri PHP jarayonini
+        // band qiladi va bir xil natijalarni qayta yozadi.
+        $lock = Cache::lock('moodle_quiz_pull_running', 150);
+        if (!$lock->get()) {
+            return response()->json([
+                'success' => false,
+                'message' => "Moodle'dan tortish allaqachon ishlayapti (boshqa oynada yoki boshqa xodim tomonidan). Bir daqiqadan so'ng qayta bosing.",
+            ]);
+        }
+
         // ASOSIY: Moodle webservice'idan TO'G'RIDAN-TO'G'RI tortamiz — Moodle
         // serveridagi push-skriptning kursor muammosidan xoli, bugungi
         // natijalar darhol keladi.
+        //
+        // Vaqt chegarasi: brauzer javobni cheksiz kutmasin. Tortish ~40 s da
+        // to'xtaydi, to'xtagan joy saqlanadi va keyingi bosish davom ettiradi.
+        Log::info('quiz:trigger-cron — direct pull boshlandi', ['user' => $userName]);
         @set_time_limit(180);
-        $res = $pull->pull();
 
-        Log::info('quiz:trigger-cron — direct pull', $res + [
-            'user' => auth()->user()->name ?? 'unknown',
-        ]);
+        try {
+            $res = $pull->pull(null, 200, 40.0);
+        } finally {
+            $lock->release();
+        }
+
+        Log::info('quiz:trigger-cron — direct pull', $res + ['user' => $userName]);
+
+        $imported = (int) ($res['imported'] ?? 0);
+        $seconds = $res['seconds'] ?? null;
+        $took = $seconds !== null ? " ({$seconds} s)" : '';
 
         if (!($res['ok'] ?? false)) {
             return response()->json([
+                'success' => $imported > 0,
+                'message' => "Moodle'dan tortishda muammo: " . ($res['error'] ?? 'nomaʼlum') . $took . '.'
+                    . ($imported > 0 ? " Shungacha {$imported} ta natija olindi — qolganini olish uchun yana bosing." : '')
+                    . " Zaxira sync so'rovi yuborildi — Moodle bir necha daqiqada o'zi yuboradi.",
+                'imported' => $imported,
+            ]);
+        }
+
+        if (!empty($res['partial'])) {
+            return response()->json([
                 'success' => true,
-                'message' => "To'g'ridan-to'g'ri tortishda muammo: " . ($res['error'] ?? 'nomaʼlum')
-                    . ". Zaxira sync so'rovi yuborildi — Moodle bir necha daqiqada yuboradi.",
+                'message' => "Moodle'dan {$imported} ta natija tortildi{$took}, lekin hammasi emas — "
+                    . "qolganini olish uchun \"Yangilash\"ni yana bosing (to'xtagan joyidan davom etadi).",
+                'imported' => $imported,
+                'partial' => true,
             ]);
         }
 
         return response()->json([
             'success' => true,
-            'message' => "Moodle'dan {$res['imported']} ta natija tortildi. Jadval yangilanmoqda…",
-            'imported' => $res['imported'],
+            'message' => "Moodle'dan {$imported} ta natija tortildi{$took}. Jadval yangilanmoqda…",
+            'imported' => $imported,
         ]);
     }
 

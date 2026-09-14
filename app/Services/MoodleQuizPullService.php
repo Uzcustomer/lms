@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -15,10 +16,17 @@ use Illuminate\Support\Facades\Log;
  *
  * Kech tugagan urinishlarni (qa.id kichik bo'lsa ham) tutish uchun mavjud
  * eng katta attempt_id dan ORQAGA "overlap" oynasi bilan so'raladi.
+ *
+ * Vaqt chegarasi ($timeBudget) berilsa, tortish shu vaqtdan keyin to'xtaydi
+ * va to'xtagan joy saqlanadi — keyingi chaqiruv o'sha joydan davom etadi.
+ * Aks holda har bosishda yana overlap boshidan boshlanib, oxiriga hech qachon
+ * yetib bo'lmasdi.
  */
 class MoodleQuizPullService
 {
-    public function pull(?int $overlap = null, int $maxPages = 200): array
+    private const RESUME_KEY = 'moodle_quiz_pull_resume';
+
+    public function pull(?int $overlap = null, int $maxPages = 200, ?float $timeBudget = null): array
     {
         $url = (string) config('services.moodle.ws_url');
         $token = (string) (config('services.moodle.quiz_ws_token') ?: config('services.moodle.ws_token'));
@@ -30,15 +38,33 @@ class MoodleQuizPullService
         $overlap = $overlap ?? (int) config('services.moodle.quiz_pull_overlap', 5000);
         $limit = 200;
         $timeout = max(30, (int) config('services.moodle.ws_timeout', 60));
+        $started = microtime(true);
 
-        $maxId = (int) DB::table('hemis_quiz_results')->max('attempt_id');
-        $since = max(0, $maxId - $overlap);
+        // Oldingi tortish yarim qolgan bo'lsa — o'sha "since" va sahifadan davom
+        // etiladi. Sahifalar bir xil "since" bilan so'ralgani uchun tartib
+        // saqlanadi; ikki marta kelgan yozuv upsert tufayli zarar qilmaydi.
+        $resume = Cache::get(self::RESUME_KEY);
+        if (is_array($resume) && isset($resume['since'], $resume['page'])) {
+            $since = (int) $resume['since'];
+            $page = max(1, (int) $resume['page']);
+        } else {
+            $maxId = (int) DB::table('hemis_quiz_results')->max('attempt_id');
+            $since = max(0, $maxId - $overlap);
+            $page = 1;
+        }
 
         $imported = 0;
         $pages = 0;
-        $page = 1;
+        $lastPage = $page + $maxPages - 1;
 
-        while ($page <= $maxPages) {
+        while ($page <= $lastPage) {
+            // Vaqt chegarasi: kamida bitta sahifa olingandan keyin tekshiriladi.
+            if ($timeBudget !== null && $pages > 0 && (microtime(true) - $started) >= $timeBudget) {
+                $this->saveResume($since, $page);
+
+                return $this->result(true, $imported, $pages, $since, $started, true);
+            }
+
             try {
                 $resp = Http::asForm()->timeout($timeout)->post($url, [
                     'wstoken' => $token,
@@ -51,16 +77,24 @@ class MoodleQuizPullService
                 ]);
             } catch (\Throwable $e) {
                 Log::warning('MoodleQuizPull: WS xatolik', ['page' => $page, 'error' => $e->getMessage()]);
-                return ['ok' => false, 'error' => $e->getMessage(), 'imported' => $imported, 'pages' => $pages];
+                // Olingan sahifalar saqlangan — keyingi urinish shu sahifadan davom etadi.
+                $this->saveResume($since, $page);
+
+                return $this->result(false, $imported, $pages, $since, $started) + ['error' => $this->readableError($e)];
             }
 
             if (!$resp->successful()) {
-                return ['ok' => false, 'error' => 'Moodle WS HTTP ' . $resp->status(), 'imported' => $imported, 'pages' => $pages];
+                $this->saveResume($since, $page);
+
+                return $this->result(false, $imported, $pages, $since, $started) + ['error' => 'Moodle WS HTTP ' . $resp->status()];
             }
 
             $body = $resp->json();
             if (isset($body['exception'])) {
-                return ['ok' => false, 'error' => (string) ($body['message'] ?? $body['exception']), 'imported' => $imported, 'pages' => $pages];
+                $this->saveResume($since, $page);
+
+                return $this->result(false, $imported, $pages, $since, $started)
+                    + ['error' => (string) ($body['message'] ?? $body['exception'])];
             }
 
             $records = $body['records'] ?? [];
@@ -132,6 +166,48 @@ class MoodleQuizPullService
             $page++;
         }
 
-        return ['ok' => true, 'imported' => $imported, 'pages' => $pages, 'since_attempt_id' => $since];
+        // Sahifa chegarasiga yetib, davomi qolgan bo'lsa — keyingi safar davom etadi.
+        if ($page > $lastPage) {
+            $this->saveResume($since, $page);
+
+            return $this->result(true, $imported, $pages, $since, $started, true);
+        }
+
+        // Oxirigacha yetildi — keyingi tortish yana overlap oynasidan boshlanadi.
+        Cache::forget(self::RESUME_KEY);
+
+        return $this->result(true, $imported, $pages, $since, $started);
+    }
+
+    private function result(bool $ok, int $imported, int $pages, int $since, float $started, bool $partial = false): array
+    {
+        return [
+            'ok' => $ok,
+            'partial' => $partial,
+            'imported' => $imported,
+            'pages' => $pages,
+            'since_attempt_id' => $since,
+            'seconds' => round(microtime(true) - $started, 1),
+        ];
+    }
+
+    /** To'xtagan joy 2 soat saqlanadi; eskirsa tortish boshidan boshlanadi. */
+    private function saveResume(int $since, int $page): void
+    {
+        Cache::put(self::RESUME_KEY, ['since' => $since, 'page' => $page], now()->addHours(2));
+    }
+
+    /** Moodle ulanish xatosini operator tushunadigan matnga aylantiradi. */
+    private function readableError(\Throwable $e): string
+    {
+        $message = $e->getMessage();
+        if (stripos($message, 'timed out') !== false || stripos($message, 'cURL error 28') !== false) {
+            return 'Moodle belgilangan vaqtda javob bermadi';
+        }
+        if (stripos($message, 'cURL error 6') !== false || stripos($message, 'cURL error 7') !== false) {
+            return "Moodle serveriga ulanib bo'lmadi";
+        }
+
+        return $message;
     }
 }

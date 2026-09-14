@@ -330,6 +330,7 @@
                     </div>
                 </div>
 
+                <div id="cron-result" style="display:none;"></div>
                 <div id="upload-result" style="display:none;"></div>
                 <div id="import-result" style="display:none;"></div>
 
@@ -1259,32 +1260,61 @@
         }
 
         // ========== MOODLE CRON TRIGGER ==========
+        // Natija alohida blokda (#cron-result) ko'rsatiladi: jadval qayta
+        // yuklanganda #upload-result yashiriladi va xabar darhol yo'qolardi.
+        function showCronResult(ok, message) {
+            $('#cron-result')
+                .html('<div class="diag-msg ' + (ok ? 'diag-success' : 'diag-error') + '">' + esc(message) + '</div>')
+                .show();
+        }
+
         function triggerMoodleCron() {
             if (!confirm('Moodle quiz natijalar sinxronizatsiyasini ishga tushirishni tasdiqlaysizmi?')) return;
 
             var btn = $('#btn-trigger-cron');
             btn.prop('disabled', true);
             var origHtml = btn.html();
-            btn.html('<span class="spinner-sm"></span> Ishga tushirilmoqda...');
+            var started = Date.now();
+            // Soniyalar ko'rinib tursin — so'rov tirikligini operator bilib tursin.
+            var tick = function() {
+                var sec = Math.round((Date.now() - started) / 1000);
+                btn.html('<span class="spinner-sm"></span> Moodle\'dan tortilmoqda… ' + sec + ' s');
+            };
+            tick();
+            var timer = setInterval(tick, 1000);
+            $('#cron-result').hide();
 
             $.ajax({
                 url: triggerCronUrl, type: 'POST',
                 headers: { 'X-CSRF-TOKEN': csrfToken },
                 contentType: 'application/json',
+                // Server ~40 s da to'xtaydi; bu faqat tarmoq osilib qolganda ishlaydi.
+                timeout: 150000,
                 success: function(data) {
-                    var cls = data.success ? 'diag-success' : 'diag-error';
-                    $('#upload-result').html('<div class="diag-msg ' + cls + '">' + esc(data.message) + '</div>').show();
-                    // To'g'ridan-to'g'ri tortish natija keltirgan bo'lsa —
-                    // jadvalni avtomatik yangilaymiz (ikkinchi marta bosish shart emas).
-                    if (data.success && typeof data.imported !== 'undefined') {
+                    showCronResult(!!data.success, data.message || 'Javob keldi.');
+                    // Yangi natija kelgan bo'lsa jadval avtomatik yangilanadi.
+                    if (data.imported > 0) {
                         loadTartibgaSol();
                     }
                 },
-                error: function(xhr) {
-                    var msg = xhr.responseJSON?.message || 'Server xatosi';
-                    $('#upload-result').html('<div class="diag-msg diag-error">' + esc(msg) + '</div>').show();
+                error: function(xhr, status) {
+                    var sec = Math.round((Date.now() - started) / 1000);
+                    var msg;
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    } else if (status === 'timeout') {
+                        msg = sec + ' soniya ichida javob kelmadi. Moodle sekin javob bermoqda — birozdan so\'ng qayta bosing.';
+                    } else if (xhr.status === 502 || xhr.status === 504) {
+                        msg = 'Server so\'rovni vaqt tugagani uchun to\'xtatdi (' + sec + ' s). Qayta bosing — tortish to\'xtagan joyidan davom etadi.';
+                    } else if (xhr.status === 419) {
+                        msg = 'Sessiya muddati tugagan. Sahifani yangilab, qayta bosing.';
+                    } else {
+                        msg = 'Server xatosi' + (xhr.status ? ' (HTTP ' + xhr.status + ')' : '') + '.';
+                    }
+                    showCronResult(false, msg);
                 },
                 complete: function() {
+                    clearInterval(timer);
                     btn.prop('disabled', false).html(origHtml);
                 }
             });

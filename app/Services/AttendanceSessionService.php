@@ -35,14 +35,17 @@ class AttendanceSessionService
                 $first = $slot->first();
                 $groupIds = $slot->pluck('group_id')->unique()->values();
 
-                $session = AttendanceSession::where('teacher_id', $teacher->id)
+                // Every session ever opened for this slot (a teacher may open
+                // it twice); the newest is the "current" one.
+                $sessions = AttendanceSession::where('teacher_id', $teacher->id)
                     ->whereDate('lesson_date', $date->toDateString())
                     ->where('subject_id', $first->subject_id)
                     ->where('lesson_pair_code', $first->lesson_pair_code)
                     ->with(['beacon', 'groups'])
-                    ->latest('id')
-                    ->first();
-                $session?->closeIfExpired();
+                    ->orderByDesc('id')
+                    ->get()
+                    ->each(fn (AttendanceSession $s) => $s->closeIfExpired());
+                $session = $sessions->first();
 
                 return [
                     'subject_id' => (int) $first->subject_id,
@@ -60,6 +63,7 @@ class AttendanceSessionService
                     'students_count' => Student::whereIn('group_id', $groupIds)->count(),
                     'has_beacon' => $this->beaconFor($first->auditorium_code) !== null,
                     'session' => $session?->toSummary(),
+                    'sessions' => $sessions->map(fn (AttendanceSession $s) => $s->toSummary())->values()->all(),
                 ];
             })
             ->values()
@@ -201,7 +205,7 @@ class AttendanceSessionService
     public function close(AttendanceSession $session): void
     {
         if ($session->status === AttendanceSession::STATUS_OPEN) {
-            $session->close('teacher');
+            $session->close('system');
         }
     }
 

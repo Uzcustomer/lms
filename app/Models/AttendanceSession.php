@@ -61,7 +61,12 @@ class AttendanceSession extends Model
         }
     }
 
-    public function close(string $decidedBy = 'teacher'): void
+    /**
+     * Settle the window: whoever is still pending becomes absent. The
+     * decider is 'system' (window ran out / teacher closed it) — per-student
+     * manual overrides keep 'teacher' so the UI can tell them apart.
+     */
+    public function close(string $decidedBy = 'system'): void
     {
         $this->confirmations()
             ->where('status', AttendanceConfirmation::STATUS_PENDING)

@@ -270,6 +270,52 @@ class FaceIdController extends Controller
      *  1. client_only = true  → brauzer o'zi distance hisoblagan (test rejimi)
      *  2. client_only = false → server saqlangan descriptor bilan taqqoslaydi
      */
+    /**
+     * Live snapshotdagi yuz kimniki ekanini aniqlaydi.
+     *
+     * Yuz mos kelmagan urinishlarda ishlatiladi: shu orqali boshqa talabaning
+     * profiliga kirishga urinish logda ko'rinadi. Ishonchsiz natija (chegaradan
+     * past o'xshashlik) qabul qilinmaydi — noto'g'ri ayblov bo'lmasin.
+     *
+     * @return array{student: \App\Models\Student, similarity: float}|null
+     */
+    private function identifyLiveFace(?string $snapshot, float $threshold): ?array
+    {
+        if (empty($snapshot) || !FaceIdService::isArcFaceEnabled()) {
+            return null;
+        }
+
+        try {
+            $tmp = FaceIdService::saveTemporarySnapshot($snapshot);
+            if (!$tmp) {
+                return null;
+            }
+
+            try {
+                $result = FaceIdService::identifyViaArcFace($tmp['url'], 1);
+            } finally {
+                FaceIdService::deleteTemporarySnapshot($tmp['rel']);
+            }
+
+            $best = $result['matches'][0] ?? null;
+            $similarity = (float) ($best['similarity_percent'] ?? 0);
+            $idNumber = $best['student_id_number'] ?? null;
+
+            if (!$idNumber || $similarity < $threshold) {
+                return null;
+            }
+
+            $student = Student::where('student_id_number', $idNumber)->first();
+
+            return $student ? ['student' => $student, 'similarity' => $similarity] : null;
+        } catch (\Throwable $exception) {
+            // Aniqlash qo'shimcha ma'lumot — u ishlamasa ham urinish logga tushadi.
+            Log::warning('[FaceID] Urinayotgan yuzni aniqlab bo\'lmadi', ['error' => $exception->getMessage()]);
+
+            return null;
+        }
+    }
+
     public function verifyAndLogin(Request $request)
     {
         $request->validate([
@@ -396,11 +442,25 @@ class FaceIdController extends Controller
             ]);
 
             if ($similarityPercent < $arcThreshold) {
-                FaceIdService::logAttempt(array_merge($commonLog, [
+                $mismatchLog = $commonLog;
+                $reason = "ArcFace: yuz mos kelmadi ({$similarityPercent}% < {$arcThreshold}%)";
+
+                // Kim urinayotganini aniqlaymiz: talaba ID raqamini o'zi kiritadi,
+                // shuning uchun yuz kimniki ekani aks holda noma'lum qolardi.
+                // Topilsa, logda "talaba" va "kirgan profil" har xil bo'lib turadi.
+                $identified = $this->identifyLiveFace($request->snapshot, $arcThreshold);
+                if ($identified && (int) $identified['student']->id !== (int) $student->id) {
+                    $mismatchLog['student_id'] = $identified['student']->id;
+                    $mismatchLog['student_id_number'] = $identified['student']->student_id_number;
+                    $reason .= '. Yuz aniqlandi: ' . $identified['student']->full_name
+                        . ' (' . round($identified['similarity'], 1) . '%)';
+                }
+
+                FaceIdService::logAttempt(array_merge($mismatchLog, [
                     'result'         => 'failed',
                     'confidence'     => round($similarityPercent / 100, 4),
                     'distance'       => round($distance, 4),
-                    'failure_reason' => "ArcFace: yuz mos kelmadi ({$similarityPercent}% < {$arcThreshold}%)",
+                    'failure_reason' => $reason,
                     'snapshot'       => $request->snapshot,
                 ]));
                 return response()->json([

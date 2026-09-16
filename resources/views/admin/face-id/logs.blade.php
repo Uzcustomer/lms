@@ -242,25 +242,26 @@
                                     (($log->student_id && $log->target_student_id) && ((string) $log->student_id !== (string) $log->target_student_id))
                                     || (($log->student_id_number && $targetIdNumber) && ((string) $log->student_id_number !== (string) $targetIdNumber));
                             @endphp
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ optional($log->created_at)->format('d.m.Y H:i:s') }}</td>
+                            {{-- Urinayotgan talaba bilan kirilayotgan profil har xil bo'lsa — qator qizil --}}
+                            <tr class="{{ $isProfileMismatch ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500' : 'hover:bg-gray-50' }}">
+                                <td class="px-4 py-3 text-xs {{ $isProfileMismatch ? 'text-red-700 font-medium' : 'text-gray-500' }} whitespace-nowrap">{{ optional($log->created_at)->format('d.m.Y H:i:s') }}</td>
                                 <td class="px-4 py-3">
                                     @if($log->student)
-                                        <div class="font-medium text-gray-800 text-xs">{{ $log->student->full_name }}</div>
+                                        <div class="font-medium text-xs {{ $isProfileMismatch ? 'text-red-700' : 'text-gray-800' }}">{{ $log->student->full_name }}</div>
                                     @endif
-                                    <div class="text-gray-400 text-xs font-mono">{{ $log->student_id_number }}</div>
+                                    <div class="text-xs font-mono {{ $isProfileMismatch ? 'text-red-500' : 'text-gray-400' }}">{{ $log->student_id_number }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                                     {{ $attemptLabels[$log->attempt_type] ?? ($log->attempt_type ?: '—') }}
                                 </td>
                                 <td class="px-4 py-3">
                                     @if($targetStudent)
-                                        <div class="font-medium text-gray-800 text-xs">{{ $targetStudent->full_name }}</div>
+                                        <div class="font-medium text-xs {{ $isProfileMismatch ? 'text-red-700' : 'text-gray-800' }}">{{ $targetStudent->full_name }}</div>
                                     @endif
-                                    <div class="text-gray-400 text-xs font-mono">{{ $targetIdNumber ?: '—' }}</div>
+                                    <div class="text-xs font-mono {{ $isProfileMismatch ? 'text-red-500' : 'text-gray-400' }}">{{ $targetIdNumber ?: '—' }}</div>
                                     @if($isProfileMismatch)
                                         <div class="mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">
-                                            Boshqa profilga kirilgan
+                                            Boshqa profilga urinilgan
                                         </div>
                                     @endif
                                 </td>

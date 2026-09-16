@@ -110,15 +110,6 @@ class FaceIdService
 
     private static function shouldStoreSnapshot(array $data): bool
     {
-        if (($data['result'] ?? null) !== 'success') {
-            return false;
-        }
-
-        $confidence = isset($data['confidence']) ? (float) $data['confidence'] : null;
-        if ($confidence === null || $confidence < 0.7 || $confidence >= 0.8) {
-            return false;
-        }
-
         $studentId = $data['student_id'] ?? null;
         $targetStudentId = $data['target_student_id'] ?? null;
         $studentIdNumber = $data['student_id_number'] ?? null;
@@ -127,7 +118,20 @@ class FaceIdService
         $idMismatch = $studentId !== null && $targetStudentId !== null && (string) $studentId !== (string) $targetStudentId;
         $numberMismatch = $studentIdNumber !== null && $targetStudentIdNumber !== null && (string) $studentIdNumber !== (string) $targetStudentIdNumber;
 
-        return $idMismatch || $numberMismatch;
+        // Boshqa talabaning profiliga urinish — natijasidan qat'i nazar rasm
+        // saqlanadi: registrator uchun yuzni solishtiradigan yagona dalil shu.
+        if ($idMismatch || $numberMismatch) {
+            return true;
+        }
+
+        // Muvaffaqiyatli, lekin o'xshashligi chegaraga yaqin kirishlar (audit zonasi).
+        if (($data['result'] ?? null) !== 'success') {
+            return false;
+        }
+
+        $confidence = isset($data['confidence']) ? (float) $data['confidence'] : null;
+
+        return $confidence !== null && $confidence >= 0.7 && $confidence < 0.8;
     }
 
     // ───────────────────────── Descriptor cache ─────────────────────────

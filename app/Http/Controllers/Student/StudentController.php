@@ -188,7 +188,17 @@ class StudentController extends Controller
             ->groupBy('semester_hemis_id');
 
         $currentDate = Carbon::now();
-        $currentSemester = $semesters->firstWhere('current', true);
+
+        // Talabaning o'z semestri eng ishonchli manba: HEMIS uni har importda
+        // yangilab turadi va "Joriy fanlar" sahifasi ham aynan shuni ishlatadi.
+        // Bu tekshiruvsiz 1-kurs talabasiga 12-semestr ochilib qolardi — reja
+        // bo'yicha "current" bayrog'i ham, hafta sanalari ham topilmasa
+        // ro'yxatning oxirgisi tanlanadi, u esa oxirgi semestr bo'ladi.
+        $currentSemester = $student->semester_code
+            ? $semesters->first(fn ($sem) => (string) $sem['code'] === (string) $student->semester_code)
+            : null;
+
+        $currentSemester = $currentSemester ?: $semesters->firstWhere('current', true);
 
         // "current" bayrog'i import paytida hisoblanadi (import haftada bir
         // marta ishlaydi), shuning uchun yangi o'quv yili boshida eskirgan

@@ -547,11 +547,12 @@
                             </option>
                         @endforeach
                     </select>
-                    <p class="bl-note">Dars jadvali tayyor bo'lmagan bo'lsa fanni bo'sh qoldiring —
-                        to'plam qoralama bo'lib turadi, savollarni hozirdan kiritaverasiz.
-                        Fan biriktirilgach uni talabalarga ochish mumkin bo'ladi.</p>
+                    <p class="bl-note">Ro'yxatda shu semestrda dars jadvaliga qo'yilgan fanlaringiz turadi.
+                        Jadval hali tayyor bo'lmasa fanni bo'sh qoldiring — to'plam qoralama bo'lib turadi,
+                        savollarni hozirdan kiritaverasiz. Fan biriktirilgach uni talabalarga ochish mumkin bo'ladi.</p>
                     @if($subjects->isEmpty())
-                        <p class="bl-note is-warn">Sizga tegishli kafedra fanlari topilmadi.</p>
+                        <p class="bl-note is-warn">Shu semestrda dars jadvalida sizga qo'yilgan fan topilmadi.
+                            Fanni bo'sh qoldirib, savollarni hozirdan kiritishingiz mumkin.</p>
                     @endif
                 </div>
 
@@ -913,7 +914,7 @@
                         @endforeach
                     </select>
                     @if($subjects->isEmpty())
-                        <p class="bl-note is-warn">Sizga biriktirilgan fanlar hali topilmadi.</p>
+                        <p class="bl-note is-warn">Shu semestrda dars jadvalida sizga qo'yilgan fan topilmadi.</p>
                     @endif
                 </div>
                 <div class="bl-field">

@@ -12,6 +12,7 @@ use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -98,20 +99,38 @@ class FanTestiController extends Controller
      */
     private function subjectGroupIds(?CurriculumSubject $subject)
     {
-        if (!Schema::hasTable('curriculum_subject_teachers')
-            || !$subject?->subject_id
-            || !$subject->curricula_hemis_id
-            || !$subject->semester_code) {
+        if (!$subject?->subject_id || !$subject->curricula_hemis_id || !$subject->semester_code) {
             return collect();
         }
 
-        return CurriculumSubjectTeacher::query()
-            ->where('subject_id', $subject->subject_id)
-            ->where('curriculum_id', $subject->curricula_hemis_id)
-            ->where('semester_id', $subject->semester_code)
-            ->where('active', true)
-            ->whereNotNull('group_id')
-            ->pluck('group_id')
+        $assigned = Schema::hasTable('curriculum_subject_teachers')
+            ? CurriculumSubjectTeacher::query()
+                ->where('subject_id', $subject->subject_id)
+                ->where('curriculum_id', $subject->curricula_hemis_id)
+                ->where('semester_id', $subject->semester_code)
+                ->where('active', true)
+                ->whereNotNull('group_id')
+                ->pluck('group_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+            : collect();
+
+        if ($assigned->isNotEmpty()) {
+            return $assigned;
+        }
+
+        // Biriktirma jadvali to'ldirilmagan fanlar uchun guruhlar dars
+        // jadvalidan olinadi — fan ro'yxati ham o'sha manbadan tuziladi.
+        return DB::table('schedules as sch')
+            ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->where('sch.subject_id', $subject->subject_id)
+            ->where('sch.semester_code', $subject->semester_code)
+            ->where('g.curriculum_hemis_id', $subject->curricula_hemis_id)
+            ->where('sch.education_year_current', true)
+            ->whereNull('sch.deleted_at')
+            ->distinct()
+            ->pluck('sch.group_id')
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
@@ -490,6 +509,16 @@ class FanTestiController extends Controller
         return $teacher;
     }
 
+    /**
+     * O'qituvchining shu semestrda haqiqatan o'tayotgan fanlari.
+     *
+     * Manba — dars jadvali, jurnal sahifasi bilan bir xil qoida bo'yicha:
+     * jadvalda shu xodim nomiga qo'yilgan, joriy o'quv yiliga tegishli va
+     * joriy semestr oynasidagi darslar. Biriktirma jadvali (curriculum_subject_teachers)
+     * to'liq to'ldirilmagani uchun undan emas, jadvaldan olinadi.
+     *
+     * Kafedra mudiri butun kafedra o'qituvchilarining fanlarini ko'radi.
+     */
     private function subjectsFor($teacher)
     {
         abort_unless($this->isAllowedDepartment($teacher), 403);
@@ -502,18 +531,40 @@ class FanTestiController extends Controller
                 ->pluck('hemis_id')
             : collect($teacher->hemis_id ? [$teacher->hemis_id] : []);
 
-        $assignments = CurriculumSubjectTeacher::query()
-            ->whereIn('employee_id', $departmentTeacherHemisIds)
-            ->where('active', true)
-            ->whereNotNull('subject_id')
-            ->get(['subject_id']);
+        if ($departmentTeacherHemisIds->isEmpty()) {
+            return collect();
+        }
 
-        $assignedSubjectIds = $assignments->pluck('subject_id')->unique()->values();
+        // Fan qatorlari va har biridan dars o'tiladigan guruhlar soni.
+        $rows = DB::table('curriculum_subjects as cs')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->join('schedules as sch', function ($join) {
+                $join->on('sch.subject_id', '=', 'cs.subject_id')
+                    ->on('sch.group_id', '=', 'g.group_hemis_id');
+            })
+            ->whereIn('sch.employee_id', $departmentTeacherHemisIds)
+            ->where('sch.education_year_current', true)
+            ->whereNull('sch.deleted_at')
+            ->where('g.active', true)
+            ->where('g.department_active', true)
+            ->where('cs.is_active', true)
+            ->whereIn('s.semester_hemis_id', $this->currentSemesterWindowQuery())
+            ->groupBy('cs.id')
+            ->selectRaw('cs.id as id, COUNT(DISTINCT g.group_hemis_id) as group_count')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return collect();
+        }
+
+        $groupCounts = $rows->pluck('group_count', 'id');
 
         $subjects = CurriculumSubject::query()
-            ->where('is_active', true)
-            ->where('department_id', $teacher->department_hemis_id)
-            ->whereIn('subject_id', $assignedSubjectIds)
+            ->whereIn('id', $rows->pluck('id'))
             ->orderBy('subject_name')
             ->orderBy('semester_name')
             ->get([
@@ -521,8 +572,11 @@ class FanTestiController extends Controller
                 'semester_code', 'curricula_hemis_id', 'department_id', 'department_name',
             ]);
 
+        foreach ($subjects as $subject) {
+            $subject->group_count = (int) ($groupCounts[$subject->id] ?? 0);
+        }
+
         $this->attachCurriculumLabels($subjects);
-        $this->attachGroupCounts($subjects);
 
         // Joriy semestr (kuzgi — toq, bahorgi — juft) birinchi turadi, so'ng
         // guruhi borlar, keyin fan nomi. Guruhsiz variantlar pastga tushadi.
@@ -567,44 +621,26 @@ class FanTestiController extends Controller
     }
 
     /**
-     * Har fan yozuviga unga biriktirilgan guruhlar sonini qo'yadi.
-     *
-     * Bitta so'rovda yig'iladi: fan bo'yicha ro'yxat uzun bo'lishi mumkin,
-     * har biriga alohida so'rov yubormaymiz. Kalitlar — subject_id,
-     * curriculum_id va semester_id (fanning semester_code i).
+     * Joriy o'quv yilining semestrlari — jurnal sahifasidagi bilan bir xil
+     * oyna. Semestrning "current" bayrog'i eskirgan bo'lsa ham, o'sha
+     * o'quv yilining barcha semestrlari qamrab olinadi.
      */
-    private function attachGroupCounts($subjects): void
+    private function currentSemesterWindowQuery()
     {
-        foreach ($subjects as $subject) {
-            $subject->group_count = 0;
-        }
+        $currentEducationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
 
-        if (!Schema::hasTable('curriculum_subject_teachers') || $subjects->isEmpty()) {
-            return;
-        }
-
-        try {
-            $rows = CurriculumSubjectTeacher::query()
-                ->select('subject_id', 'curriculum_id', 'semester_id')
-                ->selectRaw('COUNT(DISTINCT group_id) as groups_count')
-                ->whereIn('subject_id', $subjects->pluck('subject_id')->filter()->unique())
-                ->where('active', true)
-                ->whereNotNull('group_id')
-                ->groupBy('subject_id', 'curriculum_id', 'semester_id')
-                ->get();
-
-            $counts = [];
-            foreach ($rows as $row) {
-                $counts[$row->subject_id . '|' . $row->curriculum_id . '|' . $row->semester_id] = (int) $row->groups_count;
-            }
-
-            foreach ($subjects as $subject) {
-                $key = $subject->subject_id . '|' . $subject->curricula_hemis_id . '|' . $subject->semester_code;
-                $subject->group_count = $counts[$key] ?? 0;
-            }
-        } catch (\Throwable $exception) {
-            // Sanoq bezak — u bo'lmasa ham ro'yxat ishlaydi.
-        }
+        return DB::table('semesters')
+            ->select('semester_hemis_id')
+            ->when(
+                $currentEducationYear,
+                fn ($query) => $query->where('education_year', $currentEducationYear),
+                fn ($query) => $query->where('current', true)
+            )
+            ->whereNotNull('semester_hemis_id')
+            ->groupBy('semester_hemis_id');
     }
 
     /** Fan yozuvlariga o'quv reja nomini tayyor satr qilib biriktiradi. */

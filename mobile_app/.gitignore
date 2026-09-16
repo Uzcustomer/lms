@@ -60,3 +60,4 @@ ios/Runner/GoogleService-Info.plist
 
 # Gradle caches inside vendored plugins
 **/android/.gradle/
+**/android/build/

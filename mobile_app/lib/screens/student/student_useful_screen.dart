@@ -13,6 +13,7 @@ import 'student_rating_screen.dart';
 import 'chat_contacts_screen.dart';
 import 'library_webview_screen.dart';
 import 'ai_chat_screen.dart';
+import 'attendance_confirm_screen.dart';
 import 'student_home_screen.dart';
 
 // ── Clinic-calm palette ──────────────────────────────
@@ -36,6 +37,17 @@ class StudentUsefulScreen extends StatelessWidget {
     final statusBarH = MediaQuery.of(context).padding.top;
 
     final services = [
+      _ServiceCard(
+        icon: Icons.how_to_reg_outlined,
+        title: l.pick(uz: 'Davomat (beacon)', ru: 'Посещаемость (beacon)', en: 'Attendance (beacon)'),
+        subtitle: l.pick(
+          uz: 'Xonada tasdiqlash va signal',
+          ru: 'Подтверждение в аудитории и сигнал',
+          en: 'Confirm in the room and signal',
+        ),
+        color: const Color(0xFF0D9488),
+        screen: const AttendanceConfirmScreen(),
+      ),
       _ServiceCard(
         icon: Icons.auto_awesome,
         title: l.pick(uz: 'AI Yordamchi', ru: 'AI помощник', en: 'AI Assistant'),

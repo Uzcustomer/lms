@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../services/api_service.dart';
 import '../../services/attendance_service.dart';
 import '../../services/beacon_service.dart';
@@ -8,6 +9,11 @@ import '../../widgets/clinic_header.dart';
 /// "Davomat": lists the open attendance windows for the student's group,
 /// ranges the classroom beacons, and lets the student confirm once the
 /// session's beacon is actually heard by this phone.
+///
+/// Doubles as the site-survey tool: the signal card shows the median (not
+/// the peak) of a rolling window per beacon and can record a fixed-length
+/// sample at a labelled spot, which is how the RSSI threshold for a room
+/// gets chosen.
 class AttendanceConfirmScreen extends StatefulWidget {
   const AttendanceConfirmScreen({super.key});
 
@@ -19,6 +25,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
     with WidgetsBindingObserver {
   final _service = AttendanceService();
   final _beacons = BeaconService();
+  final _tracker = BeaconSignalTracker();
 
   List<PendingAttendance> _pending = const [];
   bool _loading = true;
@@ -26,19 +33,25 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
 
   BeaconReadiness? _readiness;
   StreamSubscription<List<BeaconSighting>>? _ranging;
-  final Map<String, BeaconSighting> _seen = {};
   Timer? _tick;
   Timer? _report;
   int? _confirming;
 
-  static const _sightingTtl = Duration(seconds: 12);
+  // Site survey
+  static const _recordFor = Duration(seconds: 30);
+  final _spotController = TextEditingController();
+  DateTime? _recordingStartedAt;
+  List<BeaconSignalStats> _survey = const [];
+  String _surveyLabel = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(_expireSightings);
+      if (!mounted) return;
+      setState(_tracker.prune);
+      _finishRecordingIfDue();
     });
     _report = Timer.periodic(const Duration(seconds: 20), (_) => _reportPresence());
     _load();
@@ -50,6 +63,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
     _tick?.cancel();
     _report?.cancel();
     _ranging?.cancel();
+    _spotController.dispose();
     super.dispose();
   }
 
@@ -93,31 +107,24 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
     await _ranging?.cancel();
     _ranging = _beacons.range(uuids).listen((sightings) {
       if (!mounted) return;
-      setState(() {
-        for (final s in sightings) {
-          final prev = _seen[s.key];
-          // Keep the strongest reading of the last cycle for display.
-          if (prev == null || s.rssi >= prev.rssi || now().difference(prev.seenAt) > const Duration(seconds: 3)) {
-            _seen[s.key] = s;
-          }
-        }
-        _expireSightings();
-      });
+      setState(() => _tracker.add(sightings));
     }, onError: (_) {});
   }
 
-  DateTime now() => DateTime.now();
-
-  void _expireSightings() {
-    final cutoff = DateTime.now().subtract(_sightingTtl);
-    _seen.removeWhere((_, s) => s.seenAt.isBefore(cutoff));
-  }
-
   Future<void> _reportPresence() async {
-    if (_seen.isEmpty) return;
+    final live = _tracker.live;
+    if (live.isEmpty) return;
     try {
       final pending = await _service.reportPresence(
-        _seen.values.map((s) => s.toJson()).toList(),
+        live
+            .map((s) => {
+                  'uuid': s.uuid,
+                  'major': s.major,
+                  'minor': s.minor,
+                  'rssi': s.median,
+                  'seen_at': s.lastAt.toUtc().toIso8601String(),
+                })
+            .toList(),
       );
       if (!mounted) return;
       setState(() => _pending = pending);
@@ -125,16 +132,15 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
     } catch (_) {}
   }
 
-  BeaconSighting? _sightingFor(PendingAttendance p) {
+  BeaconSignalStats? _statsFor(PendingAttendance p) {
     final b = p.beacon;
-    if (b == null) return null;
-    return _seen[b.key];
+    return b == null ? null : _tracker.statsFor(b.key);
   }
 
   Future<void> _confirm(PendingAttendance p) async {
-    final sighting = _sightingFor(p);
+    final stats = _statsFor(p);
     final beacon = p.beacon;
-    if (sighting == null || beacon == null) return;
+    if (stats == null || beacon == null) return;
 
     setState(() => _confirming = p.sessionId);
     try {
@@ -143,7 +149,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
         uuid: beacon.uuid,
         major: beacon.major,
         minor: beacon.minor,
-        rssi: sighting.rssi,
+        rssi: stats.median,
       );
       if (!mounted) return;
       _snack(res['message']?.toString() ?? 'Davomat tasdiqlandi.');
@@ -164,6 +170,47 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
     ));
   }
 
+  // ── Site survey ─────────────────────────────────────
+
+  void _startRecording() {
+    setState(() {
+      _survey = const [];
+      _surveyLabel = _spotController.text.trim();
+      _recordingStartedAt = DateTime.now();
+      _tracker.startRecording();
+    });
+  }
+
+  void _finishRecordingIfDue() {
+    final startedAt = _recordingStartedAt;
+    if (startedAt == null) return;
+    if (DateTime.now().difference(startedAt) < _recordFor) {
+      setState(() {}); // tick the countdown
+      return;
+    }
+    setState(() {
+      _survey = _tracker.stopRecording();
+      _recordingStartedAt = null;
+    });
+  }
+
+  void _cancelRecording() {
+    _tracker.stopRecording();
+    setState(() => _recordingStartedAt = null);
+  }
+
+  void _copySurvey() {
+    final label = _surveyLabel.isEmpty ? 'Nuqta' : _surveyLabel;
+    final lines = <String>['$label — ${_recordFor.inSeconds}s'];
+    for (final s in _survey) {
+      lines.add('${s.major}/${s.minor}: mediana ${s.median} dBm · '
+          '10% ${s.percentile(10)} · 90% ${s.percentile(90)} · '
+          'min ${s.min} · max ${s.max} · ${s.count} ta');
+    }
+    Clipboard.setData(ClipboardData(text: lines.join('\n')));
+    _snack('Natija nusxalandi.');
+  }
+
   // ── UI ──────────────────────────────────────────────
 
   @override
@@ -181,10 +228,13 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
                 children: [
                   if (_readiness != null && _readiness != BeaconReadiness.ready) _readinessCard(),
-                  if (_readiness == BeaconReadiness.ready) _signalCard(),
+                  if (_readiness == BeaconReadiness.ready) ...[
+                    _signalCard(),
+                    if (_survey.isNotEmpty) _surveyCard(),
+                  ],
                   if (_loading)
                     const Padding(
-                      padding: EdgeInsets.only(top: 60),
+                      padding: EdgeInsets.only(top: 40),
                       child: Center(child: CircularProgressIndicator()),
                     )
                   else if (_error != null)
@@ -205,7 +255,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
 
   Widget _message(IconData icon, String text) {
     return Padding(
-      padding: const EdgeInsets.only(top: 60),
+      padding: const EdgeInsets.only(top: 40),
       child: Column(
         children: [
           Icon(icon, size: 52, color: ClinicTheme.faint),
@@ -218,11 +268,14 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
     );
   }
 
-  /// Live list of every beacon the phone hears right now — for walking the
-  /// room/corridor and reading off signal strength when calibrating.
+  /// Live signal per beacon — median of the rolling window, with the spread
+  /// that produced it, plus the recorder.
   Widget _signalCard() {
-    final sightings = _seen.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
-    final now = DateTime.now();
+    final live = _tracker.live;
+    final recording = _recordingStartedAt != null;
+    final left = recording
+        ? _recordFor - DateTime.now().difference(_recordingStartedAt!)
+        : Duration.zero;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -239,7 +292,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
             children: [
               const Icon(Icons.bluetooth_searching, size: 18, color: ClinicTheme.teal),
               const SizedBox(width: 8),
-              Text('Signal (jonli)',
+              Text('Signal — ${_tracker.window.inSeconds}s mediana',
                   style: TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
               const Spacer(),
@@ -250,64 +303,194 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          if (sightings.isEmpty)
+          const SizedBox(height: 12),
+          if (live.isEmpty)
             Text('Hech qanday beacon eshitilmayapti',
                 style: TextStyle(fontSize: 12.5, color: ClinicTheme.mutedOf(context)))
           else
-            ...sightings.map((s) {
-              final strength = ((s.rssi + 100) / 60).clamp(0.0, 1.0);
-              final age = now.difference(s.seenAt).inSeconds;
-              final color = s.rssi >= -75
-                  ? const Color(0xFF047857)
-                  : s.rssi >= -88
-                      ? const Color(0xFFB45309)
-                      : const Color(0xFFBE123C);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
+            ...live.map(_signalRow),
+          const Divider(height: 24),
+          if (recording)
+            Row(
+              children: [
+                const Icon(Icons.fiber_manual_record, color: Color(0xFFBE123C), size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Yozilmoqda… ${left.inSeconds}s qoldi — telefonni qimirlatmasdan turing',
+                    style: TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w700, color: ClinicTheme.inkOf(context)),
+                  ),
+                ),
+                TextButton(onPressed: _cancelRecording, child: const Text('Bekor')),
+              ],
+            )
+          else ...[
+            TextField(
+              controller: _spotController,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                labelText: 'Nuqta nomi',
+                hintText: 'masalan: oxirgi qator / eshik oldi / koridor',
+                hintStyle: TextStyle(fontSize: 12, color: ClinicTheme.faint),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 42,
+              child: ElevatedButton.icon(
+                onPressed: live.isEmpty ? null : _startRecording,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ClinicTheme.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                ),
+                icon: const Icon(Icons.fiber_manual_record, size: 18),
+                label: Text('${_recordFor.inSeconds} soniya yozib olish',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _signalRow(BeaconSignalStats s) {
+    final strength = ((s.median + 100) / 60).clamp(0.0, 1.0);
+    final color = s.median >= -75
+        ? const Color(0xFF047857)
+        : s.median >= -88
+            ? const Color(0xFFB45309)
+            : const Color(0xFFBE123C);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 92,
+                child: Text('${s.major} / ${s.minor}',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: ClinicTheme.inkOf(context))),
+              ),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: strength,
+                    minHeight: 8,
+                    backgroundColor: ClinicTheme.dividerOf(context),
+                    color: color,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 72,
+                child: Text('${s.median} dBm',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: color)),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 92, top: 3),
+            child: Text(
+              'min ${s.min} · max ${s.max} · ${s.count} ta o\'lchov',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  color: ClinicTheme.mutedOf(context)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _surveyCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDFA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ClinicTheme.teal.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.assignment_turned_in_outlined, size: 18, color: ClinicTheme.teal),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_surveyLabel.isEmpty ? 'Natija' : _surveyLabel} — ${_recordFor.inSeconds}s',
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.ink),
+                ),
+              ),
+              IconButton(
+                onPressed: _copySurvey,
+                icon: const Icon(Icons.copy_rounded, size: 18),
+                tooltip: 'Nusxalash',
+                color: ClinicTheme.teal,
+              ),
+              IconButton(
+                onPressed: () => setState(() => _survey = const []),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                color: ClinicTheme.muted,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ..._survey.map((s) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(
-                      width: 92,
-                      child: Text('${s.major} / ${s.minor}',
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                              color: ClinicTheme.inkOf(context))),
-                    ),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: strength,
-                          minHeight: 8,
-                          backgroundColor: ClinicTheme.dividerOf(context),
-                          color: color,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 66,
-                      child: Text('${s.rssi} dBm',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                              color: color)),
-                    ),
-                    SizedBox(
-                      width: 34,
-                      child: Text(age == 0 ? '' : '${age}s',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(fontSize: 11, color: ClinicTheme.mutedOf(context))),
+                    Text('${s.major} / ${s.minor}',
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w700, color: ClinicTheme.muted)),
+                    const SizedBox(height: 2),
+                    Text('Mediana ${s.median} dBm',
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                            color: ClinicTheme.ink)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '10% ${s.percentile(10)} · 90% ${s.percentile(90)} · '
+                      'min ${s.min} · max ${s.max} · ${s.count} ta',
+                      style: const TextStyle(
+                          fontSize: 11.5,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                          color: ClinicTheme.muted),
                     ),
                   ],
                 ),
-              );
-            }),
+              )),
+          Text(
+            'Xona ichida "10%" qiymatiga, koridorda "90%" qiymatiga qarang — '
+            'chegara shu ikkisining orasida bo\'ladi.',
+            style: TextStyle(fontSize: 11, height: 1.35, color: ClinicTheme.muted.withOpacity(0.9)),
+          ),
         ],
       ),
     );
@@ -367,8 +550,8 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
   }
 
   Widget _sessionCard(PendingAttendance p) {
-    final sighting = _sightingFor(p);
-    final inRoom = sighting != null;
+    final stats = _statsFor(p);
+    final inRoom = stats != null;
     final left = p.timeLeft;
     final busy = _confirming == p.sessionId;
     final scanning = _readiness == BeaconReadiness.ready;
@@ -418,9 +601,9 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
               Expanded(
                 child: Text(
                   p.isPresent
-                      ? (inRoom ? 'Tasdiqlangan · signal ${sighting.rssi} dBm' : 'Tasdiqlangan')
+                      ? (inRoom ? 'Tasdiqlangan · ${stats.median} dBm' : 'Tasdiqlangan')
                       : inRoom
-                          ? 'Xona topildi (signal ${sighting.rssi} dBm)'
+                          ? 'Xona topildi · ${stats.median} dBm'
                           : scanning
                               ? 'Xona signali qidirilmoqda…'
                               : 'Skanerlash yoqilmagan',

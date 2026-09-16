@@ -122,6 +122,13 @@ class TeacherAttendanceApiController extends Controller
         return $this->live($session);
     }
 
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $this->service->cancel($this->ownSession($request, $id));
+
+        return response()->json(['success' => true, 'message' => 'Davomat bekor qilindi.']);
+    }
+
     private function ownSession(Request $request, int $id): AttendanceSession
     {
         $session = AttendanceSession::with(['beacon', 'groups'])->findOrFail($id);

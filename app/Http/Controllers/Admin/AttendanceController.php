@@ -140,6 +140,13 @@ class AttendanceController extends Controller
         return $this->live($session);
     }
 
+    public function destroy(int $id): JsonResponse
+    {
+        $this->service->cancel($this->ownSession($id));
+
+        return response()->json(['success' => true, 'message' => 'Davomat bekor qilindi.']);
+    }
+
     // ── helpers ──────────────────────────────────────────────
 
     private function resolveTeacher(): ?Teacher

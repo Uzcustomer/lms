@@ -181,6 +181,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
                 children: [
                   if (_readiness != null && _readiness != BeaconReadiness.ready) _readinessCard(),
+                  if (_readiness == BeaconReadiness.ready) _signalCard(),
                   if (_loading)
                     const Padding(
                       padding: EdgeInsets.only(top: 60),
@@ -212,6 +213,101 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
           Text(text,
               textAlign: TextAlign.center,
               style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 13.5, height: 1.4)),
+        ],
+      ),
+    );
+  }
+
+  /// Live list of every beacon the phone hears right now — for walking the
+  /// room/corridor and reading off signal strength when calibrating.
+  Widget _signalCard() {
+    final sightings = _seen.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
+    final now = DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ClinicTheme.surfaceOf(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ClinicTheme.dividerOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.bluetooth_searching, size: 18, color: ClinicTheme.teal),
+              const SizedBox(width: 8),
+              Text('Signal (jonli)',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
+              const Spacer(),
+              const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 2, color: ClinicTheme.teal),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (sightings.isEmpty)
+            Text('Hech qanday beacon eshitilmayapti',
+                style: TextStyle(fontSize: 12.5, color: ClinicTheme.mutedOf(context)))
+          else
+            ...sightings.map((s) {
+              final strength = ((s.rssi + 100) / 60).clamp(0.0, 1.0);
+              final age = now.difference(s.seenAt).inSeconds;
+              final color = s.rssi >= -75
+                  ? const Color(0xFF047857)
+                  : s.rssi >= -88
+                      ? const Color(0xFFB45309)
+                      : const Color(0xFFBE123C);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 92,
+                      child: Text('${s.major} / ${s.minor}',
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                              color: ClinicTheme.inkOf(context))),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: strength,
+                          minHeight: 8,
+                          backgroundColor: ClinicTheme.dividerOf(context),
+                          color: color,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 66,
+                      child: Text('${s.rssi} dBm',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                              color: color)),
+                    ),
+                    SizedBox(
+                      width: 34,
+                      child: Text(age == 0 ? '' : '${age}s',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontSize: 11, color: ClinicTheme.mutedOf(context))),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -322,7 +418,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
               Expanded(
                 child: Text(
                   p.isPresent
-                      ? 'Tasdiqlangan'
+                      ? (inRoom ? 'Tasdiqlangan · signal ${sighting.rssi} dBm' : 'Tasdiqlangan')
                       : inRoom
                           ? 'Xona topildi (signal ${sighting.rssi} dBm)'
                           : scanning

@@ -124,6 +124,20 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  Future<Map<String, dynamic>> delete(String endpoint, {bool auth = true}) async {
+    String? token;
+    if (auth) {
+      token = await getToken();
+    }
+
+    final response = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}$endpoint'),
+      headers: _headers(token),
+    );
+
+    return _handleResponse(response);
+  }
+
   /// Raw download (PDF etc.) with the bearer header. Errors are mapped the
   /// same way as JSON responses.
   Future<Uint8List> getBytes(String endpoint, {Map<String, String>? queryParams}) async {

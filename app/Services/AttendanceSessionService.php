@@ -209,6 +209,15 @@ class AttendanceSessionService
         }
     }
 
+    /**
+     * Throw the session away entirely — confirmations included — so the
+     * lesson can be started afresh (mainly for trial runs and mistakes).
+     */
+    public function cancel(AttendanceSession $session): void
+    {
+        $session->delete(); // confirmations and groups cascade
+    }
+
     /** Session summary + per-student rows, the shape both clients render. */
     public function live(AttendanceSession $session, array $extra = []): array
     {
@@ -226,6 +235,7 @@ class AttendanceSessionService
                 'decided_by' => $c->decided_by,
                 'beacon_seen' => $c->beacon_seen,
                 'notified' => $c->notified,
+                'rssi' => $c->rssi,
                 'confirmed_at' => $c->confirmed_at?->toIso8601String(),
             ])
             ->sortBy([['group_name', 'asc'], ['full_name', 'asc']])

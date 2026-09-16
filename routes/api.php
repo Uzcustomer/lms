@@ -237,6 +237,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/attendance/sessions/{session}/mark', [TeacherAttendanceApiController::class, 'mark']);
             Route::post('/attendance/sessions/{session}/remind', [TeacherAttendanceApiController::class, 'remind']);
             Route::post('/attendance/sessions/{session}/close', [TeacherAttendanceApiController::class, 'close']);
+            Route::delete('/attendance/sessions/{session}', [TeacherAttendanceApiController::class, 'destroy']);
         });
 
         // ── Tutor endpoints ───────────────────────────────

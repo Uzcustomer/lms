@@ -171,7 +171,8 @@
                         <button class="att-btn att-btn-ghost" @click="session = null; big = false; loadLessons()">‹ Darslarga qaytish</button>
                         <button class="att-btn att-btn-ghost" @click="big = !big" x-text="big ? 'Oddiy ko\'rinish' : 'Katta ekran'"></button>
                         <button class="att-btn att-btn-ghost" x-show="isOpen()" :disabled="busy" @click="remind()">🔔 Eslatma yuborish</button>
-                        <button class="att-btn att-btn-danger ml-auto" x-show="isOpen()" :disabled="busy" @click="closeSession()">Davomatni yopish</button>
+                        <button class="att-btn att-btn-ghost ml-auto" :disabled="busy" @click="cancelSession()" title="Sessiya tasdiqlar bilan birga o'chiriladi; darsni qaytadan boshlash mumkin">🗑 Bekor qilish</button>
+                        <button class="att-btn att-btn-danger" x-show="isOpen()" :disabled="busy" @click="closeSession()">Davomatni yopish</button>
                     </div>
                 </div>
 
@@ -388,6 +389,19 @@
                     finally { this.busy = false; }
                 },
 
+                async cancelSession() {
+                    if (!confirm('Bu davomat sessiyasi BUTUNLAY o\'chiriladi — talabalarning tasdiqlari ham. Darsni keyin qaytadan boshlash mumkin. Davom etasizmi?')) return;
+                    this.busy = true;
+                    try {
+                        await this.api(urls.session + '/' + this.session.session.id, 'DELETE');
+                        this.session = null;
+                        this.big = false;
+                        this.toast('Davomat bekor qilindi.');
+                        this.loadLessons();
+                    } catch (e) { this.toast(e.message, true); }
+                    finally { this.busy = false; }
+                },
+
                 async closeSession() {
                     if (!confirm('Tasdiqlamagan talabalar "kelmadi" deb belgilanadi. Keyin ham qo\'lda o\'zgartira olasiz. Yopilsinmi?')) return;
                     this.busy = true;
@@ -448,7 +462,10 @@
 
                 statusLabel(st) {
                     const by = st.decided_by === 'teacher' ? ' · qo\'lda belgilangan' : (st.decided_by === 'system' ? ' · oynada tasdiqlanmadi' : '');
-                    if (st.status === 'present') return 'Keldi' + (st.decided_by === 'student' ? ' · telefondan tasdiqladi' : by);
+                    if (st.status === 'present') {
+                        const sig = st.rssi != null ? ' · signal ' + st.rssi + ' dBm' : '';
+                        return 'Keldi' + (st.decided_by === 'student' ? ' · telefondan tasdiqladi' + sig : by);
+                    }
                     if (st.status === 'absent') return 'Kelmadi' + by;
                     return st.beacon_seen ? 'Xonada — hali tasdiqlamadi' : 'Kutilmoqda';
                 },

@@ -205,6 +205,12 @@ class AttendanceService {
     return res['data'] as Map<String, dynamic>? ?? {};
   }
 
+  /// Deletes the session outright (confirmations included) so the lesson
+  /// can be started again.
+  Future<void> cancelSession(int id) async {
+    await _api.delete(ApiConfig.teacherAttendanceSession(id));
+  }
+
   static String _ymd(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

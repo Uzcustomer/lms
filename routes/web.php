@@ -153,6 +153,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/sessions/{id}/mark', [\App\Http\Controllers\Admin\AttendanceController::class, 'mark'])->name('sessions.mark');
             Route::post('/sessions/{id}/remind', [\App\Http\Controllers\Admin\AttendanceController::class, 'remind'])->name('sessions.remind');
             Route::post('/sessions/{id}/close', [\App\Http\Controllers\Admin\AttendanceController::class, 'close'])->name('sessions.close');
+            Route::delete('/sessions/{id}', [\App\Http\Controllers\Admin\AttendanceController::class, 'destroy'])->name('sessions.destroy');
         });
 
         // Beacon'lar ro'yxati (xona ↔ uuid/major/minor)

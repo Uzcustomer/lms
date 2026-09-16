@@ -89,6 +89,40 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
         success: 'Xonadagi talabalarga eslatma yuborildi.',
       );
 
+  Future<void> _cancel() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Davomatni bekor qilish'),
+        content: const Text(
+            'Bu sessiya talabalarning tasdiqlari bilan birga BUTUNLAY o\'chiriladi. Darsni keyin qaytadan boshlash mumkin. Davom etasizmi?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Yo\'q')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBE123C), foregroundColor: Colors.white),
+            child: const Text('Bekor qilish'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await _service.cancelSession(widget.sessionId);
+      if (!mounted) return;
+      _snack('Davomat bekor qilindi.');
+      Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      if (mounted) _snack(e.message, error: true);
+    } catch (_) {
+      if (mounted) _snack('Tarmoq xatoligi. Qayta urinib ko\'ring.', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _close() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -272,7 +306,8 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
         title: Text(st['full_name']?.toString() ?? '',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: ClinicTheme.inkOf(context))),
         subtitle: Text(
-          '${st['group_name'] ?? ''} · $label${byTeacher ? ' (qo\'lda)' : ''}',
+          '${st['group_name'] ?? ''} · $label${byTeacher ? ' (qo\'lda)' : ''}'
+          '${st['rssi'] != null && status == 'present' ? ' · ${st['rssi']} dBm' : ''}',
           style: TextStyle(fontSize: 11.5, color: ClinicTheme.mutedOf(context)),
         ),
         trailing: _busy
@@ -287,30 +322,38 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
   }
 
   Widget _actionBar() {
-    if (!_isOpen) return const SizedBox.shrink();
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
         child: Row(
           children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : _remind,
-                icon: const Icon(Icons.notifications_active_outlined, size: 18),
-                label: const Text('Eslatma'),
-              ),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _cancel,
+              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFBE123C)),
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('Bekor'),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _busy ? null : _close,
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: ClinicTheme.blue, foregroundColor: Colors.white),
-                icon: const Icon(Icons.lock_outline, size: 18),
-                label: const Text('Yopish'),
+            if (_isOpen) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _remind,
+                  icon: const Icon(Icons.notifications_active_outlined, size: 18),
+                  label: const Text('Eslatma'),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _busy ? null : _close,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: ClinicTheme.blue, foregroundColor: Colors.white),
+                  icon: const Icon(Icons.lock_outline, size: 18),
+                  label: const Text('Yopish'),
+                ),
+              ),
+            ],
           ],
         ),
       ),

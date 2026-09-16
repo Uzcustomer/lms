@@ -14,6 +14,7 @@ use App\Imports\QuizResultImport;
 use App\Exports\QuizResultExport;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -3147,8 +3148,14 @@ class QuizResultController extends Controller
         $targetDate = $lessonDates[$mavzuN - 1];
         $moodleGrade = (int) round((float) $result->grade);
         $retakeGradedAt = now();
-        $retakeGradedByUserId = auth()->id();
-        $retakeGraderName = auth()->user()->name ?? 'Diagnostika';
+        // graded_by_user_id FK users(id) ga bog'langan. Teacher guard ostida
+        // auth()->id() teachers.id ni qaytaradi va FK xatosi chiqadi, shuning
+        // uchun faqat web guard (admin) id si yoziladi. Xodim kim ekani
+        // retake_by/employee_name ustunlarida ism bilan qoladi.
+        $retakeGradedByUserId = Auth::guard('web')->id();
+        $retakeGraderName = Auth::guard('web')->user()?->name
+            ?? Auth::guard('teacher')->user()?->full_name
+            ?? 'Diagnostika';
 
         // Shu sanadagi jurnal yozuvlari (JN type) — bir kunda bir nechta juftlik bo'lishi mumkin
         $sgRecords = DB::table('student_grades')

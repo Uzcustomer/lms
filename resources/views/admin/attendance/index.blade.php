@@ -42,10 +42,23 @@
         .att-group-head:first-child { margin-top:0; }
         .att-group-head .line { flex:1; height:1px; background:#e2e8f0; }
         [x-cloak] { display:none !important; }
+
+        /* Phone: the layout already pads the page, so the content cancels it
+           and everything shrinks to fit a ~360px screen. */
+        @media (max-width: 640px) {
+            .att-counter { font-size:22px; }
+            .att-big .att-counter { font-size:26px; }
+            .att-big .att-student { padding:10px 12px; }
+            .att-big .att-student .att-name { font-size:14px; }
+            .att-big .att-seg button { padding:6px 10px; font-size:11.5px; }
+            .att-btn { padding:9px 10px; font-size:12.5px; }
+            .att-lesson { padding:12px; }
+            .att-sess { gap:6px; padding:8px 10px; font-size:11.5px; }
+        }
     </style>
 
-    <div class="py-4" x-data="attendancePage()" x-init="init()" :class="big ? 'att-big' : ''">
-        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="py-2 sm:py-4" x-data="attendancePage()" x-init="init()" :class="big ? 'att-big' : ''">
+        <div class="max-w-full -mx-3 px-2 sm:mx-auto sm:px-6 lg:px-8">
 
             {{-- Admin: teacher picker --}}
             @if($canPickTeacher)
@@ -80,13 +93,13 @@
             {{-- ═══ Lessons (hidden while a session is on the big screen) ═══ --}}
             <div x-show="!session" x-cloak>
                 <div class="att-card p-4">
-                    <div class="flex items-center justify-between mb-4">
-                        <button class="att-btn att-btn-outline" @click="shiftDate(-1)">‹ Oldingi kun</button>
-                        <div class="text-center">
-                            <div class="font-bold text-gray-900 text-lg" x-text="dateLabel()"></div>
+                    <div class="flex items-center justify-between gap-2 mb-4">
+                        <button class="att-btn att-btn-outline" @click="shiftDate(-1)">‹<span class="hidden sm:inline">&nbsp;Oldingi kun</span></button>
+                        <div class="text-center min-w-0">
+                            <div class="font-bold text-gray-900 text-base sm:text-lg truncate" x-text="dateLabel()"></div>
                             <button x-show="date !== today" x-cloak class="text-xs text-blue-700 font-semibold" @click="date = today; loadLessons()">Bugunga qaytish</button>
                         </div>
-                        <button class="att-btn att-btn-outline" @click="shiftDate(1)">Keyingi kun ›</button>
+                        <button class="att-btn att-btn-outline" @click="shiftDate(1)"><span class="hidden sm:inline">Keyingi kun&nbsp;</span>›</button>
                     </div>
 
                     <div x-show="loadingLessons" class="text-center text-gray-500 text-sm py-8">Yuklanmoqda…</div>
@@ -145,44 +158,44 @@
 
             {{-- ═══ Live session ═══ --}}
             <div x-show="session" x-cloak>
-                <div class="rounded-2xl p-5 text-white mb-4" :style="isOpen() ? 'background:linear-gradient(135deg,#0d9488,#1e3a8a)' : 'background:linear-gradient(135deg,#334155,#0f172a)'">
-                    <div class="flex flex-wrap items-start gap-4">
-                        <div class="flex-1 min-w-[260px]">
-                            <div class="text-2xl font-extrabold" x-text="session && session.session.subject_name"></div>
-                            <div class="text-sm opacity-90 mt-1" x-text="session && ((session.session.auditorium_name || '—') + ' · ' + (session.session.lesson_pair_name || '') + ' · ' + (session.session.group_names || []).join(', '))"></div>
+                <div class="rounded-2xl p-4 sm:p-5 text-white mb-4" :style="isOpen() ? 'background:linear-gradient(135deg,#0d9488,#1e3a8a)' : 'background:linear-gradient(135deg,#334155,#0f172a)'">
+                    <div class="flex flex-col lg:flex-row lg:items-start gap-4">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-lg sm:text-2xl font-extrabold" x-text="session && session.session.subject_name"></div>
+                            <div class="text-xs sm:text-sm opacity-90 mt-1" x-text="session && ((session.session.auditorium_name || '—') + ' · ' + (session.session.lesson_pair_name || '') + ' · ' + (session.session.group_names || []).join(', '))"></div>
                             <div x-show="session && !session.session.beacon" x-cloak class="mt-2 text-xs font-semibold" style="color:#fde68a;">Bu xonada beacon yo'q — talabalar tasdiqlay olmaydi, qo'lda belgilang.</div>
                             <div class="att-progress mt-4 max-w-md"><div :style="'width:' + progressPct() + '%'"></div></div>
                             <div class="text-xs opacity-80 mt-1" x-text="session ? session.session.present + ' / ' + session.session.total + ' tasdiqlandi' : ''"></div>
                         </div>
-                        <div class="flex gap-7 items-start">
-                            <div><div class="att-counter" x-text="session && session.session.present"></div><div class="text-xs opacity-80 mt-1">Keldi</div></div>
-                            <div><div class="att-counter opacity-80" x-text="session && session.session.pending"></div><div class="text-xs opacity-80 mt-1">Kutilmoqda</div></div>
-                            <div><div class="att-counter" style="color:#fca5a5;" x-text="session && session.session.absent"></div><div class="text-xs opacity-80 mt-1">Kelmadi</div></div>
-                            <div class="text-right" x-show="isOpen()">
+                        <div class="grid grid-cols-4 gap-2 lg:flex lg:gap-7 lg:items-start">
+                            <div class="min-w-0"><div class="att-counter" x-text="session && session.session.present"></div><div class="text-[10px] sm:text-xs opacity-80 mt-1 truncate">Keldi</div></div>
+                            <div class="min-w-0"><div class="att-counter opacity-80" x-text="session && session.session.pending"></div><div class="text-[10px] sm:text-xs opacity-80 mt-1 truncate">Kutilmoqda</div></div>
+                            <div class="min-w-0"><div class="att-counter" style="color:#fca5a5;" x-text="session && session.session.absent"></div><div class="text-[10px] sm:text-xs opacity-80 mt-1 truncate">Kelmadi</div></div>
+                            <div class="min-w-0 lg:text-right" x-show="isOpen()">
                                 <div class="att-counter" x-text="countdown"></div>
-                                <div class="text-xs opacity-80 mt-1">Qoldi</div>
+                                <div class="text-[10px] sm:text-xs opacity-80 mt-1 truncate">Qoldi</div>
                             </div>
-                            <div class="text-right" x-show="!isOpen()">
+                            <div class="lg:text-right self-center" x-show="!isOpen()">
                                 <span class="att-chip" style="background:rgba(255,255,255,.18);color:#fff;">Yopilgan</span>
                             </div>
                         </div>
                     </div>
-                    <div class="flex flex-wrap gap-2 mt-4">
-                        <button class="att-btn att-btn-ghost" @click="session = null; big = false; loadLessons()">‹ Darslarga qaytish</button>
+                    <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mt-4">
+                        <button class="att-btn att-btn-ghost" @click="session = null; big = false; loadLessons()">‹ Darslarga</button>
                         <button class="att-btn att-btn-ghost" @click="big = !big" x-text="big ? 'Oddiy ko\'rinish' : 'Katta ekran'"></button>
-                        <button class="att-btn att-btn-ghost" x-show="isOpen()" :disabled="busy" @click="remind()">🔔 Eslatma yuborish</button>
-                        <button class="att-btn att-btn-ghost ml-auto" :disabled="busy" @click="cancelSession()" title="Sessiya tasdiqlar bilan birga o'chiriladi; darsni qaytadan boshlash mumkin">🗑 Bekor qilish</button>
-                        <button class="att-btn att-btn-danger" x-show="isOpen()" :disabled="busy" @click="closeSession()">Davomatni yopish</button>
+                        <button class="att-btn att-btn-ghost" x-show="isOpen()" :disabled="busy" @click="remind()">🔔 Eslatma</button>
+                        <button class="att-btn att-btn-ghost sm:ml-auto" :disabled="busy" @click="cancelSession()" title="Sessiya tasdiqlar bilan birga o'chiriladi; darsni qaytadan boshlash mumkin">🗑 Bekor qilish</button>
+                        <button class="att-btn att-btn-danger col-span-2 sm:col-auto" x-show="isOpen()" :disabled="busy" @click="closeSession()">Davomatni yopish</button>
                     </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2 mb-3">
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3">
                     <template x-for="f in [['all','Hammasi','total'],['present','Keldi','present'],['pending','Kutilmoqda','pending'],['absent','Kelmadi','absent']]" :key="f[0]">
                         <button class="att-filter" :class="filter === f[0] ? 'active' : ''" @click="filter = f[0]"
                                 x-text="f[1] + ' (' + (session ? session.session[f[2]] : 0) + ')'"></button>
                     </template>
                     <input type="text" x-model="search" placeholder="Ism bo'yicha qidirish…"
-                           class="ml-auto border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-64">
+                           class="sm:ml-auto border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-64">
                 </div>
 
                 <template x-for="g in grouped()" :key="g.name">
@@ -196,10 +209,10 @@
                             <template x-for="st in g.students" :key="st.student_id">
                                 <div class="att-student" :class="st.status + (st.beacon_seen ? ' seen' : '')">
                                     <div class="flex-1 min-w-0">
-                                        <div class="att-name font-bold text-gray-900 truncate" x-text="st.full_name"></div>
-                                        <div class="att-status mt-1" :style="'color:' + statusColor(st)">
+                                        <div class="att-name font-bold text-gray-900 truncate text-sm sm:text-base" x-text="st.full_name"></div>
+                                        <div class="att-status mt-1 min-w-0" :style="'color:' + statusColor(st)">
                                             <span x-text="statusIcon(st)"></span>
-                                            <span x-text="statusLabel(st)"></span>
+                                            <span class="truncate" x-text="statusLabel(st)"></span>
                                         </div>
                                     </div>
                                     <div class="att-seg" title="Qo'lda belgilash">

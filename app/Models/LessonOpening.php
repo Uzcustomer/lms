@@ -127,6 +127,18 @@ class LessonOpening extends Model
     }
 
     /** Bosqich qarorini yozish (saqlamaydi) */
+    /** Bosqich qarorini bergan shaxs va vaqti: ['name' => ?string, 'at' => ?Carbon] */
+    public function stageDecider(string $stage): array
+    {
+        [, , $name, , $at] = self::STAGE_COLUMNS[$stage];
+        $time = $this->{$at};
+
+        return [
+            'name' => $this->{$name},
+            'at' => $time ? \Carbon\Carbon::parse($time) : null,
+        ];
+    }
+
     public function setStageDecision(string $stage, string $decision, array $reviewer): void
     {
         [$status, $id, $name, $guard, $at] = self::STAGE_COLUMNS[$stage];

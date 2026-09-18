@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\LessonOpening;
 use App\Models\Setting;
+use App\Services\LessonOpeningNotifier;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -91,7 +92,7 @@ class LessonOpeningRequestController extends Controller
      * bosqich ham keyin tasdiqlashi mumkin: boshqa rad etgan bo'lmasa so'rov
      * yana kutilayotgan holatga qaytadi. Hamma tasdiqlagach dars ochiladi.
      */
-    public function approve(LessonOpening $opening): RedirectResponse
+    public function approve(LessonOpening $opening, LessonOpeningNotifier $notifier): RedirectResponse
     {
         $stage = $this->stage();
         abort_unless($stage !== null, 403);
@@ -130,8 +131,8 @@ class LessonOpeningRequestController extends Controller
         }
 
         if ($opening->status === LessonOpening::STATUS_ACTIVE) {
-            // O'qituvchiga xabar faqat haqiqatan ochilganda boradi
-            JournalController::notifyTeachersAboutOpening($opening->fresh());
+            // So'rov egasi va jadvaldagi o'qituvchiga: dars ochildi, muddat bilan
+            $notifier->opened($opening->fresh());
             $days = max((int) Setting::get('lesson_opening_days', 3), 1);
 
             return back()->with('success', "Dars ochildi. O'qituvchi {$days} kun ichida baho qo'ya oladi.");
@@ -140,6 +141,9 @@ class LessonOpeningRequestController extends Controller
         if ($opening->status === LessonOpening::STATUS_REJECTED) {
             return back()->with('success', "Tasdiqlandi, lekin so'rovni boshqa tasdiqlovchi rad etgan.");
         }
+
+        // Oraliq tasdiq: o'qituvchi so'rovi qayerda turganini bilib tursin
+        $notifier->approvedStep($opening, $stage);
 
         $waiting = implode(', ', array_map(
             fn ($s) => LessonOpening::STAGE_LABELS[$s],
@@ -150,7 +154,7 @@ class LessonOpeningRequestController extends Controller
     }
 
     /** Rad etish: sababi majburiy, o'qituvchi uni jurnalda ko'radi. */
-    public function reject(Request $request, LessonOpening $opening): RedirectResponse
+    public function reject(Request $request, LessonOpening $opening, LessonOpeningNotifier $notifier): RedirectResponse
     {
         $stage = $this->stage();
         abort_unless($stage !== null, 403);
@@ -185,6 +189,8 @@ class LessonOpeningRequestController extends Controller
         if (!$opening) {
             return back()->with('error', "Bu so'rov bo'yicha sizning qaroringiz kerak emas yoki allaqachon ko'rib chiqilgan.");
         }
+
+        $notifier->rejected($opening, $stage);
 
         return back()->with('success', "So'rov rad etildi.");
     }

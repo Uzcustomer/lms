@@ -9,6 +9,7 @@ use App\Models\Beacon;
 use App\Models\DeviceToken;
 use App\Models\PresenceLog;
 use App\Models\Student;
+use App\Services\AttendanceSessionService;
 use App\Services\StudentFaceVerifier;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -20,8 +21,10 @@ use Illuminate\Http\Request;
  */
 class StudentAttendanceApiController extends Controller
 {
-    public function __construct(private readonly StudentFaceVerifier $faceVerifier)
-    {
+    public function __construct(
+        private readonly StudentFaceVerifier $faceVerifier,
+        private readonly AttendanceSessionService $sessions,
+    ) {
     }
 
     public function registerDevice(Request $request): JsonResponse
@@ -78,6 +81,8 @@ class StudentAttendanceApiController extends Controller
         $source = $data['source'] ?? 'background';
         $now = now();
         $recorded = 0;
+        $minRssi = (int) config('services.attendance.min_rssi', -95);
+        $heard = []; // beacons heard well enough to count as "in the room"
 
         foreach ($data['sightings'] as $sighting) {
             $beacon = Beacon::matching($sighting['uuid'], (int) $sighting['major'], (int) $sighting['minor'])
@@ -85,6 +90,9 @@ class StudentAttendanceApiController extends Controller
                 ->first();
             if (!$beacon) {
                 continue;
+            }
+            if (!isset($sighting['rssi']) || $sighting['rssi'] >= $minRssi) {
+                $heard[] = $beacon->id;
             }
 
             $seenAt = isset($sighting['seen_at']) ? Carbon::parse($sighting['seen_at']) : $now->copy();
@@ -110,6 +118,9 @@ class StudentAttendanceApiController extends Controller
             ]);
             $recorded++;
         }
+
+        // Arrived (or opened the app) after the teacher started: prompt now.
+        $this->sessions->promptOnArrival($student, array_values(array_unique($heard)));
 
         return response()->json([
             'success' => true,
@@ -281,10 +292,25 @@ class StudentAttendanceApiController extends Controller
         ]);
     }
 
-    /** Open sessions for the student's group, with the student's own status. */
+    /**
+     * Open sessions of the student's group that this student has been
+     * prompted for, i.e. was detected in the room. Nobody else in the group
+     * sees the session in the app at all.
+     */
     private function pendingFor(Student $student): array
     {
-        $sessions = AttendanceSession::open()
+        $mine = AttendanceConfirmation::where('student_id', $student->id)
+            ->where(fn ($q) => $q->where('notified', true)
+                ->orWhere('status', AttendanceConfirmation::STATUS_PRESENT))
+            ->whereHas('session', fn ($q) => $q->open())
+            ->get()
+            ->keyBy('session_id');
+
+        if ($mine->isEmpty()) {
+            return [];
+        }
+
+        $sessions = AttendanceSession::whereIn('id', $mine->keys())
             ->whereHas('groups', fn ($q) => $q->where('group_hemis_id', $student->group_id))
             ->with('beacon')
             ->orderBy('closes_at')
@@ -293,11 +319,6 @@ class StudentAttendanceApiController extends Controller
         if ($sessions->isEmpty()) {
             return [];
         }
-
-        $mine = AttendanceConfirmation::whereIn('session_id', $sessions->pluck('id'))
-            ->where('student_id', $student->id)
-            ->get()
-            ->keyBy('session_id');
 
         return $sessions->map(fn (AttendanceSession $s) => [
             'session_id' => $s->id,

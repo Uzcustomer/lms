@@ -161,16 +161,21 @@ class BeaconService {
 
   bool _initialized = false;
 
-  Future<BeaconReadiness> prepare() async {
+  /// [request] false only checks the current permission state, so resuming
+  /// the app does not pop the system dialog again after a refusal.
+  Future<BeaconReadiness> prepare({bool request = true}) async {
     if (kIsWeb) return BeaconReadiness.unsupported;
 
     // BLE scanning needs location on every Android version and the two
     // Bluetooth runtime permissions on Android 12+ (no-ops elsewhere).
-    final statuses = await [
+    const needed = [
       Permission.locationWhenInUse,
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
-    ].request();
+    ];
+    final statuses = request
+        ? await needed.request()
+        : {for (final p in needed) p: await p.status};
     final location = statuses[Permission.locationWhenInUse];
     final scan = statuses[Permission.bluetoothScan];
     if (location?.isGranted != true && location?.isLimited != true) {

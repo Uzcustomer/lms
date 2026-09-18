@@ -13,25 +13,10 @@ class PushEvent {
 }
 
 /// Runs in a separate isolate when a push arrives and the app is in the
-/// background or killed. The server sends "attendance_opened" without a
-/// notification block (so only students seen in the room get a loud one);
-/// here we surface it quietly so the student can still open the app and
-/// confirm if they are in the room.
+/// background or killed. Every push we send carries a notification block,
+/// which the system shows by itself, so there is nothing to do here.
 @pragma('vm:entry-point')
-Future<void> pushBackgroundHandler(RemoteMessage message) async {
-  if (message.notification != null) return; // FCM already showed it
-  if (message.data['type'] != 'attendance_opened') return;
-  try {
-    await Firebase.initializeApp();
-    await PushService._ensureLocalInit();
-    await PushService._showLocal(
-      id: message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: 'Davomat boshlandi',
-      body: PushService._openedBody(message.data),
-      payload: jsonEncode(message.data),
-    );
-  } catch (_) {}
-}
+Future<void> pushBackgroundHandler(RemoteMessage message) async {}
 
 class PushService {
   /// Set when the user taps a push (or a local notification). The session
@@ -130,21 +115,13 @@ class PushService {
     }
 
     final n = message.notification;
-    final title = n?.title ?? (type == 'attendance_opened' ? 'Davomat boshlandi' : null);
-    if (title == null) return;
+    if (n?.title == null) return;
     await _showLocal(
       id: message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: title,
-      body: n?.body ?? _openedBody(message.data),
+      title: n!.title!,
+      body: n.body ?? '',
       payload: jsonEncode(message.data),
     );
-  }
-
-  static String _openedBody(Map<String, dynamic> data) {
-    final subject = data['subject_name']?.toString() ?? '';
-    final room = data['auditorium_name']?.toString() ?? '';
-    final where = [subject, room].where((s) => s.isNotEmpty).join(' — ');
-    return '$where. Xonada bo\'lsangiz ilovani ochib tasdiqlang.';
   }
 
   static Future<void> _showLocal({

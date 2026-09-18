@@ -9,6 +9,7 @@ import 'services/auth_service.dart';
 import 'services/student_service.dart';
 import 'services/student_data_cache.dart';
 import 'services/attendance_service.dart';
+import 'services/presence_scanner.dart';
 import 'services/push_service.dart';
 import 'widgets/notification_bell.dart';
 import 'widgets/biometric_gate.dart';
@@ -164,11 +165,13 @@ class _SessionEffectsState extends State<_SessionEffects> {
       StudentDataCache().ensureFresh();
       NotificationBadge.startPolling();
       AttendanceWatcher.start();
+      PresenceScanner.instance.start();
     } else {
       student.syncSessionUser(null);
       NotificationBadge.stopPolling();
       NotificationBadge.unread.value = 0;
       AttendanceWatcher.stop();
+      PresenceScanner.instance.stop();
     }
     if (authed) {
       PushService.startSession(isTeacher: _auth.isTeacher);

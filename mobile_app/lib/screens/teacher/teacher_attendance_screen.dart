@@ -315,6 +315,11 @@ class _StartDialogState extends State<_StartDialog> {
               style: TextStyle(color: Color(0xFFB45309), fontSize: 12.5),
             ),
           ],
+          const SizedBox(height: 12),
+          const Text(
+            "Avval talabalardan ilovani ochishni so'rang — xabar faqat xonada aniqlangan talabalarga boradi.",
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 16),
           const Text('Tasdiqlash oynasi', style: TextStyle(fontSize: 12.5)),
           Row(

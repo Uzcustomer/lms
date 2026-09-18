@@ -6,11 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../services/attendance_service.dart';
 import '../../services/beacon_service.dart';
+import '../../services/presence_scanner.dart';
 import '../../widgets/clinic_header.dart';
 
-/// "Davomat": lists the open attendance windows for the student's group,
-/// ranges the classroom beacons, and lets the student confirm once the
-/// session's beacon is actually heard by this phone.
+/// "Davomat": lists the attendance windows this student was prompted for
+/// (detected in the room), and lets them confirm while the session's beacon
+/// is heard. Scanning itself runs app-wide in [PresenceScanner].
 ///
 /// Doubles as the site-survey tool: the signal card shows the median (not
 /// the peak) of a rolling window per beacon and can record a fixed-length
@@ -23,20 +24,18 @@ class AttendanceConfirmScreen extends StatefulWidget {
   State<AttendanceConfirmScreen> createState() => _AttendanceConfirmScreenState();
 }
 
-class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
-    with WidgetsBindingObserver {
+class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
   final _service = AttendanceService();
   final _beacons = BeaconService();
-  final _tracker = BeaconSignalTracker();
+  final _scanner = PresenceScanner.instance;
+  BeaconSignalTracker get _tracker => _scanner.tracker;
 
   List<PendingAttendance> _pending = const [];
   bool _loading = true;
   String? _error;
 
-  BeaconReadiness? _readiness;
-  StreamSubscription<List<BeaconSighting>>? _ranging;
+  BeaconReadiness? get _readiness => _scanner.readiness.value;
   Timer? _tick;
-  Timer? _report;
   int? _confirming;
 
   // Site survey
@@ -49,31 +48,36 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    _scanner.ticks.addListener(_rebuild);
+    _scanner.readiness.addListener(_rebuild);
+    AttendanceWatcher.pending.addListener(_onPending);
+    // Countdown and the survey timer; the scanner may be paused (no ticks).
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(_tracker.prune);
+      setState(() {});
       _finishRecordingIfDue();
     });
-    _report = Timer.periodic(const Duration(seconds: 20), (_) => _reportPresence());
     _load();
+  }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
+  }
+
+  /// The scanner's presence reports return the fresh list — a student who
+  /// walks in with this screen open sees the lesson appear.
+  void _onPending() {
+    if (mounted) setState(() => _pending = AttendanceWatcher.pending.value);
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    _scanner.ticks.removeListener(_rebuild);
+    _scanner.readiness.removeListener(_rebuild);
+    AttendanceWatcher.pending.removeListener(_onPending);
     _tick?.cancel();
-    _report?.cancel();
-    _ranging?.cancel();
     _spotController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _readiness != BeaconReadiness.ready) {
-      _startScanning();
-    }
   }
 
   Future<void> _load() async {
@@ -91,47 +95,8 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
     }
     if (!mounted) return;
     setState(() => _loading = false);
-    await _startScanning();
-  }
-
-  Future<void> _startScanning() async {
-    final readiness = await _beacons.prepare();
-    if (!mounted) return;
-    setState(() => _readiness = readiness);
-    if (readiness != BeaconReadiness.ready) return;
-
-    List<String> uuids;
-    try {
-      uuids = await _service.beaconUuids();
-    } catch (_) {
-      uuids = const [];
-    }
-    await _ranging?.cancel();
-    _ranging = _beacons.range(uuids).listen((sightings) {
-      if (!mounted) return;
-      setState(() => _tracker.add(sightings));
-    }, onError: (_) {});
-  }
-
-  Future<void> _reportPresence() async {
-    final live = _tracker.live;
-    if (live.isEmpty) return;
-    try {
-      final pending = await _service.reportPresence(
-        live
-            .map((s) => {
-                  'uuid': s.uuid,
-                  'major': s.major,
-                  'minor': s.minor,
-                  'rssi': s.median,
-                  'seen_at': s.lastAt.toUtc().toIso8601String(),
-                })
-            .toList(),
-      );
-      if (!mounted) return;
-      setState(() => _pending = pending);
-      AttendanceWatcher.pending.value = pending;
-    } catch (_) {}
+    // Tell the server what we hear right away rather than on the next cycle.
+    _scanner.report();
   }
 
   BeaconSignalStats? _statsFor(PendingAttendance p) {
@@ -272,7 +237,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
                     _message(Icons.wifi_off_rounded, _error!)
                   else if (_pending.isEmpty)
                     _message(Icons.event_available_outlined,
-                        'Hozir ochiq davomat yo\'q.\nO\'qituvchi davomatni boshlaganda bu yerda ko\'rinadi.')
+                        'Hozir ochiq davomat yo\'q.\nO\'qituvchi davomatni boshlaganda, xonada bo\'lsangiz shu yerda ko\'rinadi.')
                   else
                     ..._pending.map(_sessionCard),
                 ],
@@ -569,7 +534,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
               child: TextButton(
                 onPressed: () async {
                   await onTap?.call();
-                  _startScanning();
+                  await _scanner.retry();
                 },
                 child: Text(action),
               ),

@@ -104,7 +104,7 @@ class AttendanceSessionService
         $requireFace ??= (bool) config('services.attendance.require_face', true);
         $groupIds = $rows->pluck('group_id')->unique()->values();
         $students = Student::whereIn('group_id', $groupIds)->get(['id', 'hemis_id']);
-        $seenIds = $beacon ? $this->recentlySeen($beacon->id, $students->pluck('id')->all(), now()) : [];
+        $seenIds = $beacon ? $this->seenInRoom($beacon->id, $students->pluck('id')->all(), now()) : [];
 
         $session = DB::transaction(function () use ($teacher, $first, $rows, $beacon, $window, $requireFace, $students, $seenIds) {
             $session = AttendanceSession::create([
@@ -154,9 +154,46 @@ class AttendanceSessionService
         });
 
         $session->load(['beacon', 'groups']);
-        $this->notify($session, $seenIds, $students->pluck('id')->diff($seenIds)->values()->all());
+        $this->notify($session, $seenIds);
 
         return $session;
+    }
+
+    /**
+     * A phone reported hearing these beacons: if one of them belongs to an
+     * open session of the student's own group and the student has not been
+     * prompted yet (came in, or opened the app, after the teacher started),
+     * prompt now. Students of other groups have no row in the session, so
+     * they are never prompted.
+     */
+    public function promptOnArrival(Student $student, array $beaconIds): void
+    {
+        if ($beaconIds === []) {
+            return;
+        }
+
+        $sessions = AttendanceSession::open()
+            ->whereIn('beacon_id', $beaconIds)
+            ->whereHas('groups', fn ($q) => $q->where('group_hemis_id', $student->group_id))
+            ->with('beacon')
+            ->get();
+
+        foreach ($sessions as $session) {
+            $session->closeIfExpired();
+            if (!$session->isOpen()) {
+                continue;
+            }
+
+            $prompted = AttendanceConfirmation::where('session_id', $session->id)
+                ->where('student_id', $student->id)
+                ->where('status', AttendanceConfirmation::STATUS_PENDING)
+                ->where('notified', false)
+                ->update(['beacon_seen' => true, 'notified' => true]);
+
+            if ($prompted > 0) {
+                $this->notify($session, [$student->id]);
+            }
+        }
     }
 
     /** Manual override — the teacher's decision beats the student's. */
@@ -186,23 +223,26 @@ class AttendanceSessionService
             throw new AttendanceException('Davomat oynasi yopilgan.');
         }
 
-        $pendingIds = AttendanceConfirmation::where('session_id', $session->id)
+        $pending = AttendanceConfirmation::where('session_id', $session->id)
             ->where('status', AttendanceConfirmation::STATUS_PENDING)
-            ->pluck('student_id')
-            ->all();
+            ->get(['student_id', 'notified']);
 
-        $seenIds = $session->beacon
-            ? $this->recentlySeen($session->beacon->id, $pendingIds, $session->opened_at)
+        // Already prompted (they were in the room) plus anyone the beacon
+        // has picked up just now; the rest of the group gets nothing.
+        $seenNow = $session->beacon
+            ? $this->seenInRoom($session->beacon->id, $pending->pluck('student_id')->all(), now())
             : [];
-        if ($seenIds !== []) {
+        if ($seenNow !== []) {
             AttendanceConfirmation::where('session_id', $session->id)
-                ->whereIn('student_id', $seenIds)
+                ->whereIn('student_id', $seenNow)
                 ->update(['beacon_seen' => true, 'notified' => true]);
         }
 
-        $this->notify($session, $seenIds, array_values(array_diff($pendingIds, $seenIds)));
+        $ids = $pending->where('notified', true)->pluck('student_id')
+            ->merge($seenNow)->unique()->values()->all();
+        $this->notify($session, $ids);
 
-        return count($seenIds);
+        return count($ids);
     }
 
     public function close(AttendanceSession $session): void
@@ -270,29 +310,37 @@ class AttendanceSessionService
         return Beacon::where('auditorium_code', $auditoriumCode)->where('active', true)->first();
     }
 
-    /** Student ids among $studentIds that reported this beacon within the presence TTL before $reference. */
-    private function recentlySeen(int $beaconId, array $studentIds, Carbon $reference): array
+    /**
+     * Student ids among $studentIds whose phone heard this beacon, at a
+     * usable strength, in the last few seconds before $reference. The
+     * window is short on purpose: the app reports every ~15 s while open,
+     * so anyone in the room right now is inside it, and someone who left
+     * the room ten minutes ago is not.
+     */
+    private function seenInRoom(int $beaconId, array $studentIds, Carbon $reference): array
     {
         if ($studentIds === []) {
             return [];
         }
-        $ttl = (int) config('services.attendance.presence_ttl_minutes', 15);
+        $window = (int) config('services.attendance.presence_window_seconds', 120);
+        $minRssi = (int) config('services.attendance.min_rssi', -95);
 
         return PresenceLog::where('beacon_id', $beaconId)
-            ->where('seen_at', '>=', $reference->copy()->subMinutes($ttl))
+            ->where('seen_at', '>=', $reference->copy()->subSeconds($window))
+            ->where(fn ($q) => $q->whereNull('rssi')->orWhere('rssi', '>=', $minRssi))
             ->whereIn('student_id', $studentIds)
             ->distinct()
             ->pluck('student_id')
             ->all();
     }
 
-    /**
-     * Students already seen at the beacon get the visible "confirm" push;
-     * everyone else gets a silent wake-up so their phone scans and, if it is
-     * in the room, prompts locally.
-     */
-    private function notify(AttendanceSession $session, array $eligibleIds, array $otherIds): void
+    /** The "confirm your attendance" push, only ever sent to students detected in the room. */
+    private function notify(AttendanceSession $session, array $studentIds): void
     {
+        if ($studentIds === []) {
+            return;
+        }
+
         $beacon = $session->beacon;
         $minutes = max(1, (int) now()->diffInMinutes($session->closes_at, false));
         $data = [
@@ -306,14 +354,9 @@ class AttendanceSessionService
             'minor' => $beacon?->minor ?? '',
         ];
 
-        if ($eligibleIds !== []) {
-            SendPushToDevices::dispatch('student', $eligibleIds, [
-                'title' => 'Davomatni tasdiqlang',
-                'body' => "{$session->subject_name} — {$session->auditorium_name}. {$minutes} daqiqa ichida tasdiqlang.",
-            ], $data);
-        }
-        if ($otherIds !== []) {
-            SendPushToDevices::dispatch('student', $otherIds, [], ['type' => 'attendance_opened'] + $data);
-        }
+        SendPushToDevices::dispatch('student', $studentIds, [
+            'title' => 'Davomatni tasdiqlang',
+            'body' => "{$session->subject_name} — {$session->auditorium_name}. {$minutes} daqiqa ichida tasdiqlang.",
+        ], $data);
     }
 }

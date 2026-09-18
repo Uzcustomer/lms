@@ -208,8 +208,10 @@ return [
     'attendance' => [
         // Beacon attendance: how long the "confirm" window stays open.
         'window_minutes' => (int) env('ATTENDANCE_WINDOW_MINUTES', 10),
-        // A beacon sighting counts as "in the room" for this many minutes.
-        'presence_ttl_minutes' => (int) env('ATTENDANCE_PRESENCE_TTL_MINUTES', 15),
+        // A sighting counts as "in the room now" for this many seconds: who
+        // gets the confirm push when the teacher starts. The app reports
+        // every ~15 s while open, so keep this well above that.
+        'presence_window_seconds' => (int) env('ATTENDANCE_PRESENCE_WINDOW_SECONDS', 120),
         // Weakest RSSI (dBm) accepted when confirming; lower = farther away.
         'min_rssi' => (int) env('ATTENDANCE_MIN_RSSI', -95),
         // Ask for a selfie on confirm and match it against the approved

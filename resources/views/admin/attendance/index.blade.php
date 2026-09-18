@@ -156,7 +156,8 @@
                 </div>
 
                 <div class="text-center text-gray-500 text-sm mt-4">
-                    Darsni tanlab <b>Davomatni boshlash</b>ni bosing — talabalar telefondagi ilovada tasdiqlaydi, ro'yxat shu yerda jonli yangilanadi.
+                    Avval talabalardan <b>telefonda ilovani ochishni</b> so'rang, keyin <b>Davomatni boshlash</b>ni bosing.
+                    Tasdiqlash xabari faqat xonada aniqlangan (beacon signalini eshitgan) talabalarga boradi; ro'yxat shu yerda jonli yangilanadi.
                 </div>
             </div>
 

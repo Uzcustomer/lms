@@ -107,7 +107,13 @@ class HemisService
 
     protected function fetchStudents($page)
     {
+        // HEMIS student-list sahifasi ba'zan 30 soniyadan ko'p ketadi (standart
+        // chegara) va import o'rtada uziladi. Uzunroq kutamiz va ulanish
+        // uzilganda yana 2 marta urinib ko'ramiz — bitta sekin sahifa uchun
+        // butun importni boshidan boshlash shart bo'lmasin.
         $response = Http::withoutVerifying()->withToken($this->token)
+            ->timeout(90)
+            ->retry(3, 5000, null, false)
             ->get($this->apiUrl('data/student-list'), [
                 'page' => $page,
                 'limit' => 200,

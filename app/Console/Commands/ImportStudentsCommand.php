@@ -47,7 +47,10 @@ class ImportStudentsCommand extends Command
             $this->info("Tugadi: {$count} ta talaba yangilandi.");
             $telegram->notify("✅ Talabalar importi tugadi. Jami: {$count} ta");
         } catch (\Throwable $e) {
+            // Import to'xtaganda hech bir talaba "chetlashgan" deb belgilanmaydi —
+            // HemisService faqat to'liq ro'yxat olinganda shu qadamga o'tadi.
             $this->error('Xatolik: ' . $e->getMessage());
+            $this->line('Import yarim qoldi; o\'chirilgan yoki chetlashtirilgan talaba yo\'q. Qayta ishga tushiring.');
             $telegram->notify("❌ Talabalar importida xatolik: " . $e->getMessage());
         }
 

@@ -274,21 +274,46 @@ class LessonOpening extends Model
     }
 
     /**
-     * Joriy semestr boshlanishi: kuzgi — 1-sentabr (yanvar ham shunga
-     * kiradi), bahorgi — 1-fevral. So'rovlar soni shu sanadan hisoblanadi.
+     * Joriy semestr boshlanishi. So'rovlar soni (o'qituvchi limiti) va
+     * so'rovlar sahifasidagi ro'yxat shu sanadan hisoblanadi.
+     *
+     * Kalendar bo'yicha: kuzgi — 1-sentabr (yanvar ham shunga kiradi),
+     * bahorgi — 1-fevral. Sozlamalarda aniq sana berilgan bo'lsa
+     * (lesson_opening_period_start, masalan 14-sentabr) — o'sha olinadi, lekin
+     * faqat shu kalendar semestri ichida: keyingi semestrda eski sana o'zi
+     * eskirib, yana kalendar sanasi ishlaydi.
      */
     public static function periodStart(): \Carbon\Carbon
     {
         $now = \Carbon\Carbon::now('Asia/Tashkent');
 
         if ($now->month >= 9) {
-            return $now->copy()->setDate($now->year, 9, 1)->startOfDay();
-        }
-        if ($now->month === 1) {
-            return $now->copy()->setDate($now->year - 1, 9, 1)->startOfDay();
+            $start = $now->copy()->setDate($now->year, 9, 1)->startOfDay();
+        } elseif ($now->month === 1) {
+            $start = $now->copy()->setDate($now->year - 1, 9, 1)->startOfDay();
+        } else {
+            $start = $now->copy()->setDate($now->year, 2, 1)->startOfDay();
         }
 
-        return $now->copy()->setDate($now->year, 2, 1)->startOfDay();
+        $configured = trim((string) Setting::get('lesson_opening_period_start', ''));
+        if ($configured !== '') {
+            try {
+                $custom = \Carbon\Carbon::parse($configured, 'Asia/Tashkent')->startOfDay();
+                if ($custom->greaterThanOrEqualTo($start) && $custom->lessThanOrEqualTo($now)) {
+                    return $custom;
+                }
+            } catch (\Throwable $e) {
+                // Noto'g'ri yozilgan sana — kalendar sanasi ishlaydi
+            }
+        }
+
+        return $start;
+    }
+
+    /** Faqat joriy semestrda yuborilgan so'rovlar */
+    public function scopeCurrentPeriod($query)
+    {
+        return $query->where('created_at', '>=', static::periodStart());
     }
 
     /**

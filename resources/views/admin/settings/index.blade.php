@@ -103,6 +103,13 @@
                                     <span style="font-size: 15px; color: #166534; font-weight: 600;">kun</span>
                                 </div>
                                 <div style="font-size: 11px; color: #22c55e; margin-top: 6px;">baho qo'yish muddati</div>
+                                <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #86efac;">
+                                    <label for="lesson_opening_period_start" style="display:block; font-size: 11px; font-weight: 700; color: #166534; margin-bottom: 4px;">So'rovlar hisoblanadigan sana</label>
+                                    <input type="date" id="lesson_opening_period_start" name="lesson_opening_period_start"
+                                           value="{{ old('lesson_opening_period_start', $lessonOpeningPeriodStart ?? '') }}"
+                                           style="width: 100%; padding: 6px 8px; border: 2px solid #22c55e; border-radius: 8px; font-size: 13px; font-weight: 700; color: #166534; background: rgba(255,255,255,0.7); outline: none;">
+                                    <div style="font-size: 11px; color: #16a34a; margin-top: 4px;">joriy semestr boshi · bo'sh bo'lsa 1-sentabr / 1-fevral</div>
+                                </div>
                             </div>
                         </div>
 

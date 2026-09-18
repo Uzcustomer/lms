@@ -280,13 +280,24 @@
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             Tasdiqlangach baho qo'yish muddati: <b>{{ $openingDays }} kun</b>
                         </div>
+                        {{-- Sanoq davri: joriy semestr (sozlamalardagi sana) yoki hammasi --}}
+                        <a class="lo-hero-chip" style="text-decoration:none;"
+                           href="{{ route('admin.lesson-opening-requests.index', ['status' => $status] + (($allPeriods ?? false) ? [] : ['period' => 'all'])) }}"
+                           title="{{ ($allPeriods ?? false) ? 'Faqat joriy semestr so\'rovlarini ko\'rsatish' : 'Oldingi semestrlar so\'rovlarini ham ko\'rsatish' }}">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            @if($allPeriods ?? false)
+                                Barcha semestrlar · <b>faqat joriysini ko'rsatish</b>
+                            @else
+                                Joriy semestr: <b>{{ isset($periodStart) ? $periodStart->format('d.m.Y') : '' }}</b> dan · eskilarini ko'rsatish
+                            @endif
+                        </a>
                     </div>
                 </header>
 
                 <div class="lo-stats">
                     @foreach($tiles as $key => [$label, $color, $icon])
                         @php $count = (int) ($counts[$key] ?? 0); @endphp
-                        <a href="{{ route('admin.lesson-opening-requests.index', ['status' => $key]) }}"
+                        <a href="{{ route('admin.lesson-opening-requests.index', ['status' => $key] + (($allPeriods ?? false) ? ['period' => 'all'] : [])) }}"
                            class="lo-stat lo-stat-{{ $color }} {{ $status === $key ? 'is-current' : '' }}">
                             <span class="lo-stat-icon">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ $icon }}"/></svg>
@@ -302,7 +313,7 @@
                             </div>
                         </a>
                     @endforeach
-                    <a href="{{ route('admin.lesson-opening-requests.index', ['status' => 'all']) }}"
+                    <a href="{{ route('admin.lesson-opening-requests.index', ['status' => 'all'] + (($allPeriods ?? false) ? ['period' => 'all'] : [])) }}"
                        class="lo-stat lo-stat-all {{ $status === 'all' ? 'is-current' : '' }}">
                         <div>
                             <span>Barchasi</span>

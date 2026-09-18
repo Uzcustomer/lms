@@ -24,6 +24,7 @@ class SettingsController extends Controller
         $data['mtDeadlineTime'] = Setting::get('mt_deadline_time', '17:00');
         $data['mtMaxResubmissions'] = Setting::get('mt_max_resubmissions', 3);
         $data['lessonOpeningDays'] = Setting::get('lesson_opening_days', 3);
+        $data['lessonOpeningPeriodStart'] = Setting::get('lesson_opening_period_start', '');
 
         // Marking system scores
         $data['markingSystemScores'] = MarkingSystemScore::orderBy('marking_system_code')->get();
@@ -92,6 +93,13 @@ class SettingsController extends Controller
 
         if ($request->filled('lesson_opening_days')) {
             Setting::set('lesson_opening_days', (int) $request->lesson_opening_days);
+        }
+
+        // Dars ochish so'rovlari shu sanadan hisoblanadi (joriy semestr boshi).
+        // Bo'sh qoldirilsa — kalendar bo'yicha 1-sentabr / 1-fevral.
+        if ($request->has('lesson_opening_period_start')) {
+            $request->validate(['lesson_opening_period_start' => 'nullable|date_format:Y-m-d']);
+            Setting::set('lesson_opening_period_start', (string) $request->input('lesson_opening_period_start', ''));
         }
 
         $deadlines = $request->input('deadlines', []);

@@ -39,7 +39,12 @@ class LessonOpeningRequestController extends Controller
 
         $stage = $this->stage();
 
-        $query = LessonOpening::query()->visibleToStage($stage);
+        // Sukut bo'yicha faqat joriy semestr so'rovlari (sozlamalardagi sana
+        // yoki kalendar boshi); ?period=all — eskilari ham.
+        $allPeriods = $request->input('period') === 'all';
+        $inPeriod = fn ($query) => $allPeriods ? $query : $query->currentPeriod();
+
+        $query = $inPeriod(LessonOpening::query()->visibleToStage($stage));
         if ($status !== 'all') {
             $query->where('status', $status);
         }
@@ -67,8 +72,7 @@ class LessonOpeningRequestController extends Controller
 
         $teachers = $this->lessonTeachers($openings->getCollection());
 
-        $counts = LessonOpening::query()
-            ->visibleToStage($stage)
+        $counts = $inPeriod(LessonOpening::query()->visibleToStage($stage))
             ->select('status', DB::raw('COUNT(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
@@ -82,7 +86,9 @@ class LessonOpeningRequestController extends Controller
             'teachers' => $teachers,
             'stage' => $stage,
             // Shu foydalanuvchi qarorini kutayotganlar soni
-            'myQueue' => $stage ? LessonOpening::awaitingStage($stage)->count() : null,
+            'myQueue' => $stage ? $inPeriod(LessonOpening::awaitingStage($stage))->count() : null,
+            'periodStart' => LessonOpening::periodStart(),
+            'allPeriods' => $allPeriods,
             'canReview' => $stage !== null,
             'canDelete' => $this->canDelete(),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),

@@ -16,25 +16,37 @@ class SendUnratedRegistrationsReport extends Command
     /** HEMIS talaba holati: 11 — "O'qimoqda". */
     private const ACTIVE_STATUS = 11;
 
-    protected $signature = 'registrar:send-unrated-report {--chat-id= : Test uchun shaxsiy Telegram chat_id}';
+    protected $signature = 'registrar:send-unrated-report
+        {--chat-id= : Test uchun shaxsiy Telegram chat_id}
+        {--date= : Hisobot kuni (Y-m-d), sukut bo\'yicha kecha}
+        {--semester : Bir kun emas, semestr boshidan shu kungacha yig\'ilgan ro\'yxat}';
 
-    protected $description = 'Semestr boshidan kechagacha baho qo\'yilmagan darslar haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 17:00)';
+    protected $description = 'Kechagi darslardan baho qo\'yilmaganlari haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 08:30)';
 
     public function handle(TelegramService $telegram): int
     {
         $now = Carbon::now();
-        $yesterday = Carbon::yesterday();
+        // Hisobot kuni: sukut bo'yicha kecha, --date bilan boshqa kun.
+        $yesterday = $this->option('date')
+            ? Carbon::parse($this->option('date'))->startOfDay()
+            : Carbon::yesterday();
         $yesterdayStr = $yesterday->format('Y-m-d');
 
         // Baho tekshirishdan chiqariladigan mashg'ulot turlari
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $gradeExcludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
-        // 1-QADAM: Joriy semestr boshlanish sanasini aniqlash
-        $semesterStart = $this->getSemesterStartDate();
-        if (!$semesterStart) {
-            $this->error('Joriy semestr topilmadi.');
-            return 1;
+        // 1-QADAM: Davr boshi. Sukut bo'yicha faqat hisobot kuni — har kuni
+        // kechagi darslar tekshiriladi. --semester bilan semestr boshidan beri
+        // yig'ilgan ro'yxat (oldingi ko'rinish) olinadi.
+        if ($this->option('semester')) {
+            $semesterStart = $this->getSemesterStartDate();
+            if (!$semesterStart) {
+                $this->error('Joriy semestr topilmadi.');
+                return 1;
+            }
+        } else {
+            $semesterStart = $yesterday->copy();
         }
         $semesterStartStr = $semesterStart->format('Y-m-d');
         $this->info("Davr: {$semesterStartStr} — {$yesterdayStr}");
@@ -294,11 +306,9 @@ class SendUnratedRegistrationsReport extends Command
 
             $chatId = $this->option('chat-id') ?: config('services.telegram.registrar_group_id');
             if ($chatId) {
-                $formattedDate = $yesterday->format('d.m.Y');
-                $semesterStartFormatted = $semesterStart->format('d.m.Y');
                 $telegram->sendToUser($chatId,
                     "✅ BAHO QO'YILMAGANLAR HISOBOTI\n"
-                    . "📅 Davr: {$semesterStartFormatted} — {$formattedDate}\n"
+                    . "📅 " . $this->periodLabel($semesterStart, $yesterday) . "\n"
                     . "⏰ {$now->format('H:i')} | {$now->format('d.m.Y')}\n\n"
                     . "🎉 Barcha darslarga baho qo'yilgan!"
                 );
@@ -314,13 +324,10 @@ class SendUnratedRegistrationsReport extends Command
             return 1;
         }
 
-        $formattedDate = $yesterday->format('d.m.Y');
-        $semesterStartFormatted = $semesterStart->format('d.m.Y');
-
         // Xulosa xabari
         $lines = [];
         $lines[] = "📊 BAHO QO'YILMAGANLAR HISOBOTI";
-        $lines[] = "📅 Davr: {$semesterStartFormatted} — {$formattedDate}";
+        $lines[] = "📅 " . $this->periodLabel($semesterStart, $yesterday);
         $lines[] = "⏰ {$now->format('H:i')} | {$now->format('d.m.Y')}";
         $lines[] = str_repeat('─', 30);
         $lines[] = "🔴 Jami baho qo'yilmagan: {$totalUnrated} ta dars";
@@ -441,6 +448,14 @@ class SendUnratedRegistrationsReport extends Command
      * Joriy semestrning boshlanish sanasini aniqlash.
      * Kuz va bahor semestrlarini ajratib, hozirgi vaqtga mos semestrni tanlaydi.
      */
+    /** Xabardagi davr: bitta kun bo'lsa "Sana: 17.09.2026", aks holda oraliq. */
+    private function periodLabel(Carbon $from, Carbon $to): string
+    {
+        return $from->isSameDay($to)
+            ? 'Sana: ' . $to->format('d.m.Y')
+            : 'Davr: ' . $from->format('d.m.Y') . ' — ' . $to->format('d.m.Y');
+    }
+
     /**
      * Guruhga boshqa guruhdan o'tkazilgan faol talabalar va kelgan sanasi.
      *

@@ -289,16 +289,10 @@
                     @endforeach
                 </div>
 
-                @if($openingQuota)
-                    @if($mlpLimitReached)
-                        <div class="mlp-note is-danger">
-                            Siz joriy semestrda {{ $openingQuota['used'] }} ta dars ochish so'rovi yuborgansiz — o'zingiz yuboradigan limit ({{ $openingQuota['limit'] }} ta) tugagan. Keyingi so'rov uchun <b>registrator ofisiga</b> murojaat qiling.
-                        </div>
-                    @else
-                        <div class="mlp-note">
-                            So'rovga asos hujjat (bildirgi) yuklanadi. Joriy semestrda yana <b>{{ $openingQuota['remaining'] }} ta</b> so'rov yubora olasiz{{ $openingQuota['used'] >= 1 ? ' — navbatdagisiga tushuntirish xati ham kerak bo\'ladi' : '' }}.
-                        </div>
-                    @endif
+                @if($mlpLimitReached)
+                    <div class="mlp-note is-danger">
+                        Siz joriy semestrda {{ $openingQuota['used'] }} ta dars ochish so'rovi yuborgansiz — o'zingiz yuboradigan limit ({{ $openingQuota['limit'] }} ta) tugagan. Keyingi so'rov uchun <b>registrator ofisiga</b> murojaat qiling.
+                    </div>
                 @endif
 
                 <div class="mlp-foot">

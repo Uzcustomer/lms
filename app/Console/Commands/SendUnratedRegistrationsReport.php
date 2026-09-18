@@ -15,9 +15,11 @@ class SendUnratedRegistrationsReport extends Command
     /** HEMIS talaba holati: 11 — "O'qimoqda". */
     private const ACTIVE_STATUS = 11;
 
-    protected $signature = 'registrar:send-unrated-report {--chat-id= : Test uchun shaxsiy Telegram chat_id}';
+    protected $signature = 'registrar:send-unrated-report
+        {--chat-id= : Test uchun shaxsiy Telegram chat_id}
+        {--from= : Davr boshi (Y-m-d) — berilmasa joriy semestr boshi}';
 
-    protected $description = 'Semestr boshidan kechagacha baho qo\'yilmagan darslar haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 17:00)';
+    protected $description = 'Semestr boshidan kechagacha baho qo\'yilmagan darslar haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 08:30)';
 
     public function handle(TelegramService $telegram): int
     {
@@ -29,8 +31,10 @@ class SendUnratedRegistrationsReport extends Command
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $gradeExcludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
-        // 1-QADAM: Joriy semestr boshlanish sanasini aniqlash
-        $semesterStart = $this->getSemesterStartDate();
+        // 1-QADAM: Davr boshi — --from berilsa o'sha sana, aks holda joriy semestr boshi
+        $semesterStart = $this->option('from')
+            ? Carbon::parse($this->option('from'))->startOfDay()
+            : $this->getSemesterStartDate();
         if (!$semesterStart) {
             $this->error('Joriy semestr topilmadi.');
             return 1;
@@ -407,47 +411,41 @@ class SendUnratedRegistrationsReport extends Command
      * Joriy semestrning boshlanish sanasini aniqlash.
      * Kuz va bahor semestrlarini ajratib, hozirgi vaqtga mos semestrni tanlaydi.
      */
+    /**
+     * Joriy semestr boshlanishi — o'quv haftalaridan, sanaga qarab.
+     *
+     * semesters.current belgisiga tayanilmaydi: u faqat haftalik importda
+     * yangilanadi va yangi o'quv yili boshida eskirib qoladi — shunda hisobot
+     * o'tgan yilning bahorgi semestridan (yanvardan) boshlab hisoblardi.
+     *
+     * Bugun davom etayotgan bakalavr semestrlari olinadi (birinchi haftasi
+     * bugundan oldin, oxirgisi bugundan keyin) va ularning eng erta
+     * boshlanishi qaytariladi. Semestrlar orasidagi ta'tilda davom etayotgani
+     * bo'lmasa — eng oxirgi boshlangan semestr olinadi.
+     */
     private function getSemesterStartDate(): ?Carbon
     {
-        // 1. Joriy o'quv yilini aniqlash
-        $educationYear = DB::table('semesters')
-            ->where('current', true)
-            ->orderByDesc('education_year')
-            ->value('education_year');
+        $today = Carbon::today()->toDateString();
 
-        if (!$educationYear) {
-            return null;
+        $semesterRanges = DB::table('curriculum_weeks as cw')
+            ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 's.curriculum_hemis_id')
+            ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
+            ->groupBy('cw.semester_hemis_id')
+            ->selectRaw('MIN(DATE(cw.start_date)) as sem_start, MAX(DATE(cw.end_date)) as sem_end')
+            ->get()
+            // Semestr odatda 5 oydan oshmaydi. Undan uzun oraliq — xato yoki
+            // birlashib ketgan haftalar; u davrni yanvarga tortib ketmasin.
+            ->filter(fn ($r) => Carbon::parse($r->sem_start)->diffInDays(Carbon::parse($r->sem_end)) <= 200);
+
+        $inProgress = $semesterRanges->filter(fn ($r) => $r->sem_start <= $today && $r->sem_end >= $today);
+        if ($inProgress->isNotEmpty()) {
+            return Carbon::parse($inProgress->min('sem_start'));
         }
 
-        // 2. Shu o'quv yildagi joriy semestrlarni olish
-        $currentSemesterIds = DB::table('semesters')
-            ->where('current', true)
-            ->where('education_year', $educationYear)
-            ->pluck('semester_hemis_id');
+        $latestStarted = $semesterRanges->filter(fn ($r) => $r->sem_start <= $today)->max('sem_start');
 
-        if ($currentSemesterIds->isEmpty()) {
-            return null;
-        }
-
-        // 3. Bahor semestrlarini ajratish (yanvar oyidan keyin boshlanganlar)
-        $springCutoff = ($educationYear + 1) . '-01-01';
-
-        $springSemesterIds = DB::table('curriculum_weeks')
-            ->whereIn('semester_hemis_id', $currentSemesterIds)
-            ->groupBy('semester_hemis_id')
-            ->havingRaw('MIN(start_date) >= ?', [$springCutoff])
-            ->pluck('semester_hemis_id');
-
-        // Bahor semestri bor bo'lsa — uni tanlash, aks holda kuz semestri
-        $targetSemesterIds = $springSemesterIds->isNotEmpty()
-            ? $springSemesterIds
-            : $currentSemesterIds;
-
-        $startDate = DB::table('curriculum_weeks')
-            ->whereIn('semester_hemis_id', $targetSemesterIds)
-            ->min('start_date');
-
-        return $startDate ? Carbon::parse($startDate) : null;
+        return $latestStarted ? Carbon::parse($latestStarted) : null;
     }
 
     /**

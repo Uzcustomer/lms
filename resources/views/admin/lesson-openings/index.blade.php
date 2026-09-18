@@ -13,7 +13,8 @@
             'closed' => ['Yopilgan', 'expired'],
             'rejected' => ['Rad etilgan', 'rejected'],
         ];
-        $showActions = $canReview && in_array($status, ['pending', 'all'], true);
+        // Rad etilganlar ham: rad etgan tomon keyin tasdiqlashi mumkin
+        $showActions = $canReview && in_array($status, ['pending', 'rejected', 'all'], true);
         // Hozir tasdiqlansa o'qituvchi qachongacha baho qo'ya oladi
         $approveDeadline = \Carbon\Carbon::now('Asia/Tashkent')->addDays($openingDays)->endOfDay()->format('d.m.Y H:i');
 
@@ -41,12 +42,12 @@
             return [strtoupper($ext ?: 'FAYL'), $class];
         };
         // Bosqich qarori: [belgi, css, matn]
-        $decisionOf = function ($decision, $name, $at) {
-            $who = trim(($name ?? '') . ($at ? ' · ' . $at->format('d.m.Y H:i') : ''));
+        $decisionOf = function ($decision, $name, $at, $waiting = true) {
+            $who = trim(($name ?? '') . ($at ? ' · ' . $at : ''));
             return match ($decision) {
                 'approved' => ['✓', 'is-ok', $who ?: 'tasdiqlangan'],
                 'rejected' => ['✕', 'is-no', $who ?: 'rad etgan'],
-                default => ['…', 'is-wait', 'kutilmoqda'],
+                default => ['…', 'is-wait', $waiting ? 'kutilmoqda' : "ko'rib chiqilmagan"],
             };
         };
         $initials = function ($name) {
@@ -263,7 +264,7 @@
                         </span>
                         <div>
                             <h1>Dars ochish so'rovlari</h1>
-                            <p>O'qituvchi o'tkazib yuborilgan darsni ochish uchun so'rov yuboradi: 1-so'rovni prorektor, 2-so'rovdan boshlab registrator ofisi ham tasdiqlaydi</p>
+                            <p>O'qituvchi o'tkazib yuborilgan darsni ochish uchun so'rov yuboradi: 1-so'rovni registrator ofisi, 2-so'rovni u va o'quv bo'limi boshlig'i, 3-dan boshlab o'quv prorektori ham tasdiqlaydi</p>
                         </div>
                     </div>
                     <div style="display:flex; flex-wrap:wrap; gap:8px;">
@@ -364,11 +365,13 @@
                                         [$explLabel, $explClass] = $extClassOf($opening->explanation_file_original_name);
                                         $number = (int) $opening->request_number;
                                         // Joriy foydalanuvchi shu so'rovga qaror bera oladimi
-                                        $canAct = $canReview && ($stage === 'registrar' ? $opening->isAwaitingRegistrar() : $opening->isAwaitingProrektor());
-                                        // Shu tasdiq darsni ochadimi (qolgan bosqich allaqachon tasdiqlagan)
-                                        $wouldOpen = $stage === 'registrar'
-                                            ? $opening->prorektor_status === 'approved'
-                                            : (!$opening->needs_registrar || $opening->registrar_status === 'approved');
+                                        $canAct = $canReview && $opening->awaits($stage);
+                                        $canReapprove = $canReview && $opening->canReapprove($stage);
+                                        // Shu foydalanuvchi tasdiqlagach yana kimlar qoladi
+                                        $remaining = $stage ? $opening->remainingStagesAfter($stage) : [];
+                                        $remainingText = implode(', ', array_map(fn ($st) => \App\Models\LessonOpening::STAGE_LABELS[$st], $remaining));
+                                        // Shu tasdiq darsni ochadimi (qolganlar allaqachon tasdiqlagan)
+                                        $wouldOpen = $stage && empty($remaining);
                                         $months = ['', 'Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
                                     @endphp
                                     <tr class="{{ $isPending ? 'is-pending' : '' }}">
@@ -468,14 +471,11 @@
                                                 <span class="lo-meta">Baho: <b>{{ $opening->deadline->format('d.m.Y H:i') }}</b> gacha</span>
                                             @endif
                                             <div class="lo-stages">
-                                                @if($opening->needs_registrar)
-                                                    @php [$mark, $markClass, $markText] = $decisionOf($opening->registrar_status, $opening->registrar_name, $opening->registrar_at); @endphp
-                                                    <div class="lo-stage {{ $markClass }}"><i>{{ $mark }}</i><span><b>Registrator:</b> {{ $markText }}</span></div>
-                                                @endif
-                                                @if($isPending || $opening->prorektor_status)
-                                                    @php [$mark, $markClass, $markText] = $decisionOf($opening->prorektor_status, $opening->reviewed_by_name, $opening->reviewed_at); @endphp
-                                                    <div class="lo-stage {{ $markClass }}"><i>{{ $mark }}</i><span><b>Prorektor:</b> {{ $markText }}</span></div>
-                                                @endif
+                                                @foreach($opening->stageDecisions() as $decision)
+                                                    @continue(!$decision['status'] && !$isPending && $opening->status !== 'rejected')
+                                                    @php [$mark, $markClass, $markText] = $decisionOf($decision['status'], $decision['name'], $decision['at'], $isPending); @endphp
+                                                    <div class="lo-stage {{ $markClass }}"><i>{{ $mark }}</i><span><b>{{ $decision['label'] }}:</b> {{ $markText }}</span></div>
+                                                @endforeach
                                             </div>
                                             @if($opening->status === 'rejected' && $opening->review_comment)
                                                 <div class="lo-reason"><strong>Sabab:</strong> {{ $opening->review_comment }}</div>
@@ -493,6 +493,7 @@
                                                                 data-teacher="{{ $teacherNames }}"
                                                                 data-date="{{ $lessonDate?->format('d.m.Y') }}"
                                                                 data-by="{{ $opening->opened_by_name }}"
+                                                                data-remaining="{{ $remainingText }}"
                                                                 data-final="{{ $wouldOpen ? '1' : '0' }}">
                                                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                                             Tasdiqlash
@@ -509,10 +510,27 @@
                                                             Rad etish
                                                         </button>
                                                     </div>
-                                                @elseif($isPending && $stage === 'registrar' && !$opening->needs_registrar)
-                                                    <span class="lo-waiting">1-so'rov — faqat prorektor tasdiqlaydi</span>
-                                                @elseif($isPending)
-                                                    <span class="lo-waiting">{{ $stage === 'registrar' ? 'Prorektor' : 'Registrator' }} tasdig'i kutilmoqda</span>
+                                                @elseif($canReapprove)
+                                                    <div class="lo-actions">
+                                                        <button type="button" class="lo-btn lo-btn-approve"
+                                                                onclick="loOpenModal('approve', this)"
+                                                                title="Siz rad etgan edingiz — fikringizni o'zgartirib tasdiqlashingiz mumkin"
+                                                                data-action="{{ route('admin.lesson-opening-requests.approve', $opening->id) }}"
+                                                                data-group="{{ $groupName }}"
+                                                                data-subject="{{ $subjectName }}"
+                                                                data-teacher="{{ $teacherNames }}"
+                                                                data-date="{{ $lessonDate?->format('d.m.Y') }}"
+                                                                data-by="{{ $opening->opened_by_name }}"
+                                                                data-remaining="{{ $remainingText }}"
+                                                                data-final="{{ $wouldOpen ? '1' : '0' }}">
+                                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                                            Qayta tasdiqlash
+                                                        </button>
+                                                    </div>
+                                                @elseif($isPending && $stage && $opening->stageStatus($stage) === 'approved')
+                                                    <span class="lo-waiting">Siz tasdiqlagansiz{{ $remainingText ? ' · ' . $remainingText . ' kutilmoqda' : '' }}</span>
+                                                @elseif($isPending && $remainingText)
+                                                    <span class="lo-waiting">{{ $remainingText }} kutilmoqda</span>
                                                 @endif
                                             </td>
                                         @endif
@@ -557,7 +575,7 @@
                     </div>
                     <div class="lo-callout is-partial" data-when="partial">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <div>Bu takroriy so'rov: dars <b>{{ $stage === 'registrar' ? "o'quv prorektori" : 'registrator ofisi' }}</b> ham tasdiqlagach ochiladi. Baho qo'yish muddati o'shanda hisoblanadi.</div>
+                        <div>Dars <b data-fill="remaining"></b> ham tasdiqlagach ochiladi. Baho qo'yish muddati o'shanda hisoblanadi.</div>
                     </div>
                     <div class="lo-modal-foot">
                         <button type="button" class="lo-btn lo-btn-ghost" onclick="loCloseModals()">Bekor qilish</button>

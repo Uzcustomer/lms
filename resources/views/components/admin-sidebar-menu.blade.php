@@ -377,18 +377,17 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'oquv_prorektori', 'admin', 'registrator_ofisi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi', 'oquv_bolimi_boshligi', 'oquv_prorektori']))
         @php
-            // Nishonda — shu rol qarorini kutayotgan so'rovlar
+            // Nishonda — shu rol qarorini kutayotgan so'rovlar (admin uchun — hammasi)
             $pendingLessonOpenings = 0;
             try {
-                $loQuery = \App\Models\LessonOpening::where('status', 'pending');
-                if ($hasActiveRole('registrator_ofisi')) {
-                    $loQuery->where('needs_registrar', true)->whereNull('registrar_status');
-                } elseif ($hasActiveRole(['oquv_prorektori', 'superadmin'])) {
-                    $loQuery->whereNull('prorektor_status');
-                }
-                $pendingLessonOpenings = $loQuery->count();
+                $loStage = $hasActiveRole('registrator_ofisi') ? \App\Models\LessonOpening::STAGE_REGISTRAR
+                    : ($hasActiveRole('oquv_bolimi_boshligi') ? \App\Models\LessonOpening::STAGE_DEPARTMENT
+                    : ($hasActiveRole('oquv_prorektori') ? \App\Models\LessonOpening::STAGE_PROREKTOR : null));
+                $pendingLessonOpenings = $loStage
+                    ? \App\Models\LessonOpening::awaitingStage($loStage)->count()
+                    : \App\Models\LessonOpening::where('status', 'pending')->count();
             } catch (\Throwable $e) {
                 $pendingLessonOpenings = 0;
             }

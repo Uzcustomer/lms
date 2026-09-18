@@ -5421,23 +5421,20 @@
                 numberRow.style.display = 'none';
             }
 
-            // Bosqichlar: 2-so'rovdan boshlab registrator ham tasdiqlaydi
+            // Bosqichlar: registrator ofisi; 2-so'rovdan o'quv bo'limi boshlig'i; 3-dan prorektor
             const reviewRow = document.getElementById('oim-review-row');
             const reviewed = document.getElementById('oim-reviewed');
             reviewed.innerHTML = '';
-            const stages = [];
-            if (data.needs_registrar) {
-                stages.push(['Registrator', data.registrar_status, data.registrar_name, data.registrar_at]);
-            }
-            const prorektorStatus = data.prorektor_status || (data.reviewed_by ? (isRejected ? 'rejected' : 'approved') : null);
-            if (isPending || prorektorStatus) {
-                stages.push(['Prorektor', prorektorStatus, data.reviewed_by, data.reviewed_at]);
-            }
+            const stages = (data.stages || []).filter(function (st) {
+                return st.status || isPending || isRejected;
+            });
             stages.forEach(function (st) {
                 const line = document.createElement('div');
-                const mark = st[1] === 'approved' ? '✓ ' : (st[1] === 'rejected' ? '✕ ' : '… ');
-                line.textContent = st[0] + ': ' + mark + (st[1] ? [st[2], st[3]].filter(Boolean).join(', ') : 'kutilmoqda');
-                line.style.color = st[1] === 'approved' ? '#047857' : (st[1] === 'rejected' ? '#b91c1c' : '#b45309');
+                const mark = st.status === 'approved' ? '✓ ' : (st.status === 'rejected' ? '✕ ' : '… ');
+                line.textContent = st.label + ': ' + mark + (st.status
+                    ? [st.name, st.at].filter(Boolean).join(', ')
+                    : (isPending ? 'kutilmoqda' : "ko'rib chiqilmagan"));
+                line.style.color = st.status === 'approved' ? '#047857' : (st.status === 'rejected' ? '#b91c1c' : '#b45309');
                 reviewed.appendChild(line);
             });
             reviewRow.style.display = stages.length ? '' : 'none';
@@ -5538,10 +5535,16 @@
                 level.style.display = 'none';
             }
 
+            // Tasdiqlovchilar: 1 — registrator; 2 — + o'quv bo'limi boshlig'i; 3+ — + prorektor
+            const approvers = number >= 3
+                ? "<b>registrator ofisi</b>, <b>o'quv bo'limi boshlig'i</b> va <b>o'quv prorektori</b> — uchalasi"
+                : (number === 2
+                    ? "<b>registrator ofisi</b> va <b>o'quv bo'limi boshlig'i</b> — ikkalasi"
+                    : "<b>registrator ofisi</b>");
             const days = '<b>' + LO_DAYS + ' kun</b> (soat 23:59 gacha)';
-            document.getElementById('lessonOpenInfo').innerHTML = strict
-                ? "Takroriy so'rov: <b>registrator ofisi</b> va <b>o'quv prorektori</b> ikkalasi tasdiqlagach dars ochiladi va o'qituvchiga " + days + " baho qo'yish imkoniyati beriladi."
-                : "So'rov <b>o'quv prorektoriga</b> yuboriladi. Tasdiqlangach dars ochiladi va o'qituvchiga " + days + " baho qo'yish imkoniyati beriladi — muddat tasdiqlangan kundan hisoblanadi.";
+            document.getElementById('lessonOpenInfo').innerHTML = "So'rovni " + approvers
+                + " tasdiqlagach dars ochiladi va o'qituvchiga " + days
+                + " baho qo'yish imkoniyati beriladi. Bittasi rad etsa, so'rov rad etiladi.";
         }
 
         function openLessonModal(dateStr, rejectedComment) {

@@ -1473,11 +1473,7 @@ class JournalController extends Controller
                     'reviewed_at' => $lo->reviewed_at?->format('d.m.Y H:i'),
                     'request_number' => $lo->request_number,
                     'teacher_name' => $lo->teacher_name,
-                    'needs_registrar' => (bool) $lo->needs_registrar,
-                    'prorektor_status' => $lo->prorektor_status,
-                    'registrar_status' => $lo->registrar_status,
-                    'registrar_name' => $lo->registrar_name,
-                    'registrar_at' => $lo->registrar_at?->format('d.m.Y H:i'),
+                    'stages' => $lo->stageDecisions(),
                     'explanation_name' => $lo->explanation_file_original_name,
                     'explanation_url' => $lo->explanation_file_path ? route('admin.journal.download-lesson-explanation', $lo->id) : null,
                     'opened_at' => $lo->created_at->format('d.m.Y H:i'),
@@ -5776,11 +5772,13 @@ class JournalController extends Controller
      * Dars ochish so'rovi — o'tkazib yuborilgan kunga baho qo'yishni ochishni so'rash.
      *
      * So'rovni shu kuni darsni o'tgan o'qituvchi o'zi yuboradi. Joriy semestrda:
-     *  1-so'rov — asos fayl bilan, o'quv prorektori tasdiqlaydi;
+     *  1-so'rov — asos fayl bilan, registrator ofisi tasdiqlaydi;
      *  2-so'rov — tushuntirish xati ham majburiy, registrator ofisi va o'quv
-     *             prorektori ikkalasi tasdiqlashi kerak;
+     *             bo'limi boshlig'i tasdiqlaydi;
      *  3-dan boshlab — o'qituvchi yubora olmaydi (registrator ofisiga murojaat
-     *             qiladi), so'rovni faqat admin yuboradi, tasdiq ikki bosqichli.
+     *             qiladi), so'rovni faqat admin yuboradi; registrator ofisi,
+     *             o'quv bo'limi boshlig'i va o'quv prorektori tasdiqlaydi.
+     * Tasdiqlovchilar LessonOpening::stagesFor() da.
      */
     public function openLesson(Request $request)
     {
@@ -5900,19 +5898,8 @@ class JournalController extends Controller
             'opened_by_guard' => $guard,
             'deadline' => null,
             'status' => LessonOpening::STATUS_PENDING,
-            'needs_registrar' => $strict,
-            'prorektor_status' => null,
-            'reviewed_by_id' => null,
-            'reviewed_by_name' => null,
-            'reviewed_by_guard' => null,
-            'reviewed_at' => null,
             'review_comment' => null,
-            'registrar_status' => null,
-            'registrar_id' => null,
-            'registrar_name' => null,
-            'registrar_guard' => null,
-            'registrar_at' => null,
-        ];
+        ] + LessonOpening::emptyStageDecisions();
 
         if ($existing) {
             // Rad etilgan so'rov yangi hujjatlar bilan qayta yuboriladi
@@ -5930,9 +5917,9 @@ class JournalController extends Controller
         return response()->json([
             'success' => true,
             'pending' => true,
-            'message' => $strict
-                ? "So'rov ({$number}-so'rov) registrator ofisi va o'quv prorektoriga yuborildi. Ikkalasi tasdiqlagach dars ochiladi."
-                : "So'rov o'quv prorektoriga yuborildi. Tasdiqlangach dars ochiladi va o'qituvchiga xabar boradi.",
+            'message' => "So'rov ({$number}-so'rov) yuborildi. Tasdiqlaydi: "
+                . implode(', ', array_map(fn ($stage) => LessonOpening::STAGE_LABELS[$stage], LessonOpening::stagesFor($number)))
+                . '. Hammasi tasdiqlagach dars ochiladi.',
             'opening' => [
                 'id' => $opening->id,
                 'status' => $opening->status,

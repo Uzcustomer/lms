@@ -15,17 +15,16 @@ use Illuminate\View\View;
 /**
  * Dars ochish so'rovlarini ko'rib chiqish.
  *
- * O'qituvchi o'tkazib yuborilgan kun uchun so'rov yuboradi. 1-so'rovni
- * o'quv prorektori tasdiqlaydi; 2-so'rovdan boshlab registrator ofisi ham
- * tasdiqlashi kerak (tartib ixtiyoriy). Kerakli hamma tasdiq olingach dars
- * ochiladi va o'qituvchining baho qo'yish muddati AYNAN SHU PAYTDAN
- * hisoblanadi. Istalgan bosqichdagi rad etish so'rovni yopadi.
+ * Tasdiqlovchilar so'rov raqamiga bog'liq (LessonOpening::stagesFor):
+ * 1-so'rov — registrator ofisi; 2-so'rov — u va o'quv bo'limi boshlig'i;
+ * 3-dan boshlab — ular va o'quv prorektori. Har bir tasdiqlovchi faqat o'zi
+ * qatnashadigan so'rovlarni ko'radi. Tartib ixtiyoriy; bittasi rad etsa
+ * so'rov rad etiladi, lekin rad etgan tomon keyin fikrini o'zgartirib
+ * tasdiqlashi mumkin. Hamma tasdiqlagach dars ochiladi va o'qituvchining
+ * baho qo'yish muddati AYNAN SHU PAYTDAN hisoblanadi.
  */
 class LessonOpeningRequestController extends Controller
 {
-    public const STAGE_PROREKTOR = 'prorektor';
-    public const STAGE_REGISTRAR = 'registrar';
-
     public function index(Request $request): View
     {
         $status = in_array($request->input('status'), ['pending', 'active', 'expired', 'rejected', 'all'], true)
@@ -38,15 +37,14 @@ class LessonOpeningRequestController extends Controller
 
         $stage = $this->stage();
 
-        $query = LessonOpening::query();
+        $query = LessonOpening::query()->visibleToStage($stage);
         if ($status !== 'all') {
             $query->where('status', $status);
         }
-        // Kutilayotganlar ichida avval shu foydalanuvchi qarori kerak bo'lganlari
-        if ($stage === self::STAGE_REGISTRAR) {
-            $query->orderByRaw("CASE WHEN status = 'pending' AND needs_registrar = 1 AND registrar_status IS NULL THEN 0 ELSE 1 END");
-        } elseif ($stage === self::STAGE_PROREKTOR) {
-            $query->orderByRaw("CASE WHEN status = 'pending' AND prorektor_status IS NULL THEN 0 ELSE 1 END");
+        // Avval shu foydalanuvchi qarori kerak bo'lganlari
+        if ($stage) {
+            $column = LessonOpening::statusColumn($stage);
+            $query->orderByRaw("CASE WHEN status = 'pending' AND {$column} IS NULL THEN 0 ELSE 1 END");
         }
         $query->latest();
 
@@ -68,18 +66,10 @@ class LessonOpeningRequestController extends Controller
         $teachers = $this->lessonTeachers($openings->getCollection());
 
         $counts = LessonOpening::query()
+            ->visibleToStage($stage)
             ->select('status', DB::raw('COUNT(*) as total'))
             ->groupBy('status')
             ->pluck('total', 'status');
-
-        // Shu foydalanuvchi qarorini kutayotganlar soni
-        $myQueue = match ($stage) {
-            self::STAGE_REGISTRAR => LessonOpening::where('status', LessonOpening::STATUS_PENDING)
-                ->where('needs_registrar', true)->whereNull('registrar_status')->count(),
-            self::STAGE_PROREKTOR => LessonOpening::where('status', LessonOpening::STATUS_PENDING)
-                ->whereNull('prorektor_status')->count(),
-            default => null,
-        };
 
         return view('admin.lesson-openings.index', [
             'openings' => $openings,
@@ -89,53 +79,39 @@ class LessonOpeningRequestController extends Controller
             'subjectNames' => $subjectNames,
             'teachers' => $teachers,
             'stage' => $stage,
-            'myQueue' => $myQueue,
+            // Shu foydalanuvchi qarorini kutayotganlar soni
+            'myQueue' => $stage ? LessonOpening::awaitingStage($stage)->count() : null,
             'canReview' => $stage !== null,
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
         ]);
     }
 
     /**
-     * Tasdiqlash — joriy foydalanuvchining bosqichi bo'yicha. Kerakli
-     * hamma tasdiq olingan bo'lsa dars ochiladi, muddat hozirdan hisoblanadi.
+     * Tasdiqlash — joriy foydalanuvchining bosqichi bo'yicha. Rad etgan
+     * bosqich ham keyin tasdiqlashi mumkin: boshqa rad etgan bo'lmasa so'rov
+     * yana kutilayotgan holatga qaytadi. Hamma tasdiqlagach dars ochiladi.
      */
     public function approve(LessonOpening $opening): RedirectResponse
     {
         $stage = $this->stage();
         abort_unless($stage !== null, 403);
 
-        if (!$this->awaitsStage($opening, $stage)) {
-            return back()->with('error', "Bu so'rov bo'yicha sizning qaroringiz kerak emas yoki allaqachon ko'rib chiqilgan.");
-        }
-
         $reviewer = $this->reviewer();
 
         $opening = DB::transaction(function () use ($opening, $stage, $reviewer) {
-            // Registrator va prorektor bir vaqtda bossa ham holat to'g'ri qolsin
+            // Bir necha tasdiqlovchi bir vaqtda bossa ham holat to'g'ri qolsin
             $opening = LessonOpening::whereKey($opening->id)->lockForUpdate()->first();
-            if (!$opening || !$this->awaitsStage($opening, $stage)) {
+            if (!$opening || !($opening->awaits($stage) || $opening->canReapprove($stage))) {
                 return null;
             }
 
-            if ($stage === self::STAGE_REGISTRAR) {
-                $opening->fill([
-                    'registrar_status' => LessonOpening::DECISION_APPROVED,
-                    'registrar_id' => $reviewer['id'],
-                    'registrar_name' => $reviewer['name'],
-                    'registrar_guard' => $reviewer['guard'],
-                    'registrar_at' => now(),
-                ]);
-            } else {
-                $opening->fill([
-                    'prorektor_status' => LessonOpening::DECISION_APPROVED,
-                    'reviewed_by_id' => $reviewer['id'],
-                    'reviewed_by_name' => $reviewer['name'],
-                    'reviewed_by_guard' => $reviewer['guard'],
-                    'reviewed_at' => now(),
-                ]);
+            $opening->setStageDecision($stage, LessonOpening::DECISION_APPROVED, $reviewer);
+
+            if ($opening->status === LessonOpening::STATUS_REJECTED && !$opening->anyStageRejected()) {
+                $opening->fill(['status' => LessonOpening::STATUS_PENDING, 'review_comment' => null]);
             }
 
-            if ($opening->allApprovalsGiven()) {
+            if ($opening->isPending() && $opening->allApprovalsGiven()) {
                 $days = max((int) Setting::get('lesson_opening_days', 3), 1);
                 $opening->fill([
                     'status' => LessonOpening::STATUS_ACTIVE,
@@ -150,7 +126,7 @@ class LessonOpeningRequestController extends Controller
         });
 
         if (!$opening) {
-            return back()->with('error', "Bu so'rov allaqachon ko'rib chiqilgan.");
+            return back()->with('error', "Bu so'rov bo'yicha sizning qaroringiz kerak emas yoki allaqachon ko'rib chiqilgan.");
         }
 
         if ($opening->status === LessonOpening::STATUS_ACTIVE) {
@@ -161,7 +137,14 @@ class LessonOpeningRequestController extends Controller
             return back()->with('success', "Dars ochildi. O'qituvchi {$days} kun ichida baho qo'ya oladi.");
         }
 
-        $waiting = $stage === self::STAGE_REGISTRAR ? "o'quv prorektori" : 'registrator ofisi';
+        if ($opening->status === LessonOpening::STATUS_REJECTED) {
+            return back()->with('success', "Tasdiqlandi, lekin so'rovni boshqa tasdiqlovchi rad etgan.");
+        }
+
+        $waiting = implode(', ', array_map(
+            fn ($s) => LessonOpening::STAGE_LABELS[$s],
+            $opening->remainingStagesAfter($stage)
+        ));
 
         return back()->with('success', "Tasdiqlandi. Dars {$waiting} ham tasdiqlagach ochiladi.");
     }
@@ -179,36 +162,29 @@ class LessonOpeningRequestController extends Controller
             'comment.min' => 'Sabab juda qisqa.',
         ]);
 
-        if (!$this->awaitsStage($opening, $stage)) {
+        $reviewer = $this->reviewer();
+
+        $opening = DB::transaction(function () use ($opening, $stage, $reviewer, $data) {
+            $opening = LessonOpening::whereKey($opening->id)->lockForUpdate()->first();
+            if (!$opening || !$opening->awaits($stage)) {
+                return null;
+            }
+
+            // Bitta tasdiqlovchining rad etishi yetarli
+            $opening->setStageDecision($stage, LessonOpening::DECISION_REJECTED, $reviewer);
+            $opening->fill([
+                'status' => LessonOpening::STATUS_REJECTED,
+                'deadline' => null,
+                'review_comment' => trim($data['comment']),
+            ]);
+            $opening->save();
+
+            return $opening;
+        });
+
+        if (!$opening) {
             return back()->with('error', "Bu so'rov bo'yicha sizning qaroringiz kerak emas yoki allaqachon ko'rib chiqilgan.");
         }
-
-        $reviewer = $this->reviewer();
-        $decision = [
-            'status' => LessonOpening::STATUS_REJECTED,
-            'deadline' => null,
-            'review_comment' => trim($data['comment']),
-        ];
-
-        if ($stage === self::STAGE_REGISTRAR) {
-            $decision += [
-                'registrar_status' => LessonOpening::DECISION_REJECTED,
-                'registrar_id' => $reviewer['id'],
-                'registrar_name' => $reviewer['name'],
-                'registrar_guard' => $reviewer['guard'],
-                'registrar_at' => now(),
-            ];
-        } else {
-            $decision += [
-                'prorektor_status' => LessonOpening::DECISION_REJECTED,
-                'reviewed_by_id' => $reviewer['id'],
-                'reviewed_by_name' => $reviewer['name'],
-                'reviewed_by_guard' => $reviewer['guard'],
-                'reviewed_at' => now(),
-            ];
-        }
-
-        $opening->update($decision);
 
         return back()->with('success', "So'rov rad etildi.");
     }
@@ -295,18 +271,10 @@ class LessonOpeningRequestController extends Controller
         return array_values($teachers);
     }
 
-    /** Shu so'rov hozir berilgan bosqich qarorini kutyaptimi */
-    private function awaitsStage(LessonOpening $opening, string $stage): bool
-    {
-        return $stage === self::STAGE_REGISTRAR
-            ? $opening->isAwaitingRegistrar()
-            : $opening->isAwaitingProrektor();
-    }
-
     /**
      * Joriy foydalanuvchi qaysi bosqichni tasdiqlaydi (faol rol bo'yicha):
-     * registrator ofisi — 'registrar', o'quv prorektori va superadmin —
-     * 'prorektor'. Admin faqat ko'radi (null).
+     * registrator ofisi, o'quv bo'limi boshlig'i yoki o'quv prorektori.
+     * Admin va superadmin faqat ko'radi (null).
      */
     private function stage(): ?string
     {
@@ -315,18 +283,19 @@ class LessonOpeningRequestController extends Controller
             return null;
         }
 
+        $roleStages = [
+            'registrator_ofisi' => LessonOpening::STAGE_REGISTRAR,
+            'oquv_bolimi_boshligi' => LessonOpening::STAGE_DEPARTMENT,
+            'oquv_prorektori' => LessonOpening::STAGE_PROREKTOR,
+        ];
+
         $roles = $user->getRoleNames()->all();
         $active = (string) session('active_role', '');
         if (!in_array($active, $roles, true)) {
-            $active = collect(['oquv_prorektori', 'registrator_ofisi', 'superadmin'])
-                ->first(fn ($role) => in_array($role, $roles, true)) ?? '';
+            $active = collect(array_keys($roleStages))->first(fn ($role) => in_array($role, $roles, true)) ?? '';
         }
 
-        return match ($active) {
-            'registrator_ofisi' => self::STAGE_REGISTRAR,
-            'oquv_prorektori', 'superadmin' => self::STAGE_PROREKTOR,
-            default => null,
-        };
+        return $roleStages[$active] ?? null;
     }
 
     private function reviewer(): array

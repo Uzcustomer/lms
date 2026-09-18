@@ -301,8 +301,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/applications/{application}/decision', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'decide'])->name('decision');
             });
 
-        // Dars ochish so'rovlari: o'qituvchi jurnaldan yuboradi, prorektor (2-so'rovdan registrator ham) tasdiqlaydi.
-        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|oquv_prorektori|registrator_ofisi')
+        // Dars ochish so'rovlari: o'qituvchi jurnaldan yuboradi; registrator, 2-so'rovdan o'quv bo'limi boshlig'i, 3-dan prorektor ham tasdiqlaydi.
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|oquv_prorektori|oquv_bolimi_boshligi|registrator_ofisi')
             ->prefix('lesson-opening-requests')
             ->name('lesson-opening-requests.')
             ->group(function () {

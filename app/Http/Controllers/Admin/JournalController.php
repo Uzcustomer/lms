@@ -1471,6 +1471,15 @@ class JournalController extends Controller
                     'review_comment' => $lo->review_comment,
                     'reviewed_by_name' => $lo->reviewed_by_name,
                     'reviewed_at' => $lo->reviewed_at?->format('d.m.Y H:i'),
+                    'request_number' => $lo->request_number,
+                    'teacher_name' => $lo->teacher_name,
+                    'needs_registrar' => (bool) $lo->needs_registrar,
+                    'prorektor_status' => $lo->prorektor_status,
+                    'registrar_status' => $lo->registrar_status,
+                    'registrar_name' => $lo->registrar_name,
+                    'registrar_at' => $lo->registrar_at?->format('d.m.Y H:i'),
+                    'explanation_name' => $lo->explanation_file_original_name,
+                    'explanation_url' => $lo->explanation_file_path ? route('admin.journal.download-lesson-explanation', $lo->id) : null,
                     'opened_at' => $lo->created_at->format('d.m.Y H:i'),
                     'opened_by_name' => $lo->opened_by_name,
                     'file_original_name' => $lo->file_original_name,
@@ -1484,6 +1493,36 @@ class JournalController extends Controller
 
             // O'qituvchi uchun: ochilgan va muddati tugamagan darslar
             $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
+        }
+
+        // Dars ochish so'rovi: kim yubora oladi va o'tkazib yuborilgan har bir
+        // kunda darsni kim o'tgan (o'qituvchi faqat o'z darsiga so'raydi)
+        $openingActor = self::lessonOpeningActor();
+        $openingTeachersByDate = [];
+        $openingTeacherCounts = [];
+        $myOpeningTeacherId = null;
+        if ($openingActor && !empty($missedDates) && \Schema::hasColumn('lesson_openings', 'teacher_id')) {
+            $dayTeacherRows = DB::table('schedules as s')
+                ->join('teachers as t', 't.hemis_id', '=', 's.employee_id')
+                ->where('s.group_id', $group->group_hemis_id)
+                ->where('s.subject_id', $subjectId)
+                ->where('s.semester_code', $semesterCode)
+                ->whereIn(DB::raw('DATE(s.lesson_date)'), $missedDates)
+                ->whereNull('s.deleted_at')
+                ->select('t.id', 't.hemis_id', 't.full_name', DB::raw('DATE(s.lesson_date) as day'))
+                ->distinct()
+                ->get();
+
+            foreach ($dayTeacherRows as $row) {
+                $openingTeachersByDate[$row->day][$row->id] = ['id' => (int) $row->id, 'name' => $row->full_name];
+            }
+            $openingTeachersByDate = array_map('array_values', $openingTeachersByDate);
+            $openingTeacherCounts = LessonOpening::priorRequestCounts($dayTeacherRows->pluck('id')->unique()->values()->all());
+
+            if ($openingActor === 'teacher') {
+                $myHemisId = (string) get_teacher_hemis_id();
+                $myOpeningTeacherId = optional($dayTeacherRows->first(fn ($r) => (string) $r->hemis_id === $myHemisId))->id;
+            }
         }
 
         // Sababli ariza asosida talaba-specific baho ochilishlarini olish
@@ -2222,6 +2261,10 @@ class JournalController extends Controller
             'lessonOpeningsMap',
             'lessonOpeningDays',
             'activeOpenedDates',
+            'openingActor',
+            'openingTeachersByDate',
+            'openingTeacherCounts',
+            'myOpeningTeacherId',
             'minimumLimit',
             'ynConsents',
             'ynSubmission',
@@ -5730,46 +5773,106 @@ class JournalController extends Controller
     }
 
     /**
-     * Dars ochish - o'tkazib yuborilgan kun uchun baho qo'yishni ochish
+     * Dars ochish so'rovi — o'tkazib yuborilgan kunga baho qo'yishni ochishni so'rash.
+     *
+     * So'rovni shu kuni darsni o'tgan o'qituvchi o'zi yuboradi. Joriy semestrda:
+     *  1-so'rov — asos fayl bilan, o'quv prorektori tasdiqlaydi;
+     *  2-so'rov — tushuntirish xati ham majburiy, registrator ofisi va o'quv
+     *             prorektori ikkalasi tasdiqlashi kerak;
+     *  3-dan boshlab — o'qituvchi yubora olmaydi (registrator ofisiga murojaat
+     *             qiladi), so'rovni faqat admin yuboradi, tasdiq ikki bosqichli.
      */
     public function openLesson(Request $request)
     {
-        // Faqat admin, kichik_admin, superadmin, registrator_ofisi
-        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
-        $hasRole = (auth()->guard('web')->user()?->hasAnyRole($allowedRoles) ?? false)
-            || (auth()->guard('teacher')->user()?->hasAnyRole($allowedRoles) ?? false);
-        if (!$hasRole) {
-            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        $actor = self::lessonOpeningActor();
+        if (!$actor) {
+            return response()->json(['success' => false, 'message' => "Ruxsat yo'q"], 403);
         }
 
         $request->validate([
             'group_hemis_id' => 'required',
             'subject_id' => 'required',
             'semester_code' => 'required',
-            'lesson_date' => 'required|date',
+            'lesson_date' => 'required|date|before:today',
             'file' => 'required|file|max:10240',
+            'explanation_file' => 'nullable|file|max:10240',
+            'teacher_id' => 'nullable|integer',
             'note' => 'nullable|string|max:1000',
+        ], [
+            'file.required' => 'Asos hujjat (bildirgi) faylini yuklang.',
+            'lesson_date.before' => "Faqat o'tgan kunlar uchun so'rov yuborish mumkin.",
         ]);
 
-        // Shu kun uchun so'rov bormi. Rad etilgani qayta so'ralishi mumkin —
-        // yangi asos hujjat bilan; qolgan holatlar bloklanadi.
+        $lessonDate = \Carbon\Carbon::parse($request->lesson_date)->format('Y-m-d');
+
+        // Shu kun uchun so'rov bormi. Rad etilgani qayta yuborilishi mumkin —
+        // yangi hujjat bilan; qolgan holatlar bloklanadi.
         $existing = LessonOpening::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
-            ->where('lesson_date', $request->lesson_date)
+            ->where('lesson_date', $lessonDate)
             ->first();
 
         if ($existing && $existing->status === LessonOpening::STATUS_PENDING) {
-            return response()->json(['success' => false, 'message' => "Bu kun uchun so'rov allaqachon yuborilgan — o'quv prorektori ko'rib chiqmoqda."], 409);
+            return response()->json(['success' => false, 'message' => "Bu kun uchun so'rov allaqachon yuborilgan va ko'rib chiqilmoqda."], 409);
         }
         if ($existing && $existing->status !== LessonOpening::STATUS_REJECTED) {
             return response()->json(['success' => false, 'message' => 'Bu kun uchun dars allaqachon ochilgan'], 409);
         }
 
-        // Faylni yuklash
+        // So'rov kimning nomidan: o'qituvchi — o'zi; admin — o'sha kungi o'qituvchi
+        $dayTeachers = self::lessonDayTeachers($request->group_hemis_id, $request->subject_id, $request->semester_code, $lessonDate);
+
+        if ($actor === 'teacher') {
+            $teacher = $dayTeachers->first(fn ($t) => (string) $t->hemis_id === (string) get_teacher_hemis_id());
+            if (!$teacher) {
+                return response()->json(['success' => false, 'message' => "Jadval bo'yicha bu kuni darsni siz o'tmagansiz. So'rovni faqat dars o'qituvchisi yuboradi."], 403);
+            }
+        } else {
+            $teacher = $request->filled('teacher_id')
+                ? $dayTeachers->firstWhere('id', (int) $request->teacher_id)
+                : ($dayTeachers->count() === 1 ? $dayTeachers->first() : null);
+            if (!$teacher) {
+                $message = $dayTeachers->isEmpty()
+                    ? "Bu kun uchun jadvalda o'qituvchi topilmadi."
+                    : "So'rov qaysi o'qituvchi nomidan ekanini tanlang.";
+                return response()->json(['success' => false, 'message' => $message], 422);
+            }
+        }
+
+        // Joriy semestrdagi nechanchi so'rov (rad etilganlar hisoblanmaydi)
+        $prior = LessonOpening::priorRequestCount($teacher->id, $existing?->id);
+        $number = $prior + 1;
+
+        if ($actor === 'teacher' && $number > LessonOpening::TEACHER_REQUEST_LIMIT) {
+            return response()->json([
+                'success' => false,
+                'blocked' => true,
+                'message' => "Siz joriy semestrda {$prior} marta dars ochish so'rovini yuborgansiz. Keyingi so'rov uchun registrator ofisiga murojaat qiling.",
+            ], 403);
+        }
+
+        $strict = $number >= LessonOpening::STRICT_FROM_NUMBER;
+        if ($strict && !$request->hasFile('explanation_file')) {
+            return response()->json([
+                'success' => false,
+                'message' => "Bu {$number}-so'rov — tushuntirish xati faylini ham yuklang.",
+                'errors' => ['explanation_file' => ['Tushuntirish xati majburiy.']],
+            ], 422);
+        }
+
+        // Fayllar
         $file = $request->file('file');
         $filePath = $file->store('lesson-openings', 'public');
         $fileOriginalName = $file->getClientOriginalName();
+
+        $explanationPath = null;
+        $explanationName = null;
+        if ($request->hasFile('explanation_file')) {
+            $explanation = $request->file('explanation_file');
+            $explanationPath = $explanation->store('lesson-openings/explanations', 'public');
+            $explanationName = $explanation->getClientOriginalName();
+        }
 
         // Guard va foydalanuvchi ma'lumotlari
         $webUser = auth()->guard('web')->user();
@@ -5777,33 +5880,46 @@ class JournalController extends Controller
         $guard = $teacherUser ? 'teacher' : 'web';
         $user = $webUser ?? $teacherUser;
 
-        // Dars darhol ochilmaydi: so'rov o'quv prorektoriga boradi. Baho
-        // qo'yish muddati tasdiqlangan paytdan hisoblanadi, shuning uchun
-        // hozir deadline yo'q.
+        // Dars darhol ochilmaydi: kerakli tasdiqlar olingach ochiladi va baho
+        // qo'yish muddati o'sha paytdan hisoblanadi — hozir deadline yo'q.
         $payload = [
             'group_hemis_id' => $request->group_hemis_id,
             'subject_id' => $request->subject_id,
             'semester_code' => $request->semester_code,
-            'lesson_date' => $request->lesson_date,
+            'teacher_id' => $teacher->id,
+            'teacher_name' => $teacher->full_name,
+            'request_number' => $number,
+            'lesson_date' => $lessonDate,
             'file_path' => $filePath,
             'file_original_name' => $fileOriginalName,
+            'explanation_file_path' => $explanationPath,
+            'explanation_file_original_name' => $explanationName,
             'request_note' => trim((string) $request->input('note')) ?: null,
             'opened_by_id' => $user->id,
             'opened_by_name' => $user->name ?? $user->full_name ?? 'Unknown',
             'opened_by_guard' => $guard,
             'deadline' => null,
             'status' => LessonOpening::STATUS_PENDING,
+            'needs_registrar' => $strict,
+            'prorektor_status' => null,
             'reviewed_by_id' => null,
             'reviewed_by_name' => null,
             'reviewed_by_guard' => null,
             'reviewed_at' => null,
             'review_comment' => null,
+            'registrar_status' => null,
+            'registrar_id' => null,
+            'registrar_name' => null,
+            'registrar_guard' => null,
+            'registrar_at' => null,
         ];
 
         if ($existing) {
-            // Rad etilgan so'rov yangi hujjat bilan qayta yuboriladi
-            if ($existing->file_path) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($existing->file_path);
+            // Rad etilgan so'rov yangi hujjatlar bilan qayta yuboriladi
+            foreach ([$existing->file_path, $existing->explanation_file_path] as $oldPath) {
+                if ($oldPath) {
+                    Storage::disk('public')->delete($oldPath);
+                }
             }
             $existing->update($payload);
             $opening = $existing->fresh();
@@ -5814,14 +5930,61 @@ class JournalController extends Controller
         return response()->json([
             'success' => true,
             'pending' => true,
-            'message' => "So'rov o'quv prorektoriga yuborildi. Tasdiqlangach dars ochiladi va o'qituvchiga xabar boradi.",
+            'message' => $strict
+                ? "So'rov ({$number}-so'rov) registrator ofisi va o'quv prorektoriga yuborildi. Ikkalasi tasdiqlagach dars ochiladi."
+                : "So'rov o'quv prorektoriga yuborildi. Tasdiqlangach dars ochiladi va o'qituvchiga xabar boradi.",
             'opening' => [
                 'id' => $opening->id,
                 'status' => $opening->status,
+                'request_number' => $opening->request_number,
                 'opened_by_name' => $opening->opened_by_name,
                 'file_original_name' => $opening->file_original_name,
             ],
         ]);
+    }
+
+    /**
+     * Kim dars ochish so'rovini yuboryapti: 'teacher' — faol roli o'qituvchi
+     * (faqat o'z darsiga), 'admin' — admin/superadmin (istalgan o'qituvchi
+     * nomidan, limitdan oshganda ham), aks holda null.
+     */
+    public static function lessonOpeningActor(): ?string
+    {
+        if (is_active_oqituvchi()) {
+            return get_teacher_hemis_id() ? 'teacher' : null;
+        }
+
+        $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+        if (!$user || !method_exists($user, 'getRoleNames')) {
+            return null;
+        }
+
+        $roles = $user->getRoleNames()->all();
+        $active = (string) session('active_role', '');
+        if (!in_array($active, $roles, true)) {
+            $active = $roles[0] ?? '';
+        }
+
+        return in_array($active, ['superadmin', 'admin'], true) ? 'admin' : null;
+    }
+
+    /** Jadval bo'yicha shu kuni shu guruhga shu fandan dars o'tgan o'qituvchilar */
+    public static function lessonDayTeachers($groupHemisId, $subjectId, $semesterCode, string $date)
+    {
+        $employeeIds = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereRaw('DATE(lesson_date) = ?', [$date])
+            ->whereNull('deleted_at')
+            ->distinct()
+            ->pluck('employee_id');
+
+        if ($employeeIds->isEmpty()) {
+            return collect();
+        }
+
+        return Teacher::whereIn('hemis_id', $employeeIds)->get(['id', 'hemis_id', 'full_name']);
     }
 
     /**
@@ -5916,6 +6079,18 @@ class JournalController extends Controller
         }
 
         return \Storage::disk('public')->download($lessonOpening->file_path, $lessonOpening->file_original_name);
+    }
+
+    /**
+     * Dars ochish so'rovining tushuntirish xatini yuklab olish
+     */
+    public function downloadLessonExplanation(LessonOpening $lessonOpening)
+    {
+        if (!$lessonOpening->explanation_file_path || !Storage::disk('public')->exists($lessonOpening->explanation_file_path)) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        return Storage::disk('public')->download($lessonOpening->explanation_file_path, $lessonOpening->explanation_file_original_name);
     }
 
     /**

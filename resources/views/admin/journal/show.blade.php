@@ -1129,9 +1129,20 @@
                             $totalJbDays = count($jbLessonDates);
                             $totalMtDays = count($mtLessonDates);
                             $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
-                            $openLessonRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
-                            $canOpenLesson = (auth()->guard('web')->user()?->hasAnyRole($openLessonRoles) ?? false)
-                                || (auth()->guard('teacher')->user()?->hasAnyRole($openLessonRoles) ?? false);
+                            // Dars ochish so'rovi: o'qituvchi — faqat o'zi o'tgan kunga, admin — istalgan kunga
+                            $openingActor = $openingActor ?? null;
+                            $openingTeachersByDate = $openingTeachersByDate ?? [];
+                            $myOpeningTeacherId = $myOpeningTeacherId ?? null;
+                            $canOpenLesson = $openingActor !== null;
+                            $canRequestFor = function ($day) use ($openingActor, $openingTeachersByDate, $myOpeningTeacherId) {
+                                if ($openingActor === 'admin') {
+                                    return true;
+                                }
+                                if ($openingActor !== 'teacher' || !$myOpeningTeacherId) {
+                                    return false;
+                                }
+                                return collect($openingTeachersByDate[$day] ?? [])->contains('id', $myOpeningTeacherId);
+                            };
                             // OSKI/Test hujayralariga topshirilgan sana tooltipini ko'rsatish ruxsati
                             $examDateTooltipRoles = ['admin', 'superadmin', 'registrator_ofisi'];
                             $canSeeExamDateTooltip = (auth()->guard('web')->user()?->hasAnyRole($examDateTooltipRoles) ?? false)
@@ -1225,13 +1236,13 @@
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}{{ $isPendingOpened ? 'background: #fffbeb;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($date) }}</div>
-                                                @if($canOpenLesson && $isMissed && !$isOpened)
+                                                @if($canOpenLesson && $isMissed && !$isOpened && $canRequestFor($dateStr))
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $openingStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : "O'tkazib yuborilgan kun — Dars ochish" }}">
                                                         <button type="button" onclick="openLessonModal('{{ $dateStr }}', @js($openingStatus === 'rejected' ? ($openingInfo['review_comment'] ?? '') : null))" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
                                                     </div>
                                                 @elseif($openingInfo)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
-                                                        <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode([
+                                                        <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode(array_merge($openingInfo, [
                                                             'date' => format_date($date),
                                                             'opened_at' => $openingInfo['opened_at'],
                                                             'opened_by' => $openingInfo['opened_by_name'],
@@ -1244,7 +1255,7 @@
                                                             'reviewed_by' => $openingInfo['reviewed_by_name'] ?? null,
                                                             'reviewed_at' => $openingInfo['reviewed_at'] ?? null,
                                                             'review_comment' => $openingInfo['review_comment'] ?? null,
-                                                        ]), ENT_QUOTES, 'UTF-8') !!})" title="{{ $isPendingOpened ? "O'quv prorektori tasdig'ini kutmoqda" : '' }}" style="background: {{ $isActiveOpened ? '#10b981' : ($isPendingOpened ? '#f59e0b' : ($openingStatus === 'rejected' ? '#ef4444' : '#9ca3af')) }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">{!! $isPendingOpened ? '&#8987;' : '&#128206;' !!}</button>
+                                                        ])), ENT_QUOTES, 'UTF-8') !!})" title="{{ $isPendingOpened ? "Tasdiq kutilmoqda" : '' }}" style="background: {{ $isActiveOpened ? '#10b981' : ($isPendingOpened ? '#f59e0b' : ($openingStatus === 'rejected' ? '#ef4444' : '#9ca3af')) }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">{!! $isPendingOpened ? '&#8987;' : '&#128206;' !!}</button>
                                                     </div>
                                                 @endif
                                             </th>
@@ -1776,13 +1787,13 @@
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px; position: relative; {{ $dIsMissed && !$dIsOpened ? 'background: #fef2f2;' : '' }}{{ $dIsActiveOpened ? 'background: #ecfdf5;' : '' }}{{ $dIsPendingOpened ? 'background: #fffbeb;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
-                                                @if($canOpenLesson && $dIsMissed && !$dIsOpened && $isFirstOfDate)
+                                                @if($canOpenLesson && $dIsMissed && !$dIsOpened && $isFirstOfDate && $canRequestFor($dDateStr))
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
                                                         <button type="button" onclick="openLessonModal('{{ $dDateStr }}', @js($dOpeningStatus === 'rejected' ? ($dOpeningInfo['review_comment'] ?? '') : null))" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="{{ $dOpeningStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : 'Dars ochish' }}">!</button>
                                                     </div>
                                                 @elseif($dOpeningInfo && ($dIsOpened || $isFirstOfDate))
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
-                                                        <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode([
+                                                        <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode(array_merge($dOpeningInfo, [
                                                             'date' => format_date($col['date']),
                                                             'opened_at' => $dOpeningInfo['opened_at'],
                                                             'opened_by' => $dOpeningInfo['opened_by_name'],
@@ -1795,7 +1806,7 @@
                                                             'reviewed_by' => $dOpeningInfo['reviewed_by_name'] ?? null,
                                                             'reviewed_at' => $dOpeningInfo['reviewed_at'] ?? null,
                                                             'review_comment' => $dOpeningInfo['review_comment'] ?? null,
-                                                        ]), ENT_QUOTES, 'UTF-8') !!})" title="{{ $dIsPendingOpened ? "O'quv prorektori tasdig'ini kutmoqda" : '' }}" style="background: {{ $dIsActiveOpened ? '#10b981' : ($dIsPendingOpened ? '#f59e0b' : ($dOpeningStatus === 'rejected' ? '#ef4444' : '#9ca3af')) }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">{!! $dIsPendingOpened ? '&#8987;' : '&#128206;' !!}</button>
+                                                        ])), ENT_QUOTES, 'UTF-8') !!})" title="{{ $dIsPendingOpened ? "Tasdiq kutilmoqda" : '' }}" style="background: {{ $dIsActiveOpened ? '#10b981' : ($dIsPendingOpened ? '#f59e0b' : ($dOpeningStatus === 'rejected' ? '#ef4444' : '#9ca3af')) }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">{!! $dIsPendingOpened ? '&#8987;' : '&#128206;' !!}</button>
                                                     </div>
                                                 @endif
                                             </th>
@@ -5279,6 +5290,23 @@
                     <div style="margin-top:2px; color:#b91c1c;">Yangi asos hujjat bilan qayta yuborishingiz mumkin.</div>
                 </div>
 
+                <div id="lessonOpenBlocked" style="display:none; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px; margin-bottom:16px; color:#991b1b; line-height:1.55;">
+                    <div style="font-size:14px; font-weight:700; margin-bottom:4px;">So'rov yuborib bo'lmaydi</div>
+                    <div style="font-size:13px;" id="lessonOpenBlockedText"></div>
+                </div>
+
+                <div id="lessonOpenFields">
+                <div id="lessonOpenTeacherWrap" style="display:none; margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">O'qituvchi <span style="color:#ef4444;">*</span></label>
+                    <select name="teacher_id" id="lessonOpenTeacher" onchange="lessonOpenRefreshLevel()"
+                        style="width:100%; padding:9px 10px; border:1px solid #d1d5db; border-radius:10px; font-size:13px; color:#374151; background:#fff;"></select>
+                </div>
+
+                <div id="lessonOpenLevel" style="display:none; align-items:center; gap:8px; margin-bottom:14px; font-size:12px; color:#475569;">
+                    <span id="lessonOpenLevelBadge" style="padding:3px 10px; border-radius:999px; font-weight:700;"></span>
+                    <span id="lessonOpenLevelText"></span>
+                </div>
+
                 <div style="margin-bottom:16px;">
                     <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">O'qituvchi bildirgisi (fayl) <span style="color:#ef4444;">*</span></label>
                     <input type="file" name="file" id="lessonOpenFile" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic"
@@ -5286,16 +5314,22 @@
                     <div style="font-size:11px; color:#9ca3af; margin-top:4px;">PDF, DOC, DOCX, JPG, PNG — max 10MB</div>
                 </div>
 
+                <div id="lessonOpenExplanationWrap" style="display:none; margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">Tushuntirish xati (fayl) <span style="color:#ef4444;">*</span></label>
+                    <input type="file" name="explanation_file" id="lessonOpenExplanation" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic"
+                        style="width:100%; padding:10px; border:2px dashed #fcd34d; border-radius:10px; font-size:13px; color:#374151; background:#fffbeb; cursor:pointer;">
+                    <div style="font-size:11px; color:#b45309; margin-top:4px;">Takroriy so'rov uchun majburiy: nega baho o'z vaqtida qo'yilmagani yoziladi</div>
+                </div>
+
                 <div style="margin-bottom:16px;">
                     <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">Izoh <span style="font-weight:400; color:#9ca3af;">(ixtiyoriy)</span></label>
-                    <textarea name="note" id="lessonOpenNote" rows="2" maxlength="1000" placeholder="Prorektor uchun qisqacha sabab"
+                    <textarea name="note" id="lessonOpenNote" rows="2" maxlength="1000" placeholder="Qisqacha sabab"
                         style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:10px; font-size:13px; color:#374151; resize:vertical;"></textarea>
                 </div>
 
                 <div style="background:#eff6ff; border-radius:10px; padding:12px 14px; margin-bottom:18px; border:1px solid #bfdbfe;">
-                    <div style="font-size:12px; color:#1e40af; line-height:1.6;">
-                        So'rov <b>o'quv prorektoriga</b> yuboriladi. Tasdiqlangach dars ochiladi va o'qituvchiga <b>{{ $lessonOpeningDays ?? 3 }} kun</b> (soat 23:59 gacha) baho qo'yish imkoniyati beriladi — muddat tasdiqlangan kundan hisoblanadi.
-                    </div>
+                    <div style="font-size:12px; color:#1e40af; line-height:1.6;" id="lessonOpenInfo"></div>
+                </div>
                 </div>
 
                 <div style="display:flex; gap:10px; justify-content:flex-end;">
@@ -5332,8 +5366,12 @@
                         <td style="padding:6px 0; color:#6b7280;">Holat:</td>
                         <td style="padding:6px 0;" id="oim-status"></td>
                     </tr>
+                    <tr id="oim-number-row" style="display:none;">
+                        <td style="padding:6px 0; color:#6b7280;">So'rov:</td>
+                        <td style="padding:6px 0; font-weight:600;" id="oim-number"></td>
+                    </tr>
                     <tr id="oim-review-row" style="display:none;">
-                        <td style="padding:6px 0; color:#6b7280;">Ko'rib chiqdi:</td>
+                        <td style="padding:6px 0; color:#6b7280; vertical-align:top;">Tasdiqlash:</td>
                         <td style="padding:6px 0; font-weight:600;" id="oim-reviewed"></td>
                     </tr>
                     <tr id="oim-comment-row" style="display:none;">
@@ -5353,6 +5391,10 @@
                     <span style="font-size:18px;">&#128206;</span>
                     <a id="oim-file-link" href="#" target="_blank" style="color:#2563eb; font-size:13px; font-weight:600; text-decoration:none; word-break:break-all;"></a>
                 </div>
+                <div id="oim-expl-wrap" style="display:none; margin-top:8px; align-items:center; gap:10px;">
+                    <span style="font-size:18px;">&#128221;</span>
+                    <a id="oim-expl-link" href="#" target="_blank" style="color:#b45309; font-size:13px; font-weight:600; text-decoration:none; word-break:break-all;"></a>
+                </div>
             </div>
         </div>
     </div>
@@ -5371,12 +5413,43 @@
             document.getElementById('oim-opened-by').textContent = data.opened_by;
             document.getElementById('oim-deadline').textContent = data.deadline || (isPending ? 'Tasdiqlangach belgilanadi' : '—');
 
-            const reviewRow = document.getElementById('oim-review-row');
-            if (data.reviewed_by) {
-                reviewRow.style.display = '';
-                document.getElementById('oim-reviewed').textContent = data.reviewed_by + (data.reviewed_at ? ', ' + data.reviewed_at : '');
+            const numberRow = document.getElementById('oim-number-row');
+            if (data.request_number) {
+                numberRow.style.display = '';
+                document.getElementById('oim-number').textContent = data.request_number + "-so'rov" + (data.teacher_name ? ' · ' + data.teacher_name : '');
             } else {
-                reviewRow.style.display = 'none';
+                numberRow.style.display = 'none';
+            }
+
+            // Bosqichlar: 2-so'rovdan boshlab registrator ham tasdiqlaydi
+            const reviewRow = document.getElementById('oim-review-row');
+            const reviewed = document.getElementById('oim-reviewed');
+            reviewed.innerHTML = '';
+            const stages = [];
+            if (data.needs_registrar) {
+                stages.push(['Registrator', data.registrar_status, data.registrar_name, data.registrar_at]);
+            }
+            const prorektorStatus = data.prorektor_status || (data.reviewed_by ? (isRejected ? 'rejected' : 'approved') : null);
+            if (isPending || prorektorStatus) {
+                stages.push(['Prorektor', prorektorStatus, data.reviewed_by, data.reviewed_at]);
+            }
+            stages.forEach(function (st) {
+                const line = document.createElement('div');
+                const mark = st[1] === 'approved' ? '✓ ' : (st[1] === 'rejected' ? '✕ ' : '… ');
+                line.textContent = st[0] + ': ' + mark + (st[1] ? [st[2], st[3]].filter(Boolean).join(', ') : 'kutilmoqda');
+                line.style.color = st[1] === 'approved' ? '#047857' : (st[1] === 'rejected' ? '#b91c1c' : '#b45309');
+                reviewed.appendChild(line);
+            });
+            reviewRow.style.display = stages.length ? '' : 'none';
+
+            const explWrap = document.getElementById('oim-expl-wrap');
+            if (data.explanation_url) {
+                explWrap.style.display = 'flex';
+                const explLink = document.getElementById('oim-expl-link');
+                explLink.href = data.explanation_url;
+                explLink.textContent = 'Tushuntirish xati: ' + (data.explanation_name || 'fayl');
+            } else {
+                explWrap.style.display = 'none';
             }
             const commentRow = document.getElementById('oim-comment-row');
             if (isRejected && data.review_comment) {
@@ -5390,7 +5463,7 @@
             if (isActive) {
                 statusEl.innerHTML = '<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Faol</span>';
             } else if (isPending) {
-                statusEl.innerHTML = '<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">O\'quv prorektori tasdig\'ini kutmoqda</span>';
+                statusEl.innerHTML = '<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Tasdiq kutilmoqda</span>';
             } else if (isRejected) {
                 statusEl.innerHTML = '<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Rad etilgan</span>';
             } else if (data.status === 'expired') {
@@ -5423,11 +5496,91 @@
 
     @if($canOpenLesson ?? false)
     <script>
+        // Dars ochish so'rovi: kim yuboryapti va o'qituvchilarning joriy semestrdagi so'rovlari soni
+        const LO_ACTOR = @json($openingActor ?? null);
+        const LO_TEACHERS = @json((object) ($openingTeachersByDate ?? []));
+        const LO_COUNTS = @json((object) ($openingTeacherCounts ?? []));
+        const LO_ME = @json($myOpeningTeacherId ?? null);
+        const LO_LIMIT = {{ \App\Models\LessonOpening::TEACHER_REQUEST_LIMIT }};
+        const LO_STRICT_FROM = {{ \App\Models\LessonOpening::STRICT_FROM_NUMBER }};
+        const LO_DAYS = {{ (int) ($lessonOpeningDays ?? 3) }};
+
+        function lessonOpenRefreshLevel() {
+            const teacherId = LO_ACTOR === 'teacher' ? LO_ME : (document.getElementById('lessonOpenTeacher').value || null);
+            const prior = teacherId ? (LO_COUNTS[teacherId] || 0) : 0;
+            const number = prior + 1;
+            const blocked = LO_ACTOR === 'teacher' && number > LO_LIMIT;
+            const strict = number >= LO_STRICT_FROM;
+
+            document.getElementById('lessonOpenBlocked').style.display = blocked ? '' : 'none';
+            document.getElementById('lessonOpenFields').style.display = blocked ? 'none' : '';
+            document.getElementById('lessonOpenSubmit').style.display = blocked ? 'none' : '';
+            if (blocked) {
+                document.getElementById('lessonOpenBlockedText').textContent =
+                    "Siz joriy semestrda " + prior + " marta dars ochish so'rovini yuborgansiz. Keyingi so'rov uchun registrator ofisiga murojaat qiling.";
+            }
+
+            const explanation = document.getElementById('lessonOpenExplanation');
+            document.getElementById('lessonOpenExplanationWrap').style.display = strict && !blocked ? '' : 'none';
+            explanation.required = strict && !blocked;
+
+            const level = document.getElementById('lessonOpenLevel');
+            const badge = document.getElementById('lessonOpenLevelBadge');
+            if (teacherId && !blocked) {
+                level.style.display = 'flex';
+                badge.textContent = number + "-so'rov";
+                badge.style.background = number >= 3 ? '#fee2e2' : (strict ? '#fef3c7' : '#e0f2fe');
+                badge.style.color = number >= 3 ? '#b91c1c' : (strict ? '#b45309' : '#0369a1');
+                document.getElementById('lessonOpenLevelText').textContent = number >= 3
+                    ? "o'qituvchi limitdan oshgan — so'rov admin nomidan"
+                    : 'joriy semestrda';
+            } else {
+                level.style.display = 'none';
+            }
+
+            const days = '<b>' + LO_DAYS + ' kun</b> (soat 23:59 gacha)';
+            document.getElementById('lessonOpenInfo').innerHTML = strict
+                ? "Takroriy so'rov: <b>registrator ofisi</b> va <b>o'quv prorektori</b> ikkalasi tasdiqlagach dars ochiladi va o'qituvchiga " + days + " baho qo'yish imkoniyati beriladi."
+                : "So'rov <b>o'quv prorektoriga</b> yuboriladi. Tasdiqlangach dars ochiladi va o'qituvchiga " + days + " baho qo'yish imkoniyati beriladi — muddat tasdiqlangan kundan hisoblanadi.";
+        }
+
         function openLessonModal(dateStr, rejectedComment) {
             document.getElementById('lessonOpenDate').value = dateStr;
             document.getElementById('lessonOpenDateLabel').textContent = 'Sana: ' + dateStr;
             document.getElementById('lessonOpenFile').value = '';
             document.getElementById('lessonOpenNote').value = '';
+            document.getElementById('lessonOpenExplanation').value = '';
+
+            // Admin so'rovni o'sha kungi o'qituvchi nomidan yuboradi
+            const teacherWrap = document.getElementById('lessonOpenTeacherWrap');
+            const teacherSelect = document.getElementById('lessonOpenTeacher');
+            teacherSelect.innerHTML = '';
+            if (LO_ACTOR === 'admin') {
+                const list = LO_TEACHERS[dateStr] || [];
+                const addOption = function (value, text) {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = text;
+                    teacherSelect.appendChild(option);
+                };
+                if (!list.length) {
+                    addOption('', "Jadvalda o'qituvchi topilmadi");
+                } else if (list.length > 1) {
+                    addOption('', '— tanlang —');
+                }
+                list.forEach(function (t) {
+                    addOption(t.id, t.name + ' · ' + (LO_COUNTS[t.id] || 0) + " ta so'rov");
+                });
+                if (list.length === 1) teacherSelect.value = String(list[0].id);
+                teacherSelect.disabled = false;
+                teacherSelect.required = true;
+                teacherWrap.style.display = '';
+            } else {
+                teacherSelect.disabled = true;
+                teacherSelect.required = false;
+                teacherWrap.style.display = 'none';
+            }
+            lessonOpenRefreshLevel();
 
             const rejectedBox = document.getElementById('lessonOpenRejected');
             if (typeof rejectedComment === 'string') {

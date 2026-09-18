@@ -301,8 +301,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/applications/{application}/decision', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'decide'])->name('decision');
             });
 
-        // Dars ochish so'rovlari: registrator jurnaldan yuboradi, o'quv prorektori tasdiqlaydi.
-        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|oquv_prorektori')
+        // Dars ochish so'rovlari: o'qituvchi jurnaldan yuboradi, prorektor (2-so'rovdan registrator ham) tasdiqlaydi.
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|oquv_prorektori|registrator_ofisi')
             ->prefix('lesson-opening-requests')
             ->name('lesson-opening-requests.')
             ->group(function () {
@@ -412,6 +412,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
             Route::get('/download-lesson-file/{lessonOpening}', [JournalController::class, 'downloadLessonFile'])->name('download-lesson-file');
+            Route::get('/download-lesson-explanation/{lessonOpening}', [JournalController::class, 'downloadLessonExplanation'])->name('download-lesson-explanation');
             Route::post('/save-opened-lesson-grade', [JournalController::class, 'saveOpenedLessonGrade'])->name('save-opened-lesson-grade');
             Route::get('/get-specialties', [JournalController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [JournalController::class, 'getLevelCodes'])->name('get-level-codes');

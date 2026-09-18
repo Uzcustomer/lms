@@ -30,6 +30,25 @@
             }
             return intdiv($minutes, 1440) . ' kun';
         };
+        $extClassOf = function ($fileName) {
+            $ext = strtolower(pathinfo((string) $fileName, PATHINFO_EXTENSION));
+            $class = match (true) {
+                $ext === 'pdf' => 'is-pdf',
+                in_array($ext, ['png', 'jpg', 'jpeg', 'heic', 'webp', 'gif'], true) => 'is-img',
+                in_array($ext, ['doc', 'docx'], true) => 'is-doc',
+                default => 'is-other',
+            };
+            return [strtoupper($ext ?: 'FAYL'), $class];
+        };
+        // Bosqich qarori: [belgi, css, matn]
+        $decisionOf = function ($decision, $name, $at) {
+            $who = trim(($name ?? '') . ($at ? ' · ' . $at->format('d.m.Y H:i') : ''));
+            return match ($decision) {
+                'approved' => ['✓', 'is-ok', $who ?: 'tasdiqlangan'],
+                'rejected' => ['✕', 'is-no', $who ?: 'rad etgan'],
+                default => ['…', 'is-wait', 'kutilmoqda'],
+            };
+        };
         $initials = function ($name) {
             $parts = preg_split('/\s+/u', trim((string) $name)) ?: [];
             $letters = array_map(fn ($p) => mb_substr($p, 0, 1), array_slice($parts, 0, 2));
@@ -133,6 +152,23 @@
         .lo-file-dl { display:block; font-size:10.5px; font-weight:600; color:#2563eb; }
         .lo-file-text { min-width:0; }
 
+        .lo-files { display:flex; flex-direction:column; gap:6px; }
+        .lo-file-kind { display:block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#94a3b8; }
+        .lo-file.is-explanation { border-color:#fde68a; background:#fffbeb; }
+        .lo-nbadge { display:inline-flex; align-items:center; gap:4px; margin-top:6px; padding:2px 8px; border-radius:6px; font-size:10.5px; font-weight:800; white-space:nowrap; }
+        .lo-nbadge.is-1 { background:#e0f2fe; color:#0369a1; }
+        .lo-nbadge.is-2 { background:#fef3c7; color:#b45309; }
+        .lo-nbadge.is-3 { background:#fee2e2; color:#b91c1c; }
+        .lo-behalf { display:block; margin-top:2px; font-size:11px; color:#64748b; }
+        .lo-stages { display:flex; flex-direction:column; gap:3px; margin-top:7px; }
+        .lo-stage { display:flex; align-items:flex-start; gap:6px; font-size:11.5px; line-height:1.35; color:#475569; }
+        .lo-stage i { width:16px; height:16px; flex:0 0 16px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; font-size:10px; font-style:normal; font-weight:800; }
+        .lo-stage.is-ok i { background:#d1fae5; color:#047857; }
+        .lo-stage.is-no i { background:#fee2e2; color:#b91c1c; }
+        .lo-stage.is-wait i { background:#fef3c7; color:#b45309; }
+        .lo-stage b { font-weight:700; color:#334155; }
+        .lo-waiting { font-size:11.5px; font-style:italic; color:#94a3b8; white-space:nowrap; }
+        .lo-callout.is-partial { border-color:#fde68a; background:#fffbeb; color:#92400e; }
         .lo-status { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
         .lo-status::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
         .lo-status-pending { background:#fef3c7; color:#b45309; }
@@ -227,12 +263,20 @@
                         </span>
                         <div>
                             <h1>Dars ochish so'rovlari</h1>
-                            <p>Registrator o'tkazib yuborilgan darsni ochish uchun asos hujjat bilan so'rov yuboradi</p>
+                            <p>O'qituvchi o'tkazib yuborilgan darsni ochish uchun so'rov yuboradi: 1-so'rovni prorektor, 2-so'rovdan boshlab registrator ofisi ham tasdiqlaydi</p>
                         </div>
                     </div>
-                    <div class="lo-hero-chip">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        Tasdiqlangach baho qo'yish muddati: <b>{{ $openingDays }} kun</b>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        @if($myQueue !== null)
+                            <div class="lo-hero-chip" style="{{ $myQueue > 0 ? 'background:#f59e0b;border-color:#f59e0b;' : '' }}">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                Sizning qaroringizni kutmoqda: <b>{{ $myQueue }}</b>
+                            </div>
+                        @endif
+                        <div class="lo-hero-chip">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Tasdiqlangach baho qo'yish muddati: <b>{{ $openingDays }} kun</b>
+                        </div>
                     </div>
                 </header>
 
@@ -296,7 +340,7 @@
                                     <th>Fan / O'qituvchi</th>
                                     <th>Dars sanasi</th>
                                     <th>So'rov yubordi</th>
-                                    <th>Asos hujjat</th>
+                                    <th>Hujjatlar</th>
                                     <th>Holat</th>
                                     @if($showActions)
                                         <th>Amal</th>
@@ -316,13 +360,15 @@
                                         $isPending = $opening->status === 'pending';
                                         $lessonDate = $opening->lesson_date;
                                         $daysAgo = $lessonDate ? (int) abs($lessonDate->copy()->startOfDay()->diffInDays(now()->startOfDay())) : null;
-                                        $ext = strtolower(pathinfo((string) $opening->file_original_name, PATHINFO_EXTENSION));
-                                        $extClass = match (true) {
-                                            $ext === 'pdf' => 'is-pdf',
-                                            in_array($ext, ['png', 'jpg', 'jpeg', 'heic', 'webp', 'gif'], true) => 'is-img',
-                                            in_array($ext, ['doc', 'docx'], true) => 'is-doc',
-                                            default => 'is-other',
-                                        };
+                                        [$extLabel, $extClass] = $extClassOf($opening->file_original_name);
+                                        [$explLabel, $explClass] = $extClassOf($opening->explanation_file_original_name);
+                                        $number = (int) $opening->request_number;
+                                        // Joriy foydalanuvchi shu so'rovga qaror bera oladimi
+                                        $canAct = $canReview && ($stage === 'registrar' ? $opening->isAwaitingRegistrar() : $opening->isAwaitingProrektor());
+                                        // Shu tasdiq darsni ochadimi (qolgan bosqich allaqachon tasdiqlagan)
+                                        $wouldOpen = $stage === 'registrar'
+                                            ? $opening->prorektor_status === 'approved'
+                                            : (!$opening->needs_registrar || $opening->registrar_status === 'approved');
                                         $months = ['', 'Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
                                     @endphp
                                     <tr class="{{ $isPending ? 'is-pending' : '' }}">
@@ -375,25 +421,44 @@
                                                 <span class="lo-avatar">{{ $initials($opening->opened_by_name) }}</span>
                                                 <div>
                                                     <strong>{{ $opening->opened_by_name }}</strong>
+                                                    @if($opening->teacher_name && mb_strtolower(trim($opening->teacher_name)) !== mb_strtolower(trim((string) $opening->opened_by_name)))
+                                                        <span class="lo-behalf">{{ $opening->teacher_name }} nomidan</span>
+                                                    @endif
                                                     <small>{{ $opening->created_at?->format('d.m.Y H:i') }}</small>
                                                 </div>
                                             </div>
+                                            @if($number > 0)
+                                                <span class="lo-nbadge is-{{ min($number, 3) }}">
+                                                    {{ $number }}-so'rov{{ $number >= 3 ? ' · admin orqali' : '' }}
+                                                </span>
+                                            @endif
                                             @if($opening->request_note)
                                                 <div class="lo-quote">“{{ $opening->request_note }}”</div>
                                             @endif
                                         </td>
-                                        <td data-label="Asos hujjat">
+                                        <td data-label="Hujjatlar">
+                                            <div class="lo-files">
                                             @if($opening->file_path)
                                                 <a class="lo-file" href="{{ route('admin.journal.download-lesson-file', $opening->id) }}" title="{{ $opening->file_original_name }}">
-                                                    <span class="lo-file-ext {{ $extClass }}">{{ strtoupper($ext ?: 'FAYL') }}</span>
+                                                    <span class="lo-file-ext {{ $extClass }}">{{ $extLabel }}</span>
                                                     <span class="lo-file-text">
+                                                        <span class="lo-file-kind">Bildirgi</span>
                                                         <span class="lo-file-name">{{ $opening->file_original_name ?: 'Fayl' }}</span>
-                                                        <span class="lo-file-dl">Yuklab olish</span>
                                                     </span>
                                                 </a>
                                             @else
                                                 <span class="lo-meta">Fayl yo'q</span>
                                             @endif
+                                            @if($opening->explanation_file_path)
+                                                <a class="lo-file is-explanation" href="{{ route('admin.journal.download-lesson-explanation', $opening->id) }}" title="{{ $opening->explanation_file_original_name }}">
+                                                    <span class="lo-file-ext {{ $explClass }}">{{ $explLabel }}</span>
+                                                    <span class="lo-file-text">
+                                                        <span class="lo-file-kind">Tushuntirish xati</span>
+                                                        <span class="lo-file-name">{{ $opening->explanation_file_original_name ?: 'Fayl' }}</span>
+                                                    </span>
+                                                </a>
+                                            @endif
+                                            </div>
                                         </td>
                                         <td data-label="Holat">
                                             <span class="lo-status lo-status-{{ $statusClass }}">{{ $statusText }}</span>
@@ -402,16 +467,23 @@
                                             @elseif($opening->status === 'active' && $opening->deadline)
                                                 <span class="lo-meta">Baho: <b>{{ $opening->deadline->format('d.m.Y H:i') }}</b> gacha</span>
                                             @endif
-                                            @if($opening->reviewed_by_name)
-                                                <span class="lo-meta">{{ $opening->reviewed_by_name }} · {{ $opening->reviewed_at?->format('d.m.Y H:i') }}</span>
-                                            @endif
+                                            <div class="lo-stages">
+                                                @if($opening->needs_registrar)
+                                                    @php [$mark, $markClass, $markText] = $decisionOf($opening->registrar_status, $opening->registrar_name, $opening->registrar_at); @endphp
+                                                    <div class="lo-stage {{ $markClass }}"><i>{{ $mark }}</i><span><b>Registrator:</b> {{ $markText }}</span></div>
+                                                @endif
+                                                @if($isPending || $opening->prorektor_status)
+                                                    @php [$mark, $markClass, $markText] = $decisionOf($opening->prorektor_status, $opening->reviewed_by_name, $opening->reviewed_at); @endphp
+                                                    <div class="lo-stage {{ $markClass }}"><i>{{ $mark }}</i><span><b>Prorektor:</b> {{ $markText }}</span></div>
+                                                @endif
+                                            </div>
                                             @if($opening->status === 'rejected' && $opening->review_comment)
                                                 <div class="lo-reason"><strong>Sabab:</strong> {{ $opening->review_comment }}</div>
                                             @endif
                                         </td>
                                         @if($showActions)
                                             <td data-label="{{ $isPending ? 'Amal' : '' }}">
-                                                @if($isPending)
+                                                @if($canAct)
                                                     <div class="lo-actions">
                                                         <button type="button" class="lo-btn lo-btn-approve"
                                                                 onclick="loOpenModal('approve', this)"
@@ -420,7 +492,8 @@
                                                                 data-subject="{{ $subjectName }}"
                                                                 data-teacher="{{ $teacherNames }}"
                                                                 data-date="{{ $lessonDate?->format('d.m.Y') }}"
-                                                                data-by="{{ $opening->opened_by_name }}">
+                                                                data-by="{{ $opening->opened_by_name }}"
+                                                                data-final="{{ $wouldOpen ? '1' : '0' }}">
                                                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                                                             Tasdiqlash
                                                         </button>
@@ -436,6 +509,10 @@
                                                             Rad etish
                                                         </button>
                                                     </div>
+                                                @elseif($isPending && $stage === 'registrar' && !$opening->needs_registrar)
+                                                    <span class="lo-waiting">1-so'rov — faqat prorektor tasdiqlaydi</span>
+                                                @elseif($isPending)
+                                                    <span class="lo-waiting">{{ $stage === 'registrar' ? 'Prorektor' : 'Registrator' }} tasdig'i kutilmoqda</span>
                                                 @endif
                                             </td>
                                         @endif
@@ -474,9 +551,13 @@
                         <dt>Dars sanasi</dt><dd data-fill="date"></dd>
                         <dt>So'rov yubordi</dt><dd data-fill="by"></dd>
                     </dl>
-                    <div class="lo-callout">
+                    <div class="lo-callout" data-when="final">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <div>Dars ochiladi va o'qituvchi <b>{{ $approveDeadline }}</b> gacha ({{ $openingDays }} kun) baho qo'ya oladi. O'qituvchiga Telegram orqali xabar boradi.</div>
+                    </div>
+                    <div class="lo-callout is-partial" data-when="partial">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <div>Bu takroriy so'rov: dars <b>{{ $stage === 'registrar' ? "o'quv prorektori" : 'registrator ofisi' }}</b> ham tasdiqlagach ochiladi. Baho qo'yish muddati o'shanda hisoblanadi.</div>
                     </div>
                     <div class="lo-modal-foot">
                         <button type="button" class="lo-btn lo-btn-ghost" onclick="loCloseModals()">Bekor qilish</button>
@@ -539,6 +620,9 @@
                     el.textContent = btn.dataset[el.dataset.fill] || '—';
                 });
                 modal.querySelectorAll('button[type="submit"]').forEach(function (b) { b.disabled = false; });
+                modal.querySelectorAll('[data-when]').forEach(function (el) {
+                    el.style.display = el.dataset.when === (btn.dataset.final === '1' ? 'final' : 'partial') ? '' : 'none';
+                });
                 if (kind === 'reject') {
                     document.getElementById('loRejectComment').value = '';
                 }

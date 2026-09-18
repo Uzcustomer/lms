@@ -377,11 +377,18 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'oquv_prorektori', 'admin']))
+        @if($hasActiveRole(['superadmin', 'oquv_prorektori', 'admin', 'registrator_ofisi']))
         @php
+            // Nishonda — shu rol qarorini kutayotgan so'rovlar
             $pendingLessonOpenings = 0;
             try {
-                $pendingLessonOpenings = \App\Models\LessonOpening::where('status', 'pending')->count();
+                $loQuery = \App\Models\LessonOpening::where('status', 'pending');
+                if ($hasActiveRole('registrator_ofisi')) {
+                    $loQuery->where('needs_registrar', true)->whereNull('registrar_status');
+                } elseif ($hasActiveRole(['oquv_prorektori', 'superadmin'])) {
+                    $loQuery->whereNull('prorektor_status');
+                }
+                $pendingLessonOpenings = $loQuery->count();
             } catch (\Throwable $e) {
                 $pendingLessonOpenings = 0;
             }

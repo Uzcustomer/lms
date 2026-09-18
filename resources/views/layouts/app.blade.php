@@ -170,7 +170,8 @@
                     <div class="bg-red-600 text-white">
                         <div class="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between">
                             <span class="text-sm font-medium">
-                                Siz hozir <strong>{{ session('impersonated_name') }}</strong> sifatida kirgansiz (Superadmin rejimi)
+                                {{-- To'liq ism emas, faqat bosh harflari --}}
+                                Siz hozir <strong title="{{ session('impersonated_name') }}">{{ name_initials(session('impersonated_name')) }}</strong> sifatida kirgansiz (Superadmin rejimi)
                             </span>
                             <form action="{{ route('impersonate.stop') }}" method="POST" class="inline">
                                 @csrf

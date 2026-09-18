@@ -428,3 +428,25 @@ if (!function_exists('format_datetime')) {
         return $date->format($format);
     }
 }
+
+if (!function_exists('name_initials')) {
+    /**
+     * F.I.Sh dan faqat bosh harflar: "PAYGAMOVA ZULFIYA XUSHBAKOVNA" -> "P. Z. X.".
+     * Otasining ismidagi "o'g'li" / "qizi" qo'shimchalari tashlanadi.
+     */
+    function name_initials(?string $name): string
+    {
+        $skip = ['ogli', 'ugli', 'qizi', 'kizi'];
+
+        $initials = [];
+        foreach (preg_split('/\s+/u', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) as $word) {
+            $plain = preg_replace('/[^\p{L}]/u', '', mb_strtolower($word));
+            if ($plain === '' || in_array($plain, $skip, true)) {
+                continue;
+            }
+            $initials[] = mb_strtoupper(mb_substr($plain, 0, 1)) . '.';
+        }
+
+        return implode(' ', $initials);
+    }
+}

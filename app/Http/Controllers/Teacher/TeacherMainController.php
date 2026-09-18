@@ -69,7 +69,30 @@ class TeacherMainController extends Controller
         $topTotalRanked = $topPayload['total_ranked'] ?? null;
         $topSize = $topPayload['size'] ?? CalculateTeacherDashboardStats::TOP_LEADERBOARD_SIZE;
 
+        // Baho qo'yilmay qolgan darslar — har kirishda popupda ko'rsatiladi.
+        // Popup ishlamasa ham dashboard ochilaversin.
+        $missedLessons = collect();
+        $openingQuota = null;
+        if ($isTeacherRole && $teacher && Schema::hasTable('lesson_openings')) {
+            try {
+                $missedLessons = app(\App\Services\TeacherMissedLessons::class)->forTeacher($teacher);
+                if ($missedLessons->isNotEmpty()) {
+                    $used = \App\Models\LessonOpening::priorRequestCount($teacher->id);
+                    $limit = \App\Models\LessonOpening::TEACHER_REQUEST_LIMIT;
+                    $openingQuota = ['used' => $used, 'limit' => $limit, 'remaining' => max(0, $limit - $used)];
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("Baho qo'yilmagan darslar popupi hisoblanmadi", [
+                    'teacher_id' => $teacher->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $missedLessons = collect();
+            }
+        }
+
         return view('teacher.dashboard', [
+            'missedLessons'   => $missedLessons,
+            'openingQuota'    => $openingQuota,
             'stats'           => $stats,
             'topItems'        => $topItems,
             'topUpdatedAt'    => $topUpdatedAt,

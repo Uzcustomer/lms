@@ -5641,6 +5641,28 @@
         document.getElementById('lessonOpenModal').addEventListener('click', function(e) {
             if (e.target === this) closeLessonModal();
         });
+
+        // Dashboard popupidan kelinganda (?open_lesson=YYYY-MM-DD) shu sana uchun
+        // so'rov oynasi o'zi ochiladi. Jurnaldagi "!" tugmasi orqali — u faqat so'rov
+        // yuborish mumkin bo'lgan kunlarda bor va rad etilgan so'rov sababini ham
+        // uzatadi. Parametr URL'dan olib tashlanadi: so'rovdan keyingi qayta
+        // yuklashda oyna yana ochilmasin.
+        document.addEventListener('DOMContentLoaded', function () {
+            var params = new URLSearchParams(window.location.search);
+            var day = params.get('open_lesson');
+            if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+
+            params.delete('open_lesson');
+            var qs = params.toString();
+            history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+
+            var trigger = document.querySelector('[onclick*="openLessonModal(\'' + day + '\'"]');
+            if (trigger) {
+                trigger.click();
+            } else {
+                alert(day.split('-').reverse().join('.') + " sanasi uchun so'rov yuborib bo'lmaydi: baho allaqachon qo'yilgan yoki so'rov yuborilgan.");
+            }
+        });
     </script>
     @endif
 

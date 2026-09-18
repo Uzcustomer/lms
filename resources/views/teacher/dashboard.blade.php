@@ -223,31 +223,31 @@
         <style>
             .mlp-overlay { position: fixed; inset: 0; z-index: 1050; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(15,23,42,.55); }
             .mlp-overlay.is-open { display: flex; }
-            .mlp-box { width: 100%; max-width: 620px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 24px 60px rgba(15,23,42,.35); }
-            .mlp-head { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px; background: linear-gradient(135deg, #b91c1c, #ea580c); color: #fff; }
-            .mlp-head-icon { flex: 0 0 42px; width: 42px; height: 42px; border-radius: 12px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; }
-            .mlp-head-icon svg { width: 24px; height: 24px; }
-            .mlp-head h3 { margin: 0; font-size: 17px; font-weight: 800; color: #fff; }
-            .mlp-head p { margin: 4px 0 0; font-size: 13px; opacity: .92; line-height: 1.45; }
-            .mlp-body { padding: 14px 20px; overflow-y: auto; }
-            .mlp-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+            .mlp-box { width: 100%; max-width: 780px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 24px 60px rgba(15,23,42,.35); }
+            .mlp-head { display: flex; gap: 16px; align-items: flex-start; padding: 22px 26px; background: linear-gradient(135deg, #b91c1c, #ea580c); color: #fff; }
+            .mlp-head-icon { flex: 0 0 48px; width: 48px; height: 48px; border-radius: 14px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; }
+            .mlp-head-icon svg { width: 28px; height: 28px; }
+            .mlp-head h3 { margin: 0; font-size: 20px; font-weight: 800; color: #fff; }
+            .mlp-head p { margin: 6px 0 0; font-size: 14px; opacity: .92; line-height: 1.5; }
+            .mlp-body { padding: 16px 26px; overflow-y: auto; }
+            .mlp-row { display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid #f1f5f9; }
             .mlp-row:last-child { border-bottom: 0; }
-            .mlp-cal { flex: 0 0 52px; text-align: center; border-radius: 10px; overflow: hidden; border: 1px solid #fecaca; }
-            .mlp-cal i { display: block; font-style: normal; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #fff; background: #dc2626; padding: 2px 0; }
-            .mlp-cal b { display: block; font-size: 18px; color: #7f1d1d; padding: 2px 0; }
+            .mlp-cal { flex: 0 0 60px; text-align: center; border-radius: 12px; overflow: hidden; border: 1px solid #fecaca; }
+            .mlp-cal i { display: block; font-style: normal; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #fff; background: #dc2626; padding: 3px 0; }
+            .mlp-cal b { display: block; font-size: 22px; color: #7f1d1d; padding: 3px 0; }
             .mlp-info { flex: 1; min-width: 0; }
-            .mlp-subject { font-size: 14px; font-weight: 700; color: #1e293b; }
-            .mlp-meta { font-size: 12px; color: #64748b; margin-top: 2px; }
-            .mlp-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #b91c1c; }
-            .mlp-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 9px; font-size: 12px; font-weight: 700; text-decoration: none !important; white-space: nowrap; background: #16a34a; color: #fff !important; }
+            .mlp-subject { font-size: 16px; font-weight: 700; color: #1e293b; }
+            .mlp-meta { font-size: 13px; color: #64748b; margin-top: 3px; }
+            .mlp-tag { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #fee2e2; color: #b91c1c; }
+            .mlp-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none !important; white-space: nowrap; background: #16a34a; color: #fff !important; }
             .mlp-btn:hover { background: #15803d; }
             .mlp-btn.is-muted { background: #e2e8f0; color: #334155 !important; }
-            .mlp-btn svg { width: 14px; height: 14px; }
-            .mlp-note { margin: 0 20px 12px; padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.5; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+            .mlp-btn svg { width: 16px; height: 16px; }
+            .mlp-note { margin: 0 26px 14px; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
             .mlp-note.is-danger { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
-            .mlp-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 20px; border-top: 1px solid #f1f5f9; background: #f8fafc; }
-            .mlp-foot small { color: #64748b; font-size: 12px; }
-            .mlp-close { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 9px; padding: 7px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+            .mlp-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 26px; border-top: 1px solid #f1f5f9; background: #f8fafc; }
+            .mlp-foot small { color: #64748b; font-size: 13px; }
+            .mlp-close { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 10px; padding: 9px 20px; font-size: 14px; font-weight: 700; cursor: pointer; }
             .mlp-close:hover { background: #f1f5f9; }
             @media (max-width: 480px) {
                 .mlp-row { flex-wrap: wrap; }

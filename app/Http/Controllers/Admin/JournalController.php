@@ -1749,6 +1749,18 @@ class JournalController extends Controller
             $hasOskiForWeights = ($defaultWeights['oski'] ?? 0) > 0;
             $hasTestForWeights = ($defaultWeights['test'] ?? 0) > 0;
 
+            // Fan darslari hali davom etyaptimi — jadvalda bugun yoki undan keyin
+            // dars bor. YN sanasi hali qo'yilmagan bo'lsa bosqich shunga qarab
+            // aniqlanadi: aks holda semestr boshida JN/MT hali past bo'lgani uchun
+            // hamma talaba "Pullik"/"2-urinish" bo'lib chiqardi.
+            $stageTodayStr = now('Asia/Tashkent')->format('Y-m-d');
+            $lastLessonDateStr = collect([$jbScheduleRows, $mtScheduleRows, $lectureScheduleRows])
+                ->flatMap(fn ($rows) => collect($rows)->pluck('lesson_date'))
+                ->filter()
+                ->map(fn ($d) => substr((string) $d, 0, 10))
+                ->max();
+            $subjectStillRunning = $lastLessonDateStr !== null && $lastLessonDateStr >= $stageTodayStr;
+
             $stageLevelCode = (string) ($semester?->level_code ?? '');
             $hasAttemptColForStage = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
 
@@ -2059,18 +2071,22 @@ class JournalController extends Controller
                 $stageKey = $stageInfo['stage'];
 
                 // 1-urinish OSKI/Test uchun aniq sana kelajakda turgan bo'lsa,
-                // talabani hozircha 2-urinishga o'tkazmaymiz. Lekin sana umuman
-                // qo'yilmagan bo'lsa, badge'ni kulrang "1-urinish"da abadiy ushlab
-                // turmaymiz — bunday holatda stage determineStage natijasiga ko'ra
-                // 2-urinishga tushishi mumkin.
+                // talabani hozircha 2-urinishga o'tkazmaymiz. Sana hali qo'yilmagan
+                // bo'lsa — fan darslari davom etayotgan paytda ham "1-urinish"da
+                // turadi; darslar tugagach esa (sana baribir qo'yilmasa) badge
+                // abadiy kulrang qolmasin deb determineStage natijasi ishlatiladi.
                 $today = now()->format('Y-m-d');
-                $oskiDone = $hasOskiForWeights
-                    ? (!$examSchedule || !$examSchedule->oski_date || $examSchedule->oski_date->format('Y-m-d') < $today)
-                    : true;
-                $testDone = $hasTestForWeights
-                    ? (!$examSchedule || !$examSchedule->test_date || $examSchedule->test_date->format('Y-m-d') < $today)
-                    : true;
-                $oneUrinishEnded = $oskiDone && $testDone;
+                $examDone = function ($date) use ($today, $subjectStillRunning) {
+                    return $date ? $date->format('Y-m-d') < $today : !$subjectStillRunning;
+                };
+                if ($hasOskiForWeights || $hasTestForWeights) {
+                    $oskiDone = $hasOskiForWeights ? $examDone($examSchedule?->oski_date) : true;
+                    $testDone = $hasTestForWeights ? $examDone($examSchedule?->test_date) : true;
+                    $oneUrinishEnded = $oskiDone && $testDone;
+                } else {
+                    // OSKI ham, test ham yo'q fan — 1-urinish darslar tugashi bilan tugaydi
+                    $oneUrinishEnded = !$subjectStillRunning;
+                }
                 $isDavomatFail = ($main['v'] ?? null) === -3;
                 $isInPostMainStage = !in_array($stageKey, [
                     $svc::STAGE_ASOSIY_PASSED,

@@ -34,7 +34,7 @@ class LessonOpeningNotifier
             . "Hurmatli {$this->e($teacher->full_name)}!\n\n"
             . "{$lesson['subject']} fani bo'yicha {$lesson['group']} guruhining "
             . "{$lesson['date']} sanadagi darsi baho qo'yish uchun ochildi.\n\n"
-            . ($deadline ? "⏰ Baho qo'yish muddati: <b>{$deadline}</b>\n\n" : '')
+            . ($deadline ? "⏰ Baho qo'yish muddati: <b>{$deadline}</b> gacha\n\n" : '')
             . "Iltimos, muddatgacha baholarni kiritib qo'ying."
         );
     }
@@ -154,7 +154,7 @@ class LessonOpeningNotifier
                 . "📅 Dars sanasi: {$lesson['date']}\n"
                 . ($opening->request_number ? "🔢 So'rov: {$opening->request_number}-so'rov\n" : '')
                 . "\n✅ Tasdiqlaganlar:\n" . implode("\n", $approvals)
-                . ($deadline ? "\n\n⏰ Baho qo'yish muddati: {$deadline}" : '');
+                . ($deadline ? "\n\n⏰ Baho qo'yish muddati: {$deadline} gacha" : '');
 
             $this->telegram->sendToUser((string) $chatId, $message);
         } catch (\Throwable $e) {

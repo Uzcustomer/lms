@@ -5,16 +5,15 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\Student;
-use App\Models\StudentPhoto;
 use App\Models\Teacher;
 use App\Services\ActivityLogService;
+use App\Services\StudentFaceVerifier;
 use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
@@ -317,11 +316,10 @@ class AuthController extends Controller
     }
 
     /**
-     * Face ID login — compares uploaded photo with student's reference photo
-     * (HEMIS profile image or latest approved StudentPhoto) using the local
-     * face-compare microservice (DeepFace + ArcFace, port 5005).
+     * Face ID login — compares the uploaded photo with the student's approved
+     * StudentPhoto via the face-compare microservice (StudentFaceVerifier).
      */
-    public function studentFaceLogin(Request $request): JsonResponse
+    public function studentFaceLogin(Request $request, StudentFaceVerifier $verifier): JsonResponse
     {
         $request->validate([
             'login' => ['required', 'string'],
@@ -333,78 +331,35 @@ class AuthController extends Controller
             return response()->json(['message' => 'Talaba topilmadi.'], 404);
         }
 
-        // Reference image — prefer approved StudentPhoto, fallback to HEMIS profile
-        $referenceUrl = null;
-
-        $approvedPhoto = StudentPhoto::where('student_id_number', $student->student_id_number)
-            ->where('status', StudentPhoto::STATUS_APPROVED)
-            ->latest('reviewed_at')
-            ->first();
-
-        if ($approvedPhoto && $approvedPhoto->photo_path) {
-            $referenceUrl = asset($approvedPhoto->photo_path);
-        } elseif (!empty($student->image)) {
-            $referenceUrl = $student->image;
-        }
-
-        if (!$referenceUrl) {
-            return response()->json([
-                'message' => "Talabaning tasdiqlangan rasmi topilmadi. Avval parol bilan kiring.",
-            ], 422);
-        }
-
-        // Save uploaded photo temporarily
-        $tmpPath = $request->file('photo')->store('face-login-tmp', 'public');
-        $tmpUrl = asset('storage/' . $tmpPath);
-
-        $serviceUrl = rtrim(config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
-        $timeout = config('services.face_compare.timeout', 60);
-
-        try {
-            $response = Http::timeout($timeout)
-                ->acceptJson()
-                ->post($serviceUrl . '/compare', [
-                    'image1' => $referenceUrl,
-                    'image2' => $tmpUrl,
-                ]);
-        } catch (\Throwable $e) {
-            Storage::disk('public')->delete($tmpPath);
-            Log::error('Face login: compare service unreachable', [
-                'student' => $student->student_id_number,
-                'error' => $e->getMessage(),
-            ]);
-            return response()->json([
-                'message' => 'Yuz tanish servisiga ulanib bo\'lmadi.',
-            ], 503);
-        }
-
-        // Cleanup temporary upload
-        Storage::disk('public')->delete($tmpPath);
-
-        if (!$response->successful()) {
-            return response()->json([
-                'message' => 'Yuz tanish xatoligi: ' . ($response->json('detail') ?? $response->body()),
-            ], 502);
-        }
-
-        $data = $response->json();
-        $percent = (float) ($data['similarity_percent'] ?? 0);
-        $match = (bool) ($data['match'] ?? false);
+        // Same reference photo, threshold and switches as the web Face ID login.
+        $face = $verifier->check($student, $request->file('photo'), 'mobile_login');
 
         Log::info('Face login attempt', [
             'student' => $student->student_id_number,
-            'similarity' => $percent,
-            'match' => $match,
+            'result' => $face['result'],
+            'similarity' => $face['similarity'],
         ]);
 
-        if (!$match) {
-            return response()->json([
+        return match ($face['result']) {
+            StudentFaceVerifier::OK => $this->issueStudentToken($student),
+            // 422, not 401: the app treats 401 as "session expired".
+            StudentFaceVerifier::MISMATCH => response()->json([
                 'message' => 'Yuz mos kelmadi. Iltimos, parol bilan kiring.',
-                'similarity_percent' => $percent,
-            ], 401);
-        }
-
-        return $this->issueStudentToken($student);
+                'similarity_percent' => $face['similarity'],
+            ], 422),
+            StudentFaceVerifier::DISABLED => response()->json([
+                'message' => "Face ID o'chirilgan. Parol bilan kiring.",
+            ], 403),
+            StudentFaceVerifier::NO_REFERENCE => response()->json([
+                'message' => "Talabaning tasdiqlangan rasmi topilmadi. Avval parol bilan kiring.",
+            ], 422),
+            StudentFaceVerifier::UNAVAILABLE => response()->json([
+                'message' => "Yuz tanish servisiga ulanib bo'lmadi.",
+            ], 503),
+            default => response()->json([
+                'message' => "Suratni o'qib bo'lmadi. Qayta urinib ko'ring.",
+            ], 422),
+        };
     }
 
     // --- Private Helpers ---

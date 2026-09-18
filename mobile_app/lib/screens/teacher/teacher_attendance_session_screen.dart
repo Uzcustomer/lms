@@ -305,9 +305,15 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
         leading: Icon(icon, color: color),
         title: Text(st['full_name']?.toString() ?? '',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: ClinicTheme.inkOf(context))),
-        subtitle: Text(
-          '${st['group_name'] ?? ''} · $label${byTeacher ? ' (qo\'lda)' : ''}'
-          '${st['rssi'] != null && status == 'present' ? ' · ${st['rssi']} dBm' : ''}',
+        subtitle: Text.rich(
+          TextSpan(children: [
+            TextSpan(
+              text: '${st['group_name'] ?? ''} · $label${byTeacher ? ' (qo\'lda)' : ''}'
+                  '${st['rssi'] != null && status == 'present' ? ' · ${st['rssi']} dBm' : ''}',
+            ),
+            if (_faceLabel(st) case final face?)
+              TextSpan(text: ' · ${face.$1}', style: TextStyle(color: face.$2, fontWeight: FontWeight.w700)),
+          ]),
           style: TextStyle(fontSize: 11.5, color: ClinicTheme.mutedOf(context)),
         ),
         trailing: _busy
@@ -319,6 +325,21 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
               ),
       ),
     );
+  }
+
+  /// Outcome of the student's selfie check, if there is one worth showing.
+  (String, Color)? _faceLabel(Map<String, dynamic> st) {
+    final sim = st['face_similarity'] == null
+        ? ''
+        : ' ${double.tryParse(st['face_similarity'].toString())?.round() ?? ''}%';
+    if (st['face_verified'] == true) return ('✓ yuz$sim', ClinicTheme.green);
+    if (st['face_note'] == 'mismatch') return ('✗ yuz mos emas$sim', const Color(0xFFBE123C));
+    const unchecked = {'no_photo': 'rasmi yo\'q', 'no_service': 'servis ishlamadi', 'disabled': 'Face ID o\'chiq'};
+    final note = unchecked[st['face_note']];
+    if (note != null && st['status'] == 'present' && st['decided_by'] == 'student') {
+      return ('? yuz tekshirilmadi ($note)', const Color(0xFFB45309));
+    }
+    return null;
   }
 
   Widget _actionBar() {

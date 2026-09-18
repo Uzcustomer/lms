@@ -212,6 +212,10 @@ return [
         'presence_ttl_minutes' => (int) env('ATTENDANCE_PRESENCE_TTL_MINUTES', 15),
         // Weakest RSSI (dBm) accepted when confirming; lower = farther away.
         'min_rssi' => (int) env('ATTENDANCE_MIN_RSSI', -95),
+        // Ask for a selfie on confirm and match it against the approved
+        // student photo (same source as the Face ID login). Teachers can
+        // still switch it off for a single lesson.
+        'require_face' => (bool) env('ATTENDANCE_REQUIRE_FACE', true),
     ],
 
     'gemini' => [

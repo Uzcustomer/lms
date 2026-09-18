@@ -12,11 +12,12 @@ class AttendanceSession extends Model
     protected $fillable = [
         'teacher_id', 'teacher_hemis_id', 'subject_id', 'subject_name', 'semester_code',
         'lesson_date', 'lesson_pair_code', 'lesson_pair_name', 'training_type_name',
-        'auditorium_code', 'auditorium_name', 'beacon_id',
+        'auditorium_code', 'auditorium_name', 'beacon_id', 'require_face',
         'opened_at', 'closes_at', 'closed_at', 'status',
     ];
 
     protected $casts = [
+        'require_face' => 'boolean',
         'lesson_date' => 'date',
         'opened_at' => 'datetime',
         'closes_at' => 'datetime',
@@ -92,6 +93,7 @@ class AttendanceSession extends Model
             'training_type_name' => $this->training_type_name,
             'auditorium_code' => $this->auditorium_code,
             'auditorium_name' => $this->auditorium_name,
+            'require_face' => (bool) $this->require_face,
             'beacon' => $this->beacon?->toApi(),
             'group_names' => $this->groups->pluck('group_name')->filter()->values(),
             'status' => $this->isOpen() ? self::STATUS_OPEN : self::STATUS_CLOSED,

@@ -75,6 +75,7 @@ class AttendanceController extends Controller
             'lesson_pair_code' => ['required', 'string', 'max:32'],
             'date' => ['nullable', 'date'],
             'window_minutes' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'require_face' => ['nullable', 'boolean'],
         ]);
         $teacher = $this->requireTeacher();
         $date = isset($data['date']) ? Carbon::parse($data['date'])->startOfDay() : today();
@@ -86,6 +87,7 @@ class AttendanceController extends Controller
                 $data['lesson_pair_code'],
                 $date,
                 isset($data['window_minutes']) ? (int) $data['window_minutes'] : null,
+                isset($data['require_face']) ? (bool) $data['require_face'] : null,
             );
         } catch (AttendanceException $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);

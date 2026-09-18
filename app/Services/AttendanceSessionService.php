@@ -77,6 +77,7 @@ class AttendanceSessionService
         string $lessonPairCode,
         Carbon $date,
         ?int $windowMinutes = null,
+        ?bool $requireFace = null,
     ): AttendanceSession {
         $rows = $this->scheduleRows($teacher->hemis_id, $date)
             ->where('subject_id', $subjectId)
@@ -100,11 +101,12 @@ class AttendanceSessionService
 
         $beacon = $this->beaconFor($first->auditorium_code);
         $window = $windowMinutes ?? (int) config('services.attendance.window_minutes', 10);
+        $requireFace ??= (bool) config('services.attendance.require_face', true);
         $groupIds = $rows->pluck('group_id')->unique()->values();
         $students = Student::whereIn('group_id', $groupIds)->get(['id', 'hemis_id']);
         $seenIds = $beacon ? $this->recentlySeen($beacon->id, $students->pluck('id')->all(), now()) : [];
 
-        $session = DB::transaction(function () use ($teacher, $first, $rows, $beacon, $window, $students, $seenIds) {
+        $session = DB::transaction(function () use ($teacher, $first, $rows, $beacon, $window, $requireFace, $students, $seenIds) {
             $session = AttendanceSession::create([
                 'teacher_id' => $teacher->id,
                 'teacher_hemis_id' => $teacher->hemis_id,
@@ -118,6 +120,7 @@ class AttendanceSessionService
                 'auditorium_code' => $first->auditorium_code,
                 'auditorium_name' => $first->auditorium_name,
                 'beacon_id' => $beacon?->id,
+                'require_face' => $requireFace,
                 'opened_at' => now(),
                 'closes_at' => now()->addMinutes($window),
                 'status' => AttendanceSession::STATUS_OPEN,
@@ -236,6 +239,9 @@ class AttendanceSessionService
                 'beacon_seen' => $c->beacon_seen,
                 'notified' => $c->notified,
                 'rssi' => $c->rssi,
+                'face_verified' => $c->face_verified,
+                'face_similarity' => $c->face_similarity,
+                'face_note' => $c->face_note,
                 'confirmed_at' => $c->confirmed_at?->toIso8601String(),
             ])
             ->sortBy([['group_name', 'asc'], ['full_name', 'asc']])

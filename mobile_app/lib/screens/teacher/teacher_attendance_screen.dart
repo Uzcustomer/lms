@@ -51,11 +51,11 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
 
   Future<void> _start(Map<String, dynamic> lesson) async {
     final hasBeacon = lesson['has_beacon'] == true;
-    final minutes = await showDialog<int>(
+    final choice = await showDialog<({int minutes, bool face})>(
       context: context,
       builder: (ctx) => _StartDialog(lesson: lesson, hasBeacon: hasBeacon),
     );
-    if (minutes == null || !mounted) return;
+    if (choice == null || !mounted) return;
 
     final key = '${lesson['subject_id']}|${lesson['lesson_pair_code']}';
     setState(() => _starting = key);
@@ -64,7 +64,8 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         subjectId: int.parse(lesson['subject_id'].toString()),
         lessonPairCode: lesson['lesson_pair_code'].toString(),
         date: _date,
-        windowMinutes: minutes,
+        windowMinutes: choice.minutes,
+        requireFace: choice.face,
       );
       final session = data['session'] as Map<String, dynamic>?;
       if (!mounted || session == null) return;
@@ -292,6 +293,7 @@ class _StartDialog extends StatefulWidget {
 
 class _StartDialogState extends State<_StartDialog> {
   int _minutes = 10;
+  bool _face = true;
 
   @override
   Widget build(BuildContext context) {
@@ -327,12 +329,23 @@ class _StartDialogState extends State<_StartDialog> {
                     ))
                 .toList(),
           ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _face,
+            onChanged: (v) => setState(() => _face = v),
+            title: const Text('Yuz tekshiruvi', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            subtitle: const Text(
+              "Talaba selfi oladi, LMS'dagi tasdiqlangan rasmi bilan solishtiriladi.",
+              style: TextStyle(fontSize: 11.5),
+            ),
+          ),
         ],
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Bekor qilish')),
         ElevatedButton(
-          onPressed: () => Navigator.pop(context, _minutes),
+          onPressed: () => Navigator.pop(context, (minutes: _minutes, face: _face)),
           child: const Text('Boshlash'),
         ),
       ],

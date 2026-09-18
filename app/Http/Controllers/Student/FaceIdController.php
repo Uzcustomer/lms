@@ -385,8 +385,8 @@ class FaceIdController extends Controller
         $confidence = null;
 
         if ($arcFaceEnabled) {
-            $approvedPhoto = FaceIdService::getApprovedStudentPhoto($student);
-            if (!$approvedPhoto) {
+            $referenceUrl = FaceIdService::referenceImageFor($student);
+            if (!$referenceUrl) {
                 FaceIdService::logAttempt(array_merge($commonLog, [
                     'result'         => 'failed',
                     'failure_reason' => 'student_photos da tasdiqlangan rasm yo\'q',
@@ -412,7 +412,6 @@ class FaceIdController extends Controller
             }
 
             try {
-                $referenceUrl = asset($approvedPhoto->photo_path);
                 $compareResult = FaceIdService::compareViaArcFace($liveTmp['url'], $referenceUrl);
             } finally {
                 FaceIdService::deleteTemporarySnapshot($liveTmp['rel']);

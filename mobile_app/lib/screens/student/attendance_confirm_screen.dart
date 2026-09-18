@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../services/attendance_service.dart';
 import '../../services/beacon_service.dart';
@@ -144,12 +146,24 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
 
     setState(() => _confirming = p.sessionId);
     try {
+      // Second layer: a selfie, matched on the server against the student's
+      // approved LMS photo — the same one the Face ID login uses.
+      File? selfie;
+      if (p.requireFace) {
+        selfie = await _takeSelfie();
+        if (selfie == null) {
+          if (mounted) _snack("Davomat uchun yuzingizni suratga olish kerak.", error: true);
+          return;
+        }
+      }
+
       final res = await _service.confirm(
         p.sessionId,
         uuid: beacon.uuid,
         major: beacon.major,
         minor: beacon.minor,
         rssi: stats.median,
+        photo: selfie,
       );
       if (!mounted) return;
       _snack(res['message']?.toString() ?? 'Davomat tasdiqlandi.');
@@ -160,6 +174,23 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
       if (mounted) _snack('Tarmoq xatoligi. Qayta urinib ko\'ring.', error: true);
     } finally {
       if (mounted) setState(() => _confirming = null);
+    }
+  }
+
+  /// Front camera only — no gallery, so an old photo cannot be picked.
+  Future<File?> _takeSelfie() async {
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 85,
+        maxWidth: 1280,
+        maxHeight: 1280,
+      );
+      return picked == null ? null : File(picked.path);
+    } catch (_) {
+      if (mounted) _snack("Kamerani ochib bo'lmadi. Ruxsatlarni tekshiring.", error: true);
+      return null;
     }
   }
 
@@ -622,6 +653,21 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
             ],
           ),
           if (!p.isPresent) ...[
+            if (p.requireFace) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.face_retouching_natural, size: 16, color: ClinicTheme.mutedOf(context)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Tasdiqlashda old kamera ochiladi — yuzingiz LMS'dagi rasmingiz bilan solishtiriladi.",
+                      style: TextStyle(fontSize: 11.5, color: ClinicTheme.mutedOf(context)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -638,8 +684,15 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen>
                     ? const SizedBox(
                         width: 18, height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.how_to_reg),
-                label: Text(inRoom ? 'Davomatni tasdiqlash' : 'Xonaga kiring',
+                    : Icon(p.requireFace ? Icons.camera_front : Icons.how_to_reg),
+                label: Text(
+                    !inRoom
+                        ? 'Xonaga kiring'
+                        : busy
+                            ? 'Tekshirilmoqda…'
+                            : p.requireFace
+                            ? 'Yuz bilan tasdiqlash'
+                            : 'Davomatni tasdiqlash',
                     style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
             ),

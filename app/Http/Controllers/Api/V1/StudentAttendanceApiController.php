@@ -9,6 +9,7 @@ use App\Models\Beacon;
 use App\Models\DeviceToken;
 use App\Models\PresenceLog;
 use App\Models\Student;
+use App\Services\StudentFaceVerifier;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,10 @@ use Illuminate\Http\Request;
  */
 class StudentAttendanceApiController extends Controller
 {
+    public function __construct(private readonly StudentFaceVerifier $faceVerifier)
+    {
+    }
+
     public function registerDevice(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -125,6 +130,10 @@ class StudentAttendanceApiController extends Controller
             'major' => ['required', 'integer', 'min:0', 'max:65535'],
             'minor' => ['required', 'integer', 'min:0', 'max:65535'],
             'rssi' => ['nullable', 'integer', 'min:-127', 'max:0'],
+            // Second layer: a selfie taken at confirm time. Optional in the
+            // request so an older app build still works; required by the
+            // session when the teacher switched the face layer on.
+            'photo' => ['nullable', 'file', 'image', 'max:5120'],
         ]);
 
         $student = $request->user();
@@ -166,12 +175,52 @@ class StudentAttendanceApiController extends Controller
             return response()->json(['message' => "Davomatingiz o'qituvchi tomonidan belgilangan."], 422);
         }
 
+        // ── Identity layer ───────────────────────────────────
+        // The beacon already proves the phone is in the room; the face only
+        // has to prove whose phone it is. So a clear "not them" (or an
+        // unusable photo) sends the student back to retry, while "could not
+        // check" lets attendance through, flagged for the teacher.
+        $face = ['result' => null, 'similarity' => null];
+        if ($request->hasFile('photo')) {
+            $face = $this->faceVerifier->check($student, $request->file('photo'), 'attendance');
+
+            if (in_array($face['result'], [StudentFaceVerifier::MISMATCH, StudentFaceVerifier::UNREADABLE], true)) {
+                // Still pending, but the teacher sees the failed attempt.
+                if ($face['result'] === StudentFaceVerifier::MISMATCH) {
+                    $confirmation->update([
+                        'face_verified' => false,
+                        'face_similarity' => $face['similarity'],
+                        'face_note' => $face['result'],
+                        'face_checked_at' => now(),
+                    ]);
+                }
+
+                return response()->json([
+                    'message' => $face['result'] === StudentFaceVerifier::MISMATCH
+                        ? "Yuz mos kelmadi. Yorug' joyda, yuzingizni to'liq ko'rsatib qayta urinib ko'ring."
+                        : "Suratni o'qib bo'lmadi. Qayta urinib ko'ring.",
+                    'face_result' => $face['result'],
+                    'face_similarity' => $face['similarity'],
+                ], 422);
+            }
+        } elseif ($session->require_face) {
+            return response()->json([
+                'message' => "Bu dars uchun yuz tasdig'i talab qilinadi — ilovani yangilang.",
+                'face_result' => 'photo_required',
+            ], 422);
+        }
+
         $confirmation->update([
             'status' => AttendanceConfirmation::STATUS_PRESENT,
             'decided_by' => 'student',
             'beacon_seen' => true,
             'rssi' => $data['rssi'] ?? null,
             'confirmed_at' => now(),
+            // true = matched; null = not checked (an earlier mismatch is cleared).
+            'face_verified' => $face['result'] === StudentFaceVerifier::OK ? true : null,
+            'face_similarity' => $face['similarity'],
+            'face_note' => $face['result'] === StudentFaceVerifier::OK ? null : $face['result'],
+            'face_checked_at' => $face['result'] === null ? null : now(),
         ]);
 
         PresenceLog::create([
@@ -182,7 +231,20 @@ class StudentAttendanceApiController extends Controller
             'source' => 'confirm',
         ]);
 
-        return $this->confirmed($confirmation, 'Davomat tasdiqlandi.');
+        return $this->confirmed($confirmation, $this->confirmMessage($face['result']));
+    }
+
+    /** What to tell the student, given how far the identity check got. */
+    private function confirmMessage(?string $faceResult): string
+    {
+        return match ($faceResult) {
+            StudentFaceVerifier::OK => 'Davomat tasdiqlandi — yuz tasdiqlandi.',
+            StudentFaceVerifier::NO_REFERENCE =>
+                "Davomat tasdiqlandi. Tizimda tasdiqlangan suratingiz yo'q — yuz tekshirilmadi.",
+            StudentFaceVerifier::UNAVAILABLE =>
+                'Davomat tasdiqlandi. Yuzni tekshirish xizmati vaqtincha ishlamadi.',
+            default => 'Davomat tasdiqlandi.',
+        };
     }
 
     public function history(Request $request): JsonResponse
@@ -245,6 +307,7 @@ class StudentAttendanceApiController extends Controller
             'closes_at' => $s->closes_at->toIso8601String(),
             'seconds_left' => max(0, (int) now()->diffInSeconds($s->closes_at, false)),
             'beacon' => $s->beacon?->toApi(),
+            'require_face' => (bool) $s->require_face,
             'my_status' => $mine[$s->id]->status ?? AttendanceConfirmation::STATUS_PENDING,
         ])->values()->all();
     }

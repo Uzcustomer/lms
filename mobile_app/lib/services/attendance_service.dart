@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import 'api_service.dart';
@@ -43,6 +44,7 @@ class PendingAttendance {
   final String? auditoriumName;
   final DateTime? closesAt;
   final BeaconInfo? beacon;
+  final bool requireFace; // confirm needs a selfie matched to the approved photo
   final String myStatus; // pending | present | absent
 
   const PendingAttendance({
@@ -52,6 +54,7 @@ class PendingAttendance {
     this.auditoriumName,
     this.closesAt,
     this.beacon,
+    this.requireFace = false,
     required this.myStatus,
   });
 
@@ -66,6 +69,7 @@ class PendingAttendance {
       auditoriumName: json['auditorium_name']?.toString(),
       closesAt: DateTime.tryParse(json['closes_at']?.toString() ?? '')?.toLocal(),
       beacon: BeaconInfo.fromJson(json['beacon']),
+      requireFace: json['require_face'] == true,
       myStatus: json['my_status']?.toString() ?? 'pending',
     );
   }
@@ -134,11 +138,26 @@ class AttendanceService {
     required int major,
     required int minor,
     int? rssi,
-  }) {
-    return _api.post(
+    File? photo,
+  }) async {
+    if (photo == null) {
+      return _api.post(
+        ApiConfig.studentAttendanceConfirm(sessionId),
+        {'uuid': uuid, 'major': major, 'minor': minor, if (rssi != null) 'rssi': rssi},
+        auth: true,
+      );
+    }
+    return _api.multipartPost(
       ApiConfig.studentAttendanceConfirm(sessionId),
-      {'uuid': uuid, 'major': major, 'minor': minor, if (rssi != null) 'rssi': rssi},
-      auth: true,
+      {
+        'uuid': uuid,
+        'major': '$major',
+        'minor': '$minor',
+        if (rssi != null) 'rssi': '$rssi',
+      },
+      fileBytes: await photo.readAsBytes(),
+      fileName: 'selfie.jpg',
+      fileField: 'photo',
     );
   }
 
@@ -167,6 +186,7 @@ class AttendanceService {
     required String lessonPairCode,
     DateTime? date,
     int? windowMinutes,
+    bool? requireFace,
   }) async {
     final res = await _api.post(
       ApiConfig.teacherAttendanceSessions,
@@ -175,6 +195,7 @@ class AttendanceService {
         'lesson_pair_code': lessonPairCode,
         if (date != null) 'date': _ymd(date),
         if (windowMinutes != null) 'window_minutes': windowMinutes,
+        if (requireFace != null) 'require_face': requireFace,
       },
       auth: true,
     );

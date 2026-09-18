@@ -248,6 +248,20 @@ class FaceIdService
     }
 
     /**
+     * 1:1 tekshiruv uchun mos yozuv rasmi (ArcFace /compare ga beriladi).
+     * Face ID login ham, beacon davomati ham shu yerdan oladi — manba bitta.
+     */
+    public static function referenceImageFor(Student $student): ?string
+    {
+        $photo = self::getApprovedStudentPhoto($student);
+        if (!$photo || empty($photo->photo_path)) {
+            return null;
+        }
+
+        return asset($photo->photo_path);
+    }
+
+    /**
      * Tasdiqlangan student_photos rasmi mavjudligini tekshirish.
      */
     public static function hasApprovedPhoto(Student $student): bool

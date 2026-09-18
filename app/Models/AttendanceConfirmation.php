@@ -13,6 +13,7 @@ class AttendanceConfirmation extends Model
     protected $fillable = [
         'session_id', 'student_id', 'student_hemis_id', 'status', 'decided_by',
         'beacon_seen', 'rssi', 'notified', 'confirmed_at',
+        'face_verified', 'face_similarity', 'face_note', 'face_checked_at',
     ];
 
     protected $casts = [
@@ -20,6 +21,9 @@ class AttendanceConfirmation extends Model
         'notified' => 'boolean',
         'rssi' => 'integer',
         'confirmed_at' => 'datetime',
+        'face_verified' => 'boolean',
+        'face_similarity' => 'float',
+        'face_checked_at' => 'datetime',
     ];
 
     public function session()

@@ -143,6 +143,10 @@
                                         <option value="15">15 daq</option>
                                         <option value="20">20 daq</option>
                                     </select>
+                                    <label class="flex items-center gap-1 text-xs font-semibold text-gray-700 cursor-pointer select-none" title="Tasdiqlashda talabadan selfi so'raladi va LMS'dagi tasdiqlangan rasmi bilan solishtiriladi">
+                                        <input type="checkbox" class="rounded border-gray-300 text-teal-600" x-model="faceFor[lessonKey(l)]">
+                                        Yuz
+                                    </label>
                                     <button class="att-btn flex-1" :class="(l.sessions || []).length ? 'att-btn-outline' : 'att-btn-primary'" :disabled="busy" @click="start(l)"
                                             x-text="(l.sessions || []).length ? '+ Yangi davomat ochish' : '▶ Davomatni boshlash'"></button>
                                 </div>
@@ -163,6 +167,7 @@
                         <div class="flex-1 min-w-0">
                             <div class="text-lg sm:text-2xl font-extrabold" x-text="session && session.session.subject_name"></div>
                             <div class="text-xs sm:text-sm opacity-90 mt-1" x-text="session && ((session.session.auditorium_name || '—') + ' · ' + (session.session.lesson_pair_name || '') + ' · ' + (session.session.group_names || []).join(', '))"></div>
+                            <div x-show="session && session.session.require_face" x-cloak class="mt-2"><span class="att-chip" style="background:rgba(255,255,255,.18);color:#fff;">📷 Yuz tekshiruvi yoqilgan</span></div>
                             <div x-show="session && !session.session.beacon" x-cloak class="mt-2 text-xs font-semibold" style="color:#fde68a;">Bu xonada beacon yo'q — talabalar tasdiqlay olmaydi, qo'lda belgilang.</div>
                             <div class="att-progress mt-4 max-w-md"><div :style="'width:' + progressPct() + '%'"></div></div>
                             <div class="text-xs opacity-80 mt-1" x-text="session ? session.session.present + ' / ' + session.session.total + ' tasdiqlandi' : ''"></div>
@@ -209,7 +214,12 @@
                             <template x-for="st in g.students" :key="st.student_id">
                                 <div class="att-student" :class="st.status + (st.beacon_seen ? ' seen' : '')">
                                     <div class="flex-1 min-w-0">
-                                        <div class="att-name font-bold text-gray-900 truncate text-sm sm:text-base" x-text="st.full_name"></div>
+                                        <div class="flex items-center gap-1.5 min-w-0">
+                                            <div class="att-name font-bold text-gray-900 truncate text-sm sm:text-base" x-text="st.full_name"></div>
+                                            <template x-if="faceBadge(st)">
+                                                <span class="att-chip shrink-0" :style="'background:' + faceBadge(st).bg + ';color:' + faceBadge(st).fg" :title="faceBadge(st).title" x-text="faceBadge(st).text"></span>
+                                            </template>
+                                        </div>
                                         <div class="att-status mt-1 min-w-0" :style="'color:' + statusColor(st)">
                                             <span x-text="statusIcon(st)"></span>
                                             <span class="truncate" x-text="statusLabel(st)"></span>
@@ -249,6 +259,7 @@
                 loadingLessons: false,
                 lessonsError: null,
                 windowFor: {},
+                faceFor: {},
                 session: null,
                 filter: 'all',
                 search: '',
@@ -332,6 +343,7 @@
                         for (const l of this.lessons) {
                             const k = this.lessonKey(l);
                             if (!this.windowFor[k]) this.windowFor[k] = 10;
+                            if (this.faceFor[k] === undefined) this.faceFor[k] = @json((bool) config('services.attendance.require_face', true));
                         }
                     } catch (e) {
                         this.lessonsError = e.message;
@@ -359,6 +371,7 @@
                             lesson_pair_code: l.lesson_pair_code,
                             date: this.date,
                             window_minutes: this.windowFor[this.lessonKey(l)] || 10,
+                            require_face: !!this.faceFor[this.lessonKey(l)],
                         });
                         this.showSession(data.data);
                     } catch (e) { this.toast(e.message, true); }
@@ -471,6 +484,26 @@
                     if (st.status === 'present') return '✔';
                     if (st.status === 'absent') return '✖';
                     return st.beacon_seen ? '◉' : '○';
+                },
+
+                // Result of the selfie check, if one was made (or should have been).
+                faceBadge(st) {
+                    const sim = st.face_similarity != null ? ' ' + Math.round(st.face_similarity) + '%' : '';
+                    if (st.face_verified === true) {
+                        return { text: '✓ yuz' + sim, bg: '#dcfce7', fg: '#166534', title: "Selfi LMS'dagi tasdiqlangan rasm bilan mos keldi" };
+                    }
+                    if (st.face_note === 'mismatch') {
+                        return { text: '✗ yuz' + sim, bg: '#fee2e2', fg: '#991b1b', title: 'Selfi tasdiqlangan rasmga mos kelmadi' };
+                    }
+                    const notes = {
+                        no_photo: "LMS'da tasdiqlangan rasmi yo'q",
+                        no_service: 'Yuz tekshirish xizmati javob bermadi',
+                        disabled: "Talabada Face ID o'chirilgan",
+                    };
+                    if (st.status === 'present' && st.decided_by === 'student' && notes[st.face_note]) {
+                        return { text: '? yuz', bg: '#fef3c7', fg: '#92400e', title: notes[st.face_note] + ' — yuz tekshirilmadi' };
+                    }
+                    return null;
                 },
 
                 statusLabel(st) {

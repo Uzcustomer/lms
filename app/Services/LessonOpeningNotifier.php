@@ -61,19 +61,61 @@ class LessonOpeningNotifier
         );
     }
 
-    /** So'rov rad etildi. */
-    public function rejected(LessonOpening $opening, string $stage): void
+    /**
+     * So'rov rad etildi. $wasOpen — dars allaqachon ochilgan edi va tasdiqlovchi
+     * uni qaytarib oldi (adashib tasdiqlangan): dars yopiladi, registrator
+     * guruhi ham xabardor qilinadi, chunki ochilgani haqida xabar u yerga borgan.
+     */
+    public function rejected(LessonOpening $opening, string $stage, bool $wasOpen = false): void
     {
         $by = LessonOpening::STAGE_LABELS[$stage] ?? $stage;
         $reason = trim((string) $opening->review_comment);
 
         $this->send($opening, fn (Teacher $teacher, array $lesson) =>
-            "❌ <b>Dars ochish so'rovi rad etildi</b>\n\n"
+            ($wasOpen ? "🚫 <b>Ochilgan dars yopildi</b>\n\n" : "❌ <b>Dars ochish so'rovi rad etildi</b>\n\n")
             . "Hurmatli {$this->e($teacher->full_name)}!\n\n"
             . "{$lesson['subject']} fani, {$lesson['group']} guruhi, {$lesson['date']} sanadagi dars "
-            . "bo'yicha so'rovingizni <b>{$this->e($by)}</b> rad etdi."
+            . ($wasOpen
+                ? "uchun berilgan ruxsatni <b>{$this->e($by)}</b> bekor qildi. Bu darsga endi baho qo'yib bo'lmaydi."
+                : "bo'yicha so'rovingizni <b>{$this->e($by)}</b> rad etdi.")
             . ($reason !== '' ? "\n\nSabab: {$this->e($reason)}" : '')
         );
+
+        if ($wasOpen) {
+            $this->announceRevocationToRegistrarGroup($opening, $stage, $reason);
+        }
+    }
+
+    private function announceRevocationToRegistrarGroup(LessonOpening $opening, string $stage, string $reason): void
+    {
+        $chatId = config('services.telegram.registrar_group_id');
+        if (!$chatId) {
+            return;
+        }
+
+        try {
+            $lesson = $this->lessonInfo($opening);
+            $teacherName = trim((string) $opening->teacher_name) ?: ($this->scheduleTeacherNames($opening) ?: "Noma'lum");
+            $by = LessonOpening::STAGE_LABELS[$stage] ?? $stage;
+            $decider = $opening->stageDecider($stage);
+
+            $message = "🚫 <b>DARS OCHISH RUXSATI BEKOR QILINDI</b>\n\n"
+                . "👤 O'qituvchi: <b>{$this->e($teacherName)}</b>\n"
+                . "📚 Fan: {$lesson['subject']}\n"
+                . "👥 Guruh: {$lesson['group']}\n"
+                . "📅 Dars sanasi: {$lesson['date']}\n\n"
+                . "Bekor qildi: {$this->e($by)}"
+                . ($decider['name'] ? ' — ' . $this->e($decider['name']) : '')
+                . ($decider['at'] ? ' (' . $decider['at']->timezone('Asia/Tashkent')->format('d.m.Y H:i') . ')' : '')
+                . ($reason !== '' ? "\nSabab: {$this->e($reason)}" : '');
+
+            $this->telegram->sendToUser((string) $chatId, $message);
+        } catch (\Throwable $e) {
+            Log::warning("Dars ochish ruxsati bekor qilingani haqida guruhga xabar yuborilmadi", [
+                'opening_id' => $opening->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

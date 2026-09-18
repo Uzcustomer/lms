@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
@@ -83,6 +84,7 @@ class LessonOpeningRequestController extends Controller
             // Shu foydalanuvchi qarorini kutayotganlar soni
             'myQueue' => $stage ? LessonOpening::awaitingStage($stage)->count() : null,
             'canReview' => $stage !== null,
+            'canDelete' => $this->canDelete(),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
         ]);
     }
@@ -167,12 +169,16 @@ class LessonOpeningRequestController extends Controller
         ]);
 
         $reviewer = $this->reviewer();
+        $wasOpen = false;
 
-        $opening = DB::transaction(function () use ($opening, $stage, $reviewer, $data) {
+        $opening = DB::transaction(function () use ($opening, $stage, $reviewer, $data, &$wasOpen) {
             $opening = LessonOpening::whereKey($opening->id)->lockForUpdate()->first();
-            if (!$opening || !$opening->awaits($stage)) {
+            // Kutilayotgan so'rov yoki shu bosqich tasdiqlab ochilgan dars
+            // (adashib tasdiqlangan bo'lsa qaytarib olinadi)
+            if (!$opening || !($opening->awaits($stage) || $opening->canRevoke($stage))) {
                 return null;
             }
+            $wasOpen = $opening->status === LessonOpening::STATUS_ACTIVE;
 
             // Bitta tasdiqlovchining rad etishi yetarli
             $opening->setStageDecision($stage, LessonOpening::DECISION_REJECTED, $reviewer);
@@ -190,9 +196,47 @@ class LessonOpeningRequestController extends Controller
             return back()->with('error', "Bu so'rov bo'yicha sizning qaroringiz kerak emas yoki allaqachon ko'rib chiqilgan.");
         }
 
-        $notifier->rejected($opening, $stage);
+        $notifier->rejected($opening, $stage, $wasOpen);
 
-        return back()->with('success', "So'rov rad etildi.");
+        return back()->with('success', $wasOpen
+            ? "Ochilgan dars yopildi va so'rov rad etildi."
+            : "So'rov rad etildi.");
+    }
+
+    /**
+     * So'rovni butunlay o'chirish — faqat admin va superadmin. Yuklangan
+     * asos hujjat va tushuntirish xati ham diskdan o'chiriladi. Ochilgan dars
+     * bo'lsa yopiladi; shu vaqtgacha qo'yilgan baholarga tegilmaydi.
+     */
+    public function destroy(LessonOpening $opening): RedirectResponse
+    {
+        abort_unless($this->canDelete(), 403);
+
+        foreach ([$opening->file_path, $opening->explanation_file_path] as $path) {
+            if ($path) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+
+        $opening->delete();
+
+        return back()->with('success', "So'rov va uning fayllari o'chirildi.");
+    }
+
+    /** O'chirish huquqi — faqat admin va superadmin (faol rol bo'yicha). */
+    private function canDelete(): bool
+    {
+        $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+        if (!$user || !method_exists($user, 'hasAnyRole')) {
+            return false;
+        }
+
+        $active = (string) session('active_role', '');
+        if ($active !== '' && $user->hasRole($active)) {
+            return in_array($active, ['superadmin', 'admin'], true);
+        }
+
+        return $user->hasAnyRole(['superadmin', 'admin']);
     }
 
     /**

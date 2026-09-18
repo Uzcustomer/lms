@@ -126,7 +126,6 @@ class LessonOpening extends Model
         return $this->{self::STAGE_COLUMNS[$stage][0]};
     }
 
-    /** Bosqich qarorini yozish (saqlamaydi) */
     /** Bosqich qarorini bergan shaxs va vaqti: ['name' => ?string, 'at' => ?Carbon] */
     public function stageDecider(string $stage): array
     {
@@ -139,6 +138,7 @@ class LessonOpening extends Model
         ];
     }
 
+    /** Bosqich qarorini yozish (saqlamaydi) */
     public function setStageDecision(string $stage, string $decision, array $reviewer): void
     {
         [$status, $id, $name, $guard, $at] = self::STAGE_COLUMNS[$stage];
@@ -209,6 +209,17 @@ class LessonOpening extends Model
         return $this->status === self::STATUS_REJECTED
             && in_array($stage, $this->requiredStages(), true)
             && $this->stageStatus($stage) === self::DECISION_REJECTED;
+    }
+
+    /**
+     * Ochilgan darsni tasdiqlagan bosqich qaytarib olishi mumkin — adashib
+     * tasdiqlanganlarni rad etish uchun. Muddati tugagani yopilgan hisoblanadi.
+     */
+    public function canRevoke(string $stage): bool
+    {
+        return $this->status === self::STATUS_ACTIVE
+            && in_array($stage, $this->requiredStages(), true)
+            && $this->stageStatus($stage) === self::DECISION_APPROVED;
     }
 
     public function anyStageRejected(): bool

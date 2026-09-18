@@ -309,6 +309,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'index'])->name('index');
                 Route::post('/{opening}/approve', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'approve'])->name('approve');
                 Route::post('/{opening}/reject', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'reject'])->name('reject');
+                // Faqat admin/superadmin: so'rov va uning fayllarini butunlay o'chirish
+                Route::delete('/{opening}', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'destroy'])->name('destroy');
             });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)

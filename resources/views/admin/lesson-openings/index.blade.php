@@ -14,7 +14,9 @@
             'rejected' => ['Rad etilgan', 'rejected'],
         ];
         // Rad etilganlar ham: rad etgan tomon keyin tasdiqlashi mumkin
-        $showActions = $canReview && in_array($status, ['pending', 'rejected', 'all'], true);
+        $canDelete = $canDelete ?? false;
+        // Ochilganlarda ham ustun bor: tasdiqlagan bosqich adashganini qaytarib oladi
+        $showActions = ($canReview && in_array($status, ['pending', 'active', 'rejected', 'all'], true)) || $canDelete;
         // Hozir tasdiqlansa o'qituvchi qachongacha baho qo'ya oladi
         $approveDeadline = \Carbon\Carbon::now('Asia/Tashkent')->addDays($openingDays)->endOfDay()->format('d.m.Y H:i');
 
@@ -367,6 +369,7 @@
                                         // Joriy foydalanuvchi shu so'rovga qaror bera oladimi
                                         $canAct = $canReview && $opening->awaits($stage);
                                         $canReapprove = $canReview && $opening->canReapprove($stage);
+                                        $canRevoke = $canReview && $opening->canRevoke($stage);
                                         // Shu foydalanuvchi tasdiqlagach yana kimlar qoladi
                                         $remaining = $stage ? $opening->remainingStagesAfter($stage) : [];
                                         $remainingText = implode(', ', array_map(fn ($st) => \App\Models\LessonOpening::STAGE_LABELS[$st], $remaining));
@@ -527,10 +530,38 @@
                                                             Qayta tasdiqlash
                                                         </button>
                                                     </div>
+                                                @elseif($canRevoke)
+                                                    <div class="lo-actions">
+                                                        <button type="button" class="lo-btn lo-btn-reject"
+                                                                onclick="loOpenModal('reject', this)"
+                                                                title="Adashib tasdiqlangan bo'lsa — dars yopiladi va so'rov rad etiladi"
+                                                                data-revoke="1"
+                                                                data-action="{{ route('admin.lesson-opening-requests.reject', $opening->id) }}"
+                                                                data-group="{{ $groupName }}"
+                                                                data-subject="{{ $subjectName }}"
+                                                                data-teacher="{{ $teacherNames }}"
+                                                                data-date="{{ $lessonDate?->format('d.m.Y') }}"
+                                                                data-by="{{ $opening->opened_by_name }}">
+                                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                            Rad etish
+                                                        </button>
+                                                    </div>
                                                 @elseif($isPending && $stage && $opening->stageStatus($stage) === 'approved')
                                                     <span class="lo-waiting">Siz tasdiqlagansiz{{ $remainingText ? ' · ' . $remainingText . ' kutilmoqda' : '' }}</span>
                                                 @elseif($isPending && $remainingText)
                                                     <span class="lo-waiting">{{ $remainingText }} kutilmoqda</span>
+                                                @endif
+                                                @if($canDelete)
+                                                    <form method="POST" action="{{ route('admin.lesson-opening-requests.destroy', $opening->id) }}"
+                                                          style="margin-top:6px;"
+                                                          onsubmit="return confirm('So\'rov va uning yuklangan fayllari butunlay o\'chiriladi. Ochilgan dars yopiladi, qo\'yilgan baholar saqlanib qoladi.\n\nDavom etilsinmi?');">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="lo-btn lo-btn-ghost" style="color:#b91c1c;" title="Admin: so'rovni fayllari bilan o'chirish">
+                                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                            O'chirish
+                                                        </button>
+                                                    </form>
                                                 @endif
                                             </td>
                                         @endif
@@ -617,6 +648,10 @@
                     </div>
                     <textarea name="comment" id="loRejectComment" class="lo-textarea" rows="3" required minlength="3" maxlength="1000"
                               placeholder="Sababni yozing yoki yuqoridan tanlang"></textarea>
+                    <div class="lo-callout is-partial" data-revoke-note style="display:none; margin-top:10px;">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        <div>Bu dars <b>allaqachon ochilgan</b>. Rad etilsa dars yopiladi va o'qituvchi baho qo'ya olmaydi. Shu vaqtgacha qo'yilgan baholar saqlanib qoladi. O'qituvchi va registrator guruhiga xabar boradi.</div>
+                    </div>
                     <div class="lo-modal-foot">
                         <button type="button" class="lo-btn lo-btn-ghost" onclick="loCloseModals()">Bekor qilish</button>
                         <button type="submit" class="lo-btn lo-btn-danger">
@@ -643,6 +678,10 @@
                 });
                 if (kind === 'reject') {
                     document.getElementById('loRejectComment').value = '';
+                    // Ochilgan darsni qaytarib olishda ogohlantirish ko'rinadi
+                    modal.querySelectorAll('[data-revoke-note]').forEach(function (el) {
+                        el.style.display = btn.dataset.revoke === '1' ? '' : 'none';
+                    });
                 }
                 modal.classList.add('is-open');
                 if (kind === 'reject') {

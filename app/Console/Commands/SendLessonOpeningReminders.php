@@ -26,7 +26,7 @@ class SendLessonOpeningReminders extends Command
         // ========================
         $this->info('1-qism: Dars ochilishi eslatmalari tekshirilmoqda...');
 
-        $openings = LessonOpening::where('status', 'active')->get();
+        $openings = LessonOpening::where('status', 'active')->whereNotNull('deadline')->get();
 
         $confirmedCount = 0;
         $reminderCount = 0;

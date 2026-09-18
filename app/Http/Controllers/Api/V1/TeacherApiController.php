@@ -784,7 +784,8 @@ class TeacherApiController extends Controller
                 $lessonOpeningsMap[$loDateStr] = [
                     'id' => $lo->id,
                     'status' => $lo->isActive() ? 'active' : $lo->status,
-                    'deadline' => $lo->deadline->format('Y-m-d H:i'),
+                    // Prorektor tasdig'ini kutayotgan so'rovda muddat hali yo'q
+                    'deadline' => $lo->deadline?->format('Y-m-d H:i'),
                 ];
             }
         } catch (\Exception $e) {

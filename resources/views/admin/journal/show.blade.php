@@ -1216,29 +1216,35 @@
                                             @php
                                                 $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
                                                 $isMissed = isset($missedDatesLookup[$dateStr]);
-                                                $isOpened = isset(($lessonOpeningsMap ?? [])[$dateStr]);
                                                 $openingInfo = ($lessonOpeningsMap ?? [])[$dateStr] ?? null;
-                                                $isActiveOpened = $openingInfo && $openingInfo['status'] === 'active';
+                                                $openingStatus = $openingInfo['status'] ?? null;
+                                                // Rad etilgan so'rov qayta yuborilishi mumkin — ochilmagan hisoblanadi
+                                                $isOpened = $openingInfo && $openingStatus !== 'rejected';
+                                                $isActiveOpened = $openingStatus === 'active';
+                                                $isPendingOpened = $openingStatus === 'pending';
                                             @endphp
-                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}">
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}{{ $isPendingOpened ? 'background: #fffbeb;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($date) }}</div>
                                                 @if($canOpenLesson && $isMissed && !$isOpened)
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="O'tkazib yuborilgan kun — Dars ochish">
-                                                        <button type="button" onclick="openLessonModal('{{ $dateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $openingStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : "O'tkazib yuborilgan kun — Dars ochish" }}">
+                                                        <button type="button" onclick="openLessonModal('{{ $dateStr }}', @js($openingStatus === 'rejected' ? ($openingInfo['review_comment'] ?? '') : null))" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
                                                     </div>
-                                                @elseif($isOpened)
+                                                @elseif($openingInfo)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
                                                         <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode([
                                                             'date' => format_date($date),
                                                             'opened_at' => $openingInfo['opened_at'],
                                                             'opened_by' => $openingInfo['opened_by_name'],
                                                             'deadline' => $openingInfo['deadline'],
-                                                            'status' => $isActiveOpened ? 'active' : $openingInfo['status'],
+                                                            'status' => $openingStatus,
                                                             'grade_count' => $openingInfo['grade_count'],
                                                             'last_grade_at' => $openingInfo['last_grade_at'],
                                                             'file_name' => $openingInfo['file_original_name'],
                                                             'file_url' => route('admin.journal.download-lesson-file', $openingInfo['id']),
-                                                        ]), ENT_QUOTES, 'UTF-8') !!})" style="background: {{ $isActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">&#128206;</button>
+                                                            'reviewed_by' => $openingInfo['reviewed_by_name'] ?? null,
+                                                            'reviewed_at' => $openingInfo['reviewed_at'] ?? null,
+                                                            'review_comment' => $openingInfo['review_comment'] ?? null,
+                                                        ]), ENT_QUOTES, 'UTF-8') !!})" title="{{ $isPendingOpened ? "O'quv prorektori tasdig'ini kutmoqda" : '' }}" style="background: {{ $isActiveOpened ? '#10b981' : ($isPendingOpened ? '#f59e0b' : ($openingStatus === 'rejected' ? '#ef4444' : '#9ca3af')) }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">{!! $isPendingOpened ? '&#8987;' : '&#128206;' !!}</button>
                                                     </div>
                                                 @endif
                                             </th>
@@ -1763,27 +1769,33 @@
                                                 $dDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                 $dIsMissed = isset($missedDatesLookup[$dDateStr]);
                                                 $dOpeningInfo = ($lessonOpeningsMap ?? [])[$dDateStr] ?? null;
-                                                $dIsActiveOpened = $dOpeningInfo && $dOpeningInfo['status'] === 'active';
+                                                $dOpeningStatus = $dOpeningInfo['status'] ?? null;
+                                                $dIsOpened = $dOpeningInfo && $dOpeningStatus !== 'rejected';
+                                                $dIsActiveOpened = $dOpeningStatus === 'active';
+                                                $dIsPendingOpened = $dOpeningStatus === 'pending';
                                             @endphp
-                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px; position: relative; {{ $dIsMissed && !$dOpeningInfo ? 'background: #fef2f2;' : '' }}{{ $dIsActiveOpened ? 'background: #ecfdf5;' : '' }}">
+                                            <th class="font-bold text-gray-600 text-center date-header-cell {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }}" style="min-width: 55px; width: 55px; height: 110px; position: relative; {{ $dIsMissed && !$dIsOpened ? 'background: #fef2f2;' : '' }}{{ $dIsActiveOpened ? 'background: #ecfdf5;' : '' }}{{ $dIsPendingOpened ? 'background: #fffbeb;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
-                                                @if($canOpenLesson && $dIsMissed && !$dOpeningInfo && $isFirstOfDate)
+                                                @if($canOpenLesson && $dIsMissed && !$dIsOpened && $isFirstOfDate)
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
-                                                        <button type="button" onclick="openLessonModal('{{ $dDateStr }}')" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="Dars ochish">!</button>
+                                                        <button type="button" onclick="openLessonModal('{{ $dDateStr }}', @js($dOpeningStatus === 'rejected' ? ($dOpeningInfo['review_comment'] ?? '') : null))" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="{{ $dOpeningStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : 'Dars ochish' }}">!</button>
                                                     </div>
-                                                @elseif($dOpeningInfo)
+                                                @elseif($dOpeningInfo && ($dIsOpened || $isFirstOfDate))
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
                                                         <button type="button" onclick="showOpeningInfo({!! htmlspecialchars(json_encode([
                                                             'date' => format_date($col['date']),
                                                             'opened_at' => $dOpeningInfo['opened_at'],
                                                             'opened_by' => $dOpeningInfo['opened_by_name'],
                                                             'deadline' => $dOpeningInfo['deadline'],
-                                                            'status' => $dIsActiveOpened ? 'active' : $dOpeningInfo['status'],
+                                                            'status' => $dOpeningStatus,
                                                             'grade_count' => $dOpeningInfo['grade_count'],
                                                             'last_grade_at' => $dOpeningInfo['last_grade_at'],
                                                             'file_name' => $dOpeningInfo['file_original_name'],
                                                             'file_url' => route('admin.journal.download-lesson-file', $dOpeningInfo['id']),
-                                                        ]), ENT_QUOTES, 'UTF-8') !!})" style="background: {{ $dIsActiveOpened ? '#10b981' : '#9ca3af' }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">&#128206;</button>
+                                                            'reviewed_by' => $dOpeningInfo['reviewed_by_name'] ?? null,
+                                                            'reviewed_at' => $dOpeningInfo['reviewed_at'] ?? null,
+                                                            'review_comment' => $dOpeningInfo['review_comment'] ?? null,
+                                                        ]), ENT_QUOTES, 'UTF-8') !!})" title="{{ $dIsPendingOpened ? "O'quv prorektori tasdig'ini kutmoqda" : '' }}" style="background: {{ $dIsActiveOpened ? '#10b981' : ($dIsPendingOpened ? '#f59e0b' : ($dOpeningStatus === 'rejected' ? '#ef4444' : '#9ca3af')) }}; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">{!! $dIsPendingOpened ? '&#8987;' : '&#128206;' !!}</button>
                                                     </div>
                                                 @endif
                                             </th>
@@ -5250,7 +5262,7 @@
                     <svg width="22" height="22" style="color:#fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                 </div>
                 <div>
-                    <div style="font-size:17px; font-weight:700; color:#1e293b;">Dars ochish</div>
+                    <div style="font-size:17px; font-weight:700; color:#1e293b;">Dars ochish so'rovi</div>
                     <div style="font-size:13px; color:#64748b;" id="lessonOpenDateLabel">Sana: —</div>
                 </div>
             </div>
@@ -5262,6 +5274,11 @@
                 <input type="hidden" name="semester_code" value="{{ $semesterCode }}">
                 <input type="hidden" name="lesson_date" id="lessonOpenDate" value="">
 
+                <div id="lessonOpenRejected" style="display:none; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:12px; color:#991b1b; line-height:1.5;">
+                    <b>Oldingi so'rov rad etilgan.</b> <span id="lessonOpenRejectedReason"></span>
+                    <div style="margin-top:2px; color:#b91c1c;">Yangi asos hujjat bilan qayta yuborishingiz mumkin.</div>
+                </div>
+
                 <div style="margin-bottom:16px;">
                     <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">O'qituvchi bildirgisi (fayl) <span style="color:#ef4444;">*</span></label>
                     <input type="file" name="file" id="lessonOpenFile" required accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic"
@@ -5269,21 +5286,28 @@
                     <div style="font-size:11px; color:#9ca3af; margin-top:4px;">PDF, DOC, DOCX, JPG, PNG — max 10MB</div>
                 </div>
 
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">Izoh <span style="font-weight:400; color:#9ca3af;">(ixtiyoriy)</span></label>
+                    <textarea name="note" id="lessonOpenNote" rows="2" maxlength="1000" placeholder="Prorektor uchun qisqacha sabab"
+                        style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:10px; font-size:13px; color:#374151; resize:vertical;"></textarea>
+                </div>
+
                 <div style="background:#eff6ff; border-radius:10px; padding:12px 14px; margin-bottom:18px; border:1px solid #bfdbfe;">
                     <div style="font-size:12px; color:#1e40af; line-height:1.6;">
-                        Dars ochilgach o'qituvchiga <b>{{ $lessonOpeningDays ?? 3 }} kun</b> (soat 23:59 gacha) baho qo'yish imkoniyati beriladi.
+                        So'rov <b>o'quv prorektoriga</b> yuboriladi. Tasdiqlangach dars ochiladi va o'qituvchiga <b>{{ $lessonOpeningDays ?? 3 }} kun</b> (soat 23:59 gacha) baho qo'yish imkoniyati beriladi — muddat tasdiqlangan kundan hisoblanadi.
                     </div>
                 </div>
 
                 <div style="display:flex; gap:10px; justify-content:flex-end;">
                     <button type="button" onclick="closeLessonModal()" style="padding:10px 20px; background:#f1f5f9; color:#475569; font-size:14px; font-weight:600; border-radius:10px; border:1px solid #e2e8f0; cursor:pointer;">Bekor qilish</button>
-                    <button type="submit" id="lessonOpenSubmit" style="padding:10px 24px; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; font-size:14px; font-weight:600; border-radius:10px; border:none; cursor:pointer; box-shadow:0 4px 12px rgba(245,158,11,0.3);">Dars ochish</button>
+                    <button type="submit" id="lessonOpenSubmit" style="padding:10px 24px; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; font-size:14px; font-weight:600; border-radius:10px; border:none; cursor:pointer; box-shadow:0 4px 12px rgba(245,158,11,0.3);">So'rov yuborish</button>
                 </div>
             </form>
         </div>
     </div>
+    @endif
 
-    {{-- Dars ochilishi haqida ma'lumot modali --}}
+    {{-- Dars ochilishi haqida ma'lumot modali (jurnalni ko'ra oladigan hamma uchun) --}}
     <div id="opening-info-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:50; align-items:center; justify-content:center;">
         <div style="background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-width:420px; width:90%; margin:auto; overflow:hidden;">
             <div id="oim-header" style="padding:14px 20px; color:#fff; display:flex; align-items:center; justify-content:space-between;">
@@ -5293,11 +5317,11 @@
             <div style="padding:16px 20px;">
                 <table style="width:100%; font-size:13px; border-collapse:collapse;">
                     <tr>
-                        <td style="padding:6px 0; color:#6b7280; width:140px;">Dars ochilgan:</td>
+                        <td style="padding:6px 0; color:#6b7280; width:140px;">So'rov vaqti:</td>
                         <td style="padding:6px 0; font-weight:600;" id="oim-opened-at"></td>
                     </tr>
                     <tr>
-                        <td style="padding:6px 0; color:#6b7280;">Kim ochgan:</td>
+                        <td style="padding:6px 0; color:#6b7280;">So'rov yuborgan:</td>
                         <td style="padding:6px 0; font-weight:600;" id="oim-opened-by"></td>
                     </tr>
                     <tr>
@@ -5307,6 +5331,14 @@
                     <tr>
                         <td style="padding:6px 0; color:#6b7280;">Holat:</td>
                         <td style="padding:6px 0;" id="oim-status"></td>
+                    </tr>
+                    <tr id="oim-review-row" style="display:none;">
+                        <td style="padding:6px 0; color:#6b7280;">Ko'rib chiqdi:</td>
+                        <td style="padding:6px 0; font-weight:600;" id="oim-reviewed"></td>
+                    </tr>
+                    <tr id="oim-comment-row" style="display:none;">
+                        <td style="padding:6px 0; color:#6b7280; vertical-align:top;">Rad etish sababi:</td>
+                        <td style="padding:6px 0; color:#991b1b;" id="oim-comment"></td>
                     </tr>
                     <tr>
                         <td style="padding:6px 0; color:#6b7280;">Baholar soni:</td>
@@ -5330,16 +5362,37 @@
             const modal = document.getElementById('opening-info-modal');
             const header = document.getElementById('oim-header');
             const isActive = data.status === 'active';
+            const isPending = data.status === 'pending';
+            const isRejected = data.status === 'rejected';
 
             document.getElementById('oim-title').textContent = 'Dars: ' + data.date;
-            header.style.background = isActive ? '#10b981' : '#6b7280';
+            header.style.background = isActive ? '#10b981' : (isPending ? '#f59e0b' : (isRejected ? '#ef4444' : '#6b7280'));
             document.getElementById('oim-opened-at').textContent = data.opened_at;
             document.getElementById('oim-opened-by').textContent = data.opened_by;
-            document.getElementById('oim-deadline').textContent = data.deadline;
+            document.getElementById('oim-deadline').textContent = data.deadline || (isPending ? 'Tasdiqlangach belgilanadi' : '—');
+
+            const reviewRow = document.getElementById('oim-review-row');
+            if (data.reviewed_by) {
+                reviewRow.style.display = '';
+                document.getElementById('oim-reviewed').textContent = data.reviewed_by + (data.reviewed_at ? ', ' + data.reviewed_at : '');
+            } else {
+                reviewRow.style.display = 'none';
+            }
+            const commentRow = document.getElementById('oim-comment-row');
+            if (isRejected && data.review_comment) {
+                commentRow.style.display = '';
+                document.getElementById('oim-comment').textContent = data.review_comment;
+            } else {
+                commentRow.style.display = 'none';
+            }
 
             const statusEl = document.getElementById('oim-status');
             if (isActive) {
                 statusEl.innerHTML = '<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Faol</span>';
+            } else if (isPending) {
+                statusEl.innerHTML = '<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">O\'quv prorektori tasdig\'ini kutmoqda</span>';
+            } else if (isRejected) {
+                statusEl.innerHTML = '<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Rad etilgan</span>';
             } else if (data.status === 'expired') {
                 statusEl.innerHTML = '<span style="background:#fef2f2; color:#991b1b; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600;">Muddati tugagan</span>';
             } else {
@@ -5368,11 +5421,22 @@
         });
     </script>
 
+    @if($canOpenLesson ?? false)
     <script>
-        function openLessonModal(dateStr) {
+        function openLessonModal(dateStr, rejectedComment) {
             document.getElementById('lessonOpenDate').value = dateStr;
             document.getElementById('lessonOpenDateLabel').textContent = 'Sana: ' + dateStr;
             document.getElementById('lessonOpenFile').value = '';
+            document.getElementById('lessonOpenNote').value = '';
+
+            const rejectedBox = document.getElementById('lessonOpenRejected');
+            if (typeof rejectedComment === 'string') {
+                document.getElementById('lessonOpenRejectedReason').textContent = rejectedComment ? 'Sabab: ' + rejectedComment : '';
+                rejectedBox.style.display = '';
+            } else {
+                rejectedBox.style.display = 'none';
+            }
+
             document.getElementById('lessonOpenModal').style.display = 'flex';
         }
 
@@ -5400,19 +5464,20 @@
             .then(data => {
                 if (data.success) {
                     closeLessonModal();
+                    if (data.message) alert(data.message);
                     // Sahifani qayta yuklash
                     window.location.reload();
                 } else {
-                    alert('Xatolik: ' + (data.message || 'Dars ochilmadi'));
+                    alert('Xatolik: ' + (data.message || (data.errors ? Object.values(data.errors).flat()[0] : "So'rov yuborilmadi")));
                     btn.disabled = false;
-                    btn.textContent = 'Dars ochish';
+                    btn.textContent = "So'rov yuborish";
                 }
             })
             .catch(err => {
                 console.error('Error:', err);
                 alert('Xatolik yuz berdi');
                 btn.disabled = false;
-                btn.textContent = 'Dars ochish';
+                btn.textContent = "So'rov yuborish";
             });
         });
 

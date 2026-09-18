@@ -8867,7 +8867,7 @@ class ReportController extends Controller
             'sch.lesson_pair_end_time',
             'g.id as group_db_id',
             DB::raw('DATE(sch.lesson_date) as lesson_date_str'),
-            DB::raw('EXISTS (SELECT 1 FROM lesson_openings lo WHERE lo.group_hemis_id = sch.group_id AND lo.subject_id = sch.subject_id AND lo.semester_code = sch.semester_code AND DATE(lo.lesson_date) = DATE(sch.lesson_date)) as has_opening')
+            DB::raw('EXISTS (SELECT 1 FROM lesson_openings lo WHERE lo.group_hemis_id = sch.group_id AND lo.subject_id = sch.subject_id AND lo.semester_code = sch.semester_code AND DATE(lo.lesson_date) = DATE(sch.lesson_date) AND lo.status NOT IN (\'pending\', \'rejected\')) as has_opening')
         )->get();
 
         if ($schedules->isEmpty()) {

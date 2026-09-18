@@ -378,6 +378,27 @@
         @endif
 
         @if($hasActiveRole(['superadmin', 'oquv_prorektori', 'admin']))
+        @php
+            $pendingLessonOpenings = 0;
+            try {
+                $pendingLessonOpenings = \App\Models\LessonOpening::where('status', 'pending')->count();
+            } catch (\Throwable $e) {
+                $pendingLessonOpenings = 0;
+            }
+        @endphp
+        <a href="{{ route('admin.lesson-opening-requests.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.lesson-opening-requests.*') ? 'sidebar-active' : '' }}" style="position: relative;">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zm4-5l2 2 4-4"></path>
+            </svg>
+            Dars ochish so'rovlari
+            @if($pendingLessonOpenings > 0)
+                <span class="sidebar-badge">{{ $pendingLessonOpenings > 99 ? '99+' : $pendingLessonOpenings }}</span>
+            @endif
+        </a>
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'oquv_prorektori', 'admin']))
         <a href="{{ $r('admin.quiz-grade-appeals.index', 'teacher.quiz-grade-appeals.index') }}"
            class="sidebar-link {{ $isActive('admin.quiz-grade-appeals.*', 'teacher.quiz-grade-appeals.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

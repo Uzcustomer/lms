@@ -1467,7 +1467,10 @@ class JournalController extends Controller
                 $lessonOpeningsMap[$loDateStr] = [
                     'id' => $lo->id,
                     'status' => $lo->isActive() ? 'active' : $lo->status,
-                    'deadline' => $lo->deadline->format('Y-m-d H:i'),
+                    'deadline' => $lo->deadline?->format('Y-m-d H:i'),
+                    'review_comment' => $lo->review_comment,
+                    'reviewed_by_name' => $lo->reviewed_by_name,
+                    'reviewed_at' => $lo->reviewed_at?->format('d.m.Y H:i'),
                     'opened_at' => $lo->created_at->format('d.m.Y H:i'),
                     'opened_by_name' => $lo->opened_by_name,
                     'file_original_name' => $lo->file_original_name,
@@ -5745,16 +5748,21 @@ class JournalController extends Controller
             'semester_code' => 'required',
             'lesson_date' => 'required|date',
             'file' => 'required|file|max:10240',
+            'note' => 'nullable|string|max:1000',
         ]);
 
-        // Avval mavjud ochilish bormi tekshirish (har qanday statusda)
+        // Shu kun uchun so'rov bormi. Rad etilgani qayta so'ralishi mumkin —
+        // yangi asos hujjat bilan; qolgan holatlar bloklanadi.
         $existing = LessonOpening::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
             ->where('lesson_date', $request->lesson_date)
             ->first();
 
-        if ($existing) {
+        if ($existing && $existing->status === LessonOpening::STATUS_PENDING) {
+            return response()->json(['success' => false, 'message' => "Bu kun uchun so'rov allaqachon yuborilgan — o'quv prorektori ko'rib chiqmoqda."], 409);
+        }
+        if ($existing && $existing->status !== LessonOpening::STATUS_REJECTED) {
             return response()->json(['success' => false, 'message' => 'Bu kun uchun dars allaqachon ochilgan'], 409);
         }
 
@@ -5763,83 +5771,110 @@ class JournalController extends Controller
         $filePath = $file->store('lesson-openings', 'public');
         $fileOriginalName = $file->getClientOriginalName();
 
-        // Muddat hisoblash
-        $days = (int) Setting::get('lesson_opening_days', 3);
-        $deadline = \Carbon\Carbon::now('Asia/Tashkent')->addDays($days)->endOfDay();
-
         // Guard va foydalanuvchi ma'lumotlari
         $webUser = auth()->guard('web')->user();
         $teacherUser = auth()->guard('teacher')->user();
         $guard = $teacherUser ? 'teacher' : 'web';
         $user = $webUser ?? $teacherUser;
 
-        $opening = LessonOpening::create([
+        // Dars darhol ochilmaydi: so'rov o'quv prorektoriga boradi. Baho
+        // qo'yish muddati tasdiqlangan paytdan hisoblanadi, shuning uchun
+        // hozir deadline yo'q.
+        $payload = [
             'group_hemis_id' => $request->group_hemis_id,
             'subject_id' => $request->subject_id,
             'semester_code' => $request->semester_code,
             'lesson_date' => $request->lesson_date,
             'file_path' => $filePath,
             'file_original_name' => $fileOriginalName,
+            'request_note' => trim((string) $request->input('note')) ?: null,
             'opened_by_id' => $user->id,
             'opened_by_name' => $user->name ?? $user->full_name ?? 'Unknown',
             'opened_by_guard' => $guard,
-            'deadline' => $deadline,
-            'status' => 'active',
-        ]);
+            'deadline' => null,
+            'status' => LessonOpening::STATUS_PENDING,
+            'reviewed_by_id' => null,
+            'reviewed_by_name' => null,
+            'reviewed_by_guard' => null,
+            'reviewed_at' => null,
+            'review_comment' => null,
+        ];
 
-        // O'qituvchilarga Telegram orqali xabar yuborish
-        try {
-            $teacherEmployeeIds = DB::table('schedules')
-                ->where('group_id', $request->group_hemis_id)
-                ->where('subject_id', $request->subject_id)
-                ->where('semester_code', $request->semester_code)
-                ->whereRaw('DATE(lesson_date) = ?', [$request->lesson_date])
-                ->whereNull('deleted_at')
-                ->distinct()
-                ->pluck('employee_id');
-
-            if ($teacherEmployeeIds->isNotEmpty()) {
-                $telegram = app(TelegramService::class);
-                $deadlineFormatted = $opening->deadline->format('d.m.Y H:i');
-                $lessonDateFormatted = \Carbon\Carbon::parse($request->lesson_date)->format('d.m.Y');
-
-                $subjectName = DB::table('schedules')
-                    ->where('group_id', $request->group_hemis_id)
-                    ->where('subject_id', $request->subject_id)
-                    ->whereNull('deleted_at')
-                    ->value('subject_name') ?? 'Noma\'lum fan';
-
-                $groupName = DB::table('groups')
-                    ->where('group_hemis_id', $request->group_hemis_id)
-                    ->value('name') ?? 'Noma\'lum guruh';
-
-                $teachers = Teacher::whereIn('hemis_id', $teacherEmployeeIds)
-                    ->whereNotNull('telegram_chat_id')
-                    ->get();
-
-                foreach ($teachers as $teacher) {
-                    $message = "Hurmatli {$teacher->full_name}!\n\n"
-                        . "{$subjectName} fani bo'yicha {$groupName} guruhiga {$lessonDateFormatted} sanasidagi dars ochildi.\n\n"
-                        . "Baho qo'yish uchun muhlat: {$deadlineFormatted}\n\n"
-                        . "Iltimos, muddatgacha baholarni kiritib qo'ying.";
-
-                    $telegram->sendToUser($teacher->telegram_chat_id, $message);
-                }
+        if ($existing) {
+            // Rad etilgan so'rov yangi hujjat bilan qayta yuboriladi
+            if ($existing->file_path) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($existing->file_path);
             }
-        } catch (\Throwable $e) {
-            Log::warning('Dars ochilganda Telegram xabar yuborishda xato: ' . $e->getMessage());
+            $existing->update($payload);
+            $opening = $existing->fresh();
+        } else {
+            $opening = LessonOpening::create($payload);
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'Dars muvaffaqiyatli ochildi',
+            'pending' => true,
+            'message' => "So'rov o'quv prorektoriga yuborildi. Tasdiqlangach dars ochiladi va o'qituvchiga xabar boradi.",
             'opening' => [
                 'id' => $opening->id,
-                'deadline' => $opening->deadline->format('Y-m-d H:i'),
+                'status' => $opening->status,
                 'opened_by_name' => $opening->opened_by_name,
                 'file_original_name' => $opening->file_original_name,
             ],
         ]);
+    }
+
+    /**
+     * Tasdiqlangan ochilish haqida dars o'qituvchilariga Telegram xabari.
+     * Muddat shu yerda — tasdiqlangan paytdan — hisoblangan bo'ladi.
+     */
+    public static function notifyTeachersAboutOpening(LessonOpening $opening): void
+    {
+        try {
+            $lessonDate = $opening->lesson_date->format('Y-m-d');
+
+            $teacherEmployeeIds = DB::table('schedules')
+                ->where('group_id', $opening->group_hemis_id)
+                ->where('subject_id', $opening->subject_id)
+                ->where('semester_code', $opening->semester_code)
+                ->whereRaw('DATE(lesson_date) = ?', [$lessonDate])
+                ->whereNull('deleted_at')
+                ->distinct()
+                ->pluck('employee_id');
+
+            if ($teacherEmployeeIds->isEmpty() || !$opening->deadline) {
+                return;
+            }
+
+            $telegram = app(TelegramService::class);
+            $deadlineFormatted = $opening->deadline->format('d.m.Y H:i');
+            $lessonDateFormatted = $opening->lesson_date->format('d.m.Y');
+
+            $subjectName = DB::table('schedules')
+                ->where('group_id', $opening->group_hemis_id)
+                ->where('subject_id', $opening->subject_id)
+                ->whereNull('deleted_at')
+                ->value('subject_name') ?? 'Noma\'lum fan';
+
+            $groupName = DB::table('groups')
+                ->where('group_hemis_id', $opening->group_hemis_id)
+                ->value('name') ?? 'Noma\'lum guruh';
+
+            $teachers = Teacher::whereIn('hemis_id', $teacherEmployeeIds)
+                ->whereNotNull('telegram_chat_id')
+                ->get();
+
+            foreach ($teachers as $teacher) {
+                $message = "Hurmatli {$teacher->full_name}!\n\n"
+                    . "{$subjectName} fani bo'yicha {$groupName} guruhiga {$lessonDateFormatted} sanasidagi dars ochildi.\n\n"
+                    . "Baho qo'yish uchun muhlat: {$deadlineFormatted}\n\n"
+                    . "Iltimos, muddatgacha baholarni kiritib qo'ying.";
+
+                $telegram->sendToUser($teacher->telegram_chat_id, $message);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Dars ochilganda Telegram xabar yuborishda xato: ' . $e->getMessage());
+        }
     }
 
     /**

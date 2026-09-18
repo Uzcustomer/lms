@@ -301,6 +301,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/applications/{application}/decision', [\App\Http\Controllers\Admin\AcademicMobilityController::class, 'decide'])->name('decision');
             });
 
+        // Dars ochish so'rovlari: registrator jurnaldan yuboradi, o'quv prorektori tasdiqlaydi.
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|oquv_prorektori')
+            ->prefix('lesson-opening-requests')
+            ->name('lesson-opening-requests.')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'index'])->name('index');
+                Route::post('/{opening}/approve', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'approve'])->name('approve');
+                Route::post('/{opening}/reject', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'reject'])->name('reject');
+            });
+
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)
         Route::prefix('yn-form-corrections')->name('yn-form-corrections.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'index'])->name('index');

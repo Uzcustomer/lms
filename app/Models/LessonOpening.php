@@ -18,12 +18,35 @@ class LessonOpening extends Model
         'opened_by_guard',
         'deadline',
         'status',
+        'request_note',
+        'reviewed_by_id',
+        'reviewed_by_name',
+        'reviewed_by_guard',
+        'reviewed_at',
+        'review_comment',
     ];
 
     protected $casts = [
         'lesson_date' => 'date',
         'deadline' => 'datetime',
+        'reviewed_at' => 'datetime',
     ];
+
+    /**
+     * Holatlar: pending — prorektor tasdig'ini kutmoqda; active — ochiq,
+     * o'qituvchi baho qo'ya oladi; expired — muddati tugagan;
+     * rejected — prorektor rad etgan.
+     */
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_EXPIRED = 'expired';
+    public const STATUS_REJECTED = 'rejected';
+
+    /** Shu so'rov prorektor qarorini kutmoqdami */
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
 
     /**
      * Berilgan guruh+fan+semestr uchun faol dars ochilishlarini olish
@@ -56,9 +79,10 @@ class LessonOpening extends Model
      */
     public static function expireOverdue(): int
     {
-        return static::where('status', 'active')
+        return static::where('status', self::STATUS_ACTIVE)
+            ->whereNotNull('deadline')
             ->where('deadline', '<=', now())
-            ->update(['status' => 'expired']);
+            ->update(['status' => self::STATUS_EXPIRED]);
     }
 
     /**
@@ -66,6 +90,8 @@ class LessonOpening extends Model
      */
     public function isActive(): bool
     {
-        return $this->status === 'active' && $this->deadline > now();
+        return $this->status === self::STATUS_ACTIVE
+            && $this->deadline !== null
+            && $this->deadline > now();
     }
 }

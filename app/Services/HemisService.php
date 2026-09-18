@@ -47,7 +47,11 @@ class HemisService
         return $base . '/v1/' . ltrim($path, '/');
     }
 
-    public function importStudents(): int
+    /**
+     * @param callable|null $onPage har sahifadan keyin chaqiriladi:
+     *        fn(int $page, int $pageCount, int $imported, int $total) — jarayonni ko'rsatish uchun
+     */
+    public function importStudents(?callable $onPage = null): int
     {
         $page = 1;
         $hasMore = true;
@@ -66,6 +70,16 @@ class HemisService
 
                 $pagination = $response['data']['pagination'];
                 $hasMore = $pagination['page'] < $pagination['pageCount'];
+
+                if ($onPage) {
+                    $onPage(
+                        (int) $pagination['page'],
+                        (int) $pagination['pageCount'],
+                        $totalImported,
+                        (int) ($pagination['totalCount'] ?? 0)
+                    );
+                }
+
                 $page++;
             } else {
                 Log::error('Failed to fetch students from HEMIS', is_array($response) ? $response : ['response' => $response]);

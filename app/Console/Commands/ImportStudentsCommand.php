@@ -33,9 +33,21 @@ class ImportStudentsCommand extends Command
         $this->info('Starting student import...');
 
         try {
-            $count = $hemisService->importStudents();
+            // Har sahifadan keyin jarayonni ko'rsatamiz — import bir necha
+            // daqiqa davom etadi va aks holda qotib qolgandek ko'rinadi.
+            $count = $hemisService->importStudents(function (int $page, int $pageCount, int $imported, int $total) {
+                $this->line(sprintf(
+                    '  Sahifa %d/%d — %s ta talaba ishlandi%s',
+                    $page,
+                    $pageCount,
+                    number_format($imported, 0, '.', ' '),
+                    $total > 0 ? ' (HEMIS da jami ' . number_format($total, 0, '.', ' ') . ')' : ''
+                ));
+            });
+            $this->info("Tugadi: {$count} ta talaba yangilandi.");
             $telegram->notify("✅ Talabalar importi tugadi. Jami: {$count} ta");
         } catch (\Throwable $e) {
+            $this->error('Xatolik: ' . $e->getMessage());
             $telegram->notify("❌ Talabalar importida xatolik: " . $e->getMessage());
         }
 

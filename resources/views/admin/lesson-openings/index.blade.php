@@ -100,8 +100,14 @@
         .lo-group { display:inline-flex; align-items:center; gap:5px; font-size:13.5px; font-weight:800; color:#1d4ed8; text-decoration:none; }
         .lo-group svg { width:13px; height:13px; opacity:.55; }
         .lo-group:hover { text-decoration:underline; }
-        .lo-subject { display:block; margin-top:3px; font-weight:600; color:#334155; }
-        .lo-chip { display:inline-block; margin-top:5px; padding:1px 8px; border-radius:6px; background:#eef2ff; color:#4338ca; font-size:10.5px; font-weight:700; }
+        .lo-subject { display:block; max-width:260px; font-size:13px; font-weight:700; line-height:1.35; color:#1e293b; }
+        .lo-teachers { display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+        .lo-teacher { display:flex; align-items:flex-start; gap:6px; font-size:12px; color:#475569; }
+        .lo-teacher svg { width:14px; height:14px; flex:0 0 14px; margin-top:1px; color:#64748b; }
+        .lo-teacher b { font-weight:600; color:#334155; }
+        .lo-type { display:inline-block; margin-left:4px; padding:0 6px; border-radius:5px; background:#f1f5f9; color:#64748b; font-size:10.5px; font-weight:700; white-space:nowrap; }
+        .lo-muted { font-size:12px; font-style:italic; color:#94a3b8; }
+        .lo-chip { display:inline-block; margin-top:6px; padding:1px 8px; border-radius:6px; background:#eef2ff; color:#4338ca; font-size:10.5px; font-weight:700; }
 
         .lo-date { display:flex; align-items:center; gap:10px; white-space:nowrap; }
         .lo-cal { width:42px; flex:0 0 42px; overflow:hidden; border:1px solid #dbe4ef; border-radius:9px; background:#fff; text-align:center; box-shadow:0 1px 3px rgba(15,23,42,.06); }
@@ -286,7 +292,8 @@
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Guruh / Fan</th>
+                                    <th>Guruh</th>
+                                    <th>Fan / O'qituvchi</th>
                                     <th>Dars sanasi</th>
                                     <th>So'rov yubordi</th>
                                     <th>Asos hujjat</th>
@@ -302,6 +309,8 @@
                                         $group = $groups[$opening->group_hemis_id] ?? null;
                                         $groupName = $group->name ?? $opening->group_hemis_id;
                                         $subjectName = $subjectNames[$opening->subject_id] ?? ('Fan #' . $opening->subject_id);
+                                        $lessonTeachers = $teachers[$opening->id] ?? [];
+                                        $teacherNames = collect($lessonTeachers)->pluck('name')->implode(', ');
                                         $semesterNumber = is_numeric($opening->semester_code) ? ((int) $opening->semester_code - 10) : 0;
                                         [$statusText, $statusClass] = $statusLabels[$opening->status] ?? [$opening->status, 'expired'];
                                         $isPending = $opening->status === 'pending';
@@ -318,7 +327,7 @@
                                     @endphp
                                     <tr class="{{ $isPending ? 'is-pending' : '' }}">
                                         <td class="lo-num">{{ $openings->firstItem() + $loop->index }}</td>
-                                        <td data-label="Guruh / Fan">
+                                        <td data-label="Guruh">
                                             @if($group)
                                                 <a class="lo-group" target="_blank" title="Jurnalni ochish"
                                                    href="{{ route('admin.journal.show', [$group->id, $opening->subject_id, $opening->semester_code]) }}">
@@ -328,10 +337,27 @@
                                             @else
                                                 <span class="lo-group">{{ $groupName }}</span>
                                             @endif
-                                            <span class="lo-subject">{{ $subjectName }}</span>
                                             @if($semesterNumber > 0)
-                                                <span class="lo-chip">{{ $semesterNumber }}-semestr</span>
+                                                <div><span class="lo-chip">{{ $semesterNumber }}-semestr</span></div>
                                             @endif
+                                        </td>
+                                        <td data-label="Fan / O'qituvchi">
+                                            <span class="lo-subject">{{ $subjectName }}</span>
+                                            <div class="lo-teachers">
+                                                @forelse($lessonTeachers as $teacher)
+                                                    <div class="lo-teacher">
+                                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                                                        <span>
+                                                            <b>{{ $teacher['name'] }}</b>
+                                                            @foreach($teacher['types'] as $type)
+                                                                <span class="lo-type">{{ $type }}</span>
+                                                            @endforeach
+                                                        </span>
+                                                    </div>
+                                                @empty
+                                                    <span class="lo-muted">O'qituvchi jadvalda topilmadi</span>
+                                                @endforelse
+                                            </div>
                                         </td>
                                         <td data-label="Dars sanasi">
                                             @if($lessonDate)
@@ -392,6 +418,7 @@
                                                                 data-action="{{ route('admin.lesson-opening-requests.approve', $opening->id) }}"
                                                                 data-group="{{ $groupName }}"
                                                                 data-subject="{{ $subjectName }}"
+                                                                data-teacher="{{ $teacherNames }}"
                                                                 data-date="{{ $lessonDate?->format('d.m.Y') }}"
                                                                 data-by="{{ $opening->opened_by_name }}">
                                                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
@@ -402,6 +429,7 @@
                                                                 data-action="{{ route('admin.lesson-opening-requests.reject', $opening->id) }}"
                                                                 data-group="{{ $groupName }}"
                                                                 data-subject="{{ $subjectName }}"
+                                                                data-teacher="{{ $teacherNames }}"
                                                                 data-date="{{ $lessonDate?->format('d.m.Y') }}"
                                                                 data-by="{{ $opening->opened_by_name }}">
                                                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -442,6 +470,7 @@
                     <dl class="lo-summary">
                         <dt>Guruh</dt><dd data-fill="group"></dd>
                         <dt>Fan</dt><dd data-fill="subject"></dd>
+                        <dt>O'qituvchi</dt><dd data-fill="teacher"></dd>
                         <dt>Dars sanasi</dt><dd data-fill="date"></dd>
                         <dt>So'rov yubordi</dt><dd data-fill="by"></dd>
                     </dl>
@@ -477,6 +506,7 @@
                     <dl class="lo-summary">
                         <dt>Guruh</dt><dd data-fill="group"></dd>
                         <dt>Fan</dt><dd data-fill="subject"></dd>
+                        <dt>O'qituvchi</dt><dd data-fill="teacher"></dd>
                         <dt>Dars sanasi</dt><dd data-fill="date"></dd>
                     </dl>
                     <label class="lo-label" for="loRejectComment">Rad etish sababi <span style="color:#dc2626">*</span></label>

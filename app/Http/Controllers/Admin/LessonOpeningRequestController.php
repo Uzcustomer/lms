@@ -55,6 +55,8 @@ class LessonOpeningRequestController extends Controller
             ->groupBy('subject_id')
             ->pluck('subject_name', 'subject_id');
 
+        $teachers = $this->lessonTeachers($openings->getCollection());
+
         $counts = LessonOpening::query()
             ->select('status', DB::raw('COUNT(*) as total'))
             ->groupBy('status')
@@ -66,6 +68,7 @@ class LessonOpeningRequestController extends Controller
             'counts' => $counts,
             'groups' => $groups,
             'subjectNames' => $subjectNames,
+            'teachers' => $teachers,
             'canReview' => $this->canReview(),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
         ]);
@@ -128,6 +131,88 @@ class LessonOpeningRequestController extends Controller
         ]);
 
         return back()->with('success', "So'rov rad etildi.");
+    }
+
+    /**
+     * Har bir so'rov uchun o'sha kuni darsni o'tishi kerak bo'lgan
+     * o'qituvchi(lar): [opening_id => [['name' => ..., 'type' => ...], ...]].
+     * O'sha kungi jadval qatori o'chirilgan bo'lsa — fanning shu guruhdagi
+     * o'qituvchisi ko'rsatiladi.
+     */
+    private function lessonTeachers($openings): array
+    {
+        if ($openings->isEmpty()) {
+            return [];
+        }
+
+        $groupIds = $openings->pluck('group_hemis_id')->unique()->values();
+        $subjectIds = $openings->pluck('subject_id')->unique()->values();
+        $dates = $openings->map(fn ($o) => $o->lesson_date?->format('Y-m-d'))->filter()->unique()->values();
+
+        $key = fn ($group, $subject, $semester) => $group . '|' . $subject . '|' . $semester;
+
+        $byDay = [];
+        DB::table('schedules')
+            ->whereIn('group_id', $groupIds)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereIn(DB::raw('DATE(lesson_date)'), $dates)
+            ->whereNull('deleted_at')
+            ->orderBy('lesson_pair_code')
+            ->get(['group_id', 'subject_id', 'semester_code', 'employee_name', 'training_type_name', DB::raw('DATE(lesson_date) as day')])
+            ->each(function ($row) use (&$byDay, $key) {
+                $byDay[$key($row->group_id, $row->subject_id, $row->semester_code) . '|' . $row->day][] = $row;
+            });
+
+        $result = [];
+        $missing = [];
+        foreach ($openings as $opening) {
+            $rows = $byDay[$key($opening->group_hemis_id, $opening->subject_id, $opening->semester_code) . '|' . $opening->lesson_date?->format('Y-m-d')] ?? [];
+            if ($rows) {
+                $result[$opening->id] = $this->uniqueTeachers($rows);
+            } else {
+                $missing[] = $opening;
+            }
+        }
+
+        if ($missing) {
+            $fallback = [];
+            DB::table('schedules')
+                ->whereIn('group_id', collect($missing)->pluck('group_hemis_id')->unique()->values())
+                ->whereIn('subject_id', collect($missing)->pluck('subject_id')->unique()->values())
+                ->whereNull('deleted_at')
+                ->select('group_id', 'subject_id', 'semester_code', 'employee_name', 'training_type_name')
+                ->distinct()
+                ->get()
+                ->each(function ($row) use (&$fallback, $key) {
+                    $fallback[$key($row->group_id, $row->subject_id, $row->semester_code)][] = $row;
+                });
+
+            foreach ($missing as $opening) {
+                $rows = $fallback[$key($opening->group_hemis_id, $opening->subject_id, $opening->semester_code)] ?? [];
+                $result[$opening->id] = $this->uniqueTeachers($rows);
+            }
+        }
+
+        return $result;
+    }
+
+    /** Bir o'qituvchi bir necha juftlikda bo'lsa — bir marta, turlari bilan. */
+    private function uniqueTeachers(array $rows): array
+    {
+        $teachers = [];
+        foreach ($rows as $row) {
+            $name = trim((string) $row->employee_name);
+            if ($name === '') {
+                continue;
+            }
+            $teachers[$name] ??= ['name' => $name, 'types' => []];
+            $type = trim((string) $row->training_type_name);
+            if ($type !== '' && !in_array($type, $teachers[$name]['types'], true)) {
+                $teachers[$name]['types'][] = $type;
+            }
+        }
+
+        return array_values($teachers);
     }
 
     private function canReview(): bool

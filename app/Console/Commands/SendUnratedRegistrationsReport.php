@@ -9,9 +9,13 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class SendUnratedRegistrationsReport extends Command
 {
+    /** HEMIS talaba holati: 11 — "O'qimoqda". */
+    private const ACTIVE_STATUS = 11;
+
     protected $signature = 'registrar:send-unrated-report {--chat-id= : Test uchun shaxsiy Telegram chat_id}';
 
     protected $description = 'Semestr boshidan kechagacha baho qo\'yilmagan darslar haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 17:00)';
@@ -107,9 +111,10 @@ class SendUnratedRegistrationsReport extends Command
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
 
-        // Fanga biriktirilgan faol talabalar soni (student_subjects jadvalidan)
-        // Chetlashganlar (status_code=60) hisobga olinmaydi
-        // Joriy semestrga tegishli biriktirishlarni aniqlash
+        // Fanga biriktirilgan faol talabalar soni (student_subjects jadvalidan).
+        // Faqat o'qiyotgan talabalar (status 11) sanaladi: chetlashtirilgan,
+        // akademik ta'tildagi, boshqa OTMga ko'chgan va h.k. talabalarga baho
+        // qo'yilmasligi normal — ular hisobotga tushmasligi kerak.
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $semesterCodes = $schedules->pluck('semester_code')->unique()->values()->toArray();
 
@@ -118,10 +123,7 @@ class SendUnratedRegistrationsReport extends Command
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereIn('ss.subject_id', $subjectIds)
             ->whereIn('ss.semester_id', $semesterCodes)
-            ->where(function ($q) {
-                $q->where('st.student_status_code', '!=', '60')
-                  ->orWhereNull('st.student_status_code');
-            })
+            ->where('st.student_status_code', self::ACTIVE_STATUS)
             ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');
@@ -129,20 +131,30 @@ class SendUnratedRegistrationsReport extends Command
         // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
         $groupStudentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
-            ->where(function ($q) {
-                $q->where('student_status_code', '!=', '60')
-                  ->orWhereNull('student_status_code');
-            })
+            ->where('student_status_code', self::ACTIVE_STATUS)
             ->groupBy('group_id')
             ->select('group_id', DB::raw('COUNT(*) as cnt'))
             ->pluck('cnt', 'group_id');
 
-        // Chetlashgan talabalar ro'yxati (baho sanashdan chiqarish uchun)
+        // O'qimayotgan talabalar (baho sanashdan chiqarish uchun)
         $excludedStudentHemisIds = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
-            ->where('student_status_code', '60')
+            ->where(function ($q) {
+                $q->whereNull('student_status_code')
+                  ->orWhere('student_status_code', '!=', self::ACTIVE_STATUS);
+            })
             ->pluck('hemis_id')
             ->toArray();
+
+        // Semestr davomida guruhga o'tkazilgan talabalar va kelgan sanasi.
+        // Kelishidan oldingi darslarda ularning bahosi bo'lmaydi va bo'lishi
+        // shart ham emas — aks holda o'sha darslar "baho qo'yilmagan" chiqardi.
+        $lateJoiners = $this->lateJoinersByGroup($groupHemisIds);
+        $lateJoinerSubjects = $this->subjectKeysFor(
+            collect($lateJoiners)->flatten(1)->pluck('hemis_id')->unique()->values()->all(),
+            $subjectIds,
+            $semesterCodes
+        );
 
         // Baho (1-usul): subject_schedule_id orqali — baho qo'yilgan faol talabalar soni
         $gradeCountByScheduleId = DB::table('student_grades')
@@ -169,7 +181,7 @@ class SendUnratedRegistrationsReport extends Command
             ->whereNotNull('sg.lesson_date')
             ->whereRaw('DATE(sg.lesson_date) >= ?', [$semesterStartStr])
             ->whereRaw('DATE(sg.lesson_date) <= ?', [$yesterdayStr])
-            ->where('st.student_status_code', '!=', '60')
+            ->where('st.student_status_code', self::ACTIVE_STATUS)
             ->where(function ($q) {
                 $q->where('sg.grade', '>', 0)
                   ->orWhere('sg.retake_grade', '>', 0)
@@ -198,9 +210,25 @@ class SendUnratedRegistrationsReport extends Command
 
             // Fanga biriktirilgan faol talabalar soni (student_subjects), topilmasa guruh soni
             $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
-            $subjectTotal = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
-            if ($subjectTotal === 0) {
-                continue; // Bu fanga biriktirilgan faol talaba yo'q
+            $countedFromSubjects = isset($subjectStudentCounts[$gsKey]);
+            $subjectTotal = (int) ($subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0));
+
+            // Dars kunidan keyin guruhga kelgan talabalar bu darsda sanalmaydi.
+            // student_subjects bo'yicha sanalganda — faqat shu fanga biriktirilganlari
+            // umumiy songa kirgan, qolganlarini ayirish kerak emas.
+            foreach ($lateJoiners[$sch->group_id] ?? [] as $joiner) {
+                if ($joiner['joined'] <= $sch->lesson_date_str) {
+                    continue;
+                }
+                if ($countedFromSubjects
+                    && !isset($lateJoinerSubjects[$joiner['hemis_id'] . '|' . $sch->subject_id . '|' . $sch->semester_code])) {
+                    continue;
+                }
+                $subjectTotal--;
+            }
+
+            if ($subjectTotal <= 0) {
+                continue; // Bu darsda baho kutiladigan faol talaba yo'q
             }
 
             // Baho qo'yilgan talabalar soni (ikkala usuldan kattasini olish)
@@ -413,6 +441,85 @@ class SendUnratedRegistrationsReport extends Command
      * Joriy semestrning boshlanish sanasini aniqlash.
      * Kuz va bahor semestrlarini ajratib, hozirgi vaqtga mos semestrni tanlaydi.
      */
+    /**
+     * Guruhga boshqa guruhdan o'tkazilgan faol talabalar va kelgan sanasi.
+     *
+     * student_group_history dan olinadi: oxirgi yozuvlardan orqaga qarab joriy
+     * guruhdagi uzluksiz qism topiladi (to'lov shakli yoki semestr o'zgarganda
+     * ham yangi yozuv ochiladi), uning eng birinchisi — guruhga kelgan sana.
+     * Undan oldin boshqa guruhda yozuvi bo'lmagan talaba boshidan shu guruhda
+     * hisoblanadi va ro'yxatga tushmaydi.
+     *
+     * @return array<string, array<int, array{hemis_id: string, joined: string}>> group_id => talabalar
+     */
+    private function lateJoinersByGroup(array $groupHemisIds): array
+    {
+        if (empty($groupHemisIds) || !Schema::hasTable('student_group_history')) {
+            return [];
+        }
+
+        $students = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', self::ACTIVE_STATUS)
+            ->get(['id', 'hemis_id', 'group_id'])
+            ->keyBy('id');
+
+        $result = [];
+
+        foreach ($students->keys()->chunk(1000) as $ids) {
+            $history = DB::table('student_group_history')
+                ->whereIn('student_id', $ids->all())
+                ->orderBy('student_id')
+                ->orderBy('started_at')
+                ->get(['student_id', 'group_hemis_id', 'started_at'])
+                ->groupBy('student_id');
+
+            foreach ($history as $studentId => $rows) {
+                $student = $students->get($studentId);
+                $currentGroup = (string) $student->group_id;
+                $joined = null;
+                $cameFromOtherGroup = false;
+
+                foreach ($rows->reverse() as $row) {
+                    if ((string) $row->group_hemis_id === $currentGroup) {
+                        $joined = $row->started_at;
+                        continue;
+                    }
+                    $cameFromOtherGroup = true;
+                    break;
+                }
+
+                if ($cameFromOtherGroup && $joined) {
+                    $result[$currentGroup][] = [
+                        'hemis_id' => (string) $student->hemis_id,
+                        'joined' => Carbon::parse($joined)->toDateString(),
+                    ];
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Berilgan talabalarning fan biriktirmalari: "hemis_id|subject_id|semester" kalitlari.
+     */
+    private function subjectKeysFor(array $studentHemisIds, array $subjectIds, array $semesterCodes): array
+    {
+        if (empty($studentHemisIds)) {
+            return [];
+        }
+
+        return DB::table('student_subjects')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_id', $semesterCodes)
+            ->select(DB::raw("CONCAT(student_hemis_id, '|', subject_id, '|', semester_id) as k"))
+            ->pluck('k')
+            ->flip()
+            ->all();
+    }
+
     private function getSemesterStartDate(): ?Carbon
     {
         // 1. Joriy o'quv yilini aniqlash

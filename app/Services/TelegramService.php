@@ -7,6 +7,18 @@ use Illuminate\Support\Facades\Log;
 
 class TelegramService
 {
+    /**
+     * .env dagi bir yoki bir nechta chat ID: "-1001111,-1002222" -> ['-1001111', '-1002222'].
+     * Vergul, nuqtali vergul yoki bo'sh joy bilan ajratish mumkin.
+     */
+    public static function chatIds($value): array
+    {
+        return array_values(array_unique(array_filter(
+            preg_split('/[\s,;]+/', trim((string) $value)),
+            fn ($id) => $id !== ''
+        )));
+    }
+
     public function notify(string $message): void
     {
         $this->notifyChat(config('services.telegram.chat_id'), $message);

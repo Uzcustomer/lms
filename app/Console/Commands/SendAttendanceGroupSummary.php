@@ -355,18 +355,19 @@ class SendAttendanceGroupSummary extends Command
             return strcasecmp($a['department_name'] . $a['employee_name'], $b['department_name'] . $b['employee_name']);
         });
 
-        // Chat ID: --chat-id parametri yoki config dan
-        $groupChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        // Chat ID: --chat-id parametri yoki config dan. TELEGRAM_ATTENDANCE_GROUP_ID da
+        // vergul bilan bir nechta guruh yozilsa — hisobot har biriga yuboriladi.
+        $groupChatIds = TelegramService::chatIds($this->option('chat-id') ?: config('services.telegram.attendance_group_id'));
 
         if ($this->option('chat-id')) {
-            $this->info("TEST rejim: xabar {$groupChatId} ga yuboriladi");
+            $this->info('TEST rejim: xabar ' . implode(', ', $groupChatIds) . ' ga yuboriladi');
         }
 
         if (empty($results)) {
             $this->info("Barcha o'qituvchilar davomat va baholarni kiritgan. Jami darslar: {$totalSchedules}");
 
-            if ($groupChatId) {
-                $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, [], 0, 0, 0, 0);
+            $summaryText = $this->buildSummaryText($todayStr, $now, $totalSchedules, [], 0, 0, 0, 0);
+            foreach ($groupChatIds as $groupChatId) {
                 $telegram->sendToUser($groupChatId, $summaryText);
             }
 
@@ -432,7 +433,7 @@ class SendAttendanceGroupSummary extends Command
             }
         }
 
-        if (!$groupChatId) {
+        if (empty($groupChatIds)) {
             $this->error('TELEGRAM_ATTENDANCE_GROUP_ID sozlanmagan yoki --chat-id bering.');
             return 1;
         }
@@ -527,30 +528,31 @@ class SendAttendanceGroupSummary extends Command
             $detailImages = $generator->generate($headers, $tableRows, "O'QITUVCHILAR KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kamida biri yo'q: " . count($results) . ")");
         }
 
-        $tempFiles = [];
+        $tempFiles = array_merge($deptImages, $detailImages);
 
         try {
-            // 1. Xulosa xabari
-            $telegram->sendToUser($groupChatId, $summaryText);
+            // Har bir guruhga to'liq to'plam ketma-ket: xulosa, kafedra kesimi, batafsil
+            foreach ($groupChatIds as $groupChatId) {
+                // 1. Xulosa xabari
+                $telegram->sendToUser($groupChatId, $summaryText);
 
-            // 2. Kafedra kesimi rasmlari
-            foreach ($deptImages as $index => $imagePath) {
-                $tempFiles[] = $imagePath;
-                $caption = 'Kafedra kesimi';
-                if (count($deptImages) > 1) {
-                    $caption .= ' ' . ($index + 1) . '/' . count($deptImages) . '-sahifa';
+                // 2. Kafedra kesimi rasmlari
+                foreach ($deptImages as $index => $imagePath) {
+                    $caption = 'Kafedra kesimi';
+                    if (count($deptImages) > 1) {
+                        $caption .= ' ' . ($index + 1) . '/' . count($deptImages) . '-sahifa';
+                    }
+                    $telegram->sendPhoto($groupChatId, $imagePath, $caption);
                 }
-                $telegram->sendPhoto($groupChatId, $imagePath, $caption);
-            }
 
-            // 3. Batafsil jadval rasmlari
-            foreach ($detailImages as $index => $imagePath) {
-                $tempFiles[] = $imagePath;
-                $caption = 'Batafsil hisobot';
-                if (count($detailImages) > 1) {
-                    $caption .= ' ' . ($index + 1) . '/' . count($detailImages) . '-sahifa';
+                // 3. Batafsil jadval rasmlari
+                foreach ($detailImages as $index => $imagePath) {
+                    $caption = 'Batafsil hisobot';
+                    if (count($detailImages) > 1) {
+                        $caption .= ' ' . ($index + 1) . '/' . count($detailImages) . '-sahifa';
+                    }
+                    $telegram->sendPhoto($groupChatId, $imagePath, $caption);
                 }
-                $telegram->sendPhoto($groupChatId, $imagePath, $caption);
             }
 
             $totalImages = count($deptImages) + count($detailImages);

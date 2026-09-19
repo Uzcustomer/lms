@@ -301,9 +301,10 @@ class SendAttendanceFinalDailyReport extends Command
             return strcasecmp($a['department_name'] . $a['employee_name'], $b['department_name'] . $b['employee_name']);
         });
 
-        $groupChatId = $this->option('chat-id') ?: config('services.telegram.attendance_group_id');
+        // TELEGRAM_ATTENDANCE_GROUP_ID da vergul bilan bir nechta guruh bo'lishi mumkin
+        $groupChatIds = TelegramService::chatIds($this->option('chat-id') ?: config('services.telegram.attendance_group_id'));
 
-        if (!$groupChatId) {
+        if (empty($groupChatIds)) {
             $this->error('TELEGRAM_ATTENDANCE_GROUP_ID sozlanmagan yoki --chat-id bering.');
             return 1;
         }
@@ -311,7 +312,9 @@ class SendAttendanceFinalDailyReport extends Command
         if (empty($results)) {
             $this->info("Kechagi kun barcha o'qituvchilar davomat va baholarni kiritgan. Jami darslar: {$totalSchedules}");
 
-            $telegram->sendToUser($groupChatId, "✅ KECHAGI KUN YAKUNIY HISOBOT — {$formattedDate}\n\nBarcha o'qituvchilar davomat va baholarni kiritgan!\nJami darslar: {$totalSchedules}");
+            foreach ($groupChatIds as $groupChatId) {
+                $telegram->sendToUser($groupChatId, "✅ KECHAGI KUN YAKUNIY HISOBOT — {$formattedDate}\n\nBarcha o'qituvchilar davomat va baholarni kiritgan!\nJami darslar: {$totalSchedules}");
+            }
 
             return 0;
         }
@@ -347,17 +350,18 @@ class SendAttendanceFinalDailyReport extends Command
         $generator = new TableImageGenerator();
         $detailImages = $generator->generate($headers, $tableRows, "YAKUNIY HISOBOT: O'QITUVCHILAR KESIMI - {$formattedDate} (Kamida biri yo'q: " . count($results) . ")");
 
-        $tempFiles = [];
+        $tempFiles = $detailImages;
 
         try {
-            // Faqat o'qituvchilar kesimi jadval rasmlarini yuborish
-            foreach ($detailImages as $index => $imagePath) {
-                $tempFiles[] = $imagePath;
-                $caption = "Kechagi kun yakuniy hisobot — {$formattedDate}";
-                if (count($detailImages) > 1) {
-                    $caption .= ' ' . ($index + 1) . '/' . count($detailImages) . '-sahifa';
+            // Faqat o'qituvchilar kesimi jadval rasmlarini yuborish — har bir guruhga
+            foreach ($groupChatIds as $groupChatId) {
+                foreach ($detailImages as $index => $imagePath) {
+                    $caption = "Kechagi kun yakuniy hisobot — {$formattedDate}";
+                    if (count($detailImages) > 1) {
+                        $caption .= ' ' . ($index + 1) . '/' . count($detailImages) . '-sahifa';
+                    }
+                    $telegram->sendPhoto($groupChatId, $imagePath, $caption);
                 }
-                $telegram->sendPhoto($groupChatId, $imagePath, $caption);
             }
 
             $this->info("Yakuniy hisobot yuborildi. Jami: {$totalSchedules}, Muammoli: " . count($results) . ", Rasmlar: " . count($detailImages));

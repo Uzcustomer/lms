@@ -1216,6 +1216,135 @@ class InternationalStudentController extends Controller
         );
     }
 
+    /**
+     * Belgilangan talabalarning mavjud hujjatlarini bitta ZIP faylda beradi.
+     * Fayl nomi — talabaning to'liq ismi va hujjat nomi, masalan
+     * "AXMEDOV ALI - passport.pdf". Hujjati yo'q talaba o'tkazib yuboriladi.
+     */
+    public function downloadDocuments(Request $request)
+    {
+        $request->validate([
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'integer',
+        ], [
+            'student_ids.required' => 'Avval talabalarni belgilang.',
+        ]);
+
+        if (!class_exists(\ZipArchive::class)) {
+            return back()->with('error', "Serverda ZIP arxiv (ZipArchive) yoqilmagan.");
+        }
+
+        $students = Student::with('visaInfo')
+            ->whereIn('id', $request->input('student_ids'))
+            ->orderBy('full_name')
+            ->get(['id', 'full_name']);
+
+        if ($students->isEmpty()) {
+            return back()->with('error', 'Tanlangan talabalar topilmadi.');
+        }
+
+        // Hujjat nomlari fayl nomida shunday ko'rinadi
+        $documents = [
+            'passport' => 'passport_scan_path',
+            'viza' => 'visa_scan_path',
+            'registratsiya' => 'registration_doc_path',
+        ];
+
+        $tmp = tempnam(sys_get_temp_dir(), 'intl_docs_');
+        if ($tmp === false) {
+            return back()->with('error', 'Vaqtinchalik fayl yaratib bo\'lmadi.');
+        }
+        $zipPath = $tmp . '.zip';
+        @unlink($tmp);
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return back()->with('error', 'ZIP fayl yaratib bo\'lmadi.');
+        }
+
+        $disk = \Storage::disk('public');
+        $usedNames = [];
+        $addedFiles = 0;
+        $withoutDocuments = [];
+
+        try {
+            foreach ($students as $student) {
+                $visaInfo = $student->visaInfo;
+                $studentName = $this->zipSafeName($student->full_name ?: ('talaba-' . $student->id));
+                $studentHasFile = false;
+
+                foreach ($documents as $label => $field) {
+                    $path = $visaInfo?->{$field};
+                    if (!$path || !$disk->exists($path)) {
+                        continue;
+                    }
+
+                    $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) ?: 'pdf';
+                    $name = $this->uniqueZipName($studentName . ' - ' . $label . '.' . $extension, $usedNames);
+
+                    if ($zip->addFile($disk->path($path), $name)) {
+                        $addedFiles++;
+                        $studentHasFile = true;
+                    }
+                }
+
+                if (!$studentHasFile) {
+                    $withoutDocuments[] = $student->full_name;
+                }
+            }
+
+            // Yuklab olishda sahifa yangilanmaydi, shuning uchun hujjatsiz
+            // talabalar ro'yxati arxiv ichiga izoh fayl bo'lib qo'shiladi
+            if ($withoutDocuments) {
+                $zip->addFromString(
+                    "HUJJATI YO'Q TALABALAR.txt",
+                    "Quyidagi talabalarda hujjat topilmadi:\r\n\r\n" . implode("\r\n", $withoutDocuments) . "\r\n"
+                );
+            }
+
+            $zip->close();
+        } catch (\Throwable $e) {
+            $zip->close();
+            @unlink($zipPath);
+            \Log::error('Xalqaro talabalar hujjatlarini ZIP qilishda xato: ' . $e->getMessage());
+
+            return back()->with('error', 'Hujjatlarni arxivlashda xatolik yuz berdi.');
+        }
+
+        if ($addedFiles === 0) {
+            @unlink($zipPath);
+
+            return back()->with('error', 'Tanlangan talabalarda yuklab olinadigan hujjat topilmadi.');
+        }
+
+        return response()->download($zipPath, 'talaba-hujjatlari-' . now()->format('Ymd_His') . '.zip', [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /** Fayl nomidan ZIP uchun xavfli belgilarni olib tashlash */
+    private function zipSafeName(string $value): string
+    {
+        $value = preg_replace('/[\\\\\/:*?"<>|]+/u', ' ', $value);
+        $value = preg_replace('/\s+/u', ' ', trim((string) $value));
+
+        return $value !== '' ? $value : 'talaba';
+    }
+
+    /** Bir xil ismli talabalar bo'lsa fayl nomi ustidan yozilmasin */
+    private function uniqueZipName(string $name, array &$used): string
+    {
+        $used[$name] = ($used[$name] ?? 0) + 1;
+        if ($used[$name] === 1) {
+            return $name;
+        }
+
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        $base = pathinfo($name, PATHINFO_FILENAME);
+
+        return $base . ' (' . $used[$name] . ')' . ($extension !== '' ? '.' . $extension : '');
+    }
+
     public function subscribe()
     {
         $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();

@@ -24,6 +24,12 @@
         </div>
     @endif
 
+    @if(session('error'))
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+            <span class="block sm:inline">{{ session('error') }}</span>
+        </div>
+    @endif
+
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -243,11 +249,21 @@
                         <button type="button" onclick="clearSelection()" style="font-size:11px;padding:4px 10px;border:1px solid #93c5fd;background:#fff;border-radius:6px;color:#1e40af;cursor:pointer;">Bekor qilish</button>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
+                        <button type="button" onclick="downloadDocuments()" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#0f766e,#14b8a6);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;" title="Pasport, viza va registratsiya hujjatlarini ZIP faylda yuklab olish">
+                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                            Hujjatlarni yuklash
+                        </button>
                         <button type="button" onclick="openFirmModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Firma biriktirish</button>
                         <button type="button" onclick="openRegModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Reg. talabnoma</button>
                         <button type="button" onclick="openVizaModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Viza talabnoma</button>
                     </div>
                 </div>
+
+                {{-- Hujjatlarni ZIP qilib yuklash (talaba ismi + hujjat nomi) --}}
+                <form id="docsForm" method="POST" action="{{ route('admin.international-students.download-documents') }}" style="display:none;">
+                    @csrf
+                    <div id="docsInputs"></div>
+                </form>
 
                 {{-- Registratsiya talabnoma modal --}}
                 <div id="regModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
@@ -843,6 +859,16 @@ function clearSelection() {
     document.getElementById('selectAll').checked = false;
     document.getElementById('selectAll').indeterminate = false;
     updateBulkBar();
+}
+
+function downloadDocuments() {
+    var checked = document.querySelectorAll('.student-cb:checked');
+    if (!checked.length) {
+        alert('Avval talabalarni belgilang.');
+        return;
+    }
+    syncInputs('docsInputs');
+    document.getElementById('docsForm').submit();
 }
 
 function openRegModal() {

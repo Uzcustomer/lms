@@ -53,6 +53,7 @@ class LessonOpeningNotifier
             . "Hurmatli {$this->e($teacher->full_name)}!\n\n"
             . "{$lesson['subject']} fani, {$lesson['group']} guruhi, {$lesson['date']} sanadagi dars uchun "
             . "joriy semestrdagi <b>{$number}-dars ochish so'rovingizni</b> yubordingiz.\n\n"
+            . "2-so'rovdan boshlab <b>tushuntirish xati</b> talab qilinadi.\n"
             . "Tushuntirish xatini <b>o'quv bo'limiga</b> topshiring — aks holda so'rovingiz tasdiqlanmaydi."
         );
     }

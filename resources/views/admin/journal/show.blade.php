@@ -5329,7 +5329,7 @@
                         <svg style="width:28px; height:28px; flex:0 0 28px; color:#b45309;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                         <div>
                             <div style="font-size:17px; font-weight:800; color:#92400e; line-height:1.4;">Tushuntirish xatini o'quv bo'limiga topshiring</div>
-                            <div style="font-size:14px; color:#b45309; line-height:1.55; margin-top:6px;">Aks holda dars ochish uchun so'rovingiz <b>tasdiqlanmaydi</b>. Xat tizimga yuklanmaydi — o'quv bo'limiga qog'ozda topshiriladi.</div>
+                            <div style="font-size:14px; color:#b45309; line-height:1.55; margin-top:6px;">Aks holda dars ochish uchun so'rovingiz <b>tasdiqlanmaydi</b>. 2-so'rovdan boshlab tushuntirish xati talab qilinadi — u tizimga yuklanmaydi, o'quv bo'limiga qog'ozda topshiriladi.</div>
                         </div>
                     </div>
                 </div>

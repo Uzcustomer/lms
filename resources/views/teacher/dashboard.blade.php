@@ -249,7 +249,10 @@
                 </div>
                 <div class="elp-body">
                     <p class="elp-lead">Tushuntirish xatini o'quv bo'limiga topshiring — aks holda dars ochish so'rovingiz tasdiqlanmaydi.</p>
-                    <p class="elp-meta" style="margin-bottom:10px;">Xat quyidagi so'rov{{ count($explanationNotice) > 1 ? 'lar' : '' }} uchun kerak:</p>
+                    <p class="elp-meta" style="margin-bottom:10px;">
+                        <b>2-so'rovdan boshlab</b> tushuntirish xati talab qilinadi.
+                        Quyidagi so'rov{{ count($explanationNotice) > 1 ? 'lar' : '' }} uchun kerak:
+                    </p>
                     <div class="elp-list">
                         @foreach($explanationNotice as $elp)
                             <div class="elp-item">
@@ -266,7 +269,7 @@
                     </div>
                     <p class="elp-meta" style="margin-bottom:0;">
                         Raqam — joriy semestrda yuborgan so'rovlaringiz hisobi (barcha fanlar bo'yicha).
-                        Xat tizimga yuklanmaydi, uni o'quv bo'limiga qog'ozda topshirasiz.
+                        Tushuntirish xati tizimga yuklanmaydi — uni o'quv bo'limiga qog'ozda topshirasiz.
                     </p>
                 </div>
                 <div class="elp-foot">

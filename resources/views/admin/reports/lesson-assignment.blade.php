@@ -101,13 +101,13 @@
                                 <option value="all_done">Barchasi bajarilgan</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 470px;">
+                        <div class="filter-item filter-item-actions" style="min-width: 430px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <div style="display:flex;gap:8px;flex-wrap:nowrap;">
                                 <button type="button" id="btn-sync" class="btn-sync" onclick="startSync()" title="Tanlangan sanalar uchun davomat va baholarni HEMIS dan olib keladi">
                                     <svg id="sync-icon" style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                     <span id="sync-text">Yangilash</span>
-                                    <span id="sync-percent" style="display:none;margin-left:4px;font-size:11px;opacity:0.9;"></span>
+                                    <span id="sync-percent" style="display:none;margin-left:2px;font-size:11px;opacity:0.9;font-variant-numeric:tabular-nums;"></span>
                                 </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="showData()">
                                     <svg id="calc-icon" style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
@@ -119,7 +119,7 @@
                                     Excel
                                 </button>
                             </div>
-                            <div id="last-sync-label" style="margin-top:6px;font-size:11.5px;color:#64748b;line-height:1.4;">
+                            <div id="last-sync-label" class="sync-status-line">
                                 @if($lastSync)
                                     Oxirgi yangilanish: <b style="color:#334155;">{{ $lastSync['at'] }}</b>@if($lastSync['by']) · {{ $lastSync['by'] }}@endif
                                 @else
@@ -357,7 +357,7 @@
                 return;
             }
 
-            syncBusy('Yangilanmoqda...');
+            syncBusy('Boshlanmoqda...', 0, 0);
 
             $.ajax({
                 url: '{{ route("admin.reports.lesson-assignment.sync-schedules") }}',
@@ -390,11 +390,16 @@
             });
         }
 
-        function syncBusy(text) {
-            $('#btn-sync').prop('disabled', true).css('opacity', '0.7');
+        // Tugmada faqat "Yangilanmoqda" va foiz; batafsil matn pastki qatorda
+        function syncBusy(message, percent, elapsedSeconds) {
+            $('#btn-sync').prop('disabled', true).css('opacity', '0.75');
             $('#sync-icon').css('animation', 'spin 0.8s linear infinite');
-            $('#sync-text').text(text || 'Yangilanmoqda...');
-            $('#sync-percent').show().text('');
+            $('#sync-text').text('Yangilanmoqda');
+            $('#sync-percent').show().text(percent > 0 ? percent + '%' : '');
+
+            var line = message || 'Navbatda...';
+            if (elapsedSeconds > 0) line += ' · ' + formatElapsed(elapsedSeconds);
+            $('#last-sync-label').addClass('is-running').text(line);
         }
 
         function syncReset() {
@@ -402,6 +407,13 @@
             $('#sync-icon').css('animation', '');
             $('#sync-text').text('Yangilash');
             $('#sync-percent').hide().text('');
+            $('#last-sync-label').removeClass('is-running');
+        }
+
+        function formatElapsed(seconds) {
+            var m = Math.floor(seconds / 60);
+            var sec = seconds % 60;
+            return m > 0 ? (m + ' daq ' + sec + ' son') : (sec + ' soniya');
         }
 
         function startSyncPolling() {
@@ -443,14 +455,12 @@
                     updateLastSyncLabel(res.last_sync);
 
                     if (res.status === 'running') {
-                        syncBusy(res.message || 'Yangilanmoqda...');
-                        if (res.percent > 0) {
-                            $('#sync-percent').show().text(res.percent + '%');
-                        }
+                        syncBusy(res.message, res.percent, res.elapsed_seconds);
                         if (!syncPollTimer) startSyncPolling();
                     } else if (res.status === 'done') {
                         stopSyncPolling();
                         syncReset();
+                        updateLastSyncLabel(res.last_sync);
                         if (!silent) {
                             showToast('HEMIS ma\'lumotlari yangilandi' + (res.last_sync && res.last_sync.at ? ': ' + res.last_sync.at : '') + '.');
                         }
@@ -478,8 +488,7 @@
                 success: function(res) {
                     updateLastSyncLabel(res.last_sync);
                     if (res.status === 'running') {
-                        syncBusy(res.message || 'Yangilanmoqda...');
-                        if (res.percent > 0) $('#sync-percent').show().text(res.percent + '%');
+                        syncBusy(res.message, res.percent, res.elapsed_seconds);
                         startSyncPolling();
                     }
                 }
@@ -755,7 +764,7 @@
     </script>
 
     <style>
-        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; overflow: visible; position: relative; z-index: 20; }
+        .filter-container { padding: 16px 20px 26px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; overflow: visible; position: relative; z-index: 20; }
         .filter-row { display: flex; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; align-items: flex-end; overflow: visible; }
         .filter-row:last-child { margin-bottom: 0; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
@@ -769,6 +778,12 @@
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover:not(:disabled) { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
         .btn-calc:disabled { cursor: not-allowed; }
+
+        /* Holat yozuvi qator balandligini o'zgartirmasin — tugmalar
+           filtrlar bilan bir chiziqda qolishi uchun oqimdan chiqarilgan */
+        .filter-item-actions { position: relative; }
+        .sync-status-line { position: absolute; top: 100%; left: 0; margin-top: 4px; font-size: 11.5px; line-height: 1.3; color: #64748b; white-space: nowrap; }
+        .sync-status-line.is-running { color: #b45309; font-weight: 600; }
 
         .btn-sync { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: linear-gradient(135deg, #b45309, #f59e0b); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(245,158,11,0.3); height: 36px; }
         .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 4px 12px rgba(245,158,11,0.4); transform: translateY(-1px); }

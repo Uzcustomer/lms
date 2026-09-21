@@ -634,6 +634,8 @@ class ReportController extends Controller
             'current' => 0,
             'total' => 0,
             'percent' => 0,
+            'started_at' => now()->toDateTimeString(),
+            'started_by' => $startedBy,
             'updated_at' => now()->toDateTimeString(),
         ], 600);
 
@@ -655,10 +657,19 @@ class ReportController extends Controller
     {
         $data = \Illuminate\Support\Facades\Cache::get(self::LESSON_ASSIGNMENT_SYNC_KEY);
 
+        // Yangilash necha vaqtdan beri ketayotgani (sahifa yangilansa ham to'g'ri)
+        $elapsed = null;
+        if ($data && !empty($data['started_at'])) {
+            $elapsed = Carbon::parse($data['started_at'])->diffInSeconds(now());
+        }
+
         // Oxirgi yangilanish yozuvi doimiy — sahifada har doim ko'rinadi
         return response()->json(array_merge(
             $data ?: ['status' => 'none'],
-            ['last_sync' => self::lastLessonAssignmentSync()]
+            [
+                'elapsed_seconds' => $elapsed,
+                'last_sync' => self::lastLessonAssignmentSync(),
+            ]
         ));
     }
 

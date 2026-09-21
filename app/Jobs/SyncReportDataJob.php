@@ -123,12 +123,17 @@ class SyncReportDataJob implements ShouldQueue
 
     private function updateProgress(string $message, int $current, int $total, string $status = 'running'): void
     {
+        // Boshlangan vaqt saqlanib qolsin — sahifada "necha vaqt bo'ldi" shundan
+        $existing = Cache::get($this->syncKey);
+
         Cache::put($this->syncKey, [
             'status' => $status,
             'message' => $message,
             'current' => $current,
             'total' => $total,
             'percent' => $total > 0 ? round($current / $total * 100) : 0,
+            'started_at' => $existing['started_at'] ?? now()->toDateTimeString(),
+            'started_by' => $existing['started_by'] ?? $this->startedBy,
             'updated_at' => now()->toDateTimeString(),
         ], 600);
     }

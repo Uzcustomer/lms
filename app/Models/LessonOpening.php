@@ -229,10 +229,36 @@ class LessonOpening extends Model
         return $cached[$stage] = $teachers->merge($users);
     }
 
-    /** Tasdiqlashi kerak bo'lgan prorektorlar: ["guard:id" => ism]. */
+    /**
+     * Tasdiqlashi kerak bo'lgan prorektorlar: ["guard:id" => ism].
+     * Sozlamada bittasi tayinlangan bo'lsa — faqat o'sha: rolga ega bir necha
+     * prorektordan hammasidan tasdiq so'ralmaydi.
+     */
     public static function prorektorApprovers(): \Illuminate\Support\Collection
     {
-        return static::stageApprovers(self::STAGE_PROREKTOR);
+        $all = static::stageApprovers(self::STAGE_PROREKTOR);
+        $pinned = static::pinnedApproverKey(self::STAGE_PROREKTOR);
+
+        return $pinned !== null ? $all->only([$pinned]) : $all;
+    }
+
+    /** Bosqich uchun tayinlangan xodim sozlamasining kaliti */
+    public static function approverSettingKey(string $stage): string
+    {
+        return 'lesson_opening_' . $stage . '_approver';
+    }
+
+    /** Bosqichni imzolashi tayinlangan xodim ("guard:id") yoki null */
+    public static function pinnedApproverKey(string $stage): ?string
+    {
+        $all = static::stageApprovers($stage);
+
+        $pinned = trim((string) Setting::get(static::approverSettingKey($stage), ''));
+        if ($pinned !== '' && $all->has($pinned)) {
+            return $pinned;
+        }
+
+        return $stage === self::STAGE_REGISTRAR ? static::guessRegistrarKey($all) : null;
     }
 
     /**
@@ -248,12 +274,11 @@ class LessonOpening extends Model
             return '';
         }
 
-        if ($stage === self::STAGE_REGISTRAR) {
-            $pinned = static::pinnedRegistrarKey();
-            if ($pinned !== null
-                && ($requestNumber === null || $requestNumber >= self::REGISTRAR_PINNED_FROM_NUMBER)) {
-                return (string) $all->get($pinned);
-            }
+        $pinned = static::pinnedApproverKey($stage);
+        if ($pinned !== null && ($stage !== self::STAGE_REGISTRAR
+            || $requestNumber === null
+            || $requestNumber >= self::REGISTRAR_PINNED_FROM_NUMBER)) {
+            return (string) $all->get($pinned);
         }
 
         return $all->count() <= self::APPROVER_LIST_LIMIT
@@ -426,20 +451,23 @@ class LessonOpening extends Model
     }
 
     /**
-     * Shu xodim shu bosqichda qaror qila oladimi. Registrator ofisida o'nlab
-     * xodim bor, lekin 3-so'rovdan boshlab so'rovni ulardan faqat tayinlangani
-     * imzolaydi (sozlama: lesson_opening_registrar_approver) — qolganlari
-     * so'rovni ko'radi, lekin tasdiqlay olmaydi. Hech kim tayinlanmagan bo'lsa
-     * eski tartib saqlanadi: ofisning istalgan xodimi qaror qiladi.
+     * Shu xodim shu bosqichda qaror qila oladimi. Rolga ega bir necha xodim
+     * bo'lishi mumkin (registrator ofisida o'nlab, prorektorlar ikkita), lekin
+     * dars ochishni ulardan tayinlangani imzolaydi — sozlama
+     * "lesson_opening_<bosqich>_approver". Qolganlari so'rovni ko'radi, lekin
+     * tasdiqlay olmaydi. Hech kim tayinlanmagan bo'lsa eski tartib saqlanadi.
      */
     public function stageReviewerAllowed(string $stage, ?array $reviewer = null): bool
     {
-        if ($stage !== self::STAGE_REGISTRAR
-            || (int) $this->request_number < self::REGISTRAR_PINNED_FROM_NUMBER) {
+        // Registratorda cheklov 3-so'rovdan boshlanadi: undan oldin ofisning
+        // istalgan xodimi imzolaydi. Prorektorlar bosqichi 3-so'rovda paydo
+        // bo'ladi — tayinlangani bo'lsa, o'sha imzolaydi.
+        if ($stage === self::STAGE_REGISTRAR
+            && (int) $this->request_number < self::REGISTRAR_PINNED_FROM_NUMBER) {
             return true;
         }
 
-        $pinned = static::pinnedRegistrarKey();
+        $pinned = static::pinnedApproverKey($stage);
         if ($pinned === null) {
             return true;
         }
@@ -459,24 +487,21 @@ class LessonOpening extends Model
         return $pinnedName !== '' && $pinnedName === $norm($reviewer['name'] ?? '');
     }
 
-    /**
-     * Tayinlangan registrator ("guard:id") yoki null.
-     *
-     * Sozlamada tanlanmagan bo'lsa — registrator ofisi xodimlari ichidan
-     * prorektor roli ham borini olamiz: dars ochishni imzolaydigan xodim
-     * shu ikkala rolda turadi va u yagona bo'lsa, qo'lda tanlash shart emas.
-     * Bir nechta bo'lsa (yoki umuman bo'lmasa) — hech kim tayinlanmagan
-     * hisoblanadi va eski tartib ishlaydi.
-     */
+    /** Tayinlangan registrator ("guard:id") yoki null */
     public static function pinnedRegistrarKey(): ?string
     {
-        $registrars = static::stageApprovers(self::STAGE_REGISTRAR);
+        return static::pinnedApproverKey(self::STAGE_REGISTRAR);
+    }
 
-        $pinned = trim((string) Setting::get('lesson_opening_registrar_approver', ''));
-        if ($pinned !== '' && $registrars->has($pinned)) {
-            return $pinned;
-        }
-
+    /**
+     * Sozlamada tanlanmagan bo'lsa — registrator ofisi xodimlari ichidan
+     * o'quv bo'limi va prorektor rollari ham borini olamiz: dars ochishni
+     * imzolaydigan xodim shu rollarda turadi va u yagona bo'lsa, qo'lda
+     * tanlash shart emas. Bir nechta bo'lsa — hech kim tayinlanmagan
+     * hisoblanadi va eski tartib ishlaydi.
+     */
+    private static function guessRegistrarKey(\Illuminate\Support\Collection $registrars): ?string
+    {
         // Kalit emas, ism bo'yicha solishtiramiz: bitta odam xodimlar
         // jadvalida ham, foydalanuvchilarda ham bo'lishi mumkin
         $norm = fn ($name) => mb_strtolower(trim((string) $name));

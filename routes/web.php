@@ -313,8 +313,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::delete('/{opening}', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'destroy'])->name('destroy');
                 // Faqat admin/superadmin: test rejimi (so'rov raqamini qo'lda tanlash)
                 Route::post('/test-mode', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'toggleTestMode'])->name('test-mode');
-                // Faqat admin/superadmin: registrator ofisidan kim tasdiqlashi (ro'yxatda ko'rinadi)
-                Route::post('/registrar-approver', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'setRegistrarApprover'])->name('registrar-approver');
+                // Faqat admin/superadmin: bosqichni rolga ega xodimlardan kim imzolashi
+                Route::post('/stage-approver', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'setStageApprover'])->name('stage-approver');
             });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)

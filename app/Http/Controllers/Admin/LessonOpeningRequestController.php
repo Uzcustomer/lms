@@ -95,9 +95,15 @@ class LessonOpeningRequestController extends Controller
             'canDelete' => $this->canDelete(),
             'testMode' => (bool) Setting::get('lesson_opening_test_mode', false),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
-            // Registrator ofisidan kim tasdiqlaydi (ro'yxatda shu kishi ko'rinadi)
-            'registrarApprovers' => LessonOpening::stageApprovers(LessonOpening::STAGE_REGISTRAR),
-            'registrarApprover' => trim((string) Setting::get('lesson_opening_registrar_approver', '')),
+            // Bosqichlarni kim imzolaydi: rolga ega bir nechtasidan bittasi
+            'stageApprovers' => [
+                LessonOpening::STAGE_REGISTRAR => LessonOpening::stageApprovers(LessonOpening::STAGE_REGISTRAR),
+                LessonOpening::STAGE_PROREKTOR => LessonOpening::stageApprovers(LessonOpening::STAGE_PROREKTOR),
+            ],
+            'pinnedApprovers' => [
+                LessonOpening::STAGE_REGISTRAR => LessonOpening::pinnedApproverKey(LessonOpening::STAGE_REGISTRAR),
+                LessonOpening::STAGE_PROREKTOR => LessonOpening::pinnedApproverKey(LessonOpening::STAGE_PROREKTOR),
+            ],
         ]);
     }
 
@@ -253,28 +259,34 @@ class LessonOpeningRequestController extends Controller
     }
 
     /**
-     * Registrator ofisidan kim tasdiqlashi — ro'yxatlarda va jurnal modalida
-     * shu kishi ko'rinadi. Ofisda o'nlab xodim bor, lekin dars ochishni
-     * ulardan bittasi imzolaydi. Kim tasdiqlay olishini cheklamaydi.
+     * Bosqichni kim imzolashi. Rolga ega bir necha xodim bo'ladi (registrator
+     * ofisida o'nlab, prorektorlar ikkita) — dars ochishni ulardan tayinlangani
+     * tasdiqlaydi va ro'yxatlarda o'sha ko'rinadi.
      */
-    public function setRegistrarApprover(Request $request): RedirectResponse
+    public function setStageApprover(Request $request): RedirectResponse
     {
         abort_unless($this->canDelete(), 403);
 
-        $request->validate(['approver' => ['nullable', 'string', 'max:64']]);
+        $stages = [LessonOpening::STAGE_REGISTRAR, LessonOpening::STAGE_PROREKTOR];
+        $data = $request->validate([
+            'stage' => ['required', 'string', \Illuminate\Validation\Rule::in($stages)],
+            'approver' => ['nullable', 'string', 'max:64'],
+        ]);
 
-        $key = trim((string) $request->input('approver'));
-        $approvers = LessonOpening::stageApprovers(LessonOpening::STAGE_REGISTRAR);
+        $stage = $data['stage'];
+        $key = trim((string) ($data['approver'] ?? ''));
+        $approvers = LessonOpening::stageApprovers($stage);
+        $label = LessonOpening::STAGE_LABELS[$stage];
 
         if ($key !== '' && !$approvers->has($key)) {
-            return back()->with('error', "Bunday xodim registrator ofisi rolida topilmadi.");
+            return back()->with('error', "Bunday xodim {$label} rolida topilmadi.");
         }
 
-        Setting::set('lesson_opening_registrar_approver', $key);
+        Setting::set(LessonOpening::approverSettingKey($stage), $key);
 
         return back()->with('success', $key === ''
-            ? "Registrator ofisining barcha xodimlari ko'rsatiladi."
-            : "Registrator ofisidan tasdiqlovchi: {$approvers->get($key)}");
+            ? "{$label}: rolga ega barcha xodimlar tasdiqlaydi."
+            : "{$label} sifatida tasdiqlaydi: {$approvers->get($key)}");
     }
 
     /**

@@ -301,23 +301,27 @@
                                 </button>
                             </form>
 
-                            {{-- Registrator ofisida o'nlab xodim bor — ro'yxatda kim imzolashi ko'rinsin --}}
-                            @if(($registrarApprovers ?? collect())->isNotEmpty())
-                                <form method="POST" action="{{ route('admin.lesson-opening-requests.registrar-approver') }}" style="margin:0;">
-                                    @csrf
-                                    <label class="lo-hero-chip" style="cursor:pointer; gap:6px;"
-                                           title="Registrator ofisidan kim tasdiqlashi ro'yxatlarda ko'rsatiladi. Tasdiqlash huquqini cheklamaydi.">
-                                        Registratordan:
-                                        <select name="approver" onchange="this.form.submit()"
-                                                style="max-width:210px; border:0; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; color:#1e293b;">
-                                            <option value="">— hammasi —</option>
-                                            @foreach($registrarApprovers as $key => $name)
-                                                <option value="{{ $key }}" {{ ($registrarApprover ?? '') === $key ? 'selected' : '' }}>{{ $name }}</option>
-                                            @endforeach
-                                        </select>
-                                    </label>
-                                </form>
-                            @endif
+                            {{-- Rolga ega bir nechta xodimdan kim imzolashi: registrator va prorektor --}}
+                            @foreach(['registrar' => 'Registratordan', 'prorektor' => 'Prorektor'] as $apStage => $apLabel)
+                                @php $apList = ($stageApprovers[$apStage] ?? collect()); @endphp
+                                @if($apList->count() > 1)
+                                    <form method="POST" action="{{ route('admin.lesson-opening-requests.stage-approver') }}" style="margin:0;">
+                                        @csrf
+                                        <input type="hidden" name="stage" value="{{ $apStage }}">
+                                        <label class="lo-hero-chip" style="cursor:pointer; gap:6px;"
+                                               title="Shu bosqichni kim imzolaydi. Tanlansa — faqat o'sha xodim tasdiqlaydi.">
+                                            {{ $apLabel }}:
+                                            <select name="approver" onchange="this.form.submit()"
+                                                    style="max-width:210px; border:0; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; color:#1e293b;">
+                                                <option value="">— hammasi —</option>
+                                                @foreach($apList as $key => $name)
+                                                    <option value="{{ $key }}" {{ ($pinnedApprovers[$apStage] ?? null) === $key ? 'selected' : '' }}>{{ $name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </label>
+                                    </form>
+                                @endif
+                            @endforeach
                         @endif
                         {{-- Sanoq davri: joriy semestr (sozlamalardagi sana) yoki hammasi --}}
                         <a class="lo-hero-chip" style="text-decoration:none;"
@@ -601,8 +605,8 @@
                                                         ? $opening->prorektorDecisionOf($reviewer ?? []) === 'approved'
                                                         : $opening->stageStatus($stage) === 'approved'))
                                                     <span class="lo-waiting">Siz tasdiqlagansiz{{ $remainingText ? ' · ' . $remainingText . ' kutilmoqda' : '' }}</span>
-                                                @elseif($isPending && $stage === \App\Models\LessonOpening::STAGE_REGISTRAR && !$opening->stageReviewerAllowed($stage, $reviewer ?? null))
-                                                    {{-- 3-so'rovdan boshlab registratordan faqat tayinlangani imzolaydi --}}
+                                                @elseif($isPending && $stage && !$opening->stageReviewerAllowed($stage, $reviewer ?? null))
+                                                    {{-- Bu bosqichni rolga ega boshqa xodim imzolaydi --}}
                                                     <span class="lo-waiting">Tasdiqlaydi: {{ \App\Models\LessonOpening::expectedApproverText($stage, $number) }}</span>
                                                 @elseif($isPending && $remainingText)
                                                     <span class="lo-waiting">{{ $remainingText }} kutilmoqda</span>

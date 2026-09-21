@@ -16,10 +16,28 @@ class SendUnratedRegistrationsReport extends Command
     private const ACTIVE_STATUS = 11;
 
     protected $signature = 'registrar:send-unrated-report
-        {--chat-id= : Test uchun shaxsiy Telegram chat_id}
+        {--chat-id= : Test uchun bitta chat_id — faqat shunga yuboriladi}
         {--from= : Davr boshi (Y-m-d) — berilmasa joriy semestr boshi}';
 
     protected $description = 'Semestr boshidan kechagacha baho qo\'yilmagan darslar haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 08:30)';
+
+    /**
+     * Hisobot yuboriladigan chatlar: registrator guruhi va .env dagi
+     * qo'shimcha guruhlar (TELEGRAM_UNRATED_REPORT_CHAT_IDS — vergul bilan).
+     * --chat-id berilsa, test sifatida faqat o'sha chatga yuboriladi.
+     */
+    private function resolveChatIds(): array
+    {
+        if ($this->option('chat-id')) {
+            return [trim((string) $this->option('chat-id'))];
+        }
+
+        $extra = preg_split('/[\s,]+/', (string) config('services.telegram.unrated_report_chat_ids')) ?: [];
+        $ids = array_merge([(string) config('services.telegram.registrar_group_id')], $extra);
+        $ids = array_filter(array_map('trim', $ids), fn ($id) => $id !== '');
+
+        return array_values(array_unique($ids));
+    }
 
     public function handle(TelegramService $telegram): int
     {
@@ -262,10 +280,9 @@ class SendUnratedRegistrationsReport extends Command
         if ($totalUnrated === 0) {
             $this->info('Barcha darslarga baho qo\'yilgan.');
 
-            $chatId = $this->option('chat-id') ?: config('services.telegram.registrar_group_id');
-            if ($chatId) {
-                $formattedDate = $yesterday->format('d.m.Y');
-                $semesterStartFormatted = $semesterStart->format('d.m.Y');
+            $formattedDate = $yesterday->format('d.m.Y');
+            $semesterStartFormatted = $semesterStart->format('d.m.Y');
+            foreach ($this->resolveChatIds() as $chatId) {
                 $telegram->sendToUser($chatId,
                     "✅ BAHO QO'YILMAGANLAR HISOBOTI\n"
                     . "📅 Davr: {$semesterStartFormatted} — {$formattedDate}\n"
@@ -277,9 +294,9 @@ class SendUnratedRegistrationsReport extends Command
             return 0;
         }
 
-        // 6-QADAM: Telegram guruhga hisobot yuborish
-        $chatId = $this->option('chat-id') ?: config('services.telegram.registrar_group_id');
-        if (!$chatId) {
+        // 6-QADAM: Telegram guruhlarga hisobot yuborish
+        $chatIds = $this->resolveChatIds();
+        if (empty($chatIds)) {
             $this->error('TELEGRAM_REGISTRAR_GROUP_ID sozlanmagan yoki --chat-id bering.');
             return 1;
         }
@@ -314,7 +331,9 @@ class SendUnratedRegistrationsReport extends Command
             $lines[] = "⚠️ Menejer biriktirilmagan: " . count($unassigned) . " ta";
         }
 
-        $telegram->sendToUser($chatId, implode("\n", $lines));
+        foreach ($chatIds as $chatId) {
+            $telegram->sendToUser($chatId, implode("\n", $lines));
+        }
 
         // 7-QADAM: Har bir menejer uchun jadval rasmi
         $generator = (new TableImageGenerator())->compact();
@@ -375,13 +394,15 @@ class SendUnratedRegistrationsReport extends Command
                         $caption .= ' ' . ($index + 1) . '/' . count($images) . '-sahifa';
                     }
 
-                    $sent = $telegram->sendPhoto($chatId, $imagePath, $caption);
-                    if ($sent) {
-                        $sentCount++;
-                        Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — yuborildi");
-                    } else {
-                        $failedCount++;
-                        Log::error("Registrator hisobot: {$sectionName} rasm #{$index} — YUBORILMADI (sendPhoto false qaytardi)");
+                    foreach ($chatIds as $chatId) {
+                        $sent = $telegram->sendPhoto($chatId, $imagePath, $caption);
+                        if ($sent) {
+                            $sentCount++;
+                            Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — {$chatId} ga yuborildi");
+                        } else {
+                            $failedCount++;
+                            Log::error("Registrator hisobot: {$sectionName} rasm #{$index} — {$chatId} ga YUBORILMADI (sendPhoto false qaytardi)");
+                        }
                     }
                 }
             } catch (\Throwable $e) {

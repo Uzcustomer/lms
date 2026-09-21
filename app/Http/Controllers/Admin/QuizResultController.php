@@ -3908,7 +3908,7 @@ class QuizResultController extends Controller
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
             'confirmed_fan_names' => 'nullable|array', // conflict tasdiqlanganda yuboriladi
             'subject_overrides' => 'nullable|array',   // { "<fan_id>_<group_id>": <subject_id> }
-            'yn_turi_overrides' => 'nullable|array',   // { "<fan_id>_<group_id>": "oski"|"test" }
+            'yn_turi_overrides' => 'nullable|array',   // { "<fan_id>_<group_id>": "oski"|"test"|"mavzu" }
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
@@ -3934,6 +3934,35 @@ class QuizResultController extends Controller
                 $targetSubjectId = $subjectOverrides[$key] ?? $result->fan_id;
 
                 $ynOverride = $ynTuriOverrides[$key] ?? null;
+
+                // NB (mavzu retake): jurnal qatori o'chirilmaydi — faqat qayta
+                // topshirish maydonlari tozalanadi va NB o'z holiga qaytadi.
+                if ($ynOverride === 'mavzu') {
+                    $rows = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                        ->where(function ($q) use ($result) {
+                            $q->where('quiz_result_id', $result->id)
+                              ->orWhere('retake_comment', 'like', '%(quiz_result#' . (int) $result->id . ')%');
+                        })
+                        ->get();
+
+                    if ($rows->isEmpty()) {
+                        $errors[] = [
+                            'id' => $result->id,
+                            'student_name' => $result->student_name,
+                            'fan_name' => $result->fan_name,
+                            'error' => 'Mavzu (qayta topshirish) bahosi topilmadi',
+                        ];
+                        continue;
+                    }
+
+                    foreach ($rows as $sg) {
+                        $this->revertMavzuRetake($sg);
+                        $deletedCount++;
+                    }
+
+                    continue;
+                }
+
                 if ($ynOverride === 'oski') {
                     $trainingTypeCode = 101;
                 } elseif ($ynOverride === 'test') {
@@ -4032,13 +4061,7 @@ class QuizResultController extends Controller
 
             $revertedMavzu = 0;
             foreach ($mavzuRows as $sg) {
-                DB::table('student_grades')->where('id', $sg->id)->update([
-                    'retake_grade'         => null,
-                    'retake_comment'       => null,
-                    'retake_was_sababli'   => null,
-                    'quiz_result_id'       => null,
-                    'updated_at'           => now(),
-                ]);
+                $this->revertMavzuRetake($sg);
                 $revertedMavzu++;
             }
 
@@ -4060,6 +4083,29 @@ class QuizResultController extends Controller
             'deleted_count' => $deletedCount,
             'error_count' => count($errors),
             'errors' => $errors,
+        ]);
+    }
+
+    /**
+     * Mavzu (NB/past baho) retake bahosini bekor qilish: jurnal qatori
+     * o'chirilmaydi — faqat qayta topshirish maydonlari tozalanadi, shunda NB
+     * yoki asl past baho o'z holiga qaytadi.
+     */
+    private function revertMavzuRetake(StudentGrade $sg): void
+    {
+        // low_grade faqat retake uchun qo'yilgan bo'lsa — sababi ham olib tashlanadi
+        $revertReason = $sg->reason;
+        if ($sg->reason === 'low_grade' && $sg->grade === null) {
+            $revertReason = null;
+        }
+
+        DB::table('student_grades')->where('id', $sg->id)->update([
+            'retake_grade'       => null,
+            'retake_comment'     => null,
+            'retake_was_sababli' => null,
+            'quiz_result_id'     => null,
+            'reason'             => $revertReason,
+            'updated_at'         => now(),
         ]);
     }
 

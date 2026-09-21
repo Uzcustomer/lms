@@ -1848,7 +1848,11 @@
                 html += '<button type="button" class="reupload-modal-close" onclick="closePickerModal()">&times;</button>';
                 html += '</div>';
                 html += '<div class="reupload-modal-body">';
-                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Default — Moodledan kelgan fan va YN turi. Agar baho boshqa fanga/turiga yuklangan bo\'lsa, to\'g\'rilab tanlang.</p>';
+                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Default — Moodledan kelgan fan va YN turi. Agar baho boshqa fanga/turiga yuklangan bo\'lsa, to\'g\'rilab tanlang.';
+                if (isDelete) {
+                    html += ' <b>NB (mavzu)</b> — qayta topshirish bahosi: jurnal qatori o\'chmaydi, faqat qayta topshirish bahosi olib tashlanadi va NB o\'z holiga qaytadi.';
+                }
+                html += '</p>';
                 html += '<table class="reupload-modal-table">';
                 html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>YN turi</th><th>Fan</th></tr></thead>';
                 html += '<tbody>';
@@ -1862,10 +1866,18 @@
                     // YN turi — har doim tanlash mumkin
                     html += '<td>';
                     html += '<select class="picker-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:100px;">';
-                    var ynVal = g.yn_turi === 'oski' || g.yn_turi === 'test' ? g.yn_turi : '';
+                    // Mavzu retake (1-mavzu, 2-mavzu...) — NB kuniga qo'yilgan qayta
+                    // topshirish bahosi. Faqat o'chirishda tanlanadi va avtomatik
+                    // belgilanadi; solishtirish OSKI/Test jadval qatorlari uchun.
+                    var ynVal = (g.yn_turi === 'oski' || g.yn_turi === 'test') ? g.yn_turi
+                              : ((isDelete && g.yn_turi === 'jn_mavzu') ? 'mavzu' : '');
                     html += '<option value="">Tanlang</option>';
                     html += '<option value="oski"' + (ynVal === 'oski' ? ' selected' : '') + '>OSKI</option>';
                     html += '<option value="test"' + (ynVal === 'test' ? ' selected' : '') + '>Test</option>';
+                    if (isDelete) {
+                        var mavzuLabel = g.mavzu_shakl ? 'NB (' + esc(g.mavzu_shakl) + ')' : 'NB (mavzu)';
+                        html += '<option value="mavzu"' + (ynVal === 'mavzu' ? ' selected' : '') + '>' + mavzuLabel + '</option>';
+                    }
                     html += '</select>';
                     html += '</td>';
                     // Fan dropdown
@@ -1925,7 +1937,12 @@
                         if (!val) { ynMissing = true; $(this).css('border-color', '#dc2626'); }
                         else { ynTuriOverrides[key] = val; $(this).css('border-color', '#cbd5e1'); }
                     });
-                    if (ynMissing) { alert('YN turini tanlang (OSKI yoki Test)'); return; }
+                    if (ynMissing) {
+                        alert(isDelete
+                            ? "YN turini tanlang: OSKI, Test yoki NB (mavzu qayta topshirish)"
+                            : 'YN turini tanlang (OSKI yoki Test)');
+                        return;
+                    }
 
                     var btn = $(this);
                     btn.prop('disabled', true).html('<span class="spinner-sm"></span> ...');

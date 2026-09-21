@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Console\Commands\ImportAttendanceControls;
 use App\Console\Commands\ImportGrades;
+use App\Models\Setting;
 use App\Services\ScheduleImportService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -20,41 +21,45 @@ class SyncReportDataJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 1;
-    public int $timeout = 900; // 15 daqiqa — HEMIS API sekin bo'lishi mumkin
+    // Baholar har bir kun uchun alohida olinadi — uzoq oraliq ko'p vaqt oladi
+    public int $timeout = 1800;
 
     private string $dateFrom;
     private string $dateTo;
     private string $syncKey;
+    private string $startedBy;
 
-    public function __construct(string $dateFrom, string $dateTo, string $syncKey)
+    public function __construct(string $dateFrom, string $dateTo, string $syncKey, string $startedBy = '')
     {
         $this->dateFrom = $dateFrom;
         $this->dateTo = $dateTo;
         $this->syncKey = $syncKey;
+        $this->startedBy = $startedBy;
     }
 
     public function handle(ScheduleImportService $service): void
     {
         $from = Carbon::parse($this->dateFrom)->startOfDay();
         $to = Carbon::parse($this->dateTo)->endOfDay();
-        $today = Carbon::today();
-        $totalDays = $from->diffInDays($to) + 1;
-        $includestoday = $to->gte($today) && $from->lte($today);
 
-        // Qadamlarni hisoblash:
-        // jadval(1) + davomat(1) + baholar(faqat bugungi kun uchun 0 yoki 1)
-        $gradeSteps = $includestoday ? 1 : 0;
-        $totalSteps = 1 + 1 + $gradeSteps;
+        // Tanlangan oraliqdagi har bir kun uchun baholar alohida olinadi
+        $days = [];
+        for ($day = $from->copy(); $day->lte($to); $day->addDay()) {
+            $days[] = $day->toDateString();
+        }
+
+        // Qadamlar: jadval(1) + davomat(1) + har bir kun baholari
+        $totalSteps = 2 + count($days);
         $currentStep = 0;
 
         try {
-            // 1-bosqich: Jadval (schedules) yangilash — butun oraliq bitta so'rov
+            // 1-bosqich: Jadval (schedules) — butun oraliq bitta so'rov
             $this->updateProgress('Jadval yangilanmoqda...', $currentStep, $totalSteps);
             $service->importBetween($from, $to);
             $currentStep++;
 
             // 2-bosqich: Davomat nazorati — butun oraliq bitta API chaqiruv
-            $this->updateProgress("Davomat: {$from->toDateString()} — {$to->toDateString()}", $currentStep, $totalSteps);
+            $this->updateProgress("Davomat olinmoqda: {$from->toDateString()} — {$to->toDateString()}", $currentStep, $totalSteps);
             try {
                 Artisan::call(ImportAttendanceControls::class, [
                     '--date-from' => $from->toDateString(),
@@ -66,43 +71,27 @@ class SyncReportDataJob implements ShouldQueue
             }
             $currentStep++;
 
-            // 3-bosqich: Baholar — faqat bugungi kun uchun va shartli
-            // O'tgan kunlar: nightly final import allaqachon qilgan, skip
-            // Bugungi kun: live_import_last_success tekshiruv
-            if ($includestoday) {
-                $todayStr = $today->toDateString();
-                $liveImportSuccess = Cache::get('live_import_last_success');
-                $isRecent = $liveImportSuccess && Carbon::parse($liveImportSuccess)->diffInMinutes(now()) <= 180;
+            // 3-bosqich: Baholar — tanlangan har bir kun uchun HEMIS dan
+            foreach ($days as $index => $day) {
+                $this->updateProgress(
+                    'Baholar olinmoqda: ' . $day . ' (' . ($index + 1) . '/' . count($days) . ')',
+                    $currentStep,
+                    $totalSteps
+                );
 
-                // DB fallback: cache expire bo'lgan bo'lsa ham, bazada bugungi baholar bormi tekshirish
-                if (!$isRecent) {
-                    $hasGradesToday = \Illuminate\Support\Facades\DB::table('student_grades')
-                        ->whereNull('deleted_at')
-                        ->whereRaw('DATE(lesson_date) = ?', [$todayStr])
-                        ->exists();
-                    if ($hasGradesToday) {
-                        $isRecent = true;
-                        $liveImportSuccess = $liveImportSuccess ?: 'DB da mavjud';
-                    }
+                try {
+                    Artisan::call(ImportGrades::class, [
+                        '--date' => $day,
+                        '--silent' => true,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning("[SyncReportDataJob] Baholar xato ({$day}): {$e->getMessage()}");
                 }
 
-                if ($isRecent) {
-                    $this->updateProgress("Baholar: DB da yangi ({$todayStr})", $currentStep, $totalSteps);
-                    Log::info("[SyncReportDataJob] Bugungi baholar skip — live import yaqinda muvaffaqiyatli: {$liveImportSuccess}");
-                } else {
-                    $this->updateProgress("Baholar: {$todayStr}", $currentStep, $totalSteps);
-                    try {
-                        Artisan::call(ImportGrades::class, [
-                            '--date' => $todayStr,
-                            '--silent' => true,
-                        ]);
-                    } catch (\Throwable $e) {
-                        Log::warning("[SyncReportDataJob] Baholar xato ({$todayStr}): {$e->getMessage()}");
-                    }
-                }
                 $currentStep++;
             }
 
+            $this->rememberLastSync();
             $this->updateProgress('Tayyor', $totalSteps, $totalSteps, 'done');
 
         } catch (\Throwable $e) {
@@ -111,6 +100,24 @@ class SyncReportDataJob implements ShouldQueue
             ]);
 
             $this->updateProgress("Xato: " . mb_substr($e->getMessage(), 0, 120), $currentStep, $totalSteps, 'failed');
+        }
+    }
+
+    /**
+     * Oxirgi yangilanish sahifada doimiy ko'rinadi, shuning uchun keshda
+     * emas, sozlamalarda saqlanadi.
+     */
+    private function rememberLastSync(): void
+    {
+        try {
+            Setting::set('lesson_assignment_last_sync', json_encode([
+                'at' => now()->toDateTimeString(),
+                'by' => $this->startedBy,
+                'from' => $this->dateFrom,
+                'to' => $this->dateTo,
+            ], JSON_UNESCAPED_UNICODE));
+        } catch (\Throwable $e) {
+            Log::warning('[SyncReportDataJob] Oxirgi yangilanishni saqlashda xato: ' . $e->getMessage());
         }
     }
 

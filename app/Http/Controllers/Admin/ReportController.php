@@ -519,6 +519,12 @@ class ReportController extends Controller
     /**
      * Dars belgilash hisoboti sahifasi
      */
+    /** Yangilash holati hamma uchun bitta kalitda turadi */
+    public const LESSON_ASSIGNMENT_SYNC_KEY = 'lesson_assignment_sync';
+
+    /** Oxirgi yangilanish sanasi shu sozlamada saqlanadi */
+    public const LESSON_ASSIGNMENT_SYNC_SETTING = 'lesson_assignment_last_sync';
+
     public function lessonAssignment(Request $request)
     {
         $dekanFacultyIds = get_dekan_faculty_ids();
@@ -574,13 +580,14 @@ class ReportController extends Controller
             ->orderBy('cs.department_name')
             ->get();
 
-        return view('admin.reports.lesson-assignment', compact(
-            'faculties',
-            'educationTypes',
-            'selectedEducationType',
-            'kafedras',
-            'dekanFacultyIds'
-        ));
+        return view('admin.reports.lesson-assignment', [
+            'faculties' => $faculties,
+            'educationTypes' => $educationTypes,
+            'selectedEducationType' => $selectedEducationType,
+            'kafedras' => $kafedras,
+            'dekanFacultyIds' => $dekanFacultyIds,
+            'lastSync' => self::lastLessonAssignmentSync(),
+        ]);
     }
 
     /**
@@ -603,17 +610,22 @@ class ReportController extends Controller
             ], 422);
         }
 
-        $syncKey = 'report_sync_' . auth()->id();
+        // Kalit umumiy: sahifa yangilansa ham, boshqa xodim kirsa ham
+        // o'sha yangilanishning holati ko'rinadi va ikkinchi marta boshlanmaydi
+        $syncKey = self::LESSON_ASSIGNMENT_SYNC_KEY;
 
-        // Allaqachon ishlab turgan sync bormi?
         $existing = \Illuminate\Support\Facades\Cache::get($syncKey);
-        if ($existing && $existing['status'] === 'running') {
+        if ($existing && ($existing['status'] ?? '') === 'running') {
             return response()->json([
                 'success' => true,
                 'sync_key' => $syncKey,
-                'message' => 'Sinxronlash allaqachon jarayonda.',
+                'already_running' => true,
+                'message' => 'Yangilash allaqachon jarayonda.',
             ]);
         }
+
+        $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+        $startedBy = $user->name ?? $user->full_name ?? 'Noma\'lum';
 
         // Darhol "boshlandi" holatini yozish
         \Illuminate\Support\Facades\Cache::put($syncKey, [
@@ -628,7 +640,8 @@ class ReportController extends Controller
         \App\Jobs\SyncReportDataJob::dispatch(
             $request->date_from,
             $request->date_to,
-            $syncKey
+            $syncKey,
+            $startedBy
         );
 
         return response()->json([
@@ -640,14 +653,39 @@ class ReportController extends Controller
 
     public function syncSchedulesStatus(Request $request)
     {
-        $syncKey = 'report_sync_' . auth()->id();
-        $data = \Illuminate\Support\Facades\Cache::get($syncKey);
+        $data = \Illuminate\Support\Facades\Cache::get(self::LESSON_ASSIGNMENT_SYNC_KEY);
 
-        if (!$data) {
-            return response()->json(['status' => 'none']);
+        // Oxirgi yangilanish yozuvi doimiy — sahifada har doim ko'rinadi
+        return response()->json(array_merge(
+            $data ?: ['status' => 'none'],
+            ['last_sync' => self::lastLessonAssignmentSync()]
+        ));
+    }
+
+    /**
+     * Dars belgilash hisoboti oxirgi marta qachon va kim tomonidan
+     * yangilangani. SyncReportDataJob tugagach yozib qo'yadi.
+     */
+    public static function lastLessonAssignmentSync(): ?array
+    {
+        $raw = Setting::get(self::LESSON_ASSIGNMENT_SYNC_SETTING);
+        if (!$raw) {
+            return null;
         }
 
-        return response()->json($data);
+        $data = json_decode($raw, true);
+        if (!is_array($data) || empty($data['at'])) {
+            return null;
+        }
+
+        $at = Carbon::parse($data['at']);
+
+        return [
+            'at' => $at->format('d.m.Y H:i'),
+            'by' => $data['by'] ?? null,
+            'date_from' => isset($data['from']) ? Carbon::parse($data['from'])->format('d.m.Y') : null,
+            'date_to' => isset($data['to']) ? Carbon::parse($data['to'])->format('d.m.Y') : null,
+        ];
     }
 
     /**

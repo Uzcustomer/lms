@@ -101,18 +101,30 @@
                                 <option value="all_done">Barchasi bajarilgan</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 320px;">
+                        <div class="filter-item" style="min-width: 470px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-calculate" class="btn-calc" onclick="startCalculation()">
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <button type="button" id="btn-sync" class="btn-sync" onclick="startSync()" title="Tanlangan sanalar uchun davomat va baholarni HEMIS dan olib keladi">
+                                    <svg id="sync-icon" style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <span id="sync-text">Yangilash</span>
+                                    <span id="sync-percent" style="display:none;margin-left:4px;font-size:11px;opacity:0.9;"></span>
+                                </button>
+                                <button type="button" id="btn-calculate" class="btn-calc" onclick="showData()">
                                     <svg id="calc-icon" style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                                    <span id="calc-text">Hisoblash</span>
+                                    <span id="calc-text">Ma'lumotlarni ko'rsatish</span>
                                     <span id="calc-percent" style="display:none;margin-left:4px;font-size:11px;opacity:0.9;"></span>
                                 </button>
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     Excel
                                 </button>
+                            </div>
+                            <div id="last-sync-label" style="margin-top:6px;font-size:11.5px;color:#64748b;line-height:1.4;">
+                                @if($lastSync)
+                                    Oxirgi yangilanish: <b style="color:#334155;">{{ $lastSync['at'] }}</b>@if($lastSync['by']) · {{ $lastSync['by'] }}@endif
+                                @else
+                                    Hali yangilanmagan
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -122,8 +134,8 @@
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                        <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">HEMIS dan yangilanadi va avtomatik hisoblanadi</p>
+                        <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Ma'lumotlarni ko'rsatish" tugmasini bosing</p>
+                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">HEMIS dan yangi ma'lumot kerak bo'lsa, avval "Yangilash" tugmasini bosing</p>
                         <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Natijalar shu yerda ko'rsatiladi</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
@@ -166,6 +178,10 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="sync-toast" style="display:none;position:fixed;right:18px;bottom:18px;z-index:9999;max-width:340px;padding:12px 16px;border-radius:10px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(15,23,42,.18);">
+        <span id="sync-toast-text"></span>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -327,12 +343,13 @@
         }
 
         // ==========================================
-        // Birlashtirilgan "Hisoblash" tugmasi logikasi
-        // Avval HEMIS sync → keyin avtomatik hisoblash
+        // "Yangilash" — HEMIS dan davomat va baholarni olib keladi.
+        // Holat umumiy: sahifa yangilansa ham jarayon fonda davom etadi
+        // va tugagach xabar chiqadi.
         // ==========================================
         var syncPollTimer = null;
 
-        function startCalculation() {
+        function startSync() {
             var dateFrom = $('#date_from').val();
             var dateTo = $('#date_to').val();
             if (!dateFrom || !dateTo) {
@@ -340,18 +357,7 @@
                 return;
             }
 
-            var btn = $('#btn-calculate');
-            var icon = $('#calc-icon');
-            var text = $('#calc-text');
-            var pct = $('#calc-percent');
-
-            btn.prop('disabled', true).css('opacity', '0.7');
-            icon.css('animation', 'spin 0.8s linear infinite');
-            text.text('Yangilanmoqda...');
-            pct.show().text('');
-            $('#empty-state').hide();
-            $('#table-area').hide();
-            window._calcDone = false;
+            syncBusy('Yangilanmoqda...');
 
             $.ajax({
                 url: '{{ route("admin.reports.lesson-assignment.sync-schedules") }}',
@@ -364,12 +370,17 @@
                 timeout: 30000,
                 success: function(res) {
                     if (res.success) {
-                        text.text('Yangilanmoqda...');
+                        if (res.already_running) {
+                            showToast("Yangilash allaqachon jarayonda — kuting.", 'info');
+                        }
                         startSyncPolling();
+                    } else {
+                        syncReset();
+                        alert(res.message || 'Xatolik yuz berdi');
                     }
                 },
                 error: function(xhr) {
-                    calcReset();
+                    syncReset();
                     var msg = 'Xatolik yuz berdi';
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         msg = xhr.responseJSON.message;
@@ -379,43 +390,118 @@
             });
         }
 
+        function syncBusy(text) {
+            $('#btn-sync').prop('disabled', true).css('opacity', '0.7');
+            $('#sync-icon').css('animation', 'spin 0.8s linear infinite');
+            $('#sync-text').text(text || 'Yangilanmoqda...');
+            $('#sync-percent').show().text('');
+        }
+
+        function syncReset() {
+            $('#btn-sync').prop('disabled', false).css('opacity', '1');
+            $('#sync-icon').css('animation', '');
+            $('#sync-text').text('Yangilash');
+            $('#sync-percent').hide().text('');
+        }
+
         function startSyncPolling() {
             if (syncPollTimer) clearInterval(syncPollTimer);
             syncPollTimer = setInterval(pollSyncStatus, 2000);
         }
 
-        function pollSyncStatus() {
+        function stopSyncPolling() {
+            if (syncPollTimer) clearInterval(syncPollTimer);
+            syncPollTimer = null;
+        }
+
+        function updateLastSyncLabel(lastSync) {
+            if (!lastSync || !lastSync.at) return;
+            var html = 'Oxirgi yangilanish: <b style="color:#334155;">' + lastSync.at + '</b>';
+            if (lastSync.by) html += ' · ' + $('<span>').text(lastSync.by).html();
+            $('#last-sync-label').html(html);
+        }
+
+        function showToast(message, type) {
+            var toast = $('#sync-toast');
+            if (type === 'error') {
+                toast.css({ background: '#fef2f2', borderColor: '#fecaca', color: '#991b1b' });
+            } else if (type === 'info') {
+                toast.css({ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1e40af' });
+            } else {
+                toast.css({ background: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46' });
+            }
+            $('#sync-toast-text').text(message);
+            toast.stop(true, true).fadeIn(150).delay(8000).fadeOut(400);
+        }
+
+        function pollSyncStatus(silent) {
             $.ajax({
                 url: '{{ route("admin.reports.lesson-assignment.sync-status") }}',
                 type: 'GET',
                 timeout: 10000,
                 success: function(res) {
-                    var text = $('#calc-text');
-                    var pct = $('#calc-percent');
+                    updateLastSyncLabel(res.last_sync);
 
                     if (res.status === 'running') {
-                        text.text(res.message || 'Yangilanmoqda...');
+                        syncBusy(res.message || 'Yangilanmoqda...');
                         if (res.percent > 0) {
-                            pct.show().text(res.percent + '%');
+                            $('#sync-percent').show().text(res.percent + '%');
                         }
+                        if (!syncPollTimer) startSyncPolling();
                     } else if (res.status === 'done') {
-                        clearInterval(syncPollTimer);
-                        syncPollTimer = null;
-                        // Sync tugadi — endi hisoblash
-                        text.text('Hisoblanmoqda...');
-                        pct.hide();
-                        loadReport(1);
+                        stopSyncPolling();
+                        syncReset();
+                        if (!silent) {
+                            showToast('HEMIS ma\'lumotlari yangilandi' + (res.last_sync && res.last_sync.at ? ': ' + res.last_sync.at : '') + '.');
+                        }
                     } else if (res.status === 'failed') {
-                        clearInterval(syncPollTimer);
-                        syncPollTimer = null;
-                        calcReset();
-                        alert(res.message || 'Sinxronlashda xatolik yuz berdi');
+                        stopSyncPolling();
+                        syncReset();
+                        if (!silent) {
+                            showToast(res.message || 'Yangilashda xatolik yuz berdi', 'error');
+                        }
                     }
                 },
                 error: function() {
                     // Tarmoq xatosi — polling davom etadi
                 }
             });
+        }
+
+        // Sahifa ochilganda: kimdir yangilashni boshlagan bo'lsa, jarayon
+        // ko'rinadi va tugagach xabar chiqadi
+        $(function() {
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.sync-status") }}',
+                type: 'GET',
+                timeout: 10000,
+                success: function(res) {
+                    updateLastSyncLabel(res.last_sync);
+                    if (res.status === 'running') {
+                        syncBusy(res.message || 'Yangilanmoqda...');
+                        if (res.percent > 0) $('#sync-percent').show().text(res.percent + '%');
+                        startSyncPolling();
+                    }
+                }
+            });
+        });
+
+        // "Ma'lumotlarni ko'rsatish" — HEMIS ga bormaydi, bazadagi
+        // ma'lumotlarni tanlangan sana bo'yicha hisoblab ko'rsatadi
+        function showData() {
+            var dateFrom = $('#date_from').val();
+            var dateTo = $('#date_to').val();
+            if (!dateFrom || !dateTo) {
+                alert("Iltimos, avval 'Sanadan' va 'Sanagacha' maydonlarini tanlang.");
+                return;
+            }
+
+            $('#btn-calculate').prop('disabled', true).css('opacity', '0.7');
+            $('#calc-icon').css('animation', 'spin 0.8s linear infinite');
+            $('#calc-text').text('Hisoblanmoqda...');
+            window._calcDone = false;
+
+            loadReport(1);
         }
 
         function calcReset() {
@@ -425,7 +511,7 @@
             var pct = $('#calc-percent');
 
             icon.css('animation', '');
-            text.text('Hisoblash');
+            text.text("Ma'lumotlarni ko'rsatish");
             pct.hide();
             btn.prop('disabled', false).css('opacity', '1');
             btn.css('background', '');
@@ -683,6 +769,10 @@
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover:not(:disabled) { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
         .btn-calc:disabled { cursor: not-allowed; }
+
+        .btn-sync { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: linear-gradient(135deg, #b45309, #f59e0b); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(245,158,11,0.3); height: 36px; }
+        .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 4px 12px rgba(245,158,11,0.4); transform: translateY(-1px); }
+        .btn-sync:disabled { cursor: not-allowed; }
 
         .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }

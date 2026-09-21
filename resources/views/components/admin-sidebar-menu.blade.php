@@ -1101,6 +1101,31 @@
         @endif
         @endif
 
+        {{-- O'quv bo'limi xodimi ayni paytda o'qituvchi ham bo'lsa, tizimga
+             kirganda faol rol "oqituvchi" bo'lib qoladi va yuqoridagi Hisobotlar
+             bo'limi ko'rinmaydi. Dars belgilash hisoboti esa ularga kerak, shu
+             sabab rol almashtirmasa ham chiqadi — sahifa rollari bo'yicha ochiq. --}}
+        @if($hasAnyRole(['oquv_bolimi', 'oquv_bolimi_boshligi'])
+            && !$hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'nazoratchi']))
+        <div class="sidebar-section">Hisobotlar</div>
+
+        <a href="{{ route('admin.reports.lesson-assignment') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.lesson-assignment*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            Dars belgilash
+        </a>
+
+        <a href="{{ route('admin.reports.lesson-hours') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.lesson-hours*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Dars soati belgilash
+        </a>
+        @endif
+
         @if($hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori']))
         <div class="sidebar-section">Talaba arizalari</div>
         <a href="{{ route('admin.academic-mobility.applications') }}"

@@ -246,6 +246,7 @@
                 <div id="bulkBar" style="display:none;padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;" class="flex items-center justify-between">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span style="font-size:13px;font-weight:600;color:#1e40af;"><span id="selectedCount">0</span> ta talaba tanlandi</span>
+                        <span id="selectedScope" style="display:none;font-size:11px;font-weight:700;color:#1e40af;background:#dbeafe;border:1px solid #bfdbfe;border-radius:999px;padding:2px 9px;">barcha sahifalardan</span>
                         <button type="button" onclick="clearSelection()" style="font-size:11px;padding:4px 10px;border:1px solid #93c5fd;background:#fff;border-radius:6px;color:#1e40af;cursor:pointer;">Bekor qilish</button>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
@@ -516,7 +517,7 @@
                                 @endphp
                                 <tr class="{{ $isUrgent ? 'int-row-urgent' : '' }}" onclick="window.location='{{ route('admin.international-students.show', $student) }}'" style="cursor:pointer;">
                                     <td style="text-align:center;" onclick="event.stopPropagation();">
-                                        <input type="checkbox" class="student-cb" value="{{ $student->id }}" onchange="updateBulkBar()" style="accent-color:#2b5ea7;cursor:pointer;">
+                                        <input type="checkbox" class="student-cb" value="{{ $student->id }}" onchange="toggleStudent(this)" style="accent-color:#2b5ea7;cursor:pointer;">
                                     </td>
                                     <td style="color:#64748b;font-size:12px;">{{ $student->student_id_number }}</td>
                                     <td>
@@ -823,53 +824,110 @@ function clearFilter(name) {
     }
 }
 
+// ====== Tanlash: ochiq sahifa emas, filtrga mos BARCHA talabalar ======
+// Serverdan filtrga mos to'liq id ro'yxati keladi, shuning uchun
+// "barchasini belgilash" boshqa sahifalardagilarni ham qamrab oladi.
+// Tanlov sessiyada saqlanadi — sahifadan sahifaga o'tganda yo'qolmaydi.
+var INT_ALL_IDS = @json($allFilteredIds ?? []);
+var INT_SEL_KEY = 'intl_students_selection';
+var INT_SIG_KEY = 'intl_students_filter';
+var selectedIds = new Set();
+
+// Filtr o'zgarsa eski tanlov ishlamaydi — sahifa raqami hisobga olinmaydi
+function intFilterSignature() {
+    try {
+        var p = new URLSearchParams(window.location.search);
+        p.delete('page');
+        if (p.sort) p.sort();
+        return p.toString();
+    } catch (e) {
+        return '';
+    }
+}
+
+function saveSelection() {
+    try {
+        sessionStorage.setItem(INT_SIG_KEY, intFilterSignature());
+        sessionStorage.setItem(INT_SEL_KEY, JSON.stringify(Array.from(selectedIds)));
+    } catch (e) {}
+}
+
+function restoreSelection() {
+    try {
+        if (sessionStorage.getItem(INT_SIG_KEY) !== intFilterSignature()) {
+            sessionStorage.removeItem(INT_SEL_KEY);
+            sessionStorage.removeItem(INT_SIG_KEY);
+            return;
+        }
+        var valid = new Set(INT_ALL_IDS.map(String));
+        JSON.parse(sessionStorage.getItem(INT_SEL_KEY) || '[]').forEach(function(id) {
+            if (valid.has(String(id))) selectedIds.add(String(id));
+        });
+    } catch (e) {}
+}
+
+function syncPageCheckboxes() {
+    document.querySelectorAll('.student-cb').forEach(function(cb) {
+        cb.checked = selectedIds.has(String(cb.value));
+    });
+}
+
 function toggleSelectAll() {
     var checked = document.getElementById('selectAll').checked;
-    document.querySelectorAll('.student-cb').forEach(function(cb) { cb.checked = checked; });
+    selectedIds = checked ? new Set(INT_ALL_IDS.map(String)) : new Set();
+    syncPageCheckboxes();
+    updateBulkBar();
+}
+
+function toggleStudent(cb) {
+    if (cb.checked) selectedIds.add(String(cb.value));
+    else selectedIds.delete(String(cb.value));
     updateBulkBar();
 }
 
 function updateBulkBar() {
-    var checked = document.querySelectorAll('.student-cb:checked');
     var bar = document.getElementById('bulkBar');
-    var count = document.getElementById('selectedCount');
-    count.textContent = checked.length;
-    bar.style.display = checked.length > 0 ? 'flex' : 'none';
+    document.getElementById('selectedCount').textContent = selectedIds.size;
+    bar.style.display = selectedIds.size > 0 ? 'flex' : 'none';
 
-    // Update hidden inputs for forms
-    var regInputs = document.getElementById('regInputs');
-    var vizaInputs = document.getElementById('vizaInputs');
-    regInputs.innerHTML = '';
-    vizaInputs.innerHTML = '';
-    checked.forEach(function(cb) {
-        regInputs.innerHTML += '<input type="hidden" name="student_ids[]" value="' + cb.value + '">';
-        vizaInputs.innerHTML += '<input type="hidden" name="student_ids[]" value="' + cb.value + '">';
-    });
+    // Ochiq sahifadan tashqaridagilar ham tanlangan bo'lsa — buni aytib turamiz
+    var pageBoxes = document.querySelectorAll('.student-cb');
+    var pageChecked = document.querySelectorAll('.student-cb:checked').length;
+    var scope = document.getElementById('selectedScope');
+    if (scope) {
+        scope.style.display = selectedIds.size > pageChecked ? '' : 'none';
+    }
 
-    // selectAll indeterminate
-    var all = document.querySelectorAll('.student-cb');
+    // selectAll: sahifadagilar bo'yicha belgilanadi
     var selectAll = document.getElementById('selectAll');
-    if (checked.length === 0) { selectAll.checked = false; selectAll.indeterminate = false; }
-    else if (checked.length === all.length) { selectAll.checked = true; selectAll.indeterminate = false; }
+    if (pageChecked === 0) { selectAll.checked = false; selectAll.indeterminate = false; }
+    else if (pageChecked === pageBoxes.length) { selectAll.checked = true; selectAll.indeterminate = false; }
     else { selectAll.indeterminate = true; }
+
+    saveSelection();
 }
 
 function clearSelection() {
-    document.querySelectorAll('.student-cb').forEach(function(cb) { cb.checked = false; });
+    selectedIds = new Set();
+    syncPageCheckboxes();
     document.getElementById('selectAll').checked = false;
     document.getElementById('selectAll').indeterminate = false;
     updateBulkBar();
 }
 
 function downloadDocuments() {
-    var checked = document.querySelectorAll('.student-cb:checked');
-    if (!checked.length) {
+    if (!selectedIds.size) {
         alert('Avval talabalarni belgilang.');
         return;
     }
     syncInputs('docsInputs');
     document.getElementById('docsForm').submit();
 }
+
+// Sahifa ochilganda oldingi tanlov tiklanadi (boshqa sahifaga o'tilgan bo'lsa ham)
+restoreSelection();
+syncPageCheckboxes();
+updateBulkBar();
 
 function openRegModal() {
     syncInputs('regInputs');
@@ -883,12 +941,12 @@ function openVizaModal() {
 function closeVizaModal() { document.getElementById('vizaModal').style.display = 'none'; }
 function openFirmModal() { syncInputs('firmInputs'); document.getElementById('firmModal').style.display = 'flex'; }
 function closeFirmModal() { document.getElementById('firmModal').style.display = 'none'; }
+// Ro'yxat bitta maydonda yuboriladi: minglab alohida input PHP'ning
+// max_input_vars chegarasiga tushib, ro'yxat jimgina qirqilishi mumkin.
 function syncInputs(containerId) {
     var c = document.getElementById(containerId);
-    c.innerHTML = '';
-    document.querySelectorAll('.student-cb:checked').forEach(function(cb) {
-        c.innerHTML += '<input type="hidden" name="student_ids[]" value="' + cb.value + '">';
-    });
+    var ids = Array.from(selectedIds).join(',');
+    c.innerHTML = '<input type="hidden" name="student_ids_csv" value="' + ids + '">';
 }
 
 // Excel-uslubidagi ustun filtri

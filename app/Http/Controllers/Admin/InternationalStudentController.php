@@ -187,7 +187,11 @@ class InternationalStudentController extends Controller
         // Tepada "Viza arizalar" tugmasi uchun pending arizalar soni (badge)
         $visaPendingCount = \App\Models\VisaApplication::where('status', 'pending')->count();
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms', 'visaBlockEnabled'));
+        // "Barchasini belgilash" faqat ochiq sahifani emas, filtrga mos
+        // barcha talabalarni belgilashi uchun to'liq id ro'yxati beriladi.
+        $allFilteredIds = $filteredIds->map(fn ($id) => (string) $id)->values();
+
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'entryDates', 'visaPendingCount', 'groupNames', 'levelCodes', 'usedFirms', 'visaBlockEnabled', 'allFilteredIds'));
     }
 
     /**
@@ -789,10 +793,32 @@ class InternationalStudentController extends Controller
     }
 
     /**
+     * Belgilangan talabalar ro'yxati bitta satrda (student_ids_csv) kelishi
+     * mumkin: "barchasini belgilash" minglab talabani qamrasa, alohida
+     * student_ids[] maydonlari PHP'ning max_input_vars chegarasiga tushib
+     * qolardi va ro'yxat jimgina qirqilardi.
+     */
+    private function normalizeStudentIds(Request $request): void
+    {
+        $csv = $request->input('student_ids_csv');
+        if (!is_string($csv) || trim($csv) === '') {
+            return;
+        }
+
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', explode(',', $csv)),
+            fn ($id) => $id > 0
+        )));
+
+        $request->merge(['student_ids' => $ids]);
+    }
+
+    /**
      * Registratsiya talabnoma Word yaratish.
      */
     public function registrationTalabnoma(Request $request)
     {
+        $this->normalizeStudentIds($request);
         $request->validate(['student_ids' => 'required|array|min:1', 'reg_months' => 'required|integer']);
         $students = Student::whereIn('id', $request->student_ids)->with('visaInfo')->get();
         $regMonths = (int) $request->reg_months;
@@ -864,6 +890,7 @@ class InternationalStudentController extends Controller
      */
     public function visaTalabnoma(Request $request)
     {
+        $this->normalizeStudentIds($request);
         $request->validate(['student_ids' => 'required|array|min:1', 'visa_months' => 'required|integer', 'visa_entries' => 'required|integer']);
         $students = Student::whereIn('id', $request->student_ids)->with('visaInfo')->get();
         $visaMonths = (int) $request->visa_months;
@@ -1056,6 +1083,7 @@ class InternationalStudentController extends Controller
      */
     public function bulkAssignFirm(Request $request)
     {
+        $this->normalizeStudentIds($request);
         $request->validate(['student_ids' => 'required|array|min:1', 'firm' => 'required|string']);
         $students = Student::whereIn('id', $request->student_ids)->get();
         $historyService = app(StudentVisaHistoryService::class);
@@ -1223,6 +1251,7 @@ class InternationalStudentController extends Controller
      */
     public function downloadDocuments(Request $request)
     {
+        $this->normalizeStudentIds($request);
         $request->validate([
             'student_ids' => 'required|array|min:1',
             'student_ids.*' => 'integer',

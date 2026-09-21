@@ -5296,6 +5296,20 @@
                 </div>
 
                 <div id="lessonOpenFields">
+                @if($lessonOpeningTestMode ?? false)
+                    {{-- Test rejimi: 2- va 3-so'rov oqimini tekshirish uchun raqamni qo'lda tanlash --}}
+                    <div style="margin-bottom:16px; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:10px; padding:12px 14px;">
+                        <label for="lessonOpenNumber" style="font-size:13px; font-weight:700; color:#5b21b6; display:block; margin-bottom:6px;">Test rejimi: so'rov raqami</label>
+                        <select name="request_number" id="lessonOpenNumber" onchange="lessonOpenRefreshLevel()"
+                            style="width:100%; padding:9px 10px; border:1px solid #c4b5fd; border-radius:10px; font-size:13px; color:#4c1d95; background:#fff;">
+                            <option value="">Avtomatik (haqiqiy hisob)</option>
+                            <option value="1">1-so'rov — registrator ofisi</option>
+                            <option value="2">2-so'rov — registrator va o'quv bo'limi boshlig'i</option>
+                            <option value="3">3-so'rov — o'quv bo'limi boshlig'i va prorektorlar</option>
+                        </select>
+                        <div style="font-size:11px; color:#7c3aed; margin-top:4px;">Sozlamalardagi test rejimi yoqilgan. Limit tekshirilmaydi.</div>
+                    </div>
+                @endif
                 <div id="lessonOpenTeacherWrap" style="display:none; margin-bottom:16px;">
                     <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">O'qituvchi <span style="color:#ef4444;">*</span></label>
                     <select name="teacher_id" id="lessonOpenTeacher" onchange="lessonOpenRefreshLevel()"
@@ -5314,11 +5328,15 @@
                     <div style="font-size:11px; color:#9ca3af; margin-top:4px;">PDF, DOC, DOCX, JPG, PNG — max 10MB</div>
                 </div>
 
-                <div id="lessonOpenExplanationWrap" style="display:none; margin-bottom:16px;">
-                    <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:6px;">Tushuntirish xati (fayl) <span style="color:#ef4444;">*</span></label>
-                    <input type="file" name="explanation_file" id="lessonOpenExplanation" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.heic"
-                        style="width:100%; padding:10px; border:2px dashed #fcd34d; border-radius:10px; font-size:13px; color:#374151; background:#fffbeb; cursor:pointer;">
-                    <div style="font-size:11px; color:#b45309; margin-top:4px;">Takroriy so'rov uchun majburiy: nega baho o'z vaqtida qo'yilmagani yoziladi</div>
+                {{-- 2-so'rovdan boshlab: xat tizimga yuklanmaydi, o'quv bo'limiga topshiriladi --}}
+                <div id="lessonOpenExplanationWrap" style="display:none; margin-bottom:16px; background:#fffbeb; border:2px solid #f59e0b; border-radius:12px; padding:16px 18px;">
+                    <div style="display:flex; gap:12px; align-items:flex-start;">
+                        <svg style="width:28px; height:28px; flex:0 0 28px; color:#b45309;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        <div>
+                            <div style="font-size:17px; font-weight:800; color:#92400e; line-height:1.4;">Tushuntirish xatini o'quv bo'limiga topshiring</div>
+                            <div style="font-size:14px; color:#b45309; line-height:1.55; margin-top:6px;">Aks holda dars ochish uchun so'rovingiz <b>tasdiqlanmaydi</b>. Xat tizimga yuklanmaydi — o'quv bo'limiga qog'ozda topshiriladi.</div>
+                        </div>
+                    </div>
                 </div>
 
                 <div style="margin-bottom:16px;">
@@ -5499,15 +5517,18 @@
         const LO_COUNTS = @json((object) ($openingTeacherCounts ?? []));
         const LO_ME = @json($myOpeningTeacherId ?? null);
         const LO_LIMIT = {{ \App\Models\LessonOpening::TEACHER_REQUEST_LIMIT }};
-        const LO_STRICT_FROM = {{ \App\Models\LessonOpening::STRICT_FROM_NUMBER }};
+        const LO_EXPLANATION_FROM = {{ \App\Models\LessonOpening::EXPLANATION_FROM_NUMBER }};
         const LO_DAYS = {{ (int) ($lessonOpeningDays ?? 3) }};
+        // Test rejimi: so'rov raqamini qo'lda tanlash (sozlamalardagi tugma)
+        const LO_TEST_MODE = @json((bool) ($lessonOpeningTestMode ?? false));
 
         function lessonOpenRefreshLevel() {
             const teacherId = LO_ACTOR === 'teacher' ? LO_ME : (document.getElementById('lessonOpenTeacher').value || null);
             const prior = teacherId ? (LO_COUNTS[teacherId] || 0) : 0;
-            const number = prior + 1;
-            const blocked = LO_ACTOR === 'teacher' && number > LO_LIMIT;
-            const strict = number >= LO_STRICT_FROM;
+            const picker = document.getElementById('lessonOpenNumber');
+            const number = (LO_TEST_MODE && picker && picker.value) ? parseInt(picker.value, 10) : prior + 1;
+            const blocked = !LO_TEST_MODE && LO_ACTOR === 'teacher' && number > LO_LIMIT;
+            const strict = number >= LO_EXPLANATION_FROM;
 
             document.getElementById('lessonOpenBlocked').style.display = blocked ? '' : 'none';
             document.getElementById('lessonOpenFields').style.display = blocked ? 'none' : '';
@@ -5517,9 +5538,7 @@
                     "Siz joriy semestrda " + prior + " marta dars ochish so'rovini yuborgansiz. Keyingi so'rov uchun registrator ofisiga murojaat qiling.";
             }
 
-            const explanation = document.getElementById('lessonOpenExplanation');
             document.getElementById('lessonOpenExplanationWrap').style.display = strict && !blocked ? '' : 'none';
-            explanation.required = strict && !blocked;
 
             const level = document.getElementById('lessonOpenLevel');
             const badge = document.getElementById('lessonOpenLevelBadge');
@@ -5535,9 +5554,10 @@
                 level.style.display = 'none';
             }
 
-            // Tasdiqlovchilar: 1 — registrator; 2 — + o'quv bo'limi boshlig'i; 3+ — + prorektor
+            // Tasdiqlovchilar: 1 — registrator; 2 — u va o'quv bo'limi boshlig'i;
+            // 3+ — o'quv bo'limi boshlig'i va prorektorlar (har biri alohida)
             const approvers = number >= 3
-                ? "<b>registrator ofisi</b>, <b>o'quv bo'limi boshlig'i</b> va <b>o'quv prorektori</b> — uchalasi"
+                ? "<b>o'quv bo'limi boshlig'i</b> va <b>prorektorlar</b> (har biri alohida)"
                 : (number === 2
                     ? "<b>registrator ofisi</b> va <b>o'quv bo'limi boshlig'i</b> — ikkalasi"
                     : "<b>registrator ofisi</b>");
@@ -5552,7 +5572,8 @@
             document.getElementById('lessonOpenDateLabel').textContent = 'Sana: ' + dateStr;
             document.getElementById('lessonOpenFile').value = '';
             document.getElementById('lessonOpenNote').value = '';
-            document.getElementById('lessonOpenExplanation').value = '';
+            var numberPicker = document.getElementById('lessonOpenNumber');
+            if (numberPicker) numberPicker.value = '';
 
             // Admin so'rovni o'sha kungi o'qituvchi nomidan yuboradi
             const teacherWrap = document.getElementById('lessonOpenTeacherWrap');

@@ -280,6 +280,17 @@
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             Tasdiqlangach baho qo'yish muddati: <b>{{ $openingDays }} kun</b>
                         </div>
+                        @if($canDelete)
+                            {{-- Test rejimi: so'rov yuborishda raqamni qo'lda tanlash --}}
+                            <form method="POST" action="{{ route('admin.lesson-opening-requests.test-mode') }}" style="margin:0;">
+                                @csrf
+                                <button type="submit" class="lo-hero-chip" style="border:0; cursor:pointer; {{ ($testMode ?? false) ? 'background:#7c3aed; border-color:#7c3aed;' : '' }}"
+                                        title="Yoqilganda so'rov yuborayotgan kishi 1/2/3-so'rovni tanlaydi va limit tekshirilmaydi">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                                    Test rejimi: <b>{{ ($testMode ?? false) ? 'yoqilgan' : "o'chiq" }}</b>
+                                </button>
+                            </form>
+                        @endif
                         {{-- Sanoq davri: joriy semestr (sozlamalardagi sana) yoki hammasi --}}
                         <a class="lo-hero-chip" style="text-decoration:none;"
                            href="{{ route('admin.lesson-opening-requests.index', ['status' => $status] + (($allPeriods ?? false) ? [] : ['period' => 'all'])) }}"
@@ -378,9 +389,10 @@
                                         [$explLabel, $explClass] = $extClassOf($opening->explanation_file_original_name);
                                         $number = (int) $opening->request_number;
                                         // Joriy foydalanuvchi shu so'rovga qaror bera oladimi
-                                        $canAct = $canReview && $opening->awaits($stage);
-                                        $canReapprove = $canReview && $opening->canReapprove($stage);
-                                        $canRevoke = $canReview && $opening->canRevoke($stage);
+                                        {{-- Prorektorlar bosqichida qaror shaxsiy: kim kirgan bo'lsa, o'sha --}}
+                                        $canAct = $canReview && $opening->awaits($stage, $reviewer ?? null);
+                                        $canReapprove = $canReview && $opening->canReapprove($stage, $reviewer ?? null);
+                                        $canRevoke = $canReview && $opening->canRevoke($stage, $reviewer ?? null);
                                         // Shu foydalanuvchi tasdiqlagach yana kimlar qoladi
                                         $remaining = $stage ? $opening->remainingStagesAfter($stage) : [];
                                         $remainingText = implode(', ', array_map(fn ($st) => \App\Models\LessonOpening::STAGE_LABELS[$st], $remaining));
@@ -557,7 +569,9 @@
                                                             Rad etish
                                                         </button>
                                                     </div>
-                                                @elseif($isPending && $stage && $opening->stageStatus($stage) === 'approved')
+                                                @elseif($isPending && $stage && ($stage === \App\Models\LessonOpening::STAGE_PROREKTOR
+                                                        ? $opening->prorektorDecisionOf($reviewer ?? []) === 'approved'
+                                                        : $opening->stageStatus($stage) === 'approved'))
                                                     <span class="lo-waiting">Siz tasdiqlagansiz{{ $remainingText ? ' · ' . $remainingText . ' kutilmoqda' : '' }}</span>
                                                 @elseif($isPending && $remainingText)
                                                     <span class="lo-waiting">{{ $remainingText }} kutilmoqda</span>

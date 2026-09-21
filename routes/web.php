@@ -311,6 +311,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/{opening}/reject', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'reject'])->name('reject');
                 // Faqat admin/superadmin: so'rov va uning fayllarini butunlay o'chirish
                 Route::delete('/{opening}', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'destroy'])->name('destroy');
+                // Faqat admin/superadmin: test rejimi (so'rov raqamini qo'lda tanlash)
+                Route::post('/test-mode', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'toggleTestMode'])->name('test-mode');
             });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)

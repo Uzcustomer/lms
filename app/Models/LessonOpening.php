@@ -41,6 +41,8 @@ class LessonOpening extends Model
         'department_name',
         'department_guard',
         'department_at',
+        'prorektor_approvals',
+        'explanation_notice_at',
     ];
 
     protected $casts = [
@@ -50,6 +52,8 @@ class LessonOpening extends Model
         'registrar_at' => 'datetime',
         'department_at' => 'datetime',
         'needs_registrar' => 'boolean',
+        'prorektor_approvals' => 'array',
+        'explanation_notice_at' => 'datetime',
     ];
 
     /**
@@ -84,11 +88,11 @@ class LessonOpening extends Model
         self::STAGE_PROREKTOR => ['prorektor_status', 'reviewed_by_id', 'reviewed_by_name', 'reviewed_by_guard', 'reviewed_at'],
     ];
 
-    /** Bosqich shu raqamdan boshlab qo'shiladi (registrator — har doim) */
-    private const STAGE_FROM_NUMBER = [
-        self::STAGE_REGISTRAR => 1,
-        self::STAGE_DEPARTMENT => 2,
-        self::STAGE_PROREKTOR => 3,
+    /** Bosqich qaysi so'rov raqamlarida qatnashadi: [eng kichik, eng katta yoki null] */
+    private const STAGE_NUMBERS = [
+        self::STAGE_REGISTRAR => [1, 2],
+        self::STAGE_DEPARTMENT => [2, null],
+        self::STAGE_PROREKTOR => [3, null],
     ];
 
     /**
@@ -97,18 +101,25 @@ class LessonOpening extends Model
      */
     public const TEACHER_REQUEST_LIMIT = 2;
 
-    /** Shu raqamdan boshlab tushuntirish xati majburiy */
-    public const STRICT_FROM_NUMBER = 2;
+    /** Shu raqamdan boshlab tushuntirish xati o'quv bo'limiga topshiriladi */
+    public const EXPLANATION_FROM_NUMBER = 2;
+
+    /** Prorektorlar roli — 3-so'rovdan boshlab har biri alohida tasdiqlaydi */
+    public const PROREKTOR_ROLE = 'oquv_prorektori';
 
     /**
      * N-so'rovni kimlar tasdiqlaydi: 1 — registrator ofisi; 2 — u va o'quv
-     * bo'limi boshlig'i; 3 va undan keyin — ular va o'quv prorektori.
+     * bo'limi boshlig'i; 3 va undan keyin — o'quv bo'limi boshlig'i va
+     * prorektorlar (registrator bu bosqichda qatnashmaydi).
      */
     public static function stagesFor(?int $number): array
     {
         $number = max(1, (int) $number);
 
-        return array_keys(array_filter(self::STAGE_FROM_NUMBER, fn ($from) => $number >= $from));
+        return array_keys(array_filter(
+            self::STAGE_NUMBERS,
+            fn ($range) => $number >= $range[0] && ($range[1] === null || $number <= $range[1])
+        ));
     }
 
     public function requiredStages(): array
@@ -123,7 +134,82 @@ class LessonOpening extends Model
 
     public function stageStatus(string $stage): ?string
     {
+        if ($stage === self::STAGE_PROREKTOR) {
+            return $this->prorektorStatus();
+        }
+
         return $this->{self::STAGE_COLUMNS[$stage][0]};
+    }
+
+    /**
+     * Prorektorlar bosqichi: har bir prorektor alohida tasdiqlaydi.
+     * Bittasi rad etsa — bosqich rad etilgan; hammasi tasdiqlagachgina
+     * tasdiqlangan hisoblanadi. Qarorlar prorektor_approvals da:
+     * ["teacher:12" => ['name' => ..., 'decision' => ..., 'at' => ...]].
+     */
+    public function prorektorStatus(): ?string
+    {
+        $decisions = $this->prorektor_approvals ?? [];
+
+        foreach ($decisions as $decision) {
+            if (($decision['decision'] ?? null) === self::DECISION_REJECTED) {
+                return self::DECISION_REJECTED;
+            }
+        }
+
+        $approvers = static::prorektorApprovers();
+        if ($approvers->isEmpty()) {
+            return null;
+        }
+
+        foreach ($approvers as $key => $approver) {
+            if (($decisions[$key]['decision'] ?? null) !== self::DECISION_APPROVED) {
+                return null;
+            }
+        }
+
+        return self::DECISION_APPROVED;
+    }
+
+    /**
+     * Tasdiqlashi kerak bo'lgan prorektorlar: ["guard:id" => ism].
+     * Roli bor barcha faol xodimlar — kim prorektor bo'lsa, o'sha tasdiqlaydi.
+     */
+    public static function prorektorApprovers(): \Illuminate\Support\Collection
+    {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $hasRole = fn ($query) => $query->where('name', self::PROREKTOR_ROLE);
+
+        $teachers = Teacher::query()
+            ->whereHas('roles', $hasRole)
+            ->where('is_active', true)
+            ->get(['id', 'full_name'])
+            ->mapWithKeys(fn ($t) => ['teacher:' . $t->id => $t->full_name]);
+
+        $users = User::query()
+            ->whereHas('roles', $hasRole)
+            ->get(['id', 'name'])
+            ->mapWithKeys(fn ($u) => ['web:' . $u->id => $u->name]);
+
+        return $cached = $teachers->merge($users);
+    }
+
+    /** Qaror bergan shaxs kaliti: "teacher:12" / "web:3" */
+    public static function reviewerKey(array $reviewer): string
+    {
+        return ($reviewer['guard'] ?? 'web') . ':' . ($reviewer['id'] ?? 0);
+    }
+
+    /** Shu prorektorning qarori: 'approved' | 'rejected' | null */
+    public function prorektorDecisionOf(array $reviewer): ?string
+    {
+        $key = static::reviewerKey($reviewer);
+
+        return ($this->prorektor_approvals[$key] ?? null)['decision'] ?? null;
     }
 
     /** Bosqich qarorini bergan shaxs va vaqti: ['name' => ?string, 'at' => ?Carbon] */
@@ -143,6 +229,18 @@ class LessonOpening extends Model
     {
         [$status, $id, $name, $guard, $at] = self::STAGE_COLUMNS[$stage];
 
+        if ($stage === self::STAGE_PROREKTOR) {
+            // Har bir prorektor qarori alohida saqlanadi; ustunlarda esa
+            // oxirgi qaror va bosqichning umumiy holati turadi.
+            $decisions = $this->prorektor_approvals ?? [];
+            $decisions[static::reviewerKey($reviewer)] = [
+                'name' => $reviewer['name'] ?? null,
+                'decision' => $decision,
+                'at' => now()->toDateTimeString(),
+            ];
+            $this->prorektor_approvals = $decisions;
+        }
+
         $this->fill([
             $status => $decision,
             $id => $reviewer['id'] ?? null,
@@ -150,12 +248,17 @@ class LessonOpening extends Model
             $guard => $reviewer['guard'] ?? null,
             $at => now(),
         ]);
+
+        if ($stage === self::STAGE_PROREKTOR) {
+            // Ustundagi holat — bosqichning yig'ma holati (hamma tasdiqladimi)
+            $this->{$status} = $this->prorektorStatus();
+        }
     }
 
     /** Barcha bosqich qarorlarini tozalash (so'rov qayta yuborilganda) */
     public static function emptyStageDecisions(): array
     {
-        $empty = [];
+        $empty = ['prorektor_approvals' => null];
         foreach (self::STAGE_COLUMNS as $columns) {
             foreach ($columns as $column) {
                 $empty[$column] = null;
@@ -177,6 +280,23 @@ class LessonOpening extends Model
             if (!in_array($stage, $required, true) && $this->{$status} === null) {
                 continue;
             }
+
+            // Prorektorlar har biri alohida qator bo'lib ko'rinadi
+            if ($stage === self::STAGE_PROREKTOR) {
+                $decisions = $this->prorektor_approvals ?? [];
+                foreach (static::prorektorApprovers() as $key => $approverName) {
+                    $decision = $decisions[$key] ?? null;
+                    $list[] = [
+                        'stage' => $stage,
+                        'label' => self::STAGE_LABELS[$stage],
+                        'status' => $decision['decision'] ?? null,
+                        'name' => $decision['name'] ?? $approverName,
+                        'at' => isset($decision['at']) ? \Carbon\Carbon::parse($decision['at'])->format('d.m.Y H:i') : null,
+                    ];
+                }
+                continue;
+            }
+
             $list[] = [
                 'stage' => $stage,
                 'label' => self::STAGE_LABELS[$stage],
@@ -195,31 +315,52 @@ class LessonOpening extends Model
         return $this->status === self::STATUS_PENDING;
     }
 
-    /** Shu bosqich qarori kutilmoqdami */
-    public function awaits(string $stage): bool
+    /**
+     * Shu bosqich qarori kutilmoqdami. Prorektorlar bosqichida qaror shaxsiy:
+     * $reviewer berilsa, aynan o'sha prorektor hali qaror bermaganmi.
+     */
+    public function awaits(string $stage, ?array $reviewer = null): bool
     {
-        return $this->isPending()
-            && in_array($stage, $this->requiredStages(), true)
-            && $this->stageStatus($stage) === null;
+        if (!$this->isPending() || !in_array($stage, $this->requiredStages(), true)) {
+            return false;
+        }
+
+        if ($stage === self::STAGE_PROREKTOR && $reviewer) {
+            return $this->prorektorDecisionOf($reviewer) === null;
+        }
+
+        return $this->stageStatus($stage) === null;
     }
 
     /** Shu bosqich rad etgan edi — fikrini o'zgartirib tasdiqlashi mumkin */
-    public function canReapprove(string $stage): bool
+    public function canReapprove(string $stage, ?array $reviewer = null): bool
     {
-        return $this->status === self::STATUS_REJECTED
-            && in_array($stage, $this->requiredStages(), true)
-            && $this->stageStatus($stage) === self::DECISION_REJECTED;
+        if ($this->status !== self::STATUS_REJECTED || !in_array($stage, $this->requiredStages(), true)) {
+            return false;
+        }
+
+        if ($stage === self::STAGE_PROREKTOR && $reviewer) {
+            return $this->prorektorDecisionOf($reviewer) === self::DECISION_REJECTED;
+        }
+
+        return $this->stageStatus($stage) === self::DECISION_REJECTED;
     }
 
     /**
      * Ochilgan darsni tasdiqlagan bosqich qaytarib olishi mumkin — adashib
      * tasdiqlanganlarni rad etish uchun. Muddati tugagani yopilgan hisoblanadi.
      */
-    public function canRevoke(string $stage): bool
+    public function canRevoke(string $stage, ?array $reviewer = null): bool
     {
-        return $this->status === self::STATUS_ACTIVE
-            && in_array($stage, $this->requiredStages(), true)
-            && $this->stageStatus($stage) === self::DECISION_APPROVED;
+        if ($this->status !== self::STATUS_ACTIVE || !in_array($stage, $this->requiredStages(), true)) {
+            return false;
+        }
+
+        if ($stage === self::STAGE_PROREKTOR && $reviewer) {
+            return $this->prorektorDecisionOf($reviewer) === self::DECISION_APPROVED;
+        }
+
+        return $this->stageStatus($stage) === self::DECISION_APPROVED;
     }
 
     public function anyStageRejected(): bool
@@ -245,21 +386,35 @@ class LessonOpening extends Model
         return true;
     }
 
-    /** Shu bosqich tasdiqlasa hali kimlar qoladi (tasdiqlamaganlar) */
+    /**
+     * Hali tasdiqlamagan bosqichlar. Prorektorlar bosqichi bir prorektor
+     * tasdiqlagach ham ro'yxatda qoladi — qolgan prorektorlar kutilmoqda.
+     */
     public function remainingStagesAfter(string $stage): array
     {
         return array_values(array_filter(
             $this->requiredStages(),
-            fn ($s) => $s !== $stage && $this->stageStatus($s) !== self::DECISION_APPROVED
+            fn ($s) => $this->stageStatus($s) !== self::DECISION_APPROVED
         ));
     }
 
-    /** Bosqich ko'radigan so'rovlar: o'quv bo'limi — 2-dan, prorektor — 3-dan */
+    /**
+     * Bosqich ko'radigan so'rovlar: registrator — 1 va 2-so'rov; o'quv bo'limi —
+     * 2-dan boshlab; prorektor — 3-dan boshlab.
+     */
     public function scopeVisibleToStage($query, ?string $stage)
     {
-        $from = self::STAGE_FROM_NUMBER[$stage] ?? 1;
+        $range = self::STAGE_NUMBERS[$stage] ?? null;
+        if (!$range) {
+            return $query;
+        }
+
+        [$from, $to] = $range;
         if ($from > 1) {
             $query->whereRaw('COALESCE(request_number, 1) >= ?', [$from]);
+        }
+        if ($to !== null) {
+            $query->whereRaw('COALESCE(request_number, 1) <= ?', [$to]);
         }
 
         return $query;

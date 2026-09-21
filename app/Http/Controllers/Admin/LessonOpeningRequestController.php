@@ -53,6 +53,7 @@ class LessonOpeningRequestController extends Controller
             $column = LessonOpening::statusColumn($stage);
             $query->orderByRaw("CASE WHEN status = 'pending' AND {$column} IS NULL THEN 0 ELSE 1 END");
         }
+        $reviewer = $stage ? $this->reviewer() : null;
         $query->latest();
 
         $openings = $query->paginate(30)->withQueryString();
@@ -85,12 +86,14 @@ class LessonOpeningRequestController extends Controller
             'subjectNames' => $subjectNames,
             'teachers' => $teachers,
             'stage' => $stage,
+            'reviewer' => $reviewer,
             // Shu foydalanuvchi qarorini kutayotganlar soni
-            'myQueue' => $stage ? $inPeriod(LessonOpening::awaitingStage($stage))->count() : null,
+            'myQueue' => $stage ? $this->myQueueCount($stage, $reviewer, $inPeriod) : null,
             'periodStart' => LessonOpening::periodStart(),
             'allPeriods' => $allPeriods,
             'canReview' => $stage !== null,
             'canDelete' => $this->canDelete(),
+            'testMode' => (bool) Setting::get('lesson_opening_test_mode', false),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
         ]);
     }
@@ -110,7 +113,7 @@ class LessonOpeningRequestController extends Controller
         $opening = DB::transaction(function () use ($opening, $stage, $reviewer) {
             // Bir necha tasdiqlovchi bir vaqtda bossa ham holat to'g'ri qolsin
             $opening = LessonOpening::whereKey($opening->id)->lockForUpdate()->first();
-            if (!$opening || !($opening->awaits($stage) || $opening->canReapprove($stage))) {
+            if (!$opening || !($opening->awaits($stage, $reviewer) || $opening->canReapprove($stage, $reviewer))) {
                 return null;
             }
 
@@ -181,7 +184,7 @@ class LessonOpeningRequestController extends Controller
             $opening = LessonOpening::whereKey($opening->id)->lockForUpdate()->first();
             // Kutilayotgan so'rov yoki shu bosqich tasdiqlab ochilgan dars
             // (adashib tasdiqlangan bo'lsa qaytarib olinadi)
-            if (!$opening || !($opening->awaits($stage) || $opening->canRevoke($stage))) {
+            if (!$opening || !($opening->awaits($stage, $reviewer) || $opening->canRevoke($stage, $reviewer))) {
                 return null;
             }
             $wasOpen = $opening->status === LessonOpening::STATUS_ACTIVE;
@@ -227,6 +230,42 @@ class LessonOpeningRequestController extends Controller
         $opening->delete();
 
         return back()->with('success', "So'rov va uning fayllari o'chirildi.");
+    }
+
+    /**
+     * Test rejimi: yoqilganda dars ochish so'rovini yuborayotgan kishi so'rov
+     * raqamini (1/2/3) o'zi tanlaydi va o'qituvchi limiti tekshirilmaydi —
+     * 2- va 3-so'rov oqimini sinab ko'rish uchun. Faqat admin yoqadi.
+     */
+    public function toggleTestMode(): RedirectResponse
+    {
+        abort_unless($this->canDelete(), 403);
+
+        $on = !(bool) Setting::get('lesson_opening_test_mode', false);
+        Setting::set('lesson_opening_test_mode', $on ? '1' : '');
+
+        return back()->with('success', $on
+            ? "Test rejimi yoqildi: so'rov yuborishda raqamni (1/2/3) tanlash mumkin."
+            : "Test rejimi o'chirildi: so'rov raqami avtomatik hisoblanadi.");
+    }
+
+    /**
+     * Shu foydalanuvchi qarorini kutayotgan so'rovlar soni. Prorektorlar
+     * bosqichida qaror shaxsiy, shuning uchun ustun emas — har bir so'rovda
+     * aynan shu prorektorning qarori bor-yo'qligi tekshiriladi.
+     */
+    private function myQueueCount(string $stage, ?array $reviewer, callable $inPeriod): int
+    {
+        if ($stage !== LessonOpening::STAGE_PROREKTOR) {
+            return $inPeriod(LessonOpening::awaitingStage($stage))->count();
+        }
+
+        return $inPeriod(
+            LessonOpening::query()->visibleToStage($stage)->where('status', LessonOpening::STATUS_PENDING)
+        )
+            ->get(['id', 'request_number', 'status', 'prorektor_approvals'])
+            ->filter(fn (LessonOpening $opening) => $opening->awaits($stage, $reviewer))
+            ->count();
     }
 
     /** O'chirish huquqi — faqat admin va superadmin (faol rol bo'yicha). */

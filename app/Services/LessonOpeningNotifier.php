@@ -39,6 +39,24 @@ class LessonOpeningNotifier
         );
     }
 
+    /**
+     * 2-so'rovdan boshlab: tushuntirish xati o'quv bo'limiga qog'ozda
+     * topshiriladi. Tizimga fayl yuklanmaydi, shuning uchun o'qituvchiga
+     * eslatib qo'yiladi — aks holda so'rovi tasdiqlanmay qoladi.
+     */
+    public function explanationLetterNeeded(LessonOpening $opening): void
+    {
+        $number = (int) $opening->request_number;
+
+        $this->send($opening, fn (Teacher $teacher, array $lesson) =>
+            "📄 <b>Tushuntirish xatini o'quv bo'limiga topshiring</b>\n\n"
+            . "Hurmatli {$this->e($teacher->full_name)}!\n\n"
+            . "{$lesson['subject']} fani, {$lesson['group']} guruhi, {$lesson['date']} sanadagi dars uchun "
+            . "joriy semestrdagi <b>{$number}-dars ochish so'rovingizni</b> yubordingiz.\n\n"
+            . "Tushuntirish xatini <b>o'quv bo'limiga</b> topshiring — aks holda so'rovingiz tasdiqlanmaydi."
+        );
+    }
+
     /** Bir bosqich tasdiqladi, lekin boshqa tasdiqlar hali kutilmoqda. */
     public function approvedStep(LessonOpening $opening, string $stage): void
     {

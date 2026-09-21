@@ -214,6 +214,46 @@
         </div>
     </div>
 
+    {{-- Tushuntirish xati eslatmasi: 2-so'rovdan keyin bir marta --}}
+    @if($isTeacherRole && !empty($explanationNotice))
+        @php $elpDate = $explanationNotice->lesson_date?->format('d.m.Y'); @endphp
+        <style>
+            .elp-overlay { position: fixed; inset: 0; z-index: 1060; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15,23,42,.6); }
+            .elp-box { width: 100%; max-width: 620px; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 24px 60px rgba(15,23,42,.35); }
+            .elp-head { display: flex; gap: 16px; align-items: center; padding: 22px 26px; background: linear-gradient(135deg, #b45309, #d97706); color: #fff; }
+            .elp-head-icon { flex: 0 0 48px; width: 48px; height: 48px; border-radius: 14px; background: rgba(255,255,255,.2); display: grid; place-items: center; }
+            .elp-head-icon svg { width: 28px; height: 28px; }
+            .elp-head h3 { margin: 0; font-size: 20px; font-weight: 800; color: #fff; }
+            .elp-body { padding: 22px 26px; }
+            .elp-lead { margin: 0 0 16px; font-size: 20px; font-weight: 800; line-height: 1.4; color: #92400e; }
+            .elp-meta { margin: 0 0 16px; font-size: 14px; color: #475569; line-height: 1.6; }
+            .elp-meta b { color: #1e293b; }
+            .elp-foot { display: flex; justify-content: flex-end; padding: 14px 26px; border-top: 1px solid #f1f5f9; background: #f8fafc; }
+            .elp-ok { border: none; background: #b45309; color: #fff; border-radius: 10px; padding: 10px 24px; font-size: 14px; font-weight: 700; cursor: pointer; }
+            .elp-ok:hover { background: #92400e; }
+        </style>
+        <div class="elp-overlay" id="elpModal" role="dialog" aria-modal="true" aria-labelledby="elpTitle">
+            <div class="elp-box">
+                <div class="elp-head">
+                    <span class="elp-head-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    </span>
+                    <h3 id="elpTitle">Tushuntirish xati</h3>
+                </div>
+                <div class="elp-body">
+                    <p class="elp-lead">Tushuntirish xatini o'quv bo'limiga topshiring — aks holda dars ochish so'rovingiz tasdiqlanmaydi.</p>
+                    <p class="elp-meta">
+                        Bu joriy semestrdagi <b>{{ $explanationNotice->request_number }}-so'rovingiz</b>@if($elpDate) · dars sanasi <b>{{ $elpDate }}</b>@endif.
+                        Xat tizimga yuklanmaydi, uni o'quv bo'limiga qog'ozda topshirasiz.
+                    </p>
+                </div>
+                <div class="elp-foot">
+                    <button type="button" class="elp-ok" onclick="document.getElementById('elpModal').remove()">Tushundim</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
     {{-- Baho qo'yilmay qolgan darslar: har kirishda ko'rsatiladi --}}
     @if($isTeacherRole && isset($missedLessons) && $missedLessons->isNotEmpty())
         @php

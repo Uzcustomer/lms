@@ -73,6 +73,7 @@ class TeacherMainController extends Controller
         // Popup ishlamasa ham dashboard ochilaversin.
         $missedLessons = collect();
         $openingQuota = null;
+        $explanationNotice = $isTeacherRole && $teacher ? $this->pendingExplanationNotice($teacher) : null;
         if ($isTeacherRole && $teacher && Schema::hasTable('lesson_openings')) {
             try {
                 $missedLessons = app(\App\Services\TeacherMissedLessons::class)->forTeacher($teacher);
@@ -93,6 +94,7 @@ class TeacherMainController extends Controller
         return view('teacher.dashboard', [
             'missedLessons'   => $missedLessons,
             'openingQuota'    => $openingQuota,
+            'explanationNotice' => $explanationNotice,
             'stats'           => $stats,
             'topItems'        => $topItems,
             'topUpdatedAt'    => $topUpdatedAt,
@@ -101,6 +103,42 @@ class TeacherMainController extends Controller
             'teacher'         => $teacher,
             'isTeacherRole'   => $isTeacherRole,
         ]);
+    }
+
+    /**
+     * 2- yoki undan keyingi dars ochish so'rovi yuborilgan bo'lsa — tushuntirish
+     * xatini o'quv bo'limiga topshirish eslatmasi. Bir marta ko'rsatiladi:
+     * ko'rsatilgani yozib qo'yiladi va keyingi kirishlarda chiqmaydi.
+     */
+    private function pendingExplanationNotice($teacher): ?\App\Models\LessonOpening
+    {
+        if (!Schema::hasTable('lesson_openings') || !Schema::hasColumn('lesson_openings', 'explanation_notice_at')) {
+            return null;
+        }
+
+        try {
+            $opening = \App\Models\LessonOpening::query()
+                ->where('teacher_id', $teacher->id)
+                ->where('status', \App\Models\LessonOpening::STATUS_PENDING)
+                ->where('request_number', '>=', \App\Models\LessonOpening::EXPLANATION_FROM_NUMBER)
+                ->whereNull('explanation_notice_at')
+                ->latest('id')
+                ->first();
+
+            if ($opening) {
+                // Faqat bir marta: ko'rsatilgan zahoti belgilanadi
+                \App\Models\LessonOpening::whereKey($opening->id)->update(['explanation_notice_at' => now()]);
+            }
+
+            return $opening;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Tushuntirish xati eslatmasi olinmadi', [
+                'teacher_id' => $teacher->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     public function info()

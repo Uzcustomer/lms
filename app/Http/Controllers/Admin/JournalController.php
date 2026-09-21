@@ -1453,6 +1453,7 @@ class JournalController extends Controller
         // Mavjud dars ochilishlarini olish
         $lessonOpeningsMap = [];
         $lessonOpeningDays = 3;
+        $lessonOpeningTestMode = false;
         $activeOpenedDates = [];
         if (\Schema::hasTable('lesson_openings')) {
             LessonOpening::expireOverdue();
@@ -1486,6 +1487,8 @@ class JournalController extends Controller
 
             // Dars ochish sozlamasi
             $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
+            // Test rejimi: so'rov raqamini qo'lda tanlash (2- va 3-so'rovni sinash)
+            $lessonOpeningTestMode = (bool) Setting::get('lesson_opening_test_mode', false);
 
             // O'qituvchi uchun: ochilgan va muddati tugamagan darslar
             $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
@@ -2272,6 +2275,7 @@ class JournalController extends Controller
             'missedDates',
             'lessonOpeningsMap',
             'lessonOpeningDays',
+            'lessonOpeningTestMode',
             'activeOpenedDates',
             'openingActor',
             'openingTeachersByDate',
@@ -5858,21 +5862,19 @@ class JournalController extends Controller
         $prior = LessonOpening::priorRequestCount($teacher->id, $existing?->id);
         $number = $prior + 1;
 
-        if ($actor === 'teacher' && $number > LessonOpening::TEACHER_REQUEST_LIMIT) {
+        // Test rejimi: sozlamada yoqilgan bo'lsa, so'rov raqamini qo'lda tanlash
+        // mumkin — 2- va 3-so'rov oqimini tekshirish uchun. Limit ham tekshirilmaydi.
+        $testMode = (bool) Setting::get('lesson_opening_test_mode', false);
+        if ($testMode && $request->filled('request_number')) {
+            $number = max(1, min(9, (int) $request->input('request_number')));
+        }
+
+        if (!$testMode && $actor === 'teacher' && $number > LessonOpening::TEACHER_REQUEST_LIMIT) {
             return response()->json([
                 'success' => false,
                 'blocked' => true,
                 'message' => "Siz joriy semestrda {$prior} marta dars ochish so'rovini yuborgansiz. Keyingi so'rov uchun registrator ofisiga murojaat qiling.",
             ], 403);
-        }
-
-        $strict = $number >= LessonOpening::STRICT_FROM_NUMBER;
-        if ($strict && !$request->hasFile('explanation_file')) {
-            return response()->json([
-                'success' => false,
-                'message' => "Bu {$number}-so'rov — tushuntirish xati faylini ham yuklang.",
-                'errors' => ['explanation_file' => ['Tushuntirish xati majburiy.']],
-            ], 422);
         }
 
         // Fayllar
@@ -5930,12 +5932,26 @@ class JournalController extends Controller
             $opening = LessonOpening::create($payload);
         }
 
+        // 2-so'rovdan boshlab tushuntirish xati o'quv bo'limiga qog'ozda
+        // topshiriladi — o'qituvchiga Telegram orqali eslatiladi va profilga
+        // kirganda bir marta popup chiqadi.
+        $explanationNeeded = $number >= LessonOpening::EXPLANATION_FROM_NUMBER;
+        if ($explanationNeeded) {
+            app(\App\Services\LessonOpeningNotifier::class)->explanationLetterNeeded($opening);
+        }
+
+        $message = "So'rov ({$number}-so'rov) yuborildi. Tasdiqlaydi: "
+            . implode(', ', array_map(fn ($stage) => LessonOpening::STAGE_LABELS[$stage], LessonOpening::stagesFor($number)))
+            . '. Hammasi tasdiqlagach dars ochiladi.';
+        if ($explanationNeeded) {
+            $message .= "\n\nDIQQAT! Tushuntirish xatini o'quv bo'limiga topshiring — aks holda so'rovingiz tasdiqlanmaydi.";
+        }
+
         return response()->json([
             'success' => true,
             'pending' => true,
-            'message' => "So'rov ({$number}-so'rov) yuborildi. Tasdiqlaydi: "
-                . implode(', ', array_map(fn ($stage) => LessonOpening::STAGE_LABELS[$stage], LessonOpening::stagesFor($number)))
-                . '. Hammasi tasdiqlagach dars ochiladi.',
+            'message' => $message,
+            'explanation_needed' => $explanationNeeded,
             'opening' => [
                 'id' => $opening->id,
                 'status' => $opening->status,

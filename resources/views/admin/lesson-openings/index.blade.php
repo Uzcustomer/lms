@@ -389,7 +389,7 @@
                                         [$explLabel, $explClass] = $extClassOf($opening->explanation_file_original_name);
                                         $number = (int) $opening->request_number;
                                         // Joriy foydalanuvchi shu so'rovga qaror bera oladimi
-                                        {{-- Prorektorlar bosqichida qaror shaxsiy: kim kirgan bo'lsa, o'sha --}}
+                                        // Prorektorlar bosqichida qaror shaxsiy: kim kirgan bo'lsa, o'sha
                                         $canAct = $canReview && $opening->awaits($stage, $reviewer ?? null);
                                         $canReapprove = $canReview && $opening->canReapprove($stage, $reviewer ?? null);
                                         $canRevoke = $canReview && $opening->canRevoke($stage, $reviewer ?? null);

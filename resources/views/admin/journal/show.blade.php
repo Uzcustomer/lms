@@ -5562,10 +5562,21 @@
 
             let rows = '';
             stages.forEach(function(s) {
-                const names = (LO_APPROVERS[s[0]] || []);
-                const who = names.length
-                    ? names.map(function(n) { return '<b>' + loEsc(n) + '</b>'; }).join(', ')
-                    : '<span style="color:#b91c1c;">bu rolda xodim yo\'q</span>';
+                const info = LO_APPROVERS[s[0]] || {};
+                const names = info.names || [];
+                let who;
+
+                if (s[0] === 'registrar' && number >= 3 && info.pinned) {
+                    // 3-so'rovdan boshlab registratordan faqat tayinlangani tasdiqlaydi
+                    who = '<b>' + loEsc(info.pinned) + '</b>';
+                } else if (names.length) {
+                    who = names.map(function(n) { return '<b>' + loEsc(n) + '</b>'; }).join(', ');
+                } else if (info.total) {
+                    who = '<b>' + info.total + " ta xodimdan biri</b>";
+                } else {
+                    who = '<span style="color:#b91c1c;">bu rolda xodim yo\'q</span>';
+                }
+
                 rows += '<div>• ' + s[1] + ' — ' + who + '</div>';
             });
 

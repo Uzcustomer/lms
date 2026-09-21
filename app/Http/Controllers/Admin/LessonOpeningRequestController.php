@@ -284,14 +284,19 @@ class LessonOpeningRequestController extends Controller
      */
     private function myQueueCount(string $stage, ?array $reviewer, callable $inPeriod): int
     {
-        if ($stage !== LessonOpening::STAGE_PROREKTOR) {
+        // O'quv bo'limida qaror bosqich bo'yicha: kim kirsa ham bitta qaror yetarli
+        if ($stage === LessonOpening::STAGE_DEPARTMENT) {
             return $inPeriod(LessonOpening::awaitingStage($stage))->count();
         }
 
-        return $inPeriod(
-            LessonOpening::query()->visibleToStage($stage)->where('status', LessonOpening::STATUS_PENDING)
-        )
-            ->get(['id', 'request_number', 'status', 'prorektor_approvals'])
+        // Prorektorlarda qaror shaxsiy; registratorda esa 3-so'rovdan boshlab
+        // faqat tayinlangan xodim imzolaydi — ikkalasi ham shaxs bo'yicha
+        $base = $stage === LessonOpening::STAGE_PROREKTOR
+            ? LessonOpening::query()->visibleToStage($stage)->where('status', LessonOpening::STATUS_PENDING)
+            : LessonOpening::awaitingStage($stage);
+
+        return $inPeriod($base)
+            ->get(['id', 'request_number', 'status', 'registrar_status', 'prorektor_approvals'])
             ->filter(fn (LessonOpening $opening) => $opening->awaits($stage, $reviewer))
             ->count();
     }

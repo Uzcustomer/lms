@@ -106,6 +106,12 @@ class LessonOpening extends Model
     /** Shu raqamdan boshlab tushuntirish xati o'quv bo'limiga topshiriladi */
     public const EXPLANATION_FROM_NUMBER = 2;
 
+    /** Shu raqamdan boshlab registrator ofisidan faqat tayinlangani tasdiqlaydi */
+    public const REGISTRAR_PINNED_FROM_NUMBER = 3;
+
+    /** Ro'yxatda shuncha ismdan ko'pi ko'rsatilmaydi — o'rniga soni yoziladi */
+    public const APPROVER_LIST_LIMIT = 4;
+
     /** Prorektorlar roli — 3-so'rovdan boshlab har biri alohida tasdiqlaydi */
     public const PROREKTOR_ROLE = 'oquv_prorektori';
 
@@ -230,25 +236,29 @@ class LessonOpening extends Model
     }
 
     /**
-     * Ro'yxatlarda ko'rsatiladigan tasdiqlovchilar. Registrator ofisida o'nlab
-     * xodim bor, lekin dars ochishni ulardan bittasi imzolaydi — sozlamada
-     * ("lesson_opening_registrar_approver") o'sha kishi tanlanadi va faqat u
-     * ko'rinadi. Bu kimning tasdiqlay olishini cheklamaydi — faqat ko'rinish.
+     * Bosqichni kim tasdiqlashi — ro'yxatda ko'rsatish uchun matn.
+     * Registratorda 3-so'rovdan boshlab faqat tayinlangan xodim yoziladi;
+     * ro'yxat uzun bo'lsa ismlar o'rniga soni ko'rsatiladi (18 ta ism
+     * xabarning o'zini ko'rinmas qilib yuboradi).
      */
-    public static function displayApprovers(string $stage): \Illuminate\Support\Collection
+    public static function expectedApproverText(string $stage, ?int $requestNumber = null): string
     {
         $all = static::stageApprovers($stage);
-
-        if ($stage !== self::STAGE_REGISTRAR) {
-            return $all;
+        if ($all->isEmpty()) {
+            return '';
         }
 
-        $pinned = trim((string) Setting::get('lesson_opening_registrar_approver', ''));
-        if ($pinned === '' || !$all->has($pinned)) {
-            return $all;
+        if ($stage === self::STAGE_REGISTRAR) {
+            $pinned = static::pinnedRegistrarKey();
+            if ($pinned !== null
+                && ($requestNumber === null || $requestNumber >= self::REGISTRAR_PINNED_FROM_NUMBER)) {
+                return (string) $all->get($pinned);
+            }
         }
 
-        return $all->only([$pinned]);
+        return $all->count() <= self::APPROVER_LIST_LIMIT
+            ? $all->values()->implode(', ')
+            : $all->count() . ' ta xodimdan biri';
     }
 
     /** Qaror bergan shaxs kaliti: "teacher:12" / "web:3" */
@@ -359,22 +369,33 @@ class LessonOpening extends Model
                 'status' => $this->{$status},
                 'name' => $this->{$name},
                 'at' => $this->{$at}?->format('d.m.Y H:i'),
-                'expected' => static::displayApprovers($stage)->values()->implode(', '),
+                'expected' => static::expectedApproverText($stage, (int) $this->request_number),
             ];
         }
 
         return $list;
     }
 
-    /** Bosqichlar bo'yicha tasdiqlovchilar ismlari: ['registrar' => 'A, B', ...] */
+    /**
+     * Jurnal modali uchun: har bosqichda kim tasdiqlaydi.
+     * ['registrar' => ['names' => [...], 'total' => 18, 'pinned' => 'F.I.Sh'], ...]
+     */
     public static function approverNames(): array
     {
-        $names = [];
+        $out = [];
         foreach (array_keys(self::STAGE_ROLES) as $stage) {
-            $names[$stage] = static::displayApprovers($stage)->values()->all();
+            $all = static::stageApprovers($stage);
+            $pinnedKey = $stage === self::STAGE_REGISTRAR ? static::pinnedRegistrarKey() : null;
+
+            $out[$stage] = [
+                // Ro'yxat uzun bo'lsa ismlar berilmaydi — modalda soni yoziladi
+                'names' => $all->count() <= self::APPROVER_LIST_LIMIT ? $all->values()->all() : [],
+                'total' => $all->count(),
+                'pinned' => $pinnedKey ? $all->get($pinnedKey) : null,
+            ];
         }
 
-        return $names;
+        return $out;
     }
 
     /** Hali yakuniy qaror chiqmagan */
@@ -393,6 +414,10 @@ class LessonOpening extends Model
             return false;
         }
 
+        if (!$this->stageReviewerAllowed($stage, $reviewer)) {
+            return false;
+        }
+
         if ($stage === self::STAGE_PROREKTOR && $reviewer) {
             return $this->prorektorDecisionOf($reviewer) === null;
         }
@@ -400,10 +425,46 @@ class LessonOpening extends Model
         return $this->stageStatus($stage) === null;
     }
 
+    /**
+     * Shu xodim shu bosqichda qaror qila oladimi. Registrator ofisida o'nlab
+     * xodim bor, lekin 3-so'rovdan boshlab so'rovni ulardan faqat tayinlangani
+     * imzolaydi (sozlama: lesson_opening_registrar_approver) — qolganlari
+     * so'rovni ko'radi, lekin tasdiqlay olmaydi. Hech kim tayinlanmagan bo'lsa
+     * eski tartib saqlanadi: ofisning istalgan xodimi qaror qiladi.
+     */
+    public function stageReviewerAllowed(string $stage, ?array $reviewer = null): bool
+    {
+        if ($stage !== self::STAGE_REGISTRAR
+            || (int) $this->request_number < self::REGISTRAR_PINNED_FROM_NUMBER) {
+            return true;
+        }
+
+        $pinned = static::pinnedRegistrarKey();
+        if ($pinned === null) {
+            return true;
+        }
+
+        return $reviewer !== null && static::reviewerKey($reviewer) === $pinned;
+    }
+
+    /** Tayinlangan registrator ("guard:id") yoki null */
+    public static function pinnedRegistrarKey(): ?string
+    {
+        $pinned = trim((string) Setting::get('lesson_opening_registrar_approver', ''));
+
+        return ($pinned !== '' && static::stageApprovers(self::STAGE_REGISTRAR)->has($pinned))
+            ? $pinned
+            : null;
+    }
+
     /** Shu bosqich rad etgan edi — fikrini o'zgartirib tasdiqlashi mumkin */
     public function canReapprove(string $stage, ?array $reviewer = null): bool
     {
         if ($this->status !== self::STATUS_REJECTED || !in_array($stage, $this->requiredStages(), true)) {
+            return false;
+        }
+
+        if (!$this->stageReviewerAllowed($stage, $reviewer)) {
             return false;
         }
 
@@ -421,6 +482,10 @@ class LessonOpening extends Model
     public function canRevoke(string $stage, ?array $reviewer = null): bool
     {
         if ($this->status !== self::STATUS_ACTIVE || !in_array($stage, $this->requiredStages(), true)) {
+            return false;
+        }
+
+        if (!$this->stageReviewerAllowed($stage, $reviewer)) {
             return false;
         }
 

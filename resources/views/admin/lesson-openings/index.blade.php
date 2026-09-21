@@ -276,7 +276,7 @@
                         </span>
                         <div>
                             <h1>Dars ochish so'rovlari</h1>
-                            <p>O'qituvchi o'tkazib yuborilgan darsni ochish uchun so'rov yuboradi: 1-so'rovni registrator ofisi, 2-so'rovni u va o'quv bo'limi boshlig'i, 3-dan boshlab o'quv prorektori ham tasdiqlaydi</p>
+                            <p>O'qituvchi o'tkazib yuborilgan darsni ochish uchun so'rov yuboradi: 1-so'rovni registrator ofisi, 2-so'rovni u va o'quv bo'limi boshlig'i, 3-dan boshlab prorektorlar ham tasdiqlaydi. 3-so'rovdan boshlab registrator ofisidan faqat tayinlangan xodim imzolaydi</p>
                         </div>
                     </div>
                     <div style="display:flex; flex-wrap:wrap; gap:8px;">
@@ -601,6 +601,9 @@
                                                         ? $opening->prorektorDecisionOf($reviewer ?? []) === 'approved'
                                                         : $opening->stageStatus($stage) === 'approved'))
                                                     <span class="lo-waiting">Siz tasdiqlagansiz{{ $remainingText ? ' · ' . $remainingText . ' kutilmoqda' : '' }}</span>
+                                                @elseif($isPending && $stage === \App\Models\LessonOpening::STAGE_REGISTRAR && !$opening->stageReviewerAllowed($stage, $reviewer ?? null))
+                                                    {{-- 3-so'rovdan boshlab registratordan faqat tayinlangani imzolaydi --}}
+                                                    <span class="lo-waiting">Tasdiqlaydi: {{ \App\Models\LessonOpening::expectedApproverText($stage, $number) }}</span>
                                                 @elseif($isPending && $remainingText)
                                                     <span class="lo-waiting">{{ $remainingText }} kutilmoqda</span>
                                                 @endif

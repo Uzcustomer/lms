@@ -248,7 +248,11 @@ class LessonOpening extends Model
         return 'lesson_opening_' . $stage . '_approver';
     }
 
-    /** Bosqichni imzolashi tayinlangan xodim ("guard:id") yoki null */
+    /**
+     * Bosqichni imzolashi tayinlangan xodim ("guard:id") yoki null.
+     * Prorektorlarda tayinlanmagan bo'lsa — birinchisi olinadi: dars ochishga
+     * bitta prorektorning imzosi yetarli, hammasidan so'ralmaydi.
+     */
     public static function pinnedApproverKey(string $stage): ?string
     {
         $all = static::stageApprovers($stage);
@@ -256,6 +260,10 @@ class LessonOpening extends Model
         $pinned = trim((string) Setting::get(static::approverSettingKey($stage), ''));
         if ($pinned !== '' && $all->has($pinned)) {
             return $pinned;
+        }
+
+        if ($stage === self::STAGE_PROREKTOR) {
+            return $all->isNotEmpty() ? (string) $all->keys()->first() : null;
         }
 
         return $stage === self::STAGE_REGISTRAR ? static::guessRegistrarKey($all) : null;

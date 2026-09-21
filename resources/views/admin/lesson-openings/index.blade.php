@@ -608,8 +608,8 @@
                                                         : $opening->stageStatus($stage) === 'approved'))
                                                     <span class="lo-waiting">Siz tasdiqlagansiz{{ $remainingText ? ' · ' . $remainingText . ' kutilmoqda' : '' }}</span>
                                                 @elseif($isPending && $stage && !$opening->stageReviewerAllowed($stage, $reviewer ?? null))
-                                                    {{-- Bu bosqichni rolga ega boshqa xodim imzolaydi --}}
-                                                    <span class="lo-waiting">Tasdiqlaydi: {{ \App\Models\LessonOpening::expectedApproverText($stage, $number) }}</span>
+                                                    {{-- Bosqichni boshqa xodim imzolaydi: tugma ham, izoh ham
+                                                         chiqmaydi — kim imzolashi HOLAT ustunida turibdi --}}
                                                 @elseif($isPending && $remainingText)
                                                     <span class="lo-waiting">{{ $remainingText }} kutilmoqda</span>
                                                 @endif

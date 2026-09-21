@@ -371,10 +371,28 @@ class LessonOpening extends Model
                 continue;
             }
 
-            // Prorektorlar har biri alohida qator bo'lib ko'rinadi
+            // Prorektorlar har biri alohida qator bo'lib ko'rinadi. Bittasi
+            // imzolasa ism kerak emas — lavozim nomining o'zi yetarli; bir
+            // nechta bo'lsa qatorlar farqlanishi uchun ism yoziladi.
             if ($stage === self::STAGE_PROREKTOR) {
                 $decisions = $this->prorektor_approvals ?? [];
-                foreach (static::prorektorApprovers() as $key => $approverName) {
+                $approvers = static::prorektorApprovers();
+
+                // Rolda hech kim bo'lmasa bosqich ko'rinmay ketmasin
+                if ($approvers->isEmpty()) {
+                    $list[] = [
+                        'stage' => $stage,
+                        'label' => self::STAGE_LABELS[$stage],
+                        'status' => null,
+                        'name' => null,
+                        'at' => null,
+                        'expected' => '',
+                        'empty' => true,
+                    ];
+                    continue;
+                }
+
+                foreach ($approvers as $key => $approverName) {
                     $decision = $decisions[$key] ?? null;
                     $list[] = [
                         'stage' => $stage,
@@ -382,19 +400,29 @@ class LessonOpening extends Model
                         'status' => $decision['decision'] ?? null,
                         'name' => $decision['name'] ?? $approverName,
                         'at' => isset($decision['at']) ? \Carbon\Carbon::parse($decision['at'])->format('d.m.Y H:i') : null,
-                        'expected' => $approverName,
+                        'expected' => $approvers->count() > 1 ? $approverName : '',
+                        'empty' => false,
                     ];
                 }
                 continue;
             }
 
+            // Registratorda ofis xodimi emas, uni imzolaydigan boshliq yoziladi;
+            // o'quv bo'limida esa bosqichning o'zi — kim kirsa, o'sha tasdiqlaydi
+            $pinnedName = $stage === self::STAGE_REGISTRAR
+                ? static::expectedApproverText($stage, (int) $this->request_number)
+                : '';
+
             $list[] = [
                 'stage' => $stage,
-                'label' => self::STAGE_LABELS[$stage],
+                'label' => $stage === self::STAGE_REGISTRAR && static::pinnedRegistrarKey() !== null
+                    ? "Registrator ofisi boshlig'i"
+                    : self::STAGE_LABELS[$stage],
                 'status' => $this->{$status},
                 'name' => $this->{$name},
                 'at' => $this->{$at}?->format('d.m.Y H:i'),
-                'expected' => static::expectedApproverText($stage, (int) $this->request_number),
+                'expected' => $pinnedName,
+                'empty' => static::stageApprovers($stage)->isEmpty(),
             ];
         }
 

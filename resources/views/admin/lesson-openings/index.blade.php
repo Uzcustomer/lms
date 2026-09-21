@@ -44,22 +44,24 @@
             return [strtoupper($ext ?: 'FAYL'), $class];
         };
         // Bosqich qarori: [belgi, css, matn]
-        // Qaror bo'lmasa — shu rolda kim borligi ko'rsatiladi: "kutilmoqda — F.I.Sh".
-        // Rol egasi topilmasa ogohlantiriladi, aks holda so'rov qotib qoladi.
-        $decisionOf = function ($decision, $name, $at, $waiting = true, $expected = null) {
+        // Qaror bo'lmasa — kim imzolashi ko'rsatiladi. Ism faqat kerak joyda:
+        // registratorda boshlig'ining ismi, prorektorlar bir nechta bo'lsa
+        // qaysi biri ekani. Rol egasi bo'lmasa ogohlantiriladi, aks holda
+        // so'rov shu bosqichda jimgina qotib qoladi.
+        $decisionOf = function ($decision, $name, $at, $waiting = true, $expected = null, $empty = false) {
             $who = trim(($name ?? '') . ($at ? ' · ' . $at : ''));
             $expected = trim((string) $expected);
             $pending = $waiting ? 'kutilmoqda' : "ko'rib chiqilmagan";
-            if ($expected !== '') {
-                $pending .= ' — ' . $expected;
-            } else {
+            if ($empty) {
                 $pending .= " — bu rolda xodim yo'q!";
+            } elseif ($expected !== '') {
+                $pending .= ' — ' . $expected;
             }
 
             return match ($decision) {
                 'approved' => ['✓', 'is-ok', $who ?: 'tasdiqlangan'],
                 'rejected' => ['✕', 'is-no', $who ?: 'rad etgan'],
-                default => ['…', $expected !== '' ? 'is-wait' : 'is-no', $pending],
+                default => ['…', $empty ? 'is-no' : 'is-wait', $pending],
             };
         };
         $initials = function ($name) {
@@ -531,7 +533,7 @@
                                             <div class="lo-stages">
                                                 @foreach($opening->stageDecisions() as $decision)
                                                     @continue(!$decision['status'] && !$isPending && $opening->status !== 'rejected')
-                                                    @php [$mark, $markClass, $markText] = $decisionOf($decision['status'], $decision['name'], $decision['at'], $isPending, $decision['expected'] ?? null); @endphp
+                                                    @php [$mark, $markClass, $markText] = $decisionOf($decision['status'], $decision['name'], $decision['at'], $isPending, $decision['expected'] ?? null, $decision['empty'] ?? false); @endphp
                                                     <div class="lo-stage {{ $markClass }}"><i>{{ $mark }}</i><span><b>{{ $decision['label'] }}:</b> {{ $markText }}</span></div>
                                                 @endforeach
                                             </div>

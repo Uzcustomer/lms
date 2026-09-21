@@ -444,17 +444,46 @@ class LessonOpening extends Model
             return true;
         }
 
-        return $reviewer !== null && static::reviewerKey($reviewer) === $pinned;
+        if ($reviewer === null) {
+            return false;
+        }
+
+        if (static::reviewerKey($reviewer) === $pinned) {
+            return true;
+        }
+
+        // Bir odam ikki guard'da bo'lishi mumkin — ism bo'yicha ham tekshiramiz
+        $norm = fn ($name) => mb_strtolower(trim((string) $name));
+        $pinnedName = $norm(static::stageApprovers(self::STAGE_REGISTRAR)->get($pinned));
+
+        return $pinnedName !== '' && $pinnedName === $norm($reviewer['name'] ?? '');
     }
 
-    /** Tayinlangan registrator ("guard:id") yoki null */
+    /**
+     * Tayinlangan registrator ("guard:id") yoki null.
+     *
+     * Sozlamada tanlanmagan bo'lsa — registrator ofisi xodimlari ichidan
+     * prorektor roli ham borini olamiz: dars ochishni imzolaydigan xodim
+     * shu ikkala rolda turadi va u yagona bo'lsa, qo'lda tanlash shart emas.
+     * Bir nechta bo'lsa (yoki umuman bo'lmasa) — hech kim tayinlanmagan
+     * hisoblanadi va eski tartib ishlaydi.
+     */
     public static function pinnedRegistrarKey(): ?string
     {
-        $pinned = trim((string) Setting::get('lesson_opening_registrar_approver', ''));
+        $registrars = static::stageApprovers(self::STAGE_REGISTRAR);
 
-        return ($pinned !== '' && static::stageApprovers(self::STAGE_REGISTRAR)->has($pinned))
-            ? $pinned
-            : null;
+        $pinned = trim((string) Setting::get('lesson_opening_registrar_approver', ''));
+        if ($pinned !== '' && $registrars->has($pinned)) {
+            return $pinned;
+        }
+
+        // Kalit emas, ism bo'yicha solishtiramiz: bitta odam xodimlar
+        // jadvalida ham, foydalanuvchilarda ham bo'lishi mumkin
+        $norm = fn ($name) => mb_strtolower(trim((string) $name));
+        $prorektorNames = static::stageApprovers(self::STAGE_PROREKTOR)->map($norm)->values();
+        $both = $registrars->filter(fn ($name) => $prorektorNames->contains($norm($name)));
+
+        return $both->count() === 1 ? (string) $both->keys()->first() : null;
     }
 
     /** Shu bosqich rad etgan edi — fikrini o'zgartirib tasdiqlashi mumkin */

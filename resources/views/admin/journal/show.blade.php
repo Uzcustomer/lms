@@ -5560,24 +5560,21 @@
             if (number >= 2) stages.push(['department', "O'quv bo'limi boshlig'i"]);
             if (number >= 3) stages.push(['prorektor', "O'quv prorektori"]);
 
+            // Ism faqat registrator ofisi uchun: u yerda o'nlab xodim bor va
+            // so'rovni ulardan bittasi imzolaydi. Qolgan bosqichlarda lavozim
+            // nomining o'zi yetarli.
             let rows = '';
             stages.forEach(function(s) {
                 const info = LO_APPROVERS[s[0]] || {};
-                const names = info.names || [];
-                let who;
+                let line = '• ' + s[1];
 
-                if (s[0] === 'registrar' && number >= 3 && info.pinned) {
-                    // 3-so'rovdan boshlab registratordan faqat tayinlangani tasdiqlaydi
-                    who = '<b>' + loEsc(info.pinned) + '</b>';
-                } else if (names.length) {
-                    who = names.map(function(n) { return '<b>' + loEsc(n) + '</b>'; }).join(', ');
-                } else if (info.total) {
-                    who = '<b>' + info.total + " ta xodimdan biri</b>";
-                } else {
-                    who = '<span style="color:#b91c1c;">bu rolda xodim yo\'q</span>';
+                if (s[0] === 'registrar' && info.pinned) {
+                    line += ' — <b>' + loEsc(info.pinned) + '</b>';
+                } else if (!info.total) {
+                    line += ' — <span style="color:#b91c1c;">bu rolda xodim yo\'q</span>';
                 }
 
-                rows += '<div>• ' + s[1] + ' — ' + who + '</div>';
+                rows += '<div>' + line + '</div>';
             });
 
             box.innerHTML = "<div style=\"font-weight:700; margin-bottom:4px;\">So'rovni tasdiqlaydi:</div>" + rows;

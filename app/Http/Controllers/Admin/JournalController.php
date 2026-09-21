@@ -5863,19 +5863,14 @@ class JournalController extends Controller
         $number = $prior + 1;
 
         // Test rejimi: sozlamada yoqilgan bo'lsa, so'rov raqamini qo'lda tanlash
-        // mumkin — 2- va 3-so'rov oqimini tekshirish uchun. Limit ham tekshirilmaydi.
+        // mumkin — 2- va 3-so'rov oqimini tekshirish uchun.
         $testMode = (bool) Setting::get('lesson_opening_test_mode', false);
         if ($testMode && $request->filled('request_number')) {
             $number = max(1, min(9, (int) $request->input('request_number')));
         }
 
-        if (!$testMode && $actor === 'teacher' && $number > LessonOpening::TEACHER_REQUEST_LIMIT) {
-            return response()->json([
-                'success' => false,
-                'blocked' => true,
-                'message' => "Siz joriy semestrda {$prior} marta dars ochish so'rovini yuborgansiz. Keyingi so'rov uchun registrator ofisiga murojaat qiling.",
-            ], 403);
-        }
+        // So'rovlar soniga chek yo'q: o'qituvchi 3- va undan keyingilarini ham
+        // o'zi yuboradi, faqat tasdiqlovchilar o'zgaradi (o'quv bo'limi + prorektorlar).
 
         // Fayllar
         $file = $request->file('file');
@@ -5965,7 +5960,7 @@ class JournalController extends Controller
     /**
      * Kim dars ochish so'rovini yuboryapti: 'teacher' — faol roli o'qituvchi
      * (faqat o'z darsiga), 'admin' — admin/superadmin (istalgan o'qituvchi
-     * nomidan, limitdan oshganda ham), aks holda null.
+     * nomidan), aks holda null.
      */
     public static function lessonOpeningActor(): ?string
     {

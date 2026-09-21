@@ -95,12 +95,6 @@ class LessonOpening extends Model
         self::STAGE_PROREKTOR => [3, null],
     ];
 
-    /**
-     * O'qituvchi semestr ichida o'zi yubora oladigan so'rovlar soni.
-     * Undan keyingilarini faqat admin yuboradi.
-     */
-    public const TEACHER_REQUEST_LIMIT = 2;
-
     /** Shu raqamdan boshlab tushuntirish xati o'quv bo'limiga topshiriladi */
     public const EXPLANATION_FROM_NUMBER = 2;
 

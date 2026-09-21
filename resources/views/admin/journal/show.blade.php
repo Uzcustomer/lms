@@ -5290,11 +5290,6 @@
                     <div style="margin-top:2px; color:#b91c1c;">Yangi asos hujjat bilan qayta yuborishingiz mumkin.</div>
                 </div>
 
-                <div id="lessonOpenBlocked" style="display:none; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:14px; margin-bottom:16px; color:#991b1b; line-height:1.55;">
-                    <div style="font-size:14px; font-weight:700; margin-bottom:4px;">So'rov yuborib bo'lmaydi</div>
-                    <div style="font-size:13px;" id="lessonOpenBlockedText"></div>
-                </div>
-
                 <div id="lessonOpenFields">
                 @if($lessonOpeningTestMode ?? false)
                     {{-- Test rejimi: 2- va 3-so'rov oqimini tekshirish uchun raqamni qo'lda tanlash --}}
@@ -5307,7 +5302,7 @@
                             <option value="2">2-so'rov — registrator va o'quv bo'limi boshlig'i</option>
                             <option value="3">3-so'rov — o'quv bo'limi boshlig'i va prorektorlar</option>
                         </select>
-                        <div style="font-size:11px; color:#7c3aed; margin-top:4px;">Sozlamalardagi test rejimi yoqilgan. Limit tekshirilmaydi.</div>
+                        <div style="font-size:11px; color:#7c3aed; margin-top:4px;">Sozlamalardagi test rejimi yoqilgan. So'rov raqami qo'lda tanlanadi.</div>
                     </div>
                 @endif
                 <div id="lessonOpenTeacherWrap" style="display:none; margin-bottom:16px;">
@@ -5516,7 +5511,6 @@
         const LO_TEACHERS = @json((object) ($openingTeachersByDate ?? []));
         const LO_COUNTS = @json((object) ($openingTeacherCounts ?? []));
         const LO_ME = @json($myOpeningTeacherId ?? null);
-        const LO_LIMIT = {{ \App\Models\LessonOpening::TEACHER_REQUEST_LIMIT }};
         const LO_EXPLANATION_FROM = {{ \App\Models\LessonOpening::EXPLANATION_FROM_NUMBER }};
         const LO_DAYS = {{ (int) ($lessonOpeningDays ?? 3) }};
         // Test rejimi: so'rov raqamini qo'lda tanlash (sozlamalardagi tugma)
@@ -5527,28 +5521,20 @@
             const prior = teacherId ? (LO_COUNTS[teacherId] || 0) : 0;
             const picker = document.getElementById('lessonOpenNumber');
             const number = (LO_TEST_MODE && picker && picker.value) ? parseInt(picker.value, 10) : prior + 1;
-            const blocked = !LO_TEST_MODE && LO_ACTOR === 'teacher' && number > LO_LIMIT;
             const strict = number >= LO_EXPLANATION_FROM;
 
-            document.getElementById('lessonOpenBlocked').style.display = blocked ? '' : 'none';
-            document.getElementById('lessonOpenFields').style.display = blocked ? 'none' : '';
-            document.getElementById('lessonOpenSubmit').style.display = blocked ? 'none' : '';
-            if (blocked) {
-                document.getElementById('lessonOpenBlockedText').textContent =
-                    "Siz joriy semestrda " + prior + " marta dars ochish so'rovini yuborgansiz. Keyingi so'rov uchun registrator ofisiga murojaat qiling.";
-            }
-
-            document.getElementById('lessonOpenExplanationWrap').style.display = strict && !blocked ? '' : 'none';
+            // So'rovlar soniga chek yo'q: 3-so'rovdan boshlab tasdiqlovchilar o'zgaradi
+            document.getElementById('lessonOpenExplanationWrap').style.display = strict ? '' : 'none';
 
             const level = document.getElementById('lessonOpenLevel');
             const badge = document.getElementById('lessonOpenLevelBadge');
-            if (teacherId && !blocked) {
+            if (teacherId) {
                 level.style.display = 'flex';
                 badge.textContent = number + "-so'rov";
                 badge.style.background = number >= 3 ? '#fee2e2' : (strict ? '#fef3c7' : '#e0f2fe');
                 badge.style.color = number >= 3 ? '#b91c1c' : (strict ? '#b45309' : '#0369a1');
                 document.getElementById('lessonOpenLevelText').textContent = number >= 3
-                    ? "o'qituvchi limitdan oshgan — so'rov admin nomidan"
+                    ? "joriy semestrda — tasdiq o'quv bo'limi va prorektorlardan"
                     : 'joriy semestrda';
             } else {
                 level.style.display = 'none';

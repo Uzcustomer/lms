@@ -257,7 +257,8 @@
     {{-- Baho qo'yilmay qolgan darslar: har kirishda ko'rsatiladi --}}
     @if($isTeacherRole && isset($missedLessons) && $missedLessons->isNotEmpty())
         @php
-            $mlpLimitReached = $openingQuota && $openingQuota['remaining'] <= 0;
+            // So'rovlar soniga chek yo'q: 2-so'rovdan boshlab tushuntirish xati talab qilinadi
+            $mlpStrict = $openingQuota && !empty($openingQuota['strict']);
             $mlpMonths = ['', 'yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'];
         @endphp
         <style>
@@ -321,17 +322,21 @@
                                     @endif
                                 </div>
                             </div>
-                            <a class="mlp-btn {{ $mlpLimitReached ? 'is-muted' : '' }}" href="{{ $lesson['url'] }}">
+                            <a class="mlp-btn" href="{{ $lesson['url'] }}">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
-                                {{ $mlpLimitReached ? 'Jurnalni ochish' : ($lesson['rejected'] ? 'Qayta so\'rash' : 'Ruxsat so\'rash') }}
+                                {{ $lesson['rejected'] ? 'Qayta so\'rash' : 'Ruxsat so\'rash' }}
                             </a>
                         </div>
                     @endforeach
                 </div>
 
-                @if($mlpLimitReached)
+                @if($mlpStrict)
                     <div class="mlp-note is-danger">
-                        Siz joriy semestrda {{ $openingQuota['used'] }} ta dars ochish so'rovi yuborgansiz — o'zingiz yuboradigan limit ({{ $openingQuota['limit'] }} ta) tugagan. Keyingi so'rov uchun <b>registrator ofisiga</b> murojaat qiling.
+                        Siz joriy semestrda {{ $openingQuota['used'] }} ta dars ochish so'rovi yuborgansiz — bu <b>{{ $openingQuota['next'] }}-so'rov</b> bo'ladi.
+                        <b>Tushuntirish xatini o'quv bo'limiga topshiring</b>, aks holda so'rovingiz tasdiqlanmaydi.
+                        @if($openingQuota['next'] >= 3)
+                            So'rovni <b>o'quv bo'limi boshlig'i</b> va <b>prorektorlar</b> (har biri alohida) tasdiqlaydi.
+                        @endif
                     </div>
                 @endif
 

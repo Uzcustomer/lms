@@ -78,9 +78,14 @@ class TeacherMainController extends Controller
             try {
                 $missedLessons = app(\App\Services\TeacherMissedLessons::class)->forTeacher($teacher);
                 if ($missedLessons->isNotEmpty()) {
+                    // So'rovlar soniga chek yo'q — faqat keyingi so'rov raqami ko'rsatiladi:
+                    // 2-so'rovdan boshlab tushuntirish xati talab qilinadi.
                     $used = \App\Models\LessonOpening::priorRequestCount($teacher->id);
-                    $limit = \App\Models\LessonOpening::TEACHER_REQUEST_LIMIT;
-                    $openingQuota = ['used' => $used, 'limit' => $limit, 'remaining' => max(0, $limit - $used)];
+                    $openingQuota = [
+                        'used' => $used,
+                        'next' => $used + 1,
+                        'strict' => ($used + 1) >= \App\Models\LessonOpening::EXPLANATION_FROM_NUMBER,
+                    ];
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning("Baho qo'yilmagan darslar popupi hisoblanmadi", [

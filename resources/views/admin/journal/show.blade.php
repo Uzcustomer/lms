@@ -5300,7 +5300,7 @@
                             <option value="">Avtomatik (haqiqiy hisob)</option>
                             <option value="1">1-so'rov — registrator ofisi</option>
                             <option value="2">2-so'rov — registrator va o'quv bo'limi boshlig'i</option>
-                            <option value="3">3-so'rov — o'quv bo'limi boshlig'i va prorektorlar</option>
+                            <option value="3">3-so'rov — registrator, o'quv bo'limi va prorektorlar</option>
                         </select>
                         <div style="font-size:11px; color:#7c3aed; margin-top:4px;">Sozlamalardagi test rejimi yoqilgan. So'rov raqami qo'lda tanlanadi.</div>
                     </div>
@@ -5342,6 +5342,8 @@
 
                 <div style="background:#eff6ff; border-radius:10px; padding:12px 14px; margin-bottom:18px; border:1px solid #bfdbfe;">
                     <div style="font-size:12px; color:#1e40af; line-height:1.6;" id="lessonOpenInfo"></div>
+                    {{-- So'rovni kim tasdiqlashi — ism-familiyasi bilan --}}
+                    <div id="lessonOpenApprovers" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid #bfdbfe; font-size:12px; color:#1e3a8a; line-height:1.7;"></div>
                 </div>
                 </div>
 
@@ -5515,6 +5517,8 @@
         const LO_DAYS = {{ (int) ($lessonOpeningDays ?? 3) }};
         // Test rejimi: so'rov raqamini qo'lda tanlash (sozlamalardagi tugma)
         const LO_TEST_MODE = @json((bool) ($lessonOpeningTestMode ?? false));
+        // Bosqichlarni kim tasdiqlaydi: rolga ega xodimlarning F.I.Sh si
+        const LO_APPROVERS = @json($lessonOpeningApprovers ?? []);
 
         function lessonOpenRefreshLevel() {
             const teacherId = LO_ACTOR === 'teacher' ? LO_ME : (document.getElementById('lessonOpenTeacher').value || null);
@@ -5533,9 +5537,7 @@
                 badge.textContent = number + "-so'rov";
                 badge.style.background = number >= 3 ? '#fee2e2' : (strict ? '#fef3c7' : '#e0f2fe');
                 badge.style.color = number >= 3 ? '#b91c1c' : (strict ? '#b45309' : '#0369a1');
-                document.getElementById('lessonOpenLevelText').textContent = number >= 3
-                    ? "joriy semestrda — tasdiq o'quv bo'limi va prorektorlardan"
-                    : 'joriy semestrda';
+                document.getElementById('lessonOpenLevelText').textContent = 'joriy semestrda';
             } else {
                 level.style.display = 'none';
             }
@@ -5544,6 +5546,37 @@
             const days = '<b>' + LO_DAYS + ' kun</b> (soat 23:59 gacha)';
             document.getElementById('lessonOpenInfo').innerHTML =
                 'Tasdiqlangach dars ochiladi va o\'qituvchiga ' + days + ' baho qo\'yish imkoniyati beriladi.';
+
+            lessonOpenShowApprovers(number);
+        }
+
+        // So'rovni kim tasdiqlashi — bosqich nomi va xodimlarning F.I.Sh si
+        function lessonOpenShowApprovers(number) {
+            const box = document.getElementById('lessonOpenApprovers');
+            if (!box) return;
+
+            const stages = [];
+            if (number >= 1) stages.push(['registrar', 'Registrator ofisi']);
+            if (number >= 2) stages.push(['department', "O'quv bo'limi boshlig'i"]);
+            if (number >= 3) stages.push(['prorektor', "O'quv prorektori"]);
+
+            let rows = '';
+            stages.forEach(function(s) {
+                const names = (LO_APPROVERS[s[0]] || []);
+                const who = names.length
+                    ? names.map(function(n) { return '<b>' + loEsc(n) + '</b>'; }).join(', ')
+                    : '<span style="color:#b91c1c;">bu rolda xodim yo\'q</span>';
+                rows += '<div>• ' + s[1] + ' — ' + who + '</div>';
+            });
+
+            box.innerHTML = "<div style=\"font-weight:700; margin-bottom:4px;\">So'rovni tasdiqlaydi:</div>" + rows;
+            box.style.display = rows ? '' : 'none';
+        }
+
+        function loEsc(text) {
+            const d = document.createElement('div');
+            d.textContent = text == null ? '' : text;
+            return d.innerHTML;
         }
 
         function openLessonModal(dateStr, rejectedComment) {

@@ -1454,6 +1454,7 @@ class JournalController extends Controller
         $lessonOpeningsMap = [];
         $lessonOpeningDays = 3;
         $lessonOpeningTestMode = false;
+        $lessonOpeningApprovers = [];
         $activeOpenedDates = [];
         if (\Schema::hasTable('lesson_openings')) {
             LessonOpening::expireOverdue();
@@ -1489,6 +1490,8 @@ class JournalController extends Controller
             $lessonOpeningDays = (int) Setting::get('lesson_opening_days', 3);
             // Test rejimi: so'rov raqamini qo'lda tanlash (2- va 3-so'rovni sinash)
             $lessonOpeningTestMode = (bool) Setting::get('lesson_opening_test_mode', false);
+            // So'rovni kim tasdiqlashi — modalda ism-familiyasi bilan ko'rsatiladi
+            $lessonOpeningApprovers = LessonOpening::approverNames();
 
             // O'qituvchi uchun: ochilgan va muddati tugamagan darslar
             $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
@@ -2276,6 +2279,7 @@ class JournalController extends Controller
             'lessonOpeningsMap',
             'lessonOpeningDays',
             'lessonOpeningTestMode',
+            'lessonOpeningApprovers',
             'activeOpenedDates',
             'openingActor',
             'openingTeachersByDate',
@@ -5791,13 +5795,13 @@ class JournalController extends Controller
     /**
      * Dars ochish so'rovi — o'tkazib yuborilgan kunga baho qo'yishni ochishni so'rash.
      *
-     * So'rovni shu kuni darsni o'tgan o'qituvchi o'zi yuboradi. Joriy semestrda:
+     * So'rovni shu kuni darsni o'tgan o'qituvchi o'zi yuboradi — so'rovlar
+     * soniga chek yo'q, faqat tasdiqlovchilar o'zgaradi. Joriy semestrda:
      *  1-so'rov — asos fayl bilan, registrator ofisi tasdiqlaydi;
-     *  2-so'rov — tushuntirish xati ham majburiy, registrator ofisi va o'quv
-     *             bo'limi boshlig'i tasdiqlaydi;
-     *  3-dan boshlab — o'qituvchi yubora olmaydi (registrator ofisiga murojaat
-     *             qiladi), so'rovni faqat admin yuboradi; registrator ofisi,
-     *             o'quv bo'limi boshlig'i va o'quv prorektori tasdiqlaydi.
+     *  2-so'rov — tushuntirish xati o'quv bo'limiga topshiriladi; registrator
+     *             ofisi va o'quv bo'limi boshlig'i tasdiqlaydi;
+     *  3-dan boshlab — registrator ofisi, o'quv bo'limi boshlig'i va
+     *             prorektorlar (har biri alohida) tasdiqlaydi.
      * Tasdiqlovchilar LessonOpening::stagesFor() da.
      */
     public function openLesson(Request $request)

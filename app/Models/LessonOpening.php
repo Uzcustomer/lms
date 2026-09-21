@@ -91,9 +91,16 @@ class LessonOpening extends Model
 
     /** Bosqich qaysi so'rov raqamlarida qatnashadi: [eng kichik, eng katta yoki null] */
     private const STAGE_NUMBERS = [
-        self::STAGE_REGISTRAR => [1, 2],
+        self::STAGE_REGISTRAR => [1, null],
         self::STAGE_DEPARTMENT => [2, null],
         self::STAGE_PROREKTOR => [3, null],
+    ];
+
+    /** Bosqichni qaysi roldagilar tasdiqlaydi */
+    public const STAGE_ROLES = [
+        self::STAGE_REGISTRAR => 'registrator_ofisi',
+        self::STAGE_DEPARTMENT => 'oquv_bolimi_boshligi',
+        self::STAGE_PROREKTOR => 'oquv_prorektori',
     ];
 
     /** Shu raqamdan boshlab tushuntirish xati o'quv bo'limiga topshiriladi */
@@ -104,8 +111,8 @@ class LessonOpening extends Model
 
     /**
      * N-so'rovni kimlar tasdiqlaydi: 1 — registrator ofisi; 2 — u va o'quv
-     * bo'limi boshlig'i; 3 va undan keyin — o'quv bo'limi boshlig'i va
-     * prorektorlar (registrator bu bosqichda qatnashmaydi).
+     * bo'limi boshlig'i; 3 va undan keyin — ularning ikkalasi va prorektorlar
+     * (prorektorlarning har biri alohida tasdiqlaydi).
      */
     public static function stagesFor(?int $number): array
     {
@@ -185,17 +192,22 @@ class LessonOpening extends Model
     }
 
     /**
-     * Tasdiqlashi kerak bo'lgan prorektorlar: ["guard:id" => ism].
-     * Roli bor barcha faol xodimlar — kim prorektor bo'lsa, o'sha tasdiqlaydi.
+     * Bosqichni tasdiqlaydigan xodimlar: ["guard:id" => ism].
+     * Rolga ega barcha faol xodimlar — kim rolda bo'lsa, o'sha tasdiqlaydi.
      */
-    public static function prorektorApprovers(): \Illuminate\Support\Collection
+    public static function stageApprovers(string $stage): \Illuminate\Support\Collection
     {
-        static $cached = null;
-        if ($cached !== null) {
-            return $cached;
+        static $cached = [];
+        if (isset($cached[$stage])) {
+            return $cached[$stage];
         }
 
-        $hasRole = fn ($query) => $query->where('name', self::PROREKTOR_ROLE);
+        $role = self::STAGE_ROLES[$stage] ?? null;
+        if (!$role) {
+            return collect();
+        }
+
+        $hasRole = fn ($query) => $query->where('name', $role);
 
         $teachers = Teacher::query()
             ->whereHas('roles', $hasRole)
@@ -208,7 +220,13 @@ class LessonOpening extends Model
             ->get(['id', 'name'])
             ->mapWithKeys(fn ($u) => ['web:' . $u->id => $u->name]);
 
-        return $cached = $teachers->merge($users);
+        return $cached[$stage] = $teachers->merge($users);
+    }
+
+    /** Tasdiqlashi kerak bo'lgan prorektorlar: ["guard:id" => ism]. */
+    public static function prorektorApprovers(): \Illuminate\Support\Collection
+    {
+        return static::stageApprovers(self::STAGE_PROREKTOR);
     }
 
     /** Qaror bergan shaxs kaliti: "teacher:12" / "web:3" */
@@ -283,7 +301,9 @@ class LessonOpening extends Model
 
     /**
      * Ko'rsatish uchun bosqichlar: kerakli yoki qaror bergan har biri.
-     * [['stage', 'label', 'status', 'name', 'at'], ...]
+     * 'name' — qaror bergan shaxs; qaror yo'q bo'lsa 'expected' da shu rolda
+     * kim borligi turadi, shunda kim tasdiqlashi kerakligi ko'rinib turadi.
+     * [['stage', 'label', 'status', 'name', 'at', 'expected'], ...]
      */
     public function stageDecisions(): array
     {
@@ -305,6 +325,7 @@ class LessonOpening extends Model
                         'status' => $decision['decision'] ?? null,
                         'name' => $decision['name'] ?? $approverName,
                         'at' => isset($decision['at']) ? \Carbon\Carbon::parse($decision['at'])->format('d.m.Y H:i') : null,
+                        'expected' => $approverName,
                     ];
                 }
                 continue;
@@ -316,10 +337,22 @@ class LessonOpening extends Model
                 'status' => $this->{$status},
                 'name' => $this->{$name},
                 'at' => $this->{$at}?->format('d.m.Y H:i'),
+                'expected' => static::stageApprovers($stage)->values()->implode(', '),
             ];
         }
 
         return $list;
+    }
+
+    /** Bosqichlar bo'yicha tasdiqlovchilar ismlari: ['registrar' => 'A, B', ...] */
+    public static function approverNames(): array
+    {
+        $names = [];
+        foreach (array_keys(self::STAGE_ROLES) as $stage) {
+            $names[$stage] = static::stageApprovers($stage)->values()->all();
+        }
+
+        return $names;
     }
 
     /** Hali yakuniy qaror chiqmagan */

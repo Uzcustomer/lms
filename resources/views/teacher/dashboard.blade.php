@@ -360,7 +360,7 @@
                         Siz joriy semestrda {{ $openingQuota['used'] }} ta dars ochish so'rovi yuborgansiz — bu <b>{{ $openingQuota['next'] }}-so'rov</b> bo'ladi.
                         <b>Tushuntirish xatini o'quv bo'limiga topshiring</b>, aks holda so'rovingiz tasdiqlanmaydi.
                         @if($openingQuota['next'] >= 3)
-                            So'rovni <b>o'quv bo'limi boshlig'i</b> va <b>prorektorlar</b> (har biri alohida) tasdiqlaydi.
+                            So'rovni <b>registrator ofisi</b>, <b>o'quv bo'limi boshlig'i</b> va <b>prorektorlar</b> (har biri alohida) tasdiqlaydi.
                         @endif
                     </div>
                 @endif

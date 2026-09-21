@@ -5555,8 +5555,9 @@
             const box = document.getElementById('lessonOpenApprovers');
             if (!box) return;
 
+            const registrarInfo = LO_APPROVERS.registrar || {};
             const stages = [];
-            if (number >= 1) stages.push(['registrar', 'Registrator ofisi']);
+            if (number >= 1) stages.push(['registrar', registrarInfo.pinned ? "Registrator ofisi boshlig'i" : 'Registrator ofisi']);
             if (number >= 2) stages.push(['department', "O'quv bo'limi boshlig'i"]);
             if (number >= 3) stages.push(['prorektor', "O'quv prorektori"]);
 

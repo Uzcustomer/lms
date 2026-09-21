@@ -480,7 +480,20 @@ class LessonOpening extends Model
         // Kalit emas, ism bo'yicha solishtiramiz: bitta odam xodimlar
         // jadvalida ham, foydalanuvchilarda ham bo'lishi mumkin
         $norm = fn ($name) => mb_strtolower(trim((string) $name));
-        $prorektorNames = static::stageApprovers(self::STAGE_PROREKTOR)->map($norm)->values();
+        $namesOf = fn (string $stage) => static::stageApprovers($stage)->map($norm)->values();
+
+        $prorektorNames = $namesOf(self::STAGE_PROREKTOR);
+        $departmentNames = $namesOf(self::STAGE_DEPARTMENT);
+
+        // Avval uchala rolda ham turganini qidiramiz — registrator ofisida
+        // prorektor roli bor bir nechta xodim bo'lishi mumkin, lekin dars
+        // ochishni imzolaydigani o'quv bo'limi rolida ham turadi.
+        $allThree = $registrars->filter(fn ($name) => $prorektorNames->contains($norm($name))
+            && $departmentNames->contains($norm($name)));
+        if ($allThree->count() === 1) {
+            return (string) $allThree->keys()->first();
+        }
+
         $both = $registrars->filter(fn ($name) => $prorektorNames->contains($norm($name)));
 
         return $both->count() === 1 ? (string) $both->keys()->first() : null;

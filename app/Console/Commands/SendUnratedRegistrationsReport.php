@@ -29,14 +29,13 @@ class SendUnratedRegistrationsReport extends Command
     private function resolveChatIds(): array
     {
         if ($this->option('chat-id')) {
-            return [trim((string) $this->option('chat-id'))];
+            return TelegramService::chatIds($this->option('chat-id'));
         }
 
-        $extra = preg_split('/[\s,]+/', (string) config('services.telegram.unrated_report_chat_ids')) ?: [];
-        $ids = array_merge([(string) config('services.telegram.registrar_group_id')], $extra);
-        $ids = array_filter(array_map('trim', $ids), fn ($id) => $id !== '');
-
-        return array_values(array_unique($ids));
+        return array_values(array_unique(array_merge(
+            TelegramService::chatIds(config('services.telegram.registrar_group_id')),
+            TelegramService::chatIds(config('services.telegram.unrated_report_chat_ids'))
+        )));
     }
 
     public function handle(TelegramService $telegram): int

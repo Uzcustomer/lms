@@ -215,8 +215,7 @@
     </div>
 
     {{-- Tushuntirish xati eslatmasi: 2-so'rovdan keyin bir marta --}}
-    @if($isTeacherRole && !empty($explanationNotice))
-        @php $elpDate = $explanationNotice->lesson_date?->format('d.m.Y'); @endphp
+    @if($isTeacherRole && !empty($explanationNotice) && count($explanationNotice))
         <style>
             .elp-overlay { position: fixed; inset: 0; z-index: 1060; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15,23,42,.6); }
             .elp-box { width: 100%; max-width: 620px; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 24px 60px rgba(15,23,42,.35); }
@@ -228,6 +227,14 @@
             .elp-lead { margin: 0 0 16px; font-size: 20px; font-weight: 800; line-height: 1.4; color: #92400e; }
             .elp-meta { margin: 0 0 16px; font-size: 14px; color: #475569; line-height: 1.6; }
             .elp-meta b { color: #1e293b; }
+            .elp-list { margin: 0 0 16px; border: 1px solid #fed7aa; border-radius: 12px; overflow: hidden; }
+            .elp-item { display: flex; gap: 14px; align-items: flex-start; padding: 12px 14px; background: #fffbeb; }
+            .elp-item + .elp-item { border-top: 1px solid #fed7aa; }
+            .elp-num { flex: 0 0 auto; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #b45309; color: #fff; white-space: nowrap; }
+            .elp-item-body { min-width: 0; }
+            .elp-subject { font-size: 15px; font-weight: 800; color: #7c2d12; line-height: 1.35; }
+            .elp-sub { font-size: 13px; color: #92400e; margin-top: 3px; }
+            .elp-sub b { color: #7c2d12; }
             .elp-foot { display: flex; justify-content: flex-end; padding: 14px 26px; border-top: 1px solid #f1f5f9; background: #f8fafc; }
             .elp-ok { border: none; background: #b45309; color: #fff; border-radius: 10px; padding: 10px 24px; font-size: 14px; font-weight: 700; cursor: pointer; }
             .elp-ok:hover { background: #92400e; }
@@ -242,8 +249,23 @@
                 </div>
                 <div class="elp-body">
                     <p class="elp-lead">Tushuntirish xatini o'quv bo'limiga topshiring — aks holda dars ochish so'rovingiz tasdiqlanmaydi.</p>
-                    <p class="elp-meta">
-                        Bu joriy semestrdagi <b>{{ $explanationNotice->request_number }}-so'rovingiz</b>@if($elpDate) · dars sanasi <b>{{ $elpDate }}</b>@endif.
+                    <p class="elp-meta" style="margin-bottom:10px;">Xat quyidagi so'rov{{ count($explanationNotice) > 1 ? 'lar' : '' }} uchun kerak:</p>
+                    <div class="elp-list">
+                        @foreach($explanationNotice as $elp)
+                            <div class="elp-item">
+                                <span class="elp-num">{{ $elp['number'] }}-so'rov</span>
+                                <div class="elp-item-body">
+                                    <div class="elp-subject">{{ $elp['subject'] }}</div>
+                                    <div class="elp-sub">
+                                        Guruh: <b>{{ $elp['group'] }}</b>
+                                        @if($elp['date']) · Dars sanasi: <b>{{ $elp['date'] }}</b>@endif
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    <p class="elp-meta" style="margin-bottom:0;">
+                        Raqam — joriy semestrda yuborgan so'rovlaringiz hisobi (barcha fanlar bo'yicha).
                         Xat tizimga yuklanmaydi, uni o'quv bo'limiga qog'ozda topshirasiz.
                     </p>
                 </div>

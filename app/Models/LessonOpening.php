@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class LessonOpening extends Model
 {
@@ -119,6 +120,24 @@ class LessonOpening extends Model
     public function requiredStages(): array
     {
         return static::stagesFor($this->request_number);
+    }
+
+    /** So'rov tegishli fan nomi — dars jadvalidan. */
+    public function subjectName(): string
+    {
+        return (string) (DB::table('schedules')
+            ->where('group_id', $this->group_hemis_id)
+            ->where('subject_id', $this->subject_id)
+            ->whereNull('deleted_at')
+            ->value('subject_name') ?: '');
+    }
+
+    /** So'rov tegishli guruh nomi. */
+    public function groupName(): string
+    {
+        return (string) (DB::table('groups')
+            ->where('group_hemis_id', $this->group_hemis_id)
+            ->value('name') ?: '');
     }
 
     public static function statusColumn(string $stage): string

@@ -5540,17 +5540,10 @@
                 level.style.display = 'none';
             }
 
-            // Tasdiqlovchilar: 1 — registrator; 2 — u va o'quv bo'limi boshlig'i;
-            // 3+ — o'quv bo'limi boshlig'i va prorektorlar (har biri alohida)
-            const approvers = number >= 3
-                ? "<b>o'quv bo'limi boshlig'i</b> va <b>prorektorlar</b> (har biri alohida)"
-                : (number === 2
-                    ? "<b>registrator ofisi</b> va <b>o'quv bo'limi boshlig'i</b> — ikkalasi"
-                    : "<b>registrator ofisi</b>");
+            // Faqat tasdiqdan keyingi muddat ko'rsatiladi
             const days = '<b>' + LO_DAYS + ' kun</b> (soat 23:59 gacha)';
-            document.getElementById('lessonOpenInfo').innerHTML = "So'rovni " + approvers
-                + " tasdiqlagach dars ochiladi va o'qituvchiga " + days
-                + " baho qo'yish imkoniyati beriladi. Bittasi rad etsa, so'rov rad etiladi.";
+            document.getElementById('lessonOpenInfo').innerHTML =
+                'Tasdiqlangach dars ochiladi va o\'qituvchiga ' + days + ' baho qo\'yish imkoniyati beriladi.';
         }
 
         function openLessonModal(dateStr, rejectedComment) {

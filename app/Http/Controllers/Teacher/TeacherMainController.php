@@ -73,7 +73,7 @@ class TeacherMainController extends Controller
         // Popup ishlamasa ham dashboard ochilaversin.
         $missedLessons = collect();
         $openingQuota = null;
-        $explanationNotice = $isTeacherRole && $teacher ? $this->pendingExplanationNotice($teacher) : null;
+        $explanationNotice = $isTeacherRole && $teacher ? $this->pendingExplanationNotice($teacher) : collect();
         if ($isTeacherRole && $teacher && Schema::hasTable('lesson_openings')) {
             try {
                 $missedLessons = app(\App\Services\TeacherMissedLessons::class)->forTeacher($teacher);
@@ -115,34 +115,44 @@ class TeacherMainController extends Controller
      * xatini o'quv bo'limiga topshirish eslatmasi. Bir marta ko'rsatiladi:
      * ko'rsatilgani yozib qo'yiladi va keyingi kirishlarda chiqmaydi.
      */
-    private function pendingExplanationNotice($teacher): ?\App\Models\LessonOpening
+    private function pendingExplanationNotice($teacher): \Illuminate\Support\Collection
     {
         if (!Schema::hasTable('lesson_openings') || !Schema::hasColumn('lesson_openings', 'explanation_notice_at')) {
-            return null;
+            return collect();
         }
 
         try {
-            $opening = \App\Models\LessonOpening::query()
+            $openings = \App\Models\LessonOpening::query()
                 ->where('teacher_id', $teacher->id)
                 ->where('status', \App\Models\LessonOpening::STATUS_PENDING)
                 ->where('request_number', '>=', \App\Models\LessonOpening::EXPLANATION_FROM_NUMBER)
                 ->whereNull('explanation_notice_at')
                 ->latest('id')
-                ->first();
+                ->limit(5)
+                ->get();
 
-            if ($opening) {
-                // Faqat bir marta: ko'rsatilgan zahoti belgilanadi
-                \App\Models\LessonOpening::whereKey($opening->id)->update(['explanation_notice_at' => now()]);
+            if ($openings->isEmpty()) {
+                return collect();
             }
 
-            return $opening;
+            // Faqat bir marta: ko'rsatilgan zahoti belgilanadi
+            \App\Models\LessonOpening::whereKey($openings->pluck('id')->all())
+                ->update(['explanation_notice_at' => now()]);
+
+            // Qaysi fan va qaysi guruh bo'yicha yuborilgani aniq ko'rsatiladi
+            return $openings->map(fn ($opening) => [
+                'number' => (int) $opening->request_number,
+                'subject' => $opening->subjectName() ?: "Noma'lum fan",
+                'group' => $opening->groupName() ?: "Noma'lum guruh",
+                'date' => $opening->lesson_date?->format('d.m.Y'),
+            ]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('Tushuntirish xati eslatmasi olinmadi', [
                 'teacher_id' => $teacher->id,
                 'error' => $e->getMessage(),
             ]);
 
-            return null;
+            return collect();
         }
     }
 

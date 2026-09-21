@@ -253,15 +253,8 @@ class LessonOpeningNotifier
     /** Xabar uchun fan, guruh va sana — HTML uchun ekranlangan. */
     private function lessonInfo(LessonOpening $opening): array
     {
-        $subject = DB::table('schedules')
-            ->where('group_id', $opening->group_hemis_id)
-            ->where('subject_id', $opening->subject_id)
-            ->whereNull('deleted_at')
-            ->value('subject_name') ?? "Noma'lum fan";
-
-        $group = DB::table('groups')
-            ->where('group_hemis_id', $opening->group_hemis_id)
-            ->value('name') ?? "Noma'lum guruh";
+        $subject = $opening->subjectName() ?: "Noma'lum fan";
+        $group = $opening->groupName() ?: "Noma'lum guruh";
 
         return [
             'subject' => '<b>' . $this->e($subject) . '</b>',

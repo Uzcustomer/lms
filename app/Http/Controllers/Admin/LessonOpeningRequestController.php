@@ -95,6 +95,9 @@ class LessonOpeningRequestController extends Controller
             'canDelete' => $this->canDelete(),
             'testMode' => (bool) Setting::get('lesson_opening_test_mode', false),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
+            // Registrator ofisidan kim tasdiqlaydi (ro'yxatda shu kishi ko'rinadi)
+            'registrarApprovers' => LessonOpening::stageApprovers(LessonOpening::STAGE_REGISTRAR),
+            'registrarApprover' => trim((string) Setting::get('lesson_opening_registrar_approver', '')),
         ]);
     }
 
@@ -247,6 +250,31 @@ class LessonOpeningRequestController extends Controller
         return back()->with('success', $on
             ? "Test rejimi yoqildi: so'rov yuborishda raqamni (1/2/3) tanlash mumkin."
             : "Test rejimi o'chirildi: so'rov raqami avtomatik hisoblanadi.");
+    }
+
+    /**
+     * Registrator ofisidan kim tasdiqlashi — ro'yxatlarda va jurnal modalida
+     * shu kishi ko'rinadi. Ofisda o'nlab xodim bor, lekin dars ochishni
+     * ulardan bittasi imzolaydi. Kim tasdiqlay olishini cheklamaydi.
+     */
+    public function setRegistrarApprover(Request $request): RedirectResponse
+    {
+        abort_unless($this->canDelete(), 403);
+
+        $request->validate(['approver' => ['nullable', 'string', 'max:64']]);
+
+        $key = trim((string) $request->input('approver'));
+        $approvers = LessonOpening::stageApprovers(LessonOpening::STAGE_REGISTRAR);
+
+        if ($key !== '' && !$approvers->has($key)) {
+            return back()->with('error', "Bunday xodim registrator ofisi rolida topilmadi.");
+        }
+
+        Setting::set('lesson_opening_registrar_approver', $key);
+
+        return back()->with('success', $key === ''
+            ? "Registrator ofisining barcha xodimlari ko'rsatiladi."
+            : "Registrator ofisidan tasdiqlovchi: {$approvers->get($key)}");
     }
 
     /**

@@ -229,6 +229,28 @@ class LessonOpening extends Model
         return static::stageApprovers(self::STAGE_PROREKTOR);
     }
 
+    /**
+     * Ro'yxatlarda ko'rsatiladigan tasdiqlovchilar. Registrator ofisida o'nlab
+     * xodim bor, lekin dars ochishni ulardan bittasi imzolaydi — sozlamada
+     * ("lesson_opening_registrar_approver") o'sha kishi tanlanadi va faqat u
+     * ko'rinadi. Bu kimning tasdiqlay olishini cheklamaydi — faqat ko'rinish.
+     */
+    public static function displayApprovers(string $stage): \Illuminate\Support\Collection
+    {
+        $all = static::stageApprovers($stage);
+
+        if ($stage !== self::STAGE_REGISTRAR) {
+            return $all;
+        }
+
+        $pinned = trim((string) Setting::get('lesson_opening_registrar_approver', ''));
+        if ($pinned === '' || !$all->has($pinned)) {
+            return $all;
+        }
+
+        return $all->only([$pinned]);
+    }
+
     /** Qaror bergan shaxs kaliti: "teacher:12" / "web:3" */
     public static function reviewerKey(array $reviewer): string
     {
@@ -337,7 +359,7 @@ class LessonOpening extends Model
                 'status' => $this->{$status},
                 'name' => $this->{$name},
                 'at' => $this->{$at}?->format('d.m.Y H:i'),
-                'expected' => static::stageApprovers($stage)->values()->implode(', '),
+                'expected' => static::displayApprovers($stage)->values()->implode(', '),
             ];
         }
 
@@ -349,7 +371,7 @@ class LessonOpening extends Model
     {
         $names = [];
         foreach (array_keys(self::STAGE_ROLES) as $stage) {
-            $names[$stage] = static::stageApprovers($stage)->values()->all();
+            $names[$stage] = static::displayApprovers($stage)->values()->all();
         }
 
         return $names;

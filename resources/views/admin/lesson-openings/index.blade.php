@@ -300,6 +300,24 @@
                                     Test rejimi: <b>{{ ($testMode ?? false) ? 'yoqilgan' : "o'chiq" }}</b>
                                 </button>
                             </form>
+
+                            {{-- Registrator ofisida o'nlab xodim bor — ro'yxatda kim imzolashi ko'rinsin --}}
+                            @if(($registrarApprovers ?? collect())->isNotEmpty())
+                                <form method="POST" action="{{ route('admin.lesson-opening-requests.registrar-approver') }}" style="margin:0;">
+                                    @csrf
+                                    <label class="lo-hero-chip" style="cursor:pointer; gap:6px;"
+                                           title="Registrator ofisidan kim tasdiqlashi ro'yxatlarda ko'rsatiladi. Tasdiqlash huquqini cheklamaydi.">
+                                        Registratordan:
+                                        <select name="approver" onchange="this.form.submit()"
+                                                style="max-width:210px; border:0; border-radius:6px; padding:2px 6px; font-size:12px; font-weight:700; color:#1e293b;">
+                                            <option value="">— hammasi —</option>
+                                            @foreach($registrarApprovers as $key => $name)
+                                                <option value="{{ $key }}" {{ ($registrarApprover ?? '') === $key ? 'selected' : '' }}>{{ $name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </label>
+                                </form>
+                            @endif
                         @endif
                         {{-- Sanoq davri: joriy semestr (sozlamalardagi sana) yoki hammasi --}}
                         <a class="lo-hero-chip" style="text-decoration:none;"

@@ -660,7 +660,7 @@ class ReportController extends Controller
         // Yangilash necha vaqtdan beri ketayotgani (sahifa yangilansa ham to'g'ri)
         $elapsed = null;
         if ($data && !empty($data['started_at'])) {
-            $elapsed = Carbon::parse($data['started_at'])->diffInSeconds(now());
+            $elapsed = (int) round(abs(Carbon::parse($data['started_at'])->diffInSeconds(now())));
         }
 
         // Oxirgi yangilanish yozuvi doimiy — sahifada har doim ko'rinadi

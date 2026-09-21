@@ -126,6 +126,17 @@
                                     Hali yangilanmagan
                                 @endif
                             </div>
+
+                            {{-- Yangilash jarayoni: matn o'rniga progress bar --}}
+                            <div id="sync-progress" class="sync-progress" style="display:none;">
+                                <div class="sync-progress-track">
+                                    <span id="sync-progress-fill" class="sync-progress-fill" style="width:0%;"></span>
+                                </div>
+                                <div class="sync-progress-meta">
+                                    <span id="sync-progress-text">Boshlanmoqda...</span>
+                                    <span id="sync-progress-time"></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -390,16 +401,30 @@
             });
         }
 
-        // Tugmada faqat "Yangilanmoqda" va foiz; batafsil matn pastki qatorda
+        // Tugmada "Yangilanmoqda" va foiz; jarayon pastda progress bar bilan
         function syncBusy(message, percent, elapsedSeconds) {
             $('#btn-sync').prop('disabled', true).css('opacity', '0.75');
             $('#sync-icon').css('animation', 'spin 0.8s linear infinite');
             $('#sync-text').text('Yangilanmoqda');
+
+            percent = Math.max(0, Math.min(100, parseInt(percent, 10) || 0));
             $('#sync-percent').show().text(percent > 0 ? percent + '%' : '');
 
-            var line = message || 'Navbatda...';
-            if (elapsedSeconds > 0) line += ' · ' + formatElapsed(elapsedSeconds);
-            $('#last-sync-label').addClass('is-running').text(line);
+            // Foiz hali nol bo'lsa — yugurib turadigan chiziq, aks holda aniq foiz
+            var fill = $('#sync-progress-fill');
+            if (percent > 0) {
+                fill.removeClass('is-indeterminate').css('width', percent + '%');
+            } else {
+                fill.addClass('is-indeterminate').css('width', '');
+            }
+
+            var text = message || 'Navbatda...';
+            if (percent > 0) text += ' · ' + percent + '%';
+            $('#sync-progress-text').text(text);
+            $('#sync-progress-time').text(elapsedSeconds > 0 ? formatElapsed(elapsedSeconds) : '');
+
+            $('#last-sync-label').hide();
+            $('#sync-progress').show();
         }
 
         function syncReset() {
@@ -407,10 +432,13 @@
             $('#sync-icon').css('animation', '');
             $('#sync-text').text('Yangilash');
             $('#sync-percent').hide().text('');
-            $('#last-sync-label').removeClass('is-running');
+            $('#sync-progress').hide();
+            $('#sync-progress-fill').removeClass('is-indeterminate').css('width', '0%');
+            $('#last-sync-label').removeClass('is-running').show();
         }
 
         function formatElapsed(seconds) {
+            seconds = Math.round(seconds || 0);
             var m = Math.floor(seconds / 60);
             var sec = seconds % 60;
             return m > 0 ? (m + ' daq ' + sec + ' son') : (sec + ' soniya');
@@ -784,6 +812,16 @@
         .filter-item-actions { position: relative; }
         .sync-status-line { position: absolute; top: 100%; left: 0; margin-top: 4px; font-size: 11.5px; line-height: 1.3; color: #64748b; white-space: nowrap; }
         .sync-status-line.is-running { color: #b45309; font-weight: 600; }
+
+        /* Yangilash jarayoni: foiz ko'rinadigan progress bar */
+        .sync-progress { position: absolute; top: 100%; left: 0; right: 0; margin-top: 5px; }
+        .sync-progress-track { position: relative; height: 8px; border-radius: 999px; background: #fef3c7; overflow: hidden; box-shadow: inset 0 1px 2px rgba(180,83,9,0.12); }
+        .sync-progress-fill { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #f59e0b, #b45309); transition: width 0.4s ease; }
+        .sync-progress-fill.is-indeterminate { width: 35%; animation: syncSlide 1.3s ease-in-out infinite; }
+        @keyframes syncSlide { 0% { transform: translateX(-110%); } 100% { transform: translateX(320%); } }
+        .sync-progress-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: #b45309; line-height: 1.3; }
+        .sync-progress-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #sync-progress-time { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: #92400e; }
 
         .btn-sync { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: linear-gradient(135deg, #b45309, #f59e0b); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(245,158,11,0.3); height: 36px; }
         .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 4px 12px rgba(245,158,11,0.4); transform: translateY(-1px); }

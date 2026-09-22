@@ -2174,7 +2174,19 @@ class AcademicScheduleController extends Controller
         if ($selectedSemester) {
             $localSemesterCodes = collect([$selectedSemester]);
         } elseif (($currentSemesterToggle ?? '1') === '1') {
-            $localSemesterCodes = $currentSemesters->pluck('code')->unique();
+            // loadScheduleData bilan bir xil: joriy o'quv yilidagi barcha
+            // semestr kodlari (current=true bayrog'iga tayanmaymiz)
+            $localEducationYear = $currentSemesters->first()?->education_year;
+            $localSemesterCodes = Semester::query()
+                ->when(
+                    $localEducationYear,
+                    fn ($q) => $q->where('education_year', $localEducationYear),
+                    fn ($q) => $q->where('current', true)
+                )
+                ->pluck('code')
+                ->filter()
+                ->unique()
+                ->values();
         }
         $individualItems = $this->buildIndividualScheduleItems(
             $dateFrom, $dateTo, $urinishFilter,
@@ -2761,7 +2773,14 @@ class AcademicScheduleController extends Controller
         if ($selectedSemester) {
             $semesterCodes = collect([$selectedSemester]);
         } elseif ($currentSemesterOnly) {
-            $semesterCodes = $currentSemesters->pluck('code')->unique();
+            // current=true bayrog'i HEMIS'da faqat ayrim kurslarda turib qolgan
+            // bo'lishi mumkin. Shu sabab yuqoridagi filtrlar kabi joriy o'quv
+            // yilidagi barcha semestr kodlarini olamiz — aks holda qolgan
+            // kurslarning belgilangan YN sanalari yuklanmay, ro'yxatdan tushib
+            // qolardi.
+            $semesterCodes = $currentSemesterCodes->isNotEmpty()
+                ? $currentSemesterCodes
+                : $currentSemesters->pluck('code')->unique();
         }
 
         if ($selectedLevelCode) {

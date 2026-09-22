@@ -74,9 +74,26 @@ class ExportLessonAssignmentJob implements ShouldQueue
     {
         $filters = $this->filters;
 
+        // Filtr ekrandagi ro'yxat bilan bir xil bo'lishi shart
+        // (CalculateLessonAssignmentJob): ma'ruzaga (11) baho qo'yilmaydi,
+        // shuning uchun u hisobga ham, Excelga ham tushmaydi.
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test", "Klinik mashg'ulot", "Klinik mashgulot"];
+
+        $excludedSubjectIds = Cache::remember('lesson_assignment_excluded_subjects_v1', 3600, function () {
+            return DB::table('schedules')
+                ->whereNull('deleted_at')
+                ->where(function ($q) {
+                    $q->where('subject_name', 'LIKE', '%amaliyoti')
+                      ->orWhere('subject_name', 'LIKE', '%tanishuv amaliyoti%')
+                      ->orWhere('subject_name', 'LIKE', '%quv amaliyoti%');
+                })
+                ->distinct()
+                ->pluck('subject_id')
+                ->filter()
+                ->values()
+                ->toArray();
+        });
 
         $scheduleQuery = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
@@ -85,12 +102,13 @@ class ExportLessonAssignmentJob implements ShouldQueue
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->where('sch.training_type_code', '!=', 11)
             ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
 
-        foreach ($excludedSubjectPatterns as $pattern) {
-            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        if (!empty($excludedSubjectIds)) {
+            $scheduleQuery->whereNotIn('sch.subject_id', $excludedSubjectIds);
         }
 
         if (($filters['current_semester'] ?? '1') == '1') {

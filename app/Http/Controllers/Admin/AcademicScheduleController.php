@@ -40,6 +40,33 @@ use PhpOffice\PhpWord\SimpleType\Jc;
 
 class AcademicScheduleController extends Controller
 {
+    /**
+     * Joriy o'quv yili — current=true semestrlar ichida eng ko'p uchraydigani.
+     *
+     * HEMIS'da eski semestrlarning ayrimida current bayrog'i qolib ketadi
+     * (masalan bitta 2024 yozuvi). Ro'yxatdagi birinchi qatorga tayansak,
+     * butun sahifa o'sha eski yilga o'tib, kurslar va fanlar yo'qolib qolardi.
+     */
+    private function resolveCurrentEducationYear($currentSemesters): ?string
+    {
+        $counts = collect($currentSemesters)
+            ->pluck('education_year')
+            ->filter()
+            ->countBy();
+
+        if ($counts->isEmpty()) {
+            return null;
+        }
+
+        $max = $counts->max();
+
+        // Teng bo'lsa — kattaroq (yangiroq) o'quv yili
+        return (string) $counts->filter(fn ($count) => $count === $max)
+            ->keys()
+            ->sort()
+            ->last();
+    }
+
     private function routePrefix(): string
     {
         return auth()->guard('teacher')->check() ? 'teacher' : 'admin';
@@ -341,7 +368,7 @@ class AcademicScheduleController extends Controller
         $canEditResit = ExamDateRoleService::canEditResit($activeRole);
 
         $currentSemesters = Semester::where('current', true)->get();
-        $currentEducationYear = $currentSemesters->first()?->education_year;
+        $currentEducationYear = $this->resolveCurrentEducationYear($currentSemesters);
 
         // Filtrlar
         $selectedEducationType = $request->get('education_type');
@@ -1926,7 +1953,7 @@ class AcademicScheduleController extends Controller
         $showStudents = $request->get('show_students') === '1';
 
         $currentSemesters = Semester::where('current', true)->get();
-        $currentEducationYear = $currentSemesters->first()?->education_year;
+        $currentEducationYear = $this->resolveCurrentEducationYear($currentSemesters);
 
         $scheduleData = $this->loadScheduleData(
             $currentSemesters, $selectedDepartment, $selectedSpecialty,
@@ -2176,7 +2203,7 @@ class AcademicScheduleController extends Controller
         } elseif (($currentSemesterToggle ?? '1') === '1') {
             // loadScheduleData bilan bir xil: joriy o'quv yilidagi barcha
             // semestr kodlari (current=true bayrog'iga tayanmaymiz)
-            $localEducationYear = $currentSemesters->first()?->education_year;
+            $localEducationYear = $this->resolveCurrentEducationYear($currentSemesters);
             $localSemesterCodes = Semester::query()
                 ->when(
                     $localEducationYear,
@@ -2736,7 +2763,7 @@ class AcademicScheduleController extends Controller
         $dateFrom = null, $dateTo = null, $filterByYnDate = false
     ) {
         $currentSemesterOnly = $currentSemesterToggle === '1';
-        $currentEducationYear = $currentSemesters->first()?->education_year;
+        $currentEducationYear = $this->resolveCurrentEducationYear($currentSemesters);
         // current=true faqat ayrim kurslarda turib qolgan bo'lsa, toggle yoqilganda
         // kurs/semestr filterlari sun'iy ravishda 1 va 5-kurs bilan cheklanib
         // qolmasin. Joriy o'quv yilidagi barcha semester code'larni olamiz.
@@ -4005,7 +4032,7 @@ class AcademicScheduleController extends Controller
 
         // Joriy o'quv yili
         $currentSemesters = Semester::where('current', true)->get(['curriculum_hemis_id', 'education_year', 'code']);
-        $currentEducationYear = $currentSemesters->first()?->education_year;
+        $currentEducationYear = $this->resolveCurrentEducationYear($currentSemesters);
         // Dropdown'lar current=true yozuvlari kam bo'lsa torayib qolmasin:
         // joriy o'quv yilidagi barcha semester code'larni scope qilamiz.
         $currentSemesterCodes = Semester::query()

@@ -71,6 +71,9 @@ class StudentVisaInfo extends Model
         'Independent' => 'Independent (o\'zi kelgan)',
     ];
 
+    /** Yotoqxonani tanlagan talabaning manzili — talaba formasida ham shu matn */
+    public const DORMITORY_ADDRESS = "Toshkent davlat tibbiyot universiteti Termiz filiali talabalar yotoqxonasi, Termiz shahar, I.Karimov ko'chasi 64-uy";
+
     public const VISA_TYPES = [
         'A-1' => 'A-1',
         'A-2' => 'A-2',
@@ -111,6 +114,26 @@ class StudentVisaInfo extends Model
     public function passportReceiver()
     {
         return $this->belongsTo(User::class, 'passport_received_by');
+    }
+
+    /** Turar joy turi: yotoqxona yoki talaba kiritgan manzil */
+    public function residenceTypeLabel(): string
+    {
+        return match ($this->address_type) {
+            'dormitory' => 'Yotoqxona',
+            'other' => 'Boshqa manzil',
+            default => '-',
+        };
+    }
+
+    /** To'liq manzil: yotoqxonaniki doimiy, boshqasi — talaba kiritgani */
+    public function residenceAddress(): string
+    {
+        return match ($this->address_type) {
+            'dormitory' => self::DORMITORY_ADDRESS,
+            'other' => trim((string) $this->current_address) ?: '-',
+            default => '-',
+        };
     }
 
     public function getFirmDisplayAttribute(): string

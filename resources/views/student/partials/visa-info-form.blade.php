@@ -171,7 +171,7 @@
             </label>
         </div>
         <div x-show="addressType === 'dormitory'" style="padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#166534;">
-            Toshkent davlat tibbiyot universiteti Termiz filiali talabalar yotoqxonasi, Termiz shahar, I.Karimov ko'chasi 64-uy
+            {{ \App\Models\StudentVisaInfo::DORMITORY_ADDRESS }}
         </div>
         <div x-show="addressType === 'other'" x-transition>
             <input type="text" name="current_address" value="{{ old('current_address', $visaInfo?->current_address ?? '') }}"

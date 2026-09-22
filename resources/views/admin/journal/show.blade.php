@@ -1151,6 +1151,8 @@
                             $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
                             $missedDatesLookup = array_flip($missedDates ?? []);
                             $activeOpenedDatesLookup = array_flip($activeOpenedDates ?? []);
+                            // Sozlamadagi muddat ichida bo'sh baho qo'yish mumkin bo'lgan kunlar
+                            $missedGradeDatesLookup = array_flip($missedGradeDates ?? []);
                             $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
                             $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
                             // Faqat bugungi va o'tgan dars sanalarini olish (kelajak sanalarni chiqarib tashlash)
@@ -1907,7 +1909,11 @@
                                                         $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && (!$isYnSubmitted || $superOverride);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
-                                                        $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;
+                                                        // Bo'sh baho: dars ochilgan bo'lsa o'qituvchi, yoki sozlamadagi
+                                                        // muddat ichida tanlangan rollar (registrator ofisi / o'qituvchi)
+                                                        $isMissedGradeDate = ($missedGradeAllowed ?? false) && isset($missedGradeDatesLookup[$colDateStr]);
+                                                        $canEditOpened = $grade === null && !$isAbsent && !$isYnSubmitted
+                                                            && (($isOpenedDate && $isOqituvchi) || $isMissedGradeDate);
                                                         $canEditExcuseExisting = false;
                                                         $showRatingInput = false;
                                                         $gradeRecordId = null;
@@ -2148,7 +2154,7 @@
                                                                  data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
                                                                  data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
                                                                  onclick="startEditOpened(this)"
-                                                                 title="Dars ochilgan — baho kiriting" style="background: #f0fdf4;">
+                                                                 title="{{ $isOpenedDate ? 'Dars ochilgan — baho kiriting' : "Baho qo'yilmay qolgan — kiriting (" . ($missedGradeDays ?? 0) . " kun ichida)" }}" style="background: #f0fdf4;">
                                                                 <span class="text-green-400">-</span>
                                                             </div>
                                                         @elseif($canRate && $isEmpty)

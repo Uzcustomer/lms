@@ -173,6 +173,49 @@
                             </div>
                         </div>
 
+                        {{-- Baho qo'yilmay qolganlarga baho qo'yish --}}
+                        @php
+                            $missedRoles = $missedGradeRoles ?? [];
+                            $missedByRegistrar = old('missed_grade_by_registrator', in_array('registrator_ofisi', $missedRoles, true) ? 1 : 0);
+                            $missedByTeacher = old('missed_grade_by_oqituvchi', in_array('oqituvchi', $missedRoles, true) ? 1 : 0);
+                        @endphp
+                        <div style="background: #f8fafc; border-radius: 14px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                            <div style="font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; color: #64748b;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-6 4h6m-6-4h.01M9 16h.01"/></svg>
+                                Ba'zi baho qo'yilmay qolganlarga baho qo'yish
+                            </div>
+                            <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 14px;">
+                                Dars kunidan keyin shu kun ichida bo'sh qolgan baholarni dars ochish so'rovisiz kiritish mumkin. Rol tanlansa, o'sha roldagi barcha xodimlar baho qo'ya oladi.
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                                <div style="padding: 14px 16px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                    <label for="missed_grade_days" style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 6px;">Muddat (kunlar)</label>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="missed_grade_days" name="missed_grade_days" min="0" max="365"
+                                               value="{{ old('missed_grade_days', $missedGradeDays ?? 0) }}"
+                                               style="width: 90px; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; font-weight: 700; color: #111827; text-align: center; outline: none;">
+                                        <span style="font-size: 13px; color: #64748b;">kun</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">0 — bu imkoniyat yopiq</div>
+                                </div>
+                                <div style="padding: 14px 16px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                    <label style="font-size: 11px; color: #64748b; font-weight: 500; display: block; margin-bottom: 6px;">Kim baho qo'yadi?</label>
+                                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                                        <input type="hidden" name="missed_grade_by_registrator" value="0">
+                                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 8px; border-radius: 6px; border: 1px solid {{ $missedByRegistrar ? '#2563eb40' : '#e5e7eb' }}; background: {{ $missedByRegistrar ? '#eff6ff' : '#fff' }};">
+                                            <input type="checkbox" name="missed_grade_by_registrator" value="1" {{ $missedByRegistrar ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: #2563eb;">
+                                            <span style="font-size: 12px; color: #1d4ed8; font-weight: 500;">Registrator ofisi</span>
+                                        </label>
+                                        <input type="hidden" name="missed_grade_by_oqituvchi" value="0">
+                                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 8px; border-radius: 6px; border: 1px solid {{ $missedByTeacher ? '#05966940' : '#e5e7eb' }}; background: {{ $missedByTeacher ? '#ecfdf5' : '#fff' }};">
+                                            <input type="checkbox" name="missed_grade_by_oqituvchi" value="1" {{ $missedByTeacher ? 'checked' : '' }} style="width: 16px; height: 16px; accent-color: #059669;">
+                                            <span style="font-size: 12px; color: #065f46; font-weight: 500;">O'qituvchi</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div style="display: flex; justify-content: flex-end;">
                             <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">
                                 <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>

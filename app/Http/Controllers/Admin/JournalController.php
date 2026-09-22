@@ -17,6 +17,7 @@ use App\Models\Specialty;
 use App\Jobs\ImportSchedulesPartiallyJob;
 use App\Services\ActivityLogService;
 use App\Services\HemisService;
+use App\Services\MissedGradeAccess;
 use App\Services\ScheduleImportService;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
@@ -1497,6 +1498,12 @@ class JournalController extends Controller
             $activeOpenedDates = LessonOpening::getActiveOpenings($group->group_hemis_id, $subjectId, $semesterCode);
         }
 
+        // Sozlamadagi "baho qo'yilmay qolganlar" oynasi: shu foydalanuvchi
+        // qaysi kunlarga bevosita baho qo'ya oladi (dars ochishsiz)
+        $missedGradeAllowed = MissedGradeAccess::allowsCurrentUser();
+        $missedGradeDates = $missedGradeAllowed ? MissedGradeAccess::openDates($jbLessonDates) : [];
+        $missedGradeDays = MissedGradeAccess::days();
+
         // Dars ochish so'rovi: kim yubora oladi va o'tkazib yuborilgan har bir
         // kunda darsni kim o'tgan (o'qituvchi faqat o'z darsiga so'raydi)
         $openingActor = self::lessonOpeningActor();
@@ -2281,6 +2288,9 @@ class JournalController extends Controller
             'lessonOpeningTestMode',
             'lessonOpeningApprovers',
             'activeOpenedDates',
+            'missedGradeAllowed',
+            'missedGradeDates',
+            'missedGradeDays',
             'openingActor',
             'openingTeachersByDate',
             'openingTeacherCounts',
@@ -6102,6 +6112,7 @@ class JournalController extends Controller
         $groupHemisId = $request->group_hemis_id;
         $lessonDate = \Carbon\Carbon::parse($request->lesson_date)->format('Y-m-d');
         $isExcuseOpening = false;
+        $missedGradeOpen = false;
 
         $opening = LessonOpening::where('group_hemis_id', $groupHemisId)
             ->where('subject_id', $request->subject_id)
@@ -6119,7 +6130,14 @@ class JournalController extends Controller
             );
 
             if (!$isExcuseOpening) {
-                return response()->json(['success' => false, 'message' => "Dars ochilmagan (group={$groupHemisId}, date={$lessonDate})"], 403);
+                // Sozlamadagi "baho qo'yilmay qolganlar" oynasi ochiq bo'lsa,
+                // tanlangan rollar dars ochishsiz ham baho qo'ya oladi
+                $missedGradeOpen = MissedGradeAccess::allowsCurrentUser()
+                    && MissedGradeAccess::isDateOpen($lessonDate);
+
+                if (!$missedGradeOpen) {
+                    return response()->json(['success' => false, 'message' => "Dars ochilmagan (group={$groupHemisId}, date={$lessonDate})"], 403);
+                }
             }
         }
 
@@ -6154,7 +6172,7 @@ class JournalController extends Controller
             if (!$isAssigned) {
                 return response()->json(['success' => false, 'message' => "Biriktirilmagan (teacher={$teacherHemisId}, group={$groupHemisId})"], 403);
             }
-        } elseif (!$isAdmin && !$isTeacher) {
+        } elseif (!$isAdmin && !$isTeacher && !$missedGradeOpen) {
             return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q (admin=' . ($isAdmin?'1':'0') . ', teacher=' . ($isTeacher?'1':'0') . ')'], 403);
         }
 

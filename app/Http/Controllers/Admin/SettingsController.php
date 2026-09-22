@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Deadline;
 use App\Models\MarkingSystemScore;
 use App\Models\Setting;
+use App\Services\MissedGradeAccess;
 use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
 use App\Services\HemisService;
@@ -25,6 +26,10 @@ class SettingsController extends Controller
         $data['mtMaxResubmissions'] = Setting::get('mt_max_resubmissions', 3);
         $data['lessonOpeningDays'] = Setting::get('lesson_opening_days', 3);
         $data['lessonOpeningPeriodStart'] = Setting::get('lesson_opening_period_start', '');
+
+        // Baho qo'yilmay qolganlarga baho qo'yish oynasi
+        $data['missedGradeDays'] = MissedGradeAccess::days();
+        $data['missedGradeRoles'] = MissedGradeAccess::roles();
 
         // Marking system scores
         $data['markingSystemScores'] = MarkingSystemScore::orderBy('marking_system_code')->get();
@@ -100,6 +105,14 @@ class SettingsController extends Controller
         if ($request->has('lesson_opening_period_start')) {
             $request->validate(['lesson_opening_period_start' => 'nullable|date_format:Y-m-d']);
             Setting::set('lesson_opening_period_start', (string) $request->input('lesson_opening_period_start', ''));
+        }
+
+        // Baho qo'yilmay qolganlarga baho qo'yish: muddat va kim qo'ya oladi
+        if ($request->has('missed_grade_days')) {
+            $request->validate(['missed_grade_days' => 'nullable|integer|min:0|max:365']);
+            Setting::set('missed_grade_days', (int) $request->input('missed_grade_days', 0));
+            Setting::set('missed_grade_by_registrator', $request->boolean('missed_grade_by_registrator') ? '1' : '0');
+            Setting::set('missed_grade_by_oqituvchi', $request->boolean('missed_grade_by_oqituvchi') ? '1' : '0');
         }
 
         $deadlines = $request->input('deadlines', []);

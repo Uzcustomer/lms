@@ -28,14 +28,39 @@ class SendUnratedRegistrationsReport extends Command
      */
     private function resolveChatIds(): array
     {
+        return array_values(array_unique(array_merge(
+            $this->registrarChatIds(),
+            $this->plainChatIds()
+        )));
+    }
+
+    /**
+     * To'liq hisobot: back ofis menejerlari kesimi bilan — registrator guruhi.
+     * --chat-id berilsa test uchun faqat o'sha chat.
+     */
+    private function registrarChatIds(): array
+    {
         if ($this->option('chat-id')) {
             return TelegramService::chatIds($this->option('chat-id'));
         }
 
-        return array_values(array_unique(array_merge(
-            TelegramService::chatIds(config('services.telegram.registrar_group_id')),
-            TelegramService::chatIds(config('services.telegram.unrated_report_chat_ids'))
-        )));
+        return TelegramService::chatIds(config('services.telegram.registrar_group_id'));
+    }
+
+    /**
+     * Qisqa hisobot: menejerlar kesimisiz, faqat umumiy son va jadval rasmlari.
+     * Bu guruhlarda menejerlar ichki taqsimoti kerak emas.
+     */
+    private function plainChatIds(): array
+    {
+        if ($this->option('chat-id')) {
+            return [];
+        }
+
+        return array_values(array_diff(
+            TelegramService::chatIds(config('services.telegram.unrated_report_chat_ids')),
+            TelegramService::chatIds(config('services.telegram.registrar_group_id'))
+        ));
     }
 
     public function handle(TelegramService $telegram): int
@@ -294,15 +319,14 @@ class SendUnratedRegistrationsReport extends Command
         }
 
         // 6-QADAM: Telegram guruhlarga hisobot yuborish
-        $chatIds = $this->resolveChatIds();
-        if (empty($chatIds)) {
+        if (empty($this->resolveChatIds())) {
             $this->error('TELEGRAM_REGISTRAR_GROUP_ID sozlanmagan yoki --chat-id bering.');
             return 1;
         }
 
         $formattedDate = $yesterday->format('d.m.Y');
 
-        // Xulosa xabari
+        // Xulosa xabari — hamma guruhga boradigan umumiy qismi
         $lines = [];
         $lines[] = "📊 BAHO QO'YILMAGANLAR HISOBOTI";
         $lines[] = $oneDay
@@ -311,9 +335,13 @@ class SendUnratedRegistrationsReport extends Command
         $lines[] = "⏰ {$now->format('H:i')} | {$now->format('d.m.Y')}";
         $lines[] = str_repeat('─', 30);
         $lines[] = "🔴 Jami baho qo'yilmagan: {$totalUnrated} ta dars";
-        $lines[] = "";
 
-        // Menejer kesimi statistikasi
+        foreach ($this->plainChatIds() as $chatId) {
+            $telegram->sendToUser($chatId, implode("\n", $lines));
+        }
+
+        // Menejer kesimi — faqat registrator guruhiga
+        $lines[] = "";
         $lines[] = "👤 BACK OFIS MENEJERLARI KESIMI:";
         $lines[] = "";
 
@@ -331,7 +359,7 @@ class SendUnratedRegistrationsReport extends Command
             $lines[] = "⚠️ Menejer biriktirilmagan: " . count($unassigned) . " ta";
         }
 
-        foreach ($chatIds as $chatId) {
+        foreach ($this->registrarChatIds() as $chatId) {
             $telegram->sendToUser($chatId, implode("\n", $lines));
         }
 
@@ -376,35 +404,48 @@ class SendUnratedRegistrationsReport extends Command
                     ];
                 }
 
-                $title = "{$sectionName} — " . count($entries) . " ta baho qo'yilmagan";
+                $count = count($entries);
+                $title = "{$sectionName} — {$count} ta baho qo'yilmagan";
+                // Qo'shimcha guruhlarda menejer ismi ko'rsatilmaydi
+                $plainTitle = "Baho qo'yilmagan darslar — {$formattedDate}";
 
                 Log::info("Registrator hisobot: {$sectionName} uchun rasm generatsiya qilinmoqda ({$title}, {$totalUnrated} qator)");
 
                 $images = $generator->generate($headers, $tableRows, $title);
+                $plainImages = $this->plainChatIds()
+                    ? $generator->generate($headers, $tableRows, $plainTitle)
+                    : [];
 
                 Log::info("Registrator hisobot: {$sectionName} — " . count($images) . " ta rasm yaratildi");
 
-                foreach ($images as $index => $imagePath) {
-                    $tempFiles[] = $imagePath;
-                    $fileSize = file_exists($imagePath) ? filesize($imagePath) : 0;
-                    Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — hajmi: " . round($fileSize / 1024) . " KB");
+                $send = function (array $imageList, array $targets, string $captionBase) use (
+                    &$tempFiles, &$sentCount, &$failedCount, $telegram, $sectionName
+                ) {
+                    foreach ($imageList as $index => $imagePath) {
+                        $tempFiles[] = $imagePath;
+                        $fileSize = file_exists($imagePath) ? filesize($imagePath) : 0;
+                        Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — hajmi: " . round($fileSize / 1024) . " KB");
 
-                    $caption = $sectionName;
-                    if (count($images) > 1) {
-                        $caption .= ' ' . ($index + 1) . '/' . count($images) . '-sahifa';
-                    }
+                        $caption = $captionBase;
+                        if (count($imageList) > 1) {
+                            $caption .= ' ' . ($index + 1) . '/' . count($imageList) . '-sahifa';
+                        }
 
-                    foreach ($chatIds as $chatId) {
-                        $sent = $telegram->sendPhoto($chatId, $imagePath, $caption);
-                        if ($sent) {
-                            $sentCount++;
-                            Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — {$chatId} ga yuborildi");
-                        } else {
-                            $failedCount++;
-                            Log::error("Registrator hisobot: {$sectionName} rasm #{$index} — {$chatId} ga YUBORILMADI (sendPhoto false qaytardi)");
+                        foreach ($targets as $chatId) {
+                            $sent = $telegram->sendPhoto($chatId, $imagePath, $caption);
+                            if ($sent) {
+                                $sentCount++;
+                                Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — {$chatId} ga yuborildi");
+                            } else {
+                                $failedCount++;
+                                Log::error("Registrator hisobot: {$sectionName} rasm #{$index} — {$chatId} ga YUBORILMADI (sendPhoto false qaytardi)");
+                            }
                         }
                     }
-                }
+                };
+
+                $send($images, $this->registrarChatIds(), $sectionName);
+                $send($plainImages, $this->plainChatIds(), $plainTitle);
             } catch (\Throwable $e) {
                 $failedCount++;
                 Log::error("Registrator hisobot: {$sectionName} uchun xato: " . $e->getMessage(), [

@@ -17,9 +17,9 @@ class SendUnratedRegistrationsReport extends Command
 
     protected $signature = 'registrar:send-unrated-report
         {--chat-id= : Test uchun bitta chat_id — faqat shunga yuboriladi}
-        {--from= : Davr boshi (Y-m-d) — berilmasa joriy semestr boshi}';
+        {--from= : Davr boshi (Y-m-d) — berilmasa faqat kechagi kun}';
 
-    protected $description = 'Semestr boshidan kechagacha baho qo\'yilmagan darslar haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 08:30)';
+    protected $description = 'Kechagi kunda baho qo\'yilmagan darslar haqida back ofis menejerlari kesimida registrator guruhiga hisobot yuborish (har kuni 08:30)';
 
     /**
      * Hisobot yuboriladigan chatlar: registrator guruhi va .env dagi
@@ -48,16 +48,14 @@ class SendUnratedRegistrationsReport extends Command
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $gradeExcludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
-        // 1-QADAM: Davr boshi — --from berilsa o'sha sana, aks holda joriy semestr boshi
+        // 1-QADAM: Hisobot faqat kechagi kun uchun. --from berilsa o'sha
+        // sanadan boshlanadi — qo'lda eski kunlarni tekshirish uchun.
         $semesterStart = $this->option('from')
             ? Carbon::parse($this->option('from'))->startOfDay()
-            : $this->getSemesterStartDate();
-        if (!$semesterStart) {
-            $this->error('Joriy semestr topilmadi.');
-            return 1;
-        }
+            : $yesterday->copy()->startOfDay();
         $semesterStartStr = $semesterStart->format('Y-m-d');
-        $this->info("Davr: {$semesterStartStr} — {$yesterdayStr}");
+        $oneDay = $semesterStartStr === $yesterdayStr;
+        $this->info($oneDay ? "Sana: {$yesterdayStr}" : "Davr: {$semesterStartStr} — {$yesterdayStr}");
 
         // 2-QADAM: Back ofis menejerlarini olish
         $backOfficeManagers = StaffRegistrationDivision::active()
@@ -280,11 +278,13 @@ class SendUnratedRegistrationsReport extends Command
             $this->info('Barcha darslarga baho qo\'yilgan.');
 
             $formattedDate = $yesterday->format('d.m.Y');
-            $semesterStartFormatted = $semesterStart->format('d.m.Y');
+            $periodLine = $oneDay
+                ? "📅 Sana: {$formattedDate}"
+                : "📅 Davr: {$semesterStart->format('d.m.Y')} — {$formattedDate}";
             foreach ($this->resolveChatIds() as $chatId) {
                 $telegram->sendToUser($chatId,
                     "✅ BAHO QO'YILMAGANLAR HISOBOTI\n"
-                    . "📅 Davr: {$semesterStartFormatted} — {$formattedDate}\n"
+                    . "{$periodLine}\n"
                     . "⏰ {$now->format('H:i')} | {$now->format('d.m.Y')}\n\n"
                     . "🎉 Barcha darslarga baho qo'yilgan!"
                 );
@@ -301,12 +301,13 @@ class SendUnratedRegistrationsReport extends Command
         }
 
         $formattedDate = $yesterday->format('d.m.Y');
-        $semesterStartFormatted = $semesterStart->format('d.m.Y');
 
         // Xulosa xabari
         $lines = [];
         $lines[] = "📊 BAHO QO'YILMAGANLAR HISOBOTI";
-        $lines[] = "📅 Davr: {$semesterStartFormatted} — {$formattedDate}";
+        $lines[] = $oneDay
+            ? "📅 Sana: {$formattedDate}"
+            : "📅 Davr: {$semesterStart->format('d.m.Y')} — {$formattedDate}";
         $lines[] = "⏰ {$now->format('H:i')} | {$now->format('d.m.Y')}";
         $lines[] = str_repeat('─', 30);
         $lines[] = "🔴 Jami baho qo'yilmagan: {$totalUnrated} ta dars";
@@ -427,46 +428,6 @@ class SendUnratedRegistrationsReport extends Command
         return 0;
     }
 
-    /**
-     * Joriy semestrning boshlanish sanasini aniqlash.
-     * Kuz va bahor semestrlarini ajratib, hozirgi vaqtga mos semestrni tanlaydi.
-     */
-    /**
-     * Joriy semestr boshlanishi — o'quv haftalaridan, sanaga qarab.
-     *
-     * semesters.current belgisiga tayanilmaydi: u faqat haftalik importda
-     * yangilanadi va yangi o'quv yili boshida eskirib qoladi — shunda hisobot
-     * o'tgan yilning bahorgi semestridan (yanvardan) boshlab hisoblardi.
-     *
-     * Bugun davom etayotgan bakalavr semestrlari olinadi (birinchi haftasi
-     * bugundan oldin, oxirgisi bugundan keyin) va ularning eng erta
-     * boshlanishi qaytariladi. Semestrlar orasidagi ta'tilda davom etayotgani
-     * bo'lmasa — eng oxirgi boshlangan semestr olinadi.
-     */
-    private function getSemesterStartDate(): ?Carbon
-    {
-        $today = Carbon::today()->toDateString();
-
-        $semesterRanges = DB::table('curriculum_weeks as cw')
-            ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
-            ->join('curricula as c', 'c.curricula_hemis_id', '=', 's.curriculum_hemis_id')
-            ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
-            ->groupBy('cw.semester_hemis_id')
-            ->selectRaw('MIN(DATE(cw.start_date)) as sem_start, MAX(DATE(cw.end_date)) as sem_end')
-            ->get()
-            // Semestr odatda 5 oydan oshmaydi. Undan uzun oraliq — xato yoki
-            // birlashib ketgan haftalar; u davrni yanvarga tortib ketmasin.
-            ->filter(fn ($r) => Carbon::parse($r->sem_start)->diffInDays(Carbon::parse($r->sem_end)) <= 200);
-
-        $inProgress = $semesterRanges->filter(fn ($r) => $r->sem_start <= $today && $r->sem_end >= $today);
-        if ($inProgress->isNotEmpty()) {
-            return Carbon::parse($inProgress->min('sem_start'));
-        }
-
-        $latestStarted = $semesterRanges->filter(fn ($r) => $r->sem_start <= $today)->max('sem_start');
-
-        return $latestStarted ? Carbon::parse($latestStarted) : null;
-    }
 
     /**
      * Guruhning department, specialty, level bo'yicha back ofis menejerini topish.

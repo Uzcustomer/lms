@@ -23,11 +23,14 @@ class ExportLessonAssignmentJob implements ShouldQueue
 
     private array $filters;
     private string $exportKey;
+    /** Ekranda ko'rinib turgan tayyor natija (bo'lsa — qayta hisoblanmaydi) */
+    private ?array $rows;
 
-    public function __construct(array $filters, string $exportKey)
+    public function __construct(array $filters, string $exportKey, ?array $rows = null)
     {
         $this->filters = $filters;
         $this->exportKey = $exportKey;
+        $this->rows = $rows;
     }
 
     public function handle(): void
@@ -38,7 +41,11 @@ class ExportLessonAssignmentJob implements ShouldQueue
         try {
             $this->updateProgress('Ma\'lumotlar olinmoqda...', 10);
 
-            $results = $this->fetchData();
+            // Excelga aynan ekrandagi qatorlar tushadi: "Yangilash" hisobi
+            // tayyor bo'lsa o'shani olamiz, bo'lmasa qaytadan hisoblaymiz.
+            $results = $this->rows !== null
+                ? $this->applyFilterAndSort($this->rows)
+                : $this->fetchData();
 
             $this->updateProgress('Excel fayl yaratilmoqda...', 60);
 
@@ -327,9 +334,17 @@ class ExportLessonAssignmentJob implements ShouldQueue
             }
         }
 
-        $results = array_values($grouped);
+        return $this->applyFilterAndSort(array_values($grouped));
+    }
 
-        // Holat filtri
+    /**
+     * Holat filtri va saralash — ekrandagi ro'yxat bilan bir xil tartibda
+     * (ReportController::lessonAssignmentCalcResults).
+     */
+    private function applyFilterAndSort(array $results): array
+    {
+        $filters = $this->filters;
+
         if (!empty($filters['status_filter'])) {
             $statusFilter = $filters['status_filter'];
             $results = array_values(array_filter($results, function ($r) use ($statusFilter) {
@@ -344,7 +359,6 @@ class ExportLessonAssignmentJob implements ShouldQueue
             }));
         }
 
-        // Saralash
         $sortColumn = $filters['sort'] ?? 'lesson_date';
         $sortDirection = $filters['direction'] ?? 'desc';
 

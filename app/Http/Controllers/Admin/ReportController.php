@@ -1389,7 +1389,13 @@ class ReportController extends Controller
             'updated_at' => now()->toDateTimeString(),
         ], 1800);
 
-        \App\Jobs\ExportLessonAssignmentJob::dispatch($filters, $exportKey);
+        // Excelga aynan ekrandagi qatorlar tushsin: "Yangilash" hisobi tayyor
+        // bo'lsa o'shani beramiz. Aks holda eksport qaytadan hisoblaydi —
+        // ikki xil hisob bir-biridan farq qilib qolmasligi uchun.
+        $calc = \Illuminate\Support\Facades\Cache::get('report_calc_' . auth()->id());
+        $rows = ($calc && ($calc['status'] ?? '') === 'done') ? ($calc['results'] ?? null) : null;
+
+        \App\Jobs\ExportLessonAssignmentJob::dispatch($filters, $exportKey, $rows);
 
         return response()->json([
             'export_key' => $exportKey,

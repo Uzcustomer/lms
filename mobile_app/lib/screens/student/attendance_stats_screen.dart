@@ -4,8 +4,28 @@ import '../../l10n/app_localizations.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../utils/page_transitions.dart';
 import '../../widgets/clinic_header.dart';
 
+const _green = Color(0xFF15803D);
+const _blue = Color(0xFF1D4ED8);
+const _amber = Color(0xFFB45309);
+const _red = Color(0xFFBE123C);
+
+/// Green from 85 % attendance, amber from 70 %, red below.
+Color _attendanceColor(num percent) =>
+    percent >= 85 ? _green : (percent >= 70 ? _amber : _red);
+
+int _toInt(dynamic v) {
+  if (v is int) return v;
+  if (v is num) return v.round();
+  if (v is String) return int.tryParse(v) ?? 0;
+  return 0;
+}
+
+/// "Davomat statistikasi": every subject of the semester at a glance —
+/// lessons held so far against lessons missed — and, on tap, the day-by-day
+/// journal for that subject.
 class AttendanceStatsScreen extends StatefulWidget {
   const AttendanceStatsScreen({super.key});
 
@@ -14,68 +34,33 @@ class AttendanceStatsScreen extends StatefulWidget {
 }
 
 class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
-  static const _green = Color(0xFF15803D);
-  static const _blue = Color(0xFF1D4ED8);
-  static const _amber = Color(0xFFB45309);
-  static const _red = Color(0xFFBE123C);
-
-  List<dynamic> _subjects = [];
-  bool _loadingSubjects = true;
-  int? _selectedSubjectId;
-  String _selectedSubjectName = '';
-
-  List<dynamic> _grades = [];
-  bool _loadingGrades = false;
+  List<dynamic> _subjects = const [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSubjects();
+    _load();
   }
 
-  Future<void> _loadSubjects() async {
+  Future<void> _load({bool force = false}) async {
     final provider = context.read<StudentProvider>();
-    if (provider.subjects != null && provider.subjects!.isNotEmpty) {
-      setState(() {
-        _subjects = provider.subjects!;
-        _loadingSubjects = false;
-      });
-      return;
-    }
     try {
-      await provider.loadSubjects();
-      if (mounted) {
-        setState(() {
-          _subjects = provider.subjects ?? [];
-          _loadingSubjects = false;
-        });
+      if (force || provider.subjects == null || provider.subjects!.isEmpty) {
+        await provider.loadSubjects(force: force);
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingSubjects = false);
-    }
+    } catch (_) {/* show whatever is cached */}
+    if (!mounted) return;
+    setState(() {
+      _subjects = provider.subjects ?? const [];
+      _loading = false;
+    });
   }
 
-  Future<void> _loadGrades(int subjectId, {bool force = false}) async {
-    setState(() => _loadingGrades = true);
-    try {
-      final res = await StudentService(ApiService()).getSubjectGrades(subjectId);
-      if (mounted) {
-        final data = res['data'] as Map<String, dynamic>? ?? {};
-        setState(() {
-          _grades = (data['grades'] as List<dynamic>? ?? []);
-          _loadingGrades = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingGrades = false);
-    }
-  }
-
-  Color _gradeColor(double v) {
-    if (v >= 86) return _green;
-    if (v >= 71) return _blue;
-    if (v >= 56) return _amber;
-    return _red;
+  void _open(Map<String, dynamic> subject) {
+    Navigator.of(context).push(
+      SlideFadePageRoute(builder: (_) => _SubjectAttendanceScreen(subject: subject)),
+    );
   }
 
   @override
@@ -96,130 +81,252 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
             ),
             onBack: () => Navigator.pop(context),
           ),
-          if (_loadingSubjects)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
-          else if (_subjects.isEmpty)
-            Expanded(
-              child: Center(
-                child: Text(l.noSubjects,
-                    style: TextStyle(color: muted, fontSize: 15)),
-              ),
-            )
-          else ...[
-            _buildSubjectDropdown(),
-            if (_selectedSubjectId != null)
-              Expanded(
-                child: _loadingGrades
-                    ? const Center(child: CircularProgressIndicator())
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _subjects.isEmpty
+                    ? Center(
+                        child: Text(l.noSubjects,
+                            style: TextStyle(color: muted, fontSize: 15)),
+                      )
                     : RefreshIndicator(
-                        onRefresh: () =>
-                            _loadGrades(_selectedSubjectId!, force: true),
-                        child: _buildContent(),
+                        onRefresh: () => _load(force: true),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+                          children: [
+                            _summaryCard(),
+                            const SizedBox(height: 6),
+                            ..._subjects
+                                .whereType<Map>()
+                                .map((s) => _subjectCard(Map<String, dynamic>.from(s))),
+                          ],
+                        ),
                       ),
-              ),
-            if (_selectedSubjectId == null)
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.touch_app_outlined,
-                          size: 48, color: ClinicTheme.faint),
-                      const SizedBox(height: 12),
-                      Text(l.pick(
-                          uz: 'Fanni tanlang',
-                          ru: 'Выберите предмет',
-                          en: 'Select a subject'),
-                          style: TextStyle(
-                              color: muted,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSubjectDropdown() {
+  /// Semester total across all subjects.
+  Widget _summaryCard() {
     final l = AppLocalizations.of(context);
-    final ink = ClinicTheme.inkOf(context);
-    final muted = ClinicTheme.mutedOf(context);
-    final surface = ClinicTheme.surfaceOf(context);
+    var total = 0;
+    var absent = 0;
+    for (final s in _subjects.whereType<Map>()) {
+      total += _toInt(s['lessons_total']);
+      absent += _toInt(s['lessons_absent']);
+    }
+    final percent = total > 0 ? ((total - absent) / total * 100).round() : null;
+    final color = percent == null ? ClinicTheme.faint : _attendanceColor(percent);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: surface,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l.pick(uz: 'Semestr bo\'yicha', ru: 'За семестр', en: 'This semester'),
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.6,
+                      color: Colors.white.withValues(alpha: 0.85)),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _lessonsLine(total, absent),
+                  style: const TextStyle(
+                      fontSize: 14.5, fontWeight: FontWeight.w700, color: Colors.white),
+                ),
+                const SizedBox(height: 10),
+                _ratioBar(total, absent, trackColor: Colors.white.withValues(alpha: 0.25), fillColor: Colors.white),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          _percentBadge(percent, color: color, size: 58, fontSize: 15),
+        ],
+      ),
+    );
+  }
+
+  Widget _subjectCard(Map<String, dynamic> s) {
+    final name = s['subject_name']?.toString() ?? '';
+    final total = _toInt(s['lessons_total']);
+    final absent = _toInt(s['lessons_absent']);
+    final percent = s['attendance_percent'] == null ? null : _toInt(s['attendance_percent']);
+    final color = percent == null ? ClinicTheme.faint : _attendanceColor(percent);
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        border: Border.all(
+          color: absent > 0 && percent != null && percent < 85 ? color : ClinicTheme.dividerOf(context),
+          width: absent > 0 && percent != null && percent < 85 ? 1.5 : 1,
+        ),
         boxShadow: ClinicTheme.cardShadow,
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: _selectedSubjectId,
-          hint: Text(
-            l.pick(uz: 'Fanni tanlang', ru: 'Выберите предмет', en: 'Select a subject'),
-            style: TextStyle(color: muted, fontSize: 14),
-          ),
-          isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: muted),
-          dropdownColor: surface,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          style: TextStyle(fontSize: 14, color: ink),
-          items: _subjects.map<DropdownMenuItem<int>>((s) {
-            final id = s['subject_id'] as int? ?? 0;
-            final name = s['subject_name']?.toString() ?? '';
-            final davPercent = _toDouble(s['dav_percent']);
-            final hasAbsence = davPercent > 0;
-
-            return DropdownMenuItem<int>(
-              value: id,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(name,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                            color: ink)),
+          onTap: () => _open(s),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(13, 12, 10, 12),
+            child: Row(
+              children: [
+                _percentBadge(percent, color: color, size: 48, fontSize: 12.5),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700, color: ink, height: 1.25)),
+                      const SizedBox(height: 4),
+                      Text(_lessonsLine(total, absent),
+                          style: TextStyle(fontSize: 12, color: absent > 0 ? color : muted, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      _ratioBar(total, absent, trackColor: ClinicTheme.dividerOf(context), fillColor: color),
+                    ],
                   ),
-                  if (hasAbsence)
-                    Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _red,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text('${davPercent.toStringAsFixed(0)}%',
-                          style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white)),
-                    ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (id) {
-            if (id == null) return;
-            final s = _subjects.firstWhere(
-                (s) => (s['subject_id'] as int? ?? 0) == id,
-                orElse: () => null);
-            setState(() {
-              _selectedSubjectId = id;
-              _selectedSubjectName = s?['subject_name']?.toString() ?? '';
-            });
-            _loadGrades(id);
-          },
+                ),
+                const SizedBox(width: 6),
+                Icon(Icons.chevron_right_rounded, color: ClinicTheme.faint),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  /// "14 dars · 2 qoldirilgan" — the comparison the percentage is made of.
+  String _lessonsLine(int total, int absent) {
+    final l = AppLocalizations.of(context);
+    if (total == 0) {
+      return l.pick(uz: 'Hali dars bo\'lmagan', ru: 'Занятий ещё не было', en: 'No lessons yet');
+    }
+    final lessons = l.pick(uz: '$total dars', ru: '$total занятий', en: '$total lessons');
+    final missed = absent == 0
+        ? l.pick(uz: 'qoldirilmagan', ru: 'без пропусков', en: 'none missed')
+        : l.pick(uz: '$absent qoldirilgan', ru: '$absent пропущено', en: '$absent missed');
+    return '$lessons · $missed';
+  }
+
+  Widget _percentBadge(int? percent, {required Color color, required double size, required double fontSize}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      alignment: Alignment.center,
+      child: Text(
+        percent == null ? '—' : '$percent%',
+        style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w900, color: Colors.white),
+      ),
+    );
+  }
+
+  /// Attended share of all lessons, as a thin bar.
+  Widget _ratioBar(int total, int absent, {required Color trackColor, required Color fillColor}) {
+    final ratio = total > 0 ? (total - absent) / total : 0.0;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: SizedBox(
+        height: 5,
+        child: Stack(
+          children: [
+            Container(color: trackColor),
+            FractionallySizedBox(
+              widthFactor: ratio.clamp(0.0, 1.0),
+              child: Container(color: fillColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Detail: one subject's journal, day by day
+// ─────────────────────────────────────────────────────────────────────
+
+class _SubjectAttendanceScreen extends StatefulWidget {
+  final Map<String, dynamic> subject;
+  const _SubjectAttendanceScreen({required this.subject});
+
+  @override
+  State<_SubjectAttendanceScreen> createState() => _SubjectAttendanceScreenState();
+}
+
+class _SubjectAttendanceScreenState extends State<_SubjectAttendanceScreen> {
+  List<dynamic> _grades = const [];
+  bool _loading = true;
+
+  int get _subjectId => _toInt(widget.subject['subject_id']);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await StudentService(ApiService()).getSubjectGrades(_subjectId);
+      final data = res['data'] as Map<String, dynamic>? ?? {};
+      if (mounted) setState(() => _grades = data['grades'] as List<dynamic>? ?? const []);
+    } catch (_) {/* keep what we have */}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Color _gradeColor(double v) {
+    if (v >= 86) return _green;
+    if (v >= 71) return _blue;
+    if (v >= 56) return _amber;
+    return _red;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Scaffold(
+      backgroundColor: ClinicTheme.bgOf(context),
+      body: Column(
+        children: [
+          ClinicHeader(
+            overline: l.pick(uz: 'DAVOMAT', ru: 'ПОСЕЩАЕМОСТЬ', en: 'ATTENDANCE'),
+            title: widget.subject['subject_name']?.toString() ?? '',
+            onBack: () => Navigator.pop(context),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(onRefresh: _load, child: _buildContent()),
+          ),
+        ],
       ),
     );
   }
@@ -318,60 +425,52 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     final days = _buildDays();
 
     if (days.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.event_note_outlined, size: 48, color: ClinicTheme.faint),
-            const SizedBox(height: 12),
-            Text('Ma\'lumot topilmadi',
-                style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 14)),
-          ],
-        ),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 120),
+          Icon(Icons.event_note_outlined, size: 48, color: ClinicTheme.faint),
+          const SizedBox(height: 12),
+          Text('Ma\'lumot topilmadi',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 14)),
+        ],
       );
     }
 
-    int totalPairs = 0;
-    int absentPairs = 0;
     double gradeSum = 0;
     int gradeCount = 0;
     for (final d in days) {
       for (final p in d.pairs) {
-        if (p.type == _CellType.empty) continue;
-        totalPairs++;
-        if (p.type == _CellType.absent) {
-          absentPairs++;
-        } else if (p.value != null) {
+        if (p.type == _CellType.empty || p.type == _CellType.absent) continue;
+        if (p.value != null) {
           gradeSum += p.value!;
           gradeCount++;
         }
       }
     }
-    final attended = totalPairs - absentPairs;
-    final percent = totalPairs > 0 ? (attended / totalPairs * 100) : 100.0;
     final avgGrade = gradeCount > 0 ? gradeSum / gradeCount : 0.0;
 
-    return Column(
-      children: [
-        _buildStatsBar(totalPairs, attended, absentPairs, percent, avgGrade),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
-            itemCount: days.length,
-            itemBuilder: (_, i) => _buildDayCard(days[i]),
-          ),
-        ),
-      ],
+    // Same numbers as the list card, so the two screens never disagree.
+    final total = _toInt(widget.subject['lessons_total']);
+    final absent = _toInt(widget.subject['lessons_absent']);
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+      itemCount: days.length + 1,
+      itemBuilder: (_, i) => i == 0
+          ? _buildStatsBar(total, total - absent, absent, avgGrade)
+          : _buildDayCard(days[i - 1]),
     );
   }
 
-  Widget _buildStatsBar(
-      int total, int attended, int absent, double percent, double avgGrade) {
-    final percentColor =
-        percent >= 85 ? _green : (percent >= 70 ? _amber : _red);
+  Widget _buildStatsBar(int total, int attended, int absent, double avgGrade) {
+    final percent = total > 0 ? (attended / total * 100).round() : null;
+    final percentColor = percent == null ? ClinicTheme.faint : _attendanceColor(percent);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
         color: ClinicTheme.surfaceOf(context),
@@ -389,7 +488,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
               color: percentColor,
             ),
             child: Center(
-              child: Text('${percent.round()}%',
+              child: Text(percent == null ? '—' : '$percent%',
                   style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
@@ -429,7 +528,6 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   }
 
   Widget _buildDayCard(_DayData day) {
-    final ink = ClinicTheme.inkOf(context);
     final muted = ClinicTheme.mutedOf(context);
     final hasAbsent = day.pairs.any((p) => p.type == _CellType.absent);
     final hasRetake = day.pairs.any((p) => p.type == _CellType.retake);
@@ -607,12 +705,6 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     final match = RegExp(r'(\d+)').firstMatch(raw);
     return match?.group(1) ?? raw;
   }
-
-  double _toDouble(dynamic v) {
-    if (v is num) return v.toDouble();
-    if (v is String) return double.tryParse(v) ?? 0;
-    return 0;
-  }
 }
 
 enum _CellType { empty, graded, absent, retake }
@@ -636,9 +728,6 @@ class _DiagonalCellPainter extends CustomPainter {
   final String gradeText;
 
   _DiagonalCellPainter({required this.gradeText});
-
-  static const _red = Color(0xFFBE123C);
-  static const _green = Color(0xFF15803D);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -668,7 +757,7 @@ class _DiagonalCellPainter extends CustomPainter {
       Offset(0, size.height),
       Offset(size.width, 0),
       Paint()
-        ..color = Colors.white.withOpacity(0.6)
+        ..color = Colors.white.withValues(alpha: 0.6)
         ..strokeWidth = 1,
     );
 
@@ -696,5 +785,5 @@ class _DiagonalCellPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _DiagonalCellPainter old) => old.gradeText != gradeText;
 }

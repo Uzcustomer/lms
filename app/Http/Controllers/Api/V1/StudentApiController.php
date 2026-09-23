@@ -989,6 +989,41 @@ class StudentApiController extends Controller
             }
             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
 
+            // Lessons held so far vs lessons missed, for the attendance
+            // list in the app. A lesson is one (date, pair) slot of the
+            // group's schedule, lectures included; MT and exams are not
+            // lessons. HEMIS records an attendance row only when the
+            // student was absent, so the total comes from the schedule and
+            // the misses from the attendance rows.
+            $lessonSlot = "CONCAT(DATE(lesson_date), '|', lesson_pair_code)";
+            $nonLessonCodes = [99, 100, 101, 102, 103];
+            $lessonsTotal = (int) DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->whereNotIn('training_type_code', $nonLessonCodes)
+                ->whereNotNull('lesson_date')
+                ->whereDate('lesson_date', '<=', $gradingCutoffDate->toDateString())
+                ->selectRaw("COUNT(DISTINCT $lessonSlot) AS c")
+                ->value('c');
+            $lessonsAbsent = (int) DB::table('attendances')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($subjectEducationYearCode !== null, fn($q) => $q->where('education_year_code', $subjectEducationYearCode))
+                ->whereNotIn('training_type_code', $nonLessonCodes)
+                ->where(fn($q) => $q->where('absent_on', '>', 0)->orWhere('absent_off', '>', 0))
+                ->selectRaw("COUNT(DISTINCT $lessonSlot) AS c")
+                ->value('c');
+            // A miss recorded for a slot the schedule no longer has still
+            // was a lesson; never let the count go negative.
+            $lessonsTotal = max($lessonsTotal, $lessonsAbsent);
+            $attendancePercent = $lessonsTotal > 0
+                ? (int) round(($lessonsTotal - $lessonsAbsent) / $lessonsTotal * 100)
+                : null;
+
             $total = null;
             $gradeComponents = array_filter([$jnAverage, $mtAverage, $otherGrades['on'], $otherGrades['oski'], $otherGrades['test']], fn($v) => $v !== null && $v > 0);
             if (!empty($gradeComponents)) {
@@ -1072,6 +1107,9 @@ class StudentApiController extends Controller
                 'dav_percent' => $davomatPercent,
                 'absent_hours' => $absentOff,
                 'auditorium_hours' => $auditoriumHours,
+                'lessons_total' => $lessonsTotal,
+                'lessons_absent' => $lessonsAbsent,
+                'attendance_percent' => $attendancePercent,
                 'mt_submission' => $mtData,
             ];
         });

@@ -1423,30 +1423,26 @@ class JournalController extends Controller
         $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
-        // Kun "missed" (dars ochish kerak) hisoblanadi faqat kamida bitta talabada
-        // na baho, na NB bo'lmasa. NB qo'yilgan talabaga baho qo'yib bo'lmaydi,
-        // shuning uchun u "hisobga olingan" deb hisoblanadi.
-        // Kun "missed" (dars ochish kerak) — faqat o'sha kunga HECH BIR talabada
-        // na baho, na NB yo'q bo'lganda.
-        // Kamida bitta talabada baho yoki NB bo'lsa — o'qituvchi dars o'tgan,
-        // shuning uchun dars ochish ko'rsatilmaydi.
-        $jbGradeDates = collect($jbGradesRaw)
-            ->filter(fn($g) => $getEffectiveGrade($g) !== null || $g->reason === 'absent')
-            ->pluck('lesson_date')
-            ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))
-            ->unique()
-            ->toArray();
-
-        $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
+        // Tekshiruv juftlik bo'yicha. Juftlik "hisobga olingan" — o'sha juftlikda
+        // kamida bitta talabada baho yoki NB bo'lsa (NB qo'yilganga baho qo'yib
+        // bo'lmaydi). Kun "missed" (dars ochish kerak) — o'tgan kundagi kamida
+        // bitta juftlik hisobga olinmagan bo'lsa: kun ikki juftlikdan iborat
+        // bo'lib, birida baho bor, ikkinchisida yo'q bo'lsa ham "!" chiqadi.
+        // Davomat buni bloklamaydi.
+        $jbMarkedPairs = [];
+        foreach ($jbGradesRaw as $g) {
+            if ($getEffectiveGrade($g) !== null || $g->reason === 'absent') {
+                $jbMarkedPairs[\Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') . '_' . $g->lesson_pair_code] = true;
+            }
+        }
 
         $missedDates = [];
         $today = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
-        foreach ($jbLessonDates as $date) {
-            $dateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
-            // Faqat o'tgan kunlarni tekshirish (bugundan oldingi)
+        foreach ($jbColumns as $col) {
+            $dateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+            // Faqat o'tgan kunlar (bugundan oldingi)
             if ($dateStr >= $today) continue;
-            // Haqiqiy baho yo'q bo'lsa — missed (davomat buni bloklamaydi)
-            if (!in_array($dateStr, $jbGradeDates)) {
+            if (!isset($jbMarkedPairs[$dateStr . '_' . $col['pair']]) && !in_array($dateStr, $missedDates, true)) {
                 $missedDates[] = $dateStr;
             }
         }

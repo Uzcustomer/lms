@@ -12,9 +12,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Jurnaldagi "o'tkazib yuborilgan kun" qoidasi bilan bir xil
  * (JournalController::showJournal): o'tgan kun (bugun va kelajak emas),
- * amaliy dars (ma'ruza, MT, ON, OSKI, test emas) va o'sha kuni guruhdagi
- * birorta talabaga ham baho yoki NB qo'yilmagan. Bunday kunga o'qituvchi
- * faqat dars ochish so'rovi orqali baho qo'ya oladi.
+ * amaliy dars (ma'ruza, MT, ON, OSKI, test emas) va o'sha kuni kamida
+ * bitta juftlikda guruhdagi birorta talabaga ham baho yoki NB qo'yilmagan.
+ * Kun ikki juftlikdan iborat bo'lib, birida baho bor, ikkinchisida yo'q
+ * bo'lsa ham kun ochilishi kerak. Bunday kunga o'qituvchi faqat dars ochish
+ * so'rovi orqali baho qo'ya oladi.
  *
  * Faqat shu o'qituvchi nomiga jadvalda qo'yilgan darslar, joriy semestr
  * boshidan (LessonOpening::periodStart) kechagacha. Allaqachon so'rov
@@ -37,7 +39,8 @@ class TeacherMissedLessons
         $from = LessonOpening::periodStart()->toDateString();
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        // 1. O'qituvchining o'tgan amaliy dars kunlari (guruh + fan + semestr + sana)
+        // 1. O'qituvchining o'tgan amaliy dars juftliklari
+        //    (guruh + fan + semestr + sana + juftlik)
         $slots = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
             ->where('sch.employee_id', $teacher->hemis_id)
@@ -48,7 +51,7 @@ class TeacherMissedLessons
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereRaw('DATE(sch.lesson_date) >= ?', [$from])
             ->whereRaw('DATE(sch.lesson_date) < ?', [$today])
-            ->groupBy('g.id', 'g.name', 'sch.group_id', 'sch.subject_id', 'sch.semester_code', DB::raw('DATE(sch.lesson_date)'))
+            ->groupBy('g.id', 'g.name', 'sch.group_id', 'sch.subject_id', 'sch.semester_code', DB::raw('DATE(sch.lesson_date)'), 'sch.lesson_pair_code')
             ->select(
                 'g.id as group_db_id',
                 'g.name as group_name',
@@ -56,7 +59,8 @@ class TeacherMissedLessons
                 'sch.subject_id',
                 'sch.semester_code',
                 DB::raw('MAX(sch.subject_name) as subject_name'),
-                DB::raw('DATE(sch.lesson_date) as lesson_day')
+                DB::raw('DATE(sch.lesson_date) as lesson_day'),
+                'sch.lesson_pair_code'
             )
             ->get();
 
@@ -76,7 +80,7 @@ class TeacherMissedLessons
             ->map(fn ($id) => (string) $id)
             ->flip();
 
-        // 2. Qaysi kunlarda kamida bitta baho yoki NB bor
+        // 2. Qaysi juftliklarda kamida bitta baho yoki NB bor
         $marked = [];
         DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
@@ -87,12 +91,12 @@ class TeacherMissedLessons
             ->whereNotIn('sg.training_type_code', [99, 100, 101, 102, 103])
             ->whereRaw('DATE(sg.lesson_date) >= ?', [$from])
             ->whereRaw('DATE(sg.lesson_date) < ?', [$today])
-            ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
+            ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
             ->orderBy('sg.id')
             ->chunk(2000, function ($rows) use (&$marked) {
                 foreach ($rows as $row) {
                     if ($row->reason === 'absent' || $this->effectiveGrade($row) !== null) {
-                        $marked[$this->key($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day)] = true;
+                        $marked[$this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code)] = true;
                     }
                 }
             });
@@ -107,15 +111,19 @@ class TeacherMissedLessons
                 $this->key($o->group_hemis_id, $o->subject_id, $o->semester_code, $o->lesson_date?->format('Y-m-d')) => $o->status,
             ]);
 
+        // Juftlik hisobga olinmagan bo'lsa kun ro'yxatga tushadi; so'rov esa
+        // kunga yuboriladi, shuning uchun bir kun bir marta ko'rinadi
         return $slots
             ->filter(function ($slot) use ($marked, $openings, $groupsWithStudents) {
                 $key = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
+                $pairKey = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
                 $status = $openings[$key] ?? null;
 
-                return !isset($marked[$key])
+                return !isset($marked[$pairKey])
                     && isset($groupsWithStudents[(string) $slot->group_id])
                     && ($status === null || $status === LessonOpening::STATUS_REJECTED);
             })
+            ->unique(fn ($slot) => $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day))
             ->map(function ($slot) use ($openings) {
                 $key = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
 
@@ -136,6 +144,11 @@ class TeacherMissedLessons
     private function key($groupId, $subjectId, $semesterCode, ?string $day): string
     {
         return $groupId . '|' . $subjectId . '|' . $semesterCode . '|' . $day;
+    }
+
+    private function pairKey($groupId, $subjectId, $semesterCode, ?string $day, ?string $pair): string
+    {
+        return $this->key($groupId, $subjectId, $semesterCode, $day) . '|' . $pair;
     }
 
     /**

@@ -4957,27 +4957,18 @@ class AcademicScheduleController extends Controller
             $cFGroup = ['bold' => true, 'size' => 10, 'color' => '1F4E20'];
             $hBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
             $groupBg = ['bgColor' => 'E2EFDA', 'valign' => 'center'];
-            // Ko'rinmas separator katakcha — chap va o'ng yarmini ajratish uchun.
-            $invisCell = [
-                'borderTopSize' => 0, 'borderBottomSize' => 0,
-                'borderLeftSize' => 0, 'borderRightSize' => 0,
-                'borderTopColor' => 'FFFFFF', 'borderBottomColor' => 'FFFFFF',
-                'borderLeftColor' => 'FFFFFF', 'borderRightColor' => 'FFFFFF',
-            ];
             // Jadval ichidagi paragraf — interval 0/0, Tochno 14pt.
             $pPara = ['spaceBefore' => 0, 'spaceAfter' => 0, 'spacing' => 280, 'spacingLineRule' => 'exact'];
             $cCtr = array_merge(['alignment' => Jc::CENTER], $pPara);
             $cLeft = array_merge(['alignment' => Jc::START], $pPara);
 
-            // Sahifa kengligiga moslangan ustun kengliklari.
-            // Landscape A4 ≈ 16838 twips. Margin chap+o'ng = 700+500=1200.
-            // Foydalanishga 15638 twips qoladi. Marginni qisqartirib kengroq
-            // foydalanamiz: chap=400, o'ng=400 → 16038 twips foydalaniladi.
-            // 2-up uchun bir tomon: №=420, FIO=5000, Holat=1100, Komp=700,
-            // Belgi=500 = 7720. Ko'rinmas separator = 350. Jami: 7720*2+350 =
-            // 15790 (16038'dan past — sig'adi).
-            $cw2 = [420, 5000, 1100, 700, 500]; // 2-up per side
-            $cwSep = 350;
+            // Ustun kengliklari (twips). Landscape A4 ≈ 16838, margin
+            // chap+o'ng = 400+400 → 16038 foydalaniladi. Jadval har doim bitta
+            // ustunli va 12-shakl bilan bir xil ustunlarda: №=500, FIO=5800,
+            // ID=1500, JN=800, MT=800, Davomat=1200, Kontrakt=1300,
+            // Ruxsat=1500, Komp=900, Belgi=700 = 15000.
+            $cw = [500, 5800, 1500, 800, 800, 1200, 1300, 1500, 900, 700];
+            $cwTotal = array_sum($cw);
 
             // Fan variantlarini (a)/(b)/(c) suffiks bo'yicha BIRLASHTIRISH
             // uchun helper. Misol: "Ichki kasalliklar propedevtikasi (a)" va
@@ -5006,14 +4997,6 @@ class AcademicScheduleController extends Controller
                     }
                 }
                 ksort($slotSubjects);
-
-                $slotTotal = 0;
-                foreach ($slotSubjects as $sd) {
-                    foreach ($sd['entries'] as $e) {
-                        $slotTotal += count($e['students']);
-                    }
-                }
-                $twoUp = $slotTotal > 25;
 
                 $section = $phpWord->addSection([
                     'orientation' => 'landscape',
@@ -5065,35 +5048,11 @@ class AcademicScheduleController extends Controller
 
                     $table = $section->addTable('BkSlotTable');
 
-                    if ($twoUp) {
-                        // Header (ID olib tashlandi)
-                        $hr = $table->addRow(280);
-                        // Chap yarim
-                        $hr->addCell($cw2[0], $hBg)->addText('№', $hF, $cCtr);
-                        $hr->addCell($cw2[1], $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
-                        $hr->addCell($cw2[2], $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
-                        $hr->addCell($cw2[3], $hBg)->addText('Komp №', $hF, $cCtr);
-                        $hr->addCell($cw2[4], $hBg)->addText('Belgi', $hF, $cCtr);
-                        // Ko'rinmas separator
-                        $hr->addCell($cwSep, $invisCell)->addText('', $cF, $cCtr);
-                        // O'ng yarim
-                        $hr->addCell($cw2[0], $hBg)->addText('№', $hF, $cCtr);
-                        $hr->addCell($cw2[1], $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
-                        $hr->addCell($cw2[2], $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
-                        $hr->addCell($cw2[3], $hBg)->addText('Komp №', $hF, $cCtr);
-                        $hr->addCell($cw2[4], $hBg)->addText('Belgi', $hF, $cCtr);
-                    } else {
-                        // 1-up (ID olib tashlandi, FIO kengroq)
-                        $hr = $table->addRow(320);
-                        $hr->addCell(500, $hBg)->addText('№', $hF, $cCtr);
-                        $hr->addCell(7000, $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
-                        $hr->addCell(800, $hBg)->addText('JN', $hF, $cCtr);
-                        $hr->addCell(800, $hBg)->addText('MT', $hF, $cCtr);
-                        $hr->addCell(1200, $hBg)->addText('Davomat %', $hF, $cCtr);
-                        $hr->addCell(1300, $hBg)->addText('Kontrakt', $hF, $cCtr);
-                        $hr->addCell(1500, $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
-                        $hr->addCell(900, $hBg)->addText('Komp №', $hF, $cCtr);
-                        $hr->addCell(700, $hBg)->addText('Belgi', $hF, $cCtr);
+                    // Bitta ustunli jadval — 12-shakl bilan bir xil ustunlar
+                    $hr = $table->addRow(320);
+                    $headers = ['№', 'Talaba F.I.O', 'Talaba ID', 'JN', 'MT', 'Davomat %', 'Kontrakt', 'YN ga ruxsat', 'Komp №', 'Belgi'];
+                    foreach ($headers as $i => $h) {
+                        $hr->addCell($cw[$i], $hBg)->addText($h, $hF, $cCtr);
                     }
 
                     // Talabalarni guruh bo'yicha guruhlash, har guruh ichida ism tartibida
@@ -5188,104 +5147,30 @@ class AcademicScheduleController extends Controller
                         ];
                     };
 
-                    if ($twoUp) {
-                        // 2-up rejimi — har guruh alohida segmentda: oldida
-                        // guruh nomi separator qatori, keyin guruh ichidagi
-                        // talabalar 2 ustunga taqsimlanadi. Raqamlar HAR
-                        // USTUN ICHIDA KETMA-KET: chap = 1,2,3,4; o'ng =
-                        // 5,6,7. Bu o'qish uchun qulayroq (chap ustun to'liq
-                        // tugagandan keyin o'ng o'qiladi).
-                        $globalBase = 1; // joriy fan/guruhdagi boshlang'ich raqam
-                        $totalCells = 11; // 5 + 1 sep + 5
-                        foreach ($byGroup as $gName => $list) {
-                            // Guruh separator qatori — barcha katakchalarni qamrab oladi
-                            $gr = $table->addRow(260);
-                            $gr->addCell(
-                                $cw2[0] + $cw2[1] + $cw2[2] + $cw2[3] + $cw2[4] + $cwSep + $cw2[0] + $cw2[1] + $cw2[2] + $cw2[3] + $cw2[4],
-                                array_merge($groupBg, ['gridSpan' => $totalCells])
-                            )->addText('Guruh: ' . $gName, $cFGroup, $cCtr);
-
-                            $cnt = count($list);
-                            $half = (int) ceil($cnt / 2);
-                            for ($i = 0; $i < $half; $i++) {
-                                $dr = $table->addRow();
-
-                                // CHAP yarim — i-chi talaba, raqami $globalBase + $i
-                                $leftRow = $list[$i] ?? null;
-                                if ($leftRow) {
-                                    $stu = $leftRow['student']; $ent = $leftRow['entry'];
-                                    $info = $renderStudentInfo($stu, $ent);
-                                    $dr->addCell($cw2[0])->addText((string) ($globalBase + $i), $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
-                                    $hCell = $dr->addCell($cw2[2]);
-                                    $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
-                                    $dr->addCell($cw2[3])->addText(
-                                        $info['compNum'] !== null ? (string) $info['compNum'] : '—',
-                                        $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
-                                    );
-                                    $dr->addCell($cw2[4])->addText('☐', ['size' => 14], $cCtr);
-                                } else {
-                                    $dr->addCell($cw2[0])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[2])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[3])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[4])->addText('', $cF, $cCtr);
-                                }
-
-                                // Chap-o'ng o'rtasidagi ko'rinmas separator
-                                $dr->addCell($cwSep, $invisCell)->addText('', $cF, $cCtr);
-
-                                // O'NG yarim — ($i + $half)-chi talaba, raqami $globalBase + $half + $i
-                                $rightRow = $list[$i + $half] ?? null;
-                                if ($rightRow) {
-                                    $stu = $rightRow['student']; $ent = $rightRow['entry'];
-                                    $info = $renderStudentInfo($stu, $ent);
-                                    $dr->addCell($cw2[0])->addText((string) ($globalBase + $half + $i), $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
-                                    $hCell = $dr->addCell($cw2[2]);
-                                    $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
-                                    $dr->addCell($cw2[3])->addText(
-                                        $info['compNum'] !== null ? (string) $info['compNum'] : '—',
-                                        $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
-                                    );
-                                    $dr->addCell($cw2[4])->addText('☐', ['size' => 14], $cCtr);
-                                } else {
-                                    $dr->addCell($cw2[0])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[2])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[3])->addText('', $cF, $cCtr);
-                                    $dr->addCell($cw2[4])->addText('', $cF, $cCtr);
-                                }
-                            }
-                            $globalBase += $cnt;
-                        }
-                    } else {
-                        // 1-ustun, guruh separator qatorlari bilan
-                        $globalIdx = 1;
-                        $totalCells = 9; // №, FIO, JN, MT, Dav, Kontr, Holat, Komp, Belgi
-                        foreach ($byGroup as $gName => $list) {
-                            $gr = $table->addRow(260);
-                            $gr->addCell(15000, array_merge($groupBg, ['gridSpan' => $totalCells]))
-                                ->addText('Guruh: ' . $gName, $cFGroup, $cCtr);
-                            foreach ($list as $row) {
-                                $stu = $row['student']; $ent = $row['entry'];
-                                $info = $renderStudentInfo($stu, $ent);
-                                $dr = $table->addRow();
-                                $dr->addCell(500)->addText((string) $globalIdx, $cF, $cCtr);
-                                $dr->addCell(7000)->addText($studentNameWithTime($stu), $cF, $cLeft);
-                                $dr->addCell(800)->addText((string) ($info['jn'] ?? '0'), $cF, $cCtr);
-                                $dr->addCell(800)->addText((string) ($info['mt'] ?? '0'), $cF, $cCtr);
-                                $dr->addCell(1200)->addText(($info['qoldiq'] != 0 ? $info['qoldiq'] . '%' : '0%'), $cF, $cCtr);
-                                $dr->addCell(1300)->addText($info['contractText'], $info['contractFailed'] ? $cFOr : $cF, $cCtr);
-                                $hCell = $dr->addCell(1500);
-                                $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
-                                $dr->addCell(900)->addText(
-                                    $info['compNum'] !== null ? (string) $info['compNum'] : '—',
-                                    $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
-                                );
-                                $dr->addCell(700)->addText('☐', ['size' => 14], $cCtr);
-                                $globalIdx++;
-                            }
+                    // Bitta ustun, guruh separator qatorlari bilan
+                    $globalIdx = 1;
+                    foreach ($byGroup as $gName => $list) {
+                        $gr = $table->addRow(260);
+                        $gr->addCell($cwTotal, array_merge($groupBg, ['gridSpan' => count($cw)]))
+                            ->addText('Guruh: ' . $gName, $cFGroup, $cCtr);
+                        foreach ($list as $row) {
+                            $stu = $row['student']; $ent = $row['entry'];
+                            $info = $renderStudentInfo($stu, $ent);
+                            $dr = $table->addRow();
+                            $dr->addCell($cw[0])->addText((string) $globalIdx, $cF, $cCtr);
+                            $dr->addCell($cw[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
+                            $dr->addCell($cw[2])->addText((string) ($stu->student_id ?? ''), $cF, $cCtr);
+                            $dr->addCell($cw[3])->addText((string) ($info['jn'] ?? '0'), $cF, $cCtr);
+                            $dr->addCell($cw[4])->addText((string) ($info['mt'] ?? '0'), $cF, $cCtr);
+                            $dr->addCell($cw[5])->addText(($info['qoldiq'] != 0 ? $info['qoldiq'] . '%' : '0%'), $cF, $cCtr);
+                            $dr->addCell($cw[6])->addText($info['contractText'], $info['contractFailed'] ? $cFOr : $cF, $cCtr);
+                            $dr->addCell($cw[7])->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
+                            $dr->addCell($cw[8])->addText(
+                                $info['compNum'] !== null ? (string) $info['compNum'] : '—',
+                                $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
+                            );
+                            $dr->addCell($cw[9])->addText('☐', ['size' => 14], $cCtr);
+                            $globalIdx++;
                         }
                     }
                 }

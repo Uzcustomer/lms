@@ -69,13 +69,23 @@ class InternationalStudentController extends Controller
             $query->orderByRaw("CASE WHEN students.id NOT IN (SELECT student_id FROM student_visa_infos WHERE passport_number IS NOT NULL OR visa_number IS NOT NULL OR registration_end_date IS NOT NULL) THEN 1 ELSE 0 END");
         }
 
-        // Arizasi yo'q talabalar oxirida, ular orasida ism bo'yicha.
-        $students = $query->with('visaInfo')
-            ->orderByRaw('svi_sort.updated_at IS NULL')
-            ->orderByDesc('svi_sort.updated_at')
-            ->orderBy('students.full_name')
-            ->paginate(25)
-            ->withQueryString();
+        // Ism bo'yicha saralash tanlansa — faqat shu tartib. Aks holda
+        // avvalgidek: yangi arizalar tepada, arizasizlar oxirida.
+        $nameSort = in_array($request->get('name_sort'), ['asc', 'desc'], true)
+            ? $request->get('name_sort')
+            : null;
+
+        $query->with('visaInfo');
+
+        if ($nameSort) {
+            $query->orderBy('students.full_name', $nameSort);
+        } else {
+            $query->orderByRaw('svi_sort.updated_at IS NULL')
+                ->orderByDesc('svi_sort.updated_at')
+                ->orderBy('students.full_name');
+        }
+
+        $students = $query->paginate(25)->withQueryString();
 
         $firms = StudentVisaInfo::FIRM_OPTIONS;
 

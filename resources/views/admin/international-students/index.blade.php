@@ -36,6 +36,10 @@
 
                 {{-- Filtrlar --}}
                 <form id="filterForm" method="GET" action="{{ route('admin.international-students.index') }}">
+                    {{-- Filtr o'zgarganda ism bo'yicha saralash yo'qolmasin --}}
+                    @if(in_array(request('name_sort'), ['asc', 'desc'], true))
+                        <input type="hidden" name="name_sort" value="{{ request('name_sort') }}">
+                    @endif
                     <div class="filter-container">
                         {{-- 1-qator --}}
                         <div class="filter-row">
@@ -356,7 +360,21 @@
                                     <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="accent-color:#2b5ea7;cursor:pointer;">
                                 </th>
                                 <th>Talaba ID</th>
-                                <th>F.I.Sh</th>
+                                @php
+                                    // Sarlavha bosilganda: A-Z → Z-A → odatiy tartib
+                                    $nameSort = request('name_sort');
+                                    $nextNameSort = $nameSort === 'asc' ? 'desc' : ($nameSort === 'desc' ? null : 'asc');
+                                    $nameSortUrl = request()->fullUrlWithQuery(['name_sort' => $nextNameSort, 'page' => null]);
+                                @endphp
+                                <th>
+                                    <a href="{{ $nameSortUrl }}" class="name-sort-link {{ $nameSort ? 'is-active' : '' }}"
+                                       title="{{ $nameSort === 'asc' ? 'Z-A tartibda' : ($nameSort === 'desc' ? 'Odatiy tartib' : 'A-Z tartibda') }} saralash">
+                                        F.I.Sh
+                                        <span class="name-sort-icon">
+                                            @if($nameSort === 'asc') A→Z @elseif($nameSort === 'desc') Z→A @else ⇅ @endif
+                                        </span>
+                                    </a>
+                                </th>
                                 <th>Davlati</th>
                                 <th>Kurs</th>
                                 <th>Fakultet</th>
@@ -793,6 +811,11 @@
     .col-filter-list { max-height:220px; overflow-y:auto; }
     .col-filter-item { display:flex; align-items:center; gap:6px; padding:5px 10px; font-size:12px; color:#334155; cursor:pointer; white-space:nowrap; text-transform:none; font-weight:500; letter-spacing:normal; }
     .col-filter-item:hover { background:#f1f5f9; }
+    /* F.I.Sh sarlavhasi: bosilganda A-Z / Z-A / odatiy */
+    .name-sort-link { display:inline-flex; align-items:center; gap:5px; color:inherit; text-decoration:none; cursor:pointer; white-space:nowrap; }
+    .name-sort-link:hover { color:#2b5ea7; }
+    .name-sort-icon { font-size:10px; font-weight:700; color:#94a3b8; letter-spacing:0; }
+    .name-sort-link.is-active .name-sort-icon { color:#fff; background:#2b5ea7; border-radius:4px; padding:1px 5px; }
     .col-filter-item input[type="checkbox"] { accent-color:#2b5ea7; cursor:pointer; margin:0; }
     .col-filter-all { border-bottom:1px solid #e2e8f0; background:#fafbfc; font-weight:600; color:#1e293b; }
     .col-filter-empty { padding:12px; text-align:center; color:#94a3b8; font-size:12px; }
@@ -838,6 +861,7 @@ function intFilterSignature() {
     try {
         var p = new URLSearchParams(window.location.search);
         p.delete('page');
+        p.delete('name_sort'); // saralash ro'yxatni o'zgartirmaydi, faqat tartibini
         if (p.sort) p.sort();
         return p.toString();
     } catch (e) {

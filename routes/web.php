@@ -56,6 +56,11 @@ use App\Http\Controllers\Student\StudentContractController as StudentContractCtr
 use App\Http\Controllers\LanguageController;
 
 
+// Privacy policy for the app stores and the web site. Must stay public:
+// Google Play and Apple review it without signing in.
+Route::view('/privacy', 'privacy')->name('privacy');
+Route::view('/maxfiylik', 'privacy');
+
 Route::get('/', function () {
     // Agar foydalanuvchi allaqachon login bo'lgan bo'lsa — o'z dashboardiga yo'naltirish
     if (Auth::guard('web')->check()) {

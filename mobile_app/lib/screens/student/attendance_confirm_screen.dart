@@ -500,7 +500,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
           _beacons.openBluetoothSettings,
         ),
       BeaconReadiness.permissionDenied => (
-          'Bluetooth va joylashuv ruxsati kerak — busiz xona beacon\'i aniqlanmaydi.',
+          'Bluetooth ruxsati kerak — busiz xona beacon\'i aniqlanmaydi.',
           'Ruxsat berish',
           _beacons.openAppPermissionSettings,
         ),

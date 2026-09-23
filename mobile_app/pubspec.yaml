@@ -39,6 +39,7 @@ dependencies:
   permission_handler: ^12.0.1
   dchs_flutter_beacon:
     path: packages/dchs_flutter_beacon
+  device_info_plus: ^12.4.0
 
 dev_dependencies:
   flutter_test:

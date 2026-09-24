@@ -1260,10 +1260,17 @@ class HemisService
      * Barcha talabalar uchun student-subject-list ni import qilish.
      * Talabaga biriktirilgan fanlar — o'quv reja + elektiv tanlov hisobini to'g'ri olish uchun.
      */
-    public function importStudentSubjects(?callable $onProgress = null): int
+    /**
+     * @param  array<int>|null  $onlyHemisIds  Berilsa — faqat shu talabalar
+     *         (yangi qo'shilgan talabani butun bazani aylanmasdan tortish uchun).
+     */
+    public function importStudentSubjects(?callable $onProgress = null, ?array $onlyHemisIds = null): int
     {
         $totalImported = 0;
-        $students = Student::select('hemis_id')->whereNotNull('hemis_id')->pluck('hemis_id');
+        $students = Student::select('hemis_id')
+            ->whereNotNull('hemis_id')
+            ->when($onlyHemisIds !== null, fn ($q) => $q->whereIn('hemis_id', $onlyHemisIds))
+            ->pluck('hemis_id');
         $total = $students->count();
 
         foreach ($students as $index => $studentHemisId) {

@@ -459,6 +459,147 @@
         .bl-drop { min-height: 76px; }
         .bl-q-meta { display: none; }
     }
+
+    /* ============================================================
+       Rasmiy ko'rinish qatlami — yuqoridagi bl-* tokenlar ustiga.
+       HTML va JS tegilmaydi: faqat rang, tipografiya va fazo.
+       ============================================================ */
+
+    .bl {
+        /* Universitet palitrasi: to'q ko'k + oltin. Sovuq kulrang o'rniga
+           ozgina iliq ohang — sahifa "bo'sh Excel" emas, hujjatdek ko'rinsin. */
+        --navy: #0e2342;
+        --paper: #f7f9fc;
+        --paper-warm: #fcfbf7;
+        --gold-soft: #f2e4bd;
+        --gold-deep: #a8871d;
+        --shadow-sm: 0 1px 2px rgba(14, 35, 66, .05);
+        --shadow-md: 0 2px 6px rgba(14, 35, 66, .06), 0 14px 34px rgba(14, 35, 66, .07);
+        --shadow-lg: 0 30px 70px rgba(14, 35, 66, .28);
+    }
+
+    /* Sahifa foni — oq emas, juda yengil ko'kimtir qog'oz */
+    .bl { background: transparent; }
+
+    /* ---- Sarlavha: kuchliroq, gerbli ---- */
+    .bl-head {
+        padding: 26px 30px;
+        border-left-width: 5px;
+        border-radius: 10px;
+        background:
+            radial-gradient(circle at 92% 130%, rgba(201, 162, 39, .13), transparent 58%),
+            linear-gradient(180deg, #ffffff, #f2f7fc);
+        box-shadow: var(--shadow-md);
+    }
+    .bl-head::after { width: 210px; height: 168px; opacity: .06; }
+    .bl-head-badge {
+        width: 56px; height: 56px; border-radius: 13px;
+        border-color: #d3e0f0;
+        background: linear-gradient(160deg, #ffffff, #eaf1fa);
+        box-shadow: 0 5px 14px rgba(14, 35, 66, .09), inset 0 1px 0 #fff;
+    }
+    .bl-head-badge svg { width: 26px; height: 26px; }
+    .bl-eyebrow {
+        display: inline-flex; align-items: center; gap: 7px;
+        color: var(--gold-deep); letter-spacing: .22em;
+    }
+    /* Eyebrow oldidan qisqa oltin chiziq — rasmiy blank hissi */
+    .bl-eyebrow::before {
+        content: ''; width: 18px; height: 2px; border-radius: 2px;
+        background: linear-gradient(90deg, var(--gold), var(--gold-soft));
+    }
+    .bl-head h1 { font-size: 25px; letter-spacing: -.02em; }
+    .bl-head p { max-width: 56ch; font-size: 13.5px; line-height: 1.6; }
+    .bl-headnum {
+        padding: 12px 22px; border-radius: 11px; border-color: #d3e0f0;
+        background: linear-gradient(180deg, #fff, #f7fafd);
+        box-shadow: var(--shadow-sm);
+    }
+    .bl-headnum b { font-size: 28px; }
+
+    /* ---- Panellar ---- */
+    .bl-panel { border-radius: 10px; box-shadow: var(--shadow-md); }
+    .bl-panel-head {
+        padding: 17px 24px;
+        background: linear-gradient(180deg, #ffffff, #f2f7fc);
+        border-bottom-color: #e4ecf5;
+    }
+    /* Bosqich raqami — oltin kontur bilan */
+    .bl-step {
+        width: 36px; height: 36px; border-radius: 10px; font-size: 13.5px;
+        box-shadow: 0 4px 12px rgba(14, 35, 66, .26), inset 0 0 0 1px rgba(201, 162, 39, .45);
+    }
+    .bl-panel-head h2 { font-size: 16px; letter-spacing: -.01em; }
+    .bl-panel-head p { font-size: 12px; }
+    .bl-panel-count {
+        border-color: #d3e0f0; background: #f4f8fc;
+        font-size: 11.5px; letter-spacing: .02em;
+    }
+    .bl-panel-body { padding: 22px 24px; }
+    .bl-panel-foot { padding: 15px 24px; background: linear-gradient(180deg, #fafcfe, #f4f8fc); }
+
+    /* ---- Maydonlar: yorliqlar aniqroq, inputlar tinchroq ---- */
+    .bl-field > label, .bl-label {
+        margin-bottom: 8px; font-size: 11.5px;
+        letter-spacing: .04em; text-transform: uppercase;
+    }
+    .bl-field > label em { text-transform: none; letter-spacing: 0; }
+    .bl input:not([type='checkbox']):not([type='radio']):not([type='file']),
+    .bl select, .bl textarea {
+        border-color: #d8e2ee; border-radius: 9px; background: #fcfdff;
+    }
+    .bl input:not([type='checkbox']):not([type='radio']):not([type='file']), .bl select { height: 44px; }
+    .bl input:focus, .bl select:focus, .bl textarea:focus {
+        border-color: var(--navy-soft);
+        box-shadow: 0 0 0 3px rgba(27, 58, 99, .12);
+    }
+    /* Fan tanlash — sahifadagi eng muhim maydon, oltin urg'u bilan ajratiladi */
+    .bl-field.bl-span:first-child select { border-left: 3px solid var(--gold); }
+
+    /* ---- Tugmalar ---- */
+    .bl-btn { height: 44px; border-radius: 9px; font-size: 13px; letter-spacing: .015em; }
+    .bl-btn-main {
+        background: linear-gradient(165deg, #1e4272, var(--navy));
+        box-shadow: 0 5px 14px rgba(14, 35, 66, .24), inset 0 1px 0 rgba(255, 255, 255, .12);
+    }
+    .bl-btn-main:hover { box-shadow: 0 8px 20px rgba(14, 35, 66, .3); }
+    .bl-btn-ghost { border-color: #d8e2ee; }
+    .bl-btn-sm { height: 34px; border-radius: 8px; }
+
+    /* ---- Belgilash kartochkalari ---- */
+    .bl-check { padding: 13px 16px; border-radius: 10px; }
+    .bl-check:has(input:checked) {
+        border-color: #b9cde6; background: #eff5fc;
+        box-shadow: 0 2px 8px rgba(14, 35, 66, .08), inset 3px 0 0 var(--gold);
+    }
+
+    /* ---- Jadval ---- */
+    .bl-table th {
+        padding: 11px 20px; background: #f4f8fc;
+        font-size: 10px; letter-spacing: .14em; color: #7b8ca6;
+    }
+    .bl-table td { padding: 14px 20px; }
+    .bl-table tbody tr:hover { background: #f7fafd; }
+    .bl-pill { padding: 5px 13px; letter-spacing: .03em; }
+
+    /* ---- Bo'sh holat: chiroyliroq ---- */
+    .bl-empty {
+        padding: 58px 26px; border-color: #d3dfec; border-radius: 11px;
+        background: linear-gradient(180deg, #ffffff, #fafcfe);
+    }
+    .bl-empty b { font-size: 17px; }
+
+    /* ---- Guruhlar paneli ---- */
+    .bl-groups { padding: 15px 24px; border-radius: 10px; box-shadow: var(--shadow-sm); }
+    .bl-group-chip { border-color: #d3e0f0; background: #f1f6fc; }
+
+    /* ---- Oynalar ---- */
+    .bl-modal-box, .bl-qmodal-box { border-radius: 13px; box-shadow: var(--shadow-lg); }
+    .bl-modal-head, .bl-qmodal-head {
+        padding: 18px 24px;
+        background: linear-gradient(180deg, #ffffff, #f2f7fc);
+        border-bottom-color: #e4ecf5;
+    }
 </style>
 
 @php

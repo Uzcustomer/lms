@@ -211,6 +211,85 @@
         .jr-table td { display: block; padding: 6px 16px; border-bottom: 0; }
         .jr-table tbody tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
     }
+
+    /* ============================================================
+       Rasmiy ko'rinish qatlami — test yaratish sahifasi bilan bir xil
+       (builder.blade.php). HTML va JS tegilmaydi.
+       ============================================================ */
+
+    .jr {
+        --navy: #0e2342;
+        --gold-soft: #f2e4bd;
+        --gold-deep: #a8871d;
+        --shadow-sm: 0 1px 2px rgba(14, 35, 66, .05);
+        --shadow-md: 0 2px 6px rgba(14, 35, 66, .06), 0 14px 34px rgba(14, 35, 66, .07);
+    }
+
+    /* ---- Sarlavha ---- */
+    .jr-head {
+        position: relative; overflow: hidden;
+        padding: 26px 30px;
+        border-left-width: 5px; border-radius: 10px;
+        background:
+            radial-gradient(circle at 92% 130%, rgba(201, 162, 39, .13), transparent 58%),
+            linear-gradient(180deg, #ffffff, #f2f7fc);
+        box-shadow: var(--shadow-md);
+    }
+    /* Gerb konturi — builder sarlavhasidagidek */
+    .jr-head::after {
+        content: ''; position: absolute; right: -30px; bottom: -46px; width: 210px; height: 168px;
+        background-repeat: no-repeat; background-position: center; background-size: contain; opacity: .06;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230e2342' stroke-width='1.2'><path d='M12 3 2 8v2h20V8L12 3Z'/><path d='M4 10v9M8 10v9M12 10v9M16 10v9M20 10v9'/><path d='M2 21h20'/></svg>");
+        pointer-events: none;
+    }
+    .jr-eyebrow {
+        display: inline-flex; align-items: center; gap: 7px;
+        color: var(--gold-deep); letter-spacing: .22em; font-weight: 800;
+    }
+    .jr-eyebrow::before {
+        content: ''; width: 18px; height: 2px; border-radius: 2px;
+        background: linear-gradient(90deg, var(--gold), var(--gold-soft));
+    }
+    .jr-head h1 { font-size: 25px; letter-spacing: -.02em; }
+    .jr-head p { max-width: 56ch; font-size: 13.5px; line-height: 1.6; }
+
+    /* ---- Panellar va maydonlar ---- */
+    .jr-panel {
+        padding: 18px 22px; border-radius: 10px;
+        background: linear-gradient(180deg, #ffffff, #fcfdff);
+        box-shadow: var(--shadow-sm);
+    }
+    .jr-filters label {
+        margin-bottom: 7px; color: var(--navy);
+        font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    }
+    .jr-filters input[type='search'], .jr-filters select {
+        height: 42px; border-color: #d8e2ee; border-radius: 9px; background: #fcfdff;
+    }
+    .jr-filters input[type='search']:focus, .jr-filters select:focus {
+        box-shadow: 0 0 0 3px rgba(27, 58, 99, .12);
+    }
+    .jr-btn {
+        height: 42px; border-radius: 9px; font-weight: 600;
+        background: linear-gradient(165deg, #1e4272, var(--navy));
+        box-shadow: 0 5px 14px rgba(14, 35, 66, .24), inset 0 1px 0 rgba(255, 255, 255, .12);
+    }
+    .jr-btn:hover { box-shadow: 0 8px 20px rgba(14, 35, 66, .3); }
+    .jr-reset { height: 42px; border-color: #d8e2ee; border-radius: 9px; }
+    .jr-flash { border-radius: 9px; border-left-width: 4px; }
+
+    /* ---- Jadval ---- */
+    .jr-table th {
+        background: #f4f8fc; color: #7b8ca6;
+        font-size: 10px; letter-spacing: .14em;
+    }
+    .jr-table tbody tr:hover { background: #f7fafd; }
+
+    /* ---- Bo'sh holat ---- */
+    .jr-empty {
+        border-radius: 11px;
+        background: linear-gradient(180deg, #ffffff, #fafcfe);
+    }
 </style>
 
     <div class="jr py-6">

@@ -554,7 +554,10 @@ class FanTestiController extends Controller
             ->where('cs.is_active', true)
             ->whereIn('s.semester_hemis_id', $this->currentSemesterWindowQuery())
             ->groupBy('cs.id')
-            ->selectRaw('cs.id as id, COUNT(DISTINCT g.group_hemis_id) as group_count')
+            // Guruh nomlari ham kerak: ro'yxatda "8 guruh" yozuvining yonida
+            // aynan qaysi guruhlar ekani ko'rinib tursin.
+            ->selectRaw('cs.id as id, COUNT(DISTINCT g.group_hemis_id) as group_count,'
+                . " GROUP_CONCAT(DISTINCT g.name ORDER BY g.name SEPARATOR ', ') as group_names")
             ->get();
 
         if ($rows->isEmpty()) {
@@ -562,6 +565,7 @@ class FanTestiController extends Controller
         }
 
         $groupCounts = $rows->pluck('group_count', 'id');
+        $groupNames = $rows->pluck('group_names', 'id');
 
         $subjects = CurriculumSubject::query()
             ->whereIn('id', $rows->pluck('id'))
@@ -574,6 +578,7 @@ class FanTestiController extends Controller
 
         foreach ($subjects as $subject) {
             $subject->group_count = (int) ($groupCounts[$subject->id] ?? 0);
+            $subject->group_names = (string) ($groupNames[$subject->id] ?? '');
         }
 
         $this->attachCurriculumLabels($subjects);

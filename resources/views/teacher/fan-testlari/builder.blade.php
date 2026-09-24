@@ -612,6 +612,26 @@
 </style>
 
 @php
+    // Fan ro'yxati yorlig'i: nomi · semestr · reja — N guruh: nomlari.
+    // Ikkala tanlov ro'yxatida bir xil ko'rinishi uchun shu yerda hisoblanadi.
+    $subjectOptionLabel = function ($subject) {
+        $count = (int) ($subject->group_count ?? 0);
+        $names = array_values(array_filter(
+            array_map('trim', explode(',', (string) ($subject->group_names ?? '')))
+        ));
+        // Ro'yxat cho'zilib ketmasligi uchun 6 tadan keyingisi soni bilan
+        $shown = array_slice($names, 0, 6);
+        $rest = count($names) - count($shown);
+        $groups = $count > 0
+            ? $count . ' guruh' . ($shown ? ': ' . implode(', ', $shown) . ($rest > 0 ? ' +' . $rest : '') : '')
+            : "guruh yo'q";
+
+        return collect([
+            $subject->subject_name,
+            $subject->semester_name,
+            $subject->curriculum_label ?? null,
+        ])->filter()->implode(' · ') . ' — ' . $groups;
+    };
     $questions = $collection?->questions ?? [];
     $isEdit = (bool) $collection;
     $optionDefaults = [
@@ -685,12 +705,7 @@
                         @foreach($subjects as $subject)
                             @php
                                 $subjectGroups = (int) ($subject->group_count ?? 0);
-                                $subjectLabel = collect([
-                                    $subject->subject_name,
-                                    $subject->semester_name,
-                                    $subject->curriculum_label ?? null,
-                                ])->filter()->implode(' · ')
-                                    . ' — ' . ($subjectGroups > 0 ? $subjectGroups . ' guruh' : 'guruh yo\'q');
+                                $subjectLabel = $subjectOptionLabel($subject);
                             @endphp
                             <option value="{{ $subject->id }}" @selected((int) old('curriculum_subject_id', $collection?->curriculum_subject_id) === (int) $subject->id) @class(['bl-opt-empty' => $subjectGroups < 1])>
                                 {{ $subjectLabel }}
@@ -1053,12 +1068,7 @@
                         @foreach($subjects as $subject)
                             @php
                                 $aGroups = (int) ($subject->group_count ?? 0);
-                                $aLabel = collect([
-                                    $subject->subject_name,
-                                    $subject->semester_name,
-                                    $subject->curriculum_label ?? null,
-                                ])->filter()->implode(' · ')
-                                    . ' — ' . ($aGroups > 0 ? $aGroups . ' guruh' : 'guruh yo\'q');
+                                $aLabel = $subjectOptionLabel($subject);
                             @endphp
                             <option value="{{ $subject->id }}" @class(['bl-opt-empty' => $aGroups < 1])>{{ $aLabel }}</option>
                         @endforeach

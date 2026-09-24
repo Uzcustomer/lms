@@ -553,8 +553,9 @@
         border-color: var(--navy-soft);
         box-shadow: 0 0 0 3px rgba(27, 58, 99, .12);
     }
-    /* Fan tanlash — sahifadagi eng muhim maydon, oltin urg'u bilan ajratiladi */
-    .bl-field.bl-span:first-child select { border-left: 3px solid var(--gold); }
+    /* Fan tanlash — sahifadagi eng muhim maydon, oltin urg'u bilan ajratiladi.
+       id bo'yicha: .bl-field panel ichida birinchi element emas. */
+    .bl select#curriculum_subject_id { border-left: 3px solid var(--gold); padding-left: 12px; }
 
     /* ---- Tugmalar ---- */
     .bl-btn { height: 44px; border-radius: 9px; font-size: 13px; letter-spacing: .015em; }

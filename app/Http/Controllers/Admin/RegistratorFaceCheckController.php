@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Log;
  *
  *   1. Anti-fraud verify (this controller's verify action):
  *      ArcFace similarity webcam ↔ HEMIS photo AND webcam ↔ approved mark
- *      photo. Per-reference thresholds: HEMIS ≥ 75%, MARK ≥ 82% (HEMIS is
+ *      photo. Per-reference thresholds: HEMIS ≥ 71%, MARK ≥ 82% (HEMIS is
  *      lower because those photos are old/different lighting). Both must
  *      pass. On success we save a new student_photos row, persist the
  *      descriptor to face_id_descriptors, push the photo to Moodle and
@@ -40,14 +40,14 @@ class RegistratorFaceCheckController extends Controller
      *
      * HEMIS photos are typically the student's 1st-kurs passport shot —
      * several years old, different lighting, often serious / no-smile. They
-     * legitimately score ~75-85% against a fresh webcam capture even for
-     * the right person, so we set a lower bar here.
+     * legitimately score ~70-85% against a fresh webcam capture even for
+     * the right person, so we set a lower bar here (71%).
      *
      * MARK photos are recent (taken by a tutor or this very flow), under
      * controlled lighting, so we keep the bar close to the industry-standard
      * 85% — a real impostor scores well below 80%.
      */
-    private const ANTI_FRAUD_THRESHOLD_HEMIS = 75.0;
+    private const ANTI_FRAUD_THRESHOLD_HEMIS = 71.0;
     private const ANTI_FRAUD_THRESHOLD_MARK  = 82.0;
 
     public function index(Request $request)

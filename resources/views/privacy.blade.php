@@ -109,7 +109,7 @@
             Toshkent Davlat Tibbiyot Universiteti Termiz filiali — <strong>TDTU LMS</strong>
             mobil ilovasi va <a href="https://mark.tashmedunitf.uz">mark.tashmedunitf.uz</a> veb-sayti.
         </p>
-        <span class="updated">Oxirgi yangilanish: {{ $updatedAt ?? '23.09.2026' }}</span>
+        <span class="updated">Oxirgi yangilanish: 24.09.2026</span>
     </header>
 
     <h2>1. Umumiy ma'lumot</h2>
@@ -308,15 +308,15 @@
         </tr>
         <tr>
             <th>Manzil</th>
-            <td>{{ $address ?? "Termiz shahri, Surxondaryo viloyati, O'zbekiston" }}</td>
+            <td>O'zbekiston Respublikasi, Surxondaryo viloyati, Termiz shahri, A. Navoiy ko'chasi, 26-uy, 7-xonadon</td>
         </tr>
         <tr>
             <th>Elektron pochta</th>
-            <td><a href="mailto:{{ $email ?? 'info@tashmedunitf.uz' }}">{{ $email ?? 'info@tashmedunitf.uz' }}</a></td>
+            <td><a href="mailto:uzbcorporattion@gmail.com">uzbcorporattion@gmail.com</a></td>
         </tr>
         <tr>
             <th>Telefon</th>
-            <td>{{ $phone ?? '—' }}</td>
+            <td><a href="tel:+998505059799">+998 50 505 97 99</a></td>
         </tr>
     </table>
 

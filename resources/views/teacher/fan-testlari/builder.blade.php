@@ -1,6 +1,6 @@
 <x-app-layout>
 <link rel="preconnect" href="https://fonts.bunny.net">
-<link href="https://fonts.bunny.net/css?family=roboto:300,400,500,700|roboto-slab:400,600,700&display=swap" rel="stylesheet">
+<link href="https://fonts.bunny.net/css?family=inter:400,500,600,700|source-serif-4:400,600,700&display=swap" rel="stylesheet">
 <style>
     .bl {
         --navy: #0f2748; --navy-soft: #1b3a63; --gold: #c9a227;
@@ -8,9 +8,9 @@
         --line: #dde5ef; --line-soft: #eef2f8;
         --ok: #0f7a52; --ok-bg: #e9f7f0; --bad: #b3261e; --bad-bg: #fdeceb;
         --warn: #a35a06; --warn-bg: #fdf3e4;
-        font-family: 'Roboto', system-ui, sans-serif; color: var(--ink);
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--ink);
     }
-    .bl h1, .bl h2, .bl .slab { font-family: 'Roboto Slab', Georgia, serif; }
+    .bl h1, .bl h2, .bl .slab { font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif; }
     .bl [x-cloak] { display: none !important; }
 
     /* ---- Sarlavha ---- */
@@ -53,7 +53,7 @@
         position: relative; flex: none; padding: 10px 20px; text-align: center;
         border: 1px solid #dbe6f4; border-radius: 10px; background: rgba(255, 255, 255, .8);
     }
-    .bl-headnum b { display: block; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 26px; font-weight: 600; line-height: 1; }
+    .bl-headnum b { display: block; color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 26px; font-weight: 600; line-height: 1; }
     .bl-headnum span { display: block; margin-top: 4px; color: var(--muted); font-size: 9.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 
     /* ---- Panel ---- */
@@ -69,7 +69,7 @@
     .bl-step {
         flex: none; display: grid; place-items: center; width: 34px; height: 34px;
         border-radius: 9px; background: linear-gradient(160deg, var(--navy-soft), var(--navy)); color: #fff;
-        font-family: 'Roboto Slab', serif; font-size: 13px; font-weight: 600;
+        font-family: 'Source Serif 4', Georgia, serif; font-size: 13px; font-weight: 600;
         box-shadow: 0 4px 10px rgba(15, 39, 72, .22);
     }
     .bl-panel-head h2 { margin: 0; color: var(--navy); font-size: 15.5px; font-weight: 700; }
@@ -102,7 +102,7 @@
     .bl input:not([type='checkbox']):not([type='radio']):not([type='file']),
     .bl select, .bl textarea {
         width: 100%; border: 1px solid #d5deea; border-radius: 8px; background: #fbfdff;
-        color: var(--ink); font-family: 'Roboto', sans-serif; font-size: 13.5px; outline: none;
+        color: var(--ink); font-family: 'Inter', system-ui, sans-serif; font-size: 13.5px; outline: none;
         transition: border-color .16s, box-shadow .16s, background .16s;
     }
     .bl input:not([type='checkbox']):not([type='radio']):not([type='file']), .bl select { height: 42px; padding: 0 13px; }
@@ -118,7 +118,7 @@
     .bl-btn {
         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
         height: 42px; padding: 0 20px; border: 1px solid transparent; border-radius: 8px;
-        font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: .01em;
+        font-family: 'Inter', system-ui, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: .01em;
         line-height: 1; text-decoration: none; cursor: pointer;
         transition: background .16s, border-color .16s, color .16s, box-shadow .16s, transform .16s;
     }
@@ -179,7 +179,7 @@
     .bl-langs { display: inline-flex; flex: none; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: #f1f6fc; }
     .bl-lang {
         min-width: 40px; padding: 7px 11px; border: 0; border-radius: 6px; background: transparent;
-        color: var(--muted); font-family: 'Roboto', sans-serif; font-size: 11px; font-weight: 600;
+        color: var(--muted); font-family: 'Inter', system-ui, sans-serif; font-size: 11px; font-weight: 600;
         letter-spacing: .06em; cursor: pointer; transition: background .16s, color .16s;
     }
     .bl-lang:hover { color: var(--navy); }
@@ -227,7 +227,7 @@
     .bl-opt.is-correct { border-color: #a5d6bf; background: var(--ok-bg); }
     .bl-pick { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
     .bl-pick input[type='radio'] { accent-color: var(--ok); }
-    .bl-pick span { color: var(--ink-soft); font-family: 'Roboto Slab', serif; font-size: 13px; font-weight: 600; }
+    .bl-pick span { color: var(--ink-soft); font-family: 'Source Serif 4', Georgia, serif; font-size: 13px; font-weight: 600; }
     .bl-opt.is-correct .bl-pick span { color: var(--ok); }
 
     .bl-answers.is-match { border-left-color: #7c9dd0; }
@@ -250,7 +250,7 @@
     .bl-pair-no, .bl-step-no {
         display: grid; place-items: center; width: 26px; height: 26px;
         border: 1px solid var(--line); border-radius: 4px; background: #fafcfe;
-        color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 12px; font-weight: 600;
+        color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 12px; font-weight: 600;
     }
     .bl-pair-arrow { color: var(--muted); font-size: 15px; text-align: center; }
 
@@ -286,12 +286,12 @@
     .bl-slot {
         display: flex; flex-direction: column; gap: 7px; min-height: 96px;
         padding: 14px 16px; border: 1px solid var(--line); border-radius: 11px;
-        background: #fff; font-family: 'Roboto', sans-serif; text-align: left; cursor: pointer;
+        background: #fff; font-family: 'Inter', system-ui, sans-serif; text-align: left; cursor: pointer;
         transition: border-color .16s, background .16s, box-shadow .16s, transform .16s;
     }
     .bl-slot:hover { border-color: var(--navy-soft); box-shadow: 0 6px 18px rgba(15, 39, 72, .1); transform: translateY(-1px); }
     .bl-slot-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-    .bl-slot-no { color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; }
+    .bl-slot-no { color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; }
 
     /* Bo'sh katakcha: yashil doiradagi + */
     .bl-slot.is-empty {
@@ -333,7 +333,7 @@
         display: flex; align-items: center; justify-content: center; gap: 11px;
         width: 100%; margin-top: 16px; padding: 15px;
         border: 1px dashed #cfdaea; border-radius: 11px; background: #fbfdff;
-        color: var(--ink-soft); font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 600;
+        color: var(--ink-soft); font-family: 'Inter', system-ui, sans-serif; font-size: 13px; font-weight: 600;
         cursor: pointer; transition: border-color .16s, background .16s, color .16s;
     }
     .bl-slot-more:hover { border-color: var(--ok); background: #f4fbf8; color: var(--ok); }
@@ -361,7 +361,7 @@
         padding: 16px 22px; border-bottom: 1px solid var(--line-soft);
         background: linear-gradient(180deg, #fdfefe, #f4f8fc);
     }
-    .bl-qmodal-head h3 { margin: 0; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; }
+    .bl-qmodal-head h3 { margin: 0; color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 16px; font-weight: 600; }
     .bl-qmodal-head p { margin: 3px 0 0; color: var(--muted); font-size: 11.5px; }
     .bl-qmodal-x {
         margin-left: auto; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 8px;
@@ -385,7 +385,7 @@
     .bl-table tbody tr.is-current { background: #f5f8fc; box-shadow: inset 3px 0 0 var(--gold); }
     .bl-t-name { color: var(--ink); font-weight: 500; }
     .bl-t-sub { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
-    .bl-num { color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 14px; font-weight: 600; }
+    .bl-num { color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 14px; font-weight: 600; }
     .bl-pill { display: inline-flex; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
     .bl-pill.ok { background: var(--ok-bg); color: var(--ok); }
     .bl-pill.off { background: #eef1f6; color: var(--muted); }
@@ -408,7 +408,7 @@
         padding: 17px 22px; border-bottom: 1px solid var(--line-soft);
         background: linear-gradient(180deg, #fdfefe, #f4f8fc);
     }
-    .bl-modal-head h3 { margin: 0; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16.5px; font-weight: 600; }
+    .bl-modal-head h3 { margin: 0; color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 16.5px; font-weight: 600; }
     .bl-modal-head p { margin: 3px 0 0; color: var(--ink-soft); font-size: 12px; }
     .bl-modal-icon {
         flex: none; display: grid; place-items: center; width: 38px; height: 38px;
@@ -439,7 +439,7 @@
         background: #f1f6fc; color: var(--navy); font-size: 12px; font-weight: 600;
     }
     .bl-groups-note { color: var(--warn); font-size: 12.5px; }
-    .bl-groups-head b { margin-left: 6px; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 12px; }
+    .bl-groups-head b { margin-left: 6px; color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 12px; }
     option.bl-opt-empty { color: #9aa8bd; }
 
     /* ---- Xabar / bo'sh holat ---- */
@@ -449,7 +449,7 @@
     .bl-alert ul { margin: 6px 0 0; padding-left: 20px; }
 
     .bl-empty { padding: 52px 24px; border: 1px dashed #c9d5e4; border-radius: 10px; background: #fff; text-align: center; }
-    .bl-empty b { display: block; color: var(--navy); font-family: 'Roboto Slab', serif; font-size: 16px; font-weight: 600; }
+    .bl-empty b { display: block; color: var(--navy); font-family: 'Source Serif 4', Georgia, serif; font-size: 16px; font-weight: 600; }
     .bl-empty span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
 
     @media (max-width: 900px) {
@@ -600,6 +600,14 @@
         background: linear-gradient(180deg, #ffffff, #f2f7fc);
         border-bottom-color: #e4ecf5;
     }
+
+    /* ---- Tipografiya: Source Serif 4 (sarlavha) + Inter (matn) ---- */
+    .bl h1, .bl h2, .bl .slab { letter-spacing: -.015em; font-feature-settings: 'ss01'; }
+    .bl-head h1 { font-size: 26px; font-weight: 600; }
+    .bl-panel-head h2 { font-size: 16.5px; font-weight: 600; }
+    .bl-headnum b, .bl-num, .bl-slot-no, .bl-pair-no, .bl-step-no, .bl-pick span { font-weight: 600; }
+    /* Inter'da raqamlar bir xil kenglikda tursin — jadval va hisoblagichlar tekis */
+    .bl-headnum b, .bl-num, .bl-panel-count, .bl-slot-no, .bl-table td { font-variant-numeric: tabular-nums; }
 </style>
 
 @php

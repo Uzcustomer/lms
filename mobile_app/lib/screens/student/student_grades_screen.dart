@@ -130,13 +130,17 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   Color get _surface => ClinicTheme.surfaceOf(context);
   Color get _divider => ClinicTheme.dividerOf(context);
 
-  List<BoxShadow> get _cardShadow => [
-        BoxShadow(
-          color: const Color(0xFF0F172A).withOpacity(0.14),
-          blurRadius: 5,
-          offset: const Offset(0, 2),
-        ),
-      ];
+  // Subject cards sit on a same-coloured page, so they get a firmer border
+  // and a deeper shadow than the hairline cards elsewhere.
+  List<BoxShadow> get _cardShadow => ClinicTheme.isDark(context)
+      ? const []
+      : [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.16),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ];
 
   Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 16}) {
     return Container(
@@ -145,7 +149,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: _divider, width: 1),
+        border: Border.all(color: ClinicTheme.strongBorderOf(context), width: 1.4),
         boxShadow: _cardShadow,
       ),
       child: child,
@@ -451,7 +455,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: ClinicTheme.tealOf(context).withOpacity(0.30),
+            color: ClinicTheme.heroGlowOf(context).withValues(alpha: 0.30),
             blurRadius: 16,
             offset: const Offset(0, 7),
           ),
@@ -464,7 +468,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
+              colors: ClinicTheme.heroGradientOf(context),
             ),
           ),
           padding: const EdgeInsets.all(14),

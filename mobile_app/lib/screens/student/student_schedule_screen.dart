@@ -110,6 +110,35 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   }
 
   /// Bright accent colour for a lesson type.
+  /// One colour per weekday, so the day strip reads at a glance.
+  Color _weekdayColor(int weekday) => switch (weekday) {
+        DateTime.monday => ClinicTheme.tealOf(context),
+        DateTime.tuesday => ClinicTheme.blueOf(context),
+        DateTime.wednesday => ClinicTheme.violetOf(context),
+        DateTime.thursday => ClinicTheme.amberOf(context),
+        DateTime.friday => ClinicTheme.redOf(context),
+        DateTime.saturday => ClinicTheme.greenOf(context),
+        _ => ClinicTheme.mutedOf(context),
+      };
+
+  /// Lesson card washed in its training type's colour - lectures blue,
+  /// practicals green, ... - with a firmer ring while the lesson is on.
+  Widget _typeCard({required Color accent, required bool current, required Widget child}) {
+    final dark = ClinicTheme.isDark(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: dark ? 0.20 : 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: current ? ClinicTheme.greenOf(context) : accent.withValues(alpha: dark ? 0.55 : 0.40),
+          width: current ? 1.8 : 1.2,
+        ),
+        boxShadow: current ? _cardShadow : null,
+      ),
+      child: child,
+    );
+  }
+
   Color _typeColor(String? type) {
     final t = (type ?? '').toLowerCase();
     if (t.contains("ma'ruza") || t.contains('maruza')) return const Color(0xFF2563EB);
@@ -518,6 +547,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         final isSelected = i == activeIndex;
         final hasLessons = _getLessonsForDate(day, dateSchedule, days).isNotEmpty;
         final shortName = _weekdayShort[day.weekday] ?? '';
+        final dayColor = _weekdayColor(day.weekday);
 
         return Expanded(
           child: GestureDetector(
@@ -527,14 +557,12 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               padding: const EdgeInsets.symmetric(vertical: 9),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? ClinicTheme.tealFillOf(context)
-                    : (isDark ? Colors.white.withOpacity(0.04) : Colors.white),
+                    ? dayColor
+                    : dayColor.withValues(alpha: isDark ? 0.16 : 0.10),
                 borderRadius: BorderRadius.circular(13),
                 border: Border.all(
-                  color: isSelected
-                      ? ClinicTheme.tealOf(context)
-                      : (isToday ? ClinicTheme.tealOf(context) : _divider),
-                  width: isToday && !isSelected ? 1.5 : 1,
+                  color: isSelected || isToday ? dayColor : dayColor.withValues(alpha: 0.35),
+                  width: isToday && !isSelected ? 1.8 : 1,
                 ),
                 boxShadow: isSelected ? _cardShadow : null,
               ),
@@ -545,9 +573,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     shortName,
                     style: TextStyle(
                       fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0.3,
-                      color: isSelected ? Colors.white.withOpacity(0.85) : _muted,
+                      color: isSelected ? Colors.white.withValues(alpha: 0.9) : dayColor,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -566,7 +594,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: hasLessons
-                          ? (isSelected ? Colors.white : ClinicTheme.greenOf(context))
+                          ? (isSelected ? Colors.white : dayColor)
                           : Colors.transparent,
                     ),
                   ),
@@ -867,9 +895,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
-              child: isCurrent
-                  ? _accentCard(accent: ClinicTheme.greenOf(context), child: card)
-                  : _calmCard(child: card),
+              child: _typeCard(accent: accent, current: isCurrent, child: card),
             ),
           ),
         ],

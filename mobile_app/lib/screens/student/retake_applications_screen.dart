@@ -329,7 +329,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
+            colors: ClinicTheme.heroGradientOf(context),
           ),
         ),
         child: Row(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/accent_themes.dart';
 import '../config/theme.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/settings_provider.dart';
@@ -90,6 +91,22 @@ void showSettingsSheet(BuildContext context) {
                     _buildLangOption(ctx, 'RU', l.russian, 'ru', settings),
                     const SizedBox(width: 8),
                     _buildLangOption(ctx, 'EN', l.english, 'en', settings),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Hero-card colour
+                Text(
+                  l.pick(uz: 'Rang', ru: 'Цвет', en: 'Colour'),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final t in AccentThemes.all)
+                      Expanded(
+                        child: _buildAccentOption(ctx, t, settings, () => setSheetState(() {})),
+                      ),
                   ],
                 ),
                 const _BiometricTile(),
@@ -188,6 +205,49 @@ Widget _buildLangOption(
               ),
             ),
           ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// One gradient swatch; the chosen one wears a ring.
+Widget _buildAccentOption(
+  BuildContext context,
+  AccentTheme theme,
+  SettingsProvider settings,
+  VoidCallback onChanged,
+) {
+  final isSelected = settings.accent.id == theme.id;
+  final isDk = Theme.of(context).brightness == Brightness.dark;
+  return GestureDetector(
+    onTap: () {
+      settings.setAccent(theme);
+      onChanged();
+    },
+    child: Center(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 36,
+        height: 36,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? theme.start : (isDk ? AppTheme.darkBorderColor : Colors.grey[300]!),
+            width: isSelected ? 2.5 : 1,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: theme.gradient,
+            ),
+          ),
+          child: isSelected ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
         ),
       ),
     ),

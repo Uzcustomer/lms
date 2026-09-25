@@ -163,22 +163,37 @@ class StudentApiController extends Controller
             ? $semesterGpas[$semesterGpas->keys()[$currentGpaIndex - 1]]
             : null;
 
-        // Attendance streak — consecutive days since the student's last absence.
-        // An absence = a lesson with absent_on > 0 OR absent_off > 0.
-        $lastAbsenceDate = Attendance::where('student_id', $student->id)
+        // Attendance streak — how many lesson days in a row, counting back
+        // from the latest one, the student has attended without an absence.
+        // Lesson days come from the group's schedule (lectures and
+        // practicals; not MT or exams), absences from HEMIS attendance rows
+        // (absent_on / absent_off > 0). It used to be "calendar days since
+        // the last absence", which read 0 for anyone marked absent today and
+        // counted weekends and holidays as attendance.
+        $lessonDays = DB::table('schedules')
+            ->where('group_id', $student->group_id)
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', [99, 100, 101, 102, 103])
+            ->whereNotNull('lesson_date')
+            ->whereDate('lesson_date', '<=', Carbon::now('Asia/Tashkent')->toDateString())
+            ->selectRaw('DISTINCT DATE(lesson_date) AS d')
+            ->orderByDesc('d')
+            ->limit(200)
+            ->pluck('d');
+        $absentDays = Attendance::where('student_id', $student->id)
             ->where(function ($q) {
                 $q->where('absent_on', '>', 0)
                   ->orWhere('absent_off', '>', 0);
             })
-            ->max('lesson_date');
-        $firstLessonDate = Attendance::where('student_id', $student->id)
-            ->min('lesson_date');
-        $attendanceStreak = null;
-        $today = Carbon::now()->startOfDay();
-        if ($lastAbsenceDate) {
-            $attendanceStreak = Carbon::parse($lastAbsenceDate)->startOfDay()->diffInDays($today);
-        } elseif ($firstLessonDate) {
-            $attendanceStreak = Carbon::parse($firstLessonDate)->startOfDay()->diffInDays($today);
+            ->selectRaw('DISTINCT DATE(lesson_date) AS d')
+            ->pluck('d')
+            ->flip();
+        $attendanceStreak = 0;
+        foreach ($lessonDays as $day) {
+            if (isset($absentDays[$day])) {
+                break;
+            }
+            $attendanceStreak++;
         }
 
         return response()->json([

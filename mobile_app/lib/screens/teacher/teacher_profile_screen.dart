@@ -36,9 +36,21 @@ class _TeacherProfileScreenState extends State<TeacherProfileScreen> {
         ),
         title: Text(l.profile),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(context),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFB91C1C),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
+                onPressed: () => _showLogoutDialog(context),
+              ),
+            ),
           ),
         ],
       ),

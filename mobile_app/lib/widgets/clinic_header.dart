@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/accent_themes.dart';
 import '../config/theme.dart';
 
 /// Shared "clinic-calm" palette used across the redesigned student screens.
@@ -42,6 +43,15 @@ class ClinicTheme {
   /// Pale tint behind a status label: washed in light, translucent in dark.
   static Color tintOf(BuildContext c, Color base) =>
       base.withValues(alpha: isDark(c) ? 0.18 : 0.10);
+
+  /// Hero cards follow the colour the student picked in Settings.
+  static List<Color> heroGradientOf(BuildContext c) => AccentThemes.current.gradient;
+  static Color heroGlowOf(BuildContext c) => AccentThemes.current.start;
+
+  /// A border that visibly separates a card from the page, unlike the
+  /// hairline [dividerOf].
+  static Color strongBorderOf(BuildContext c) =>
+      tone(c, const Color(0xFFCBD5E1), AppTheme.darkBorderColor);
 
   static List<BoxShadow> cardShadow = [
     BoxShadow(

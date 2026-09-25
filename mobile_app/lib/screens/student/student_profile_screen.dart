@@ -186,15 +186,12 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFFDC2626).withOpacity(0.15)
-                      : const Color(0xFFFEE2E2),
+                  color: const Color(0xFFB91C1C),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: IconButton(
                   padding: EdgeInsets.zero,
-                  icon: Icon(Icons.logout_rounded,
-                      color: ClinicTheme.redOf(context), size: 18),
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
                   onPressed: () => _showLogoutDialog(context),
                 ),
               ),
@@ -264,7 +261,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: ClinicTheme.tealOf(context).withOpacity(0.32),
+            color: ClinicTheme.heroGlowOf(context).withValues(alpha: 0.32),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -277,7 +274,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
+              colors: ClinicTheme.heroGradientOf(context),
             ),
           ),
           padding: const EdgeInsets.all(18),

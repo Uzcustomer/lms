@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../config/aurora_themes.dart';
+import '../config/accent_themes.dart';
 
 class SettingsProvider extends ChangeNotifier {
   static const String _themeKey = 'theme_mode';
   static const String _localeKey = 'locale';
-  static const String _auroraKey = 'aurora_theme';
+  static const String _accentKey = 'accent_theme';
 
   ThemeMode _themeMode = ThemeMode.light;
   Locale _locale = const Locale('uz');
-  AuroraTheme _auroraTheme = AuroraThemes.steel;
+  AccentTheme _accent = AccentThemes.teal;
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
   String get languageCode => _locale.languageCode;
-  AuroraTheme get auroraTheme => _auroraTheme;
+  AccentTheme get accent => _accent;
 
   SettingsProvider() {
     _loadSettings();
@@ -30,7 +30,8 @@ class SettingsProvider extends ChangeNotifier {
       final localeStr = prefs.getString(_localeKey) ?? 'uz';
       _locale = Locale(localeStr);
 
-      _auroraTheme = AuroraThemes.steel;
+      _accent = AccentThemes.byId(prefs.getString(_accentKey));
+      AccentThemes.current = _accent;
     } catch (_) {
       // Keep defaults on failure
     }
@@ -57,11 +58,12 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_localeKey, locale.languageCode);
   }
 
-  Future<void> setAuroraTheme(AuroraTheme theme) async {
-    _auroraTheme = theme;
+  Future<void> setAccent(AccentTheme theme) async {
+    _accent = theme;
+    AccentThemes.current = theme;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_auroraKey, theme.id);
+    await prefs.setString(_accentKey, theme.id);
   }
 
   bool get isDark => _themeMode == ThemeMode.dark;

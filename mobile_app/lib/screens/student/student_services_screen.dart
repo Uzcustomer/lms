@@ -107,33 +107,9 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
           }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FC),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Stack(
         children: [
-          Positioned(
-            top: -92,
-            right: -56,
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFFEFF3FF),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -110,
-            left: -88,
-            child: Container(
-              width: 230,
-              height: 230,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFEAFBF1).withAlpha(180),
-              ),
-            ),
-          ),
           Column(
             children: [
               ClinicHeader(
@@ -182,9 +158,9 @@ class _ServicesSearchField extends StatelessWidget {
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F3F9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5EAF4)),
+        color: ClinicTheme.elevatedOf(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ClinicTheme.dividerOf(context)),
       ),
       child: TextField(
         onChanged: onChanged,
@@ -236,10 +212,10 @@ class _EmptySearchState extends StatelessWidget {
               width: 58,
               height: 58,
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF2FF),
+                color: ClinicTheme.tintOf(context, const Color(0xFF3B82F6)),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.search_off_rounded, color: Color(0xFF3B82F6)),
+              child: Icon(Icons.search_off_rounded, color: ClinicTheme.blueOf(context)),
             ),
             const SizedBox(height: 12),
             Text(
@@ -289,27 +265,24 @@ class _ServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = ClinicTheme.inkOf(context);
     final mutedColor = ClinicTheme.mutedOf(context);
+    // Same card as the "Foydali" grid outside; the icon keeps its pastel
+    // in light and takes a translucent wash of its own colour in dark.
+    final iconBg = ClinicTheme.isDark(context) ? item.color.withValues(alpha: 0.20) : item.bgColor;
 
     return ScaleTap(
       onTap: item.onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFE8EDF6)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withAlpha(16),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          color: ClinicTheme.surfaceOf(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ClinicTheme.dividerOf(context)),
+          boxShadow: ClinicTheme.cardShadowOf(context),
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: item.onTap,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(16),
             child: Stack(
               children: [
                 Padding(
@@ -318,11 +291,11 @@ class _ServiceCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        width: 52,
-                        height: 52,
+                        width: 54,
+                        height: 54,
                         decoration: BoxDecoration(
-                          color: item.bgColor,
-                          borderRadius: BorderRadius.circular(17),
+                          color: iconBg,
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: Icon(item.icon, size: 28, color: item.color),
                       ),
@@ -360,7 +333,7 @@ class _ServiceCard extends StatelessWidget {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: item.bgColor,
+                      color: iconBg,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(

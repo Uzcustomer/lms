@@ -297,7 +297,7 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: _heroTeal.withOpacity(0.35),
+            color: ClinicTheme.heroGlowOf(context).withValues(alpha: 0.35),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -315,7 +315,7 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [_heroTeal, _heroNavy],
+                  colors: ClinicTheme.heroGradientOf(context),
                 ),
               ),
               child: Column(
@@ -477,20 +477,20 @@ class _ServiceTile extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 54,
+                    height: 54,
                     decoration: BoxDecoration(
                       color: item.color,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: item.color.withOpacity(0.35),
+                          color: item.color.withValues(alpha: 0.35),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
                       ],
                     ),
-                    child: Icon(item.icon, size: 21, color: Colors.white),
+                    child: Icon(item.icon, size: 27, color: Colors.white),
                   ),
                   const SizedBox(height: 10),
                   Column(

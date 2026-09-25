@@ -430,7 +430,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: ClinicTheme.tealOf(context).withOpacity(0.30),
+            color: ClinicTheme.heroGlowOf(context).withValues(alpha: 0.30),
             blurRadius: 16,
             offset: const Offset(0, 7),
           ),
@@ -443,7 +443,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
+              colors: ClinicTheme.heroGradientOf(context),
             ),
           ),
           padding: const EdgeInsets.all(14),
@@ -596,10 +596,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   // ── Weekly activity ──────────────────────────────────
   Widget _buildWeeklyActivity(Map<String, dynamic>? data) {
-    // Attendance streak — consecutive days since the last absence (API).
+    // Attendance streak — consecutive lesson days without an absence (API).
     final streakRaw = data?['attendance_streak_days'];
     final streak = streakRaw is num ? streakRaw.toInt() : 0;
-    final isGood = streak >= 7;
+    final isGood = streak >= 5;
 
     return _calmCard(
       padding: const EdgeInsets.all(12),
@@ -615,7 +615,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'HAFTALIK FAOLLIK',
+                      context.l10n.pick(uz: 'DAVOMAT KETMA-KETLIGI', ru: 'СЕРИЯ ПОСЕЩЕНИЙ', en: 'ATTENDANCE STREAK'),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -625,7 +625,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      context.l10n.pick(uz: '$streak kun · ketma-ket', ru: '$streak дн. · подряд', en: '$streak days · streak'),
+                      context.l10n.pick(uz: '$streak dars kuni · NB\'siz', ru: '$streak уч. дн. · без пропусков', en: '$streak lesson days · no absences'),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -644,7 +644,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  isGood ? 'NORMA' : 'PAST',
+                  isGood
+                      ? context.l10n.pick(uz: 'NORMA', ru: 'НОРМА', en: 'GOOD')
+                      : context.l10n.pick(uz: 'PAST', ru: 'НИЗКО', en: 'LOW'),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
@@ -951,57 +953,25 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               if (isContract) ...[
                 const SizedBox(height: 16),
+                _buildContractBars(
+                  total: totalAmount,
+                  paid: paidAmount,
+                  remaining: remainingAmount,
+                  textColor: textColor,
+                  subTextColor: subTextColor,
+                ),
+                const SizedBox(height: 12),
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    _buildContractDonut(
-                      progress: progress,
-                      remainingAmount: remainingAmount,
-                      isPaid: currentContractPaid,
+                    Icon(Icons.event_outlined, size: 14, color: subTextColor),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${l.deadline}: ',
+                      style: TextStyle(fontSize: 12, color: subTextColor),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            l.paid,
-                            style: TextStyle(fontSize: 12, color: subTextColor),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '${_formatMoney(paidAmount)} / ${_formatMoney(totalAmount)} ${context.l10n.currency}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: textColor,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildContractMiniMetric(
-                                  l.remaining,
-                                  '${_formatMoney(remainingAmount)} ${context.l10n.currency}',
-                                  remainingAmount <= 0
-                                      ? AppTheme.successColor
-                                      : AppTheme.warningColor,
-                                  subTextColor,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              _buildContractMiniMetric(
-                                l.deadline,
-                                currentContractYear,
-                                textColor,
-                                subTextColor,
-                                alignEnd: true,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    Text(
+                      currentContractYear,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
                     ),
                   ],
                 ),
@@ -1105,6 +1075,62 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  /// Three horizontal bars - total, paid, remaining - every one measured
+  /// against the total, so the paid and remaining bars add up to the first.
+  Widget _buildContractBars({
+    required double total,
+    required double paid,
+    required double remaining,
+    required Color textColor,
+    required Color subTextColor,
+  }) {
+    final l = AppLocalizations.of(context);
+    final rows = [
+      (l.contractAmount, total, ClinicTheme.blueOf(context)),
+      (l.paidAmount, paid, ClinicTheme.greenOf(context)),
+      (l.unpaidAmount, remaining, remaining > 0 ? ClinicTheme.amberOf(context) : ClinicTheme.greenOf(context)),
+    ];
+    return Column(
+      children: [
+        for (final (label, value, color) in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: subTextColor)),
+                    ),
+                    Text(
+                      '${_formatMoney(value)} ${context.l10n.currency}',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: total > 0 ? (value / total).clamp(0.0, 1.0) : 0.0),
+                    duration: const Duration(milliseconds: 900),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, v, __) => LinearProgressIndicator(
+                      value: v,
+                      minHeight: 10,
+                      backgroundColor: color.withValues(alpha: 0.14),
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -1702,8 +1728,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     double? trend,
     int trendDigits = 1,
   }) {
-    return _calmCard(
+    // Washed in its own accent so the two cards read as two things.
+    final dark = ClinicTheme.isDark(context);
+    return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: dark ? 0.20 : 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: dark ? 0.55 : 0.35), width: 1.2),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -63,7 +63,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        'Rolni almashtirish',
+                        context.l10n.pick(uz: 'Rolni almashtirish', ru: 'Сменить роль', en: 'Switch role'),
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
@@ -76,7 +76,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                 const SizedBox(height: 12),
                 ...auth.roles.map((role) {
                   final isActive = role == auth.activeRole;
-                  final label = AuthProvider.roleLabels[role] ?? role;
+                  final label = AuthProvider.roleLabel(role);
                   return ListTile(
                     leading: Container(
                       width: 40,
@@ -193,7 +193,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
               if (auth.roles.length > 1) {
                 return IconButton(
                   icon: const Icon(Icons.swap_horiz),
-                  tooltip: 'Rolni almashtirish',
+                  tooltip: context.l10n.pick(uz: 'Rolni almashtirish', ru: 'Сменить роль', en: 'Switch role'),
                   onPressed: () => _showRoleSwitcher(context),
                 );
               }
@@ -306,7 +306,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Joriy semestr fanlari',
+                        context.l10n.pick(uz: 'Joriy semestr fanlari', ru: 'Предметы текущего семестра', en: 'Current semester subjects'),
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -472,7 +472,7 @@ class _SubjectCard extends StatelessWidget {
                               const SizedBox(width: 8),
                               _InfoChip(
                                 icon: Icons.star_outline,
-                                label: '$credit kr',
+                                label: context.l10n.pick(uz: '$credit kr', ru: '$credit кр', en: '$credit cr'),
                                 isDark: isDark,
                               ),
                             ],
@@ -499,26 +499,26 @@ class _SubjectCard extends StatelessWidget {
                   child: Column(
                     children: [
                       if (semesterName.isNotEmpty)
-                        _DetailRow(label: 'Semestr', value: semesterName, isDark: isDark),
+                        _DetailRow(label: context.l10n.semester, value: semesterName, isDark: isDark),
                       if (levelName.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        _DetailRow(label: 'Kurs', value: levelName, isDark: isDark),
+                        _DetailRow(label: context.l10n.course, value: levelName, isDark: isDark),
                       ],
                       if (facultyName.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        _DetailRow(label: 'Fakultet', value: facultyName, isDark: isDark),
+                        _DetailRow(label: context.l10n.faculty, value: facultyName, isDark: isDark),
                       ],
                       if (specialtyName.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        _DetailRow(label: 'Yo\'nalish', value: specialtyName, isDark: isDark),
+                        _DetailRow(label: context.l10n.direction, value: specialtyName, isDark: isDark),
                       ],
                       if (kafedraName.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        _DetailRow(label: 'Kafedra', value: kafedraName, isDark: isDark),
+                        _DetailRow(label: context.l10n.pick(uz: 'Kafedra', ru: 'Кафедра', en: 'Department'), value: kafedraName, isDark: isDark),
                       ],
                       if (educationType.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        _DetailRow(label: 'Ta\'lim turi', value: educationType, isDark: isDark),
+                        _DetailRow(label: context.l10n.educationType, value: educationType, isDark: isDark),
                       ],
                     ],
                   ),

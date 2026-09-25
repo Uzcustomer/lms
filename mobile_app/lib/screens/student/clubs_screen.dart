@@ -75,7 +75,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? "Ariza yuborildi!"),
+          content: Text(res['message'] ?? AppLocalizations.current.pick(uz: 'Ariza yuborildi!', ru: 'Заявка отправлена!', en: 'Application sent!')),
           backgroundColor: const Color(0xFF047857),
         ),
       );
@@ -109,7 +109,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? "Ariza bekor qilindi!"),
+          content: Text(res['message'] ?? AppLocalizations.current.pick(uz: 'Ariza bekor qilindi!', ru: 'Заявка отменена!', en: 'Application cancelled!')),
           backgroundColor: const Color(0xFFB45309),
         ),
       );
@@ -334,8 +334,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                           valueColor: AlwaysStoppedAnimation(Color(0xFFBE123C)),
                         ),
                       )
-                    : const Text(
-                        'Bekor qilish',
+                    : Text(
+                        context.l10n.cancel,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -372,8 +372,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                               valueColor: AlwaysStoppedAnimation(Colors.white),
                             ),
                           )
-                        : const Text(
-                            "A'zo bo'lish",
+                        : Text(
+                            context.l10n.pick(uz: 'A\'zo bo\'lish', ru: 'Вступить', en: 'Join'),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -399,12 +399,12 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
             Icon(Icons.groups_outlined, size: 64, color: subColor.withAlpha(80)),
             const SizedBox(height: 12),
             Text(
-              "Hali ariza yuborilmagan",
+              context.l10n.pick(uz: 'Hali ariza yuborilmagan', ru: 'Заявка ещё не подана', en: 'No application yet'),
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: subColor),
             ),
             const SizedBox(height: 4),
             Text(
-              "To'garakka a'zo bo'lish uchun ariza yuboring",
+              context.l10n.pick(uz: 'To\'garakka a\'zo bo\'lish uchun ariza yuboring', ru: 'Подайте заявку, чтобы вступить в кружок', en: 'Apply to join the club'),
               style: TextStyle(fontSize: 12, color: subColor.withAlpha(160)),
             ),
           ],
@@ -426,15 +426,15 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
           switch (status) {
             case 'approved':
               statusColor = const Color(0xFF047857);
-              statusLabel = 'Tasdiqlangan';
+              statusLabel = context.l10n.confirmed;
               break;
             case 'rejected':
               statusColor = const Color(0xFFBE123C);
-              statusLabel = 'Rad etilgan';
+              statusLabel = context.l10n.pick(uz: 'Rad etilgan', ru: 'Отклонено', en: 'Rejected');
               break;
             default:
               statusColor = const Color(0xFFB45309);
-              statusLabel = 'Kutilmoqda';
+              statusLabel = context.l10n.pending;
           }
 
           return Container(
@@ -542,8 +542,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                                   valueColor: AlwaysStoppedAnimation(Color(0xFFBE123C)),
                                 ),
                               )
-                            : const Text(
-                                'Bekor qilish',
+                            : Text(
+                                context.l10n.cancel,
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,

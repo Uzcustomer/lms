@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
+import '../../l10n/app_localizations.dart';
 
 class AppealDetailScreen extends StatefulWidget {
   final int appealId;
@@ -49,7 +50,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = "Ma'lumotlarni yuklashda xatolik";
+        _error = AppLocalizations.current.pick(uz: 'Ma\'lumotlarni yuklashda xatolik', ru: 'Ошибка загрузки данных', en: 'Failed to load data');
         _loading = false;
       });
     }
@@ -73,7 +74,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
     final text = _commentCtrl.text.trim();
     if (text.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Izoh kamida 3 ta belgidan iborat bo\'lsin')),
+        SnackBar(content: Text(AppLocalizations.current.pick(uz: 'Izoh kamida 3 ta belgidan iborat bo\'lsin', ru: 'Комментарий должен содержать не менее 3 символов', en: 'The comment must be at least 3 characters'))),
       );
       return;
     }
@@ -100,7 +101,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFBE123C)),
+        SnackBar(content: Text(AppLocalizations.current.genericError), backgroundColor: const Color(0xFFBE123C)),
       );
     } finally {
       if (mounted) setState(() => _submittingComment = false);
@@ -139,8 +140,8 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'XIZMATLAR',
-            title: 'Apellyatsiya tafsilotlari',
+            overline: context.l10n.services.toUpperCase(),
+            title: context.l10n.pick(uz: 'Apellyatsiya tafsilotlari', ru: 'Детали апелляции', en: 'Appeal details'),
             onBack: () => Navigator.pop(context, true),
           ),
           Expanded(
@@ -151,9 +152,9 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(_error ?? 'Topilmadi', style: TextStyle(color: subColor)),
+                            Text(_error ?? context.l10n.notFoundShort, style: TextStyle(color: subColor)),
                             const SizedBox(height: 12),
-                            TextButton(onPressed: _load, child: const Text('Qayta yuklash')),
+                            TextButton(onPressed: _load, child: Text(context.l10n.reload)),
                           ],
                         ),
                       )
@@ -282,7 +283,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Apellyatsiya sababi',
+                Text(context.l10n.pick(uz: 'Apellyatsiya sababi', ru: 'Причина апелляции', en: 'Reason for appeal'),
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: subColor)),
                 const SizedBox(height: 8),
                 Text(
@@ -304,7 +305,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            appeal['file_original_name'] ?? 'Fayl',
+                            appeal['file_original_name'] ?? context.l10n.file,
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -330,7 +331,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Tekshiruv natijasi',
+                    context.l10n.pick(uz: 'Tekshiruv natijasi', ru: 'Результат рассмотрения', en: 'Review outcome'),
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
                   ),
                   const SizedBox(height: 6),
@@ -350,13 +351,13 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
           ],
           const SizedBox(height: 16),
           Text(
-            'Izohlar (${comments.length})',
+            context.l10n.pick(uz: 'Izohlar (${comments.length})', ru: 'Комментарии (${comments.length})', en: 'Comments (${comments.length})'),
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textColor),
           ),
           const SizedBox(height: 8),
           if (comments.isEmpty)
             Text(
-              'Hozircha izoh yo\'q',
+              context.l10n.pick(uz: 'Hozircha izoh yo\'q', ru: 'Комментариев пока нет', en: 'No comments yet'),
               style: TextStyle(fontSize: 12, color: subColor),
             )
           else
@@ -435,7 +436,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            comment['file_original_name'] ?? 'Fayl',
+                            comment['file_original_name'] ?? context.l10n.file,
                             style: TextStyle(fontSize: 11, color: subColor),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -516,7 +517,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
-                      hintText: 'Izoh yozish…',
+                      hintText: context.l10n.pick(uz: 'Izoh yozish…', ru: 'Написать комментарий…', en: 'Write a comment…'),
                       hintStyle: TextStyle(fontSize: 12, color: subColor.withAlpha(170)),
                     ),
                   ),

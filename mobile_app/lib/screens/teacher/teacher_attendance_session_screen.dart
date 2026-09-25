@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/attendance_service.dart';
 import '../../widgets/clinic_header.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Live view of one attendance session: counters, countdown, per-student
 /// status with manual override, remind and close actions. Polls every 5 s
@@ -55,7 +56,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
-      _error ??= 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error ??= AppLocalizations.current.networkError;
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -73,7 +74,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     } on ApiException catch (e) {
       if (mounted) _snack(e.message, error: true);
     } catch (_) {
-      if (mounted) _snack('Tarmoq xatoligi. Qayta urinib ko\'ring.', error: true);
+      if (mounted) _snack(context.l10n.retryError, error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -86,22 +87,22 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
 
   Future<void> _remind() => _run(
         () => _service.remind(widget.sessionId),
-        success: 'Xonadagi talabalarga eslatma yuborildi.',
+        success: context.l10n.pick(uz: 'Xonadagi talabalarga eslatma yuborildi.', ru: 'Напоминание отправлено студентам в аудитории.', en: 'Reminder sent to the students in the room.'),
       );
 
   Future<void> _cancel() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Davomatni bekor qilish'),
-        content: const Text(
-            'Bu sessiya talabalarning tasdiqlari bilan birga BUTUNLAY o\'chiriladi. Darsni keyin qaytadan boshlash mumkin. Davom etasizmi?'),
+        title: Text(context.l10n.pick(uz: 'Davomatni bekor qilish', ru: 'Отменить перекличку', en: 'Cancel attendance')),
+        content: Text(
+            context.l10n.pick(uz: 'Bu sessiya talabalarning tasdiqlari bilan birga BUTUNLAY o\'chiriladi. Darsni keyin qaytadan boshlash mumkin. Davom etasizmi?', ru: 'Эта сессия будет ПОЛНОСТЬЮ удалена вместе с подтверждениями студентов. Занятие можно будет начать заново. Продолжить?', en: 'This session will be deleted COMPLETELY, including the students\' confirmations. The lesson can be started again later. Continue?')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Yo\'q')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.no)),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFBE123C), foregroundColor: Colors.white),
-            child: const Text('Bekor qilish'),
+            child: Text(context.l10n.cancel),
           ),
         ],
       ),
@@ -112,12 +113,12 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     try {
       await _service.cancelSession(widget.sessionId);
       if (!mounted) return;
-      _snack('Davomat bekor qilindi.');
+      _snack(context.l10n.pick(uz: 'Davomat bekor qilindi.', ru: 'Перекличка отменена.', en: 'Attendance cancelled.'));
       Navigator.of(context).pop();
     } on ApiException catch (e) {
       if (mounted) _snack(e.message, error: true);
     } catch (_) {
-      if (mounted) _snack('Tarmoq xatoligi. Qayta urinib ko\'ring.', error: true);
+      if (mounted) _snack(context.l10n.retryError, error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -127,16 +128,16 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Davomatni yopish'),
-        content: const Text(
-            'Tasdiqlamagan talabalar "kelmadi" deb belgilanadi. Keyin ham qo\'lda o\'zgartira olasiz. Davom etasizmi?'),
+        title: Text(context.l10n.pick(uz: 'Davomatni yopish', ru: 'Закрыть перекличку', en: 'Close attendance')),
+        content: Text(
+            context.l10n.pick(uz: 'Tasdiqlamagan talabalar "kelmadi" deb belgilanadi. Keyin ham qo\'lda o\'zgartira olasiz. Davom etasizmi?', ru: 'Студенты без подтверждения будут отмечены как «отсутствовал». Позже это можно изменить вручную. Продолжить?', en: 'Students who have not confirmed will be marked absent. You can still change it manually later. Continue?')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Bekor qilish')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yopish')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.cancel)),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.close)),
         ],
       ),
     );
-    if (ok == true) await _run(() => _service.close(widget.sessionId), success: 'Davomat yopildi.');
+    if (ok == true) await _run(() => _service.close(widget.sessionId), success: context.l10n.pick(uz: 'Davomat yopildi.', ru: 'Перекличка закрыта.', en: 'Attendance closed.'));
   }
 
   void _snack(String msg, {bool error = false}) {
@@ -156,14 +157,14 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
       body: Column(
         children: [
           ClinicHeader(
-            title: s?['subject_name']?.toString() ?? 'Davomat',
+            title: s?['subject_name']?.toString() ?? context.l10n.attendance,
             onBack: () => Navigator.of(context).pop(),
           ),
           Expanded(
             child: _loading && s == null
                 ? const Center(child: CircularProgressIndicator())
                 : s == null
-                    ? Center(child: Text(_error ?? 'Sessiya topilmadi'))
+                    ? Center(child: Text(_error ?? context.l10n.pick(uz: 'Sessiya topilmadi', ru: 'Сессия не найдена', en: 'Session not found')))
                     : RefreshIndicator(
                         onRefresh: () => _load(silent: true),
                         child: ListView(
@@ -214,14 +215,14 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
           const SizedBox(height: 12),
           Row(
             children: [
-              _stat('Keldi', s['present'], Colors.white),
-              _stat('Kutilmoqda', s['pending'], Colors.white70),
-              _stat('Kelmadi', s['absent'], const Color(0xFFFCA5A5)),
+              _stat(context.l10n.present, s['present'], Colors.white),
+              _stat(context.l10n.pending, s['pending'], Colors.white70),
+              _stat(context.l10n.absentLabel, s['absent'], const Color(0xFFFCA5A5)),
               const Spacer(),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(_isOpen ? 'Qoldi' : 'Yopilgan',
+                  Text(_isOpen ? context.l10n.pick(uz: 'Qoldi', ru: 'Осталось', en: 'Left') : context.l10n.closed,
                       style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11)),
                   Text(_isOpen ? leftStr : '${s['present']}/${s['total']}',
                       style: const TextStyle(
@@ -235,7 +236,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
           ),
           if (s['beacon'] == null) ...[
             const SizedBox(height: 10),
-            Text('Bu xonada beacon yo\'q — talabalar tasdiqlay olmaydi, qo\'lda belgilang.',
+            Text(context.l10n.pick(uz: 'Bu xonada beacon yo\'q — talabalar tasdiqlay olmaydi, qo\'lda belgilang.', ru: 'В этой аудитории нет маяка — студенты не смогут подтвердить, отмечайте вручную.', en: 'No beacon in this room — students cannot confirm, mark them manually.'),
                 style: TextStyle(color: const Color(0xFFFDE68A), fontSize: 12)),
           ],
         ],
@@ -259,10 +260,10 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
 
   Widget _filters(Map<String, dynamic> s) {
     final items = [
-      ('all', 'Hammasi', s['total']),
-      ('present', 'Keldi', s['present']),
-      ('pending', 'Kutilmoqda', s['pending']),
-      ('absent', 'Kelmadi', s['absent']),
+      ('all', context.l10n.all, s['total']),
+      ('present', context.l10n.present, s['present']),
+      ('pending', context.l10n.pending, s['pending']),
+      ('absent', context.l10n.absentLabel, s['absent']),
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -288,9 +289,9 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     final status = st['status']?.toString() ?? 'pending';
     final byTeacher = st['decided_by'] == 'teacher';
     final (color, icon, label) = switch (status) {
-      'present' => (ClinicTheme.green, Icons.check_circle, 'Keldi'),
-      'absent' => (const Color(0xFFBE123C), Icons.cancel, 'Kelmadi'),
-      _ => (const Color(0xFFB45309), Icons.schedule, st['beacon_seen'] == true ? 'Xonada, tasdiqlamadi' : 'Kutilmoqda'),
+      'present' => (ClinicTheme.green, Icons.check_circle, context.l10n.present),
+      'absent' => (const Color(0xFFBE123C), Icons.cancel, context.l10n.absentLabel),
+      _ => (const Color(0xFFB45309), Icons.schedule, st['beacon_seen'] == true ? context.l10n.pick(uz: 'Xonada, tasdiqlamadi', ru: 'В аудитории, не подтвердил', en: 'In the room, not confirmed') : context.l10n.pending),
     };
 
     return Container(
@@ -308,7 +309,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
         subtitle: Text.rich(
           TextSpan(children: [
             TextSpan(
-              text: '${st['group_name'] ?? ''} · $label${byTeacher ? ' (qo\'lda)' : ''}'
+              text: '${st['group_name'] ?? ''} · $label${byTeacher ? ' (${context.l10n.pick(uz: 'qo\'lda', ru: 'вручную', en: 'manual')})' : ''}'
                   '${st['rssi'] != null && status == 'present' ? ' · ${st['rssi']} dBm' : ''}',
             ),
             if (_faceLabel(st) case final face?)
@@ -320,7 +321,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
             ? null
             : TextButton(
                 onPressed: () => _toggle(st),
-                child: Text(status == 'present' ? 'Kelmadi' : 'Keldi',
+                child: Text(status == 'present' ? context.l10n.absentLabel : context.l10n.present,
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
               ),
       ),
@@ -332,12 +333,16 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     final sim = st['face_similarity'] == null
         ? ''
         : ' ${double.tryParse(st['face_similarity'].toString())?.round() ?? ''}%';
-    if (st['face_verified'] == true) return ('✓ yuz$sim', ClinicTheme.green);
-    if (st['face_note'] == 'mismatch') return ('✗ yuz mos emas$sim', const Color(0xFFBE123C));
-    const unchecked = {'no_photo': 'rasmi yo\'q', 'no_service': 'servis ishlamadi', 'disabled': 'Face ID o\'chiq'};
+    if (st['face_verified'] == true) return ('✓ ${context.l10n.pick(uz: 'yuz', ru: 'лицо', en: 'face')}$sim', ClinicTheme.green);
+    if (st['face_note'] == 'mismatch') return ('✗ ${context.l10n.pick(uz: 'yuz mos emas', ru: 'лицо не совпало', en: 'face mismatch')}$sim', const Color(0xFFBE123C));
+    final unchecked = {
+      'no_photo': context.l10n.pick(uz: 'rasmi yo\'q', ru: 'нет фото', en: 'no photo'),
+      'no_service': context.l10n.pick(uz: 'servis ishlamadi', ru: 'сервис недоступен', en: 'service unavailable'),
+      'disabled': context.l10n.pick(uz: 'Face ID o\'chiq', ru: 'Face ID выключен', en: 'Face ID off'),
+    };
     final note = unchecked[st['face_note']];
     if (note != null && st['status'] == 'present' && st['decided_by'] == 'student') {
-      return ('? yuz tekshirilmadi ($note)', const Color(0xFFB45309));
+      return ('? ${context.l10n.pick(uz: 'yuz tekshirilmadi', ru: 'лицо не проверено', en: 'face not checked')} ($note)', const Color(0xFFB45309));
     }
     return null;
   }
@@ -353,7 +358,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
               onPressed: _busy ? null : _cancel,
               style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFBE123C)),
               icon: const Icon(Icons.delete_outline, size: 18),
-              label: const Text('Bekor'),
+              label: Text(context.l10n.cancel),
             ),
             if (_isOpen) ...[
               const SizedBox(width: 10),
@@ -361,7 +366,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
                 child: OutlinedButton.icon(
                   onPressed: _busy ? null : _remind,
                   icon: const Icon(Icons.notifications_active_outlined, size: 18),
-                  label: const Text('Eslatma'),
+                  label: Text(context.l10n.pick(uz: 'Eslatma', ru: 'Напомнить', en: 'Remind')),
                 ),
               ),
               const SizedBox(width: 10),
@@ -371,7 +376,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
                   style: ElevatedButton.styleFrom(
                       backgroundColor: ClinicTheme.blue, foregroundColor: Colors.white),
                   icon: const Icon(Icons.lock_outline, size: 18),
-                  label: const Text('Yopish'),
+                  label: Text(context.l10n.close),
                 ),
               ),
             ],

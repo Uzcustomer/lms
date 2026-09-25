@@ -107,7 +107,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     final formatted = username.startsWith('@') ? username : '@$username';
     if (!RegExp(r'^@[a-zA-Z0-9_]{5,32}$').hasMatch(formatted)) {
       setState(() => _telegramError =
-          'Username @username formatida bo\'lishi kerak (kamida 5 belgi)');
+          AppLocalizations.current.pick(uz: 'Username @username formatida bo\'lishi kerak (kamida 5 belgi)', ru: 'Username должен быть в формате @username (не менее 5 символов)', en: 'Username must be in the @username format (at least 5 characters)'));
       return;
     }
 
@@ -136,7 +136,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _telegramError = 'Xatolik yuz berdi';
+        _telegramError = AppLocalizations.current.genericError;
         _isSavingTelegram = false;
       });
     }
@@ -336,7 +336,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 alignment: WrapAlignment.center,
                 children: [
                   if (year.isNotEmpty) _chip(year),
-                  if (course.isNotEmpty) _chip('$course-kurs'),
+                  if (course.isNotEmpty) _chip(context.l10n.pick(uz: '$course-kurs', ru: '$course курс', en: 'Year $course')),
                   if (semester.isNotEmpty) _chip(semester),
                   if (payment.isNotEmpty) _chip(payment),
                 ],

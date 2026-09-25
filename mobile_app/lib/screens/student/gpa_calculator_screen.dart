@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/student_provider.dart';
 import '../../widgets/clinic_header.dart';
+import '../../l10n/app_localizations.dart';
 
 class GpaCalculatorScreen extends StatefulWidget {
   const GpaCalculatorScreen({super.key});
@@ -58,7 +59,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
         children: [
           ClinicHeader(
             overline: 'FOYDALI',
-            title: 'GPA Kalkulyator',
+            title: context.l10n.pick(uz: 'GPA Kalkulyator', ru: 'GPA калькулятор', en: 'GPA calculator'),
             onBack: () => Navigator.pop(context),
           ),
           Expanded(
@@ -118,13 +119,13 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
                       _buildScaleRow(),
                       const SizedBox(height: 16),
                       if (graded.isNotEmpty) ...[
-                        _sectionTitle('Baholangan fanlar', '${graded.length} ta'),
+                        _sectionTitle(context.l10n.pick(uz: 'Baholangan fanlar', ru: 'Оценённые предметы', en: 'Graded subjects'), context.l10n.pick(uz: '${graded.length} ta', ru: '${graded.length} шт', en: '${graded.length}')),
                         const SizedBox(height: 10),
                         ...graded.map(_buildSubjectCard),
                       ],
                       if (pending.isNotEmpty) ...[
                         const SizedBox(height: 16),
-                        _sectionTitle('Hali baholanmagan', '${pending.length} ta'),
+                        _sectionTitle(context.l10n.pick(uz: 'Hali baholanmagan', ru: 'Ещё не оценено', en: 'Not graded yet'), context.l10n.pick(uz: '${pending.length} ta', ru: '${pending.length} шт', en: '${pending.length}')),
                         const SizedBox(height: 10),
                         ...pending.map(_buildPendingCard),
                       ],
@@ -145,16 +146,16 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
     final String label;
     if (gpa >= 4.5) {
       color = const Color(0xFF15803D);
-      label = "A'lo";
+      label = context.l10n.pick(uz: 'A\'lo', ru: 'Отлично', en: 'Excellent');
     } else if (gpa >= 3.5) {
       color = const Color(0xFF1D4ED8);
-      label = 'Yaxshi';
+      label = context.l10n.pick(uz: 'Yaxshi', ru: 'Хорошо', en: 'Good');
     } else if (gpa >= 2.5) {
       color = const Color(0xFFB45309);
-      label = 'Qoniqarli';
+      label = context.l10n.pick(uz: 'Qoniqarli', ru: 'Удовлетворительно', en: 'Satisfactory');
     } else if (gpa > 0) {
       color = const Color(0xFFBE123C);
-      label = 'Qoniqarsiz';
+      label = context.l10n.pick(uz: 'Qoniqarsiz', ru: 'Неудовлетворительно', en: 'Unsatisfactory');
     } else {
       color = const Color(0xFF0F766E);
       label = '';
@@ -191,7 +192,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('SIZNING GPA',
+                  Text(context.l10n.pick(uz: 'SIZNING GPA', ru: 'ВАШ GPA', en: 'YOUR GPA'),
                       style: TextStyle(
                           fontSize: 10,
                           letterSpacing: 0.5,
@@ -234,7 +235,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          canPass ? 'Kursdan o\'tadi' : 'O\'tmaydi',
+                          canPass ? context.l10n.pick(uz: 'Kursdan o\'tadi', ru: 'Переходит на курс', en: 'Passes the year') : 'O\'tmaydi',
                           style: TextStyle(
                               fontSize: 11,
                               color: Colors.white.withOpacity(0.85),
@@ -286,7 +287,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                'GPA = Σ(kredit × baho) ÷ Σ(kredit) = '
+                '${context.l10n.pick(uz: 'GPA = Σ(kredit × baho) ÷ Σ(kredit) = ', ru: 'GPA = Σ(кредит × оценка) ÷ Σ(кредит) = ', en: 'GPA = Σ(credit × grade) ÷ Σ(credit) = ')}'
                 '${(gpa * totalCredits).toStringAsFixed(0)} ÷ $totalCredits '
                 '= ${gpa.toStringAsFixed(2)}',
                 style: TextStyle(
@@ -320,13 +321,13 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
   Widget _buildScaleRow() {
     return Row(
       children: [
-        _scaleItem(5, "A'lo", '86-100', const Color(0xFF15803D)),
+        _scaleItem(5, context.l10n.pick(uz: 'A\'lo', ru: 'Отлично', en: 'Excellent'), '86-100', const Color(0xFF15803D)),
         const SizedBox(width: 8),
-        _scaleItem(4, 'Yaxshi', '71-85', const Color(0xFF1D4ED8)),
+        _scaleItem(4, context.l10n.pick(uz: 'Yaxshi', ru: 'Хорошо', en: 'Good'), '71-85', const Color(0xFF1D4ED8)),
         const SizedBox(width: 8),
-        _scaleItem(3, 'Qon.', '56-70', const Color(0xFFB45309)),
+        _scaleItem(3, context.l10n.pick(uz: 'Qon.', ru: 'Удовл.', en: 'Satisf.'), '56-70', const Color(0xFFB45309)),
         const SizedBox(width: 8),
-        _scaleItem(2, 'Qon-siz', '0-55', const Color(0xFFBE123C)),
+        _scaleItem(2, context.l10n.pick(uz: 'Qon-siz', ru: 'Неудовл.', en: 'Unsatisf.'), '0-55', const Color(0xFFBE123C)),
       ],
     );
   }
@@ -415,7 +416,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
                               children: [
                                 Icon(Icons.stars_rounded, size: 12, color: muted),
                                 const SizedBox(width: 3),
-                                Text('${s.credit.toInt()} kredit',
+                                Text(context.l10n.pick(uz: '${s.credit.toInt()} kredit', ru: '${s.credit.toInt()} кредит', en: '${s.credit.toInt()} credits'),
                                     style: TextStyle(fontSize: 11, color: muted)),
                                 const SizedBox(width: 12),
                                 if (s.jn != null) ...[
@@ -508,7 +509,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
-                Text('${s.credit.toInt()} kredit',
+                Text(context.l10n.pick(uz: '${s.credit.toInt()} kredit', ru: '${s.credit.toInt()} кредит', en: '${s.credit.toInt()} credits'),
                     style: TextStyle(fontSize: 11, color: muted)),
               ],
             ),
@@ -519,7 +520,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
               color: const Color(0xFFB45309),
               borderRadius: BorderRadius.circular(7),
             ),
-            child: const Text('Kutilmoqda',
+            child: Text(context.l10n.pending,
                 style: TextStyle(
                     fontSize: 10, color: Colors.white, fontWeight: FontWeight.w800)),
           ),

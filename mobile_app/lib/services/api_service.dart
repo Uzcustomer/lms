@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../l10n/app_localizations.dart';
 
 class ApiService {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
@@ -155,9 +156,9 @@ class ApiService {
     }
     if (response.statusCode == 401) {
       await clearToken();
-      throw ApiException('Sessiya tugagan. Qayta kiring.', 401);
+      throw ApiException(AppLocalizations.current.sessionExpired, 401);
     }
-    var message = 'Faylni yuklab bo\'lmadi';
+    var message = AppLocalizations.current.pick(uz: 'Faylni yuklab bo\'lmadi', ru: 'Не удалось загрузить файл', en: 'Could not download the file');
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       message = body['message']?.toString() ?? message;
@@ -218,16 +219,16 @@ class ApiService {
       return body;
     } else if (response.statusCode == 401) {
       clearToken();
-      throw ApiException('Sessiya tugagan. Qayta kiring.', response.statusCode);
+      throw ApiException(AppLocalizations.current.sessionExpired, response.statusCode);
     } else if (response.statusCode == 422) {
       final errors = body['errors'] as Map<String, dynamic>?;
       final message = errors?.values.first is List
           ? (errors!.values.first as List).first.toString()
-          : body['message']?.toString() ?? 'Xatolik yuz berdi';
+          : body['message']?.toString() ?? AppLocalizations.current.genericError;
       throw ApiException(message, response.statusCode);
     } else {
       throw ApiException(
-        body['message']?.toString() ?? 'Server xatoligi',
+        body['message']?.toString() ?? AppLocalizations.current.serverError,
         response.statusCode,
       );
     }

@@ -84,8 +84,8 @@ class _AiChatScreenState extends State<AiChatScreen>
   Future<void> _refreshData() async {
     if (_contextLoading) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ma\'lumotlar yangilanmoqda...'),
+      SnackBar( 
+        content: Text(AppLocalizations.current.pick(uz: 'Ma\'lumotlar yangilanmoqda...', ru: 'Обновление данных...', en: 'Refreshing data...')),
         duration: Duration(seconds: 2),
       ),
     );
@@ -99,8 +99,8 @@ class _AiChatScreenState extends State<AiChatScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(_contextLoaded
-            ? 'Ma\'lumotlar yangilandi$tsStr'
-            : 'Yangilashda xatolik'),
+            ? AppLocalizations.current.pick(uz: 'Ma\'lumotlar yangilandi$tsStr', ru: 'Данные обновлены$tsStr', en: 'Data refreshed$tsStr')
+            : AppLocalizations.current.pick(uz: 'Yangilashda xatolik', ru: 'Ошибка обновления', en: 'Refresh failed')),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -134,7 +134,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     }
 
     final attachments = List<GeminiAttachment>.from(_pendingAttachments);
-    final messageText = text.isEmpty ? 'Yuborilgan faylni tahlil qiling' : text;
+    final messageText = text.isEmpty ? AppLocalizations.current.pick(uz: 'Yuborilgan faylni tahlil qiling', ru: 'Проанализируйте отправленный файл', en: 'Analyse the attached file') : text;
 
     setState(() {
       _messages.add(_ChatMessage(
@@ -199,7 +199,7 @@ class _AiChatScreenState extends State<AiChatScreen>
       if (bytes == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Faylni o\'qib bo\'lmadi')),
+            SnackBar(content: Text(AppLocalizations.current.pick(uz: 'Faylni o\'qib bo\'lmadi', ru: 'Не удалось прочитать файл', en: 'Could not read the file'))),
           );
         }
         return;
@@ -208,8 +208,8 @@ class _AiChatScreenState extends State<AiChatScreen>
       if (bytes.length > _maxFileSize) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Fayl hajmi 18MB dan katta. Kichikroq fayl tanlang')),
+            SnackBar( 
+                content: Text(AppLocalizations.current.pick(uz: 'Fayl hajmi 18MB dan katta. Kichikroq fayl tanlang', ru: 'Файл больше 18 МБ. Выберите файл меньше', en: 'The file is over 18 MB. Choose a smaller one'))),
           );
         }
         return;
@@ -230,7 +230,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Xatolik: $e')),
+          SnackBar(content: Text('${AppLocalizations.current.genericError}: $e')),
         );
       }
     } finally {
@@ -316,13 +316,13 @@ class _AiChatScreenState extends State<AiChatScreen>
                 ),
               ),
               const SizedBox(height: 18),
-              _attachOption(Icons.image_outlined, 'Rasm', 'JPG, PNG, WEBP',
+              _attachOption(Icons.image_outlined, context.l10n.picture, 'JPG, PNG, WEBP',
                   const Color(0xFF1D4ED8), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.custom, extensions: _imageExt);
               }),
               _attachOption(Icons.picture_as_pdf_outlined, 'PDF',
-                  'Hujjatlar va kitoblar', const Color(0xFFBE123C), () {
+                  context.l10n.pick(uz: 'Hujjatlar va kitoblar', ru: 'Документы и книги', en: 'Documents and books'), const Color(0xFFBE123C), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.custom, extensions: ['pdf']);
               }),
@@ -336,7 +336,7 @@ class _AiChatScreenState extends State<AiChatScreen>
                 Navigator.pop(ctx);
                 _pickFile(FileType.custom, extensions: _videoExt);
               }),
-              _attachOption(Icons.insert_drive_file_outlined, 'Boshqa fayl',
+              _attachOption(Icons.insert_drive_file_outlined, context.l10n.pick(uz: 'Boshqa fayl', ru: 'Другой файл', en: 'Other file'),
                   'TXT, CSV, MD', const Color(0xFF0F766E), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.any);
@@ -398,12 +398,12 @@ class _AiChatScreenState extends State<AiChatScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Chatni tozalash'),
-        content: const Text('Barcha xabarlar o\'chiriladi. Davom etasizmi?'),
+        title: Text(context.l10n.pick(uz: 'Chatni tozalash', ru: 'Очистить чат', en: 'Clear chat')),
+        content: Text(context.l10n.pick(uz: 'Barcha xabarlar o\'chiriladi. Davom etasizmi?', ru: 'Все сообщения будут удалены. Продолжить?', en: 'All messages will be deleted. Continue?')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Bekor qilish'),
+            child: Text(context.l10n.cancel),
           ),
           TextButton(
             onPressed: () {
@@ -413,7 +413,7 @@ class _AiChatScreenState extends State<AiChatScreen>
                 _gemini.resetChat();
               });
             },
-            child: const Text('Tozalash', style: TextStyle(color: Colors.red)),
+            child: Text(context.l10n.pick(uz: 'Tozalash', ru: 'Очистить', en: 'Clear'), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -791,8 +791,8 @@ class _AiChatScreenState extends State<AiChatScreen>
                             onTap: () {
                               Clipboard.setData(ClipboardData(text: msg.text));
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Nusxa olindi'),
+                                SnackBar( 
+                                  content: Text(AppLocalizations.current.pick(uz: 'Nusxa olindi', ru: 'Скопировано', en: 'Copied')),
                                   duration: Duration(seconds: 1),
                                 ),
                               );

@@ -77,12 +77,12 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
           builder: (ctx) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFBE123C), size: 48),
-            title: const Text(
-              'Muddat tugagan',
+            title: Text(
+              context.l10n.pick(uz: 'Muddat tugagan', ru: 'Срок истёк', en: 'Deadline passed'),
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
             ),
-            content: const Text(
-              'Sababli ariza topshirish muddati tugagan. Ariza faqat 10 kun ichida topshirilishi kerak.',
+            content: Text(
+              context.l10n.pick(uz: 'Sababli ariza topshirish muddati tugagan. Ariza faqat 10 kun ichida topshirilishi kerak.', ru: 'Срок подачи заявления по уважительной причине истёк. Заявление подаётся в течение 10 дней.', en: 'The deadline for an excused-absence application has passed. It must be filed within 10 days.'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14),
             ),
@@ -96,7 +96,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Tushunarli'),
+                  child: Text(context.l10n.pick(uz: 'Tushunarli', ru: 'Понятно', en: 'Got it')),
                 ),
               ),
             ],
@@ -176,11 +176,11 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_startDate == null || _endDate == null) {
-      setState(() => _submitError = 'Sanalarni tanlang');
+      setState(() => _submitError = AppLocalizations.current.pick(uz: 'Sanalarni tanlang', ru: 'Выберите даты', en: 'Select the dates'));
       return;
     }
     if (_fileBytes == null) {
-      setState(() => _submitError = 'Fayl yuklang');
+      setState(() => _submitError = AppLocalizations.current.pick(uz: 'Fayl yuklang', ru: 'Загрузите файл', en: 'Upload a file'));
       return;
     }
     if (_missedAssessments.isNotEmpty && !_allDatesSelected()) {
@@ -636,7 +636,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '${dateFormat.format(_startDate!)} — ${dateFormat.format(_endDate!)} ($_excuseDays kun)',
+                              '${dateFormat.format(_startDate!)} — ${dateFormat.format(_endDate!)} (${context.l10n.pick(uz: '$_excuseDays kun', ru: '$_excuseDays дн.', en: '$_excuseDays days')})',
                               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textColor),
                             ),
                           ),
@@ -956,7 +956,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Joriy nazoratdan keyingi test kunlari',
+                context.l10n.pick(uz: 'Joriy nazoratdan keyingi test kunlari', ru: 'Дни тестов после текущего контроля', en: 'Test days after the midterm'),
                 style: TextStyle(fontSize: 11, color: const Color(0xFFB45309)),
               ),
             ),
@@ -1339,8 +1339,8 @@ class _CalendarPickerState extends State<_CalendarPicker> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Tanlash',
+                  child: Text(
+                    context.l10n.pick(uz: 'Tanlash', ru: 'Выбрать', en: 'Select'),
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),

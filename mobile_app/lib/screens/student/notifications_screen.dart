@@ -340,9 +340,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (dt == null) return iso;
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'hozir';
-    if (diff.inHours < 1) return '${diff.inMinutes} daqiqa oldin';
-    if (diff.inDays < 1) return '${diff.inHours} soat oldin';
-    if (diff.inDays < 7) return '${diff.inDays} kun oldin';
+    if (diff.inHours < 1) return AppLocalizations.current.minutesAgo(diff.inMinutes);
+    if (diff.inDays < 1) return AppLocalizations.current.hoursAgo(diff.inHours);
+    if (diff.inDays < 7) return AppLocalizations.current.daysAgo(diff.inDays);
     return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
   }
 }

@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 class AppLocalizations {
   final Locale locale;
 
   AppLocalizations(this.locale);
+
+  /// The strings for the language the app is currently showing. For
+  /// providers and services, which have no BuildContext; widgets should
+  /// keep using [of] so they rebuild when the locale changes.
+  static AppLocalizations current = AppLocalizations(const Locale('uz'));
 
   static AppLocalizations of(BuildContext context) {
     return Localizations.of<AppLocalizations>(context, AppLocalizations) ??
@@ -137,6 +143,84 @@ class AppLocalizations {
   String get noScheduleThisWeek => get('no_schedule_this_week');
   String get noLessons => get('no_lessons');
   String get today => get('today');
+  String get phone => get('phone');
+
+  // ── Shared strings ──
+  String get networkError => get('network_error');
+  String get retryError => get('retry_error');
+  String get sessionExpired => get('session_expired');
+  String get genericError => get('generic_error');
+  String get serverError => get('server_error');
+  String get loading => get('loading');
+  String get close => get('close');
+  String get all => get('all');
+  String get present => get('present');
+  String get absentLabel => get('absent_label');
+  String get confirm => get('confirm');
+  String get confirmed => get('confirmed');
+  String get noInfo => get('no_info');
+  String get refresh => get('refresh');
+  String get subjects => get('subjects');
+  String get checking => get('checking');
+  String get sending => get('sending');
+  String get yes => get('yes');
+  String get no => get('no');
+  String get currency => get('currency');
+  String get points => get('points');
+  String get start => get('start');
+  String get back => get('back');
+  String get openFile => get('open_file');
+  String get notUploaded => get('not_uploaded');
+  String get uploaded => get('uploaded');
+  String get graded => get('graded');
+  String get select => get('select');
+  String get picture => get('picture');
+  String get library => get('library');
+  String get permissionGrant => get('permission_grant');
+  String get bluetoothSettings => get('bluetooth_settings');
+  String get enterRoom => get('enter_room');
+  String get closed => get('closed');
+  String get open => get('open');
+  String get notFoundShort => get('not_found_short');
+
+  /// Monday-first.
+  List<String> get weekdays => switch (locale.languageCode) {
+        'ru' => const ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'],
+        'en' => const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+        _ => const ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'],
+      };
+  /// Monday-first.
+  List<String> get weekdaysShort => switch (locale.languageCode) {
+        'ru' => const ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
+        'en' => const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        _ => const ['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan', 'Yak'],
+      };
+  List<String> get months => switch (locale.languageCode) {
+        'ru' => const ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
+        'en' => const ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+        _ => const ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr'],
+      };
+
+  List<String> get monthsShort => switch (locale.languageCode) {
+        'ru' => const ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+        'en' => const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        _ => const ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'],
+      };
+
+  // ── Parameterised strings ──
+  String minutesAgo(int n) => pick(uz: '$n daqiqa oldin', ru: '$n мин. назад', en: '$n min ago');
+  String hoursAgo(int n) => pick(uz: '$n soat oldin', ru: '$n ч. назад', en: '$n h ago');
+  String daysAgo(int n) => pick(uz: '$n kun oldin', ru: '$n дн. назад', en: '$n d ago');
+  String lessonPair(String n) => pick(uz: '$n-juftlik', ru: '$n-я пара', en: 'Pair $n');
+  String studentsCount(int n) => pick(uz: '$n talaba', ru: '$n студ.', en: '$n students');
+  String secondsLeft(int n) => pick(uz: '$n s qoldi', ru: 'осталось $n с', en: '$n s left');
+  String hoursMinutes(int h, int m) => h > 0
+      ? pick(uz: '$h soat $m daqiqa', ru: '$h ч $m мин', en: '$h h $m min')
+      : pick(uz: '$m daqiqa', ru: '$m мин', en: '$m min');
+  /// "5 sentyabr 2026" / "5 сентября 2026" / "5 September 2026"
+  String longDate(DateTime d) => '${d.day} ${months[d.month - 1]} ${d.year}';
+  /// Monday-first weekday name for [d].
+  String weekdayOf(DateTime d) => weekdays[d.weekday - 1];
   String get lessonUnit => get('lesson_unit');
   String get practicalClasses => get('practical_classes');
   String get lectures => get('lectures');
@@ -219,6 +303,43 @@ class AppLocalizations {
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
+      // ── shared strings (added with the full-app localisation pass) ──
+      'network_error': 'Tarmoq xatoligi. Internet aloqasini tekshiring.',
+      'retry_error': 'Tarmoq xatoligi. Qayta urinib ko\'ring.',
+      'session_expired': 'Sessiya tugagan. Qayta kiring.',
+      'generic_error': 'Xatolik yuz berdi',
+      'server_error': 'Server xatoligi',
+      'loading': 'Yuklanmoqda...',
+      'close': 'Yopish',
+      'all': 'Hammasi',
+      'present': 'Keldi',
+      'absent_label': 'Kelmadi',
+      'confirm': 'Tasdiqlash',
+      'confirmed': 'Tasdiqlangan',
+      'no_info': 'Ma\'lumot yo\'q',
+      'refresh': 'Yangilash',
+      'subjects': 'Fanlar',
+      'checking': 'Tekshirilmoqda…',
+      'sending': 'Yuborilmoqda…',
+      'yes': 'Ha',
+      'no': 'Yo\'q',
+      'currency': 'so\'m',
+      'points': 'ball',
+      'start': 'Boshlash',
+      'back': 'Orqaga',
+      'open_file': 'Faylni ochish',
+      'not_uploaded': 'Yuklanmagan',
+      'uploaded': 'Yuklangan',
+      'graded': 'Baholangan',
+      'select': 'Tanlang',
+      'picture': 'Rasm',
+      'library': 'Kutubxona',
+      'permission_grant': 'Ruxsat berish',
+      'bluetooth_settings': 'Bluetooth sozlamalari',
+      'enter_room': 'Xonaga kiring',
+      'closed': 'Yopilgan',
+      'open': 'Ochiq',
+      'not_found_short': 'Topilmadi',
       'app_title': 'Tashmedunitf Lms',
       'home': 'Bosh sahifa',
       'grades': 'Baholar',
@@ -400,6 +521,43 @@ class AppLocalizations {
       'status_unpaid': 'Qarzdor',
     },
     'ru': {
+      // ── shared strings (added with the full-app localisation pass) ──
+      'network_error': 'Ошибка сети. Проверьте подключение к интернету.',
+      'retry_error': 'Ошибка сети. Попробуйте ещё раз.',
+      'session_expired': 'Сессия истекла. Войдите снова.',
+      'generic_error': 'Произошла ошибка',
+      'server_error': 'Ошибка сервера',
+      'loading': 'Загрузка...',
+      'close': 'Закрыть',
+      'all': 'Все',
+      'present': 'Присутствовал',
+      'absent_label': 'Отсутствовал',
+      'confirm': 'Подтвердить',
+      'confirmed': 'Подтверждено',
+      'no_info': 'Нет данных',
+      'refresh': 'Обновить',
+      'subjects': 'Предметы',
+      'checking': 'Проверка…',
+      'sending': 'Отправка…',
+      'yes': 'Да',
+      'no': 'Нет',
+      'currency': 'сум',
+      'points': 'балл',
+      'start': 'Начать',
+      'back': 'Назад',
+      'open_file': 'Открыть файл',
+      'not_uploaded': 'Не загружено',
+      'uploaded': 'Загружено',
+      'graded': 'Оценено',
+      'select': 'Выберите',
+      'picture': 'Изображение',
+      'library': 'Библиотека',
+      'permission_grant': 'Разрешить',
+      'bluetooth_settings': 'Настройки Bluetooth',
+      'enter_room': 'Войдите в аудиторию',
+      'closed': 'Закрыто',
+      'open': 'Открыто',
+      'not_found_short': 'Не найдено',
       'app_title': 'Tashmedunitf Lms',
       'home': 'Главная',
       'grades': 'Оценки',
@@ -581,6 +739,43 @@ class AppLocalizations {
       'status_unpaid': 'Задолженность',
     },
     'en': {
+      // ── shared strings (added with the full-app localisation pass) ──
+      'network_error': 'Network error. Check your internet connection.',
+      'retry_error': 'Network error. Please try again.',
+      'session_expired': 'Session expired. Please sign in again.',
+      'generic_error': 'Something went wrong',
+      'server_error': 'Server error',
+      'loading': 'Loading...',
+      'close': 'Close',
+      'all': 'All',
+      'present': 'Present',
+      'absent_label': 'Absent',
+      'confirm': 'Confirm',
+      'confirmed': 'Confirmed',
+      'no_info': 'No data',
+      'refresh': 'Refresh',
+      'subjects': 'Subjects',
+      'checking': 'Checking…',
+      'sending': 'Sending…',
+      'yes': 'Yes',
+      'no': 'No',
+      'currency': 'UZS',
+      'points': 'pts',
+      'start': 'Start',
+      'back': 'Back',
+      'open_file': 'Open file',
+      'not_uploaded': 'Not uploaded',
+      'uploaded': 'Uploaded',
+      'graded': 'Graded',
+      'select': 'Select',
+      'picture': 'Image',
+      'library': 'Library',
+      'permission_grant': 'Grant permission',
+      'bluetooth_settings': 'Bluetooth settings',
+      'enter_room': 'Enter the room',
+      'closed': 'Closed',
+      'open': 'Open',
+      'not_found_short': 'Not found',
       'app_title': 'Tashmedunitf Lms',
       'home': 'Home',
       'grades': 'Grades',
@@ -781,10 +976,16 @@ class _AppLocalizationsDelegate
 
   @override
   Future<AppLocalizations> load(Locale locale) async {
-    return AppLocalizations(locale);
+    return AppLocalizations.current = AppLocalizations(locale);
   }
 
   @override
   bool shouldReload(covariant LocalizationsDelegate<AppLocalizations> old) =>
       false;
+}
+
+/// `context.l10n.attendance` — the strings for the current locale, from
+/// anywhere a BuildContext is in scope.
+extension L10nContext on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
 }

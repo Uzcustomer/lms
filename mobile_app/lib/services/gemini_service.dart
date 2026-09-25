@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import 'api_service.dart';
+import '../l10n/app_localizations.dart';
 
 class GeminiAttachment {
   final String name;
@@ -75,12 +76,12 @@ class GeminiService {
       try {
         response = await client.send(request).timeout(_connectTimeout);
       } on TimeoutException {
-        throw Exception('AI javob bermadi. Internet aloqasini tekshiring.');
+        throw Exception(AppLocalizations.current.pick(uz: 'AI javob bermadi. Internet aloqasini tekshiring.', ru: 'ИИ не ответил. Проверьте подключение к интернету.', en: 'The AI did not respond. Check your internet connection.'));
       }
 
       if (response.statusCode == 401) {
         await _api.clearToken();
-        throw Exception('Sessiya tugagan. Qayta kiring.');
+        throw Exception(AppLocalizations.current.sessionExpired);
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception(await _errorMessage(response));
@@ -118,10 +119,10 @@ class GeminiService {
       if (msg != null && msg.isNotEmpty) return msg;
     } catch (_) {}
     return switch (response.statusCode) {
-      429 => 'Juda ko\'p so\'rov. Biroz kutib qayta urinib ko\'ring.',
-      413 => 'Fayl hajmi juda katta. 20MB dan kichikroq fayl yuklang.',
-      503 => 'AI yordamchi hozircha o\'chirilgan.',
-      _ => 'AI xizmatida xatolik. Keyinroq urinib ko\'ring.',
+      429 => AppLocalizations.current.pick(uz: 'Juda ko\'p so\'rov. Biroz kutib qayta urinib ko\'ring.', ru: 'Слишком много запросов. Подождите немного и попробуйте снова.', en: 'Too many requests. Wait a moment and try again.'),
+      413 => AppLocalizations.current.pick(uz: 'Fayl hajmi juda katta. 20MB dan kichikroq fayl yuklang.', ru: 'Файл слишком большой. Загрузите файл меньше 20 МБ.', en: 'The file is too large. Upload a file under 20 MB.'),
+      503 => AppLocalizations.current.pick(uz: 'AI yordamchi hozircha o\'chirilgan.', ru: 'ИИ-помощник пока отключён.', en: 'The AI assistant is currently disabled.'),
+      _ => AppLocalizations.current.pick(uz: 'AI xizmatida xatolik. Keyinroq urinib ko\'ring.', ru: 'Ошибка сервиса ИИ. Попробуйте позже.', en: 'AI service error. Try again later.'),
     };
   }
 

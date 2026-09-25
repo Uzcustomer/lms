@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'attendance_service.dart';
+import '../l10n/app_localizations.dart';
 
 /// A push the user tapped (or one that arrived while the app was open).
 class PushEvent {
@@ -24,12 +25,17 @@ class PushService {
   static final ValueNotifier<PushEvent?> lastTap = ValueNotifier<PushEvent?>(null);
 
   static final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
-  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'attendance',
-    'Davomat',
-    description: 'Davomatni tasdiqlash xabarlari',
-    importance: Importance.high,
-  );
+  // A getter, not a const: the channel's visible name follows the app language.
+  static AndroidNotificationChannel get _channel => AndroidNotificationChannel(
+        'attendance',
+        AppLocalizations.current.attendance,
+        description: AppLocalizations.current.pick(
+          uz: 'Davomatni tasdiqlash xabarlari',
+          ru: 'Уведомления о подтверждении присутствия',
+          en: 'Attendance confirmation notifications',
+        ),
+        importance: Importance.high,
+      );
 
   static bool _firebaseReady = false;
   static bool _localReady = false;

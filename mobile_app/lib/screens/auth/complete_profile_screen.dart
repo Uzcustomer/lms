@@ -142,8 +142,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               // Title
               Text(
                 _phoneSaved
-                    ? 'Telegram username kiriting'
-                    : 'Telefon raqamingizni kiriting',
+                    ? context.l10n.pick(uz: 'Telegram username kiriting', ru: 'Введите username Telegram', en: 'Enter your Telegram username')
+                    : context.l10n.pick(uz: 'Telefon raqamingizni kiriting', ru: 'Введите номер телефона', en: 'Enter your phone number'),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: textColor,
@@ -153,8 +153,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               const SizedBox(height: 8),
               Text(
                 _phoneSaved
-                    ? 'Telegram botimiz orqali hisobingizni tasdiqlang'
-                    : 'Tizimga kirish uchun telefon raqamingiz zarur',
+                    ? context.l10n.pick(uz: 'Telegram botimiz orqali hisobingizni tasdiqlang', ru: 'Подтвердите аккаунт через наш Telegram-бот', en: 'Verify your account via our Telegram bot')
+                    : context.l10n.pick(uz: 'Tizimga kirish uchun telefon raqamingiz zarur', ru: 'Для входа нужен ваш номер телефона', en: 'Your phone number is required to sign in'),
                 style: TextStyle(color: subTextColor, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
@@ -212,7 +212,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _buildStepDot(1, 'Telefon', _phoneSaved, !_phoneSaved, isDark),
+        _buildStepDot(1, context.l10n.phone, _phoneSaved, !_phoneSaved, isDark),
         Container(
           width: 40,
           height: 2,
@@ -279,7 +279,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               controller: _phoneController,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
-                labelText: 'Telefon raqam',
+                labelText: context.l10n.pick(uz: 'Telefon raqam', ru: 'Номер телефона', en: 'Phone number'),
                 hintText: '+998901234567',
                 prefixIcon: const Icon(Icons.phone),
                 border: OutlineInputBorder(
@@ -301,7 +301,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('Davom etish'),
+                    : Text(context.l10n.pick(uz: 'Davom etish', ru: 'Продолжить', en: 'Continue')),
               ),
             ),
           ],
@@ -348,7 +348,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Tasdiqlash uchun $daysLeft kun qoldi',
+                    context.l10n.pick(uz: 'Tasdiqlash uchun $daysLeft kun qoldi', ru: 'На подтверждение осталось $daysLeft дн.', en: '$daysLeft days left to verify'),
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -386,14 +386,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('Tasdiqlash boshlash'),
+                    : Text(context.l10n.pick(uz: 'Tasdiqlash boshlash', ru: 'Начать подтверждение', en: 'Start verification')),
               ),
             ),
             const SizedBox(height: 12),
             TextButton(
               onPressed: _skipTelegram,
               child: Text(
-                'Keyinroq tasdiqlash',
+                context.l10n.pick(uz: 'Keyinroq tasdiqlash', ru: 'Подтвердить позже', en: 'Verify later'),
                 style: TextStyle(color: subTextColor),
               ),
             ),
@@ -428,7 +428,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               child: Column(
                 children: [
                   Text(
-                    'Tasdiqlash kodi',
+                    context.l10n.pick(uz: 'Tasdiqlash kodi', ru: 'Код подтверждения', en: 'Verification code'),
                     style: TextStyle(fontSize: 13, color: subTextColor),
                   ),
                   const SizedBox(height: 8),
@@ -446,8 +446,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: code));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Kod nusxalandi'),
+                        SnackBar( 
+                          content: Text(context.l10n.pick(uz: 'Kod nusxalandi', ru: 'Код скопирован', en: 'Code copied')),
                           duration: Duration(seconds: 1),
                         ),
                       );
@@ -458,7 +458,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       children: [
                         Icon(Icons.copy, size: 14, color: subTextColor),
                         const SizedBox(width: 4),
-                        Text('Nusxalash', style: TextStyle(fontSize: 12, color: subTextColor)),
+                        Text(context.l10n.pick(uz: 'Nusxalash', ru: 'Копировать', en: 'Copy'), style: TextStyle(fontSize: 12, color: subTextColor)),
                       ],
                     ),
                   ),
@@ -469,7 +469,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
             // Instructions
             Text(
-              'Quyidagi tugma orqali Telegram botga o\'ting va tasdiqlash kodini yuboring:',
+              context.l10n.pick(uz: 'Quyidagi tugma orqali Telegram botga o\'ting va tasdiqlash kodini yuboring:', ru: 'Перейдите в Telegram-бот по кнопке ниже и отправьте код подтверждения:', en: 'Open the Telegram bot with the button below and send the verification code:'),
               style: TextStyle(fontSize: 13, color: subTextColor),
               textAlign: TextAlign.center,
             ),
@@ -481,7 +481,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               child: ElevatedButton.icon(
                 onPressed: _openBot,
                 icon: const Icon(Icons.send),
-                label: Text(botUsername.isNotEmpty ? 'Botga o\'tish (@$botUsername)' : 'Telegram botga o\'tish'),
+                label: Text(botUsername.isNotEmpty ? context.l10n.pick(uz: 'Botga o\'tish (@$botUsername)', ru: 'Перейти в бот (@$botUsername)', en: 'Open the bot (@$botUsername)') : context.l10n.pick(uz: 'Telegram botga o\'tish', ru: 'Перейти в Telegram-бот', en: 'Open the Telegram bot')),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0088CC),
                 ),
@@ -505,7 +505,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Tasdiqlash kutilmoqda...',
+                    context.l10n.pick(uz: 'Tasdiqlash kutilmoqda...', ru: 'Ожидание подтверждения...', en: 'Waiting for verification...'),
                     style: TextStyle(fontSize: 13, color: subTextColor),
                   ),
                 ],
@@ -515,7 +515,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             TextButton(
               onPressed: _skipTelegram,
               child: Text(
-                'Keyinroq tasdiqlash',
+                context.l10n.pick(uz: 'Keyinroq tasdiqlash', ru: 'Подтвердить позже', en: 'Verify later'),
                 style: TextStyle(color: subTextColor),
               ),
             ),

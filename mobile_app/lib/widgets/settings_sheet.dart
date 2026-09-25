@@ -31,7 +31,7 @@ void showSettingsSheet(BuildContext context) {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey[400],
+                      color: isDark ? AppTheme.darkBorderColor : Colors.grey[400],
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -266,8 +266,7 @@ class _BiometricTileState extends State<_BiometricTile> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.05)
-                : const Color(0xFFF1F5F9),
+            color: isDark ? AppTheme.darkElevated : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -295,7 +294,9 @@ class _BiometricTileState extends State<_BiometricTile> {
                         ru: 'Отпечаток, Face ID или пароль устройства',
                         en: 'Fingerprint, Face ID, or device passcode',
                       ),
-                      style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          color: isDark ? AppTheme.darkTextSecondary : Colors.grey),
                     ),
                   ],
                 ),

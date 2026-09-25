@@ -125,18 +125,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   static const _calmGreen = Color(0xFF047857);
   static const _calmLine = Color(0xFFE2E8F0);
 
-  Color get _ink => Theme.of(context).brightness == Brightness.dark
-      ? Colors.white
-      : _calmInk;
-  Color get _muted => Theme.of(context).brightness == Brightness.dark
-      ? AppTheme.darkTextSecondary
-      : _calmMuted;
-  Color get _surface => Theme.of(context).brightness == Brightness.dark
-      ? AppTheme.darkCard
-      : Colors.white;
-  Color get _divider => Theme.of(context).brightness == Brightness.dark
-      ? Colors.white.withOpacity(0.08)
-      : _calmLine;
+  Color get _ink => ClinicTheme.inkOf(context);
+  Color get _muted => ClinicTheme.mutedOf(context);
+  Color get _surface => ClinicTheme.surfaceOf(context);
+  Color get _divider => ClinicTheme.dividerOf(context);
 
   List<BoxShadow> get _cardShadow => [
         BoxShadow(
@@ -401,7 +393,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               children: [
                 Text(
                   semester.isNotEmpty
-                      ? 'BAHOLAR · ${semester.toUpperCase()}'
+                      ? '${context.l10n.grades.toUpperCase()} · ${semester.toUpperCase()}'
                       : 'BAHOLAR',
                   style: TextStyle(
                     fontSize: 10,
@@ -412,7 +404,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Akademik baholar',
+                  context.l10n.pick(uz: 'Akademik baholar', ru: 'Академические оценки', en: 'Academic grades'),
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
                 ),
               ],
@@ -484,7 +476,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                   Expanded(
                     child: Text(
                       semester.isNotEmpty
-                          ? '${semester.toUpperCase()} · O\'RTACHA'
+                          ? '${semester.toUpperCase()} · ${context.l10n.pick(uz: 'O\'rtacha', ru: 'Средний', en: 'Average').toUpperCase()}'
                           : 'SEMESTR · O\'RTACHA',
                       style: TextStyle(
                         fontSize: 10.5,
@@ -541,11 +533,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  _buildStatCell('$total', 'Fanlar'),
+                  _buildStatCell('$total', context.l10n.subjects),
                   _statDivider(),
-                  _buildStatCell('$completed', 'Topshirilgan'),
+                  _buildStatCell('$completed', context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted')),
                   _statDivider(),
-                  _buildStatCell('$waiting', 'Kutilmoqda'),
+                  _buildStatCell('$waiting', context.l10n.pending),
                 ],
               ),
             ],
@@ -653,7 +645,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
   // ── Filter tabs ──────────────────────────────────────
   Widget _buildFilterTabs(int completed, int waiting, int total) {
-    final labels = ['Hammasi', 'Topshirilgan', 'Kutilmoqda'];
+    final labels = [context.l10n.all, context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted'), context.l10n.pending];
     final counts = [total, completed, waiting];
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
@@ -810,7 +802,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                         color: isCompleted ? _calmGreen : const Color(0xFFB45309)),
                     const SizedBox(width: 4),
                     Text(
-                      isCompleted ? 'Topshirilgan' : 'Kutilmoqda',
+                      isCompleted ? context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted') : context.l10n.pending,
                       style: TextStyle(
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,
@@ -822,7 +814,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               const SizedBox(width: 10),
               Text.rich(TextSpan(children: [
                 TextSpan(
-                    text: 'Davomat ',
+                    text: '${context.l10n.attendance} ',
                     style: TextStyle(fontSize: 11.5, color: _muted, fontWeight: FontWeight.w500)),
                 TextSpan(
                     text: '${attendance.toStringAsFixed(0)}%',
@@ -926,8 +918,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 const SizedBox(height: 1),
                 Text(
                   hasSubmission
-                      ? (canSubmit ? 'Yuklangan · ko\'rib chiqilmoqda' : 'Yuklangan')
-                      : 'Yuklanmagan',
+                      ? (canSubmit ? context.l10n.pick(uz: 'Yuklangan · ko\'rib chiqilmoqda', ru: 'Загружено · на проверке', en: 'Uploaded · under review') : context.l10n.uploaded)
+                      : context.l10n.notUploaded,
                   style: TextStyle(fontSize: 10.5, color: _muted, fontWeight: FontWeight.w500),
                 ),
               ],
@@ -950,7 +942,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                       height: 14,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : Text(
-                      'Yangilash',
+                      context.l10n.refresh,
                       style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w800,
@@ -1074,7 +1066,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 _buildMtDetailRow(Icons.replay, '${l.get("mt_remaining")}:', mt['remaining_attempts'].toString(), secondaryText, textColor),
               _buildMtDetailRow(
                 mt['has_submission'] == true ? Icons.check_circle : Icons.cancel,
-                'Status:',
+                context.l10n.pick(uz: 'Status:', ru: 'Статус:', en: 'Status:'),
                 mt['has_submission'] == true
                     ? l.get('mt_uploaded')
                     : mt['is_overdue'] == true
@@ -1475,18 +1467,10 @@ class _JnGradesPageState extends State<_JnGradesPage> {
   static const _calmFaint = Color(0xFF94A3B8);
   static const _calmLine = Color(0xFFE2E8F0);
 
-  Color get _ink => Theme.of(context).brightness == Brightness.dark
-      ? Colors.white
-      : _calmInk;
-  Color get _muted => Theme.of(context).brightness == Brightness.dark
-      ? AppTheme.darkTextSecondary
-      : _calmMuted;
-  Color get _surface => Theme.of(context).brightness == Brightness.dark
-      ? AppTheme.darkCard
-      : Colors.white;
-  Color get _divider => Theme.of(context).brightness == Brightness.dark
-      ? Colors.white.withOpacity(0.08)
-      : _calmLine;
+  Color get _ink => ClinicTheme.inkOf(context);
+  Color get _muted => ClinicTheme.mutedOf(context);
+  Color get _surface => ClinicTheme.surfaceOf(context);
+  Color get _divider => ClinicTheme.dividerOf(context);
 
   Widget _calmCard({required Widget child}) {
     return Container(
@@ -1579,7 +1563,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                             const SizedBox(height: 16),
                             ElevatedButton(
                               onPressed: _loadGrades,
-                              child: const Text('Qayta yuklash'),
+                              child: Text(context.l10n.reload),
                             ),
                           ],
                         ),
@@ -1591,7 +1575,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                               children: [
                                 Icon(Icons.school_outlined, size: 48, color: _muted),
                                 const SizedBox(height: 12),
-                                Text('Ma\'lumot topilmadi', style: TextStyle(color: _muted)),
+                                Text(context.l10n.noData, style: TextStyle(color: _muted)),
                               ],
                             ),
                           )
@@ -1625,7 +1609,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
           children: [
             if (hasAmaliy) ...[
               _buildSectionCard(
-                title: 'Amaliy mashg\'ulotlar',
+                title: context.l10n.pick(uz: 'Amaliy mashg\'ulotlar', ru: 'Практические занятия', en: 'Practical classes'),
                 icon: Icons.assignment_turned_in_rounded,
                 hueColor: const Color(0xFF15803D),
                 gradesByDate: _amaliyByDate,
@@ -1644,7 +1628,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
             ],
             if (!hasAmaliy && !hasMaruza)
               _buildSectionCard(
-                title: 'Baholar',
+                title: context.l10n.grades,
                 icon: Icons.school_outlined,
                 hueColor: const Color(0xFF6D28D9),
                 gradesByDate: const {},
@@ -1705,7 +1689,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
             if (dates.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text('Ma\'lumot yo\'q', style: TextStyle(fontSize: 13, color: _muted)),
+                child: Text(context.l10n.noInfo, style: TextStyle(fontSize: 13, color: _muted)),
               )
             else
               ...dates.asMap().entries.map((e) {
@@ -1785,7 +1769,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
   String _formatDateLong(String dateKey) {
     try {
       final date = DateTime.parse(dateKey);
-      const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
+      final months = AppLocalizations.current.monthsShort;
       final m = months[date.month - 1];
       return '${date.day.toString().padLeft(2, '0')} $m ${date.year}';
     } catch (_) {

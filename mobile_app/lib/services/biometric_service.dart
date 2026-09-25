@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../l10n/app_localizations.dart';
 
 class BiometricService {
   static const String _enabledKey = 'biometric_enabled';
@@ -51,9 +52,8 @@ class BiometricService {
   /// Prompt the user for their biometric. If the sensor fails, isn't
   /// enrolled, or doesn't recognise them, the OS automatically falls back
   /// to the device PIN / pattern / password.
-  Future<bool> authenticate({
-    String reason = 'Tizimga kirish uchun qurilma himoyasini tasdiqlang',
-  }) async {
+  Future<bool> authenticate({String? reason}) async {
+    reason ??= AppLocalizations.current.pick(uz: 'Tizimga kirish uchun qurilma himoyasini tasdiqlang', ru: 'Подтвердите защиту устройства для входа', en: 'Confirm your device security to sign in');
     if (kIsWeb) return false;
     try {
       return await _auth.authenticate(

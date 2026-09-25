@@ -201,18 +201,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   static const _calmGreen = Color(0xFF047857);
   static const _calmLine = Color(0xFFE2E8F0);
 
-  Color get _ink => Theme.of(context).brightness == Brightness.dark
-      ? Colors.white
-      : _calmInk;
-  Color get _muted => Theme.of(context).brightness == Brightness.dark
-      ? AppTheme.darkTextSecondary
-      : _calmMuted;
-  Color get _surface => Theme.of(context).brightness == Brightness.dark
-      ? AppTheme.darkCard
-      : Colors.white;
-  Color get _divider => Theme.of(context).brightness == Brightness.dark
-      ? Colors.white.withOpacity(0.08)
-      : _calmLine;
+  Color get _ink => ClinicTheme.inkOf(context);
+  Color get _muted => ClinicTheme.mutedOf(context);
+  Color get _surface => ClinicTheme.surfaceOf(context);
+  Color get _divider => ClinicTheme.dividerOf(context);
 
   List<BoxShadow> get _cardShadow => [
         BoxShadow(
@@ -544,9 +536,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   _buildStatCell('KURS', course.isNotEmpty ? '$course-kurs' : '—'),
                   _statDivider(),
                   _buildStatCell(
-                      'SEMESTR', semesterName.isNotEmpty ? semesterName : '—'),
+                      context.l10n.semester.toUpperCase(), semesterName.isNotEmpty ? semesterName : '—'),
                   _statDivider(),
-                  _buildStatCell('O\'QUV YIL',
+                  _buildStatCell(context.l10n.educationYear.toUpperCase(),
                       educationYear.isNotEmpty ? educationYear : '—'),
                 ],
               ),
@@ -633,7 +625,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$streak kun · ketma-ket',
+                      context.l10n.pick(uz: '$streak kun · ketma-ket', ru: '$streak дн. · подряд', en: '$streak days · streak'),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -722,7 +714,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         Row(
           children: [
             Text(
-              'Fanlar',
+              context.l10n.subjects,
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
             ),
             const Spacer(),
@@ -731,7 +723,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               child: Row(
                 children: [
                   Text(
-                    'Barchasi',
+                    context.l10n.all,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -846,7 +838,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '$absent/$total soat',
+                          '$absent/$total ${context.l10n.hours}',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -978,7 +970,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            '${_formatMoney(paidAmount)} / ${_formatMoney(totalAmount)} so\'m',
+                            '${_formatMoney(paidAmount)} / ${_formatMoney(totalAmount)} ${context.l10n.currency}',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
@@ -991,7 +983,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               Expanded(
                                 child: _buildContractMiniMetric(
                                   l.remaining,
-                                  '${_formatMoney(remainingAmount)} so\'m',
+                                  '${_formatMoney(remainingAmount)} ${context.l10n.currency}',
                                   remainingAmount <= 0
                                       ? AppTheme.successColor
                                       : AppTheme.warningColor,
@@ -1088,21 +1080,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   const SizedBox(height: 10),
                   _buildContractRow(
                     l.contractAmount,
-                    '${_formatMoney(totalAmount)} so\'m',
+                    '${_formatMoney(totalAmount)} ${context.l10n.currency}',
                     subTextColor,
                     textColor,
                   ),
                   const SizedBox(height: 6),
                   _buildContractRow(
                     l.paidAmount,
-                    '${_formatMoney(paidAmount)} so\'m',
+                    '${_formatMoney(paidAmount)} ${context.l10n.currency}',
                     subTextColor,
                     AppTheme.successColor,
                   ),
                   const SizedBox(height: 6),
                   _buildContractRow(
                     l.unpaidAmount,
-                    '${_formatMoney(remainingAmount)} so\'m',
+                    '${_formatMoney(remainingAmount)} ${context.l10n.currency}',
                     subTextColor,
                     remainingAmount > 0
                         ? AppTheme.errorColor
@@ -1545,7 +1537,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   String _weekdayName(int weekday) {
-    const days = ['', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+    final days = ['', ...AppLocalizations.current.weekdays];
     return days[weekday.clamp(1, 7)];
   }
 
@@ -1563,7 +1555,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         _now.year, _now.month, _now.day,
       )).inDays;
       if (diff == 1) {
-        dayLabel = 'Ertaga';
+        dayLabel = AppLocalizations.current.pick(uz: 'Ertaga', ru: 'Завтра', en: 'Tomorrow');
       } else {
         dayLabel = '${_weekdayName(dayDate.weekday)}, ${DateFormat('d-MMMM').format(dayDate)}';
       }

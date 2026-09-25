@@ -4,6 +4,7 @@ import '../../services/attendance_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/clinic_header.dart';
 import 'teacher_attendance_session_screen.dart';
+import '../../l10n/app_localizations.dart';
 
 /// "Davomat" tab: the teacher's lessons for a day with a "start attendance"
 /// action per slot, or the live result if a session already exists.
@@ -39,7 +40,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -73,7 +74,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     } on ApiException catch (e) {
       if (mounted) _snack(e.message);
     } catch (_) {
-      if (mounted) _snack('Tarmoq xatoligi. Qayta urinib ko\'ring.');
+      if (mounted) _snack(context.l10n.retryError);
     } finally {
       if (mounted) setState(() => _starting = null);
     }
@@ -97,7 +98,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
       backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          const ClinicHeader(title: 'Davomat'),
+          ClinicHeader(title: context.l10n.attendance),
           _dateBar(isToday),
           Expanded(
             child: RefreshIndicator(
@@ -111,7 +112,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         if (_error != null)
                           _empty(Icons.wifi_off_rounded, _error!)
                         else if (_lessons.isEmpty)
-                          _empty(Icons.event_busy_outlined, 'Bu kunda jadvalda darsingiz yo\'q.')
+                          _empty(Icons.event_busy_outlined, context.l10n.pick(uz: 'Bu kunda jadvalda darsingiz yo\'q.', ru: 'На этот день занятий в расписании нет.', en: 'No lessons in your timetable for this day.'))
                         else
                           ..._lessons.whereType<Map>().map((l) => _lessonCard(Map<String, dynamic>.from(l))),
                       ],
@@ -124,7 +125,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   }
 
   Widget _dateBar(bool isToday) {
-    const weekdays = ['Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan', 'Yak'];
+    final weekdays = context.l10n.weekdaysShort;
     final label =
         '${weekdays[_date.weekday - 1]}, ${_date.day.toString().padLeft(2, '0')}.${_date.month.toString().padLeft(2, '0')}.${_date.year}';
     return Padding(
@@ -144,7 +145,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                       setState(() => _date = DateTime.now());
                       _load();
                     },
-                    child: const Text('Bugunga qaytish'),
+                    child: Text(context.l10n.pick(uz: 'Bugunga qaytish', ru: 'Вернуться к сегодня', en: 'Back to today')),
                   ),
               ],
             ),
@@ -208,7 +209,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
               ),
               if (!hasBeacon)
                 Tooltip(
-                  message: 'Bu xona uchun beacon sozlanmagan',
+                  message: context.l10n.pick(uz: 'Bu xona uchun beacon sozlanmagan', ru: 'Для этой аудитории маяк не настроен', en: 'No beacon configured for this room'),
                   child: Icon(Icons.bluetooth_disabled, size: 18, color: const Color(0xFFB45309)),
                 ),
             ],
@@ -219,7 +220,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                   fontSize: 15, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
           const SizedBox(height: 4),
           Text(
-            '${l['auditorium_name'] ?? '—'} · $groups · ${l['students_count'] ?? 0} talaba',
+            '${l['auditorium_name'] ?? '—'} · $groups · ${context.l10n.studentsCount(int.tryParse(l['students_count'].toString()) ?? 0)}',
             style: TextStyle(fontSize: 12.5, color: ClinicTheme.mutedOf(context)),
           ),
           const SizedBox(height: 12),
@@ -239,7 +240,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         width: 18, height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.play_arrow_rounded),
-                label: const Text('Davomatni boshlash',
+                label: Text(context.l10n.pick(uz: 'Davomatni boshlash', ru: 'Начать перекличку', en: 'Start attendance'),
                     style: TextStyle(fontWeight: FontWeight.w800)),
               ),
             )
@@ -298,7 +299,7 @@ class _StartDialogState extends State<_StartDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Davomatni boshlash'),
+      title: Text(context.l10n.pick(uz: 'Davomatni boshlash', ru: 'Начать перекличку', en: 'Start attendance')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,28 +307,28 @@ class _StartDialogState extends State<_StartDialog> {
           Text(widget.lesson['subject_name']?.toString() ?? '',
               style: const TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text('${widget.lesson['auditorium_name'] ?? '—'} · ${widget.lesson['students_count'] ?? 0} talaba',
+          Text('${widget.lesson['auditorium_name'] ?? '—'} · ${context.l10n.studentsCount(int.tryParse(widget.lesson['students_count'].toString()) ?? 0)}',
               style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 12.5)),
           if (!widget.hasBeacon) ...[
             const SizedBox(height: 12),
-            const Text(
-              'Diqqat: bu xonada beacon sozlanmagan — talabalar tasdiqlay olmaydi, faqat qo\'lda belgilash mumkin.',
+            Text( 
+              context.l10n.pick(uz: 'Diqqat: bu xonada beacon sozlanmagan — talabalar tasdiqlay olmaydi, faqat qo\'lda belgilash mumkin.', ru: 'Внимание: в этой аудитории маяк не настроен — студенты не смогут подтвердить, только ручная отметка.', en: 'Note: no beacon is configured for this room — students cannot confirm, only manual marking.'),
               style: TextStyle(color: Color(0xFFB45309), fontSize: 12.5),
             ),
           ],
           const SizedBox(height: 12),
-          const Text(
-            "Avval talabalardan ilovani ochishni so'rang — xabar faqat xonada aniqlangan talabalarga boradi.",
+          Text( 
+            context.l10n.pick(uz: 'Avval talabalardan ilovani ochishni so\'rang — xabar faqat xonada aniqlangan talabalarga boradi.', ru: 'Сначала попросите студентов открыть приложение — уведомление получат только те, кто обнаружен в аудитории.', en: 'First ask the students to open the app — only those detected in the room get the notification.'),
             style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
-          const Text('Tasdiqlash oynasi', style: TextStyle(fontSize: 12.5)),
+          Text(context.l10n.pick(uz: 'Tasdiqlash oynasi', ru: 'Окно подтверждения', en: 'Confirmation window'), style: const TextStyle(fontSize: 12.5)),
           Row(
             children: [5, 10, 15, 20]
                 .map((m) => Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: ChoiceChip(
-                        label: Text('$m daq'),
+                        label: Text(context.l10n.pick(uz: '$m daq', ru: '$m мин', en: '$m min')),
                         selected: _minutes == m,
                         onSelected: (_) => setState(() => _minutes = m),
                       ),
@@ -339,19 +340,19 @@ class _StartDialogState extends State<_StartDialog> {
             contentPadding: EdgeInsets.zero,
             value: _face,
             onChanged: (v) => setState(() => _face = v),
-            title: const Text('Yuz tekshiruvi', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-            subtitle: const Text(
-              "Talaba selfi oladi, LMS'dagi tasdiqlangan rasmi bilan solishtiriladi.",
+            title: Text(context.l10n.pick(uz: 'Yuz tekshiruvi', ru: 'Проверка лица', en: 'Face check'), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+            subtitle: Text( 
+              context.l10n.pick(uz: 'Talaba selfi oladi, LMS\'dagi tasdiqlangan rasmi bilan solishtiriladi.', ru: 'Студент делает селфи, оно сравнивается с утверждённым фото в LMS.', en: 'The student takes a selfie; it is matched against the approved photo in the LMS.'),
               style: TextStyle(fontSize: 11.5),
             ),
           ),
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Bekor qilish')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.l10n.cancel)),
         ElevatedButton(
           onPressed: () => Navigator.pop(context, (minutes: _minutes, face: _face)),
-          child: const Text('Boshlash'),
+          child: Text(context.l10n.start),
         ),
       ],
     );

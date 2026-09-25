@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../l10n/app_localizations.dart';
 
 class FaceLoginScreen extends StatefulWidget {
   final String login;
@@ -41,7 +42,7 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
         _capturedFile = File(picked.path);
       });
     } catch (e) {
-      setState(() => _error = 'Kameraga kirish bekor qilindi yoki xatolik yuz berdi');
+      setState(() => _error = AppLocalizations.current.pick(uz: 'Kameraga kirish bekor qilindi yoki xatolik yuz berdi', ru: 'Доступ к камере отменён или произошла ошибка', en: 'Camera access was cancelled or failed'));
     }
   }
 
@@ -63,7 +64,7 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
     } else {
       setState(() {
         _busy = false;
-        _error = auth.errorMessage ?? 'Yuz mos kelmadi';
+        _error = auth.errorMessage ?? AppLocalizations.current.pick(uz: 'Yuz mos kelmadi', ru: 'Лицо не совпало', en: 'Face did not match');
       });
     }
   }
@@ -119,8 +120,8 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
                         color: Colors.white, size: 48),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Yuzingizni kameraga ko\'rsating',
+                  Text(
+                    context.l10n.pick(uz: 'Yuzingizni kameraga ko\'rsating', ru: 'Покажите лицо в камеру', en: 'Show your face to the camera'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
@@ -189,7 +190,7 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
                                       ),
                                       const SizedBox(height: 12),
                                       Text(
-                                        'Kamerani ochish',
+                                        context.l10n.pick(uz: 'Kamerani ochish', ru: 'Открыть камеру', en: 'Open camera'),
                                         style: TextStyle(
                                           color: _ink,
                                           fontSize: 14,
@@ -198,7 +199,7 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Yuzingiz markazda bo\'lsin',
+                                        context.l10n.pick(uz: 'Yuzingiz markazda bo\'lsin', ru: 'Держите лицо по центру', en: 'Keep your face centred'),
                                         style: TextStyle(
                                           color: _ink.withOpacity(0.55),
                                           fontSize: 12,
@@ -216,7 +217,7 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
                     TextButton.icon(
                       onPressed: _busy ? null : _captureFace,
                       icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Qayta olish'),
+                      label: Text(context.l10n.pick(uz: 'Qayta olish', ru: 'Переснять', en: 'Retake')),
                       style: TextButton.styleFrom(foregroundColor: _accent),
                     ),
                   if (_error != null) ...[
@@ -250,7 +251,7 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
                   if (_similarity != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Mos kelish: ${_similarity!.toStringAsFixed(1)}%',
+                      context.l10n.pick(uz: 'Mos kelish: ${_similarity!.toStringAsFixed(1)}%', ru: 'Совпадение: ${_similarity!.toStringAsFixed(1)}%', en: 'Match: ${_similarity!.toStringAsFixed(1)}%'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: _ink.withOpacity(0.7),
@@ -295,7 +296,7 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
                             const SizedBox(width: 8),
                           ],
                           Text(
-                            _busy ? 'Tekshirilmoqda...' : 'Tasdiqlash',
+                            _busy ? context.l10n.checking : context.l10n.confirm,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,

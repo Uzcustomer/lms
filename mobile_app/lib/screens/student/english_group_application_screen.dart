@@ -69,7 +69,7 @@ class _EnglishGroupApplicationScreenState
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = "Tarmoq xatoligi. Internet aloqasini tekshiring.";
+        _error = AppLocalizations.current.networkError;
         _loading = false;
       });
     }
@@ -134,8 +134,8 @@ class _EnglishGroupApplicationScreenState
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("So'rov yuborishda xatolik yuz berdi."),
+        SnackBar( 
+          content: Text(AppLocalizations.current.pick(uz: 'So\'rov yuborishda xatolik yuz berdi.', ru: 'Ошибка при отправке запроса.', en: 'Failed to send the request.')),
         ),
       );
     } finally {

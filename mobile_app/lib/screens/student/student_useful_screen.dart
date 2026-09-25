@@ -352,7 +352,7 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Sababli ariza · Ma\'lumotnoma · Xizmatlar',
+                    context.l10n.pick(uz: 'Sababli ariza · Ma\'lumotnoma · Xizmatlar', ru: 'Заявление · Справка · Услуги', en: 'Excuse · Certificate · Services'),
                     style: TextStyle(fontSize: 12.5, color: Colors.white.withOpacity(0.9)),
                   ),
                   const SizedBox(height: 14),

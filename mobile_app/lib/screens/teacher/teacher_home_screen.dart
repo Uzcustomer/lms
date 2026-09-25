@@ -29,7 +29,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     // subject list — it needs a group + subject, so it has no tab of its own.
 
     // Davomat — beacon attendance for today's lessons (anyone who teaches)
-    items.add(_NavItem(Icons.how_to_reg_outlined, Icons.how_to_reg, 'Davomat', 'attendance'));
+    items.add(_NavItem(Icons.how_to_reg_outlined, Icons.how_to_reg, l.attendance, 'attendance'));
 
     // Talabalar - most roles except test_markazi, oquv_bolimi, oquv_bolimi_boshligi
     if (activeRole != 'test_markazi' && activeRole != 'oquv_bolimi' && activeRole != 'oquv_bolimi_boshligi') {

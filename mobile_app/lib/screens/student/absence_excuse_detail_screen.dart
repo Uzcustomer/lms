@@ -63,7 +63,7 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Faylni ochib bo\'lmadi')),
+          SnackBar(content: Text(AppLocalizations.current.pick(uz: 'Faylni ochib bo\'lmadi', ru: 'Не удалось открыть файл', en: 'Could not open the file'))),
         );
       }
     }

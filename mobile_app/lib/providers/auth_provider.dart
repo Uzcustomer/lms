@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/student_data_cache.dart';
+import '../l10n/app_localizations.dart';
 
 enum AuthState { initial, loading, authenticated, profileIncomplete, unauthenticated, requires2fa, error }
 
@@ -42,27 +43,32 @@ class AuthProvider extends ChangeNotifier {
   List<String> get roles => _roles;
   String? get activeRole => _activeRole;
 
-  static const Map<String, String> roleLabels = {
-    'superadmin': 'Superadmin',
-    'admin': 'Admin',
-    'kichik_admin': 'Kichik admin',
-    'inspeksiya': 'Inspeksiya',
-    'oquv_prorektori': "O'quv prorektori",
-    'registrator_ofisi': 'Registrator ofisi',
-    'oquv_bolimi': "O'quv bo'limi",
-    'oquv_bolimi_boshligi': "O'quv bo'limi boshlig'i",
-    'buxgalteriya': 'Buxgalteriya',
-    'manaviyat': "Ma'naviyat",
-    'tyutor': 'Tyutor',
-    'dekan': 'Dekan',
-    'kafedra_mudiri': 'Kafedra mudiri',
-    'fan_masuli': "Fan mas'uli",
-    'oqituvchi': "O'qituvchi",
-    'test_markazi': 'Test markazi',
-    'talaba': 'Talaba',
-  };
+  /// Display name of a staff role in the current app language.
+  static String roleLabel(String? role) {
+    final l = AppLocalizations.current;
+    return switch (role) {
+      'superadmin' => 'Superadmin',
+      'admin' => 'Admin',
+      'kichik_admin' => l.pick(uz: 'Kichik admin', ru: 'Младший админ', en: 'Junior admin'),
+      'inspeksiya' => l.pick(uz: 'Inspeksiya', ru: 'Инспекция', en: 'Inspection'),
+      'oquv_prorektori' => l.pick(uz: "O'quv prorektori", ru: 'Проректор по учебной работе', en: 'Vice-rector for academic affairs'),
+      'registrator_ofisi' => l.pick(uz: 'Registrator ofisi', ru: 'Офис регистратора', en: "Registrar's office"),
+      'oquv_bolimi' => l.pick(uz: "O'quv bo'limi", ru: 'Учебный отдел', en: 'Academic office'),
+      'oquv_bolimi_boshligi' => l.pick(uz: "O'quv bo'limi boshlig'i", ru: 'Начальник учебного отдела', en: 'Head of academic office'),
+      'buxgalteriya' => l.pick(uz: 'Buxgalteriya', ru: 'Бухгалтерия', en: 'Accounting'),
+      'manaviyat' => l.pick(uz: "Ma'naviyat", ru: 'Отдел духовности', en: 'Spirituality office'),
+      'tyutor' => l.pick(uz: 'Tyutor', ru: 'Тьютор', en: 'Tutor'),
+      'dekan' => l.pick(uz: 'Dekan', ru: 'Декан', en: 'Dean'),
+      'kafedra_mudiri' => l.pick(uz: 'Kafedra mudiri', ru: 'Заведующий кафедрой', en: 'Head of department'),
+      'fan_masuli' => l.pick(uz: "Fan mas'uli", ru: 'Ответственный по предмету', en: 'Subject lead'),
+      'oqituvchi' => l.teacher,
+      'test_markazi' => l.pick(uz: 'Test markazi', ru: 'Тестовый центр', en: 'Test centre'),
+      'talaba' => l.student,
+      _ => role ?? '',
+    };
+  }
 
-  String get activeRoleLabel => roleLabels[_activeRole] ?? _activeRole ?? '';
+  String get activeRoleLabel => roleLabel(_activeRole);
 
   void setActiveRole(String role) {
     if (_roles.contains(role)) {
@@ -159,7 +165,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _errorMessage = AppLocalizations.current.networkError;
       _state = AuthState.error;
       notifyListeners();
       return false;
@@ -192,7 +198,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _errorMessage = AppLocalizations.current.networkError;
       _state = AuthState.error;
       notifyListeners();
       return false;
@@ -227,7 +233,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _errorMessage = AppLocalizations.current.networkError;
       _state = AuthState.error;
       notifyListeners();
       return false;
@@ -253,7 +259,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _errorMessage = AppLocalizations.current.networkError;
       _state = AuthState.requires2fa;
       notifyListeners();
       return false;
@@ -284,7 +290,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _errorMessage = AppLocalizations.current.networkError;
       notifyListeners();
       return false;
     }
@@ -306,7 +312,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _errorMessage = AppLocalizations.current.networkError;
       notifyListeners();
       return false;
     }

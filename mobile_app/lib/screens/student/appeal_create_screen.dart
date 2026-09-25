@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
+import '../../l10n/app_localizations.dart';
 
 class AppealCreateScreen extends StatefulWidget {
   const AppealCreateScreen({super.key});
@@ -52,7 +53,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _loadError = "Baholarni yuklashda xatolik";
+        _loadError = AppLocalizations.current.pick(uz: 'Baholarni yuklashda xatolik', ru: 'Ошибка загрузки оценок', en: 'Failed to load grades');
         _loading = false;
       });
     }
@@ -75,7 +76,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
   Future<void> _submit() async {
     setState(() => _submitError = null);
     if (_selectedGrade == null) {
-      setState(() => _submitError = "Bahoni tanlang");
+      setState(() => _submitError = AppLocalizations.current.pick(uz: 'Bahoni tanlang', ru: 'Выберите оценку', en: 'Select a grade'));
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -101,7 +102,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
       setState(() => _submitError = e.message);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _submitError = "Xatolik yuz berdi");
+      setState(() => _submitError = AppLocalizations.current.genericError);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -126,8 +127,8 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'XIZMATLAR',
-            title: 'Yangi apellyatsiya',
+            overline: context.l10n.services.toUpperCase(),
+            title: context.l10n.pick(uz: 'Yangi apellyatsiya', ru: 'Новая апелляция', en: 'New appeal'),
             onBack: () => Navigator.pop(context),
           ),
           Expanded(
@@ -140,7 +141,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                           children: [
                             Text(_loadError!, style: TextStyle(color: subColor)),
                             const SizedBox(height: 12),
-                            TextButton(onPressed: _loadGrades, child: const Text('Qayta yuklash')),
+                            TextButton(onPressed: _loadGrades, child: Text(context.l10n.reload)),
                           ],
                         ),
                       )
@@ -156,14 +157,14 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                 border: Border.all(color: ClinicTheme.teal.withAlpha(60)),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Row(
+                              child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Icon(Icons.info_outline, size: 16, color: ClinicTheme.teal),
                                   SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      "Faqat oxirgi 24 soat ichida qo'yilgan baholarga apellyatsiya topshirish mumkin.",
+                                      context.l10n.pick(uz: 'Faqat oxirgi 24 soat ichida qo\'yilgan baholarga apellyatsiya topshirish mumkin.', ru: 'Апелляцию можно подать только на оценки, выставленные за последние 24 часа.', en: 'Appeals can only be filed for grades given in the last 24 hours.'),
                                       style: TextStyle(fontSize: 11, color: ClinicTheme.teal, height: 1.4),
                                     ),
                                   ),
@@ -171,7 +172,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            Text('Bahoni tanlang',
+                            Text(context.l10n.pick(uz: 'Bahoni tanlang', ru: 'Выберите оценку', en: 'Select a grade'),
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textColor)),
                             const SizedBox(height: 8),
                             if (_grades.isEmpty)
@@ -183,7 +184,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                 ),
                                 child: Center(
                                   child: Text(
-                                    "Apellyatsiya qilish mumkin bo'lgan baho topilmadi",
+                                    context.l10n.pick(uz: 'Apellyatsiya qilish mumkin bo\'lgan baho topilmadi', ru: 'Нет оценок, доступных для апелляции', en: 'No grades eligible for appeal'),
                                     style: TextStyle(fontSize: 12, color: subColor),
                                   ),
                                 ),
@@ -305,7 +306,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                                       borderRadius: BorderRadius.circular(5),
                                                     ),
                                                     child: Text(
-                                                      canAppeal ? 'Apellyatsiya mumkin' : 'Muddat tugagan',
+                                                      canAppeal ? context.l10n.pick(uz: 'Apellyatsiya mumkin', ru: 'Можно обжаловать', en: 'Can appeal') : context.l10n.pick(uz: 'Muddat tugagan', ru: 'Срок истёк', en: 'Deadline passed'),
                                                       style: TextStyle(
                                                         fontSize: 10,
                                                         fontWeight: FontWeight.w700,
@@ -326,7 +327,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                 );
                               }),
                             const SizedBox(height: 16),
-                            Text('Apellyatsiya sababi',
+                            Text(context.l10n.pick(uz: 'Apellyatsiya sababi', ru: 'Причина апелляции', en: 'Reason for appeal'),
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textColor)),
                             const SizedBox(height: 8),
                             Container(
@@ -344,20 +345,20 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                   isDense: true,
                                   contentPadding: EdgeInsets.zero,
                                   border: InputBorder.none,
-                                  hintText: "Sabab kamida 20 ta belgidan iborat bo'lishi kerak",
+                                  hintText: context.l10n.pick(uz: 'Sabab kamida 20 ta belgidan iborat bo\'lishi kerak', ru: 'Причина должна содержать не менее 20 символов', en: 'The reason must be at least 20 characters'),
                                   hintStyle: TextStyle(color: subColor.withAlpha(150), fontSize: 12),
                                   counterStyle: TextStyle(fontSize: 10, color: subColor),
                                 ),
                                 validator: (v) {
                                   if (v == null || v.trim().length < 20) {
-                                    return "Kamida 20 ta belgi";
+                                    return context.l10n.pick(uz: 'Kamida 20 ta belgi', ru: 'Минимум 20 символов', en: 'At least 20 characters');
                                   }
                                   return null;
                                 },
                               ),
                             ),
                             const SizedBox(height: 16),
-                            Text('Hujjat (ixtiyoriy)',
+                            Text(context.l10n.pick(uz: 'Hujjat (ixtiyoriy)', ru: 'Документ (необязательно)', en: 'Document (optional)'),
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textColor)),
                             const SizedBox(height: 8),
                             InkWell(
@@ -387,7 +388,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        _fileName ?? 'PDF, JPG, PNG (maks 5MB)',
+                                        _fileName ?? context.l10n.pick(uz: 'PDF, JPG, PNG (maks 5MB)', ru: 'PDF, JPG, PNG (макс. 5 МБ)', en: 'PDF, JPG, PNG (max 5MB)'),
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: _fileName != null ? FontWeight.w600 : FontWeight.w400,
@@ -459,7 +460,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                       const SizedBox(width: 10),
                                     ],
                                     Text(
-                                      _submitting ? 'Yuborilmoqda…' : 'Apellyatsiya topshirish',
+                                      _submitting ? context.l10n.sending : context.l10n.pick(uz: 'Apellyatsiya topshirish', ru: 'Подать апелляцию', en: 'Submit appeal'),
                                       style: const TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,

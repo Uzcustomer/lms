@@ -38,7 +38,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = "Ma'lumotlarni yuklashda xatolik";
+        _error = AppLocalizations.current.pick(uz: 'Ma\'lumotlarni yuklashda xatolik', ru: 'Ошибка загрузки данных', en: 'Failed to load data');
         _loading = false;
       });
     }
@@ -228,7 +228,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
                                                 ),
                                                 const SizedBox(width: 8),
                                                 Text(
-                                                  '${grade.toStringAsFixed(grade == grade.toInt() ? 0 : 1)} ball',
+                                                  '${grade.toStringAsFixed(grade == grade.toInt() ? 0 : 1)} ${context.l10n.points}',
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w700,
@@ -240,7 +240,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
                                                   Icon(Icons.arrow_forward, size: 12, color: subColor),
                                                   const SizedBox(width: 6),
                                                   Text(
-                                                    '${newGrade.toStringAsFixed(newGrade == newGrade.toInt() ? 0 : 1)} ball',
+                                                    '${newGrade.toStringAsFixed(newGrade == newGrade.toInt() ? 0 : 1)} ${context.l10n.points}',
                                                     style: TextStyle(
                                                       fontSize: 12,
                                                       fontWeight: FontWeight.w700,

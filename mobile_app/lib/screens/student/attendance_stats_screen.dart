@@ -431,7 +431,7 @@ class _SubjectAttendanceScreenState extends State<_SubjectAttendanceScreen> {
           const SizedBox(height: 120),
           Icon(Icons.event_note_outlined, size: 48, color: ClinicTheme.faint),
           const SizedBox(height: 12),
-          Text('Ma\'lumot topilmadi',
+          Text(context.l10n.noData,
               textAlign: TextAlign.center,
               style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 14)),
         ],
@@ -501,11 +501,11 @@ class _SubjectAttendanceScreenState extends State<_SubjectAttendanceScreen> {
               spacing: 6,
               runSpacing: 6,
               children: [
-                _chip('Jami', '$total', ClinicTheme.mutedOf(context)),
-                _chip('Bor', '$attended', _green),
+                _chip(context.l10n.pick(uz: 'Jami', ru: 'Всего', en: 'Total'), '$total', ClinicTheme.mutedOf(context)),
+                _chip(context.l10n.pick(uz: 'Bor', ru: 'Был', en: 'Present'), '$attended', _green),
                 _chip('NB', '$absent', _red),
                 if (avgGrade > 0)
-                  _chip('O\'rtacha', avgGrade.toStringAsFixed(1), _blue),
+                  _chip(context.l10n.pick(uz: 'O\'rtacha', ru: 'Средний', en: 'Average'), avgGrade.toStringAsFixed(1), _blue),
               ],
             ),
           ),
@@ -538,15 +538,7 @@ class _SubjectAttendanceScreenState extends State<_SubjectAttendanceScreen> {
       final dt = DateTime.parse(day.date);
       dateStr =
           '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}';
-      const wds = [
-        'Dushanba',
-        'Seshanba',
-        'Chorshanba',
-        'Payshanba',
-        'Juma',
-        'Shanba',
-        'Yakshanba'
-      ];
+      final wds = context.l10n.weekdays;
       weekDay = wds[dt.weekday - 1];
     } catch (_) {
       dateStr = day.date;
@@ -657,7 +649,7 @@ class _SubjectAttendanceScreenState extends State<_SubjectAttendanceScreen> {
             ),
           ),
           const SizedBox(height: 2),
-          Text('${p.pair}-juftlik', style: TextStyle(fontSize: 9.5, color: muted)),
+          Text(context.l10n.lessonPair(p.pair), style: TextStyle(fontSize: 9.5, color: muted)),
         ],
       );
     }
@@ -696,7 +688,7 @@ class _SubjectAttendanceScreenState extends State<_SubjectAttendanceScreen> {
                   fontSize: 15, fontWeight: FontWeight.w900, color: textColor)),
         ),
         const SizedBox(height: 2),
-        Text('${p.pair}-juftlik', style: TextStyle(fontSize: 9.5, color: muted)),
+        Text(context.l10n.lessonPair(p.pair), style: TextStyle(fontSize: 9.5, color: muted)),
       ],
     );
   }

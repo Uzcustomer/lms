@@ -3,6 +3,7 @@ import '../screens/student/attendance_confirm_screen.dart';
 import '../services/attendance_service.dart';
 import '../utils/page_transitions.dart';
 import 'clinic_header.dart';
+import '../l10n/app_localizations.dart';
 
 /// Dashboard strip shown while a teacher has an attendance window open for
 /// the student's group. Hidden otherwise.
@@ -46,7 +47,7 @@ class AttendanceBanner extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          done ? 'Davomat tasdiqlandi' : 'Davomat ochiq — tasdiqlang',
+                          done ? context.l10n.pick(uz: 'Davomat tasdiqlandi', ru: 'Присутствие подтверждено', en: 'Attendance confirmed') : context.l10n.pick(uz: 'Davomat ochiq — tasdiqlang', ru: 'Перекличка открыта — подтвердите', en: 'Attendance is open — confirm'),
                           style: const TextStyle(
                               color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.5),
                         ),
@@ -70,7 +71,7 @@ class AttendanceBanner extends StatelessWidget {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(9),
                       ),
-                      child: const Text('Tasdiqlash',
+                      child: Text(context.l10n.confirm,
                           style: TextStyle(
                               color: ClinicTheme.ink, fontWeight: FontWeight.w800, fontSize: 12)),
                     ),

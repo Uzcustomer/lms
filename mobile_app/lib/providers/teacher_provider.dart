@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/teacher_service.dart';
 import '../services/api_service.dart';
+import '../l10n/app_localizations.dart';
 
 class TeacherProvider extends ChangeNotifier {
   final TeacherService _service;
@@ -45,7 +46,7 @@ class TeacherProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
 
     _inFlight--;

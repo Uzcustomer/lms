@@ -12,27 +12,43 @@ class ClinicTheme {
   static const line = Color(0xFFE2E8F0);
   static const bg = Color(0xFFFFFFFF);
 
-  static Color inkOf(BuildContext c) =>
-      Theme.of(c).brightness == Brightness.dark ? Colors.white : ink;
-  static Color mutedOf(BuildContext c) => Theme.of(c).brightness == Brightness.dark
-      ? AppTheme.darkTextSecondary
-      : muted;
-  static Color surfaceOf(BuildContext c) =>
-      Theme.of(c).brightness == Brightness.dark ? AppTheme.darkCard : Colors.white;
-  static Color dividerOf(BuildContext c) => Theme.of(c).brightness == Brightness.dark
-      ? Colors.white.withOpacity(0.08)
-      : line;
-  static Color bgOf(BuildContext c) => Theme.of(c).brightness == Brightness.dark
-      ? AppTheme.darkBackground
-      : Colors.white;
+  static bool isDark(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
+
+  /// Pick a colour by brightness — the one helper every other getter uses.
+  static Color tone(BuildContext c, Color light, Color dark) => isDark(c) ? dark : light;
+
+  // Surfaces and text
+  static Color inkOf(BuildContext c) => tone(c, ink, AppTheme.darkTextPrimary);
+  static Color mutedOf(BuildContext c) => tone(c, muted, AppTheme.darkTextSecondary);
+  static Color faintOf(BuildContext c) => tone(c, faint, AppTheme.darkTextFaint);
+  static Color surfaceOf(BuildContext c) => tone(c, Colors.white, AppTheme.darkCard);
+  /// Soft fill for chips, icon buttons, secondary rows.
+  static Color elevatedOf(BuildContext c) => tone(c, const Color(0xFFF1F5F9), AppTheme.darkElevated);
+  static Color dividerOf(BuildContext c) => tone(c, line, AppTheme.darkDivider);
+  static Color bgOf(BuildContext c) => tone(c, Colors.white, AppTheme.darkBackground);
+
+  // Accents — the brand colours, lifted for dark so they read on navy.
+  static Color tealOf(BuildContext c) => tone(c, teal, const Color(0xFF2DD4BF));
+  static Color blueOf(BuildContext c) => tone(c, blue, AppTheme.darkAccent);
+  static Color greenOf(BuildContext c) => tone(c, green, AppTheme.darkSuccess);
+  static Color redOf(BuildContext c) => tone(c, const Color(0xFFBE123C), AppTheme.darkError);
+  static Color amberOf(BuildContext c) => tone(c, const Color(0xFFB45309), AppTheme.darkWarning);
+  static Color violetOf(BuildContext c) => tone(c, const Color(0xFF6D28D9), const Color(0xFFA78BFA));
+
+  /// Pale tint behind a status label: washed in light, translucent in dark.
+  static Color tintOf(BuildContext c, Color base) =>
+      base.withValues(alpha: isDark(c) ? 0.18 : 0.10);
 
   static List<BoxShadow> cardShadow = [
     BoxShadow(
-      color: const Color(0xFF0F172A).withOpacity(0.14),
+      color: const Color(0xFF0F172A).withValues(alpha: 0.14),
       blurRadius: 5,
       offset: const Offset(0, 2),
     ),
   ];
+
+  /// Shadows read as smudges on a dark ground — none there.
+  static List<BoxShadow> cardShadowOf(BuildContext c) => isDark(c) ? const [] : cardShadow;
 }
 
 /// Soft-square 38×38 icon button used in clinical headers.
@@ -48,7 +64,7 @@ class ClinicIconButton extends StatelessWidget {
       width: 38,
       height: 38,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+        color: isDark ? AppTheme.darkElevated : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(11),
       ),
       child: IconButton(

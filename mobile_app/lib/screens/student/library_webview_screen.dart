@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../widgets/clinic_header.dart';
+import '../../l10n/app_localizations.dart';
 
 class LibraryWebViewScreen extends StatefulWidget {
   const LibraryWebViewScreen({super.key});
@@ -62,7 +63,7 @@ class _LibraryWebViewScreenState extends State<LibraryWebViewScreen> {
           children: [
             ClinicHeader(
               overline: 'FOYDALI',
-              title: 'Kutubxona',
+              title: context.l10n.library,
               onBack: () => Navigator.pop(context),
             ),
             const Expanded(child: Center(child: CircularProgressIndicator())),
@@ -77,7 +78,7 @@ class _LibraryWebViewScreenState extends State<LibraryWebViewScreen> {
         children: [
           ClinicHeader(
             overline: 'FOYDALI',
-            title: 'Kutubxona',
+            title: context.l10n.library,
             onBack: () => Navigator.pop(context),
             actions: [
               ClinicIconButton(

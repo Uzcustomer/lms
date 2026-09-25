@@ -18,15 +18,18 @@ class StudentScheduleScreen extends StatefulWidget {
 class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   int _selectedDayIndex = -1;
 
-  static const Map<int, String> _weekdayToUzName = {
-    DateTime.monday: 'Dushanba',
-    DateTime.tuesday: 'Seshanba',
-    DateTime.wednesday: 'Chorshanba',
-    DateTime.thursday: 'Payshanba',
-    DateTime.friday: 'Juma',
-    DateTime.saturday: 'Shanba',
-    DateTime.sunday: 'Yakshanba',
-  };
+  static Map<int, String> get _weekdayToUzName {
+    final w = AppLocalizations.current.weekdays;
+    return {
+      DateTime.monday: w[0],
+      DateTime.tuesday: w[1],
+      DateTime.wednesday: w[2],
+      DateTime.thursday: w[3],
+      DateTime.friday: w[4],
+      DateTime.saturday: w[5],
+      DateTime.sunday: w[6],
+    };
+  }
 
   static const Map<int, String> _weekdayShort = {
     DateTime.monday: 'DU',
@@ -216,9 +219,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   String _formatDuration(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    if (h > 0 && m > 0) return '$h soat $m daqiqa';
-    if (h > 0) return '$h soat';
-    return '$m daqiqa';
+    if (h > 0 && m > 0) return AppLocalizations.current.hoursMinutes(h, m);
+    if (h > 0) return AppLocalizations.current.pick(uz: '$h soat', ru: '$h ч', en: '$h h');
+    return AppLocalizations.current.hoursMinutes(0, m);
   }
 
   /// Sum of every lesson's start→end span, formatted.
@@ -378,7 +381,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Haftalik dars jadvali',
+                  context.l10n.pick(uz: 'Haftalik dars jadvali', ru: 'Расписание на неделю', en: 'Weekly timetable'),
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
                 ),
               ],
@@ -613,8 +616,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   const SizedBox(height: 2),
                   Text(
                     lessons.isEmpty
-                        ? 'Dars yo\'q'
-                        : '${lessons.length} ta para · ${_totalDuration(lessons)}',
+                        ? context.l10n.pick(uz: 'Dars yo\'q', ru: 'Занятий нет', en: 'No lessons')
+                        : context.l10n.pick(uz: '${lessons.length} ta para · ${_totalDuration(lessons)}', ru: '${lessons.length} пар · ${_totalDuration(lessons)}', en: '${lessons.length} pairs · ${_totalDuration(lessons)}'),
                     style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: _muted),
                   ),
                 ],

@@ -6,6 +6,7 @@ import '../../utils/page_transitions.dart';
 import '../../widgets/clinic_header.dart';
 import 'face_login_screen.dart';
 import 'verify_2fa_screen.dart';
+import '../../l10n/app_localizations.dart';
 
 enum _Role { student, staff }
 
@@ -99,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _faceIdLogin() async {
     if (!_isStudent) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tezkor kirish faqat talabalar uchun')),
+        SnackBar(content: Text(context.l10n.pick(uz: 'Tezkor kirish faqat talabalar uchun', ru: 'Быстрый вход доступен только студентам', en: 'Quick sign-in is for students only'))),
       );
       return;
     }
@@ -107,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final login = _idCtrl.text.trim();
     if (login.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Avval Login (talaba ID) ni kiriting')),
+        SnackBar(content: Text(context.l10n.pick(uz: 'Avval Login (talaba ID) ni kiriting', ru: 'Сначала введите логин (ID студента)', en: 'Enter your login (student ID) first'))),
       );
       return;
     }
@@ -159,15 +160,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       alignment: Alignment.centerRight,
                       child: GestureDetector(
                         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text(
-                                "Parolni tiklash uchun universitet IT-bo'limiga murojaat qiling."),
+                                context.l10n.pick(uz: 'Parolni tiklash uchun universitet IT-bo\'limiga murojaat qiling.', ru: 'Для сброса пароля обратитесь в IT-отдел университета.', en: 'To reset your password, contact the university IT department.')),
                           ),
                         ),
-                        child: const Padding(
+                        child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                           child: Text(
-                            'Parolni unutdingizmi?',
+                            context.l10n.pick(uz: 'Parolni unutdingizmi?', ru: 'Забыли пароль?', en: 'Forgot your password?'),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -235,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Row(
         children: [
-          _tabButton('Talaba', Icons.school_outlined, _Role.student),
+          _tabButton(context.l10n.student, Icons.school_outlined, _Role.student),
           const SizedBox(width: 4),
           _tabButton('Xodim', Icons.badge_outlined, _Role.staff),
         ],
@@ -313,10 +314,10 @@ class _LoginScreenState extends State<LoginScreen> {
           color: _ink,
         ),
         validator: (v) {
-          if (v == null || v.trim().isEmpty) return 'Login kiriting';
+          if (v == null || v.trim().isEmpty) return context.l10n.loginRequired;
           return null;
         },
-        decoration: _inputDecoration.copyWith(hintText: 'ID raqam'),
+        decoration: _inputDecoration.copyWith(hintText: context.l10n.pick(uz: 'ID raqam', ru: 'ID номер', en: 'ID number')),
       ),
     );
   }
@@ -346,10 +347,10 @@ class _LoginScreenState extends State<LoginScreen> {
           color: _ink,
         ),
         validator: (v) {
-          if (v == null || v.isEmpty) return 'Parol kiriting';
+          if (v == null || v.isEmpty) return context.l10n.passwordRequired;
           return null;
         },
-        decoration: _inputDecoration.copyWith(hintText: 'Parol'),
+        decoration: _inputDecoration.copyWith(hintText: context.l10n.password),
       ),
     );
   }
@@ -400,8 +401,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     : null,
               ),
               const SizedBox(width: 8),
-              const Text(
-                'Meni eslab qol',
+              Text(
+                context.l10n.pick(uz: 'Meni eslab qol', ru: 'Запомнить меня', en: 'Remember me'),
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
@@ -413,7 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const Spacer(),
         Text(
-          'Faqat login saqlanadi',
+          context.l10n.pick(uz: 'Faqat login saqlanadi', ru: 'Сохраняется только логин', en: 'Only the login is saved'),
           style: TextStyle(fontSize: 11, color: _ink.withOpacity(0.45)),
         ),
       ],
@@ -470,7 +471,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(width: 8),
                           ],
                           Text(
-                            loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
+                            loading ? context.l10n.checking : context.l10n.signIn,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
@@ -505,7 +506,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Expanded(child: Container(height: 1, color: _ink.withOpacity(0.10))),
         const SizedBox(width: 10),
         Text(
-          'YOKI',
+          context.l10n.pick(uz: 'YOKI', ru: 'ИЛИ', en: 'OR'),
           style: TextStyle(
             fontSize: 10.5,
             fontWeight: FontWeight.w800,
@@ -544,8 +545,8 @@ class _LoginScreenState extends State<LoginScreen> {
               child: const Icon(Icons.face_outlined, color: _accent, size: 17),
             ),
             const SizedBox(width: 10),
-            const Text(
-              'Face ID orqali kirish',
+            Text(
+              context.l10n.pick(uz: 'Face ID orqali kirish', ru: 'Войти через Face ID', en: 'Sign in with Face ID'),
               style: TextStyle(
                 color: _ink,
                 fontSize: 13.5,
@@ -615,7 +616,7 @@ class _Hero extends StatelessWidget {
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    'Toshkent Davlat Tibbiyot Universiteti',
+                    context.l10n.pick(uz: 'Toshkent Davlat Tibbiyot Universiteti', ru: 'Ташкентский государственный медицинский университет', en: 'Tashkent State Medical University'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.92),
@@ -625,7 +626,7 @@ class _Hero extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'Termiz filiali · 2018',
+                    context.l10n.pick(uz: 'Termiz filiali · 2018', ru: 'Термезский филиал · 2018', en: 'Termez branch · 2018'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.8),

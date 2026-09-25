@@ -172,7 +172,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
       );
       if (!mounted) return;
       Navigator.pop(context);
-      _showSnack('Ariza muvaffaqiyatli yuborildi');
+      _showSnack(AppLocalizations.current.pick(uz: 'Ariza muvaffaqiyatli yuborildi', ru: 'Заявка успешно отправлена', en: 'Application sent successfully'));
       setState(() {
         _selected.clear();
         _receiptBytes = null;
@@ -183,7 +183,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     } on ApiException catch (e) {
       if (mounted) _showSnack(e.message, error: true);
     } catch (_) {
-      if (mounted) _showSnack('Ariza yuborishda xatolik', error: true);
+      if (mounted) _showSnack(AppLocalizations.current.pick(uz: 'Ariza yuborishda xatolik', ru: 'Ошибка при отправке заявки', en: 'Failed to send the application'), error: true);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -208,12 +208,12 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
         paymentFileName: result.files.single.name,
       );
       if (!mounted) return;
-      _showSnack('To\'lov cheki yuborildi');
+      _showSnack(AppLocalizations.current.pick(uz: 'To\'lov cheki yuborildi', ru: 'Чек об оплате отправлен', en: 'Payment receipt sent'));
       await _load();
     } on ApiException catch (e) {
       if (mounted) _showSnack(e.message, error: true);
     } catch (_) {
-      if (mounted) _showSnack('To\'lov chekini yuborishda xatolik', error: true);
+      if (mounted) _showSnack(AppLocalizations.current.pick(uz: 'To\'lov chekini yuborishda xatolik', ru: 'Ошибка при отправке чека', en: 'Failed to send the receipt'), error: true);
     } finally {
       if (mounted) setState(() => _uploadingPaymentGroupId = null);
     }
@@ -238,12 +238,12 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
         fileName: result.files.single.name,
       );
       if (!mounted) return;
-      _showSnack('Mustaqil ta\'lim fayli yuklandi');
+      _showSnack(AppLocalizations.current.pick(uz: 'Mustaqil ta\'lim fayli yuklandi', ru: 'Файл самостоятельной работы загружен', en: 'Independent work file uploaded'));
       await _load();
     } on ApiException catch (e) {
       if (mounted) _showSnack(e.message, error: true);
     } catch (_) {
-      if (mounted) _showSnack('Mustaqil faylni yuklashda xatolik', error: true);
+      if (mounted) _showSnack(AppLocalizations.current.pick(uz: 'Mustaqil faylni yuklashda xatolik', ru: 'Ошибка при загрузке файла', en: 'Failed to upload the file'), error: true);
     } finally {
       if (mounted) setState(() => _uploadingMustaqilApplicationId = null);
     }
@@ -404,7 +404,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
           '${window['semester_name'] ?? ''}\n${window['start_date'] ?? '-'} -> ${window['end_date'] ?? '-'}',
       color: isOpen ? ClinicTheme.green : const Color(0xFFB45309),
       trailing: isOpen
-          ? '${_remainingSlots.toString()} slot'
+          ? context.l10n.pick(uz: '${_remainingSlots.toString()} slot', ru: '${_remainingSlots.toString()} мест', en: '${_remainingSlots.toString()} slots')
           : (window['status']?.toString() ?? ''),
     );
   }
@@ -926,7 +926,7 @@ class _RetakeJournalCard extends StatelessWidget {
                     ),
                     _StatusPill(
                       text: item['is_editable'] == true
-                          ? 'Davom etmoqda'
+                          ? context.l10n.pick(uz: 'Davom etmoqda', ru: 'В процессе', en: 'In progress')
                           : (group['status_label']?.toString() ?? 'Jurnal'),
                       color: Colors.white,
                     ),
@@ -938,7 +938,7 @@ class _RetakeJournalCard extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     _LightPill(text: item['semester_name']?.toString() ?? '-'),
-                    _LightPill(text: group['name']?.toString() ?? 'Guruh'),
+                    _LightPill(text: group['name']?.toString() ?? AppLocalizations.current.group),
                     _LightPill(text: assessment),
                   ],
                 ),
@@ -952,7 +952,7 @@ class _RetakeJournalCard extends StatelessWidget {
               children: [
                 _JournalInfoLine(
                   icon: Icons.person_outline_rounded,
-                  text: group['teacher_name']?.toString() ?? 'O\'qituvchi biriktirilmagan',
+                  text: group['teacher_name']?.toString() ?? AppLocalizations.current.pick(uz: 'O\'qituvchi biriktirilmagan', ru: 'Преподаватель не назначен', en: 'No teacher assigned'),
                 ),
                 const SizedBox(height: 5),
                 _JournalInfoLine(
@@ -987,7 +987,7 @@ class _RetakeJournalCard extends StatelessWidget {
                     if (showTest)
                       _ScoreTile(label: 'TEST', value: _gradeText(item['test_score'])),
                     _ScoreTile(
-                      label: 'Yakuniy',
+                      label: context.l10n.pick(uz: 'Yakuniy', ru: 'Итог', en: 'Final'),
                       value: _gradeText(item['final_grade_value']),
                       accent: ClinicTheme.blue,
                     ),
@@ -996,7 +996,7 @@ class _RetakeJournalCard extends StatelessWidget {
                 if (dailyGrades.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'Kunlik baholar',
+                    context.l10n.pick(uz: 'Kunlik baholar', ru: 'Ежедневные оценки', en: 'Daily grades'),
                     style: TextStyle(
                       color: ClinicTheme.inkOf(context),
                       fontSize: 12,
@@ -1051,7 +1051,7 @@ class _RetakeJournalCard extends StatelessWidget {
                       Text(
                         hasSubmission
                             ? '${mustaqil['file_name'] ?? 'Fayl'} · ${mustaqil['submitted_at'] ?? '-'}'
-                            : 'Hali fayl yuklanmagan',
+                            : context.l10n.pick(uz: 'Hali fayl yuklanmagan', ru: 'Файл ещё не загружен', en: 'No file uploaded yet'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1077,7 +1077,7 @@ class _RetakeJournalCard extends StatelessWidget {
                         runSpacing: 8,
                         children: [
                           if (fileUrl != null)
-                            _LinkChip(text: 'Faylni ochish', onTap: () => onOpen(fileUrl)),
+                            _LinkChip(text: context.l10n.openFile, onTap: () => onOpen(fileUrl)),
                           if (canUpload)
                             ActionChip(
                               onPressed: uploading ? null : onUpload,
@@ -1090,10 +1090,10 @@ class _RetakeJournalCard extends StatelessWidget {
                                   : const Icon(Icons.upload_file_rounded, size: 15),
                               label: Text(
                                 uploading
-                                    ? 'Yuklanmoqda...'
+                                    ? context.l10n.loading
                                     : hasSubmission
-                                        ? 'Qayta yuklash'
-                                        : 'Mustaqil yuklash',
+                                        ? context.l10n.pick(uz: 'Qayta yuklash', ru: 'Загрузить снова', en: 'Re-upload')
+                                        : context.l10n.pick(uz: 'Mustaqil yuklash', ru: 'Загрузить работу', en: 'Upload work'),
                               ),
                               labelStyle: const TextStyle(
                                 fontSize: 11,
@@ -1107,8 +1107,8 @@ class _RetakeJournalCard extends StatelessWidget {
                       if (canUpload) ...[
                         const SizedBox(height: 7),
                         Text(
-                          'Urinish: ${mustaqil['attempt_count'] ?? 0}/${mustaqil['max_attempts'] ?? 3}. '
-                          '60+ baho olinsa qayta yuklash yopiladi.',
+                          '${context.l10n.pick(uz: 'Urinish', ru: 'Попытка', en: 'Attempt')}: ${mustaqil['attempt_count'] ?? 0}/${mustaqil['max_attempts'] ?? 3}. '
+                          '${context.l10n.pick(uz: '60+ baho olinsa qayta yuklash yopiladi.', ru: 'При оценке 60+ повторная загрузка закрывается.', en: 'Re-upload closes once a grade of 60+ is given.')}',
                           style: const TextStyle(
                             color: Color(0xFFB45309),
                             fontSize: 10.5,
@@ -1150,9 +1150,9 @@ class _RetakeJournalCard extends StatelessWidget {
   String _mustaqilStatus(Map<String, dynamic> mustaqil) {
     if (mustaqil['is_passed'] == true) return 'O\'tdi';
     if (mustaqil['is_exhausted'] == true) return 'Urinish tugadi';
-    if (mustaqil['grade'] != null) return 'Baholangan';
-    if (mustaqil['exists'] == true) return 'Tekshirilmoqda';
-    return 'Yuklanmagan';
+    if (mustaqil['grade'] != null) return AppLocalizations.current.graded;
+    if (mustaqil['exists'] == true) return AppLocalizations.current.pick(uz: 'Tekshirilmoqda', ru: 'На проверке', en: 'Under review');
+    return AppLocalizations.current.notUploaded;
   }
 
   Color _mustaqilColor(Map<String, dynamic> mustaqil) {
@@ -1297,7 +1297,7 @@ class _HistoryCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${apps.length} fan - $moneyText',
+                  context.l10n.pick(uz: '${apps.length} fan - $moneyText', ru: '${apps.length} предм. - $moneyText', en: '${apps.length} subjects - $moneyText'),
                   style: TextStyle(
                     color: ClinicTheme.inkOf(context),
                     fontWeight: FontWeight.w900,
@@ -1314,7 +1314,7 @@ class _HistoryCard extends StatelessWidget {
           if (group['session_name'] != null) ...[
             const SizedBox(height: 3),
             Text(
-              'Sessiya: ${group['session_name']}',
+              '${AppLocalizations.current.pick(uz: 'Sessiya', ru: 'Сессия', en: 'Session')}: ${group['session_name']}',
               style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 11),
             ),
           ],
@@ -1328,7 +1328,7 @@ class _HistoryCard extends StatelessWidget {
                 if (docxUrl != null)
                   _LinkChip(text: 'DOCX', onTap: () => onOpen(docxUrl)),
                 if (certificateUrl != null)
-                  _LinkChip(text: 'Ruxsatnoma PDF', onTap: () => onOpen(certificateUrl)),
+                  _LinkChip(text: context.l10n.pick(uz: 'Ruxsatnoma PDF', ru: 'Разрешение PDF', en: 'Permit PDF'), onTap: () => onOpen(certificateUrl)),
               ],
             ),
           ],
@@ -1379,7 +1379,7 @@ class _ApplicationRow extends StatelessWidget {
           if (retakeGroup != null) ...[
             const SizedBox(height: 4),
             Text(
-              '${retakeGroup['name'] ?? 'Guruh'} - ${retakeGroup['teacher_name'] ?? 'O\'qituvchi'}',
+              '${retakeGroup['name'] ?? AppLocalizations.current.group} - ${retakeGroup['teacher_name'] ?? 'O\'qituvchi'}',
               style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 11),
             ),
             Text(
@@ -1746,7 +1746,7 @@ class _ErrorState extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Qayta yuklash'),
+              label: Text(context.l10n.reload),
             ),
           ],
         ),

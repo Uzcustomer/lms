@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../services/student_service.dart';
 import '../services/api_service.dart';
+import '../l10n/app_localizations.dart';
 
 /// Student data provider — direct API calls per screen.
 class StudentProvider extends ChangeNotifier {
@@ -59,7 +60,7 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     _isLoading = false;
     notifyListeners();
@@ -76,7 +77,7 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     _isLoading = false;
     notifyListeners();
@@ -95,7 +96,7 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     _isLoading = false;
     notifyListeners();
@@ -112,7 +113,7 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     _isLoading = false;
     notifyListeners();
@@ -128,7 +129,7 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     _isLoading = false;
     notifyListeners();
@@ -145,7 +146,7 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     _isLoading = false;
     notifyListeners();
@@ -163,7 +164,7 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (e) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     _isLoading = false;
     notifyListeners();

@@ -8,6 +8,7 @@ import '../../services/attendance_service.dart';
 import '../../services/beacon_service.dart';
 import '../../services/presence_scanner.dart';
 import '../../widgets/clinic_header.dart';
+import '../../l10n/app_localizations.dart';
 
 /// "Davomat": lists the attendance windows this student was prompted for
 /// (detected in the room), and lets them confirm while the session's beacon
@@ -91,7 +92,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
-      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _error = AppLocalizations.current.networkError;
     }
     if (!mounted) return;
     setState(() => _loading = false);
@@ -117,7 +118,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
       if (p.requireFace) {
         selfie = await _takeSelfie();
         if (selfie == null) {
-          if (mounted) _snack("Davomat uchun yuzingizni suratga olish kerak.", error: true);
+          if (mounted) _snack(context.l10n.pick(uz: 'Davomat uchun yuzingizni suratga olish kerak.', ru: 'Для переклички нужно сфотографировать лицо.', en: 'A selfie is required to confirm attendance.'), error: true);
           return;
         }
       }
@@ -131,12 +132,12 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
         photo: selfie,
       );
       if (!mounted) return;
-      _snack(res['message']?.toString() ?? 'Davomat tasdiqlandi.');
+      _snack(res['message']?.toString() ?? context.l10n.pick(uz: 'Davomat tasdiqlandi.', ru: 'Присутствие подтверждено.', en: 'Attendance confirmed.'));
       await _load();
     } on ApiException catch (e) {
       if (mounted) _snack(e.message, error: true);
     } catch (_) {
-      if (mounted) _snack('Tarmoq xatoligi. Qayta urinib ko\'ring.', error: true);
+      if (mounted) _snack(context.l10n.retryError, error: true);
     } finally {
       if (mounted) setState(() => _confirming = null);
     }
@@ -154,7 +155,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
       );
       return picked == null ? null : File(picked.path);
     } catch (_) {
-      if (mounted) _snack("Kamerani ochib bo'lmadi. Ruxsatlarni tekshiring.", error: true);
+      if (mounted) _snack(context.l10n.pick(uz: 'Kamerani ochib bo\'lmadi. Ruxsatlarni tekshiring.', ru: 'Не удалось открыть камеру. Проверьте разрешения.', en: 'Could not open the camera. Check permissions.'), error: true);
       return null;
     }
   }
@@ -196,15 +197,15 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
   }
 
   void _copySurvey() {
-    final label = _surveyLabel.isEmpty ? 'Nuqta' : _surveyLabel;
+    final label = _surveyLabel.isEmpty ? context.l10n.pick(uz: 'Nuqta', ru: 'Точка', en: 'Spot') : _surveyLabel;
     final lines = <String>['$label — ${_recordFor.inSeconds}s'];
     for (final s in _survey) {
       lines.add('${s.major}/${s.minor}: mediana ${s.median} dBm · '
           '10% ${s.percentile(10)} · 90% ${s.percentile(90)} · '
-          'min ${s.min} · max ${s.max} · ${s.count} ta');
+          'min ${s.min} · max ${s.max} · ${context.l10n.pick(uz: '${s.count} ta', ru: '${s.count} шт', en: '${s.count}')}');
     }
     Clipboard.setData(ClipboardData(text: lines.join('\n')));
-    _snack('Natija nusxalandi.');
+    _snack(context.l10n.pick(uz: 'Natija nusxalandi.', ru: 'Результат скопирован.', en: 'Result copied.'));
   }
 
   // ── UI ──────────────────────────────────────────────
@@ -215,7 +216,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
       backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          ClinicHeader(title: 'Davomat', onBack: () => Navigator.of(context).pop()),
+          ClinicHeader(title: context.l10n.attendance, onBack: () => Navigator.of(context).pop()),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
@@ -237,7 +238,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                     _message(Icons.wifi_off_rounded, _error!)
                   else if (_pending.isEmpty)
                     _message(Icons.event_available_outlined,
-                        'Hozir ochiq davomat yo\'q.\nO\'qituvchi davomatni boshlaganda, xonada bo\'lsangiz shu yerda ko\'rinadi.')
+                        context.l10n.pick(uz: 'Hozir ochiq davomat yo\'q.\\nO\'qituvchi davomatni boshlaganda, xonada bo\'lsangiz shu yerda ko\'rinadi.', ru: 'Сейчас открытой переклички нет.\\nКогда преподаватель начнёт, она появится здесь, если вы в аудитории.', en: 'No attendance is open right now.\\nWhen the teacher starts one, it appears here if you are in the room.'))
                   else
                     ..._pending.map(_sessionCard),
                 ],
@@ -288,7 +289,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
             children: [
               const Icon(Icons.bluetooth_searching, size: 18, color: ClinicTheme.teal),
               const SizedBox(width: 8),
-              Text('Signal — ${_tracker.window.inSeconds}s mediana',
+              Text(context.l10n.pick(uz: 'Signal — ${_tracker.window.inSeconds}s mediana', ru: 'Сигнал — медиана за ${_tracker.window.inSeconds}с', en: 'Signal — ${_tracker.window.inSeconds}s median'),
                   style: TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
               const Spacer(),
@@ -301,7 +302,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
           ),
           const SizedBox(height: 12),
           if (live.isEmpty)
-            Text('Hech qanday beacon eshitilmayapti',
+            Text(context.l10n.pick(uz: 'Hech qanday beacon eshitilmayapti', ru: 'Маяки не слышны', en: 'No beacon is being heard'),
                 style: TextStyle(fontSize: 12.5, color: ClinicTheme.mutedOf(context)))
           else
             ...live.map(_signalRow),
@@ -313,12 +314,12 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Yozilmoqda… ${left.inSeconds}s qoldi — telefonni qimirlatmasdan turing',
+                    context.l10n.pick(uz: 'Yozilmoqda… ${left.inSeconds}s qoldi — telefonni qimirlatmasdan turing', ru: 'Запись… осталось ${left.inSeconds}с — не двигайте телефон', en: 'Recording… ${left.inSeconds}s left — hold the phone still'),
                     style: TextStyle(
                         fontSize: 12.5, fontWeight: FontWeight.w700, color: ClinicTheme.inkOf(context)),
                   ),
                 ),
-                TextButton(onPressed: _cancelRecording, child: const Text('Bekor')),
+                TextButton(onPressed: _cancelRecording, child: Text(context.l10n.cancel)),
               ],
             )
           else ...[
@@ -327,8 +328,8 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
               style: const TextStyle(fontSize: 13),
               decoration: InputDecoration(
                 isDense: true,
-                labelText: 'Nuqta nomi',
-                hintText: 'masalan: oxirgi qator / eshik oldi / koridor',
+                labelText: context.l10n.pick(uz: 'Nuqta nomi', ru: 'Название точки', en: 'Spot name'),
+                hintText: context.l10n.pick(uz: 'masalan: oxirgi qator / eshik oldi / koridor', ru: 'например: последний ряд / у двери / коридор', en: 'e.g. back row / by the door / corridor'),
                 hintStyle: TextStyle(fontSize: 12, color: ClinicTheme.faint),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -345,7 +346,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
                 ),
                 icon: const Icon(Icons.fiber_manual_record, size: 18),
-                label: Text('${_recordFor.inSeconds} soniya yozib olish',
+                label: Text(context.l10n.pick(uz: '${_recordFor.inSeconds} soniya yozib olish', ru: 'Записать ${_recordFor.inSeconds} с', en: 'Record ${_recordFor.inSeconds} s'),
                     style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
             ),
@@ -406,7 +407,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
           Padding(
             padding: const EdgeInsets.only(left: 92, top: 3),
             child: Text(
-              'min ${s.min} · max ${s.max} · ${s.count} ta o\'lchov',
+              'min ${s.min} · max ${s.max} · ${context.l10n.pick(uz: '${s.count} ta o\'lchov', ru: '${s.count} измер.', en: '${s.count} readings')}',
               style: TextStyle(
                   fontSize: 11,
                   fontFeatures: const [FontFeature.tabularFigures()],
@@ -436,7 +437,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${_surveyLabel.isEmpty ? 'Natija' : _surveyLabel} — ${_recordFor.inSeconds}s',
+                  '${_surveyLabel.isEmpty ? context.l10n.pick(uz: 'Natija', ru: 'Результат', en: 'Result') : _surveyLabel} — ${_recordFor.inSeconds}s',
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.ink),
                 ),
@@ -444,7 +445,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
               IconButton(
                 onPressed: _copySurvey,
                 icon: const Icon(Icons.copy_rounded, size: 18),
-                tooltip: 'Nusxalash',
+                tooltip: context.l10n.pick(uz: 'Nusxalash', ru: 'Копировать', en: 'Copy'),
                 color: ClinicTheme.teal,
               ),
               IconButton(
@@ -464,7 +465,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                         style: const TextStyle(
                             fontSize: 12, fontWeight: FontWeight.w700, color: ClinicTheme.muted)),
                     const SizedBox(height: 2),
-                    Text('Mediana ${s.median} dBm',
+                    Text(context.l10n.pick(uz: 'Mediana ${s.median} dBm', ru: 'Медиана ${s.median} дБм', en: 'Median ${s.median} dBm'),
                         style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -473,7 +474,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                     const SizedBox(height: 2),
                     Text(
                       '10% ${s.percentile(10)} · 90% ${s.percentile(90)} · '
-                      'min ${s.min} · max ${s.max} · ${s.count} ta',
+                      'min ${s.min} · max ${s.max} · ${context.l10n.pick(uz: '${s.count} ta', ru: '${s.count} шт', en: '${s.count}')}',
                       style: const TextStyle(
                           fontSize: 11.5,
                           fontFeatures: [FontFeature.tabularFigures()],
@@ -483,8 +484,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                 ),
               )),
           Text(
-            'Xona ichida "10%" qiymatiga, koridorda "90%" qiymatiga qarang — '
-            'chegara shu ikkisining orasida bo\'ladi.',
+            context.l10n.pick(uz: 'Xona ichida "10%" qiymatiga, koridorda "90%" qiymatiga qarang — chegara shu ikkisining orasida bo\'ladi.', ru: 'В аудитории смотрите на значение «10%», в коридоре — на «90%»: порог между ними.', en: 'Inside the room look at the "10%" value, in the corridor at "90%" — the threshold lies between them.'),
             style: TextStyle(fontSize: 11, height: 1.35, color: ClinicTheme.muted.withOpacity(0.9)),
           ),
         ],
@@ -495,16 +495,16 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
   Widget _readinessCard() {
     final (text, action, onTap) = switch (_readiness!) {
       BeaconReadiness.bluetoothOff => (
-          'Bluetooth o\'chiq. Xona signalini eshitish uchun uni yoqing.',
-          'Bluetooth sozlamalari',
+          context.l10n.pick(uz: 'Bluetooth o\'chiq. Xona signalini eshitish uchun uni yoqing.', ru: 'Bluetooth выключен. Включите его, чтобы слышать сигнал аудитории.', en: 'Bluetooth is off. Turn it on to hear the room signal.'),
+          context.l10n.bluetoothSettings,
           _beacons.openBluetoothSettings,
         ),
       BeaconReadiness.permissionDenied => (
-          'Bluetooth ruxsati kerak — busiz xona beacon\'i aniqlanmaydi.',
-          'Ruxsat berish',
+          context.l10n.pick(uz: 'Bluetooth ruxsati kerak — busiz xona beacon\'i aniqlanmaydi.', ru: 'Нужно разрешение Bluetooth — без него маяк аудитории не определяется.', en: 'Bluetooth permission is required — without it the room beacon cannot be detected.'),
+          context.l10n.permissionGrant,
           _beacons.openAppPermissionSettings,
         ),
-      _ => ('Bu qurilma BLE skanerlashni qo\'llab-quvvatlamaydi.', null, null),
+      _ => (context.l10n.pick(uz: 'Bu qurilma BLE skanerlashni qo\'llab-quvvatlamaydi.', ru: 'Это устройство не поддерживает сканирование BLE.', en: 'This device does not support BLE scanning.'), null, null),
     };
 
     return Container(
@@ -597,12 +597,12 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
               Expanded(
                 child: Text(
                   p.isPresent
-                      ? (inRoom ? 'Tasdiqlangan · ${stats.median} dBm' : 'Tasdiqlangan')
+                      ? (inRoom ? '${context.l10n.confirmed} · ${stats.median} dBm' : context.l10n.confirmed)
                       : inRoom
-                          ? 'Xona topildi · ${stats.median} dBm'
+                          ? context.l10n.pick(uz: 'Xona topildi · ${stats.median} dBm', ru: 'Аудитория найдена · ${stats.median} дБм', en: 'Room found · ${stats.median} dBm')
                           : scanning
-                              ? 'Xona signali qidirilmoqda…'
-                              : 'Skanerlash yoqilmagan',
+                              ? context.l10n.pick(uz: 'Xona signali qidirilmoqda…', ru: 'Поиск сигнала аудитории…', en: 'Looking for the room signal…')
+                              : context.l10n.pick(uz: 'Skanerlash yoqilmagan', ru: 'Сканирование выключено', en: 'Scanning is off'),
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: accent),
                 ),
               ),
@@ -626,7 +626,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      "Tasdiqlashda old kamera ochiladi — yuzingiz LMS'dagi rasmingiz bilan solishtiriladi.",
+                      context.l10n.pick(uz: 'Tasdiqlashda old kamera ochiladi — yuzingiz LMS\'dagi rasmingiz bilan solishtiriladi.', ru: 'При подтверждении откроется фронтальная камера — лицо сравнится с вашим фото в LMS.', en: 'The front camera opens on confirm — your face is matched against your LMS photo.'),
                       style: TextStyle(fontSize: 11.5, color: ClinicTheme.mutedOf(context)),
                     ),
                   ),
@@ -652,12 +652,12 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                     : Icon(p.requireFace ? Icons.camera_front : Icons.how_to_reg),
                 label: Text(
                     !inRoom
-                        ? 'Xonaga kiring'
+                        ? context.l10n.enterRoom
                         : busy
-                            ? 'Tekshirilmoqda…'
+                            ? context.l10n.checking
                             : p.requireFace
-                            ? 'Yuz bilan tasdiqlash'
-                            : 'Davomatni tasdiqlash',
+                            ? context.l10n.pick(uz: 'Yuz bilan tasdiqlash', ru: 'Подтвердить лицом', en: 'Confirm with face')
+                            : context.l10n.pick(uz: 'Davomatni tasdiqlash', ru: 'Подтвердить присутствие', en: 'Confirm attendance'),
                     style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
             ),

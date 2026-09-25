@@ -44,9 +44,18 @@ class ClinicTheme {
   static Color tintOf(BuildContext c, Color base) =>
       base.withValues(alpha: isDark(c) ? 0.18 : 0.10);
 
-  /// Hero cards follow the colour the student picked in Settings.
+  // ── The scheme picked in Settings ────────────────────────────────
+  static AccentTheme accent(BuildContext c) => AccentThemes.current;
+
+  /// Hero cards (gradient panels with the shine sweep) and their glow.
   static List<Color> heroGradientOf(BuildContext c) => AccentThemes.current.gradient;
   static Color heroGlowOf(BuildContext c) => AccentThemes.current.start;
+
+  /// Interactive colour: active tab, links, selected chips.
+  static Color primaryOf(BuildContext c) => AccentThemes.current.primaryOf(isDark(c));
+
+  /// Colour for tile [i] of a grid, from the scheme's palette.
+  static Color tileOf(BuildContext c, int i) => AccentThemes.current.tile(i);
 
   /// A border that visibly separates a card from the page, unlike the
   /// hairline [dividerOf].

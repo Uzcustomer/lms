@@ -220,7 +220,7 @@ class _NavItemWidgetState extends State<_NavItemWidget>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeColor = ClinicTheme.tealOf(context);
+    final activeColor = ClinicTheme.primaryOf(context);
     final inactiveColor = isDark ? Colors.white60 : const Color(0xFF94A3B8);
     final color = widget.isActive ? activeColor : inactiveColor;
 

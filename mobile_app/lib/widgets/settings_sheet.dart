@@ -15,6 +15,9 @@ void showSettingsSheet(BuildContext context) {
 
   showModalBottomSheet(
     context: context,
+    // Scrollable and tall enough for every section: on a short screen the
+    // biometric row used to fall off the bottom of the sheet.
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -22,96 +25,138 @@ void showSettingsSheet(BuildContext context) {
       return StatefulBuilder(
         builder: (ctx, setSheetState) {
           final isDark = settings.isDark;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.darkBorderColor : Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+          return SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  l.settings,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-
-                // Theme toggle
-                Text(
-                  l.theme,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildThemeOption(
-                      ctx,
-                      icon: Icons.light_mode,
-                      label: l.lightMode,
-                      isSelected: !isDark,
-                      onTap: () {
-                        settings.setThemeMode(ThemeMode.light);
-                        setSheetState(() {});
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _buildThemeOption(
-                      ctx,
-                      icon: Icons.dark_mode,
-                      label: l.darkMode,
-                      isSelected: isDark,
-                      onTap: () {
-                        settings.setThemeMode(ThemeMode.dark);
-                        setSheetState(() {});
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Language selection
-                Text(
-                  l.language,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _buildLangOption(ctx, 'UZ', l.uzbek, 'uz', settings),
-                    const SizedBox(width: 8),
-                    _buildLangOption(ctx, 'RU', l.russian, 'ru', settings),
-                    const SizedBox(width: 8),
-                    _buildLangOption(ctx, 'EN', l.english, 'en', settings),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Hero-card colour
-                Text(
-                  l.pick(uz: 'Rang', ru: 'Цвет', en: 'Colour'),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    for (final t in AccentThemes.all)
-                      Expanded(
-                        child: _buildAccentOption(ctx, t, settings, () => setSheetState(() {})),
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppTheme.darkBorderColor
+                              : Colors.grey[400],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      l.settings,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Theme toggle
+                    Text(
+                      l.theme,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _buildThemeOption(
+                          ctx,
+                          icon: Icons.light_mode,
+                          label: l.lightMode,
+                          isSelected: !isDark,
+                          onTap: () {
+                            settings.setThemeMode(ThemeMode.light);
+                            setSheetState(() {});
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _buildThemeOption(
+                          ctx,
+                          icon: Icons.dark_mode,
+                          label: l.darkMode,
+                          isSelected: isDark,
+                          onTap: () {
+                            settings.setThemeMode(ThemeMode.dark);
+                            setSheetState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Language selection
+                    Text(
+                      l.language,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _buildLangOption(ctx, 'UZ', l.uzbek, 'uz', settings),
+                        const SizedBox(width: 8),
+                        _buildLangOption(ctx, 'RU', l.russian, 'ru', settings),
+                        const SizedBox(width: 8),
+                        _buildLangOption(ctx, 'EN', l.english, 'en', settings),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Colour scheme
+                    Text(
+                      l.pick(
+                        uz: 'Rang sxemasi',
+                        ru: 'Цветовая схема',
+                        en: 'Colour scheme',
+                      ),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      AccentThemes.labelOf(settings.accent.id, l.pick),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: settings.accent.primaryOf(isDark),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        for (final t in AccentThemes.all)
+                          Expanded(
+                            child: _buildAccentOption(
+                              ctx,
+                              t,
+                              settings,
+                              () => setSheetState(() {}),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const _BiometricTile(),
+                    const SizedBox(height: 24),
                   ],
                 ),
-                const _BiometricTile(),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
           );
         },
@@ -137,12 +182,16 @@ Widget _buildThemeOption(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor : unselectedBg,
+          color: isSelected ? ClinicTheme.primaryOf(context) : unselectedBg,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? Colors.white : unselectedFg, size: 28),
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : unselectedFg,
+              size: 28,
+            ),
             const SizedBox(height: 6),
             Text(
               label,
@@ -170,8 +219,12 @@ Widget _buildLangOption(
   final isDk = Theme.of(context).brightness == Brightness.dark;
   final unselectedBg = isDk ? AppTheme.darkSurface : Colors.grey[200];
   final unselectedBorder = isDk ? AppTheme.darkBorderColor : Colors.grey[300]!;
-  final unselectedCodeColor = isDk ? AppTheme.darkTextPrimary : Colors.grey[700];
-  final unselectedLabelColor = isDk ? AppTheme.darkTextSecondary : Colors.grey[500];
+  final unselectedCodeColor = isDk
+      ? AppTheme.darkTextPrimary
+      : Colors.grey[700];
+  final unselectedLabelColor = isDk
+      ? AppTheme.darkTextSecondary
+      : Colors.grey[500];
 
   return Expanded(
     child: GestureDetector(
@@ -182,7 +235,7 @@ Widget _buildLangOption(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor : unselectedBg,
+          color: isSelected ? ClinicTheme.primaryOf(context) : unselectedBg,
           borderRadius: BorderRadius.circular(14),
           border: isSelected ? null : Border.all(color: unselectedBorder),
         ),
@@ -234,7 +287,9 @@ Widget _buildAccentOption(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSelected ? theme.start : (isDk ? AppTheme.darkBorderColor : Colors.grey[300]!),
+            color: isSelected
+                ? theme.start
+                : (isDk ? AppTheme.darkBorderColor : Colors.grey[300]!),
             width: isSelected ? 2.5 : 1,
           ),
         ),
@@ -247,7 +302,9 @@ Widget _buildAccentOption(
               colors: theme.gradient,
             ),
           ),
-          child: isSelected ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
+          child: isSelected
+              ? const Icon(Icons.check, size: 16, color: Colors.white)
+              : null,
         ),
       ),
     ),
@@ -332,8 +389,11 @@ class _BiometricTileState extends State<_BiometricTile> {
           ),
           child: Row(
             children: [
-              Icon(Icons.fingerprint_rounded,
-                  color: ClinicTheme.tealOf(context), size: 24),
+              Icon(
+                Icons.fingerprint_rounded,
+                color: ClinicTheme.tealOf(context),
+                size: 24,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -346,7 +406,9 @@ class _BiometricTileState extends State<_BiometricTile> {
                         en: 'Quick access',
                       ),
                       style: const TextStyle(
-                          fontSize: 13.5, fontWeight: FontWeight.w600),
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 1),
                     Text(
@@ -356,8 +418,11 @@ class _BiometricTileState extends State<_BiometricTile> {
                         en: 'Fingerprint, Face ID, or device passcode',
                       ),
                       style: TextStyle(
-                          fontSize: 11.5,
-                          color: isDark ? AppTheme.darkTextSecondary : Colors.grey),
+                        fontSize: 11.5,
+                        color: isDark
+                            ? AppTheme.darkTextSecondary
+                            : Colors.grey,
+                      ),
                     ),
                   ],
                 ),

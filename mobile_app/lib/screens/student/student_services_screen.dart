@@ -28,8 +28,7 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
         icon: Icons.description_outlined,
         title: l.absenceExcuse,
         subtitle: l.absenceExcuseDesc,
-        color: const Color(0xFF3B82F6),
-        bgColor: const Color(0xFFEAF2FF),
+        colorIndex: 0,
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const AbsenceExcuseListScreen()),
@@ -39,8 +38,7 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
         icon: Icons.groups_2_outlined,
         title: l.clubs,
         subtitle: l.clubsDesc,
-        color: const Color(0xFFA855F7),
-        bgColor: const Color(0xFFF3E8FF),
+        colorIndex: 1,
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const ClubsScreen()),
@@ -50,8 +48,7 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
         icon: Icons.gavel_rounded,
         title: l.appeal,
         subtitle: l.appealDesc,
-        color: const Color(0xFFF97316),
-        bgColor: const Color(0xFFFFF1E8),
+        colorIndex: 2,
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const AppealsListScreen()),
@@ -69,8 +66,7 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
           ru: 'Подать заявление на перевод',
           en: 'Apply to transfer',
         ),
-        color: const Color(0xFF10B981),
-        bgColor: const Color(0xFFE8FBF4),
+        colorIndex: 3,
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(
@@ -90,8 +86,7 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
           ru: 'Подать заявку по предметам с задолженностью',
           en: 'Apply for subjects with academic debt',
         ),
-        color: const Color(0xFF22C55E),
-        bgColor: const Color(0xFFEAFBF1),
+        colorIndex: 4,
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const RetakeApplicationsScreen()),
@@ -118,7 +113,7 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
                 onBack: () => Navigator.pop(context),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 2),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
                 child: _ServicesSearchField(
                   onChanged: (value) => setState(() => _query = value),
                 ),
@@ -127,12 +122,12 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
                 child: filteredServices.isEmpty
                     ? _EmptySearchState(query: _query)
                     : GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: 1.06,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          mainAxisExtent: 146,
                         ),
                         itemCount: filteredServices.length,
                         itemBuilder: (context, index) =>
@@ -242,16 +237,15 @@ class _ServiceItem {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color color;
-  final Color bgColor;
+  /// Position in the accent scheme's palette.
+  final int colorIndex;
   final VoidCallback onTap;
 
   const _ServiceItem({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.color,
-    required this.bgColor,
+    required this.colorIndex,
     required this.onTap,
   });
 }
@@ -263,11 +257,8 @@ class _ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = ClinicTheme.inkOf(context);
-    final mutedColor = ClinicTheme.mutedOf(context);
-    // Same card as the "Foydali" grid outside; the icon keeps its pastel
-    // in light and takes a translucent wash of its own colour in dark.
-    final iconBg = ClinicTheme.isDark(context) ? item.color.withValues(alpha: 0.20) : item.bgColor;
+    // Same tile as the "Foydali" grid: solid colour block, title, subtitle.
+    final color = ClinicTheme.tileOf(context, item.colorIndex);
 
     return ScaleTap(
       onTap: item.onTap,
@@ -275,7 +266,7 @@ class _ServiceCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: ClinicTheme.surfaceOf(context),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: ClinicTheme.dividerOf(context)),
+          border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
           boxShadow: ClinicTheme.cardShadowOf(context),
         ),
         child: Material(
@@ -283,67 +274,56 @@ class _ServiceCard extends StatelessWidget {
           child: InkWell(
             onTap: item.onTap,
             borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(15, 15, 14, 48),
-                  child: Column(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Icon(item.icon, size: 27, color: Colors.white),
+                  ),
+                  const SizedBox(height: 10),
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: iconBg,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(item.icon, size: 28, color: item.color),
-                      ),
-                      const SizedBox(height: 14),
                       Text(
                         item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 13.5,
-                          height: 1.18,
-                          fontWeight: FontWeight.w900,
-                          color: textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          height: 1.25,
+                          letterSpacing: -0.2,
+                          color: ClinicTheme.inkOf(context),
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 3),
                       Text(
                         item.subtitle,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11,
-                          height: 1.35,
-                          color: mutedColor,
-                          fontWeight: FontWeight.w600,
-                        ),
+                            fontSize: 11, height: 1.35, color: ClinicTheme.mutedOf(context)),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
-                ),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: iconBg,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 18,
-                      color: item.color,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

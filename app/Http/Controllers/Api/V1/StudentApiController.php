@@ -48,7 +48,11 @@ class StudentApiController extends Controller
 
         $avgGpa = $student->avg_gpa ?? 0;
 
-        $totalAbsent = Attendance::where('student_id', $student->id)->count();
+        // Veb dashboard bilan bir xil: faqat joriy semestr qoldirilgan darslari
+        $totalAbsent = Attendance::query()
+            ->where('student_hemis_id', $student->hemis_id)
+            ->when($student->semester_code, fn ($q) => $q->where('semester_code', $student->semester_code))
+            ->count();
 
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;

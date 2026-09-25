@@ -61,7 +61,13 @@ class StudentController extends Controller
 
         $avgGpa = $student->avg_gpa ?? 0;
 
-        $totalAbsent = Attendance::where('student_id', $student->id)->count();
+        // Qoldirilgan darslar — faqat JORIY semestr. Avval butun tarix
+        // sanalardi, shuning uchun 3-4 kursda raqam yuzlab bo'lib ketardi.
+        // Davomat tabi bilan bir xil mezon: student_hemis_id + semester_code.
+        $totalAbsent = Attendance::query()
+            ->where('student_hemis_id', $student->hemis_id)
+            ->when($student->semester_code, fn ($q) => $q->where('semester_code', $student->semester_code))
+            ->count();
 
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;

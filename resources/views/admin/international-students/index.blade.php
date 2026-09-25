@@ -258,9 +258,53 @@
                             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
                             Hujjatlarni yuklash
                         </button>
+                        <button type="button" onclick="openProcessModal('registration')" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#4338ca,#6366f1);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;" title="Tanlangan talabalarning registratsiya jarayonini o'zgartirish">
+                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.6a1 1 0 01.7.3l5.4 5.4a1 1 0 01.3.7V19a2 2 0 01-2 2z"/></svg>
+                            Registratsiya jarayoni
+                        </button>
+                        <button type="button" onclick="openProcessModal('visa')" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;" title="Tanlangan talabalarning viza jarayonini o'zgartirish">
+                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 010 20 15 15 0 010-20z"/></svg>
+                            Viza jarayoni
+                        </button>
                         <button type="button" onclick="openFirmModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Firma biriktirish</button>
                         <button type="button" onclick="openRegModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Reg. talabnoma</button>
                         <button type="button" onclick="openVizaModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Viza talabnoma</button>
+                    </div>
+                </div>
+
+                {{-- Jarayonni bir nechta talabaga birdan qo'llash --}}
+                <div id="processModal" style="display:none;position:fixed;inset:0;z-index:120;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.55);">
+                    <div style="width:min(100%,460px);border-radius:14px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.3);overflow:hidden;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #e2e8f0;background:linear-gradient(180deg,#fff,#f8fafc);">
+                            <div>
+                                <strong id="processModalTitle" style="display:block;font-size:15px;color:#1e293b;">Jarayonni o'zgartirish</strong>
+                                <span style="display:block;margin-top:2px;font-size:11.5px;color:#64748b;"><b id="processModalCount">0</b> ta talaba tanlangan</span>
+                            </div>
+                            <button type="button" onclick="closeProcessModal()" style="width:28px;height:28px;border:1px solid #e2e8f0;border-radius:50%;background:#fff;color:#64748b;font-size:18px;line-height:1;cursor:pointer;">&times;</button>
+                        </div>
+                        <form method="POST" action="{{ route('admin.international-students.bulk-process') }}">
+                            @csrf
+                            <input type="hidden" name="process_type" id="processType">
+                            <div id="processInputs"></div>
+                            <div style="padding:16px 20px;display:grid;gap:10px;">
+                                <label style="display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer;">
+                                    <input type="radio" name="action" value="accept_passport" checked style="margin-top:2px;accent-color:#2b5ea7;">
+                                    <span style="font-size:12.5px;color:#334155;"><b style="display:block;color:#1e293b;">Pasport qabul qilindi</b>Jarayon boshlanadi, pasport universitetda deb belgilanadi.</span>
+                                </label>
+                                <label style="display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer;">
+                                    <input type="radio" name="action" value="mark_registering" style="margin-top:2px;accent-color:#2b5ea7;">
+                                    <span style="font-size:12.5px;color:#334155;"><b style="display:block;color:#1e293b;">Jarayon davom etmoqda</b>Hujjatlar topshirilgan, natija kutilmoqda.</span>
+                                </label>
+                                <label style="display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid #fecaca;border-radius:10px;background:#fff7f7;cursor:pointer;">
+                                    <input type="radio" name="action" value="return_passport" style="margin-top:2px;accent-color:#dc2626;">
+                                    <span style="font-size:12.5px;color:#7f1d1d;"><b style="display:block;color:#991b1b;">Pasport qaytarildi</b>Jarayon yakunlanadi. Eski ma'lumotlar tozalanadi va talabaga 3 kun muddat beriladi.</span>
+                                </label>
+                            </div>
+                            <div style="display:flex;justify-content:flex-end;gap:8px;padding:13px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+                                <button type="button" onclick="closeProcessModal()" style="padding:8px 14px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#475569;font-size:12px;font-weight:600;cursor:pointer;">Bekor qilish</button>
+                                <button type="submit" style="padding:8px 16px;border:0;border-radius:9px;background:#2b5ea7;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Qo'llash</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
 
@@ -964,6 +1008,21 @@ function openVizaModal() {
 }
 function closeVizaModal() { document.getElementById('vizaModal').style.display = 'none'; }
 function openFirmModal() { syncInputs('firmInputs'); document.getElementById('firmModal').style.display = 'flex'; }
+
+// Registratsiya/viza jarayonini tanlanganlarga birdan qo'llash
+function openProcessModal(type) {
+    if (!selectedIds.size) {
+        alert('Avval talabalarni belgilang.');
+        return;
+    }
+    syncInputs('processInputs');
+    document.getElementById('processType').value = type;
+    document.getElementById('processModalTitle').textContent =
+        (type === 'visa' ? 'Viza' : 'Registratsiya') + ' jarayonini o\'zgartirish';
+    document.getElementById('processModalCount').textContent = selectedIds.size;
+    document.getElementById('processModal').style.display = 'flex';
+}
+function closeProcessModal() { document.getElementById('processModal').style.display = 'none'; }
 function closeFirmModal() { document.getElementById('firmModal').style.display = 'none'; }
 // Ro'yxat bitta maydonda yuboriladi: minglab alohida input PHP'ning
 // max_input_vars chegarasiga tushib, ro'yxat jimgina qirqilishi mumkin.

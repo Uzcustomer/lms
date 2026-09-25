@@ -735,12 +735,122 @@ class InternationalStudentController extends Controller
         $oldValues = $historyService->fieldsFrom($visaInfo);
         $type = $request->process_type;
 
+        // Eski PDF fayllar diskdan O'CHIRILMAYDI — tarix orqali ko'rinadigan bo'lib qoladi
+        $visaInfo->update($this->returnPassportUpdates($type));
+
+        $label = $type === 'visa' ? 'Viza va registratsiya' : 'Registratsiya';
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            StudentVisaInfoHistory::CHANGE_PASSPORT_RETURNED,
+            $oldValues,
+            "Pasport qaytarildi ({$label}) — talaba qaytadan to'ldirishi kerak"
+        );
+        $this->notifyStudent($student, "Pasportingiz qaytarildi. {$label} ma'lumotlaringizni 3 kun ichida qaytadan kiriting!");
+
+        return redirect()->route('admin.international-students.show', $student)
+            ->with('success', 'Pasport qaytarildi. Talabaga 3 kunlik muddat berildi.');
+    }
+
+
+    /**
+     * Bir nechta talabaning registratsiya yoki viza jarayonini bir vaqtda
+     * keyingi bosqichga o'tkazish. Har bir talaba uchun yakka amallar
+     * (acceptPassport / markRegistering / returnPassport) bilan bir xil
+     * tarix yoziladi va bildirishnoma yuboriladi.
+     */
+    public function bulkProcess(Request $request)
+    {
+        $this->normalizeStudentIds($request);
+
+        $data = $request->validate([
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'integer',
+            'process_type' => 'required|in:registration,visa',
+            'action' => 'required|in:accept_passport,mark_registering,return_passport',
+        ], [
+            'student_ids.required' => 'Avval talabalarni belgilang.',
+        ]);
+
+        $type = $data['process_type'];
+        $label = $type === 'visa' ? 'Viza' : 'Registratsiya';
+        $field = $type === 'registration' ? 'registration_process_status' : 'visa_process_status';
+        $hasField = in_array($field, \Schema::getColumnListing('student_visa_infos'), true);
+
+        $students = Student::with('visaInfo')
+            ->whereIn('id', $data['student_ids'])
+            ->orderBy('full_name')
+            ->get();
+
+        $historyService = app(StudentVisaHistoryService::class);
+        $done = 0;
+        $skipped = [];
+
+        foreach ($students as $student) {
+            $visaInfo = $student->visaInfo;
+            if (!$visaInfo) {
+                // Viza yozuvi yo'q talabada o'zgartiradigan narsa yo'q
+                $skipped[] = $student->full_name;
+                continue;
+            }
+
+            $oldValues = $historyService->fieldsFrom($visaInfo);
+
+            [$updates, $changeType, $note, $message] = match ($data['action']) {
+                'accept_passport' => [
+                    array_merge([
+                        'passport_handed_over' => true,
+                        'passport_handed_at' => now(),
+                        'passport_received_by' => $this->currentUserId(),
+                    ], $hasField ? [$field => StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED] : []),
+                    StudentVisaInfoHistory::CHANGE_PASSPORT_ACCEPTED,
+                    "{$label} uchun pasport qabul qilindi",
+                    "Pasportingiz qabul qilindi. {$label} jarayoni boshlandi.",
+                ],
+                'mark_registering' => [
+                    [$field => StudentVisaInfo::PROCESS_REGISTERING],
+                    StudentVisaInfoHistory::CHANGE_MARK_REGISTERING,
+                    "{$label} jarayoni davom etmoqda",
+                    "{$label} jarayoni davom etmoqda.",
+                ],
+                default => [
+                    $this->returnPassportUpdates($type),
+                    StudentVisaInfoHistory::CHANGE_PASSPORT_RETURNED,
+                    'Pasport qaytarildi (' . ($type === 'visa' ? 'Viza va registratsiya' : 'Registratsiya')
+                        . ") — talaba qaytadan to'ldirishi kerak",
+                    'Pasportingiz qaytarildi. ' . ($type === 'visa' ? 'Viza va registratsiya' : 'Registratsiya')
+                        . " ma'lumotlaringizni 3 kun ichida qaytadan kiriting!",
+                ],
+            };
+
+            $visaInfo->update($updates);
+            $historyService->snapshot($student, $visaInfo->fresh(), $changeType, $oldValues, $note);
+            $this->notifyStudent($student, $message);
+            $done++;
+        }
+
+        if ($done === 0) {
+            return back()->with('error', "Hech bir talabada viza yozuvi topilmadi — jarayon o'zgartirilmadi.");
+        }
+
+        $text = "{$done} ta talabaning {$label} jarayoni yangilandi.";
+        if ($skipped) {
+            $text .= ' Viza yozuvi yo\'qligi uchun o\'tkazib yuborildi: ' . implode(', ', array_slice($skipped, 0, 5))
+                . (count($skipped) > 5 ? ' +' . (count($skipped) - 5) : '') . '.';
+        }
+
+        return back()->with('success', $text);
+    }
+
+    /** returnPassport bilan bir xil maydonlar (yakka va bulk bitta manbadan). */
+    private function returnPassportUpdates(string $type): array
+    {
         $updates = [
             'passport_handed_over' => false,
             'passport_handed_at' => null,
             'passport_received_by' => null,
             'status' => 'pending',
-            'visa_info_deadline' => now()->addDays(3), // 3 kun ichida to'ldirishi kerak
+            'visa_info_deadline' => now()->addDays(3),
         ];
 
         if ($type === 'visa') {
@@ -757,22 +867,7 @@ class InternationalStudentController extends Controller
             $updates['registration_doc_path'] = null;
         }
 
-        // Eski PDF fayllar diskdan O'CHIRILMAYDI — tarix orqali ko'rinadigan bo'lib qoladi
-
-        $visaInfo->update($updates);
-
-        $label = $type === 'visa' ? 'Viza va registratsiya' : 'Registratsiya';
-        $historyService->snapshot(
-            $student,
-            $visaInfo->fresh(),
-            StudentVisaInfoHistory::CHANGE_PASSPORT_RETURNED,
-            $oldValues,
-            "Pasport qaytarildi ({$label}) — talaba qaytadan to'ldirishi kerak"
-        );
-        $this->notifyStudent($student, "Pasportingiz qaytarildi. {$label} ma'lumotlaringizni 3 kun ichida qaytadan kiriting!");
-
-        return redirect()->route('admin.international-students.show', $student)
-            ->with('success', 'Pasport qaytarildi. Talabaga 3 kunlik muddat berildi.');
+        return $updates;
     }
 
     private function notifyStudent(Student $student, string $message): void

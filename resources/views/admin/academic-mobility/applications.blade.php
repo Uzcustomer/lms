@@ -260,37 +260,50 @@
                                                  <span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span>
                                              </div>
                                              <div class="am-stage-list">
-                                                <div class="am-stage">
-                                                    <span>O'quv bo'limi</span>
-                                                    @if($departmentApproval?->status === 'approved')
-                                                        <b class="am-stage-approved">Qabul</b>
-                                                     @elseif($departmentApproval?->status === 'rejected')
-                                                         <b class="am-stage-rejected">Rad</b>
-                                                         @if($departmentApproval->rejection_comment)
-                                                             <div class="am-rejection-note"><strong>Izoh:</strong> {{ $departmentApproval->rejection_comment }}</div>
-                                                         @endif
-                                                    @else
-                                                        <b class="am-stage-pending">Kutilmoqda</b>
-                                                    @endif
-                                                </div>
-                                                <div class="am-stage">
-                                                    <span>O'quv prorektori</span>
-                                                    @if($viceRectorApproval?->status === 'approved')
-                                                        <b class="am-stage-approved">Qabul</b>
-                                                     @elseif($viceRectorApproval?->status === 'rejected')
-                                                         <b class="am-stage-rejected">Rad</b>
-                                                         @if($viceRectorApproval->rejection_comment)
-                                                             <div class="am-rejection-note"><strong>Izoh:</strong> {{ $viceRectorApproval->rejection_comment }}</div>
-                                                         @endif
-                                                    @else
-                                                        <b class="am-stage-pending">Kutilmoqda</b>
-                                                    @endif
-                                                </div>
+                                                @foreach([["O'quv bo'limi", $departmentApproval], ["O'quv prorektori", $viceRectorApproval]] as [$stageLabel, $stageApproval])
+                                                    <div class="am-stage">
+                                                        <span>{{ $stageLabel }}</span>
+                                                        @if($stageApproval?->status === 'approved')
+                                                            <b class="am-stage-approved">Qabul</b>
+                                                        @elseif($stageApproval?->status === 'rejected')
+                                                            <b class="am-stage-rejected">Rad</b>
+                                                        @else
+                                                            <b class="am-stage-pending">Kutilmoqda</b>
+                                                        @endif
+                                                        {{-- Kim qaror berganini ko'rsatamiz: "Kutilmoqda" kimni
+                                                             kutayotganini aytmaydi, tasdiq esa kimniki ekani
+                                                             bilinmasdi. --}}
+                                                        @if($stageApproval?->reviewed_by_name)
+                                                            <div class="am-stage-who">
+                                                                {{ $stageApproval->reviewed_by_name }}
+                                                                @if($stageApproval->reviewed_at)
+                                                                    <span>· {{ $stageApproval->reviewed_at->format('d.m.Y H:i') }}</span>
+                                                                @endif
+                                                            </div>
+                                                        @endif
+                                                        @if($stageApproval?->status === 'rejected' && $stageApproval->rejection_comment)
+                                                            <div class="am-rejection-note"><strong>Izoh:</strong> {{ $stageApproval->rejection_comment }}</div>
+                                                        @endif
+                                                    </div>
+                                                @endforeach
                                             </div>
 
                                             @php
                                                 $decisionDisabled = $isViceRector && !$viceRectorEnabled;
+                                                // Shu foydalanuvchi bosqichidagi qaror. Qaror chiqarilgan
+                                                // bo'lsa tugmalar ko'rsatilmaydi — aks holda tasdiqlangan
+                                                // arizada ham "Qabul / Rad" turaverardi.
+                                                $myApproval = $isViceRector ? $viceRectorApproval : $departmentApproval;
+                                                $myDecision = $myApproval?->status;
                                             @endphp
+                                             @if($myDecision === 'approved' || $myDecision === 'rejected')
+                                                 <div class="am-decision-done {{ $myDecision === 'approved' ? 'is-approved' : 'is-rejected' }}">
+                                                     {{ $myDecision === 'approved' ? 'Siz qabul qilgansiz' : 'Siz rad etgansiz' }}
+                                                     @if($myApproval?->reviewed_at)
+                                                         <span>{{ $myApproval->reviewed_at->format('d.m.Y H:i') }}</span>
+                                                     @endif
+                                                 </div>
+                                             @else
                                              <div class="am-decision-actions">
                                                  <form method="POST" action="{{ route('admin.academic-mobility.decision', $application) }}">
                                                      @csrf
@@ -325,8 +338,32 @@
                                             @if($isViceRector && !$departmentApproved)
                                                 <div class="am-stage-note">O'quv bo'limi tasdig'i kutilmoqda.</div>
                                             @endif
+                                             @endif
                                          @else
                                              <span class="am-status {{ $statusClass }}">{{ $statusLabel }}</span>
+                                             {{-- Registrator/admin: kim tasdiqlagan, kim qolgani ko'rinib tursin --}}
+                                             <div class="am-stage-list">
+                                                 @foreach([["O'quv bo'limi", $departmentApproval], ["O'quv prorektori", $viceRectorApproval]] as [$stageLabel, $stageApproval])
+                                                     <div class="am-stage">
+                                                         <span>{{ $stageLabel }}</span>
+                                                         @if($stageApproval?->status === 'approved')
+                                                             <b class="am-stage-approved">Qabul</b>
+                                                         @elseif($stageApproval?->status === 'rejected')
+                                                             <b class="am-stage-rejected">Rad</b>
+                                                         @else
+                                                             <b class="am-stage-pending">Kutilmoqda</b>
+                                                         @endif
+                                                         @if($stageApproval?->reviewed_by_name)
+                                                             <div class="am-stage-who">
+                                                                 {{ $stageApproval->reviewed_by_name }}
+                                                                 @if($stageApproval->reviewed_at)
+                                                                     <span>· {{ $stageApproval->reviewed_at->format('d.m.Y H:i') }}</span>
+                                                                 @endif
+                                                             </div>
+                                                         @endif
+                                                     </div>
+                                                 @endforeach
+                                             </div>
                                              @if($application->status === 'rejected')
                                                  @foreach($rejectedApprovals as $rejectedApproval)
                                                      <div class="am-rejection-note am-rejection-note-global">
@@ -516,6 +553,15 @@
         .am-rejection-modal { position:fixed; inset:0; z-index:120; display:flex; align-items:center; justify-content:center; padding:16px; }.am-rejection-modal-backdrop { position:absolute; inset:0; background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }.am-rejection-modal-card { position:relative; z-index:1; width:min(100%,420px); overflow:hidden; border:1px solid #dbe4ef; border-radius:16px; background:#fff; box-shadow:0 24px 70px rgba(15,23,42,.28); }.am-rejection-modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:16px 18px; border-bottom:1px solid #e2e8f0; background:linear-gradient(135deg,#fff7f7,#fff); }.am-rejection-modal-head strong { display:block; color:#991b1b; font-size:14px; }.am-rejection-modal-head span { display:block; margin-top:3px; color:#64748b; font-size:11px; }.am-rejection-modal-close { width:28px!important; height:28px; padding:0!important; border:1px solid #fecaca!important; border-radius:50%!important; background:#fff!important; color:#dc2626!important; font-size:20px!important; line-height:1!important; }.am-rejection-modal-card form { display:block!important; padding:16px 18px 18px; }.am-rejection-modal-card textarea { width:100%; min-height:100px; resize:vertical; padding:10px 11px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; color:#334155; font-size:13px; line-height:1.45; }.am-rejection-modal-card textarea:focus { outline:none; border-color:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.12); }.am-rejection-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }.am-rejection-modal-actions button { width:auto!important; padding:8px 14px!important; border-radius:9px!important; font-size:12px!important; }.am-rejection-cancel { border:1px solid #cbd5e1!important; background:#fff!important; color:#475569!important; }.am-rejection-submit { border:0!important; background:#dc2626!important; color:#fff!important; }.am-rejection-submit:hover { background:#b91c1c!important; }
         .am-decision-actions button:disabled { background:#cbd5e1;color:#64748b;cursor:not-allowed; }
         .am-stage-note { margin-top:5px;font-size:9.5px;color:#b45309; }
+        /* Bosqich ichida ism alohida qatorga tushsin (.am-stage — flex qator) */
+        .am-stage { flex-wrap:wrap; }
+        .am-stage-who { flex-basis:100%; margin-top:2px; color:#64748b; font-size:9.5px; font-weight:600; line-height:1.35; }
+        .am-stage-who span { color:#94a3b8; font-weight:500; }
+        /* Qaror berilgan bo'lsa tugmalar o'rniga shu yozuv turadi */
+        .am-decision-done { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; padding:6px 9px; border-radius:8px; font-size:10px; font-weight:800; }
+        .am-decision-done span { font-weight:600; opacity:.75; }
+        .am-decision-done.is-approved { background:#dcfce7; color:#15803d; }
+        .am-decision-done.is-rejected { background:#fee2e2; color:#b91c1c; }
         .am-creator { font-weight:600;color:#334155; }.am-status { display:inline-block;border-radius:999px;padding:4px 9px;font-size:10.5px;font-weight:700;white-space:nowrap; }
         .am-status-pending { background:#fef3c7;color:#b45309; }.am-status-approved { background:#d1fae5;color:#047857; }
         .am-status-rejected { background:#fee2e2;color:#b91c1c; }.am-status-default { background:#e2e8f0;color:#475569; }

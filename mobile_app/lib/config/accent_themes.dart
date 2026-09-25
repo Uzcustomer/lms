@@ -12,7 +12,6 @@ import 'package:flutter/material.dart';
 /// its colour across schemes.
 class AccentTheme {
   final String id;
-  final String Function(String uz, String ru, String en) _unused;
   final Color start;
   final Color end;
   final Color primary;
@@ -26,9 +25,7 @@ class AccentTheme {
     required this.primary,
     required this.primaryDark,
     required this.palette,
-  }) : _unused = _noop;
-
-  static String _noop(String uz, String ru, String en) => uz;
+  });
 
   List<Color> get gradient => [start, end];
 
@@ -124,7 +121,45 @@ class AccentThemes {
     ],
   );
 
-  static const all = [teal, blue, violet, rose, emerald, amber, graphite];
+  // Three brighter ones: vivid starts, still deep enough at the end for
+  // white text on the hero.
+  static const sky = AccentTheme(
+    id: 'sky',
+    start: Color(0xFF0EA5E9),
+    end: Color(0xFF1D4ED8),
+    primary: Color(0xFF0284C7),
+    primaryDark: Color(0xFF38BDF8),
+    palette: [
+      Color(0xFF0284C7), Color(0xFF2563EB), Color(0xFF0891B2),
+      Color(0xFF0D9488), Color(0xFF4F46E5), Color(0xFF0369A1),
+    ],
+  );
+
+  static const orange = AccentTheme(
+    id: 'orange',
+    start: Color(0xFFF97316),
+    end: Color(0xFFB91C1C),
+    primary: Color(0xFFEA580C),
+    primaryDark: Color(0xFFFB923C),
+    palette: [
+      Color(0xFFEA580C), Color(0xFFDC2626), Color(0xFFD97706),
+      Color(0xFFDB2777), Color(0xFFC2410C), Color(0xFFB45309),
+    ],
+  );
+
+  static const fuchsia = AccentTheme(
+    id: 'fuchsia',
+    start: Color(0xFFD946EF),
+    end: Color(0xFF6D28D9),
+    primary: Color(0xFFC026D3),
+    primaryDark: Color(0xFFE879F9),
+    palette: [
+      Color(0xFFC026D3), Color(0xFF9333EA), Color(0xFFDB2777),
+      Color(0xFF7C3AED), Color(0xFFA21CAF), Color(0xFFE11D48),
+    ],
+  );
+
+  static const all = [teal, blue, violet, rose, emerald, amber, graphite, sky, orange, fuchsia];
 
   static String labelOf(String id, String Function({required String uz, required String ru, required String en}) pick) {
     return switch (id) {
@@ -134,6 +169,9 @@ class AccentThemes {
       'emerald' => pick(uz: 'Zumrad', ru: 'Изумрудный', en: 'Emerald'),
       'amber' => pick(uz: 'Sariq', ru: 'Янтарный', en: 'Amber'),
       'graphite' => pick(uz: 'Grafit', ru: 'Графит', en: 'Graphite'),
+      'sky' => pick(uz: 'Osmon', ru: 'Небесный', en: 'Sky'),
+      'orange' => pick(uz: 'Apelsin', ru: 'Оранжевый', en: 'Orange'),
+      'fuchsia' => pick(uz: 'Pushti', ru: 'Фуксия', en: 'Fuchsia'),
       _ => pick(uz: 'Feruza', ru: 'Бирюзовый', en: 'Teal'),
     };
   }

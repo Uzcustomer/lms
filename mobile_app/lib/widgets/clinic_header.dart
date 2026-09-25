@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../config/accent_themes.dart';
 import '../config/theme.dart';
+import '../providers/settings_provider.dart';
 
 /// Shared "clinic-calm" palette used across the redesigned student screens.
 class ClinicTheme {
@@ -45,17 +47,27 @@ class ClinicTheme {
       base.withValues(alpha: isDark(c) ? 0.18 : 0.10);
 
   // ── The scheme picked in Settings ────────────────────────────────
-  static AccentTheme accent(BuildContext c) => AccentThemes.current;
+  /// Read through the provider so the caller *depends* on it and is rebuilt
+  /// when the student picks another scheme. A plain static would leave
+  /// const widgets and off-screen tabs showing the old colour until
+  /// something else happened to rebuild them.
+  static AccentTheme accent(BuildContext c) {
+    try {
+      return Provider.of<SettingsProvider>(c).accent;
+    } on ProviderNotFoundException {
+      return AccentThemes.current;
+    }
+  }
 
   /// Hero cards (gradient panels with the shine sweep) and their glow.
-  static List<Color> heroGradientOf(BuildContext c) => AccentThemes.current.gradient;
-  static Color heroGlowOf(BuildContext c) => AccentThemes.current.start;
+  static List<Color> heroGradientOf(BuildContext c) => accent(c).gradient;
+  static Color heroGlowOf(BuildContext c) => accent(c).start;
 
   /// Interactive colour: active tab, links, selected chips.
-  static Color primaryOf(BuildContext c) => AccentThemes.current.primaryOf(isDark(c));
+  static Color primaryOf(BuildContext c) => accent(c).primaryOf(isDark(c));
 
   /// Colour for tile [i] of a grid, from the scheme's palette.
-  static Color tileOf(BuildContext c, int i) => AccentThemes.current.tile(i);
+  static Color tileOf(BuildContext c, int i) => accent(c).tile(i);
 
   /// A border that visibly separates a card from the page, unlike the
   /// hairline [dividerOf].

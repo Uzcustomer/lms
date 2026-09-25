@@ -139,16 +139,16 @@ void showSettingsSheet(BuildContext context) {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Row(
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
                       children: [
                         for (final t in AccentThemes.all)
-                          Expanded(
-                            child: _buildAccentOption(
-                              ctx,
-                              t,
-                              settings,
-                              () => setSheetState(() {}),
-                            ),
+                          _buildAccentOption(
+                            ctx,
+                            t,
+                            settings,
+                            () => setSheetState(() {}),
                           ),
                       ],
                     ),

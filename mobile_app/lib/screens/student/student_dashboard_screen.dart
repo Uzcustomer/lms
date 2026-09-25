@@ -339,7 +339,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget _buildHeader(BuildContext context, AppLocalizations l) {
     final statusBarH = MediaQuery.of(context).padding.top;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, statusBarH + 10, 16, 14),
+      padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,

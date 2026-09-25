@@ -66,14 +66,25 @@ ios_img.save(os.path.join(OUT, "ios.png"))
 ios_img.save(os.path.join(STORE, "icon-1024.png"))
 ios_img.resize((512, 512), Image.LANCZOS).save(os.path.join(STORE, "icon-512.png"))
 
-# ── Android background: the circle's blue, spread to the corners ───
-ac = np.array(and_crop).astype(np.float32)
-cx = cy = S / 2
-r = S * 0.49
-rr = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-core = rr < r * 0.88        # inside the circle, clear of its rim highlight
+# ── Android: the iOS artwork, split into adaptive layers ───────────
+# The designer's Android disc carries its own circular edge, so under a
+# square or squircle launcher mask it showed as a circle inside a square.
+# The iOS variant - blue emblem on a pale glass ground - has no such edge,
+# so it becomes the Android icon too: its ground extended to the corners
+# as the background, its emblem lifted off as the foreground.
+ic = np.array(ios_crop).astype(np.float32)
+yy, xx = np.mgrid[0:S, 0:S]
+mx, mn = ic.max(axis=2), ic.min(axis=2)
+sat = (mx - mn) / np.maximum(mx, 1.0)
+# emblem = saturated blue; the ground is near-white / pale blue
+t = np.clip((sat - 0.28) / 0.18, 0, 1)
+inner = (np.abs(xx - S / 2) < S * 0.44) & (np.abs(yy - S / 2) < S * 0.44)
+t *= inner
+t = np.array(Image.fromarray((t * 255).astype(np.uint8)).filter(ImageFilter.MedianFilter(3))).astype(np.float32) / 255
 
-px, py = xx[core] / S, yy[core] / S
+# background: fit the pale ground from emblem-free pixels, render corner to corner
+ground = (t < 0.02) & inner
+px, py = xx[ground] / S, yy[ground] / S
 
 
 def feats(x, y):
@@ -82,41 +93,39 @@ def feats(x, y):
 
 
 A = feats(px, py)
-coef = [np.linalg.lstsq(A, ac[:, :, c][core], rcond=None)[0] for c in range(3)]
+coef = [np.linalg.lstsq(A, ic[:, :, c][ground], rcond=None)[0] for c in range(3)]
 F = feats(xx.reshape(-1) / S, yy.reshape(-1) / S)
 fit = np.stack([F @ coef[c] for c in range(3)], axis=-1).reshape(S, S, 3)
-# keep the real artwork inside the circle, the fitted blue outside it
 bg_img = Image.fromarray(np.clip(fit, 0, 255).astype(np.uint8), "RGB").filter(ImageFilter.GaussianBlur(3))
 bg_img.save(os.path.join(OUT, "android-bg.png"))
 
-# ── Android foreground: the whole disc, scaled into the safe zone ──
-# Lifting just the emblem off the blue left a ghost and mis-sized it, so
-# the foreground is the circle artwork itself; the background is the
-# fitted blue behind it. Every launcher mask then works.
-disc = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-cmask = Image.new("L", (S, S), 0)
-ImageDraw.Draw(cmask).ellipse((round(cx - r), round(cy - r), round(cx + r), round(cy + r)), fill=255)
-cmask = cmask.filter(ImageFilter.GaussianBlur(1.5))
-disc.paste(and_crop, (0, 0), cmask)
+# foreground: the emblem, sized so the launcher shows it as the designer drew it
+ys, xs = np.where(t > 0.5)
+eb = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
+emblem = Image.fromarray(np.dstack([ic, t * 255]).astype(np.uint8), "RGBA").crop(eb)
+em_ratio = max(emblem.size) / S
+em_cy = (eb[1] + eb[3]) / 2 / S
+print(f"emblem {emblem.size} ratio {em_ratio:.3f} cy {em_cy:.3f}")
 
 INSET = 0.68           # flutter_launcher_icons wraps the foreground in <inset 16%>
-SAFE = 66 / 108        # adaptive-icon safe-zone diameter on the full canvas
-target = round(S * SAFE / INSET)
+VISIBLE = 72 / 108     # the launcher shows the middle 72dp of the 108dp canvas
+sc = em_ratio * VISIBLE / INSET * S / max(emblem.size)
+em = emblem.resize((round(emblem.size[0] * sc), round(emblem.size[1] * sc)), Image.LANCZOS)
 fgc = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-fgc.alpha_composite(disc.resize((target, target), Image.LANCZOS), ((S - target) // 2,) * 2)
+fgc.alpha_composite(em, (round(S / 2 - em.size[0] / 2),
+                         round(S / 2 + (em_cy - 0.5) * VISIBLE / INSET * S - em.size[1] / 2)))
 fgc.save(os.path.join(OUT, "android-fg.png"))
 
-# Monochrome (Android 13 themed icons): the white emblem only.
+# monochrome (Android 13 themed icons): the emblem silhouette
 mono = np.array(fgc)
-alpha = mono[:, :, 3].astype(np.float32) / 255
-lum = mono[:, :, :3].astype(np.float32).sum(axis=2) / 3
 mono[:, :, :3] = 255
-mono[:, :, 3] = ((lum > 150) * alpha * 255).astype(np.uint8)
 Image.fromarray(mono, "RGBA").save(os.path.join(OUT, "android-mono.png"))
 
-# Legacy (Android 7 and older): the designer's circle as drawn.
+# legacy (Android 7 and older): the iOS square with rounded corners
 legacy = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-legacy.paste(and_crop, (0, 0), cmask)
+lm = Image.new("L", (S, S), 0)
+ImageDraw.Draw(lm).rounded_rectangle((0, 0, S - 1, S - 1), radius=round(S * 0.22), fill=255)
+legacy.paste(ios_img, (0, 0), lm)
 legacy.save(os.path.join(OUT, "android-legacy.png"))
 
 # ── preview: what launchers actually show ──────────────────────────

@@ -1,162 +1,153 @@
-"""Build launcher icons for Android (adaptive + legacy), iOS and the store
-from the designer's two-up PNG (circle | rounded square), then run
-`dart run flutter_launcher_icons` to fan them out.
+"""Launcher icons from the designer's glass sheet (two icons on a black board).
 
-    python tool/make_launcher_icons.py            # uses assets/launcher/source.png
-    python tool/make_launcher_icons.py path.png   # a new design
+Boxes are read off the sheet by hand - the icons sit in a wide glow that
+defeats automatic edge detection. Change them here if the sheet changes.
 
-Needs: pip install pillow numpy
+  iOS     - rounded square; its interior is re-rendered as a full square
+            (iOS masks the corners itself, so a bare square must not carry
+            the designer's own rounded edge or the board behind it)
+  Android - circle; its blue becomes the adaptive background and the white
+            emblem the adaptive foreground, so every launcher shape works
 """
 import os
 import sys
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
-APP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(APP, "assets", "launcher")   # not in pubspec assets -> not bundled
+APP = r"C:\Users\or7\Desktop\LMS\mobile_app"
+OUT = os.path.join(APP, "assets", "launcher")
 STORE = os.path.join(APP, "store")
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(OUT, "source.png")
-PREVIEW = os.path.join(STORE, "icon-preview.png")
 os.makedirs(OUT, exist_ok=True)
 os.makedirs(STORE, exist_ok=True)
+S = 1024
 
-im = Image.open(SRC).convert("RGBA")
-a = np.array(im).astype(np.float32)
-alpha = a[:, :, 3]
+# Hand-measured on the 1536x1024 sheet.
+IOS_BOX = (105, 200, 730, 840)
+AND_BOX = (845, 192, 1467, 816)
+
+sheet = Image.open(SRC).convert("RGB")
+print("sheet", sheet.size)
 
 
-def bbox(mask):
-    ys, xs = np.where(mask)
-    return xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+def square(box):
+    x0, y0, x1, y1 = box
+    s = max(x1 - x0, y1 - y0)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    return (round(cx - s / 2), round(cy - s / 2), round(cx + s / 2), round(cy + s / 2))
 
 
-# ── split the two icons on the transparent gap ──────────────────────
-colmax = alpha.max(axis=0)
-opaque_cols = np.where(colmax > 10)[0]
-gap = np.where(colmax <= 10)[0]
-gap = gap[(gap > opaque_cols.min()) & (gap < opaque_cols.max())]
-split = int((gap.min() + gap.max()) // 2)
+ios_sq, and_sq = square(IOS_BOX), square(AND_BOX)
+ios_crop = sheet.crop(ios_sq).resize((S, S), Image.LANCZOS)
+and_crop = sheet.crop(and_sq).resize((S, S), Image.LANCZOS)
+print("ios", ios_sq, "android", and_sq)
 
-circle = im.crop(bbox(alpha[:, :split] > 10))
-sq_box = bbox(alpha[:, split:] > 10)
-square = im.crop((sq_box[0] + split, sq_box[1], sq_box[2] + split, sq_box[3]))
-print("circle", circle.size, "square", square.size)
+# ── iOS: grow the interior over the rounded corners ────────────────
+# Sample a ring just inside the shape and mirror it outward, so the dark
+# board never shows in a corner once iOS applies its own mask.
+ic = np.array(ios_crop).astype(np.float32)
+yy, xx = np.mgrid[0:S, 0:S]
+r_out = S * 0.50          # the designer's square nearly fills the crop
+inside = (np.abs(xx - S / 2) < r_out * 0.92) & (np.abs(yy - S / 2) < r_out * 0.92)
+corner = ~inside
 
-# ── emblem: everything that is not the blue background ─────────────
-sq = np.array(square).astype(np.float32)
-R = sq[:, :, 0]
-t = np.clip((R - 80.0) / 70.0, 0.0, 1.0)          # bg R≤65 → 0, pages R≈182 → 1
-t *= (sq[:, :, 3] / 255.0)                          # respect real transparency
-fg = sq.copy()
-fg[:, :, 3] = t * 255.0
-fg_img = Image.fromarray(fg.astype(np.uint8), "RGBA")
-eb = bbox(t > 0.5)
-emblem = fg_img.crop(eb)
-print("emblem bbox in square:", eb, "emblem size", emblem.size)
+cur = ic.copy()
+m_in = inside.copy()
+for _ in range(18):
+    blurred = np.array(Image.fromarray(cur.astype(np.uint8)).filter(ImageFilter.GaussianBlur(14))).astype(np.float32)
+    grow = np.array(Image.fromarray((m_in * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(9))) > 127
+    newly = grow & ~m_in
+    cur[newly] = blurred[newly]
+    m_in = grow
+    if m_in.all():
+        break
+ios_img = Image.fromarray(np.clip(np.where(inside[..., None], ic, cur), 0, 255).astype(np.uint8), "RGB")
+ios_img.save(os.path.join(OUT, "ios.png"))
+ios_img.save(os.path.join(STORE, "icon-1024.png"))
+ios_img.resize((512, 512), Image.LANCZOS).save(os.path.join(STORE, "icon-512.png"))
 
-# ── background: fit the blue gradient from the icon's outer ring ──
-W, H = square.size
-yy, xx = np.mgrid[0:H, 0:W]
-ring = 0.13
-is_ring = (xx < W * ring) | (xx > W * (1 - ring)) | (yy < H * ring) | (yy > H * (1 - ring))
-is_bg = (t < 0.02) & (sq[:, :, 3] > 250) & is_ring
-xs = xx[is_bg] / W
-ys = yy[is_bg] / H
+# ── Android background: the circle's blue, spread to the corners ───
+ac = np.array(and_crop).astype(np.float32)
+cx = cy = S / 2
+r = S * 0.49
+rr = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+core = rr < r * 0.88        # inside the circle, clear of its rim highlight
+
+px, py = xx[core] / S, yy[core] / S
 
 
 def feats(x, y):
-    return np.stack([np.ones_like(x), x, y, x * x, x * y, y * y, x ** 3, y ** 3, x * x * y, x * y * y], axis=-1)
+    return np.stack([np.ones_like(x), x, y, x * x, x * y, y * y,
+                     x ** 3, y ** 3, x * x * y, x * y * y], axis=-1)
 
 
-A = feats(xs, ys)
-coef = [np.linalg.lstsq(A, sq[:, :, c][is_bg], rcond=None)[0] for c in range(3)]
+A = feats(px, py)
+coef = [np.linalg.lstsq(A, ac[:, :, c][core], rcond=None)[0] for c in range(3)]
+F = feats(xx.reshape(-1) / S, yy.reshape(-1) / S)
+fit = np.stack([F @ coef[c] for c in range(3)], axis=-1).reshape(S, S, 3)
+# keep the real artwork inside the circle, the fitted blue outside it
+bg_img = Image.fromarray(np.clip(fit, 0, 255).astype(np.uint8), "RGB").filter(ImageFilter.GaussianBlur(3))
+bg_img.save(os.path.join(OUT, "android-bg.png"))
 
+# ── Android foreground: the whole disc, scaled into the safe zone ──
+# Lifting just the emblem off the blue left a ghost and mis-sized it, so
+# the foreground is the circle artwork itself; the background is the
+# fitted blue behind it. Every launcher mask then works.
+disc = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+cmask = Image.new("L", (S, S), 0)
+ImageDraw.Draw(cmask).ellipse((round(cx - r), round(cy - r), round(cx + r), round(cy + r)), fill=255)
+cmask = cmask.filter(ImageFilter.GaussianBlur(1.5))
+disc.paste(and_crop, (0, 0), cmask)
 
-def gradient(size):
-    yy, xx = np.mgrid[0:size, 0:size]
-    F = feats(xx.reshape(-1) / size, yy.reshape(-1) / size)
-    rgb = np.stack([F @ coef[c] for c in range(3)], axis=-1).reshape(size, size, 3)
-    return Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
-
-
-# ── compositions ─────────────────────────────────────────────────
-def fit(img, longest):
-    w, h = img.size
-    s = longest / max(w, h)
-    return img.resize((max(1, round(w * s)), max(1, round(h * s))), Image.LANCZOS)
-
-
-def place(canvas, sprite, cx, cy):
-    w, h = sprite.size
-    canvas.alpha_composite(sprite, (round(cx - w / 2), round(cy - h / 2)))
-
-
-# how the designer placed the emblem inside the square (size and centre)
-em_ratio = max(emblem.size) / max(W, H)
-em_cx = ((eb[0] + eb[2]) / 2) / W
-em_cy = ((eb[1] + eb[3]) / 2) / H
-print(f"emblem/icon = {em_ratio:.3f}, centre = ({em_cx:.3f}, {em_cy:.3f})")
-
-S = 1024
-# iOS / store: full-bleed gradient, emblem exactly as designed, no alpha
-ios = gradient(S).convert("RGBA")
-place(ios, fit(emblem, em_ratio * S), em_cx * S, em_cy * S)
-ios_rgb = ios.convert("RGB")
-ios_rgb.save(os.path.join(OUT, "ios.png"))
-ios_rgb.save(os.path.join(STORE, "icon-1024.png"))
-ios_rgb.resize((512, 512), Image.LANCZOS).save(os.path.join(STORE, "icon-512.png"))
-
-# Android adaptive: 108dp canvas, launcher shows the middle 72dp. The
-# designer's emblem fills em_ratio of the visible icon, so on the full
-# canvas it must end up em_ratio * 72/108. flutter_launcher_icons wraps
-# the foreground in <inset 16%> (scale 0.68), so draw it 1/0.68 larger
-# than that to land on the intended size.
-INSET = 0.68
-gradient(S).save(os.path.join(OUT, "android-bg.png"))
+INSET = 0.68           # flutter_launcher_icons wraps the foreground in <inset 16%>
+SAFE = 66 / 108        # adaptive-icon safe-zone diameter on the full canvas
+target = round(S * SAFE / INSET)
 fgc = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-place(fgc, fit(emblem, em_ratio * (72 / 108) / INSET * S),
-      S / 2, S / 2 + (em_cy - 0.5) * (72 / 108) / INSET * S)
+fgc.alpha_composite(disc.resize((target, target), Image.LANCZOS), ((S - target) // 2,) * 2)
 fgc.save(os.path.join(OUT, "android-fg.png"))
+
+# Monochrome (Android 13 themed icons): the white emblem only.
 mono = np.array(fgc)
+alpha = mono[:, :, 3].astype(np.float32) / 255
+lum = mono[:, :, :3].astype(np.float32).sum(axis=2) / 3
 mono[:, :, :3] = 255
+mono[:, :, 3] = ((lum > 150) * alpha * 255).astype(np.uint8)
 Image.fromarray(mono, "RGBA").save(os.path.join(OUT, "android-mono.png"))
 
-# Android legacy (< 8.0): the designer's circle as is
-fit(circle, S).save(os.path.join(OUT, "android-legacy.png"))
+# Legacy (Android 7 and older): the designer's circle as drawn.
+legacy = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+legacy.paste(and_crop, (0, 0), cmask)
+legacy.save(os.path.join(OUT, "android-legacy.png"))
 
-# ── preview: what launchers will actually show ───────────────────
-def masked(bg, fg, mask_draw, size=256):
-    vis = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    # visible 72dp window out of the 108dp canvas
+# ── preview: what launchers actually show ──────────────────────────
+def masked(bgi, fgi, draw_mask, size=256):
     big = round(size * 108 / 72)
-    layer = bg.resize((big, big), Image.LANCZOS).convert("RGBA")
-    # the generator's <inset 16%>, exactly as the launcher will see it
+    layer = bgi.resize((big, big), Image.LANCZOS).convert("RGBA")
     small = round(big * INSET)
-    layer.alpha_composite(fg.resize((small, small), Image.LANCZOS), ((big - small) // 2, (big - small) // 2))
+    layer.alpha_composite(fgi.resize((small, small), Image.LANCZOS), ((big - small) // 2,) * 2)
     off = (big - size) // 2
     layer = layer.crop((off, off, off + size, off + size))
-    m = Image.new("L", (size, size), 0)
-    mask_draw(ImageDraw.Draw(m), size)
-    vis.paste(layer, (0, 0), m)
-    return vis
+    o = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    mk = Image.new("L", (size, size), 0)
+    draw_mask(ImageDraw.Draw(mk), size)
+    o.paste(layer, (0, 0), mk)
+    return o
 
 
-bg_img = Image.open(os.path.join(OUT, "android-bg.png"))
-fg_img2 = Image.open(os.path.join(OUT, "android-fg.png"))
 tiles = [
-    masked(bg_img, fg_img2, lambda d, s: d.ellipse((0, 0, s - 1, s - 1), fill=255)),
-    masked(bg_img, fg_img2, lambda d, s: d.rounded_rectangle((0, 0, s - 1, s - 1), radius=s * 0.42, fill=255)),
-    masked(bg_img, fg_img2, lambda d, s: d.rounded_rectangle((0, 0, s - 1, s - 1), radius=s * 0.18, fill=255)),
+    masked(bg_img, fgc, lambda d, s: d.ellipse((0, 0, s - 1, s - 1), fill=255)),
+    masked(bg_img, fgc, lambda d, s: d.rounded_rectangle((0, 0, s - 1, s - 1), radius=s * 0.42, fill=255)),
+    masked(bg_img, fgc, lambda d, s: d.rounded_rectangle((0, 0, s - 1, s - 1), radius=s * 0.18, fill=255)),
 ]
-ios_prev = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
-m = Image.new("L", (256, 256), 0)
-ImageDraw.Draw(m).rounded_rectangle((0, 0, 255, 255), radius=256 * 0.2237, fill=255)
-ios_prev.paste(ios.resize((256, 256), Image.LANCZOS), (0, 0), m)
-tiles.append(ios_prev)
+iosp = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+mk = Image.new("L", (256, 256), 0)
+ImageDraw.Draw(mk).rounded_rectangle((0, 0, 255, 255), radius=256 * 0.2237, fill=255)
+iosp.paste(ios_img.resize((256, 256), Image.LANCZOS), (0, 0), mk)
+tiles.append(iosp)
 tiles.append(Image.open(os.path.join(OUT, "android-legacy.png")).resize((256, 256), Image.LANCZOS))
 
-sheet = Image.new("RGB", (5 * 296 + 40, 336), (245, 246, 250))
+board = Image.new("RGB", (5 * 296 + 40, 336), (245, 246, 250))
 for i, tl in enumerate(tiles):
-    sheet.paste(tl, (40 + i * 296, 40), tl)
-sheet.save(PREVIEW)
-print("preview:", PREVIEW)
+    board.paste(tl, (40 + i * 296, 40), tl)
+board.save(os.path.join(STORE, "icon-preview.png"))
+print("preview ->", os.path.join(STORE, "icon-preview.png"))

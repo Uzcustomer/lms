@@ -142,14 +142,21 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           ),
         ];
 
-  Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 16}) {
+  Widget _calmCard({
+    required Widget child,
+    EdgeInsets? padding,
+    double radius = 16,
+  }) {
     return Container(
       width: double.infinity,
       padding: padding ?? const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: ClinicTheme.strongBorderOf(context), width: 1.4),
+        border: Border.all(
+          color: ClinicTheme.strongBorderOf(context),
+          width: 1.4,
+        ),
         boxShadow: _cardShadow,
       ),
       child: child,
@@ -179,50 +186,94 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     for (final s in subjects) {
       if (s is! Map<String, dynamic>) continue;
       final t = _getSubjectTotal(s);
-      if (t > 0) { sum += t; count++; }
+      if (t > 0) {
+        sum += t;
+        count++;
+      }
     }
     return count > 0 ? sum / count : 0;
   }
 
-  String _getSubjectTypeLabel(Map<String, dynamic> subject, AppLocalizations l) {
+  String _getSubjectTypeLabel(
+    Map<String, dynamic> subject,
+    AppLocalizations l,
+  ) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-    final raw = subject['closing_form'] ??
+    final raw =
+        subject['closing_form'] ??
         subject['yopilish_shakli'] ??
         subject['assessment_type'];
-    final normalized = raw?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
+    final normalized =
+        raw?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
 
     if (normalized == 'sinov_test' ||
         normalized == 'sinovtest' ||
         (normalized.contains('sinov') && normalized.contains('test'))) {
-      return l.pick(uz: 'Fan turi: Sinov test', ru: 'Тип предмета: Синов тест', en: 'Type: Sinov test');
+      return l.pick(
+        uz: 'Fan turi: Sinov test',
+        ru: 'Тип предмета: Синов тест',
+        en: 'Type: Sinov test',
+      );
     }
     if (normalized == 'sinov') {
-      return l.pick(uz: 'Fan turi: Sinov', ru: 'Тип предмета: Синов', en: 'Type: Sinov');
+      return l.pick(
+        uz: 'Fan turi: Sinov',
+        ru: 'Тип предмета: Синов',
+        en: 'Type: Sinov',
+      );
     }
     if (normalized == 'test') {
-      return l.pick(uz: 'Fan turi: Test', ru: 'Тип предмета: Тест', en: 'Type: Test');
+      return l.pick(
+        uz: 'Fan turi: Test',
+        ru: 'Тип предмета: Тест',
+        en: 'Type: Test',
+      );
     }
     if (normalized == 'oski' || normalized == 'oske') {
-      return l.pick(uz: 'Fan turi: OSKI', ru: 'Тип предмета: ОСКИ', en: 'Type: OSKI');
+      return l.pick(
+        uz: 'Fan turi: OSKI',
+        ru: 'Тип предмета: ОСКИ',
+        en: 'Type: OSKI',
+      );
     }
     if (normalized == 'oski_test' || normalized == 'oske_test') {
-      return l.pick(uz: 'Fan turi: OSKI + Test', ru: 'Тип предмета: ОСКИ + Тест', en: 'Type: OSKI + Test');
+      return l.pick(
+        uz: 'Fan turi: OSKI + Test',
+        ru: 'Тип предмета: ОСКИ + Тест',
+        en: 'Type: OSKI + Test',
+      );
     }
     if (raw == null || raw.toString().trim().isEmpty) {
       final hasOski = grades['oski'] != null;
       final hasTest = grades['test'] != null;
 
       if (hasTest && !hasOski) {
-        return l.pick(uz: 'Fan turi: Test', ru: 'Тип предмета: Тест', en: 'Type: Test');
+        return l.pick(
+          uz: 'Fan turi: Test',
+          ru: 'Тип предмета: Тест',
+          en: 'Type: Test',
+        );
       }
       if (hasOski && !hasTest) {
-        return l.pick(uz: 'Fan turi: OSKI', ru: 'Тип предмета: ОСКИ', en: 'Type: OSKI');
+        return l.pick(
+          uz: 'Fan turi: OSKI',
+          ru: 'Тип предмета: ОСКИ',
+          en: 'Type: OSKI',
+        );
       }
       if (hasOski && hasTest) {
-        return l.pick(uz: 'Fan turi: OSKI + Test', ru: 'Тип предмета: ОСКИ + Тест', en: 'Type: OSKI + Test');
+        return l.pick(
+          uz: 'Fan turi: OSKI + Test',
+          ru: 'Тип предмета: ОСКИ + Тест',
+          en: 'Type: OSKI + Test',
+        );
       }
       if (grades['jn'] != null || grades['mt'] != null) {
-        return l.pick(uz: 'Fan turi: Sinov', ru: 'Тип предмета: Синов', en: 'Type: Sinov');
+        return l.pick(
+          uz: 'Fan turi: Sinov',
+          ru: 'Тип предмета: Синов',
+          en: 'Type: Sinov',
+        );
       }
       return '';
     }
@@ -235,8 +286,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
   List<Map<String, dynamic>> _filterSubjects(List subjects) {
     final all = subjects.whereType<Map<String, dynamic>>().toList();
-    if (_selectedFilter == 1) return all.where((s) => _isSubjectCompleted(s)).toList();
-    if (_selectedFilter == 2) return all.where((s) => !_isSubjectCompleted(s)).toList();
+    if (_selectedFilter == 1)
+      return all.where((s) => _isSubjectCompleted(s)).toList();
+    if (_selectedFilter == 2)
+      return all.where((s) => !_isSubjectCompleted(s)).toList();
     return all;
   }
 
@@ -262,131 +315,171 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
       body: Consumer<StudentProvider>(
-          builder: (context, provider, _) {
-            if (provider.isLoading && provider.subjects == null) {
-              return const Center(child: LoadingWidget());
-            }
+        builder: (context, provider, _) {
+          if (provider.isLoading && provider.subjects == null) {
+            return const Center(child: LoadingWidget());
+          }
 
-            final subjects = provider.subjects;
-            if (subjects == null || subjects.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.school_outlined, size: 64, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
-                    const SizedBox(height: 16),
-                    Text(provider.error ?? l.get('no_subjects'),
-                      style: TextStyle(color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary)),
-                    const SizedBox(height: 16),
-                    ElevatedButton(onPressed: () => provider.loadSubjects(), child: Text(l.reload)),
-                  ],
-                ),
-              );
-            }
-
-            final semesterAvg = _calculateSemesterAvg(subjects);
-            final completed = subjects.whereType<Map<String, dynamic>>().where((s) => _isSubjectCompleted(s)).length;
-            final waiting = subjects.length - completed;
-            final filtered = _filterSubjects(subjects);
-            final bestSubject = _getBestSubject(subjects);
-            // If the dashboard asked us to focus a specific subject, move it
-            // to the top of the list so it's the first card the user sees.
-            if (_highlightedSubjectId != null) {
-              final idx = filtered.indexWhere((s) {
-                final raw = s['subject_id'];
-                final id = raw is int
-                    ? raw
-                    : (raw == null ? null : int.tryParse(raw.toString()));
-                return id == _highlightedSubjectId;
-              });
-              if (idx > 0) {
-                final pinned = filtered.removeAt(idx);
-                filtered.insert(0, pinned);
-              }
-            }
-            final semesterName = provider.profile?['semester_name']?.toString() ?? '';
-
-            return RefreshIndicator(
-              onRefresh: () => provider.refreshAll(),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildHeader(context, l, semesterName),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSummaryCard(semesterAvg, subjects.length,
-                              completed, waiting, semesterName, provider),
-                          const SizedBox(height: 12),
-                          if (bestSubject != null) ...[
-                            _buildBestSubjectCard(bestSubject),
-                            const SizedBox(height: 12),
-                          ],
-                          _buildFilterTabs(completed, waiting, subjects.length),
-                          const SizedBox(height: 12),
-                          ...filtered.asMap().entries.map((e) {
-                            final subj = e.value;
-                            final rawId = subj['subject_id'];
-                            final sid = rawId is int
-                                ? rawId
-                                : (rawId == null ? null : int.tryParse(rawId.toString()));
-                            final key = sid != null
-                                ? _subjectKeys.putIfAbsent(sid, () => GlobalKey())
-                                : null;
-                            final highlighted =
-                                sid != null && sid == _highlightedSubjectId;
-                            return Padding(
-                              key: key,
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                decoration: highlighted
-                                    ? BoxDecoration(
-                                        borderRadius: BorderRadius.circular(16),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: ClinicTheme.tealOf(context).withOpacity(0.45),
-                                            blurRadius: 18,
-                                            spreadRadius: 1,
-                                          ),
-                                        ],
-                                      )
-                                    : null,
-                                child: _buildSubjectCard(context, subj, l),
-                              ),
-                            );
-                          }),
-                          const SizedBox(height: 100),
-                        ],
-                      ),
+          final subjects = provider.subjects;
+          if (subjects == null || subjects.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.school_outlined,
+                    size: 64,
+                    color: isDark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.textSecondary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    provider.error ?? l.get('no_subjects'),
+                    style: TextStyle(
+                      color: isDark
+                          ? AppTheme.darkTextSecondary
+                          : AppTheme.textSecondary,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => provider.loadSubjects(),
+                    child: Text(l.reload),
+                  ),
+                ],
               ),
             );
-          },
-        ),
+          }
+
+          final semesterAvg = _calculateSemesterAvg(subjects);
+          final completed = subjects
+              .whereType<Map<String, dynamic>>()
+              .where((s) => _isSubjectCompleted(s))
+              .length;
+          final waiting = subjects.length - completed;
+          final filtered = _filterSubjects(subjects);
+          final bestSubject = _getBestSubject(subjects);
+          // If the dashboard asked us to focus a specific subject, move it
+          // to the top of the list so it's the first card the user sees.
+          if (_highlightedSubjectId != null) {
+            final idx = filtered.indexWhere((s) {
+              final raw = s['subject_id'];
+              final id = raw is int
+                  ? raw
+                  : (raw == null ? null : int.tryParse(raw.toString()));
+              return id == _highlightedSubjectId;
+            });
+            if (idx > 0) {
+              final pinned = filtered.removeAt(idx);
+              filtered.insert(0, pinned);
+            }
+          }
+          final semesterName =
+              provider.profile?['semester_name']?.toString() ?? '';
+
+          return RefreshIndicator(
+            onRefresh: () => provider.refreshAll(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildHeader(context, l, semesterName),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSummaryCard(
+                          semesterAvg,
+                          subjects.length,
+                          completed,
+                          waiting,
+                          semesterName,
+                          provider,
+                        ),
+                        const SizedBox(height: 12),
+                        if (bestSubject != null) ...[
+                          _buildBestSubjectCard(bestSubject),
+                          const SizedBox(height: 12),
+                        ],
+                        _buildFilterTabs(completed, waiting, subjects.length),
+                        const SizedBox(height: 12),
+                        ...filtered.asMap().entries.map((e) {
+                          final subj = e.value;
+                          final rawId = subj['subject_id'];
+                          final sid = rawId is int
+                              ? rawId
+                              : (rawId == null
+                                    ? null
+                                    : int.tryParse(rawId.toString()));
+                          final key = sid != null
+                              ? _subjectKeys.putIfAbsent(sid, () => GlobalKey())
+                              : null;
+                          final highlighted =
+                              sid != null && sid == _highlightedSubjectId;
+                          return Padding(
+                            key: key,
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              decoration: highlighted
+                                  ? BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: ClinicTheme.tealOf(
+                                            context,
+                                          ).withOpacity(0.45),
+                                          blurRadius: 18,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    )
+                                  : null,
+                              child: _buildSubjectCard(context, subj, l),
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
   // ── Header ───────────────────────────────────────────
-  Widget _buildHeader(BuildContext context, AppLocalizations l, String semester) {
+  Widget _buildHeader(
+    BuildContext context,
+    AppLocalizations l,
+    String semester,
+  ) {
     final statusBarH = MediaQuery.of(context).padding.top;
     return Container(
       padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border(bottom: BorderSide(color: _divider, width: 1)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ClinicTheme.heroGradientOf(context),
+        ),
       ),
       child: Row(
         children: [
           _headerIconButton(
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: Icon(Icons.arrow_back_rounded, color: _ink, size: 20),
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               onPressed: () => StudentHomeScreen.switchToHome(context),
             ),
           ),
@@ -403,23 +496,37 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
-                    color: _muted,
+                    color: Colors.white.withValues(alpha: 0.75),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  context.l10n.pick(uz: 'Akademik baholar', ru: 'Академические оценки', en: 'Academic grades'),
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
+                  context.l10n.pick(
+                    uz: 'Akademik baholar',
+                    ru: 'Академические оценки',
+                    en: 'Academic grades',
+                  ),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),
           ),
-          _headerIconButton(child: NotificationBell(iconColor: _ink, iconSize: 18)),
+          _headerIconButton(
+            child: NotificationBell(iconColor: Colors.white, iconSize: 18),
+          ),
           const SizedBox(width: 8),
           _headerIconButton(
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: Icon(Icons.settings_outlined, color: _ink, size: 18),
+              icon: Icon(
+                Icons.settings_outlined,
+                color: Colors.white,
+                size: 18,
+              ),
               onPressed: () => showSettingsSheet(context),
             ),
           ),
@@ -429,12 +536,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 
   Widget _headerIconButton({required Widget child}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 38,
       height: 38,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(11),
       ),
       child: child,
@@ -442,8 +548,14 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 
   // ── Summary card ─────────────────────────────────────
-  Widget _buildSummaryCard(double avg, int total, int completed, int waiting,
-      String semester, StudentProvider provider) {
+  Widget _buildSummaryCard(
+    double avg,
+    int total,
+    int completed,
+    int waiting,
+    String semester,
+    StudentProvider provider,
+  ) {
     final dash = provider.dashboard;
     final cur = dash?['current_semester_avg'];
     final prev = dash?['prev_semester_avg'];
@@ -509,11 +621,14 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Text('/ 100',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white.withOpacity(0.7))),
+                  Text(
+                    '/ 100',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white.withOpacity(0.7),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -527,8 +642,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                     value: v,
                     minHeight: 7,
                     backgroundColor: Colors.white.withOpacity(0.18),
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -539,7 +655,14 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 children: [
                   _buildStatCell('$total', context.l10n.subjects),
                   _statDivider(),
-                  _buildStatCell('$completed', context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted')),
+                  _buildStatCell(
+                    '$completed',
+                    context.l10n.pick(
+                      uz: 'Topshirilgan',
+                      ru: 'Сдано',
+                      en: 'Submitted',
+                    ),
+                  ),
                   _statDivider(),
                   _buildStatCell('$waiting', context.l10n.pending),
                 ],
@@ -556,13 +679,19 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-            size: 11, color: Colors.white),
+        Icon(
+          up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+          size: 11,
+          color: Colors.white,
+        ),
         const SizedBox(width: 1),
         Text(
           '${up ? '+' : ''}${trend.toStringAsFixed(1)}',
           style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
         ),
       ],
     );
@@ -575,18 +704,22 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
           const SizedBox(height: 3),
           Text(
             label,
             style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: Colors.white.withOpacity(0.75)),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Colors.white.withOpacity(0.75),
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -629,7 +762,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 const SizedBox(height: 3),
                 Text(
                   name,
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: _ink),
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -640,7 +777,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           Text(
             '$grade',
             style: TextStyle(
-                fontSize: 26, fontWeight: FontWeight.w900, color: ClinicTheme.greenOf(context)),
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: ClinicTheme.greenOf(context),
+            ),
           ),
         ],
       ),
@@ -649,7 +789,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
   // ── Filter tabs ──────────────────────────────────────
   Widget _buildFilterTabs(int completed, int waiting, int total) {
-    final labels = [context.l10n.all, context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted'), context.l10n.pending];
+    final labels = [
+      context.l10n.all,
+      context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted'),
+      context.l10n.pending,
+    ];
     final counts = [total, completed, waiting];
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
@@ -665,7 +809,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               decoration: BoxDecoration(
                 color: isActive
                     ? ClinicTheme.tealFillOf(context)
-                    : (isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9)),
+                    : (isDark
+                          ? Colors.white.withOpacity(0.06)
+                          : const Color(0xFFF1F5F9)),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -676,7 +822,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                       labels[i],
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight: isActive
+                            ? FontWeight.w800
+                            : FontWeight.w600,
                         color: isActive ? Colors.white : _muted,
                       ),
                       maxLines: 1,
@@ -685,7 +833,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                   ),
                   const SizedBox(width: 5),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
                       color: isActive
                           ? Colors.white.withOpacity(0.25)
@@ -711,7 +862,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 
   // ── Subject card ─────────────────────────────────────
-  Widget _buildSubjectCard(BuildContext context, Map<String, dynamic> subject, AppLocalizations l) {
+  Widget _buildSubjectCard(
+    BuildContext context,
+    Map<String, dynamic> subject,
+    AppLocalizations l,
+  ) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final name = subject['subject_name']?.toString() ?? '';
     final subjectTypeLabel = _getSubjectTypeLabel(subject, l);
@@ -727,12 +882,12 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     final totalColor = total == null
         ? _calmFaint
         : total >= 71
-            ? _calmBlue
-            : total >= 60
-                ? const Color(0xFFB45309)
-                : total == -1
-                    ? const Color(0xFFB45309)
-                    : AppTheme.errorColor;
+        ? _calmBlue
+        : total >= 60
+        ? const Color(0xFFB45309)
+        : total == -1
+        ? const Color(0xFFB45309)
+        : AppTheme.errorColor;
 
     return _calmCard(
       child: Column(
@@ -748,7 +903,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                   children: [
                     Text(
                       name,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -775,15 +934,22 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                   Text(
                     total != null ? '$total' : '—',
                     style: TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.w900, color: totalColor, height: 1),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: totalColor,
+                      height: 1,
+                    ),
                   ),
                   const SizedBox(height: 2),
-                  Text('JAMI',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                          color: ClinicTheme.faintOf(context))),
+                  Text(
+                    'JAMI',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: ClinicTheme.faintOf(context),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -795,35 +961,66 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isCompleted ? const Color(0xFFF0FDF4) : const Color(0xFFFFF7ED),
+                  color: isCompleted
+                      ? const Color(0xFFF0FDF4)
+                      : const Color(0xFFFFF7ED),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(isCompleted ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                        size: 12,
-                        color: isCompleted ? ClinicTheme.greenOf(context) : const Color(0xFFB45309)),
+                    Icon(
+                      isCompleted
+                          ? Icons.check_circle_rounded
+                          : Icons.schedule_rounded,
+                      size: 12,
+                      color: isCompleted
+                          ? ClinicTheme.greenOf(context)
+                          : const Color(0xFFB45309),
+                    ),
                     const SizedBox(width: 4),
                     Text(
-                      isCompleted ? context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted') : context.l10n.pending,
+                      isCompleted
+                          ? context.l10n.pick(
+                              uz: 'Topshirilgan',
+                              ru: 'Сдано',
+                              en: 'Submitted',
+                            )
+                          : context.l10n.pending,
                       style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: isCompleted ? ClinicTheme.greenOf(context) : const Color(0xFFB45309)),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: isCompleted
+                            ? ClinicTheme.greenOf(context)
+                            : const Color(0xFFB45309),
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              Text.rich(TextSpan(children: [
+              Text.rich(
                 TextSpan(
-                    text: '${context.l10n.attendance} ',
-                    style: TextStyle(fontSize: 11.5, color: _muted, fontWeight: FontWeight.w500)),
-                TextSpan(
-                    text: '${attendance.toStringAsFixed(0)}%',
-                    style: TextStyle(fontSize: 11.5, color: _ink, fontWeight: FontWeight.w800)),
-              ])),
+                  children: [
+                    TextSpan(
+                      text: '${context.l10n.attendance} ',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: _muted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    TextSpan(
+                      text: '${attendance.toStringAsFixed(0)}%',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: _ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -837,8 +1034,16 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               return Expanded(
                 child: ScaleTap(
                   scaleDown: 0.92,
-                  onTap: () => _onGradeCardTap(context, subject, key,
-                      gradeLabels[i], _gradeFullLabels[i], value, isDark, l),
+                  onTap: () => _onGradeCardTap(
+                    context,
+                    subject,
+                    key,
+                    gradeLabels[i],
+                    _gradeFullLabels[i],
+                    value,
+                    isDark,
+                    l,
+                  ),
                   child: Container(
                     margin: EdgeInsets.only(right: i < 5 ? 6 : 0),
                     padding: const EdgeInsets.symmetric(vertical: 7),
@@ -851,18 +1056,22 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                         Text(
                           hasValue ? value.toString() : '—',
                           style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              color: hasValue ? Colors.white : _calmFaint),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: hasValue ? Colors.white : _calmFaint,
+                          ),
                         ),
                         const SizedBox(height: 1),
                         Text(
                           gradeLabels[i],
                           style: TextStyle(
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.3,
-                              color: hasValue ? Colors.white.withOpacity(0.85) : _calmFaint),
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                            color: hasValue
+                                ? Colors.white.withOpacity(0.85)
+                                : _calmFaint,
+                          ),
                         ),
                       ],
                     ),
@@ -882,10 +1091,19 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 
   static const List<String> _gradeFullLabels = [
-    'Joriy nazorat', 'Mustaqil ta\'lim', 'Oraliq nazorat', 'OSKI', 'Test', 'Yakuniy',
+    'Joriy nazorat',
+    'Mustaqil ta\'lim',
+    'Oraliq nazorat',
+    'OSKI',
+    'Test',
+    'Yakuniy',
   ];
 
-  Widget _buildMtUploadSection(BuildContext context, Map<String, dynamic> subject, AppLocalizations l) {
+  Widget _buildMtUploadSection(
+    BuildContext context,
+    Map<String, dynamic> subject,
+    AppLocalizations l,
+  ) {
     final mt = subject['mt_submission'] as Map<String, dynamic>;
     final hasSubmission = mt['has_submission'] == true;
     final canSubmit = mt['can_submit'] == true;
@@ -896,7 +1114,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFC),
+        color: isDark
+            ? Colors.white.withOpacity(0.04)
+            : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _divider, width: 1),
       ),
@@ -909,29 +1129,52 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               color: ClinicTheme.tealFillOf(context).withOpacity(0.12),
               borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(hasSubmission ? Icons.cloud_done_rounded : Icons.cloud_upload_rounded,
-                color: ClinicTheme.tealOf(context), size: 18),
+            child: Icon(
+              hasSubmission
+                  ? Icons.cloud_done_rounded
+                  : Icons.cloud_upload_rounded,
+              color: ClinicTheme.tealOf(context),
+              size: 18,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Mustaqil ta\'lim',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: _ink)),
+                Text(
+                  'Mustaqil ta\'lim',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
+                ),
                 const SizedBox(height: 1),
                 Text(
                   hasSubmission
-                      ? (canSubmit ? context.l10n.pick(uz: 'Yuklangan · ko\'rib chiqilmoqda', ru: 'Загружено · на проверке', en: 'Uploaded · under review') : context.l10n.uploaded)
+                      ? (canSubmit
+                            ? context.l10n.pick(
+                                uz: 'Yuklangan · ko\'rib chiqilmoqda',
+                                ru: 'Загружено · на проверке',
+                                en: 'Uploaded · under review',
+                              )
+                            : context.l10n.uploaded)
                       : context.l10n.notUploaded,
-                  style: TextStyle(fontSize: 10.5, color: _muted, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: _muted,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: canSubmit && !isThisUploading ? () => _uploadMT(context, subject) : null,
+            onTap: canSubmit && !isThisUploading
+                ? () => _uploadMT(context, subject)
+                : null,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
@@ -944,13 +1187,18 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : Text(
                       context.l10n.refresh,
                       style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          color: canSubmit ? Colors.white : _calmFaint),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: canSubmit ? Colors.white : _calmFaint,
+                      ),
                     ),
             ),
           ),
@@ -994,7 +1242,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       context,
       SlideFadePageRoute(
         builder: (_) => _JnGradesPage(
-          subjectId: subjectId is int ? subjectId : int.parse(subjectId.toString()),
+          subjectId: subjectId is int
+              ? subjectId
+              : int.parse(subjectId.toString()),
           subjectName: subjectName,
           fullLabel: fullLabel,
         ),
@@ -1014,7 +1264,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     final mt = subject['mt_submission'] as Map<String, dynamic>?;
     final bgColor = isDark ? AppTheme.darkCard : Colors.white;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final secondaryText = isDark
+        ? AppTheme.darkTextSecondary
+        : AppTheme.textSecondary;
 
     showModalBottomSheet(
       context: context,
@@ -1029,7 +1281,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
@@ -1039,21 +1292,39 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             Row(
               children: [
                 Container(
-                  width: 44, height: 44,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: _cardColors[1].withAlpha(isDark ? 40 : 255),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(_cardIcons[1], color: _cardTextColors[1], size: 24),
+                  child: Icon(
+                    _cardIcons[1],
+                    color: _cardTextColors[1],
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(fullLabel, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                      Text('$label: ${value?.toString() ?? '-'}',
-                        style: TextStyle(fontSize: 14, color: _cardTextColors[1], fontWeight: FontWeight.w600)),
+                      Text(
+                        fullLabel,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: textColor,
+                        ),
+                      ),
+                      Text(
+                        '$label: ${value?.toString() ?? '-'}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _cardTextColors[1],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1061,28 +1332,59 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             ),
             if (mt != null) ...[
               const SizedBox(height: 16),
-              _buildMtDetailRow(Icons.calendar_today, '${l.get("mt_deadline")}:', '${mt['deadline'] ?? '-'} ${mt['deadline_time'] ?? ''}', secondaryText, textColor),
-              if (mt['grade'] != null)
-                _buildMtDetailRow(Icons.grade, '${l.get("mt_graded")}:', mt['grade'].toString(), secondaryText, _cardTextColors[1]),
-              if (mt['file_name'] != null)
-                _buildMtDetailRow(Icons.attach_file, '${l.get("file")}:', mt['file_name'].toString(), secondaryText, textColor),
-              if (mt['remaining_attempts'] != null)
-                _buildMtDetailRow(Icons.replay, '${l.get("mt_remaining")}:', mt['remaining_attempts'].toString(), secondaryText, textColor),
               _buildMtDetailRow(
-                mt['has_submission'] == true ? Icons.check_circle : Icons.cancel,
+                Icons.calendar_today,
+                '${l.get("mt_deadline")}:',
+                '${mt['deadline'] ?? '-'} ${mt['deadline_time'] ?? ''}',
+                secondaryText,
+                textColor,
+              ),
+              if (mt['grade'] != null)
+                _buildMtDetailRow(
+                  Icons.grade,
+                  '${l.get("mt_graded")}:',
+                  mt['grade'].toString(),
+                  secondaryText,
+                  _cardTextColors[1],
+                ),
+              if (mt['file_name'] != null)
+                _buildMtDetailRow(
+                  Icons.attach_file,
+                  '${l.get("file")}:',
+                  mt['file_name'].toString(),
+                  secondaryText,
+                  textColor,
+                ),
+              if (mt['remaining_attempts'] != null)
+                _buildMtDetailRow(
+                  Icons.replay,
+                  '${l.get("mt_remaining")}:',
+                  mt['remaining_attempts'].toString(),
+                  secondaryText,
+                  textColor,
+                ),
+              _buildMtDetailRow(
+                mt['has_submission'] == true
+                    ? Icons.check_circle
+                    : Icons.cancel,
                 context.l10n.pick(uz: 'Status:', ru: 'Статус:', en: 'Status:'),
                 mt['has_submission'] == true
                     ? l.get('mt_uploaded')
                     : mt['is_overdue'] == true
-                        ? l.get('mt_overdue')
-                        : l.get('mt_not_uploaded'),
+                    ? l.get('mt_overdue')
+                    : l.get('mt_not_uploaded'),
                 secondaryText,
-                mt['has_submission'] == true ? AppTheme.successColor : AppTheme.errorColor,
+                mt['has_submission'] == true
+                    ? AppTheme.successColor
+                    : AppTheme.errorColor,
               ),
             ] else
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Text(l.noData, style: TextStyle(color: secondaryText, fontSize: 14)),
+                child: Text(
+                  l.noData,
+                  style: TextStyle(color: secondaryText, fontSize: 14),
+                ),
               ),
             const SizedBox(height: 16),
           ],
@@ -1091,7 +1393,13 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     );
   }
 
-  Widget _buildMtDetailRow(IconData icon, String label, String value, Color labelColor, Color valueColor) {
+  Widget _buildMtDetailRow(
+    IconData icon,
+    String label,
+    String value,
+    Color labelColor,
+    Color valueColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1101,8 +1409,17 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           Text(label, style: TextStyle(fontSize: 13, color: labelColor)),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor),
-              textAlign: TextAlign.end, maxLines: 2, overflow: TextOverflow.ellipsis),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: valueColor,
+              ),
+              textAlign: TextAlign.end,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -1135,7 +1452,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
@@ -1143,22 +1461,44 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               ),
             ),
             Container(
-              width: 64, height: 64,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
                 color: _cardColors[colorIdx].withAlpha(isDark ? 40 : 255),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(_cardIcons[colorIdx], color: _cardTextColors[colorIdx], size: 32),
+              child: Icon(
+                _cardIcons[colorIdx],
+                color: _cardTextColors[colorIdx],
+                size: 32,
+              ),
             ),
             const SizedBox(height: 12),
-            Text(fullLabel, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
+            Text(
+              fullLabel,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: textColor,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               value?.toString() ?? '-',
-              style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: _cardTextColors[colorIdx]),
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                color: _cardTextColors[colorIdx],
+              ),
             ),
             const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 14, color: _cardTextColors[colorIdx].withAlpha(180))),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                color: _cardTextColors[colorIdx].withAlpha(180),
+              ),
+            ),
             const SizedBox(height: 20),
           ],
         ),
@@ -1191,7 +1531,12 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return mt['has_submission'] == true;
   }
 
-  Widget _buildMtInfo(BuildContext context, Map<String, dynamic> mt, bool isDark, AppLocalizations l) {
+  Widget _buildMtInfo(
+    BuildContext context,
+    Map<String, dynamic> mt,
+    bool isDark,
+    AppLocalizations l,
+  ) {
     final hasSubmission = mt['has_submission'] == true;
     final isOverdue = mt['is_overdue'] == true;
     final gradeLocked = mt['grade_locked'] == true;
@@ -1210,7 +1555,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       statusIcon = Icons.check_circle;
     } else if (hasSubmission && grade != null) {
       statusColor = AppTheme.warningColor;
-      statusText = '${l.get("mt_graded")}: $grade (${l.get("mt_remaining")}: $remaining)';
+      statusText =
+          '${l.get("mt_graded")}: $grade (${l.get("mt_remaining")}: $remaining)';
       statusIcon = Icons.warning;
     } else if (hasSubmission) {
       statusColor = AppTheme.accentColor;
@@ -1243,7 +1589,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               Expanded(
                 child: Text(
                   statusText,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusColor),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
+                  ),
                 ),
               ),
             ],
@@ -1251,14 +1601,24 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           const SizedBox(height: 4),
           Text(
             '${l.get("mt_deadline")}: $deadline ${mt['deadline_time'] ?? ''}',
-            style: TextStyle(fontSize: 11, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark
+                  ? AppTheme.darkTextSecondary
+                  : AppTheme.textSecondary,
+            ),
           ),
           if (fileName != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
                 fileName,
-                style: TextStyle(fontSize: 11, color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark
+                      ? AppTheme.darkTextSecondary
+                      : AppTheme.textSecondary,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1268,7 +1628,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     );
   }
 
-  Future<void> _uploadMT(BuildContext context, Map<String, dynamic> subject) async {
+  Future<void> _uploadMT(
+    BuildContext context,
+    Map<String, dynamic> subject,
+  ) async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -1282,7 +1645,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       if (file.bytes == null) return;
 
       final subjectId = subject['subject_id'];
-      setState(() { _isUploading = true; _uploadingSubjectId = subjectId is int ? subjectId : -1; });
+      setState(() {
+        _isUploading = true;
+        _uploadingSubjectId = subjectId is int ? subjectId : -1;
+      });
 
       await ApiService().uploadFile(
         '${ApiConfig.studentSubjects}/$subjectId/mt-upload',
@@ -1311,7 +1677,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       }
     }
   }
-
 }
 
 class _JnGradesPage extends StatefulWidget {
@@ -1346,8 +1711,9 @@ class _JnGradesPageState extends State<_JnGradesPage> {
 
   Future<void> _loadGrades() async {
     try {
-      final response =
-          await StudentService(ApiService()).getSubjectGrades(widget.subjectId);
+      final response = await StudentService(
+        ApiService(),
+      ).getSubjectGrades(widget.subjectId);
 
       List<dynamic> grades = [];
       List<dynamic> scheduleDates = [];
@@ -1367,9 +1733,15 @@ class _JnGradesPageState extends State<_JnGradesPage> {
         final typeCode = g['training_type_code'];
         final typeName = g['training_type_name']?.toString() ?? '';
 
-        if (typeCode == 11 || typeName.contains("Ma'ruza") || typeName.contains('Maruza')) {
+        if (typeCode == 11 ||
+            typeName.contains("Ma'ruza") ||
+            typeName.contains('Maruza')) {
           maruzaRaw.add(g);
-        } else if (typeCode != 99 && typeCode != 100 && typeCode != 101 && typeCode != 102 && typeCode != 103) {
+        } else if (typeCode != 99 &&
+            typeCode != 100 &&
+            typeCode != 101 &&
+            typeCode != 102 &&
+            typeCode != 103) {
           amaliyRaw.add(g);
         }
       }
@@ -1384,9 +1756,15 @@ class _JnGradesPageState extends State<_JnGradesPage> {
         final dateKey = dateStr.substring(0, 10);
         final typeCode = s['training_type_code'];
         final typeName = s['training_type_name']?.toString() ?? '';
-        if (typeCode == 11 || typeName.contains("Ma'ruza") || typeName.contains('Maruza')) {
+        if (typeCode == 11 ||
+            typeName.contains("Ma'ruza") ||
+            typeName.contains('Maruza')) {
           maruzaDates.add(dateKey);
-        } else if (typeCode != 99 && typeCode != 100 && typeCode != 101 && typeCode != 102 && typeCode != 103) {
+        } else if (typeCode != 99 &&
+            typeCode != 100 &&
+            typeCode != 101 &&
+            typeCode != 102 &&
+            typeCode != 103) {
           amaliyDates.add(dateKey);
         }
       }
@@ -1422,7 +1800,10 @@ class _JnGradesPageState extends State<_JnGradesPage> {
     }
   }
 
-  Map<String, dynamic> _computeDailyMap(List<Map<String, dynamic>> grades, Set<String> dates) {
+  Map<String, dynamic> _computeDailyMap(
+    List<Map<String, dynamic>> grades,
+    Set<String> dates,
+  ) {
     final byDate = <String, List<num>>{};
     final absentDates = <String>{};
 
@@ -1455,7 +1836,8 @@ class _JnGradesPageState extends State<_JnGradesPage> {
       if (byDate.containsKey(dateKey)) {
         final vals = byDate[dateKey]!;
         if (vals.isNotEmpty) {
-          result[dateKey] = (vals.reduce((a, b) => a + b) / vals.length).round();
+          result[dateKey] = (vals.reduce((a, b) => a + b) / vals.length)
+              .round();
         } else {
           result[dateKey] = 'NB';
         }
@@ -1507,8 +1889,11 @@ class _JnGradesPageState extends State<_JnGradesPage> {
           Container(
             padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
             decoration: BoxDecoration(
-              color: _surface,
-              border: Border(bottom: BorderSide(color: _divider, width: 1)),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: ClinicTheme.heroGradientOf(context),
+              ),
             ),
             child: Row(
               children: [
@@ -1516,14 +1901,16 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.06)
-                        : const Color(0xFFF1F5F9),
+                    color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    icon: Icon(Icons.arrow_back_rounded, color: _ink, size: 20),
+                    icon: Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
@@ -1538,14 +1925,17 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.5,
-                          color: _muted,
+                          color: Colors.white.withValues(alpha: 0.75),
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         widget.subjectName,
                         style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1559,31 +1949,34 @@ class _JnGradesPageState extends State<_JnGradesPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(_error!, style: TextStyle(color: _muted)),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _loadGrades,
-                              child: Text(context.l10n.reload),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(_error!, style: TextStyle(color: _muted)),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadGrades,
+                          child: Text(context.l10n.reload),
                         ),
-                      )
-                    : _allDates.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.school_outlined, size: 48, color: _muted),
-                                const SizedBox(height: 12),
-                                Text(context.l10n.noData, style: TextStyle(color: _muted)),
-                              ],
-                            ),
-                          )
-                        : _buildVerticalTable(),
+                      ],
+                    ),
+                  )
+                : _allDates.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.school_outlined, size: 48, color: _muted),
+                        const SizedBox(height: 12),
+                        Text(
+                          context.l10n.noData,
+                          style: TextStyle(color: _muted),
+                        ),
+                      ],
+                    ),
+                  )
+                : _buildVerticalTable(),
           ),
         ],
       ),
@@ -1594,14 +1987,28 @@ class _JnGradesPageState extends State<_JnGradesPage> {
     final hasAmaliy = _amaliyByDate.isNotEmpty;
     final hasMaruza = _maruzaByDate.isNotEmpty;
 
-    final amaliyDates = _allDates
-        .where((d) => _amaliyByDate.containsKey(d) || !_maruzaByDate.containsKey(d))
-        .toList()
-      ..removeWhere((d) => _maruzaByDate.containsKey(d) && !_amaliyByDate.containsKey(d));
-    final maruzaDates = _allDates
-        .where((d) => _maruzaByDate.containsKey(d) || !_amaliyByDate.containsKey(d))
-        .toList()
-      ..removeWhere((d) => _amaliyByDate.containsKey(d) && !_maruzaByDate.containsKey(d));
+    final amaliyDates =
+        _allDates
+            .where(
+              (d) =>
+                  _amaliyByDate.containsKey(d) || !_maruzaByDate.containsKey(d),
+            )
+            .toList()
+          ..removeWhere(
+            (d) =>
+                _maruzaByDate.containsKey(d) && !_amaliyByDate.containsKey(d),
+          );
+    final maruzaDates =
+        _allDates
+            .where(
+              (d) =>
+                  _maruzaByDate.containsKey(d) || !_amaliyByDate.containsKey(d),
+            )
+            .toList()
+          ..removeWhere(
+            (d) =>
+                _amaliyByDate.containsKey(d) && !_maruzaByDate.containsKey(d),
+          );
 
     return RefreshIndicator(
       onRefresh: _loadGrades,
@@ -1613,7 +2020,11 @@ class _JnGradesPageState extends State<_JnGradesPage> {
           children: [
             if (hasAmaliy) ...[
               _buildSectionCard(
-                title: context.l10n.pick(uz: 'Amaliy mashg\'ulotlar', ru: 'Практические занятия', en: 'Practical classes'),
+                title: context.l10n.pick(
+                  uz: 'Amaliy mashg\'ulotlar',
+                  ru: 'Практические занятия',
+                  en: 'Practical classes',
+                ),
                 icon: Icons.assignment_turned_in_rounded,
                 hueColor: const Color(0xFF15803D),
                 gradesByDate: _amaliyByDate,
@@ -1672,11 +2083,18 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                 Expanded(
                   child: Text(
                     title,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: hueColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(7),
@@ -1684,7 +2102,10 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                   child: Text(
                     '${dates.length}',
                     style: TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w800, color: hueColor),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: hueColor,
+                    ),
                   ),
                 ),
               ],
@@ -1693,7 +2114,10 @@ class _JnGradesPageState extends State<_JnGradesPage> {
             if (dates.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(context.l10n.noInfo, style: TextStyle(fontSize: 13, color: _muted)),
+                child: Text(
+                  context.l10n.noInfo,
+                  style: TextStyle(fontSize: 13, color: _muted),
+                ),
               )
             else
               ...dates.asMap().entries.map((e) {
@@ -1739,17 +2163,27 @@ class _JnGradesPageState extends State<_JnGradesPage> {
 
     return Container(
       decoration: BoxDecoration(
-        border: showDivider ? Border(bottom: BorderSide(color: _divider)) : null,
+        border: showDivider
+            ? Border(bottom: BorderSide(color: _divider))
+            : null,
       ),
       padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
         children: [
-          Icon(Icons.event_outlined, size: 16, color: ClinicTheme.faintOf(context)),
+          Icon(
+            Icons.event_outlined,
+            size: 16,
+            color: ClinicTheme.faintOf(context),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _formatDateLong(dateKey),
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: _ink),
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: _ink,
+              ),
             ),
           ),
           Container(
@@ -1762,7 +2196,11 @@ class _JnGradesPageState extends State<_JnGradesPage> {
             ),
             child: Text(
               text,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: valueColor),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: valueColor,
+              ),
             ),
           ),
         ],

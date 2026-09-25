@@ -77,7 +77,7 @@ class LmsApp extends StatelessWidget {
         builder: (context, settings, _) {
           return MaterialApp(
             navigatorKey: LmsApp.navigatorKey,
-            title: 'TDTU LMS',
+            title: 'LMS - Tashmedunitf',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

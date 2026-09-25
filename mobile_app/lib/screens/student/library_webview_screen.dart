@@ -82,11 +82,13 @@ class _LibraryWebViewScreenState extends State<LibraryWebViewScreen> {
             onBack: () => Navigator.pop(context),
             actions: [
               ClinicIconButton(
+                onHeader: true,
                 icon: Icons.open_in_browser_rounded,
                 onTap: () => launchUrl(Uri.parse(_url),
                     mode: LaunchMode.externalApplication),
               ),
               ClinicIconButton(
+                onHeader: true,
                 icon: Icons.refresh_rounded,
                 onTap: () => _controller?.reload(),
               ),

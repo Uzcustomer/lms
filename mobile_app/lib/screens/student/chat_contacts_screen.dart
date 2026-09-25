@@ -64,7 +64,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
             overline: l.useful.toUpperCase(),
             title: l.pick(uz: 'Xabarlar', ru: 'Сообщения', en: 'Messages'),
             onBack: () => Navigator.pop(context),
-            actions: const [NotificationBell()],
+            actions: const [NotificationBell(onHeader: true)],
           ),
           Container(
             color: ClinicTheme.surfaceOf(context),

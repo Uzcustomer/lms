@@ -38,7 +38,11 @@ class StudentUsefulScreen extends StatelessWidget {
     final services = [
       _ServiceCard(
         icon: Icons.how_to_reg_outlined,
-        title: l.pick(uz: 'Davomat (beacon)', ru: 'Посещаемость (beacon)', en: 'Attendance (beacon)'),
+        title: l.pick(
+          uz: 'Davomat (beacon)',
+          ru: 'Посещаемость (beacon)',
+          en: 'Attendance (beacon)',
+        ),
         subtitle: l.pick(
           uz: 'Xonada tasdiqlash va signal',
           ru: 'Подтверждение в аудитории и сигнал',
@@ -49,7 +53,11 @@ class StudentUsefulScreen extends StatelessWidget {
       ),
       _ServiceCard(
         icon: Icons.auto_awesome,
-        title: l.pick(uz: 'AI Yordamchi', ru: 'AI помощник', en: 'AI Assistant'),
+        title: l.pick(
+          uz: 'AI Yordamchi',
+          ru: 'AI помощник',
+          en: 'AI Assistant',
+        ),
         subtitle: l.pick(
           uz: 'Gemini AI bilan savol-javob',
           ru: 'Вопросы и ответы с Gemini AI',
@@ -60,7 +68,11 @@ class StudentUsefulScreen extends StatelessWidget {
       ),
       _ServiceCard(
         icon: Icons.calculate_outlined,
-        title: l.pick(uz: 'GPA Kalkulyator', ru: 'GPA калькулятор', en: 'GPA Calculator'),
+        title: l.pick(
+          uz: 'GPA Kalkulyator',
+          ru: 'GPA калькулятор',
+          en: 'GPA Calculator',
+        ),
         subtitle: l.pick(
           uz: 'GPA hisoblash va prognoz',
           ru: 'Расчет и прогноз GPA',
@@ -112,7 +124,11 @@ class StudentUsefulScreen extends StatelessWidget {
       ),
       _ServiceCard(
         icon: Icons.grid_view_rounded,
-        title: l.pick(uz: 'Imtihon sanalari', ru: 'Даты экзаменов', en: 'Exam dates'),
+        title: l.pick(
+          uz: 'Imtihon sanalari',
+          ru: 'Даты экзаменов',
+          en: 'Exam dates',
+        ),
         subtitle: l.pick(
           uz: 'OSKI va Test kunlari',
           ru: 'Дни OSCE и тестов',
@@ -145,8 +161,11 @@ class StudentUsefulScreen extends StatelessWidget {
             Container(
               padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
               decoration: BoxDecoration(
-                color: surface,
-                border: Border(bottom: BorderSide(color: divider, width: 1)),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: ClinicTheme.heroGradientOf(context),
+                ),
               ),
               child: Row(
                 children: [
@@ -154,7 +173,11 @@ class StudentUsefulScreen extends StatelessWidget {
                     isDark: isDark,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      icon: Icon(Icons.arrow_back_rounded, color: ink, size: 20),
+                      icon: Icon(
+                        Icons.arrow_back_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       onPressed: () => StudentHomeScreen.switchToHome(context),
                     ),
                   ),
@@ -169,28 +192,38 @@ class StudentUsefulScreen extends StatelessWidget {
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
-                            color: muted,
+                            color: Colors.white.withValues(alpha: 0.75),
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           l.useful,
                           style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700, color: ink),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   _HeaderIconButton(
                     isDark: isDark,
-                    child: NotificationBell(iconColor: ink, iconSize: 18),
+                    child: NotificationBell(
+                      iconColor: Colors.white,
+                      iconSize: 18,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   _HeaderIconButton(
                     isDark: isDark,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      icon: Icon(Icons.settings_outlined, color: ink, size: 18),
+                      icon: Icon(
+                        Icons.settings_outlined,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                       onPressed: () => showSettingsSheet(context),
                     ),
                   ),
@@ -207,7 +240,9 @@ class StudentUsefulScreen extends StatelessWidget {
                   ScaleTap(
                     onTap: () => Navigator.push(
                       context,
-                      SlideFadePageRoute(builder: (_) => const StudentServicesScreen()),
+                      SlideFadePageRoute(
+                        builder: (_) => const StudentServicesScreen(),
+                      ),
                     ),
                     child: const _ShinyHero(),
                   ),
@@ -218,12 +253,13 @@ class StudentUsefulScreen extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: services.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      mainAxisExtent: 146,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          mainAxisExtent: 146,
+                        ),
                     itemBuilder: (_, i) => _ServiceTile(
                       item: services[i],
                       ink: ink,
@@ -253,7 +289,7 @@ class _HeaderIconButton extends StatelessWidget {
       width: 38,
       height: 38,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(11),
       ),
       child: child,
@@ -269,7 +305,8 @@ class _ShinyHero extends StatefulWidget {
   State<_ShinyHero> createState() => _ShinyHeroState();
 }
 
-class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMixin {
+class _ShinyHeroState extends State<_ShinyHero>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
@@ -320,7 +357,10 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.18),
                       borderRadius: BorderRadius.circular(999),
@@ -351,12 +391,22 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    context.l10n.pick(uz: 'Sababli ariza · Ma\'lumotnoma · Xizmatlar', ru: 'Заявление · Справка · Услуги', en: 'Excuse · Certificate · Services'),
-                    style: TextStyle(fontSize: 12.5, color: Colors.white.withOpacity(0.9)),
+                    context.l10n.pick(
+                      uz: 'Sababli ariza · Ma\'lumotnoma · Xizmatlar',
+                      ru: 'Заявление · Справка · Услуги',
+                      en: 'Excuse · Certificate · Services',
+                    ),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 9,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(11),
@@ -364,13 +414,20 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(l.signIn,
-                            style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: ClinicTheme.primaryOf(context))),
+                        Text(
+                          l.signIn,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: ClinicTheme.primaryOf(context),
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        Icon(Icons.chevron_right_rounded, size: 16, color: ClinicTheme.primaryOf(context)),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color: ClinicTheme.primaryOf(context),
+                        ),
                       ],
                     ),
                   ),
@@ -385,7 +442,8 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                   builder: (_, __) {
                     return LayoutBuilder(
                       builder: (_, c) {
-                        final dx = (-0.35 + 1.7 * _controller.value) * c.maxWidth;
+                        final dx =
+                            (-0.35 + 1.7 * _controller.value) * c.maxWidth;
                         return Stack(
                           children: [
                             Positioned(
@@ -509,7 +567,11 @@ class _ServiceTile extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         item.subtitle,
-                        style: TextStyle(fontSize: 11, height: 1.35, color: muted),
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: muted,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

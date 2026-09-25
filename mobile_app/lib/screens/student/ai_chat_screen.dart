@@ -84,8 +84,14 @@ class _AiChatScreenState extends State<AiChatScreen>
   Future<void> _refreshData() async {
     if (_contextLoading) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar( 
-        content: Text(AppLocalizations.current.pick(uz: 'Ma\'lumotlar yangilanmoqda...', ru: 'Обновление данных...', en: 'Refreshing data...')),
+      SnackBar(
+        content: Text(
+          AppLocalizations.current.pick(
+            uz: 'Ma\'lumotlar yangilanmoqda...',
+            ru: 'Обновление данных...',
+            en: 'Refreshing data...',
+          ),
+        ),
         duration: Duration(seconds: 2),
       ),
     );
@@ -98,9 +104,19 @@ class _AiChatScreenState extends State<AiChatScreen>
         : ' (${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')})';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_contextLoaded
-            ? AppLocalizations.current.pick(uz: 'Ma\'lumotlar yangilandi$tsStr', ru: 'Данные обновлены$tsStr', en: 'Data refreshed$tsStr')
-            : AppLocalizations.current.pick(uz: 'Yangilashda xatolik', ru: 'Ошибка обновления', en: 'Refresh failed')),
+        content: Text(
+          _contextLoaded
+              ? AppLocalizations.current.pick(
+                  uz: 'Ma\'lumotlar yangilandi$tsStr',
+                  ru: 'Данные обновлены$tsStr',
+                  en: 'Data refreshed$tsStr',
+                )
+              : AppLocalizations.current.pick(
+                  uz: 'Yangilashda xatolik',
+                  ru: 'Ошибка обновления',
+                  en: 'Refresh failed',
+                ),
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -134,14 +150,18 @@ class _AiChatScreenState extends State<AiChatScreen>
     }
 
     final attachments = List<GeminiAttachment>.from(_pendingAttachments);
-    final messageText = text.isEmpty ? AppLocalizations.current.pick(uz: 'Yuborilgan faylni tahlil qiling', ru: 'Проанализируйте отправленный файл', en: 'Analyse the attached file') : text;
+    final messageText = text.isEmpty
+        ? AppLocalizations.current.pick(
+            uz: 'Yuborilgan faylni tahlil qiling',
+            ru: 'Проанализируйте отправленный файл',
+            en: 'Analyse the attached file',
+          )
+        : text;
 
     setState(() {
-      _messages.add(_ChatMessage(
-        text: text,
-        isUser: true,
-        attachments: attachments,
-      ));
+      _messages.add(
+        _ChatMessage(text: text, isUser: true, attachments: attachments),
+      );
       _messages.add(_ChatMessage(text: '', isUser: false));
       _isStreaming = true;
       _pendingAttachments.clear();
@@ -170,7 +190,9 @@ class _AiChatScreenState extends State<AiChatScreen>
         final errMsg = e.toString().replaceFirst('Exception: ', '');
         setState(() {
           _messages[aiIndex] = _ChatMessage(
-            text: errMsg.length > 200 ? '${errMsg.substring(0, 200)}...' : errMsg,
+            text: errMsg.length > 200
+                ? '${errMsg.substring(0, 200)}...'
+                : errMsg,
             isUser: false,
             isError: true,
           );
@@ -199,7 +221,15 @@ class _AiChatScreenState extends State<AiChatScreen>
       if (bytes == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.current.pick(uz: 'Faylni o\'qib bo\'lmadi', ru: 'Не удалось прочитать файл', en: 'Could not read the file'))),
+            SnackBar(
+              content: Text(
+                AppLocalizations.current.pick(
+                  uz: 'Faylni o\'qib bo\'lmadi',
+                  ru: 'Не удалось прочитать файл',
+                  en: 'Could not read the file',
+                ),
+              ),
+            ),
           );
         }
         return;
@@ -208,8 +238,15 @@ class _AiChatScreenState extends State<AiChatScreen>
       if (bytes.length > _maxFileSize) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar( 
-                content: Text(AppLocalizations.current.pick(uz: 'Fayl hajmi 18MB dan katta. Kichikroq fayl tanlang', ru: 'Файл больше 18 МБ. Выберите файл меньше', en: 'The file is over 18 MB. Choose a smaller one'))),
+            SnackBar(
+              content: Text(
+                AppLocalizations.current.pick(
+                  uz: 'Fayl hajmi 18MB dan katta. Kichikroq fayl tanlang',
+                  ru: 'Файл больше 18 МБ. Выберите файл меньше',
+                  en: 'The file is over 18 MB. Choose a smaller one',
+                ),
+              ),
+            ),
           );
         }
         return;
@@ -220,17 +257,21 @@ class _AiChatScreenState extends State<AiChatScreen>
 
       if (mounted) {
         setState(() {
-          _pendingAttachments.add(GeminiAttachment(
-            name: file.name,
-            mimeType: mimeType,
-            bytes: bytes!,
-          ));
+          _pendingAttachments.add(
+            GeminiAttachment(
+              name: file.name,
+              mimeType: mimeType,
+              bytes: bytes!,
+            ),
+          );
         });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.current.genericError}: $e')),
+          SnackBar(
+            content: Text('${AppLocalizations.current.genericError}: $e'),
+          ),
         );
       }
     } finally {
@@ -316,31 +357,64 @@ class _AiChatScreenState extends State<AiChatScreen>
                 ),
               ),
               const SizedBox(height: 18),
-              _attachOption(Icons.image_outlined, context.l10n.picture, 'JPG, PNG, WEBP',
-                  const Color(0xFF1D4ED8), () {
-                Navigator.pop(ctx);
-                _pickFile(FileType.custom, extensions: _imageExt);
-              }),
-              _attachOption(Icons.picture_as_pdf_outlined, 'PDF',
-                  context.l10n.pick(uz: 'Hujjatlar va kitoblar', ru: 'Документы и книги', en: 'Documents and books'), const Color(0xFFBE123C), () {
-                Navigator.pop(ctx);
-                _pickFile(FileType.custom, extensions: ['pdf']);
-              }),
-              _attachOption(Icons.audiotrack_outlined, 'Audio',
-                  'MP3, WAV, M4A', const Color(0xFFB45309), () {
-                Navigator.pop(ctx);
-                _pickFile(FileType.custom, extensions: _audioExt);
-              }),
-              _attachOption(Icons.videocam_outlined, 'Video',
-                  'MP4, MOV, WEBM', const Color(0xFF7C3AED), () {
-                Navigator.pop(ctx);
-                _pickFile(FileType.custom, extensions: _videoExt);
-              }),
-              _attachOption(Icons.insert_drive_file_outlined, context.l10n.pick(uz: 'Boshqa fayl', ru: 'Другой файл', en: 'Other file'),
-                  'TXT, CSV, MD', ClinicTheme.tealOf(context), () {
-                Navigator.pop(ctx);
-                _pickFile(FileType.any);
-              }),
+              _attachOption(
+                Icons.image_outlined,
+                context.l10n.picture,
+                'JPG, PNG, WEBP',
+                const Color(0xFF1D4ED8),
+                () {
+                  Navigator.pop(ctx);
+                  _pickFile(FileType.custom, extensions: _imageExt);
+                },
+              ),
+              _attachOption(
+                Icons.picture_as_pdf_outlined,
+                'PDF',
+                context.l10n.pick(
+                  uz: 'Hujjatlar va kitoblar',
+                  ru: 'Документы и книги',
+                  en: 'Documents and books',
+                ),
+                const Color(0xFFBE123C),
+                () {
+                  Navigator.pop(ctx);
+                  _pickFile(FileType.custom, extensions: ['pdf']);
+                },
+              ),
+              _attachOption(
+                Icons.audiotrack_outlined,
+                'Audio',
+                'MP3, WAV, M4A',
+                const Color(0xFFB45309),
+                () {
+                  Navigator.pop(ctx);
+                  _pickFile(FileType.custom, extensions: _audioExt);
+                },
+              ),
+              _attachOption(
+                Icons.videocam_outlined,
+                'Video',
+                'MP4, MOV, WEBM',
+                const Color(0xFF7C3AED),
+                () {
+                  Navigator.pop(ctx);
+                  _pickFile(FileType.custom, extensions: _videoExt);
+                },
+              ),
+              _attachOption(
+                Icons.insert_drive_file_outlined,
+                context.l10n.pick(
+                  uz: 'Boshqa fayl',
+                  ru: 'Другой файл',
+                  en: 'Other file',
+                ),
+                'TXT, CSV, MD',
+                ClinicTheme.tealOf(context),
+                () {
+                  Navigator.pop(ctx);
+                  _pickFile(FileType.any);
+                },
+              ),
             ],
           ),
         );
@@ -349,7 +423,12 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Widget _attachOption(
-      IconData icon, String title, String subtitle, Color color, VoidCallback onTap) {
+    IconData icon,
+    String title,
+    String subtitle,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -370,20 +449,30 @@ class _AiChatScreenState extends State<AiChatScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
-                          color: ClinicTheme.inkOf(context))),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: ClinicTheme.inkOf(context),
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 11.5, color: ClinicTheme.mutedOf(context))),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: ClinicTheme.mutedOf(context),
+                    ),
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded,
-                size: 14, color: ClinicTheme.faint),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: ClinicTheme.faint,
+            ),
           ],
         ),
       ),
@@ -398,8 +487,20 @@ class _AiChatScreenState extends State<AiChatScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(context.l10n.pick(uz: 'Chatni tozalash', ru: 'Очистить чат', en: 'Clear chat')),
-        content: Text(context.l10n.pick(uz: 'Barcha xabarlar o\'chiriladi. Davom etasizmi?', ru: 'Все сообщения будут удалены. Продолжить?', en: 'All messages will be deleted. Continue?')),
+        title: Text(
+          context.l10n.pick(
+            uz: 'Chatni tozalash',
+            ru: 'Очистить чат',
+            en: 'Clear chat',
+          ),
+        ),
+        content: Text(
+          context.l10n.pick(
+            uz: 'Barcha xabarlar o\'chiriladi. Davom etasizmi?',
+            ru: 'Все сообщения будут удалены. Продолжить?',
+            en: 'All messages will be deleted. Continue?',
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -413,7 +514,10 @@ class _AiChatScreenState extends State<AiChatScreen>
                 _gemini.resetChat();
               });
             },
-            child: Text(context.l10n.pick(uz: 'Tozalash', ru: 'Очистить', en: 'Clear'), style: const TextStyle(color: Colors.red)),
+            child: Text(
+              context.l10n.pick(uz: 'Tozalash', ru: 'Очистить', en: 'Clear'),
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -446,18 +550,20 @@ class _AiChatScreenState extends State<AiChatScreen>
   Widget _buildHeader() {
     final l = AppLocalizations.of(context);
     final statusBarH = MediaQuery.of(context).padding.top;
-    final ink = ClinicTheme.inkOf(context);
+    const ink = Colors.white;
     return Container(
       padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
       decoration: BoxDecoration(
-        color: ClinicTheme.surfaceOf(context),
-        border: Border(
-          bottom: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ClinicTheme.heroGradientOf(context),
         ),
       ),
       child: Row(
         children: [
           ClinicIconButton(
+            onHeader: true,
             icon: Icons.arrow_back_rounded,
             onTap: () => Navigator.pop(context),
           ),
@@ -469,7 +575,11 @@ class _AiChatScreenState extends State<AiChatScreen>
               gradient: const LinearGradient(colors: [_aiA, _aiB]),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 19),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: Colors.white,
+              size: 19,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -477,9 +587,16 @@ class _AiChatScreenState extends State<AiChatScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l.pick(uz: 'AI Yordamchi', ru: 'AI помощник', en: 'AI Assistant'),
+                  l.pick(
+                    uz: 'AI Yordamchi',
+                    ru: 'AI помощник',
+                    en: 'AI Assistant',
+                  ),
                   style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w700, color: ink),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: ink,
+                  ),
                 ),
                 Row(
                   children: [
@@ -488,38 +605,58 @@ class _AiChatScreenState extends State<AiChatScreen>
                         width: 8,
                         height: 8,
                         child: CircularProgressIndicator(
-                            strokeWidth: 1.5, color: ClinicTheme.mutedOf(context)),
+                          strokeWidth: 1.5,
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
                       ),
                       const SizedBox(width: 6),
-                      Text(l.pick(
+                      Text(
+                        l.pick(
                           uz: 'Ma\'lumot yuklanmoqda...',
                           ru: 'Данные загружаются...',
-                          en: 'Loading data...'),
-                          style: TextStyle(
-                              fontSize: 10.5, color: ClinicTheme.mutedOf(context))),
+                          en: 'Loading data...',
+                        ),
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
+                      ),
                     ] else if (_contextLoaded) ...[
-                      Icon(Icons.check_circle_rounded,
-                          size: 11, color: ClinicTheme.greenOf(context)),
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 11,
+                        color: ClinicTheme.greenOf(context),
+                      ),
                       const SizedBox(width: 4),
-                      Text(l.pick(
+                      Text(
+                        l.pick(
                           uz: 'Ma\'lumotlaringiz bilan tayyor',
                           ru: 'Готов с вашими данными',
-                          en: 'Ready with your data'),
-                          style: TextStyle(
-                              fontSize: 10.5, color: ClinicTheme.mutedOf(context))),
+                          en: 'Ready with your data',
+                        ),
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
+                      ),
                     ] else
-                      Text('Gemini · TDTU',
-                          style: TextStyle(
-                              fontSize: 11, color: ClinicTheme.mutedOf(context))),
+                      Text(
+                        'Gemini · TDTU',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
+                      ),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          const NotificationBell(),
+          const NotificationBell(onHeader: true),
           const SizedBox(width: 8),
           ClinicIconButton(
+            onHeader: true,
             icon: Icons.refresh_rounded,
             onTap: () {
               if (!_contextLoading) _refreshData();
@@ -527,6 +664,7 @@ class _AiChatScreenState extends State<AiChatScreen>
           ),
           const SizedBox(width: 8),
           ClinicIconButton(
+            onHeader: true,
             icon: Icons.delete_outline_rounded,
             onTap: () {
               if (_messages.isNotEmpty && !_isStreaming) _clearChat();
@@ -545,63 +683,117 @@ class _AiChatScreenState extends State<AiChatScreen>
     final suggestions = _contextLoaded
         ? [
             _Suggestion(
-                Icons.bar_chart_rounded,
-                l.pick(uz: 'Mening baholarim', ru: 'Мои оценки', en: 'My grades'),
-                l.pick(
-                    uz: 'Barcha fanlardan baholarimni umumlashtirib bering',
-                    ru: 'Обобщите мои оценки по всем предметам',
-                    en: 'Summarize my grades across all subjects')),
+              Icons.bar_chart_rounded,
+              l.pick(uz: 'Mening baholarim', ru: 'Мои оценки', en: 'My grades'),
+              l.pick(
+                uz: 'Barcha fanlardan baholarimni umumlashtirib bering',
+                ru: 'Обобщите мои оценки по всем предметам',
+                en: 'Summarize my grades across all subjects',
+              ),
+            ),
             _Suggestion(
-                Icons.trending_up_rounded,
-                l.pick(
-                    uz: 'Eng yaxshi/yomon fanim',
-                    ru: 'Лучший/сложный предмет',
-                    en: 'Best/worst subject'),
-                l.pick(
-                    uz: 'Qaysi fanda eng yaxshi va qaysida yomon natija bor?',
-                    ru: 'По какому предмету у меня лучший и худший результат?',
-                    en: 'Which subject is my best and which is my weakest?')),
+              Icons.trending_up_rounded,
+              l.pick(
+                uz: 'Eng yaxshi/yomon fanim',
+                ru: 'Лучший/сложный предмет',
+                en: 'Best/worst subject',
+              ),
+              l.pick(
+                uz: 'Qaysi fanda eng yaxshi va qaysida yomon natija bor?',
+                ru: 'По какому предмету у меня лучший и худший результат?',
+                en: 'Which subject is my best and which is my weakest?',
+              ),
+            ),
             _Suggestion(
-                Icons.warning_amber_rounded,
-                l.pick(
-                    uz: 'Diqqat qilishim kerak',
-                    ru: 'На что обратить внимание',
-                    en: 'Needs attention'),
-                l.pick(
-                    uz: 'Qaysi fanlarga ko\'proq e\'tibor berishim kerak?',
-                    ru: 'Каким предметам мне нужно уделить больше внимания?',
-                    en: 'Which subjects should I focus on more?')),
+              Icons.warning_amber_rounded,
+              l.pick(
+                uz: 'Diqqat qilishim kerak',
+                ru: 'На что обратить внимание',
+                en: 'Needs attention',
+              ),
+              l.pick(
+                uz: 'Qaysi fanlarga ko\'proq e\'tibor berishim kerak?',
+                ru: 'Каким предметам мне нужно уделить больше внимания?',
+                en: 'Which subjects should I focus on more?',
+              ),
+            ),
             _Suggestion(
-                Icons.calendar_month_rounded,
-                l.pick(uz: 'Imtihon jadvalim', ru: 'Мое расписание экзаменов', en: 'My exam schedule'),
-                l.pick(
-                    uz: 'Yaqinlashayotgan imtihonlarim qachon?',
-                    ru: 'Когда мои ближайшие экзамены?',
-                    en: 'When are my upcoming exams?')),
+              Icons.calendar_month_rounded,
+              l.pick(
+                uz: 'Imtihon jadvalim',
+                ru: 'Мое расписание экзаменов',
+                en: 'My exam schedule',
+              ),
+              l.pick(
+                uz: 'Yaqinlashayotgan imtihonlarim qachon?',
+                ru: 'Когда мои ближайшие экзамены?',
+                en: 'When are my upcoming exams?',
+              ),
+            ),
             _Suggestion(
-                Icons.event_available_rounded,
-                l.pick(uz: 'Davomatim', ru: 'Моя посещаемость', en: 'My attendance'),
-                l.pick(
-                    uz: 'Davomat statistikasini tahlil qiling',
-                    ru: 'Проанализируйте мою посещаемость',
-                    en: 'Analyze my attendance statistics')),
+              Icons.event_available_rounded,
+              l.pick(
+                uz: 'Davomatim',
+                ru: 'Моя посещаемость',
+                en: 'My attendance',
+              ),
+              l.pick(
+                uz: 'Davomat statistikasini tahlil qiling',
+                ru: 'Проанализируйте мою посещаемость',
+                en: 'Analyze my attendance statistics',
+              ),
+            ),
             _Suggestion(
-                Icons.lightbulb_outline_rounded,
-                l.pick(uz: 'Maslahat bering', ru: 'Дайте совет', en: 'Give advice'),
-                l.pick(
-                    uz: 'Reytingimni yaxshilash uchun nima qilishim kerak?',
-                    ru: 'Что мне сделать, чтобы улучшить рейтинг?',
-                    en: 'What should I do to improve my ranking?')),
+              Icons.lightbulb_outline_rounded,
+              l.pick(
+                uz: 'Maslahat bering',
+                ru: 'Дайте совет',
+                en: 'Give advice',
+              ),
+              l.pick(
+                uz: 'Reytingimni yaxshilash uchun nima qilishim kerak?',
+                ru: 'Что мне сделать, чтобы улучшить рейтинг?',
+                en: 'What should I do to improve my ranking?',
+              ),
+            ),
           ]
         : [
-            _Suggestion(Icons.science_outlined, 'Anatomiya',
-                l.pick(uz: 'Yurak tuzilishi haqida tushuntiring', ru: 'Объясните строение сердца', en: 'Explain the structure of the heart')),
-            _Suggestion(Icons.medication_outlined, 'Farmakologiya',
-                l.pick(uz: 'Antibiotiklar klassifikatsiyasi', ru: 'Классификация антибиотиков', en: 'Classification of antibiotics')),
-            _Suggestion(Icons.biotech_outlined, 'Fiziologiya',
-                l.pick(uz: 'Qon aylanish doiralari', ru: 'Круги кровообращения', en: 'Circles of blood circulation')),
-            _Suggestion(Icons.school_outlined, l.pick(uz: 'Imtihon', ru: 'Экзамен', en: 'Exam'),
-                l.pick(uz: 'Patologik anatomiyadan savollar', ru: 'Вопросы по патологической анатомии', en: 'Pathological anatomy questions')),
+            _Suggestion(
+              Icons.science_outlined,
+              'Anatomiya',
+              l.pick(
+                uz: 'Yurak tuzilishi haqida tushuntiring',
+                ru: 'Объясните строение сердца',
+                en: 'Explain the structure of the heart',
+              ),
+            ),
+            _Suggestion(
+              Icons.medication_outlined,
+              'Farmakologiya',
+              l.pick(
+                uz: 'Antibiotiklar klassifikatsiyasi',
+                ru: 'Классификация антибиотиков',
+                en: 'Classification of antibiotics',
+              ),
+            ),
+            _Suggestion(
+              Icons.biotech_outlined,
+              'Fiziologiya',
+              l.pick(
+                uz: 'Qon aylanish doiralari',
+                ru: 'Круги кровообращения',
+                en: 'Circles of blood circulation',
+              ),
+            ),
+            _Suggestion(
+              Icons.school_outlined,
+              l.pick(uz: 'Imtihon', ru: 'Экзамен', en: 'Exam'),
+              l.pick(
+                uz: 'Patologik anatomiyadan savollar',
+                ru: 'Вопросы по патологической анатомии',
+                en: 'Pathological anatomy questions',
+              ),
+            ),
           ];
 
     return SingleChildScrollView(
@@ -627,13 +819,24 @@ class _AiChatScreenState extends State<AiChatScreen>
                 ),
               ],
             ),
-            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: Colors.white,
+              size: 40,
+            ),
           ),
           const SizedBox(height: 18),
           Text(
-            l.pick(uz: 'TDTU AI Yordamchi', ru: 'AI помощник TDTU', en: 'TDTU AI Assistant'),
+            l.pick(
+              uz: 'TDTU AI Yordamchi',
+              ru: 'AI помощник TDTU',
+              en: 'TDTU AI Assistant',
+            ),
             style: TextStyle(
-                fontSize: 21, fontWeight: FontWeight.w900, color: ink),
+              fontSize: 21,
+              fontWeight: FontWeight.w900,
+              color: ink,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -646,10 +849,12 @@ class _AiChatScreenState extends State<AiChatScreen>
             style: TextStyle(fontSize: 13, color: muted, height: 1.5),
           ),
           const SizedBox(height: 24),
-          ...suggestions.map((s) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _buildSuggestionCard(s),
-              )),
+          ...suggestions.map(
+            (s) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildSuggestionCard(s),
+            ),
+          ),
         ],
       ),
     );
@@ -691,23 +896,32 @@ class _AiChatScreenState extends State<AiChatScreen>
                   color: ClinicTheme.tealFillOf(context).withAlpha(18),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(s.icon, size: 19, color: ClinicTheme.tealOf(context)),
+                child: Icon(
+                  s.icon,
+                  size: 19,
+                  color: ClinicTheme.tealOf(context),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(s.label,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: ink)),
+                    Text(
+                      s.label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: ink,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(s.prompt,
-                        style: TextStyle(fontSize: 11.5, color: muted),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      s.prompt,
+                      style: TextStyle(fontSize: 11.5, color: muted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
@@ -749,7 +963,11 @@ class _AiChatScreenState extends State<AiChatScreen>
                 gradient: const LinearGradient(colors: [_aiA, _aiB]),
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+              child: const Icon(
+                Icons.auto_awesome,
+                color: Colors.white,
+                size: 16,
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -791,16 +1009,25 @@ class _AiChatScreenState extends State<AiChatScreen>
                             onTap: () {
                               Clipboard.setData(ClipboardData(text: msg.text));
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar( 
-                                  content: Text(AppLocalizations.current.pick(uz: 'Nusxa olindi', ru: 'Скопировано', en: 'Copied')),
+                                SnackBar(
+                                  content: Text(
+                                    AppLocalizations.current.pick(
+                                      uz: 'Nusxa olindi',
+                                      ru: 'Скопировано',
+                                      en: 'Copied',
+                                    ),
+                                  ),
                                   duration: Duration(seconds: 1),
                                 ),
                               );
                             },
                             child: Padding(
                               padding: const EdgeInsets.all(4),
-                              child: Icon(Icons.copy_rounded,
-                                  size: 14, color: muted),
+                              child: Icon(
+                                Icons.copy_rounded,
+                                size: 14,
+                                color: muted,
+                              ),
                             ),
                           ),
                         ],
@@ -815,8 +1042,9 @@ class _AiChatScreenState extends State<AiChatScreen>
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
         margin: const EdgeInsets.only(bottom: 12, left: 36),
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         decoration: BoxDecoration(
@@ -848,10 +1076,12 @@ class _AiChatScreenState extends State<AiChatScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: msg.attachments
-                      .map((a) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: _buildBubbleAttachment(a),
-                          ))
+                      .map(
+                        (a) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: _buildBubbleAttachment(a),
+                        ),
+                      )
                       .toList(),
                 ),
               ),
@@ -888,8 +1118,9 @@ class _AiChatScreenState extends State<AiChatScreen>
       icon = Icons.insert_drive_file_rounded;
     }
     final sizeKb = (a.bytes.length / 1024).round();
-    final sizeStr =
-        sizeKb > 1024 ? '${(sizeKb / 1024).toStringAsFixed(1)} MB' : '$sizeKb KB';
+    final sizeStr = sizeKb > 1024
+        ? '${(sizeKb / 1024).toStringAsFixed(1)} MB'
+        : '$sizeKb KB';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -910,15 +1141,17 @@ class _AiChatScreenState extends State<AiChatScreen>
                 Text(
                   a.name,
                   style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
-                Text(sizeStr,
-                    style:
-                        const TextStyle(fontSize: 10.5, color: Colors.white70)),
+                Text(
+                  sizeStr,
+                  style: const TextStyle(fontSize: 10.5, color: Colors.white70),
+                ),
               ],
             ),
           ),
@@ -975,7 +1208,9 @@ class _AiChatScreenState extends State<AiChatScreen>
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.tealFillOf(context),
+                  color: disabled
+                      ? ClinicTheme.dividerOf(context)
+                      : ClinicTheme.tealFillOf(context),
                   shape: BoxShape.circle,
                 ),
                 child: Material(
@@ -991,11 +1226,17 @@ class _AiChatScreenState extends State<AiChatScreen>
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
-                          : Icon(Icons.add_rounded,
-                              color: disabled ? ClinicTheme.faint : Colors.white,
-                              size: 22),
+                          : Icon(
+                              Icons.add_rounded,
+                              color: disabled
+                                  ? ClinicTheme.faint
+                                  : Colors.white,
+                              size: 22,
+                            ),
                     ),
                   ),
                 ),
@@ -1008,7 +1249,10 @@ class _AiChatScreenState extends State<AiChatScreen>
                   textCapitalization: TextCapitalization.sentences,
                   maxLines: 4,
                   minLines: 1,
-                  style: TextStyle(fontSize: 14, color: ClinicTheme.inkOf(context)),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: ClinicTheme.inkOf(context),
+                  ),
                   decoration: InputDecoration(
                     hintText: _pendingAttachments.isNotEmpty
                         ? AppLocalizations.of(context).pick(
@@ -1022,22 +1266,29 @@ class _AiChatScreenState extends State<AiChatScreen>
                             en: 'Write a question...',
                           ),
                     hintStyle: TextStyle(
-                        color: ClinicTheme.mutedOf(context), fontSize: 14),
+                      color: ClinicTheme.mutedOf(context),
+                      fontSize: 14,
+                    ),
                     filled: true,
                     fillColor: isDark
                         ? Colors.white.withOpacity(0.05)
                         : const Color(0xFFF1F5F9),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(22),
-                      borderSide:
-                          BorderSide(color: ClinicTheme.dividerOf(context)),
+                      borderSide: BorderSide(
+                        color: ClinicTheme.dividerOf(context),
+                      ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(22),
-                      borderSide:
-                          BorderSide(color: ClinicTheme.tealOf(context), width: 1.5),
+                      borderSide: BorderSide(
+                        color: ClinicTheme.tealOf(context),
+                        width: 1.5,
+                      ),
                     ),
                   ),
                   onSubmitted: (_) => _send(),
@@ -1046,7 +1297,9 @@ class _AiChatScreenState extends State<AiChatScreen>
               const SizedBox(width: 6),
               Container(
                 decoration: BoxDecoration(
-                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.tealFillOf(context),
+                  color: disabled
+                      ? ClinicTheme.dividerOf(context)
+                      : ClinicTheme.tealFillOf(context),
                   shape: BoxShape.circle,
                   boxShadow: disabled
                       ? null
@@ -1071,10 +1324,17 @@ class _AiChatScreenState extends State<AiChatScreen>
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
-                          : Icon(Icons.send_rounded,
-                              color: disabled ? ClinicTheme.faint : Colors.white,
-                              size: 20),
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(
+                              Icons.send_rounded,
+                              color: disabled
+                                  ? ClinicTheme.faint
+                                  : Colors.white,
+                              size: 20,
+                            ),
                     ),
                   ),
                 ),
@@ -1154,13 +1414,16 @@ class _AiChatScreenState extends State<AiChatScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(a.name,
-                      style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: ink),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1),
+                  Text(
+                    a.name,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: ink,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                   const SizedBox(height: 2),
                   Text(sizeStr, style: TextStyle(fontSize: 10, color: muted)),
                 ],

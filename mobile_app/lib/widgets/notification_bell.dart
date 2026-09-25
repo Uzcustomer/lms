@@ -46,11 +46,14 @@ class NotificationBadge {
 class NotificationBell extends StatelessWidget {
   final Color? iconColor;
   final double iconSize;
+  /// Styled for the tinted [ClinicHeader]: white glyph in a translucent well.
+  final bool onHeader;
 
   const NotificationBell({
     super.key,
     this.iconColor,
     this.iconSize = 18,
+    this.onHeader = false,
   });
 
   @override
@@ -63,6 +66,7 @@ class NotificationBell extends StatelessWidget {
             ? ClinicIconButton(
                 icon: Icons.notifications_outlined,
                 onTap: () => _openNotifications(context),
+                onHeader: onHeader,
               )
             : SizedBox(
                 width: 38,
@@ -97,7 +101,7 @@ class NotificationBell extends StatelessWidget {
                       color: const Color(0xFFE53935),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: useClinic
+                        color: useClinic && !onHeader
                             ? ClinicTheme.surfaceOf(context)
                             : Colors.white,
                         width: 1.5,

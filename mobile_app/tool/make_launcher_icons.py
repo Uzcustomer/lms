@@ -23,8 +23,8 @@ os.makedirs(STORE, exist_ok=True)
 S = 1024
 
 # Hand-measured on the 1536x1024 sheet.
-IOS_BOX = (105, 200, 730, 840)
-AND_BOX = (845, 192, 1467, 816)
+IOS_BOX = (100, 180, 712, 795)
+AND_BOX = (846, 188, 1458, 798)
 
 sheet = Image.open(SRC).convert("RGB")
 print("sheet", sheet.size)

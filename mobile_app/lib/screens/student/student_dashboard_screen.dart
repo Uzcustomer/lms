@@ -62,7 +62,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       debugPrint('[SCHEDULE] today=$today');
       final scheduleList = schedule['schedule'];
       if (scheduleList == null || scheduleList is! List) {
-        debugPrint('[SCHEDULE] scheduleList is null or not List, keys=${schedule.keys.toList()}');
+        debugPrint(
+          '[SCHEDULE] scheduleList is null or not List, keys=${schedule.keys.toList()}',
+        );
         return;
       }
       debugPrint('[SCHEDULE] days count=${scheduleList.length}');
@@ -89,7 +91,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       }
 
       setState(() => _todayLessons = []);
-      final todayDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final todayDate = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day,
+      );
       // Collect future days with lessons, then sort to find nearest
       final futureDays = <Map<String, dynamic>>[];
       for (final day in scheduleList) {
@@ -105,7 +111,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         futureDays.add(day);
       }
       if (futureDays.isNotEmpty) {
-        futureDays.sort((a, b) => a['date'].toString().compareTo(b['date'].toString()));
+        futureDays.sort(
+          (a, b) => a['date'].toString().compareTo(b['date'].toString()),
+        );
         final nearest = futureDays.first;
         final firstLesson = (nearest['lessons'] as List).first;
         if (firstLesson is Map<String, dynamic>) {
@@ -131,10 +139,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       if (!mounted) return;
       _parseSchedule(provider.schedule);
     } catch (_) {
-      if (mounted) setState(() {
-        _todayLessons = [];
-        _nextDayLesson = null;
-      });
+      if (mounted)
+        setState(() {
+          _todayLessons = [];
+          _nextDayLesson = null;
+        });
     }
   }
 
@@ -157,17 +166,24 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final startM = int.tryParse(startParts[1]);
       final endH = int.tryParse(endParts[0]);
       final endM = int.tryParse(endParts[1]);
-      if (startH == null || startM == null || endH == null || endM == null) continue;
+      if (startH == null || startM == null || endH == null || endM == null)
+        continue;
 
       final start = DateTime(now.year, now.month, now.day, startH, startM);
       final end = DateTime(now.year, now.month, now.day, endH, endM);
 
-      if (now.isAfter(start.subtract(const Duration(minutes: 1))) && now.isBefore(end)) {
+      if (now.isAfter(start.subtract(const Duration(minutes: 1))) &&
+          now.isBefore(end)) {
         return {...lesson, '_is_active': true, '_end': end, '_start': start};
       }
       if (now.isBefore(start)) {
         if (nextLesson == null) {
-          nextLesson = {...lesson, '_is_active': false, '_start': start, '_end': end};
+          nextLesson = {
+            ...lesson,
+            '_is_active': false,
+            '_start': start,
+            '_end': end,
+          };
         }
       }
     }
@@ -207,14 +223,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Color get _divider => ClinicTheme.dividerOf(context);
 
   List<BoxShadow> get _cardShadow => [
-        BoxShadow(
-          color: const Color(0xFF0F172A).withOpacity(0.14),
-          blurRadius: 5,
-          offset: const Offset(0, 2),
-        ),
-      ];
+    BoxShadow(
+      color: const Color(0xFF0F172A).withOpacity(0.14),
+      blurRadius: 5,
+      offset: const Offset(0, 2),
+    ),
+  ];
 
-  Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 16}) {
+  Widget _calmCard({
+    required Widget child,
+    EdgeInsets? padding,
+    double radius = 16,
+  }) {
     return Container(
       width: double.infinity,
       padding: padding ?? const EdgeInsets.all(14),
@@ -237,7 +257,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       backgroundColor: isDark ? AppTheme.darkBackground : _calmBg,
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
-          if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
+          if (provider.isLoading &&
+              provider.dashboard == null &&
+              provider.profile == null) {
             return const LoadingWidget();
           }
 
@@ -251,7 +273,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 children: [
                   Icon(Icons.error_outline, size: 48, color: _muted),
                   const SizedBox(height: 16),
-                  Text(provider.error ?? l.noData, style: TextStyle(color: _ink)),
+                  Text(
+                    provider.error ?? l.noData,
+                    style: TextStyle(color: _ink),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
@@ -289,7 +314,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         const SizedBox(height: 8),
                         _buildLiveClassCard(),
                         _buildSubjectsOverview(provider.subjects, isDark, l),
-                        _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
+                        _buildTuitionFeeSection(
+                          context,
+                          profile,
+                          provider.contract,
+                          provider.contractList,
+                          l,
+                          isDark,
+                        ),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -309,8 +341,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return Container(
       padding: EdgeInsets.fromLTRB(16, statusBarH + 10, 16, 14),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border(bottom: BorderSide(color: _divider, width: 1)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ClinicTheme.heroGradientOf(context),
+        ),
       ),
       child: Row(
         children: [
@@ -318,44 +353,37 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: ClinicTheme.tealFillOf(context),
+              color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
+            child: const Icon(
+              Icons.account_balance_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 11),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'MED · UNIVERSITY',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                  color: _muted,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                l.home,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: _ink,
-                ),
-              ),
-            ],
+          Text(
+            l.home,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
           ),
           const Spacer(),
           _headerIconButton(
-            child: NotificationBell(iconColor: _ink, iconSize: 18),
+            child: NotificationBell(iconColor: Colors.white, iconSize: 18),
           ),
           const SizedBox(width: 8),
           _headerIconButton(
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: Icon(Icons.settings_outlined, color: _ink, size: 18),
+              icon: Icon(
+                Icons.settings_outlined,
+                color: Colors.white,
+                size: 18,
+              ),
               onPressed: () => showSettingsSheet(context),
             ),
           ),
@@ -365,21 +393,24 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _headerIconButton({required Widget child}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 38,
       height: 38,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(11),
       ),
       child: child,
     );
   }
 
-
   // Kept for tuition/contract sections — now renders a plain clinic-calm card.
-  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 16, Color? cardColor}) {
+  Widget _buildGlassCard({
+    required Widget child,
+    required bool isDark,
+    double borderRadius = 16,
+    Color? cardColor,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: _surface,
@@ -392,8 +423,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   // ── Profile card ─────────────────────────────────────
-  Widget _buildProfileCard(Map<String, dynamic>? data, Map<String, dynamic>? profile) {
-    final fullName = profile?['full_name']?.toString() ??
+  Widget _buildProfileCard(
+    Map<String, dynamic>? data,
+    Map<String, dynamic>? profile,
+  ) {
+    final fullName =
+        profile?['full_name']?.toString() ??
         data?['student_name']?.toString() ??
         '';
     final studentId = profile?['student_id_number']?.toString() ?? '';
@@ -476,16 +511,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               TextSpan(
                                 text: 'ID · ',
                                 style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white.withOpacity(0.7),
-                                    fontWeight: FontWeight.w500),
+                                  fontSize: 11,
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                               TextSpan(
                                 text: studentId,
                                 style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800),
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ],
                           ),
@@ -494,7 +531,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         if (paymentFormName.isNotEmpty)
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 9, vertical: 4),
+                              horizontal: 9,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(20),
@@ -506,8 +545,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                                   width: 6,
                                   height: 6,
                                   decoration: const BoxDecoration(
-                                      color: Color(0xFF7DF0C8),
-                                      shape: BoxShape.circle),
+                                    color: Color(0xFF7DF0C8),
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
@@ -531,15 +571,25 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(height: 14),
               Row(
                 children: [
-                  _buildStatCell('YIL', yearOfEnter.isNotEmpty ? yearOfEnter : '—'),
-                  _statDivider(),
-                  _buildStatCell('KURS', course.isNotEmpty ? '$course-kurs' : '—'),
+                  _buildStatCell(
+                    'YIL',
+                    yearOfEnter.isNotEmpty ? yearOfEnter : '—',
+                  ),
                   _statDivider(),
                   _buildStatCell(
-                      context.l10n.semester.toUpperCase(), semesterName.isNotEmpty ? semesterName : '—'),
+                    'KURS',
+                    course.isNotEmpty ? '$course-kurs' : '—',
+                  ),
                   _statDivider(),
-                  _buildStatCell(context.l10n.educationYear.toUpperCase(),
-                      educationYear.isNotEmpty ? educationYear : '—'),
+                  _buildStatCell(
+                    context.l10n.semester.toUpperCase(),
+                    semesterName.isNotEmpty ? semesterName : '—',
+                  ),
+                  _statDivider(),
+                  _buildStatCell(
+                    context.l10n.educationYear.toUpperCase(),
+                    educationYear.isNotEmpty ? educationYear : '—',
+                  ),
                 ],
               ),
             ],
@@ -584,7 +634,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           Text(
             value,
             style: const TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -608,14 +661,22 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.favorite_rounded, size: 32, color: Color(0xFFE53935)),
+              const Icon(
+                Icons.favorite_rounded,
+                size: 32,
+                color: Color(0xFFE53935),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.l10n.pick(uz: 'DAVOMAT KETMA-KETLIGI', ru: 'СЕРИЯ ПОСЕЩЕНИЙ', en: 'ATTENDANCE STREAK'),
+                      context.l10n.pick(
+                        uz: 'DAVOMAT KETMA-KETLIGI',
+                        ru: 'СЕРИЯ ПОСЕЩЕНИЙ',
+                        en: 'ATTENDANCE STREAK',
+                      ),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -625,7 +686,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      context.l10n.pick(uz: '$streak dars kuni · NB\'siz', ru: '$streak уч. дн. · без пропусков', en: '$streak lesson days · no absences'),
+                      context.l10n.pick(
+                        uz: '$streak dars kuni · NB\'siz',
+                        ru: '$streak уч. дн. · без пропусков',
+                        en: '$streak lesson days · no absences',
+                      ),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -650,18 +715,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: isGood ? ClinicTheme.greenOf(context) : AppTheme.warningColor,
+                    color: isGood
+                        ? ClinicTheme.greenOf(context)
+                        : AppTheme.warningColor,
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          const SizedBox(
-            height: 46,
-            width: double.infinity,
-            child: _EcgLine(),
-          ),
+          const SizedBox(height: 46, width: double.infinity, child: _EcgLine()),
         ],
       ),
     );
@@ -686,7 +749,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   // ── Fanlar ───────────────────────────────────────────
-  Widget _buildSubjectsOverview(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
+  Widget _buildSubjectsOverview(
+    List<dynamic>? subjects,
+    bool isDark,
+    AppLocalizations l,
+  ) {
     if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
 
     final items = <Map<String, dynamic>>[];
@@ -717,7 +784,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           children: [
             Text(
               context.l10n.subjects,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+              ),
             ),
             const Spacer(),
             GestureDetector(
@@ -733,7 +804,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     ),
                   ),
                   const SizedBox(width: 2),
-                  Icon(Icons.arrow_forward_rounded, size: 13, color: ClinicTheme.tealOf(context)),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 13,
+                    color: ClinicTheme.tealOf(context),
+                  ),
                 ],
               ),
             ),
@@ -746,7 +821,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             children: [
               for (int i = 0; i < items.length; i++) ...[
                 if (i > 0)
-                  Divider(height: 1, indent: 16, endIndent: 16, color: _divider),
+                  Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: _divider,
+                  ),
                 _buildSubjectRow(items[i]),
               ],
             ],
@@ -780,7 +860,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final subjectId = rawId is int
         ? rawId
         : (rawId == null ? null : int.tryParse(rawId.toString()));
-    final progress = total > 0 ? ((total - absent) / total).clamp(0.0, 1.0) : 0.0;
+    final progress = total > 0
+        ? ((total - absent) / total).clamp(0.0, 1.0)
+        : 0.0;
 
     return Material(
       color: Colors.transparent,
@@ -834,7 +916,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               value: progress,
                               minHeight: 4,
                               backgroundColor: _divider,
-                              valueColor: AlwaysStoppedAnimation<Color>(ClinicTheme.tealOf(context)),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                ClinicTheme.tealOf(context),
+                              ),
                             ),
                           ),
                         ),
@@ -853,7 +937,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ),
               ),
               const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded, size: 18, color: ClinicTheme.faintOf(context)),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: ClinicTheme.faintOf(context),
+              ),
             ],
           ),
         ),
@@ -870,7 +958,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     bool isDark,
   ) {
     final paymentFormName = profile?['payment_form_name']?.toString() ?? '';
-    final isContract = paymentFormName.toLowerCase().contains('kontrakt') ||
+    final isContract =
+        paymentFormName.toLowerCase().contains('kontrakt') ||
         paymentFormName.toLowerCase().contains('shartnoma') ||
         (profile?['payment_form_code']?.toString() ?? '') == '12';
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
@@ -888,11 +977,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         ? _toDouble(currentContract['unpaid_amount'])
         : _toDouble(summary?['remaining_amount']);
     final remainingAmount = rawRemainingAmount < 0 ? 0.0 : rawRemainingAmount;
-    final progress =
-        totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
+    final progress = totalAmount > 0
+        ? (paidAmount / totalAmount).clamp(0.0, 1.0)
+        : 0.0;
     final currentContractPaid =
-        currentContract?['status']?.toString() == 'paid' || remainingAmount <= 0;
-    final currentContractYear = _contractYearLabel(currentContract, contractData);
+        currentContract?['status']?.toString() == 'paid' ||
+        remainingAmount <= 0;
+    final currentContractYear = _contractYearLabel(
+      currentContract,
+      contractData,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -914,81 +1008,96 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Payment form badge
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isContract
-                          ? AppTheme.primaryColor.withAlpha(25)
-                          : AppTheme.successColor.withAlpha(25),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isContract ? Icons.receipt_long : Icons.school,
-                          size: 14,
-                          color: isContract ? AppTheme.primaryColor : AppTheme.successColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          paymentFormName.isNotEmpty
-                              ? paymentFormName
-                              : (isContract ? l.contractStudent : l.grantStudent),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isContract ? AppTheme.primaryColor : AppTheme.successColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (isContract) ...[
-                const SizedBox(height: 16),
-                _buildContractBars(
-                  total: totalAmount,
-                  paid: paidAmount,
-                  remaining: remainingAmount,
-                  textColor: textColor,
-                  subTextColor: subTextColor,
-                ),
-                const SizedBox(height: 12),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Payment form badge
                 Row(
                   children: [
-                    Icon(Icons.event_outlined, size: 14, color: subTextColor),
-                    const SizedBox(width: 5),
-                    Text(
-                      '${l.deadline}: ',
-                      style: TextStyle(fontSize: 12, color: subTextColor),
-                    ),
-                    Text(
-                      currentContractYear,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isContract
+                            ? AppTheme.primaryColor.withAlpha(25)
+                            : AppTheme.successColor.withAlpha(25),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isContract ? Icons.receipt_long : Icons.school,
+                            size: 14,
+                            color: isContract
+                                ? AppTheme.primaryColor
+                                : AppTheme.successColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            paymentFormName.isNotEmpty
+                                ? paymentFormName
+                                : (isContract
+                                      ? l.contractStudent
+                                      : l.grantStudent),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isContract
+                                  ? AppTheme.primaryColor
+                                  : AppTheme.successColor,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ] else ...[
-                const SizedBox(height: 12),
-                Text(
-                  paymentFormName.isNotEmpty ? paymentFormName : l.grantStudent,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: textColor,
+                if (isContract) ...[
+                  const SizedBox(height: 16),
+                  _buildContractBars(
+                    total: totalAmount,
+                    paid: paidAmount,
+                    remaining: remainingAmount,
+                    textColor: textColor,
+                    subTextColor: subTextColor,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.event_outlined, size: 14, color: subTextColor),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${l.deadline}: ',
+                        style: TextStyle(fontSize: 12, color: subTextColor),
+                      ),
+                      Text(
+                        currentContractYear,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    paymentFormName.isNotEmpty
+                        ? paymentFormName
+                        : l.grantStudent,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
         ),
         if (isContract && currentContract != null) ...[
           const SizedBox(height: 20),
@@ -1027,7 +1136,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: currentContractPaid
                               ? AppTheme.successColor.withAlpha(25)
@@ -1092,7 +1204,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final rows = [
       (l.contractAmount, total, ClinicTheme.blueOf(context)),
       (l.paidAmount, paid, ClinicTheme.greenOf(context)),
-      (l.unpaidAmount, remaining, remaining > 0 ? ClinicTheme.amberOf(context) : ClinicTheme.greenOf(context)),
+      (
+        l.unpaidAmount,
+        remaining,
+        remaining > 0
+            ? ClinicTheme.amberOf(context)
+            : ClinicTheme.greenOf(context),
+      ),
     ];
     return Column(
       children: [
@@ -1105,11 +1223,22 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: subTextColor)),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: subTextColor,
+                        ),
+                      ),
                     ),
                     Text(
                       '${_formatMoney(value)} ${context.l10n.currency}',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      ),
                     ),
                   ],
                 ),
@@ -1117,7 +1246,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(5),
                   child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: total > 0 ? (value / total).clamp(0.0, 1.0) : 0.0),
+                    tween: Tween(
+                      begin: 0,
+                      end: total > 0 ? (value / total).clamp(0.0, 1.0) : 0.0,
+                    ),
                     duration: const Duration(milliseconds: 900),
                     curve: Curves.easeOutCubic,
                     builder: (_, v, __) => LinearProgressIndicator(
@@ -1143,13 +1275,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     bool alignEnd = false,
   }) {
     return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: labelColor),
-        ),
+        Text(label, style: TextStyle(fontSize: 11, color: labelColor)),
         const SizedBox(height: 2),
         Text(
           value,
@@ -1203,11 +1333,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               const SizedBox(height: 3),
               Text(
-                AppLocalizations.of(context).pick(
-                  uz: 'to\'landi',
-                  ru: 'оплачено',
-                  en: 'paid',
-                ),
+                AppLocalizations.of(
+                  context,
+                ).pick(uz: 'to\'landi', ru: 'оплачено', en: 'paid'),
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
@@ -1249,8 +1377,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       return course.isEmpty || course == currentCourse;
     }
 
-    var candidates =
-        contracts.where((c) => matchesYear(c) && matchesCourse(c)).toList();
+    var candidates = contracts
+        .where((c) => matchesYear(c) && matchesCourse(c))
+        .toList();
     if (candidates.isEmpty) {
       candidates = contracts.where(matchesYear).toList();
     }
@@ -1291,7 +1420,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     Map<String, dynamic>? contract,
     Map<String, dynamic>? contractData,
   ) {
-    final value = contract?['education_year'] ?? contractData?['education_year'];
+    final value =
+        contract?['education_year'] ?? contractData?['education_year'];
     final text = value?.toString().trim() ?? '';
     return text.isEmpty ? '--' : text;
   }
@@ -1300,21 +1430,24 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     Map<String, dynamic>? contract,
     Map<String, dynamic>? contractData,
   ) {
-    final value = contract?['edu_year'] ??
+    final value =
+        contract?['edu_year'] ??
         contract?['education_year'] ??
         contractData?['education_year'];
     final text = value?.toString().trim() ?? '';
     return text.isEmpty ? '--' : text;
   }
 
-  Widget _buildContractRow(String label, String value, Color labelColor, Color valueColor) {
+  Widget _buildContractRow(
+    String label,
+    String value,
+    Color labelColor,
+    Color valueColor,
+  ) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 12, color: labelColor),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: labelColor)),
         Text(
           value,
           style: TextStyle(
@@ -1382,13 +1515,27 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     }
 
     final progress = isActive
-        ? 1.0 - (remaining.inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0)
+        ? 1.0 -
+              (remaining.inSeconds / end.difference(start).inSeconds).clamp(
+                0.0,
+                1.0,
+              )
         : 0.0;
 
     final gradientColors = isActive
-        ? [const Color(0xFF2E7D32), const Color(0xFF43A047), const Color(0xFF66BB6A)]
-        : [const Color(0xFFE65100), const Color(0xFFF57C00), const Color(0xFFFFA726)];
-    final shadowColor = isActive ? const Color(0xFF43A047) : const Color(0xFFF57C00);
+        ? [
+            const Color(0xFF2E7D32),
+            const Color(0xFF43A047),
+            const Color(0xFF66BB6A),
+          ]
+        : [
+            const Color(0xFFE65100),
+            const Color(0xFFF57C00),
+            const Color(0xFFFFA726),
+          ];
+    final shadowColor = isActive
+        ? const Color(0xFF43A047)
+        : const Color(0xFFF57C00);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1459,7 +1606,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         _buildBlinkingDot()
                       else
                         Container(
-                          width: 8, height: 8,
+                          width: 8,
+                          height: 8,
                           decoration: BoxDecoration(
                             color: Colors.white.withAlpha(200),
                             shape: BoxShape.circle,
@@ -1491,17 +1639,39 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.access_time_rounded, size: 16, color: Colors.white.withAlpha(200)),
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 16,
+                        color: Colors.white.withAlpha(200),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '$startTime–$endTime',
-                        style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withAlpha(230),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       if (room.isNotEmpty) ...[
                         const SizedBox(width: 10),
-                        Text('·', style: TextStyle(fontSize: 18, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                        Text(
+                          '·',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white.withAlpha(180),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500)),
+                        Text(
+                          room,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withAlpha(230),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -1513,7 +1683,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         value: progress,
                         minHeight: 5,
                         backgroundColor: Colors.white.withAlpha(40),
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.white,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1577,13 +1749,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     String dayLabel = '';
     if (dayDate != null) {
-      final diff = dayDate.difference(DateTime(
-        _now.year, _now.month, _now.day,
-      )).inDays;
+      final diff = dayDate
+          .difference(DateTime(_now.year, _now.month, _now.day))
+          .inDays;
       if (diff == 1) {
-        dayLabel = AppLocalizations.current.pick(uz: 'Ertaga', ru: 'Завтра', en: 'Tomorrow');
+        dayLabel = AppLocalizations.current.pick(
+          uz: 'Ertaga',
+          ru: 'Завтра',
+          en: 'Tomorrow',
+        );
       } else {
-        dayLabel = '${_weekdayName(dayDate.weekday)}, ${DateFormat('d-MMMM').format(dayDate)}';
+        dayLabel =
+            '${_weekdayName(dayDate.weekday)}, ${DateFormat('d-MMMM').format(dayDate)}';
       }
     }
 
@@ -1639,17 +1816,39 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.access_time, size: 16, color: Colors.white.withAlpha(200)),
+                Icon(
+                  Icons.access_time,
+                  size: 16,
+                  color: Colors.white.withAlpha(200),
+                ),
                 const SizedBox(width: 4),
                 Text(
                   '$startTime–$endTime',
-                  style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withAlpha(220),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 if (room.isNotEmpty) ...[
                   const SizedBox(width: 12),
-                  Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                  Text(
+                    '·',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white.withAlpha(180),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(width: 6),
-                  Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+                  Text(
+                    room,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withAlpha(220),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -1666,7 +1865,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   // ── GPA + O'rtacha cards ─────────────────────────────
-  Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
+  Widget _buildGpaRow(
+    Map<String, dynamic>? data,
+    Map<String, dynamic>? profile,
+    AppLocalizations l,
+  ) {
     final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
     final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
 
@@ -1736,7 +1939,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       decoration: BoxDecoration(
         color: accent.withValues(alpha: dark ? 0.20 : 0.10),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withValues(alpha: dark ? 0.55 : 0.35), width: 1.2),
+        border: Border.all(
+          color: accent.withValues(alpha: dark ? 0.55 : 0.35),
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1761,9 +1967,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      trend > 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                      trend > 0
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded,
                       size: 10,
-                      color: trend > 0 ? ClinicTheme.greenOf(context) : AppTheme.errorColor,
+                      color: trend > 0
+                          ? ClinicTheme.greenOf(context)
+                          : AppTheme.errorColor,
                     ),
                     const SizedBox(width: 1),
                     Text(
@@ -1771,7 +1981,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: trend > 0 ? ClinicTheme.greenOf(context) : AppTheme.errorColor,
+                        color: trend > 0
+                            ? ClinicTheme.greenOf(context)
+                            : AppTheme.errorColor,
                       ),
                     ),
                   ],
@@ -1796,7 +2008,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(width: 4),
               Text(
                 maxLabel,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _muted),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: _muted,
+                ),
               ),
             ],
           ),
@@ -1839,7 +2055,8 @@ class _ContractDonutPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final strokeWidth = size.width * 0.12;
-    final rect = Offset(strokeWidth / 2, strokeWidth / 2) &
+    final rect =
+        Offset(strokeWidth / 2, strokeWidth / 2) &
         Size(size.width - strokeWidth, size.height - strokeWidth);
     final start = -math.pi / 2;
     final clamped = progress.clamp(0.0, 1.0).toDouble();
@@ -1899,7 +2116,8 @@ class _EcgLine extends StatefulWidget {
   State<_EcgLine> createState() => _EcgLineState();
 }
 
-class _EcgLineState extends State<_EcgLine> with SingleTickerProviderStateMixin {
+class _EcgLineState extends State<_EcgLine>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
@@ -1941,15 +2159,22 @@ class _EcgLinePainter extends CustomPainter {
   // from 0 (top) to 1 (bottom) with the baseline at 0.58: small P wave,
   // a sharp QRS spike, then a rounded T wave.
   static const List<Offset> _beat = [
-    Offset(0.00, 0.58), Offset(0.10, 0.58),
-    Offset(0.13, 0.55), Offset(0.16, 0.47), Offset(0.19, 0.55), Offset(0.22, 0.58),
+    Offset(0.00, 0.58),
+    Offset(0.10, 0.58),
+    Offset(0.13, 0.55),
+    Offset(0.16, 0.47),
+    Offset(0.19, 0.55),
+    Offset(0.22, 0.58),
     Offset(0.34, 0.58),
     Offset(0.37, 0.67),
     Offset(0.40, 0.05),
     Offset(0.43, 0.90),
     Offset(0.47, 0.58),
     Offset(0.58, 0.58),
-    Offset(0.63, 0.52), Offset(0.69, 0.38), Offset(0.75, 0.52), Offset(0.80, 0.58),
+    Offset(0.63, 0.52),
+    Offset(0.69, 0.38),
+    Offset(0.75, 0.52),
+    Offset(0.80, 0.58),
     Offset(1.00, 0.58),
   ];
   static const int _beats = 3;

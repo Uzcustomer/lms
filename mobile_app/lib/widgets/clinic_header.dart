@@ -75,10 +75,19 @@ class ClinicTheme {
 }
 
 /// Soft-square 38×38 icon button used in clinical headers.
+///
+/// [onHeader] styles it for the tinted [ClinicHeader] - a translucent
+/// white well with a white glyph - instead of the page surface.
 class ClinicIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const ClinicIconButton({super.key, required this.icon, required this.onTap});
+  final bool onHeader;
+  const ClinicIconButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.onHeader = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -87,20 +96,24 @@ class ClinicIconButton extends StatelessWidget {
       width: 38,
       height: 38,
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkElevated : const Color(0xFFF1F5F9),
+        color: onHeader
+            ? Colors.white.withValues(alpha: 0.18)
+            : (isDark ? AppTheme.darkElevated : const Color(0xFFF1F5F9)),
         borderRadius: BorderRadius.circular(11),
       ),
       child: IconButton(
         padding: EdgeInsets.zero,
-        icon: Icon(icon, color: ClinicTheme.inkOf(context), size: 18),
+        icon: Icon(icon, color: onHeader ? Colors.white : ClinicTheme.inkOf(context), size: 18),
         onPressed: onTap,
       ),
     );
   }
 }
 
-/// White clinical header with a hairline bottom border, an optional back
-/// button, a two-line title and trailing action widgets.
+/// Page header painted in the colour scheme the student picked, with an
+/// optional back button, a two-line title and trailing action widgets.
+/// Everything on it is white, so pass [onHeader] to any icon button and
+/// bell placed in [actions].
 class ClinicHeader extends StatelessWidget {
   final String? overline;
   final String title;
@@ -118,21 +131,26 @@ class ClinicHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusBarH = MediaQuery.of(context).padding.top;
-    final ink = ClinicTheme.inkOf(context);
-    final muted = ClinicTheme.mutedOf(context);
+    const ink = Colors.white;
+    final muted = Colors.white.withValues(alpha: 0.75);
 
     return Container(
       padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
       decoration: BoxDecoration(
-        color: ClinicTheme.surfaceOf(context),
-        border: Border(
-          bottom: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ClinicTheme.heroGradientOf(context),
         ),
       ),
       child: Row(
         children: [
           if (onBack != null) ...[
-            ClinicIconButton(icon: Icons.arrow_back_rounded, onTap: onBack!),
+            ClinicIconButton(
+              icon: Icons.arrow_back_rounded,
+              onTap: onBack!,
+              onHeader: true,
+            ),
             const SizedBox(width: 11),
           ],
           Expanded(

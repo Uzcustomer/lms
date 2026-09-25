@@ -50,9 +50,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   static const _calmGreen = Color(0xFF047857);
   static const _calmLine = Color(0xFFE2E8F0);
 
-  Color get _ink => Theme.of(context).brightness == Brightness.dark
-      ? Colors.white
-      : _calmInk;
+  Color get _ink =>
+      Theme.of(context).brightness == Brightness.dark ? Colors.white : _calmInk;
   Color get _muted => Theme.of(context).brightness == Brightness.dark
       ? AppTheme.darkTextSecondary
       : _calmMuted;
@@ -64,14 +63,18 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       : _calmLine;
 
   List<BoxShadow> get _cardShadow => [
-        BoxShadow(
-          color: const Color(0xFF0F172A).withOpacity(0.14),
-          blurRadius: 5,
-          offset: const Offset(0, 2),
-        ),
-      ];
+    BoxShadow(
+      color: const Color(0xFF0F172A).withOpacity(0.14),
+      blurRadius: 5,
+      offset: const Offset(0, 2),
+    ),
+  ];
 
-  Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 14}) {
+  Widget _calmCard({
+    required Widget child,
+    EdgeInsets? padding,
+    double radius = 14,
+  }) {
     return Container(
       width: double.infinity,
       padding: padding,
@@ -112,25 +115,31 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   /// Bright accent colour for a lesson type.
   /// One colour per weekday, so the day strip reads at a glance.
   Color _weekdayColor(int weekday) => switch (weekday) {
-        DateTime.monday => ClinicTheme.tealOf(context),
-        DateTime.tuesday => ClinicTheme.blueOf(context),
-        DateTime.wednesday => ClinicTheme.violetOf(context),
-        DateTime.thursday => ClinicTheme.amberOf(context),
-        DateTime.friday => ClinicTheme.redOf(context),
-        DateTime.saturday => ClinicTheme.greenOf(context),
-        _ => ClinicTheme.mutedOf(context),
-      };
+    DateTime.monday => ClinicTheme.tealOf(context),
+    DateTime.tuesday => ClinicTheme.blueOf(context),
+    DateTime.wednesday => ClinicTheme.violetOf(context),
+    DateTime.thursday => ClinicTheme.amberOf(context),
+    DateTime.friday => ClinicTheme.redOf(context),
+    DateTime.saturday => ClinicTheme.greenOf(context),
+    _ => ClinicTheme.mutedOf(context),
+  };
 
   /// Lesson card washed in its training type's colour - lectures blue,
   /// practicals green, ... - with a firmer ring while the lesson is on.
-  Widget _typeCard({required Color accent, required bool current, required Widget child}) {
+  Widget _typeCard({
+    required Color accent,
+    required bool current,
+    required Widget child,
+  }) {
     final dark = ClinicTheme.isDark(context);
     return Container(
       decoration: BoxDecoration(
         color: accent.withValues(alpha: dark ? 0.20 : 0.10),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: current ? ClinicTheme.greenOf(context) : accent.withValues(alpha: dark ? 0.55 : 0.40),
+          color: current
+              ? ClinicTheme.greenOf(context)
+              : accent.withValues(alpha: dark ? 0.55 : 0.40),
           width: current ? 1.8 : 1.2,
         ),
         boxShadow: current ? _cardShadow : null,
@@ -141,7 +150,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
   Color _typeColor(String? type) {
     final t = (type ?? '').toLowerCase();
-    if (t.contains("ma'ruza") || t.contains('maruza')) return const Color(0xFF2563EB);
+    if (t.contains("ma'ruza") || t.contains('maruza'))
+      return const Color(0xFF2563EB);
     if (t.contains('oski')) return const Color(0xFFEA580C);
     if (t.contains('seminar')) return const Color(0xFF7C3AED);
     if (t.contains('amaliy')) return const Color(0xFF059669);
@@ -171,8 +181,12 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     }
 
     if (selectedWeek != null) {
-      final startDate = DateTime.tryParse(selectedWeek['start_date']?.toString() ?? '');
-      final endDate = DateTime.tryParse(selectedWeek['end_date']?.toString() ?? '');
+      final startDate = DateTime.tryParse(
+        selectedWeek['start_date']?.toString() ?? '',
+      );
+      final endDate = DateTime.tryParse(
+        selectedWeek['end_date']?.toString() ?? '',
+      );
       if (startDate != null && endDate != null) {
         final days = <DateTime>[];
         var current = startDate;
@@ -189,7 +203,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     return List.generate(6, (i) => monday.add(Duration(days: i)));
   }
 
-  List<dynamic> _getLessonsForDate(DateTime date, List<dynamic> dateSchedule, Map<String, dynamic> days) {
+  List<dynamic> _getLessonsForDate(
+    DateTime date,
+    List<dynamic> dateSchedule,
+    Map<String, dynamic> days,
+  ) {
     final dateStr =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
@@ -215,7 +233,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   int _findCurrentWeekIndex(List<dynamic> weeks, dynamic selectedWeekId) {
     final selectedStr = selectedWeekId?.toString();
     for (int i = 0; i < weeks.length; i++) {
-      if (weeks[i] is Map<String, dynamic> && weeks[i]['id']?.toString() == selectedStr) {
+      if (weeks[i] is Map<String, dynamic> &&
+          weeks[i]['id']?.toString() == selectedStr) {
         return i;
       }
     }
@@ -250,7 +269,12 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     final h = minutes ~/ 60;
     final m = minutes % 60;
     if (h > 0 && m > 0) return AppLocalizations.current.hoursMinutes(h, m);
-    if (h > 0) return AppLocalizations.current.pick(uz: '$h soat', ru: '$h ч', en: '$h h');
+    if (h > 0)
+      return AppLocalizations.current.pick(
+        uz: '$h soat',
+        ru: '$h ч',
+        en: '$h h',
+      );
     return AppLocalizations.current.hoursMinutes(0, m);
   }
 
@@ -287,8 +311,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 children: [
                   Icon(Icons.calendar_today_outlined, size: 64, color: _muted),
                   const SizedBox(height: 16),
-                  Text(provider.error ?? l.scheduleNotFound,
-                      style: TextStyle(color: _ink)),
+                  Text(
+                    provider.error ?? l.scheduleNotFound,
+                    style: TextStyle(color: _ink),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => provider.loadSchedule(),
@@ -300,7 +326,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           }
 
           final daysRaw = schedule['days'];
-          final days = daysRaw is Map<String, dynamic> ? daysRaw : <String, dynamic>{};
+          final days = daysRaw is Map<String, dynamic>
+              ? daysRaw
+              : <String, dynamic>{};
           final dateSchedule = schedule['schedule'] as List<dynamic>? ?? [];
           final weeks = schedule['weeks'] as List<dynamic>? ?? [];
           final selectedWeekId = schedule['selected_week_id'];
@@ -309,15 +337,22 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           final currentWeekIndex = _findCurrentWeekIndex(weeks, selectedWeekId);
           final activeIndex = _getInitialSelectedIndex(weekDays);
           final selectedDate = weekDays[activeIndex];
-          final selectedLessons =
-              List<dynamic>.from(_getLessonsForDate(selectedDate, dateSchedule, days));
+          final selectedLessons = List<dynamic>.from(
+            _getLessonsForDate(selectedDate, dateSchedule, days),
+          );
           // Sort lessons by start time so the timeline reads top-to-bottom.
           selectedLessons.sort((a, b) {
-            final sa = _parseMinutes(
-                    (a is Map ? a['lesson_pair_start_time'] : null)?.toString() ?? '') ??
+            final sa =
+                _parseMinutes(
+                  (a is Map ? a['lesson_pair_start_time'] : null)?.toString() ??
+                      '',
+                ) ??
                 0;
-            final sb = _parseMinutes(
-                    (b is Map ? b['lesson_pair_start_time'] : null)?.toString() ?? '') ??
+            final sb =
+                _parseMinutes(
+                  (b is Map ? b['lesson_pair_start_time'] : null)?.toString() ??
+                      '',
+                ) ??
                 0;
             return sa.compareTo(sb);
           });
@@ -383,15 +418,22 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     return Container(
       padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border(bottom: BorderSide(color: _divider, width: 1)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ClinicTheme.heroGradientOf(context),
+        ),
       ),
       child: Row(
         children: [
           _headerIconButton(
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: Icon(Icons.arrow_back_rounded, color: _ink, size: 20),
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               onPressed: () => StudentHomeScreen.switchToHome(context),
             ),
           ),
@@ -406,23 +448,37 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
-                    color: _muted,
+                    color: Colors.white.withValues(alpha: 0.75),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  context.l10n.pick(uz: 'Haftalik dars jadvali', ru: 'Расписание на неделю', en: 'Weekly timetable'),
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
+                  context.l10n.pick(
+                    uz: 'Haftalik dars jadvali',
+                    ru: 'Расписание на неделю',
+                    en: 'Weekly timetable',
+                  ),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),
           ),
-          _headerIconButton(child: NotificationBell(iconColor: _ink, iconSize: 18)),
+          _headerIconButton(
+            child: NotificationBell(iconColor: Colors.white, iconSize: 18),
+          ),
           const SizedBox(width: 8),
           _headerIconButton(
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: Icon(Icons.settings_outlined, color: _ink, size: 18),
+              icon: Icon(
+                Icons.settings_outlined,
+                color: Colors.white,
+                size: 18,
+              ),
               onPressed: () => showSettingsSheet(context),
             ),
           ),
@@ -432,12 +488,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   }
 
   Widget _headerIconButton({required Widget child}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 38,
       height: 38,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(11),
       ),
       child: child,
@@ -479,7 +534,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     child: SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: ClinicTheme.tealOf(context)),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: ClinicTheme.tealOf(context),
+                      ),
                     ),
                   ),
                 Flexible(
@@ -545,7 +603,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         final day = entry.value;
         final isToday = _isSameDay(day, DateTime.now());
         final isSelected = i == activeIndex;
-        final hasLessons = _getLessonsForDate(day, dateSchedule, days).isNotEmpty;
+        final hasLessons = _getLessonsForDate(
+          day,
+          dateSchedule,
+          days,
+        ).isNotEmpty;
         final shortName = _weekdayShort[day.weekday] ?? '';
         final dayColor = _weekdayColor(day.weekday);
 
@@ -561,7 +623,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     : dayColor.withValues(alpha: isDark ? 0.16 : 0.10),
                 borderRadius: BorderRadius.circular(13),
                 border: Border.all(
-                  color: isSelected || isToday ? dayColor : dayColor.withValues(alpha: 0.35),
+                  color: isSelected || isToday
+                      ? dayColor
+                      : dayColor.withValues(alpha: 0.35),
                   width: isToday && !isSelected ? 1.8 : 1,
                 ),
                 boxShadow: isSelected ? _cardShadow : null,
@@ -575,7 +639,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                       fontSize: 9.5,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.3,
-                      color: isSelected ? Colors.white.withValues(alpha: 0.9) : dayColor,
+                      color: isSelected
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : dayColor,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -630,7 +696,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 color: ClinicTheme.tealFillOf(context),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.calendar_month_rounded, size: 20, color: Colors.white),
+              child: const Icon(
+                Icons.calendar_month_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -640,14 +710,29 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   Text(
                     '$dayName, $dateStr',
                     style: TextStyle(
-                        fontSize: 13.5, fontWeight: FontWeight.w800, color: _ink),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     lessons.isEmpty
-                        ? context.l10n.pick(uz: 'Dars yo\'q', ru: 'Занятий нет', en: 'No lessons')
-                        : context.l10n.pick(uz: '${lessons.length} ta para · ${_totalDuration(lessons)}', ru: '${lessons.length} пар · ${_totalDuration(lessons)}', en: '${lessons.length} pairs · ${_totalDuration(lessons)}'),
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: _muted),
+                        ? context.l10n.pick(
+                            uz: 'Dars yo\'q',
+                            ru: 'Занятий нет',
+                            en: 'No lessons',
+                          )
+                        : context.l10n.pick(
+                            uz: '${lessons.length} ta para · ${_totalDuration(lessons)}',
+                            ru: '${lessons.length} пар · ${_totalDuration(lessons)}',
+                            en: '${lessons.length} pairs · ${_totalDuration(lessons)}',
+                          ),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                    ),
                   ),
                 ],
               ),
@@ -666,7 +751,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                       width: 6,
                       height: 6,
                       decoration: const BoxDecoration(
-                          color: Colors.white, shape: BoxShape.circle),
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 5),
                     const Text(
@@ -693,11 +780,19 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.event_busy_outlined, size: 46, color: ClinicTheme.faintOf(context)),
+            Icon(
+              Icons.event_busy_outlined,
+              size: 46,
+              color: ClinicTheme.faintOf(context),
+            ),
             const SizedBox(height: 12),
             Text(
               l.noLessons,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _muted),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _muted,
+              ),
             ),
           ],
         ),
@@ -719,7 +814,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     final room = lesson['auditorium_name']?.toString();
     final trainingType = lesson['training_type_name']?.toString();
 
-    final startShort = startTime.length >= 5 ? startTime.substring(0, 5) : startTime;
+    final startShort = startTime.length >= 5
+        ? startTime.substring(0, 5)
+        : startTime;
     final endShort = endTime.length >= 5 ? endTime.substring(0, 5) : endTime;
 
     // Split a compound subject name into a title and a subtitle line.
@@ -752,7 +849,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             children: [
               if (trainingType != null && trainingType.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: accent,
                     borderRadius: BorderRadius.circular(7),
@@ -781,7 +881,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           const SizedBox(height: 8),
           Text(
             title,
-            style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: _ink),
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w800,
+              color: _ink,
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -789,7 +893,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: _muted),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: _muted,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -803,21 +911,38 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 Flexible(
                   child: Text(
                     room,
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: _muted),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: _muted,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
-              if (room != null && room.isNotEmpty && teacherName != null && teacherName.isNotEmpty)
-                Text(' · ', style: TextStyle(fontSize: 11.5, color: ClinicTheme.faintOf(context))),
+              if (room != null &&
+                  room.isNotEmpty &&
+                  teacherName != null &&
+                  teacherName.isNotEmpty)
+                Text(
+                  ' · ',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: ClinicTheme.faintOf(context),
+                  ),
+                ),
               if (teacherName != null && teacherName.isNotEmpty) ...[
                 Icon(Icons.person_outline_rounded, size: 13, color: _muted),
                 const SizedBox(width: 3),
                 Flexible(
                   child: Text(
                     teacherName,
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: _muted),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: _muted,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -843,12 +968,19 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   Text(
                     startShort,
                     style: TextStyle(
-                        fontSize: 12.5, fontWeight: FontWeight.w800, color: _ink),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
                   ),
                   const SizedBox(height: 1),
                   Text(
                     endShort,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: ClinicTheme.faintOf(context)),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: ClinicTheme.faintOf(context),
+                    ),
                   ),
                 ],
               ),
@@ -864,7 +996,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 height: isCurrent ? 14 : 12,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isCurrent ? ClinicTheme.greenFillOf(context) : _surface,
+                  color: isCurrent
+                      ? ClinicTheme.greenFillOf(context)
+                      : _surface,
                   border: Border.all(
                     color: isCurrent ? ClinicTheme.greenOf(context) : accent,
                     width: isCurrent ? 0 : 2.4,
@@ -872,7 +1006,9 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   boxShadow: isCurrent
                       ? [
                           BoxShadow(
-                            color: ClinicTheme.greenOf(context).withOpacity(0.4),
+                            color: ClinicTheme.greenOf(
+                              context,
+                            ).withOpacity(0.4),
                             blurRadius: 6,
                             spreadRadius: 1,
                           ),

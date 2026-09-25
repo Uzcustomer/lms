@@ -284,7 +284,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
             ),
             onBack: () => Navigator.pop(context),
             actions: [
-              ClinicIconButton(icon: Icons.refresh_rounded, onTap: _load),
+              ClinicIconButton(icon: Icons.refresh_rounded, onTap: _load, onHeader: true),
             ],
           ),
           Expanded(

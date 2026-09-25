@@ -179,6 +179,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             onBack: () => StudentHomeScreen.switchToHome(context),
             actions: [
               ClinicIconButton(
+                onHeader: true,
                 icon: Icons.settings_outlined,
                 onTap: () => showSettingsSheet(context),
               ),

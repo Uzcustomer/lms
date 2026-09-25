@@ -7,6 +7,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/notification_bell.dart';
 import 'student_home_screen.dart';
+import '../../widgets/clinic_header.dart';
 
 class StudentScheduleScreen extends StatefulWidget {
   const StudentScheduleScreen({super.key});
@@ -449,7 +450,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     child: SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: _calmTeal),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: ClinicTheme.tealOf(context)),
                     ),
                   ),
                 Flexible(
@@ -664,7 +665,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.event_busy_outlined, size: 46, color: _calmFaint),
+            Icon(Icons.event_busy_outlined, size: 46, color: ClinicTheme.faintOf(context)),
             const SizedBox(height: 12),
             Text(
               l.noLessons,
@@ -744,7 +745,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   fontSize: 9.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.4,
-                  color: _calmFaint,
+                  color: ClinicTheme.faintOf(context),
                 ),
               ),
             ],
@@ -781,7 +782,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 ),
               ],
               if (room != null && room.isNotEmpty && teacherName != null && teacherName.isNotEmpty)
-                Text(' · ', style: TextStyle(fontSize: 11.5, color: _calmFaint)),
+                Text(' · ', style: TextStyle(fontSize: 11.5, color: ClinicTheme.faintOf(context))),
               if (teacherName != null && teacherName.isNotEmpty) ...[
                 Icon(Icons.person_outline_rounded, size: 13, color: _muted),
                 const SizedBox(width: 3),
@@ -819,7 +820,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   const SizedBox(height: 1),
                   Text(
                     endShort,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _calmFaint),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: ClinicTheme.faintOf(context)),
                   ),
                 ],
               ),

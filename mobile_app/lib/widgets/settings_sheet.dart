@@ -4,6 +4,7 @@ import '../config/theme.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/settings_provider.dart';
 import '../services/biometric_service.dart';
+import '../widgets/clinic_header.dart';
 
 /// Shared settings bottom sheet — theme + language.
 /// Used by the settings icon in every screen header.
@@ -271,8 +272,8 @@ class _BiometricTileState extends State<_BiometricTile> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.fingerprint_rounded,
-                  color: Color(0xFF0D9488), size: 24),
+              Icon(Icons.fingerprint_rounded,
+                  color: ClinicTheme.tealOf(context), size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

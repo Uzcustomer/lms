@@ -111,7 +111,7 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
             child: _isLoading
                 ? const LoadingWidget()
                 : _error != null
-                    ? Center(child: Text(_error!, style: const TextStyle(color: Color(0xFFBE123C))))
+                    ? Center(child: Text(_error!, style: TextStyle(color: ClinicTheme.redOf(context))))
                     : _excuse == null
                         ? Center(child: Text(l.noData))
                         : RefreshIndicator(

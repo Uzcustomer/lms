@@ -322,7 +322,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: const Color(0xFFBE123C).withAlpha(15),
-                  border: Border.all(color: const Color(0xFFBE123C).withAlpha(60)),
+                  border: Border.all(color: ClinicTheme.redOf(context).withAlpha(60)),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: isCancelling
@@ -339,7 +339,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFFBE123C),
+                          color: ClinicTheme.redOf(context),
                         ),
                       ),
               ),
@@ -505,11 +505,11 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                     decoration: BoxDecoration(
                       color: const Color(0xFFBE123C).withAlpha(15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFBE123C).withAlpha(40)),
+                      border: Border.all(color: ClinicTheme.redOf(context).withAlpha(40)),
                     ),
                     child: Text(
                       'Sabab: ${club['reject_reason']}',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFFBE123C)),
+                      style: TextStyle(fontSize: 11, color: ClinicTheme.redOf(context)),
                     ),
                   ),
                 ],
@@ -530,7 +530,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFBE123C).withAlpha(15),
-                          border: Border.all(color: const Color(0xFFBE123C).withAlpha(60)),
+                          border: Border.all(color: ClinicTheme.redOf(context).withAlpha(60)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: _cancellingClub == club['club_name']
@@ -547,7 +547,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFFBE123C),
+                                  color: ClinicTheme.redOf(context),
                                 ),
                               ),
                       ),

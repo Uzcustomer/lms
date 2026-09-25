@@ -76,7 +76,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFBE123C), size: 48),
+            icon: Icon(Icons.warning_amber_rounded, color: ClinicTheme.redOf(context), size: 48),
             title: Text(
               context.l10n.pick(uz: 'Muddat tugagan', ru: 'Срок истёк', en: 'Deadline passed'),
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
@@ -702,17 +702,17 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF047857).withAlpha(15),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF047857).withAlpha(50)),
+                  border: Border.all(color: ClinicTheme.greenOf(context).withAlpha(50)),
                 ),
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 20, color: const Color(0xFF047857)),
+                    Icon(Icons.check_circle_outline, size: 20, color: ClinicTheme.greenOf(context)),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         l.noMissedAssessments,
-                        style: TextStyle(fontSize: 13, color: const Color(0xFF047857)),
+                        style: TextStyle(fontSize: 13, color: ClinicTheme.greenOf(context)),
                       ),
                     ),
                   ],
@@ -759,13 +759,13 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFBE123C).withAlpha(25),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFBE123C).withAlpha(80)),
+                  border: Border.all(color: ClinicTheme.redOf(context).withAlpha(80)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline_rounded, color: Color(0xFFBE123C), size: 20),
+                    Icon(Icons.error_outline_rounded, color: ClinicTheme.redOf(context), size: 20),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(_submitError!, style: const TextStyle(color: Color(0xFFBE123C), fontSize: 13, fontWeight: FontWeight.w600))),
+                    Expanded(child: Text(_submitError!, style: TextStyle(color: ClinicTheme.redOf(context), fontSize: 13, fontWeight: FontWeight.w600))),
                   ],
                 ),
               ),
@@ -843,7 +843,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.assignment_late, size: 20, color: const Color(0xFFB45309)),
+              Icon(Icons.assignment_late, size: 20, color: ClinicTheme.amberOf(context)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -948,7 +948,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               Text(originalDate, style: TextStyle(fontSize: 12, color: subColor)),
               if (isFuture) ...[
                 const SizedBox(width: 6),
-                Icon(Icons.info_outline, size: 13, color: const Color(0xFFB45309)),
+                Icon(Icons.info_outline, size: 13, color: ClinicTheme.amberOf(context)),
               ],
             ],
           ),
@@ -957,7 +957,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 context.l10n.pick(uz: 'Joriy nazoratdan keyingi test kunlari', ru: 'Дни тестов после текущего контроля', en: 'Test days after the midterm'),
-                style: TextStyle(fontSize: 11, color: const Color(0xFFB45309)),
+                style: TextStyle(fontSize: 11, color: ClinicTheme.amberOf(context)),
               ),
             ),
           const SizedBox(height: 8),

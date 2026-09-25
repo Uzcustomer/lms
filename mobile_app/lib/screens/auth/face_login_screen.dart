@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../l10n/app_localizations.dart';
+import '../../widgets/clinic_header.dart';
 
 class FaceLoginScreen extends StatefulWidget {
   final String login;
@@ -231,14 +232,14 @@ class _FaceLoginScreenState extends State<FaceLoginScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline,
-                              color: Color(0xFFB91C1C), size: 16),
+                          Icon(Icons.error_outline,
+                              color: ClinicTheme.redOf(context), size: 16),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _error!,
-                              style: const TextStyle(
-                                color: Color(0xFFB91C1C),
+                              style: TextStyle(
+                                color: ClinicTheme.redOf(context),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),

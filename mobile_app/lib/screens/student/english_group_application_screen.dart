@@ -798,7 +798,7 @@ class _InputField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFF0D9488), width: 1.4),
+              borderSide: BorderSide(color: ClinicTheme.tealOf(context), width: 1.4),
             ),
           ),
         ),
@@ -849,7 +849,7 @@ class _DropdownField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFF0D9488), width: 1.4),
+              borderSide: BorderSide(color: ClinicTheme.tealOf(context), width: 1.4),
             ),
           ),
         ),
@@ -1018,8 +1018,8 @@ class _DangerBox extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: Color(0xFFB91C1C),
+        style: TextStyle(
+          color: ClinicTheme.redOf(context),
           fontSize: 12.5,
           fontWeight: FontWeight.w700,
         ),

@@ -210,7 +210,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
               if (!hasBeacon)
                 Tooltip(
                   message: context.l10n.pick(uz: 'Bu xona uchun beacon sozlanmagan', ru: 'Для этой аудитории маяк не настроен', en: 'No beacon configured for this room'),
-                  child: Icon(Icons.bluetooth_disabled, size: 18, color: const Color(0xFFB45309)),
+                  child: Icon(Icons.bluetooth_disabled, size: 18, color: ClinicTheme.amberOf(context)),
                 ),
             ],
           ),
@@ -313,7 +313,7 @@ class _StartDialogState extends State<_StartDialog> {
             const SizedBox(height: 12),
             Text( 
               context.l10n.pick(uz: 'Diqqat: bu xonada beacon sozlanmagan — talabalar tasdiqlay olmaydi, faqat qo\'lda belgilash mumkin.', ru: 'Внимание: в этой аудитории маяк не настроен — студенты не смогут подтвердить, только ручная отметка.', en: 'Note: no beacon is configured for this room — students cannot confirm, only manual marking.'),
-              style: TextStyle(color: Color(0xFFB45309), fontSize: 12.5),
+              style: TextStyle(color: ClinicTheme.amberOf(context), fontSize: 12.5),
             ),
           ],
           const SizedBox(height: 12),

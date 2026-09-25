@@ -415,12 +415,12 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFBE123C).withAlpha(15),
-                                  border: Border.all(color: const Color(0xFFBE123C).withAlpha(60)),
+                                  border: Border.all(color: ClinicTheme.redOf(context).withAlpha(60)),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   _submitError!,
-                                  style: const TextStyle(fontSize: 12, color: Color(0xFFBE123C)),
+                                  style: TextStyle(fontSize: 12, color: ClinicTheme.redOf(context)),
                                 ),
                               ),
                             ],

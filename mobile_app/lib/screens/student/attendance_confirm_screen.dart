@@ -310,7 +310,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
           if (recording)
             Row(
               children: [
-                const Icon(Icons.fiber_manual_record, color: Color(0xFFBE123C), size: 18),
+                Icon(Icons.fiber_manual_record, color: ClinicTheme.redOf(context), size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -519,7 +519,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            const Icon(Icons.bluetooth_disabled, color: Color(0xFFB45309)),
+            Icon(Icons.bluetooth_disabled, color: ClinicTheme.amberOf(context)),
             const SizedBox(width: 8),
             Expanded(
               child: Text(text,

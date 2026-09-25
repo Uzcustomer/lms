@@ -194,16 +194,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFDC2626).withOpacity(0.08),
                               border: Border.all(
-                                  color: const Color(0xFFDC2626)
+                                  color: ClinicTheme.redOf(context)
                                       .withOpacity(0.25)),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
                               auth.errorMessage!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFFB91C1C),
+                                color: ClinicTheme.redOf(context),
                               ),
                             ),
                           ),
@@ -370,9 +370,9 @@ class _LoginScreenState extends State<LoginScreen> {
       fontWeight: FontWeight.w500,
       color: const Color(0xFF0F1B3D).withOpacity(0.35),
     ),
-    errorStyle: const TextStyle(
+    errorStyle: TextStyle(
       fontSize: 11,
-      color: Color(0xFFB91C1C),
+      color: const Color(0xFFBE123C),
       height: 1.2,
     ),
   );

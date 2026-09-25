@@ -578,9 +578,9 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                                   Text(
                                     debt['active_status']?.toString() ??
                                         l.pick(uz: 'Ariza mavjud', ru: 'Заявка уже есть', en: 'Application exists'),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 11,
-                                      color: Color(0xFFB45309),
+                                      color: ClinicTheme.amberOf(context),
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -1109,8 +1109,8 @@ class _RetakeJournalCard extends StatelessWidget {
                         Text(
                           '${context.l10n.pick(uz: 'Urinish', ru: 'Попытка', en: 'Attempt')}: ${mustaqil['attempt_count'] ?? 0}/${mustaqil['max_attempts'] ?? 3}. '
                           '${context.l10n.pick(uz: '60+ baho olinsa qayta yuklash yopiladi.', ru: 'При оценке 60+ повторная загрузка закрывается.', en: 'Re-upload closes once a grade of 60+ is given.')}',
-                          style: const TextStyle(
-                            color: Color(0xFFB45309),
+                          style: TextStyle(
+                            color: ClinicTheme.amberOf(context),
                             fontSize: 10.5,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1391,7 +1391,7 @@ class _ApplicationRow extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Sabab: ${app['rejection_reason']}',
-              style: const TextStyle(color: Color(0xFFBE123C), fontSize: 11),
+              style: TextStyle(color: ClinicTheme.redOf(context), fontSize: 11),
             ),
           ],
         ],
@@ -1735,7 +1735,7 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.wifi_off_rounded, color: Color(0xFFBE123C), size: 42),
+            Icon(Icons.wifi_off_rounded, color: ClinicTheme.redOf(context), size: 42),
             const SizedBox(height: 10),
             Text(
               message,

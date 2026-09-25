@@ -635,8 +635,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           const SizedBox(width: 12),
           Text(
             '$grade',
-            style: const TextStyle(
-                fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF15803D)),
+            style: TextStyle(
+                fontSize: 26, fontWeight: FontWeight.w900, color: ClinicTheme.greenOf(context)),
           ),
         ],
       ),
@@ -755,7 +755,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: _calmFaint,
+                          color: ClinicTheme.faintOf(context),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -779,7 +779,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
-                          color: _calmFaint)),
+                          color: ClinicTheme.faintOf(context))),
                 ],
               ),
             ],
@@ -906,7 +906,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(hasSubmission ? Icons.cloud_done_rounded : Icons.cloud_upload_rounded,
-                color: _calmTeal, size: 18),
+                color: ClinicTheme.tealOf(context), size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1740,7 +1740,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
       padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
         children: [
-          Icon(Icons.event_outlined, size: 16, color: _calmFaint),
+          Icon(Icons.event_outlined, size: 16, color: ClinicTheme.faintOf(context)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

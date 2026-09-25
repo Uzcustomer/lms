@@ -193,8 +193,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 ),
                 child: IconButton(
                   padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.logout_rounded,
-                      color: Color(0xFFDC2626), size: 18),
+                  icon: Icon(Icons.logout_rounded,
+                      color: ClinicTheme.redOf(context), size: 18),
                   onPressed: () => _showLogoutDialog(context),
                 ),
               ),
@@ -608,7 +608,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         if (_telegramError != null) ...[
           const SizedBox(height: 6),
           Text(_telegramError!,
-              style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12)),
+              style: TextStyle(color: ClinicTheme.redOf(context), fontSize: 12)),
         ],
         const SizedBox(height: 12),
         SizedBox(

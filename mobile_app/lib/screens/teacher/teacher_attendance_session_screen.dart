@@ -356,7 +356,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
           children: [
             OutlinedButton.icon(
               onPressed: _busy ? null : _cancel,
-              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFBE123C)),
+              style: OutlinedButton.styleFrom(foregroundColor: ClinicTheme.redOf(context)),
               icon: const Icon(Icons.delete_outline, size: 18),
               label: Text(context.l10n.cancel),
             ),

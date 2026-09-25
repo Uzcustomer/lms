@@ -305,7 +305,7 @@ class _BiometricTileState extends State<_BiometricTile> {
               Switch(
                 value: _enabled,
                 onChanged: _busy ? null : _toggle,
-                activeColor: const Color(0xFF0D9488),
+                activeColor: ClinicTheme.tealOf(context),
               ),
             ],
           ),

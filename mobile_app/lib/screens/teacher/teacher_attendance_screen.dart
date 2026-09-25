@@ -184,7 +184,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
         color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: isOpen ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+            color: isOpen ? ClinicTheme.tealOf(context) : ClinicTheme.dividerOf(context),
             width: isOpen ? 1.5 : 1),
       ),
       child: Column(
@@ -195,12 +195,12 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                  color: ClinicTheme.teal.withOpacity(0.12),
+                  color: ClinicTheme.tealFillOf(context).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text('${l['start_time'] ?? ''}–${l['end_time'] ?? ''}',
-                    style: const TextStyle(
-                        color: ClinicTheme.teal, fontWeight: FontWeight.w800, fontSize: 12)),
+                    style: TextStyle(
+                        color: ClinicTheme.tealOf(context), fontWeight: FontWeight.w800, fontSize: 12)),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -251,13 +251,13 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: (isOpen ? ClinicTheme.teal : ClinicTheme.green).withOpacity(0.1),
+                  color: (isOpen ? ClinicTheme.tealOf(context) : ClinicTheme.greenOf(context)).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
                     Icon(isOpen ? Icons.timer_outlined : Icons.check_circle_outline,
-                        color: isOpen ? ClinicTheme.teal : ClinicTheme.green, size: 20),
+                        color: isOpen ? ClinicTheme.tealOf(context) : ClinicTheme.greenOf(context), size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(

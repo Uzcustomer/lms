@@ -31,6 +31,10 @@ class ClinicTheme {
   static Color tealOf(BuildContext c) => tone(c, teal, const Color(0xFF2DD4BF));
   static Color blueOf(BuildContext c) => tone(c, blue, AppTheme.darkAccent);
   static Color greenOf(BuildContext c) => tone(c, green, AppTheme.darkSuccess);
+  /// Same accents for *fills* that carry white text: a step deeper than the
+  /// foreground shade in dark, so the white stays legible on them.
+  static Color tealFillOf(BuildContext c) => tone(c, teal, const Color(0xFF14B8A6));
+  static Color greenFillOf(BuildContext c) => tone(c, green, const Color(0xFF10B981));
   static Color redOf(BuildContext c) => tone(c, const Color(0xFFBE123C), AppTheme.darkError);
   static Color amberOf(BuildContext c) => tone(c, const Color(0xFFB45309), AppTheme.darkWarning);
   static Color violetOf(BuildContext c) => tone(c, const Color(0xFF6D28D9), const Color(0xFFA78BFA));

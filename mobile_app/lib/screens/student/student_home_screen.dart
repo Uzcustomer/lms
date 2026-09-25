@@ -6,6 +6,7 @@ import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_useful_screen.dart';
+import '../../widgets/clinic_header.dart';
 
 /// Tab shell with a fixed bottom nav and a separate [Navigator] per tab.
 /// Sub-pages pushed from a tab stay inside that tab, so the nav bar is
@@ -219,7 +220,7 @@ class _NavItemWidgetState extends State<_NavItemWidget>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const activeColor = Color(0xFF0D9488);
+    final activeColor = ClinicTheme.tealOf(context);
     final inactiveColor = isDark ? Colors.white60 : const Color(0xFF94A3B8);
     final color = widget.isActive ? activeColor : inactiveColor;
 

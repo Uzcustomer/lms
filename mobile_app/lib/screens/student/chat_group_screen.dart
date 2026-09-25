@@ -147,11 +147,11 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                                   width: 60,
                                   height: 60,
                                   decoration: BoxDecoration(
-                                    color: ClinicTheme.teal.withAlpha(18),
+                                    color: ClinicTheme.tealFillOf(context).withAlpha(18),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Icon(Icons.group_outlined,
-                                      size: 28, color: ClinicTheme.teal),
+                                      size: 28, color: ClinicTheme.tealOf(context)),
                                 ),
                                 const SizedBox(height: 14),
                                 Text(l.pick(
@@ -345,8 +345,8 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
               padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
               decoration: BoxDecoration(
                 gradient: isMe
-                    ? const LinearGradient(
-                        colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
+                    ? LinearGradient(
+                        colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       )
@@ -368,7 +368,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                 boxShadow: [
                   BoxShadow(
                     color: isMe
-                        ? ClinicTheme.teal.withAlpha(34)
+                        ? ClinicTheme.tealOf(context).withAlpha(34)
                         : const Color(0xFF0F172A).withAlpha(12),
                     blurRadius: isMe ? 12 : 16,
                     offset: const Offset(0, 6),
@@ -470,15 +470,15 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
           const SizedBox(width: 8),
           Container(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
+              gradient: LinearGradient(
+                colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0F766E).withAlpha(77),
+                  color: ClinicTheme.tealOf(context).withAlpha(77),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -522,13 +522,13 @@ class _MedicalPatternPainter extends CustomPainter {
         Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = bgColor);
 
     final paint = Paint()
-      ..color = (isDark ? Colors.white : const Color(0xFF0F766E))
+      ..color = (isDark ? Colors.white : const Color(0xFF0D9488))
           .withAlpha(isDark ? 8 : 10)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
     final fillPaint = Paint()
-      ..color = (isDark ? Colors.white : const Color(0xFF0F766E))
+      ..color = (isDark ? Colors.white : const Color(0xFF0D9488))
           .withAlpha(isDark ? 4 : 5)
       ..style = PaintingStyle.fill;
 

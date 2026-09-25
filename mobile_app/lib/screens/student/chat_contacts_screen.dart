@@ -82,11 +82,11 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                 dividerColor: Colors.transparent,
                 indicatorSize: TabBarIndicatorSize.tab,
                 indicator: BoxDecoration(
-                  color: ClinicTheme.teal,
+                  color: ClinicTheme.tealFillOf(context),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: ClinicTheme.teal.withAlpha(35),
+                      color: ClinicTheme.tealOf(context).withAlpha(35),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -133,11 +133,11 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: ClinicTheme.teal.withAlpha(18),
+                color: ClinicTheme.tealFillOf(context).withAlpha(18),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Icon(Icons.chat_bubble_outline_rounded,
-                  size: 36, color: ClinicTheme.teal),
+                  size: 36, color: ClinicTheme.tealOf(context)),
             ),
             const SizedBox(height: 16),
             Text(l.pick(
@@ -221,7 +221,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color:
-                    unread > 0 ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+                    unread > 0 ? ClinicTheme.tealOf(context) : ClinicTheme.dividerOf(context),
                 width: unread > 0 ? 1.5 : 1,
               ),
               boxShadow: [
@@ -236,7 +236,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
               children: [
                 CircleAvatar(
                   radius: 25,
-                  backgroundColor: ClinicTheme.teal,
+                  backgroundColor: ClinicTheme.tealFillOf(context),
                   backgroundImage: image != null && image.isNotEmpty
                       ? NetworkImage('${ApiConfig.baseUrl}/image-proxy?url=$image')
                       : null,
@@ -269,7 +269,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                                     fontSize: 11,
                                     fontWeight:
                                         unread > 0 ? FontWeight.w700 : FontWeight.w500,
-                                    color: unread > 0 ? ClinicTheme.teal : muted)),
+                                    color: unread > 0 ? ClinicTheme.tealOf(context) : muted)),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -303,7 +303,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: ClinicTheme.teal,
+                                color: ClinicTheme.tealFillOf(context),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text('$unread',

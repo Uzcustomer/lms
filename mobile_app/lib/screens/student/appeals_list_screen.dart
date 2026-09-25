@@ -47,7 +47,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'approved':
-        return const Color(0xFF047857);
+        return ClinicTheme.greenOf(context);
       case 'rejected':
         return const Color(0xFFBE123C);
       case 'reviewing':
@@ -58,7 +58,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
   }
 
   Color _gradeColor(num grade) {
-    if (grade >= 86) return const Color(0xFF047857);
+    if (grade >= 86) return ClinicTheme.greenOf(context);
     if (grade >= 71) return ClinicTheme.blue;
     if (grade >= 60) return const Color(0xFFB45309);
     return const Color(0xFFBE123C);
@@ -81,7 +81,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
           );
           if (result == true && mounted) _loadData();
         },
-        backgroundColor: ClinicTheme.teal,
+        backgroundColor: ClinicTheme.tealFillOf(context),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: Text(

@@ -200,7 +200,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: _isOpen
-              ? const [Color(0xFF0D9488), Color(0xFF1E3A8A)]
+              ? [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)]
               : const [Color(0xFF334155), Color(0xFF0F172A)],
         ),
         borderRadius: BorderRadius.circular(16),
@@ -289,7 +289,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     final status = st['status']?.toString() ?? 'pending';
     final byTeacher = st['decided_by'] == 'teacher';
     final (color, icon, label) = switch (status) {
-      'present' => (ClinicTheme.green, Icons.check_circle, context.l10n.present),
+      'present' => (ClinicTheme.greenOf(context), Icons.check_circle, context.l10n.present),
       'absent' => (const Color(0xFFBE123C), Icons.cancel, context.l10n.absentLabel),
       _ => (const Color(0xFFB45309), Icons.schedule, st['beacon_seen'] == true ? context.l10n.pick(uz: 'Xonada, tasdiqlamadi', ru: 'В аудитории, не подтвердил', en: 'In the room, not confirmed') : context.l10n.pending),
     };
@@ -333,7 +333,7 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
     final sim = st['face_similarity'] == null
         ? ''
         : ' ${double.tryParse(st['face_similarity'].toString())?.round() ?? ''}%';
-    if (st['face_verified'] == true) return ('✓ ${context.l10n.pick(uz: 'yuz', ru: 'лицо', en: 'face')}$sim', ClinicTheme.green);
+    if (st['face_verified'] == true) return ('✓ ${context.l10n.pick(uz: 'yuz', ru: 'лицо', en: 'face')}$sim', ClinicTheme.greenOf(context));
     if (st['face_note'] == 'mismatch') return ('✗ ${context.l10n.pick(uz: 'yuz mos emas', ru: 'лицо не совпало', en: 'face mismatch')}$sim', const Color(0xFFBE123C));
     final unchecked = {
       'no_photo': context.l10n.pick(uz: 'rasmi yo\'q', ru: 'нет фото', en: 'no photo'),

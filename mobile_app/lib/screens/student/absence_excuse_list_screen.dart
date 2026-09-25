@@ -27,7 +27,7 @@ class _AbsenceExcuseListScreenState extends State<AbsenceExcuseListScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'approved':
-        return const Color(0xFF047857);
+        return ClinicTheme.greenOf(context);
       case 'rejected':
         return const Color(0xFFBE123C);
       default:
@@ -63,7 +63,7 @@ class _AbsenceExcuseListScreenState extends State<AbsenceExcuseListScreen> {
             context.read<StudentProvider>().loadExcuses(force: true);
           }
         },
-        backgroundColor: ClinicTheme.teal,
+        backgroundColor: ClinicTheme.tealFillOf(context),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: Text(l.newExcuse),

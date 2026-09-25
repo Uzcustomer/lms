@@ -337,7 +337,7 @@ class _AiChatScreenState extends State<AiChatScreen>
                 _pickFile(FileType.custom, extensions: _videoExt);
               }),
               _attachOption(Icons.insert_drive_file_outlined, context.l10n.pick(uz: 'Boshqa fayl', ru: 'Другой файл', en: 'Other file'),
-                  'TXT, CSV, MD', const Color(0xFF0F766E), () {
+                  'TXT, CSV, MD', ClinicTheme.tealOf(context), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.any);
               }),
@@ -498,8 +498,8 @@ class _AiChatScreenState extends State<AiChatScreen>
                           style: TextStyle(
                               fontSize: 10.5, color: ClinicTheme.mutedOf(context))),
                     ] else if (_contextLoaded) ...[
-                      const Icon(Icons.check_circle_rounded,
-                          size: 11, color: ClinicTheme.green),
+                      Icon(Icons.check_circle_rounded,
+                          size: 11, color: ClinicTheme.greenOf(context)),
                       const SizedBox(width: 4),
                       Text(l.pick(
                           uz: 'Ma\'lumotlaringiz bilan tayyor',
@@ -688,10 +688,10 @@ class _AiChatScreenState extends State<AiChatScreen>
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: ClinicTheme.teal.withAlpha(18),
+                  color: ClinicTheme.tealFillOf(context).withAlpha(18),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(s.icon, size: 19, color: ClinicTheme.teal),
+                child: Icon(s.icon, size: 19, color: ClinicTheme.tealOf(context)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -820,8 +820,8 @@ class _AiChatScreenState extends State<AiChatScreen>
         margin: const EdgeInsets.only(bottom: 12, left: 36),
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
+          gradient: LinearGradient(
+            colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -833,7 +833,7 @@ class _AiChatScreenState extends State<AiChatScreen>
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F766E).withOpacity(0.3),
+              color: ClinicTheme.tealOf(context).withOpacity(0.3),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -975,7 +975,7 @@ class _AiChatScreenState extends State<AiChatScreen>
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.teal,
+                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.tealFillOf(context),
                   shape: BoxShape.circle,
                 ),
                 child: Material(
@@ -1037,7 +1037,7 @@ class _AiChatScreenState extends State<AiChatScreen>
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(22),
                       borderSide:
-                          const BorderSide(color: ClinicTheme.teal, width: 1.5),
+                          BorderSide(color: ClinicTheme.tealOf(context), width: 1.5),
                     ),
                   ),
                   onSubmitted: (_) => _send(),
@@ -1046,13 +1046,13 @@ class _AiChatScreenState extends State<AiChatScreen>
               const SizedBox(width: 6),
               Container(
                 decoration: BoxDecoration(
-                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.teal,
+                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.tealFillOf(context),
                   shape: BoxShape.circle,
                   boxShadow: disabled
                       ? null
                       : [
                           BoxShadow(
-                            color: ClinicTheme.teal.withOpacity(0.3),
+                            color: ClinicTheme.tealOf(context).withOpacity(0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -1127,7 +1127,7 @@ class _AiChatScreenState extends State<AiChatScreen>
         iconColor = const Color(0xFF7C3AED);
       } else {
         icon = Icons.insert_drive_file_rounded;
-        iconColor = const Color(0xFF0F766E);
+        iconColor = ClinicTheme.tealOf(context);
       }
       content = Container(
         width: 140,

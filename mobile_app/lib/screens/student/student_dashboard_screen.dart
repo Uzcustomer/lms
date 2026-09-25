@@ -318,7 +318,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: _calmTeal,
+              color: ClinicTheme.tealFillOf(context),
               borderRadius: BorderRadius.circular(11),
             ),
             child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
@@ -430,7 +430,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D9488).withOpacity(0.30),
+            color: ClinicTheme.tealOf(context).withOpacity(0.30),
             blurRadius: 16,
             offset: const Offset(0, 7),
           ),
@@ -439,11 +439,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       child: ShinySweep(
         radius: 16,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+              colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
             ),
           ),
           padding: const EdgeInsets.all(14),
@@ -648,7 +648,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: isGood ? _calmGreen : AppTheme.warningColor,
+                    color: isGood ? ClinicTheme.greenOf(context) : AppTheme.warningColor,
                   ),
                 ),
               ),
@@ -832,7 +832,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               value: progress,
                               minHeight: 4,
                               backgroundColor: _divider,
-                              valueColor: AlwaysStoppedAnimation<Color>(_calmTeal),
+                              valueColor: AlwaysStoppedAnimation<Color>(ClinicTheme.tealOf(context)),
                             ),
                           ),
                         ),
@@ -1672,7 +1672,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             value: gpa.toStringAsFixed(2),
             maxLabel: '/ 5',
             progress: (gpa / 5.0).clamp(0.0, 1.0),
-            accent: _calmTeal,
+            accent: ClinicTheme.tealOf(context),
             trend: gpaTrend,
             trendDigits: 2,
           ),
@@ -1729,7 +1729,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     Icon(
                       trend > 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
                       size: 10,
-                      color: trend > 0 ? _calmGreen : AppTheme.errorColor,
+                      color: trend > 0 ? ClinicTheme.greenOf(context) : AppTheme.errorColor,
                     ),
                     const SizedBox(width: 1),
                     Text(
@@ -1737,7 +1737,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: trend > 0 ? _calmGreen : AppTheme.errorColor,
+                        color: trend > 0 ? ClinicTheme.greenOf(context) : AppTheme.errorColor,
                       ),
                     ),
                   ],

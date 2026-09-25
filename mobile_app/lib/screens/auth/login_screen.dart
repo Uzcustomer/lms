@@ -576,11 +576,11 @@ class _Hero extends StatelessWidget {
         bottomRight: Radius.circular(34),
       ),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+            colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
           ),
         ),
         child: Stack(

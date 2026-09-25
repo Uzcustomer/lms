@@ -32,7 +32,7 @@ class AttendanceBanner extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: done
-                      ? const [Color(0xFF047857), Color(0xFF0D9488)]
+                      ? [ClinicTheme.greenFillOf(context), ClinicTheme.tealFillOf(context)]
                       : const [Color(0xFFB45309), Color(0xFFD97706)],
                 ),
                 borderRadius: BorderRadius.circular(14),

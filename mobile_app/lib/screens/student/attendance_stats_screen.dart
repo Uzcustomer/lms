@@ -125,10 +125,10 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+          colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
         ),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -584,7 +584,7 @@ class _SubjectAttendanceScreenState extends State<_SubjectAttendanceScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(
-                    color: ClinicTheme.teal,
+                    color: ClinicTheme.tealFillOf(context),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(dateStr,

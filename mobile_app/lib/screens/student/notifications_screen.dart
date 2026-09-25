@@ -115,7 +115,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             actions: [
               if (hasUnread)
                 Material(
-                  color: ClinicTheme.teal,
+                  color: ClinicTheme.tealOf(context),
                   borderRadius: BorderRadius.circular(11),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(11),
@@ -304,7 +304,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Color _typeColor(String type) {
     switch (type) {
       case 'grade':
-        return ClinicTheme.green;
+        return ClinicTheme.greenOf(context);
       case 'excuse':
       case 'appeal':
       case 'english_group_application':
@@ -314,7 +314,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'sms':
         return ClinicTheme.blue;
       default:
-        return ClinicTheme.teal;
+        return ClinicTheme.tealOf(context);
     }
   }
 

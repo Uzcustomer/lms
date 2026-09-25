@@ -261,7 +261,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: error ? const Color(0xFFBE123C) : ClinicTheme.green,
+        backgroundColor: error ? const Color(0xFFBE123C) : ClinicTheme.greenOf(context),
       ),
     );
   }
@@ -325,11 +325,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
       radius: 20,
       child: Container(
         padding: const EdgeInsets.all(18),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
+            colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
           ),
         ),
         child: Row(
@@ -402,7 +402,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
           : l.pick(uz: 'Ariza qabul yopiq', ru: 'Прием заявок закрыт', en: 'Applications are closed'),
       message:
           '${window['semester_name'] ?? ''}\n${window['start_date'] ?? '-'} -> ${window['end_date'] ?? '-'}',
-      color: isOpen ? ClinicTheme.green : const Color(0xFFB45309),
+      color: isOpen ? ClinicTheme.greenOf(context) : const Color(0xFFB45309),
       trailing: isOpen
           ? context.l10n.pick(uz: '${_remainingSlots.toString()} slot', ru: '${_remainingSlots.toString()} мест', en: '${_remainingSlots.toString()} slots')
           : (window['status']?.toString() ?? ''),
@@ -488,7 +488,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
               padding: const EdgeInsets.symmetric(vertical: 22),
               child: Column(
                 children: [
-                  const Icon(Icons.verified_rounded, color: ClinicTheme.green, size: 42),
+                  Icon(Icons.verified_rounded, color: ClinicTheme.greenOf(context), size: 42),
                   const SizedBox(height: 8),
                   Text(
                     l.pick(
@@ -515,11 +515,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: selected
-                            ? ClinicTheme.teal.withAlpha(18)
+                            ? ClinicTheme.tealFillOf(context).withAlpha(18)
                             : ClinicTheme.surfaceOf(context),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: selected ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+                          color: selected ? ClinicTheme.tealOf(context) : ClinicTheme.dividerOf(context),
                           width: selected ? 1.4 : 1,
                         ),
                       ),
@@ -532,10 +532,10 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                             margin: const EdgeInsets.only(top: 2),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: selected ? ClinicTheme.teal : Colors.transparent,
+                              color: selected ? ClinicTheme.tealFillOf(context) : Colors.transparent,
                               border: Border.all(
                                 color: selected
-                                    ? ClinicTheme.teal
+                                    ? ClinicTheme.tealOf(context)
                                     : canSelect
                                         ? ClinicTheme.faint
                                         : ClinicTheme.dividerOf(context),
@@ -685,7 +685,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
               icon: const Icon(Icons.send_rounded, size: 18),
               label: Text(l.pick(uz: 'Yuborish', ru: 'Отправить', en: 'Submit')),
               style: ElevatedButton.styleFrom(
-                backgroundColor: ClinicTheme.teal,
+                backgroundColor: ClinicTheme.tealFillOf(context),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -742,7 +742,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
                             children: [
-                              const Icon(Icons.check_circle, color: ClinicTheme.teal, size: 16),
+                              Icon(Icons.check_circle, color: ClinicTheme.tealOf(context), size: 16),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -807,7 +807,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                       child: ElevatedButton(
                         onPressed: _submitting ? null : _submitApplication,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: ClinicTheme.teal,
+                          backgroundColor: ClinicTheme.tealFillOf(context),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1029,7 +1029,7 @@ class _RetakeJournalCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.cloud_done_outlined, color: ClinicTheme.teal, size: 18),
+                          Icon(Icons.cloud_done_outlined, color: ClinicTheme.tealOf(context), size: 18),
                           const SizedBox(width: 7),
                           Expanded(
                             child: Text(
@@ -1099,8 +1099,8 @@ class _RetakeJournalCard extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                               ),
-                              backgroundColor: ClinicTheme.teal.withAlpha(18),
-                              side: BorderSide(color: ClinicTheme.teal.withAlpha(45)),
+                              backgroundColor: ClinicTheme.tealFillOf(context).withAlpha(18),
+                              side: BorderSide(color: ClinicTheme.tealOf(context).withAlpha(45)),
                             ),
                         ],
                       ),
@@ -1156,7 +1156,7 @@ class _RetakeJournalCard extends StatelessWidget {
   }
 
   Color _mustaqilColor(Map<String, dynamic> mustaqil) {
-    if (mustaqil['is_passed'] == true) return ClinicTheme.green;
+    if (mustaqil['is_passed'] == true) return const Color(0xFF047857);
     if (mustaqil['is_exhausted'] == true) return const Color(0xFFBE123C);
     if (mustaqil['grade'] != null) return const Color(0xFFB45309);
     if (mustaqil['exists'] == true) return ClinicTheme.blue;
@@ -1221,10 +1221,10 @@ class _ScoreTile extends StatelessWidget {
   final String value;
   final Color accent;
 
-  const _ScoreTile({
+  _ScoreTile({
     required this.label,
     required this.value,
-    this.accent = ClinicTheme.teal,
+    this.accent = const Color(0xFF0D9488),
   });
 
   @override
@@ -1347,7 +1347,7 @@ class _ApplicationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = app['final_status']?.toString() ?? 'pending';
     final color = switch (status) {
-      'approved' => ClinicTheme.green,
+      'approved' => ClinicTheme.greenOf(context),
       'rejected' => const Color(0xFFBE123C),
       _ => const Color(0xFFB45309),
     };
@@ -1607,14 +1607,14 @@ class _FilePickerTile extends StatelessWidget {
           color: ClinicTheme.dividerOf(context).withAlpha(35),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: picked ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+            color: picked ? ClinicTheme.tealOf(context) : ClinicTheme.dividerOf(context),
           ),
         ),
         child: Row(
           children: [
             Icon(
               picked ? Icons.attach_file_rounded : Icons.upload_file_outlined,
-              color: picked ? ClinicTheme.teal : ClinicTheme.mutedOf(context),
+              color: picked ? ClinicTheme.tealOf(context) : ClinicTheme.mutedOf(context),
             ),
             const SizedBox(width: 10),
             Expanded(

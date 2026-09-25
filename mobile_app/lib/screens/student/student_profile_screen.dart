@@ -264,7 +264,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D9488).withOpacity(0.32),
+            color: ClinicTheme.tealOf(context).withOpacity(0.32),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -273,11 +273,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       child: ShinySweep(
         radius: 18,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+              colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
             ),
           ),
           padding: const EdgeInsets.all(18),
@@ -376,7 +376,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: ClinicTheme.green,
+                color: ClinicTheme.greenFillOf(context),
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2.5),
               ),
@@ -471,7 +471,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(width: 4, color: ClinicTheme.teal),
+                Container(width: 4, color: ClinicTheme.tealOf(context)),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(13),
@@ -502,8 +502,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                                         color: ink),
                                   ),
                                   const SizedBox(width: 4),
-                                  const Icon(Icons.verified_rounded,
-                                      size: 14, color: ClinicTheme.green),
+                                  Icon(Icons.verified_rounded,
+                                      size: 14, color: ClinicTheme.greenOf(context)),
                                 ],
                               ),
                               const SizedBox(height: 1),
@@ -921,8 +921,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 ),
                 if (verified) ...[
                   const SizedBox(width: 4),
-                  const Icon(Icons.verified_rounded,
-                      size: 14, color: ClinicTheme.green),
+                  Icon(Icons.verified_rounded,
+                      size: 14, color: ClinicTheme.greenOf(context)),
                 ],
               ],
             ),

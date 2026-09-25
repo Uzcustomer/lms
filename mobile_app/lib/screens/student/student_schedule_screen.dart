@@ -494,7 +494,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: enabled ? _calmTeal : _divider,
+          color: enabled ? ClinicTheme.tealFillOf(context) : _divider,
           borderRadius: BorderRadius.circular(9),
         ),
         child: Icon(icon, size: 22, color: enabled ? Colors.white : _calmFaint),
@@ -527,13 +527,13 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               padding: const EdgeInsets.symmetric(vertical: 9),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? _calmTeal
+                    ? ClinicTheme.tealFillOf(context)
                     : (isDark ? Colors.white.withOpacity(0.04) : Colors.white),
                 borderRadius: BorderRadius.circular(13),
                 border: Border.all(
                   color: isSelected
-                      ? _calmTeal
-                      : (isToday ? _calmTeal : _divider),
+                      ? ClinicTheme.tealOf(context)
+                      : (isToday ? ClinicTheme.tealOf(context) : _divider),
                   width: isToday && !isSelected ? 1.5 : 1,
                 ),
                 boxShadow: isSelected ? _cardShadow : null,
@@ -566,7 +566,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: hasLessons
-                          ? (isSelected ? Colors.white : _calmGreen)
+                          ? (isSelected ? Colors.white : ClinicTheme.greenOf(context))
                           : Colors.transparent,
                     ),
                   ),
@@ -590,7 +590,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     final isToday = _isSameDay(date, DateTime.now());
 
     return _accentCard(
-      accent: _calmTeal,
+      accent: ClinicTheme.tealOf(context),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         child: Row(
@@ -599,7 +599,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _calmTeal,
+                color: ClinicTheme.tealFillOf(context),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.calendar_month_rounded, size: 20, color: Colors.white),
@@ -628,7 +628,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _calmGreen,
+                  color: ClinicTheme.greenFillOf(context),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -836,15 +836,15 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 height: isCurrent ? 14 : 12,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isCurrent ? _calmGreen : _surface,
+                  color: isCurrent ? ClinicTheme.greenFillOf(context) : _surface,
                   border: Border.all(
-                    color: isCurrent ? _calmGreen : accent,
+                    color: isCurrent ? ClinicTheme.greenOf(context) : accent,
                     width: isCurrent ? 0 : 2.4,
                   ),
                   boxShadow: isCurrent
                       ? [
                           BoxShadow(
-                            color: _calmGreen.withOpacity(0.4),
+                            color: ClinicTheme.greenOf(context).withOpacity(0.4),
                             blurRadius: 6,
                             spreadRadius: 1,
                           ),
@@ -868,7 +868,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             child: Padding(
               padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
               child: isCurrent
-                  ? _accentCard(accent: _calmGreen, child: card)
+                  ? _accentCard(accent: ClinicTheme.greenOf(context), child: card)
                   : _calmCard(child: card),
             ),
           ),

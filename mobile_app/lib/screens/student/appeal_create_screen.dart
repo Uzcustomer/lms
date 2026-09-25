@@ -93,7 +93,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message'] ?? 'Apellyatsiya topshirildi'),
-          backgroundColor: const Color(0xFF047857),
+          backgroundColor: ClinicTheme.greenFillOf(context),
         ),
       );
       Navigator.pop(context, true);
@@ -109,7 +109,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
   }
 
   Color _gradeColor(num grade) {
-    if (grade >= 86) return const Color(0xFF047857);
+    if (grade >= 86) return ClinicTheme.greenOf(context);
     if (grade >= 71) return ClinicTheme.blue;
     if (grade >= 60) return const Color(0xFFB45309);
     return const Color(0xFFBE123C);
@@ -153,19 +153,19 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: ClinicTheme.teal.withAlpha(15),
-                                border: Border.all(color: ClinicTheme.teal.withAlpha(60)),
+                                color: ClinicTheme.tealFillOf(context).withAlpha(15),
+                                border: Border.all(color: ClinicTheme.tealOf(context).withAlpha(60)),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.info_outline, size: 16, color: ClinicTheme.teal),
+                                  Icon(Icons.info_outline, size: 16, color: ClinicTheme.tealOf(context)),
                                   SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       context.l10n.pick(uz: 'Faqat oxirgi 24 soat ichida qo\'yilgan baholarga apellyatsiya topshirish mumkin.', ru: 'Апелляцию можно подать только на оценки, выставленные за последние 24 часа.', en: 'Appeals can only be filed for grades given in the last 24 hours.'),
-                                      style: TextStyle(fontSize: 11, color: ClinicTheme.teal, height: 1.4),
+                                      style: TextStyle(fontSize: 11, color: ClinicTheme.tealOf(context), height: 1.4),
                                     ),
                                   ),
                                 ],
@@ -212,7 +212,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
                                             color: isSelected
-                                                ? ClinicTheme.teal
+                                                ? ClinicTheme.tealOf(context)
                                                 : isDark
                                                     ? Colors.white10
                                                     : ClinicTheme.dividerOf(context),
@@ -233,12 +233,12 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color: isSelected
-                                                          ? ClinicTheme.teal
+                                                          ? ClinicTheme.tealOf(context)
                                                           : subColor.withAlpha(120),
                                                       width: 1.6,
                                                     ),
                                                     color: isSelected
-                                                        ? ClinicTheme.teal
+                                                        ? ClinicTheme.tealFillOf(context)
                                                         : Colors.transparent,
                                                   ),
                                                   child: isSelected
@@ -301,7 +301,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                     decoration: BoxDecoration(
                                                       color: canAppeal
-                                                          ? const Color(0xFF047857).withAlpha(20)
+                                                          ? ClinicTheme.greenFillOf(context).withAlpha(20)
                                                           : ClinicTheme.faint.withAlpha(40),
                                                       borderRadius: BorderRadius.circular(5),
                                                     ),
@@ -311,7 +311,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                                         fontSize: 10,
                                                         fontWeight: FontWeight.w700,
                                                         color: canAppeal
-                                                            ? const Color(0xFF047857)
+                                                            ? ClinicTheme.greenOf(context)
                                                             : ClinicTheme.muted,
                                                       ),
                                                     ),
@@ -371,7 +371,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: _fileName != null
-                                        ? ClinicTheme.teal
+                                        ? ClinicTheme.tealOf(context)
                                         : isDark
                                             ? Colors.white10
                                             : ClinicTheme.dividerOf(context),
@@ -383,7 +383,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                     Icon(
                                       _fileName != null ? Icons.attach_file : Icons.upload_file_outlined,
                                       size: 20,
-                                      color: _fileName != null ? ClinicTheme.teal : subColor,
+                                      color: _fileName != null ? ClinicTheme.tealOf(context) : subColor,
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
@@ -431,15 +431,15 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
+                                  gradient: LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: [ClinicTheme.teal, ClinicTheme.blue],
+                                    colors: [ClinicTheme.tealFillOf(context), ClinicTheme.blue],
                                   ),
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: ClinicTheme.teal.withAlpha(70),
+                                      color: ClinicTheme.tealOf(context).withAlpha(70),
                                       blurRadius: 16,
                                       offset: const Offset(0, 6),
                                     ),

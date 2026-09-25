@@ -111,7 +111,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'approved':
-        return const Color(0xFF047857);
+        return ClinicTheme.greenOf(context);
       case 'rejected':
         return const Color(0xFFBE123C);
       case 'reviewing':
@@ -122,7 +122,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
   }
 
   Color _gradeColor(num grade) {
-    if (grade >= 86) return const Color(0xFF047857);
+    if (grade >= 86) return ClinicTheme.greenOf(context);
     if (grade >= 71) return ClinicTheme.blue;
     if (grade >= 60) return const Color(0xFFB45309);
     return const Color(0xFFBE123C);
@@ -295,21 +295,21 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: ClinicTheme.teal.withAlpha(15),
+                      color: ClinicTheme.tealFillOf(context).withAlpha(15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: ClinicTheme.teal.withAlpha(40)),
+                      border: Border.all(color: ClinicTheme.tealOf(context).withAlpha(40)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.attach_file, size: 16, color: ClinicTheme.teal),
+                        Icon(Icons.attach_file, size: 16, color: ClinicTheme.tealOf(context)),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             appeal['file_original_name'] ?? context.l10n.file,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: ClinicTheme.teal,
+                              color: ClinicTheme.tealOf(context),
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -370,7 +370,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
 
   Widget _buildComment(Map<String, dynamic> comment, Color cardColor, Color textColor, Color subColor, bool isDark) {
     final isAdmin = comment['user_type'] == 'admin';
-    final accent = isAdmin ? ClinicTheme.blue : ClinicTheme.teal;
+    final accent = isAdmin ? ClinicTheme.blue : ClinicTheme.tealOf(context);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -469,18 +469,18 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
               margin: const EdgeInsets.only(bottom: 6),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: ClinicTheme.teal.withAlpha(15),
+                color: ClinicTheme.tealFillOf(context).withAlpha(15),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: ClinicTheme.teal.withAlpha(40)),
+                border: Border.all(color: ClinicTheme.tealOf(context).withAlpha(40)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.attach_file, size: 14, color: ClinicTheme.teal),
+                  Icon(Icons.attach_file, size: 14, color: ClinicTheme.tealOf(context)),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       _fileName!,
-                      style: const TextStyle(fontSize: 11, color: ClinicTheme.teal, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 11, color: ClinicTheme.tealOf(context), fontWeight: FontWeight.w600),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -530,10 +530,10 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [ClinicTheme.teal, ClinicTheme.blue],
+                      colors: [ClinicTheme.tealFillOf(context), ClinicTheme.blue],
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),

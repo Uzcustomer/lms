@@ -221,8 +221,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                                             Container(
                                               width: 52,
                                               height: 52,
-                                              decoration: const BoxDecoration(
-                                                color: ClinicTheme.teal,
+                                              decoration: BoxDecoration(
+                                                color: ClinicTheme.tealFillOf(context),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: const Icon(
@@ -373,7 +373,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
 
       Color? cellBg;
       if (isSelected) {
-        cellBg = ClinicTheme.teal;
+        cellBg = ClinicTheme.tealOf(context);
       } else if (hasExam && isPast) {
         cellBg = _past.withOpacity(0.14);
       } else if (hasOski && !isPast) {
@@ -391,7 +391,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
               color: cellBg ?? Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: isToday && !isSelected
-                  ? Border.all(color: ClinicTheme.teal, width: 1.5)
+                  ? Border.all(color: ClinicTheme.tealOf(context), width: 1.5)
                   : null,
             ),
             child: Column(

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/biometric_service.dart';
+import '../widgets/clinic_header.dart';
 
 /// Wraps the authenticated app with a biometric lock.
 ///
@@ -150,11 +151,11 @@ class _LockScreen extends StatelessWidget {
     final l = AppLocalizations.of(context);
     return Material(
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+            colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
           ),
         ),
         child: SafeArea(
@@ -214,7 +215,7 @@ class _LockScreen extends StatelessWidget {
                     )),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF0D9488),
+                      foregroundColor: ClinicTheme.tealOf(context),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       textStyle: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w800),

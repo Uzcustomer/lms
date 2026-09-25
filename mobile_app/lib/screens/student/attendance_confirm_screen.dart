@@ -163,7 +163,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? const Color(0xFFBE123C) : const Color(0xFF047857),
+      backgroundColor: error ? const Color(0xFFBE123C) : ClinicTheme.greenOf(context),
     ));
   }
 
@@ -287,16 +287,16 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.bluetooth_searching, size: 18, color: ClinicTheme.teal),
+              Icon(Icons.bluetooth_searching, size: 18, color: ClinicTheme.tealOf(context)),
               const SizedBox(width: 8),
               Text(context.l10n.pick(uz: 'Signal — ${_tracker.window.inSeconds}s mediana', ru: 'Сигнал — медиана за ${_tracker.window.inSeconds}с', en: 'Signal — ${_tracker.window.inSeconds}s median'),
                   style: TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
               const Spacer(),
-              const SizedBox(
+              SizedBox(
                 width: 12,
                 height: 12,
-                child: CircularProgressIndicator(strokeWidth: 2, color: ClinicTheme.teal),
+                child: CircularProgressIndicator(strokeWidth: 2, color: ClinicTheme.tealOf(context)),
               ),
             ],
           ),
@@ -359,7 +359,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
   Widget _signalRow(BeaconSignalStats s) {
     final strength = ((s.median + 100) / 60).clamp(0.0, 1.0);
     final color = s.median >= -75
-        ? const Color(0xFF047857)
+        ? ClinicTheme.greenOf(context)
         : s.median >= -88
             ? const Color(0xFFB45309)
             : const Color(0xFFBE123C);
@@ -426,14 +426,14 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF0FDFA),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ClinicTheme.teal.withOpacity(0.4)),
+        border: Border.all(color: ClinicTheme.tealOf(context).withOpacity(0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.assignment_turned_in_outlined, size: 18, color: ClinicTheme.teal),
+              Icon(Icons.assignment_turned_in_outlined, size: 18, color: ClinicTheme.tealOf(context)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -446,7 +446,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                 onPressed: _copySurvey,
                 icon: const Icon(Icons.copy_rounded, size: 18),
                 tooltip: context.l10n.pick(uz: 'Nusxalash', ru: 'Копировать', en: 'Copy'),
-                color: ClinicTheme.teal,
+                color: ClinicTheme.tealOf(context),
               ),
               IconButton(
                 onPressed: () => setState(() => _survey = const []),
@@ -553,9 +553,9 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     final scanning = _readiness == BeaconReadiness.ready;
 
     final Color accent = p.isPresent
-        ? const Color(0xFF047857)
+        ? ClinicTheme.greenOf(context)
         : inRoom
-            ? ClinicTheme.teal
+            ? ClinicTheme.tealOf(context)
             : const Color(0xFFB45309);
 
     return Container(
@@ -640,7 +640,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
               child: ElevatedButton.icon(
                 onPressed: inRoom && !busy && left > Duration.zero ? () => _confirm(p) : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: ClinicTheme.teal,
+                  backgroundColor: ClinicTheme.tealFillOf(context),
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: ClinicTheme.dividerOf(context),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -96,7 +96,7 @@ class _LibraryWebViewScreenState extends State<LibraryWebViewScreen> {
             LinearProgressIndicator(
               value: _progress,
               backgroundColor: ClinicTheme.line,
-              valueColor: const AlwaysStoppedAnimation<Color>(ClinicTheme.teal),
+              valueColor: AlwaysStoppedAnimation<Color>(ClinicTheme.tealOf(context)),
               minHeight: 3,
             ),
           Expanded(child: WebViewWidget(controller: _controller!)),

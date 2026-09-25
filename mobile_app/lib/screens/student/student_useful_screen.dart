@@ -15,12 +15,13 @@ import 'library_webview_screen.dart';
 import 'ai_chat_screen.dart';
 import 'attendance_confirm_screen.dart';
 import 'student_home_screen.dart';
+import '../../widgets/clinic_header.dart';
 
 // ── Clinic-calm palette ──────────────────────────────
 const _calmInk = Color(0xFF0F172A);
 const _calmMuted = Color(0xFF64748B);
 const _calmLine = Color(0xFFE2E8F0);
-const _heroTeal = Color(0xFF0F766E);
+final _heroTeal = const Color(0xFF0D9488);
 const _heroNavy = Color(0xFF1E3A8A);
 
 class StudentUsefulScreen extends StatelessWidget {
@@ -45,7 +46,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Подтверждение в аудитории и сигнал',
           en: 'Confirm in the room and signal',
         ),
-        color: const Color(0xFF0D9488),
+        color: ClinicTheme.tealOf(context),
         screen: const AttendanceConfirmScreen(),
       ),
       _ServiceCard(
@@ -67,7 +68,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Расчет и прогноз GPA',
           en: 'Calculate and forecast GPA',
         ),
-        color: const Color(0xFF0F766E),
+        color: ClinicTheme.tealOf(context),
         screen: const GpaCalculatorScreen(),
       ),
       _ServiceCard(
@@ -82,7 +83,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Посещаемость и оценки',
           en: 'Attendance and grades table',
         ),
-        color: const Color(0xFF047857),
+        color: ClinicTheme.greenOf(context),
         screen: const AttendanceStatsScreen(),
       ),
       _ServiceCard(
@@ -310,7 +311,7 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(18),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -366,12 +367,12 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(l.signIn,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w800,
                                 color: _heroTeal)),
                         const SizedBox(width: 6),
-                        const Icon(Icons.chevron_right_rounded, size: 16, color: _heroTeal),
+                        Icon(Icons.chevron_right_rounded, size: 16, color: _heroTeal),
                       ],
                     ),
                   ),

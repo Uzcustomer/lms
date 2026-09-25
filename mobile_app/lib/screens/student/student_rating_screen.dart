@@ -94,7 +94,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 9),
                       decoration: BoxDecoration(
                         color: active
-                            ? ClinicTheme.teal
+                            ? ClinicTheme.tealFillOf(context)
                             : (Theme.of(context).brightness == Brightness.dark
                                 ? Colors.white.withOpacity(0.06)
                                 : const Color(0xFFF1F5F9)),
@@ -142,15 +142,15 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
+        gradient: LinearGradient(
+          colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F766E).withOpacity(0.35),
+            color: ClinicTheme.tealOf(context).withOpacity(0.35),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -254,7 +254,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
         color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isMe ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+          color: isMe ? ClinicTheme.tealOf(context) : ClinicTheme.dividerOf(context),
           width: isMe ? 1.5 : 1,
         ),
         boxShadow: ClinicTheme.cardShadow,
@@ -271,7 +271,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                     style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
-                        color: isMe ? ClinicTheme.teal : muted),
+                        color: isMe ? ClinicTheme.tealOf(context) : muted),
                   ),
           ),
           const SizedBox(width: 10),
@@ -284,7 +284,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: isMe ? ClinicTheme.teal : ink),
+                      color: isMe ? ClinicTheme.tealOf(context) : ink),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -307,7 +307,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
           ),
           if (isMe) ...[
             const SizedBox(width: 6),
-            const Icon(Icons.person_rounded, size: 16, color: ClinicTheme.teal),
+            Icon(Icons.person_rounded, size: 16, color: ClinicTheme.tealOf(context)),
           ],
         ],
       ),

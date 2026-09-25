@@ -72,7 +72,7 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'approved':
-        return const Color(0xFF047857);
+        return ClinicTheme.greenOf(context);
       case 'rejected':
         return const Color(0xFFBE123C);
       default:
@@ -273,7 +273,7 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
         icon: const Icon(Icons.picture_as_pdf),
         label: Text(l.downloadPdf, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: ClinicTheme.teal,
+          backgroundColor: ClinicTheme.tealFillOf(context),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
@@ -283,7 +283,7 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
 
   Widget _buildMakeupsCard(Color cardColor, Color textColor, Color subColor, AppLocalizations l) {
     final makeups = _excuse!['makeups'] as List;
-    final accent = ClinicTheme.teal;
+    final accent = ClinicTheme.tealOf(context);
 
     return Container(
       decoration: BoxDecoration(

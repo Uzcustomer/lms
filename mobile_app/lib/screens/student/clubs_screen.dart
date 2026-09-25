@@ -76,7 +76,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message'] ?? AppLocalizations.current.pick(uz: 'Ariza yuborildi!', ru: 'Заявка отправлена!', en: 'Application sent!')),
-          backgroundColor: const Color(0xFF047857),
+          backgroundColor: ClinicTheme.greenFillOf(context),
         ),
       );
       await _loadData();
@@ -157,9 +157,9 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
             color: ClinicTheme.surfaceOf(context),
             child: TabBar(
               controller: _tabCtrl,
-              indicatorColor: ClinicTheme.teal,
+              indicatorColor: ClinicTheme.tealFillOf(context),
               indicatorWeight: 3,
-              labelColor: ClinicTheme.teal,
+              labelColor: ClinicTheme.tealOf(context),
               unselectedLabelColor: subColor,
               labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -241,9 +241,9 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: ClinicTheme.teal.withOpacity(isDark ? 0.18 : 0.10),
+                    color: ClinicTheme.tealFillOf(context).withOpacity(isDark ? 0.18 : 0.10),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: ClinicTheme.teal.withOpacity(0.25)),
+                    border: Border.all(color: ClinicTheme.tealOf(context).withOpacity(0.25)),
                   ),
                   child: Text(
                     title,
@@ -287,7 +287,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: applied
-              ? const Color(0xFF047857).withAlpha(80)
+              ? ClinicTheme.greenOf(context).withAlpha(80)
               : ClinicTheme.dividerOf(context),
           width: applied ? 1.4 : 1,
         ),
@@ -352,10 +352,10 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                 onTap: isJoining ? null : () => _joinClub(club, kafedraTitle),
                 child: Ink(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [ClinicTheme.teal, ClinicTheme.blue],
+                      colors: [ClinicTheme.tealFillOf(context), ClinicTheme.blue],
                     ),
                     borderRadius: BorderRadius.circular(9),
                   ),
@@ -425,7 +425,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
           String statusLabel;
           switch (status) {
             case 'approved':
-              statusColor = const Color(0xFF047857);
+              statusColor = ClinicTheme.greenOf(context);
               statusLabel = context.l10n.confirmed;
               break;
             case 'rejected':

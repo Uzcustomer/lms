@@ -109,7 +109,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   // Saturated grade-chip colours, one per column (JN, MT, ON, OSKI, TEST, YN).
   static const List<Color> _gradeColors = [
     Color(0xFF15803D), // JN   — green
-    Color(0xFF0F766E), // MT   — teal
+    const Color(0xFF0D9488), // MT   — teal
     Color(0xFFB45309), // ON   — amber
     Color(0xFF1D4ED8), // OSKI — blue
     Color(0xFFBE123C), // TEST — rose
@@ -344,7 +344,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                                         borderRadius: BorderRadius.circular(16),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: _calmTeal.withOpacity(0.45),
+                                            color: ClinicTheme.tealOf(context).withOpacity(0.45),
                                             blurRadius: 18,
                                             spreadRadius: 1,
                                           ),
@@ -451,7 +451,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D9488).withOpacity(0.30),
+            color: ClinicTheme.tealOf(context).withOpacity(0.30),
             blurRadius: 16,
             offset: const Offset(0, 7),
           ),
@@ -460,11 +460,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       child: ShinySweep(
         radius: 16,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+              colors: [ClinicTheme.tealFillOf(context), Color(0xFF1E3A8A)],
             ),
           ),
           padding: const EdgeInsets.all(14),
@@ -660,7 +660,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
               decoration: BoxDecoration(
                 color: isActive
-                    ? _calmTeal
+                    ? ClinicTheme.tealFillOf(context)
                     : (isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9)),
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -799,14 +799,14 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                   children: [
                     Icon(isCompleted ? Icons.check_circle_rounded : Icons.schedule_rounded,
                         size: 12,
-                        color: isCompleted ? _calmGreen : const Color(0xFFB45309)),
+                        color: isCompleted ? ClinicTheme.greenOf(context) : const Color(0xFFB45309)),
                     const SizedBox(width: 4),
                     Text(
                       isCompleted ? context.l10n.pick(uz: 'Topshirilgan', ru: 'Сдано', en: 'Submitted') : context.l10n.pending,
                       style: TextStyle(
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,
-                          color: isCompleted ? _calmGreen : const Color(0xFFB45309)),
+                          color: isCompleted ? ClinicTheme.greenOf(context) : const Color(0xFFB45309)),
                     ),
                   ],
                 ),
@@ -902,7 +902,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: _calmTeal.withOpacity(0.12),
+              color: ClinicTheme.tealFillOf(context).withOpacity(0.12),
               borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(hasSubmission ? Icons.cloud_done_rounded : Icons.cloud_upload_rounded,
@@ -932,7 +932,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: canSubmit
-                    ? _calmTeal
+                    ? ClinicTheme.tealFillOf(context)
                     : (isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
                 borderRadius: BorderRadius.circular(9),
               ),

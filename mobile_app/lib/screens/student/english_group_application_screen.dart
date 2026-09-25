@@ -379,7 +379,7 @@ class _EnglishGroupApplicationScreenState
             child: ElevatedButton(
               onPressed: _submitting ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: ClinicTheme.teal,
+                backgroundColor: ClinicTheme.tealFillOf(context),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -505,7 +505,7 @@ class _EnglishGroupApplicationScreenState
               child: ElevatedButton(
                 onPressed: () => setState(() => _resubmitMode = true),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: ClinicTheme.teal,
+                  backgroundColor: ClinicTheme.tealFillOf(context),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -611,8 +611,8 @@ class _HeroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F766E), Color(0xFF10B981)],
+        gradient: LinearGradient(
+          colors: [ClinicTheme.tealFillOf(context), Color(0xFF10B981)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -885,14 +885,14 @@ class _UploadTile extends StatelessWidget {
           color: ClinicTheme.dividerOf(context).withAlpha(35),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: picked ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+            color: picked ? ClinicTheme.tealOf(context) : ClinicTheme.dividerOf(context),
           ),
         ),
         child: Row(
           children: [
             Icon(
               picked ? Icons.attach_file_rounded : Icons.upload_file_outlined,
-              color: picked ? ClinicTheme.teal : ClinicTheme.mutedOf(context),
+              color: picked ? ClinicTheme.tealOf(context) : ClinicTheme.mutedOf(context),
             ),
             const SizedBox(width: 10),
             Expanded(

@@ -157,7 +157,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
       color = const Color(0xFFBE123C);
       label = context.l10n.pick(uz: 'Qoniqarsiz', ru: 'Неудовлетворительно', en: 'Unsatisfactory');
     } else {
-      color = const Color(0xFF0F766E);
+      color = ClinicTheme.tealOf(context);
       label = '';
     }
     final canPass = gpa >= 2.4 && gradedCount > 0;

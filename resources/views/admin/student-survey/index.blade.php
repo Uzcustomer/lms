@@ -338,22 +338,45 @@
                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
                     'Accept': 'application/json',
                 },
+                // Sessiya cookie'siz so'rov 419 bo'lardi
+                credentials: 'same-origin',
                 body: JSON.stringify({ enabled: newState }),
             })
-            .then(r => r.json())
-            .then(data => {
+            .then(function (r) {
+                // Sessiya tugagan yoki ruxsat yo'q bo'lsa JSON kelmaydi — jimgina
+                // yiqilib, toggle "ishlamayotgandek" ko'rinardi.
+                if (!r.ok) {
+                    return r.text().then(function () {
+                        throw new Error(r.status === 419
+                            ? 'Sessiya muddati tugagan. Sahifani yangilab, qayta urining.'
+                            : (r.status === 403 ? 'Bu amal uchun ruxsat yo\'q.' : 'Server xatosi (HTTP ' + r.status + ')'));
+                    });
+                }
+                return r.json();
+            })
+            .then(function (data) {
                 btn.disabled = false;
                 if (!data.success) { alert(data.message || 'Xatolik'); return; }
-                btn.dataset.enabled = newState ? '1' : '0';
-                btn.style.background = newState ? '#10b981' : '#d1d5db';
-                btn.title = newState ? "So'rovnomani o'chirish" : "So'rovnomani yoqish";
-                btn.querySelector('span').style.left = newState ? '19px' : '3px';
 
-                const status = document.getElementById('sv-toggle-status');
-                status.textContent = newState ? 'Yoqilgan' : "O'chirilgan";
-                status.style.color = newState ? '#059669' : '#9ca3af';
+                // Holat serverdan kelgan qiymat bo'yicha — mahalliy taxmin emas
+                const on = data.enabled === true || data.enabled === 1 || data.enabled === '1';
+                svApplyToggleState(btn, on);
             })
-            .catch(() => { btn.disabled = false; alert('Tarmoq xatosi'); });
+            .catch(function (e) {
+                btn.disabled = false;
+                alert(e.message || 'Tarmoq xatosi');
+            });
+        }
+
+        function svApplyToggleState(btn, on) {
+            btn.dataset.enabled = on ? '1' : '0';
+            btn.style.background = on ? '#10b981' : '#d1d5db';
+            btn.title = on ? "So'rovnomani o'chirish" : "So'rovnomani yoqish";
+            btn.querySelector('span').style.left = on ? '19px' : '3px';
+
+            const status = document.getElementById('sv-toggle-status');
+            status.textContent = on ? 'Yoqilgan' : "O'chirilgan";
+            status.style.color = on ? '#059669' : '#9ca3af';
         }
 
         // Telegram yuborish progress polling

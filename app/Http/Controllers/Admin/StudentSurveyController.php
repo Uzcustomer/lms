@@ -122,12 +122,21 @@ class StudentSurveyController extends Controller
         $enabled = $request->boolean('enabled');
         Setting::set('student_survey_active', $enabled ? '1' : '0');
 
-        Log::info('Student survey toggled', ['enabled' => $enabled, 'by' => auth()->id()]);
+        // Yozilgan qiymatni qayta o'qiymiz — javobdagi holat DB dagisi bilan
+        // bir xil bo'lsin, aks holda toggle "ishlagandek" ko'rinib, aslida
+        // saqlanmagan bo'lishi mumkin.
+        $saved = self::isActive();
+
+        Log::info('Student survey toggled', [
+            'requested' => $enabled,
+            'saved' => $saved,
+            'by' => auth()->id(),
+        ]);
 
         return response()->json([
             'success' => true,
-            'enabled' => $enabled,
-            'message' => $enabled
+            'enabled' => $saved,
+            'message' => $saved
                 ? "So'rovnoma yoqildi — talabalar uchun ko'rinadi."
                 : "So'rovnoma o'chirildi — talabalarga ko'rinmaydi.",
         ]);

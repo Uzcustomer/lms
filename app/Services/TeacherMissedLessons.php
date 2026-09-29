@@ -123,8 +123,9 @@ class TeacherMissedLessons
             ->whereNotNull('sch.lesson_date')
             ->whereNotIn('sch.training_type_name', self::EXCLUDED_TYPE_NAMES)
             ->whereNotIn('sch.training_type_code', $excludedCodes)
-            ->whereRaw('DATE(sch.lesson_date) >= ?', [$from])
-            ->whereRaw('DATE(sch.lesson_date) < ?', [$today])
+            // Indeksdan foydalanish uchun DATE() emas, sana chegaralari bilan
+            ->where('sch.lesson_date', '>=', $from.' 00:00:00')
+            ->where('sch.lesson_date', '<', $today.' 00:00:00')
             ->groupBy('g.id', 'g.name', 'sch.employee_id', 'sch.group_id', 'sch.subject_id', 'sch.semester_code', DB::raw('DATE(sch.lesson_date)'), 'sch.lesson_pair_code')
             ->select(
                 'g.id as group_db_id',
@@ -136,21 +137,27 @@ class TeacherMissedLessons
                 'sch.semester_code',
                 DB::raw('MAX(sch.subject_name) as subject_name'),
                 DB::raw('DATE(sch.lesson_date) as lesson_day'),
-                'sch.lesson_pair_code'
+                'sch.lesson_pair_code',
+                DB::raw('MAX(sch.lesson_pair_name) as lesson_pair_name'),
+                DB::raw('MAX(sch.lesson_pair_start_time) as lesson_pair_start_time'),
+                DB::raw('MAX(sch.lesson_pair_end_time) as lesson_pair_end_time')
             )
             ->get();
     }
 
     /**
      * Faol (O'qimoqda) talabasi bor guruhlar: [group_id => index].
+     * $bachelorOnly — faqat bakalavr talabasi bor guruhlar (hisobot uchun).
      *
      * @return array<string, int>
      */
-    public function groupsWithActiveStudents(array $groupIds): array
+    public function groupsWithActiveStudents(array $groupIds, bool $bachelorOnly = false): array
     {
         return DB::table('students')
             ->whereIn('group_id', $groupIds)
             ->where('student_status_code', 11)
+            // Faqat bakalavr: hisobot magistr/ordinatura guruhlarini chiqarmaydi
+            ->when($bachelorOnly, fn ($q) => $q->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%']))
             ->distinct()
             ->pluck('group_id')
             ->map(fn ($id) => (string) $id)
@@ -175,8 +182,8 @@ class TeacherMissedLessons
             ->whereNull('sg.deleted_at')
             ->whereNotNull('sg.lesson_date')
             ->whereNotIn('sg.training_type_code', [99, 100, 101, 102, 103])
-            ->whereRaw('DATE(sg.lesson_date) >= ?', [$from])
-            ->whereRaw('DATE(sg.lesson_date) < ?', [$today])
+            ->where('sg.lesson_date', '>=', $from.' 00:00:00')
+            ->where('sg.lesson_date', '<', $today.' 00:00:00')
             ->select('sg.id as id', 'st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
             // Butun o'qituvchilar uchun qatorlar ko'p: offset emas, id bo'yicha bo'laklaymiz
             ->chunkById(2000, function ($rows) use (&$marked) {

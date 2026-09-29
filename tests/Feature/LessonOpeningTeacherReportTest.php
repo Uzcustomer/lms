@@ -60,29 +60,41 @@ function loTeacher(int $hemis, string $name, string $department = ''): void
 }
 
 /** Guruh va uning bitta talabasini yaratadi; talabaning HEMIS id'sini qaytaradi. */
-function loGroup(int $hemis, string $name, bool $withActiveStudent = true): int
+function loGroup(int $hemis, string $name, bool $withActiveStudent = true, string $educationType = 'Bakalavr'): int
 {
     loRow('groups', ['group_hemis_id' => $hemis, 'name' => $name]);
     $seq = loSeq();
 
-    // Faol talaba: student_status_code = 11 ("O'qimoqda"); boshqa kod — faol emas
+    // Faol talaba: student_status_code = 11 ("O'qimoqda"); boshqa kod — faol emas.
+    // education_type_name — hisobot faqat bakalavrni chiqaradi.
     loRow('students', [
         'hemis_id' => $seq, 'student_id_number' => 'S'.$seq, 'full_name' => 'Talaba '.$seq,
         'group_id' => $hemis, 'student_status_code' => $withActiveStudent ? 11 : 12,
+        'education_type_name' => $educationType, 'education_type_code' => $educationType === 'Bakalavr' ? '11' : '12',
     ]);
 
     return $seq;   // talabaning HEMIS id'si — baholar shunga bog'lanadi
 }
 
-/** Jadvaldagi bitta juftlik: o'qituvchi, guruh, fan, sana. */
+/** Jadvaldagi bitta juftlik: o'qituvchi, guruh, fan, sana, juftlik (kod, nomi, vaqti). */
 function loSlot(int $employee, string $employeeName, int $group, int $subject, string $subjectName, string $date, string $pair = '1', string $type = "Amaliy mashg'ulot", string $typeCode = '13'): void
 {
+    // Juftlik vaqtlari tibbiyot universiteti standarti
+    $times = [
+        '1' => ['1-juftlik', '08:30:00', '09:50:00'],
+        '2' => ['2-juftlik', '10:00:00', '11:20:00'],
+        '3' => ['3-juftlik', '12:00:00', '13:20:00'],
+    ];
+    [$pairName, $start, $end] = $times[$pair] ?? [$pair.'-juftlik', '00:00:00', '00:00:00'];
+
     loRow('schedules', [
         'schedule_hemis_id' => loSeq(), 'subject_id' => $subject, 'subject_name' => $subjectName,
         'semester_code' => '11', 'education_year_current' => true, 'group_id' => $group,
         'employee_id' => $employee, 'employee_name' => $employeeName,
         'training_type_code' => $typeCode, 'training_type_name' => $type,
-        'lesson_pair_code' => $pair, 'lesson_date' => $date.' 00:00:00',
+        'lesson_pair_code' => $pair, 'lesson_pair_name' => $pairName,
+        'lesson_pair_start_time' => $start, 'lesson_pair_end_time' => $end,
+        'lesson_date' => $date.' 00:00:00',
     ]);
 }
 
@@ -191,6 +203,11 @@ function loWorld(): array
 
     // O'qituvchilar jadvalida yo'q xodim — ismi jadvaldan olinadi
     loSlot(2001, 'Fantom Ustoz', 502, $path[0], $path[1], '2026-09-18');
+
+    // Magistratura guruhi — bakalavr emas, hisobotга umuman kirmasligi kerak
+    loTeacher(1005, 'Magistr Ustoz', 'Magistratura kafedrasi');
+    loGroup(504, 'M1-01', true, 'Magistr');
+    loSlot(1005, 'Magistr Ustoz', 504, 9004, 'Magistr fani', '2026-09-05');   // baho yo'q, ariza yo'q
 
     return $ids;
 }
@@ -306,12 +323,31 @@ test('Excel ikki varaqli: yig\'ma va kunlar, sonlar hisobotdagiga teng', functio
     expect((int) $summary->getCell("E{$last}")->getValue())->toBe(3);
 
     $days = $book->getSheet(1);
-    expect($days->getHighestRow())->toBe(11);   // sarlavha + 10 kun
+    expect($days->getHighestRow())->toBe(11);   // sarlavha + 10 kun (magistr guruhi kirmaydi)
+    // Ustunlar: №, O'qituvchi, Kafedra, Guruh, Fan, Sana, Juftlik, Soat, Holat, So'rov, Ariza sanasi
+    expect($days->getCell('A1')->getValue())->toBe('№');
+    expect($days->getCell('C1')->getValue())->toBe('Kafedra');
+    expect($days->getCell('G1')->getValue())->toBe('Juftlik');
+    expect($days->getCell('H1')->getValue())->toBe('Soat');
+    // 1-qator: Aliyev (alifbo bo'yicha birinchi), 03-sentabr, 1-juftlik
     expect($days->getCell('B2')->getValue())->toBe('Aliyev Vali');
-    expect($days->getCell('C2')->getValue())->toBe('D1-01');
-    expect($days->getCell('D2')->getValue())->toBe('Farmakologiya');
-    expect($days->getCell('E2')->getValue())->toBe('03.09.2026');
-    expect($days->getCell('F2')->getValue())->toBe('Ariza yubormagan');
+    expect($days->getCell('C2')->getValue())->toBe('Farmakologiya kafedrasi');   // kafedra name dan keyin
+    expect($days->getCell('D2')->getValue())->toBe('D1-01');
+    expect($days->getCell('E2')->getValue())->toBe('Farmakologiya');
+    expect($days->getCell('F2')->getValue())->toBe('03.09.2026');
+    expect($days->getCell('G2')->getValue())->toBe('1-juftlik');
+    expect($days->getCell('H2')->getValue())->toBe('08:30-09:50');
+    expect($days->getCell('I2')->getValue())->toBe('Ariza yubormagan');
+    // 10-sentabr (Aliyevning 6-qatori, r7): 1-juftlikka baho qo'yilgan, 2-juftlik ochilmagan
+    expect($days->getCell('F7')->getValue())->toBe('10.09.2026');
+    expect($days->getCell('G7')->getValue())->toBe('2-juftlik');
+    expect($days->getCell('H7')->getValue())->toBe('10:00-11:20');
+    // Magistr o'qituvchi umuman yo'q
+    $allNames = [];
+    for ($r = 2; $r <= 11; $r++) {
+        $allNames[] = $days->getCell('B'.$r)->getValue();
+    }
+    expect($allNames)->not->toContain('Magistr Ustoz');
 });
 
 test('bo\'sh davrda ham Excel xatosiz tuziladi', function () {
@@ -391,6 +427,32 @@ test('sana oralig\'i faqat shu oraliqdagi kunlarni hisoblaydi', function () {
     // Kelajakdagi yuqori chegara kechagacha qisqaradi (bugun 2026-09-29)
     $capped = $report->build('2026-09-25', '2026-12-31');
     expect($capped['to']->toDateString())->toBe('2026-09-28');
+});
+
+test('faqat bakalavr: magistratura guruhi va o\'qituvchisi hisobotda yo\'q', function () {
+    $report = app(LessonOpeningTeacherReport::class)->build();
+
+    expect(collect($report['teachers'])->pluck('name')->all())->not->toContain('Magistr Ustoz');
+    expect(collect($report['days'])->pluck('teacher')->all())->not->toContain('Magistr Ustoz');
+});
+
+test('bir kunda bir necha juftlik ochilmagan bo\'lsa — har biri alohida qator, holat bitta', function () {
+    // Sobirovga 09-22 kuni ikkala juftlik ham ochilmagan (baho yo'q, ariza yo'q)
+    loSlot(1004, 'Sobirov Anvar', 502, 9002, 'Patologik anatomiya', '2026-09-22', '1');
+    loSlot(1004, 'Sobirov Anvar', 502, 9002, 'Patologik anatomiya', '2026-09-22', '2');
+
+    $report = app(LessonOpeningTeacherReport::class)->build();
+
+    // Yig'mada bitta kun = bitta holat (juftliklar soniga qarab emas)
+    $sobirov = collect($report['teachers'])->firstWhere('name', 'Sobirov Anvar');
+    expect($sobirov)->toMatchArray(['total' => 1, 'no_request' => 1]);
+
+    // Kunlar varag'ida esa qaysi juftlik va qaysi soatda ekani — har biri alohida qator
+    $rows = collect($report['days'])->where('teacher', 'Sobirov Anvar')->where('date', '2026-09-22')->values();
+    expect($rows->pluck('pair')->all())->toBe(['1-juftlik', '2-juftlik']);
+    expect($rows->pluck('time')->all())->toBe(['08:30-09:50', '10:00-11:20']);
+    expect($rows->pluck('status')->unique()->all())->toBe(['no_request']);
+    expect($rows->pluck('department')->unique()->all())->toBe(['']);   // Sobirov kafedrasi berilmagan
 });
 
 test('sahifada faqat tasdiqlovchi tanlovlari va Excel tugmasi qoladi', function () {

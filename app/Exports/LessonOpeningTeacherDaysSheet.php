@@ -14,10 +14,16 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
  * "Kunlar" varag'i: yig'madagi har bir son ortidagi dars kunlari — o'qituvchi,
- * guruh, fan, dars sanasi va ariza holati.
+ * kafedrasi, guruh, fan, dars sanasi va (baho qo'yilmagan bo'lsa) qaysi
+ * juftlikda va qaysi soatda ekani, hamda ariza holati.
  */
 class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
+    /** Ustunlar: A..K (Holat — I ustun) */
+    private const LAST_COL = 'K';
+
+    private const STATUS_COL = 'I';
+
     private int $lastRow = 0;
 
     public function __construct(private array $report) {}
@@ -29,15 +35,18 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function array(): array
     {
-        $rows = [['№', "O'qituvchi", 'Guruh', 'Fan', 'Dars sanasi', 'Holat', "So'rov raqami", 'Ariza sanasi']];
+        $rows = [['№', "O'qituvchi", 'Kafedra', 'Guruh', 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat', "So'rov raqami", 'Ariza sanasi']];
 
         foreach ($this->report['days'] as $index => $day) {
             $rows[] = [
                 $index + 1,
                 $day['teacher'],
+                $day['department'] ?? '',
                 $day['group'],
                 $day['subject'],
                 $day['date'] ? \Carbon\Carbon::parse($day['date'])->format('d.m.Y') : '',
+                $day['pair'] ?? '',
+                $day['time'] ?? '',
                 LessonOpeningTeacherReport::LABELS[$day['status']] ?? $day['status'],
                 $day['request_number'] ?? '',
                 $day['requested_at'] ? $day['requested_at']->format('d.m.Y H:i') : '',
@@ -51,7 +60,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 36, 'C' => 16, 'D' => 42, 'E' => 13, 'F' => 38, 'G' => 11, 'H' => 17];
+        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 40, 'F' => 13, 'G' => 16, 'H' => 14, 'I' => 36, 'J' => 11, 'K' => 17];
     }
 
     public function registerEvents(): array
@@ -60,11 +69,13 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $last = $this->lastRow;
+                $lc = self::LAST_COL;
+                $sc = self::STATUS_COL;
 
-                $sheet->getStyle('A1:H1')->getFont()->setBold(true)->setSize(10)->getColor()->setRGB('FFFFFF');
-                $sheet->getStyle('A1:H1')->getFill()
+                $sheet->getStyle("A1:{$lc}1")->getFont()->setBold(true)->setSize(10)->getColor()->setRGB('FFFFFF');
+                $sheet->getStyle("A1:{$lc}1")->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B3A63');
-                $sheet->getStyle('A1:H1')->getAlignment()
+                $sheet->getStyle("A1:{$lc}1")->getAlignment()
                     ->setWrapText(true)->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getRowDimension(1)->setRowHeight(28);
                 $sheet->freezePane('A2');
@@ -73,12 +84,13 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                     return;
                 }
 
-                $sheet->setAutoFilter("A1:H{$last}");
-                $sheet->getStyle("A2:H{$last}")->getBorders()->getBottom()
+                $sheet->setAutoFilter("A1:{$lc}{$last}");
+                $sheet->getStyle("A2:{$lc}{$last}")->getBorders()->getBottom()
                     ->setBorderStyle(Border::BORDER_HAIR)->getColor()->setRGB('CBD5E1');
                 $sheet->getStyle("A2:A{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("E2:E{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("G2:H{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                // Sana, juftlik, soat, so'rov raqami, ariza sanasi — markazda
+                $sheet->getStyle("F2:H{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("J2:K{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Holat rangi: yashil — baho qo'yilgan, to'q sariq — tasdiqlangan lekin baho yo'q,
                 // ko'k — kutilmoqda, qizil — rad etilgan, kulrang — ariza yo'q
@@ -90,13 +102,13 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                     LessonOpeningTeacherReport::LABELS[LessonOpeningTeacherReport::NO_REQUEST] => '64748B',
                 ];
                 for ($row = 2; $row <= $last; $row++) {
-                    $color = $colors[(string) $sheet->getCell("F{$row}")->getValue()] ?? null;
+                    $color = $colors[(string) $sheet->getCell("{$sc}{$row}")->getValue()] ?? null;
                     if ($color) {
-                        $sheet->getStyle("F{$row}")->getFont()->setBold(true)->getColor()->setRGB($color);
+                        $sheet->getStyle("{$sc}{$row}")->getFont()->setBold(true)->getColor()->setRGB($color);
                     }
                 }
 
-                $sheet->getStyle("A1:H{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle("A1:{$lc}{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
             },
         ];
     }

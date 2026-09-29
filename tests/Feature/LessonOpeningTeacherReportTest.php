@@ -120,7 +120,7 @@ function loOpening(string $status, int $group, int $subject, string $date, ?int 
         // Faol ariza muddati kelajakda, tugagani o'tmishda, kutilayotgan/rad etilganda yo'q
         'deadline' => match ($status) {
             'active' => now('Asia/Tashkent')->addDays(2),
-            'expired' => now('Asia/Tashkent')->subDay(),
+            'expired', 'completed' => now('Asia/Tashkent')->subDay(),
             default => null,
         },
         'teacher_id' => $teacherId, 'teacher_name' => $teacherName, 'request_number' => $teacherId ? 1 : null,
@@ -476,6 +476,27 @@ test('baho qo\'yilmaganlik birligi: guruh + fan + kun (juftlik emas)', function 
     expect($rows->count())->toBe(4);
     $x22 = $rows->where('subject', 'X fan')->where('date', '2026-09-22')->pluck('pair')->all();
     expect($x22)->toBe(['1-juftlik', '2-juftlik']);
+});
+
+test('completed holati baho qo\'yilgan deb sanaladi, PENDINGga tushmaydi', function () {
+    // SendLessonOpeningReminders baho to'liq qo'yilgach status = 'completed' qiladi
+    // (active/expired emas). Bu "Ariza orqali tasdiq olib, baho qo'ygan" deb sanalishi kerak.
+    loTeacher(1009, 'Complete Ustoz', 'Test kafedrasi');
+    loGroup(508, 'B1-88');
+    loSlot(1009, 'Complete Ustoz', 508, 9201, 'Z fan', '2026-09-20');
+    $tid = (int) DB::table('teachers')->where('hemis_id', 1009)->value('id');
+    loOpening('completed', 508, 9201, '2026-09-20', $tid, 'Complete Ustoz');
+
+    $report = app(LessonOpeningTeacherReport::class)->build();
+    $ustoz = collect($report['teachers'])->firstWhere('name', 'Complete Ustoz');
+
+    // completed -> baho qo'yilgan (graded), pending emas
+    expect($ustoz)->toMatchArray(['total' => 1, 'graded' => 1, 'approved' => 0, 'pending' => 0]);
+
+    // Kunlar varag'ida bu qator "Ariza orqali tasdiq olib, baho qo'ygan" va juftlik bo'sh
+    $row = collect($report['days'])->firstWhere('teacher', 'Complete Ustoz');
+    expect($row['status'])->toBe('graded');
+    expect($row['pair'])->toBe('');
 });
 
 test('bir kunda bir necha juftlik ochilmagan bo\'lsa — har biri alohida qator, holat bitta', function () {

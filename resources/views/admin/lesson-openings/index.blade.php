@@ -9,6 +9,8 @@
         $statusLabels = [
             'pending' => ['Kutilmoqda', 'pending'],
             'active' => ['Ochilgan', 'active'],
+            // completed — dars ochilib, baho to'liq qo'yilgan (SendLessonOpeningReminders belgilaydi)
+            'completed' => ['Baholangan', 'active'],
             'expired' => ['Muddati tugagan', 'expired'],
             'closed' => ['Yopilgan', 'expired'],
             'rejected' => ['Rad etilgan', 'rejected'],

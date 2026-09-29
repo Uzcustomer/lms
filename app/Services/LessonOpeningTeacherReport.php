@@ -196,14 +196,23 @@ class LessonOpeningTeacherReport
 
             foreach ($whos as $who) {
                 $own = str_starts_with($who, 'h') ? ($onDay[substr($who, 1)] ?? null) : null;
-                // O'z juftliklari jadvalda bo'lsa — hammasi hisobga olinganmi; bo'lmasa kunda biror belgi bormi
-                $graded = $own !== null ? ! $own['unmarked'] : isset($dayMarked[$dayKey]);
+                $isCompleted = $opening->status === LessonOpening::STATUS_COMPLETED;
+                // "completed" — tizim baholarni to'liq deb belgilagan (SendLessonOpeningReminders).
+                // Aks holda real baholarga qaraymiz: o'z juftliklari jadvalda bo'lsa hammasi
+                // hisobga olinganmi, bo'lmasa kunda biror belgi bormi.
+                $graded = $isCompleted
+                    || ($own !== null ? ! $own['unmarked'] : isset($dayMarked[$dayKey]));
 
                 $records[] = [
                     'who' => $who,
+                    // Ochilgan bosqich uchta ko'rinishda bo'ladi: completed (baholangan),
+                    // active (muddat ichida) va expired (muddat o'tgan). Baho qo'yilgan-yo'qligi
+                    // GRADED/APPROVED ni ajratadi.
                     'status' => match ($opening->status) {
                         LessonOpening::STATUS_REJECTED => self::REJECTED,
-                        LessonOpening::STATUS_ACTIVE, LessonOpening::STATUS_EXPIRED => $graded ? self::GRADED : self::APPROVED,
+                        LessonOpening::STATUS_COMPLETED,
+                        LessonOpening::STATUS_ACTIVE,
+                        LessonOpening::STATUS_EXPIRED => $graded ? self::GRADED : self::APPROVED,
                         default => self::PENDING,
                     },
                     'group' => $first['group'] ?? (string) ($groupNames[$opening->group_hemis_id] ?? ''),
@@ -211,8 +220,8 @@ class LessonOpeningTeacherReport
                     'date' => $opening->lesson_date?->format('Y-m-d'),
                     'request_number' => $opening->request_number,
                     'requested_at' => $opening->created_at,
-                    // Aynan shu o'qituvchining shu kundagi baho qo'yilmagan juftliklari
-                    'pairs' => $own['pairs'] ?? [],
+                    // Baho qo'yilmagan juftliklar (completed = to'liq baholangan, ular bo'sh)
+                    'pairs' => $isCompleted ? [] : ($own['pairs'] ?? []),
                 ];
             }
         }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\AbsenceExcuse;
 use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
@@ -1424,6 +1425,44 @@ class StudentController extends Controller
         return view('student.independents', compact('independents', 'subjectsList', 'mtDeadlineTime', 'mtMaxResubmissions', 'minimumLimit'));
     }
 
+    /**
+     * MT muddati o'tган bo'lsa ham talabaga yuklash ochiladimi — tasdiqlangan
+     * sababli ariza (MT makeup) bo'yicha. Shart: (1) shu fan uchun MT makeup'li
+     * tasdiqlangan sababli bor; (2) MT ning o'z muddati sababli davr boshidan
+     * OLDIN o'tmagan (talaba aynan yo'qligi sababli topshira olmagan); (3) hozir
+     * sababli oyna ichida — ariza ko'rilган sana + ariza kunlari (o'qituvchi
+     * tomonidagi grade_save bilan bir xil oyna).
+     */
+    private function mtSubmissionOpenBySababli($student, $independent, ?int $subjectId): bool
+    {
+        if (!$subjectId) {
+            return false;
+        }
+
+        $excuse = AbsenceExcuse::where('status', 'approved')
+            ->where('student_hemis_id', $student->hemis_id)
+            ->whereNotNull('reviewed_at')
+            ->whereHas('makeups', function ($q) use ($subjectId) {
+                $q->where('subject_id', $subjectId)->where('assessment_type', 'mt');
+            })
+            ->latest('reviewed_at')
+            ->first();
+        if (!$excuse) {
+            return false;
+        }
+
+        // MT muddati sababli davr boshidan oldin o'tган bo'lsa — bu yo'qlikка
+        // aloqador emas, ochilmaydi.
+        if (Carbon::parse($independent->deadline)->lt(Carbon::parse($excuse->start_date))) {
+            return false;
+        }
+
+        $sababliDays = Carbon::parse($excuse->start_date)->diffInDays(Carbon::parse($excuse->end_date)) + 1;
+        $sababliDeadline = Carbon::parse($excuse->reviewed_at)->addDays($sababliDays)->endOfDay();
+
+        return now()->lessThanOrEqualTo($sababliDeadline);
+    }
+
     public function submitIndependent(Request $request, $id)
     {
         if ($redirect = $this->redirectIfPasswordChangeRequired()) {
@@ -1486,7 +1525,10 @@ class StudentController extends Controller
         $minute = (int) ($timeParts[1] ?? 0);
 
         $deadlineTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
-        if (Carbon::now()->gt($deadlineTime)) {
+        // Muddat o'tган bo'lsa ham, talabaning tasdiqlangan sababli arizasi (MT makeup)
+        // bo'lib, MT muddati sababli davr boshidan oldin o'tmagan bo'lsa — yuklash ochiladi.
+        // Bu o'qituvchi tomonidagi sababli MT bahosi oynasi bilan bir xil (JournalController).
+        if (Carbon::now()->gt($deadlineTime) && !$this->mtSubmissionOpenBySababli($student, $independent, $resolvedSubjectId)) {
             return back()->with('error', 'Topshiriq muddati tugagan (muddat: ' . $independent->deadline . ' soat ' . $mtDeadlineTime . ')');
         }
 

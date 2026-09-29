@@ -90,7 +90,7 @@ function loSlot(int $employee, string $employeeName, int $group, int $subject, s
 
     loRow('schedules', [
         'schedule_hemis_id' => loSeq(), 'subject_id' => $subject, 'subject_name' => $subjectName,
-        'semester_code' => '11', 'education_year_current' => true, 'group_id' => $group,
+        'semester_code' => '11', 'semester_name' => '3-semestr', 'education_year_current' => true, 'group_id' => $group,
         'employee_id' => $employee, 'employee_name' => $employeeName,
         'training_type_code' => $typeCode, 'training_type_name' => $type,
         'lesson_pair_code' => $pair, 'lesson_pair_name' => $pairName,
@@ -332,31 +332,35 @@ test('Excel ikki varaqli: yig\'ma va kunlar, sonlar hisobotdagiga teng', functio
     // Ustunlar: №, O'qituvchi, Kafedra, Guruh, Fan, Sana, Juftlik, Soat, Holat, So'rov, Ariza sanasi
     expect($days->getCell('A1')->getValue())->toBe('№');
     expect($days->getCell('C1')->getValue())->toBe('Kafedra');
-    expect($days->getCell('G1')->getValue())->toBe('Juftlik');
-    expect($days->getCell('H1')->getValue())->toBe('Soat');
+    expect($days->getCell('E1')->getValue())->toBe('Kurs');
+    expect($days->getCell('F1')->getValue())->toBe('Semestr');
+    expect($days->getCell('I1')->getValue())->toBe('Juftlik');
+    expect($days->getCell('J1')->getValue())->toBe('Soat');
     // 1-qator: Aliyev (alifbo bo'yicha birinchi), 03-sentabr, 1-juftlik
     expect($days->getCell('B2')->getValue())->toBe('Aliyev Vali');
     expect($days->getCell('C2')->getValue())->toBe('Farmakologiya kafedrasi');   // kafedra name dan keyin
     expect($days->getCell('D2')->getValue())->toBe('D1-01');
-    expect($days->getCell('E2')->getValue())->toBe('Farmakologiya');
-    expect($days->getCell('F2')->getValue())->toBe('03.09.2026');
-    expect($days->getCell('G2')->getValue())->toBe('1-juftlik');
-    expect($days->getCell('H2')->getValue())->toBe('08:30-09:50');
-    expect($days->getCell('I2')->getValue())->toBe('Ariza yubormagan');
+    expect($days->getCell('E2')->getValue())->toBe('2-kurs');
+    expect($days->getCell('F2')->getValue())->toBe('3-semestr');
+    expect($days->getCell('G2')->getValue())->toBe('Farmakologiya');
+    expect($days->getCell('H2')->getValue())->toBe('03.09.2026');
+    expect($days->getCell('I2')->getValue())->toBe('1-juftlik');
+    expect($days->getCell('J2')->getValue())->toBe('08:30-09:50');
+    expect($days->getCell('K2')->getValue())->toBe('Ariza yubormagan');
     // 10-sentabr (Aliyevning 6-qatori, r7): 1-juftlikka baho qo'yilgan, 2-juftlik ochilmagan
-    expect($days->getCell('F7')->getValue())->toBe('10.09.2026');
-    expect($days->getCell('G7')->getValue())->toBe('2-juftlik');
-    expect($days->getCell('H7')->getValue())->toBe('10:00-11:20');
+    expect($days->getCell('H7')->getValue())->toBe('10.09.2026');
+    expect($days->getCell('I7')->getValue())->toBe('2-juftlik');
+    expect($days->getCell('J7')->getValue())->toBe('10:00-11:20');
     // Yangi ustunlar: So'rov yuborgan (L) va Tasdiqlaganlar (M)
-    expect($days->getCell('L1')->getValue())->toBe("So'rov yuborgan");
-    expect($days->getCell('M1')->getValue())->toBe('Tasdiqlaganlar');
+    expect($days->getCell('N1')->getValue())->toBe("So'rov yuborgan");
+    expect($days->getCell('O1')->getValue())->toBe('Tasdiqlaganlar');
     // 2-qator (Aliyev, 03-sentabr) — ariza yubormagan, ustunlar bo'sh
-    expect($days->getCell('L2')->getValue())->toBeIn(['', null]);
-    expect($days->getCell('M2')->getValue())->toBeIn(['', null]);
+    expect($days->getCell('N2')->getValue())->toBeIn(['', null]);
+    expect($days->getCell('O2')->getValue())->toBeIn(['', null]);
     // 3-qator (Aliyev, 04-sentabr) — ochilgan ariza: yuboruvchi va tasdiqlagan
-    expect($days->getCell('F3')->getValue())->toBe('04.09.2026');
-    expect($days->getCell('L3')->getValue())->toBe('Ariza Yuboruvchi');
-    expect($days->getCell('M3')->getValue())->toBe('Registrator Boshliq');
+    expect($days->getCell('H3')->getValue())->toBe('04.09.2026');
+    expect($days->getCell('N3')->getValue())->toBe('Ariza Yuboruvchi');
+    expect($days->getCell('O3')->getValue())->toBe('Registrator Boshliq');
 
     // Magistr o'qituvchi umuman yo'q
     $allNames = [];
@@ -535,6 +539,8 @@ test('bir necha tasdiqlovchi bitta katakda vergul bilan chiqadi', function () {
     $report = app(LessonOpeningTeacherReport::class)->build();
     $row = collect($report['days'])->firstWhere('teacher', 'Uch Bosqich Ustoz');
 
+    expect($row['course'])->toBe('2-kurs');
+    expect($row['semester'])->toBe('3-semestr');
     expect($row['applicant'])->toBe('Domla Yuboruvchi');
     // Uch bosqich bitta katakda, vergul bilan
     expect($row['approvers'])->toBe("Registrator F.I.Sh, O'quv Bo'limi F.I.Sh, Prorektor F.I.Sh");

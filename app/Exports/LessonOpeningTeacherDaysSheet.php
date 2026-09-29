@@ -19,8 +19,8 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
  */
 class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
-    /** Ustunlar: A..K (Holat — I ustun) */
-    private const LAST_COL = 'K';
+    /** Ustunlar: A..M (Holat — I ustun) */
+    private const LAST_COL = 'M';
 
     private const STATUS_COL = 'I';
 
@@ -35,7 +35,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function array(): array
     {
-        $rows = [['№', "O'qituvchi", 'Kafedra', 'Guruh', 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat', "So'rov raqami", 'Ariza sanasi']];
+        $rows = [['№', "O'qituvchi", 'Kafedra', 'Guruh', 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat', "So'rov raqami", 'Ariza sanasi', "So'rov yuborgan", 'Tasdiqlaganlar']];
 
         foreach ($this->report['days'] as $index => $day) {
             $rows[] = [
@@ -50,6 +50,8 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                 LessonOpeningTeacherReport::LABELS[$day['status']] ?? $day['status'],
                 $day['request_number'] ?? '',
                 $day['requested_at'] ? $day['requested_at']->format('d.m.Y H:i') : '',
+                $day['applicant'] ?? '',
+                $day['approvers'] ?? '',
             ];
         }
 
@@ -60,7 +62,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 40, 'F' => 13, 'G' => 16, 'H' => 14, 'I' => 36, 'J' => 11, 'K' => 17];
+        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 40, 'F' => 13, 'G' => 16, 'H' => 14, 'I' => 36, 'J' => 11, 'K' => 17, 'L' => 34, 'M' => 40];
     }
 
     public function registerEvents(): array

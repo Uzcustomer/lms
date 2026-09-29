@@ -82,7 +82,7 @@ class LessonOpeningTeacherReport
         $openings = LessonOpening::query()
             ->whereDate('lesson_date', '>=', $from)
             ->whereDate('lesson_date', '<=', $to)
-            ->get(['id', 'group_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'teacher_id', 'teacher_name', 'request_number', 'status', 'created_at']);
+            ->get(['id', 'group_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'teacher_id', 'teacher_name', 'request_number', 'status', 'created_at', 'opened_by_name', 'registrar_status', 'registrar_name', 'department_status', 'department_name', 'prorektor_status', 'reviewed_by_name', 'prorektor_approvals']);
 
         // Faqat bakalavr: faol bakalavr talabasi bor guruhlar bilan cheklaymiz;
         // magistr/ordinatura guruhlari hisobotга kirmaydi.
@@ -169,6 +169,29 @@ class LessonOpeningTeacherReport
             ->groupBy('subject_id')
             ->pluck('subject_name', 'subject_id');
 
+        // So'rov yuborgan va tasdiqlaganlar (bir necha bosqich bo'lsa bitta katakda, vergul bilan)
+        $approversOf = function (LessonOpening $o): string {
+            $names = [];
+            if ($o->registrar_status === LessonOpening::DECISION_APPROVED && trim((string) $o->registrar_name) !== '') {
+                $names[] = trim((string) $o->registrar_name);
+            }
+            if ($o->department_status === LessonOpening::DECISION_APPROVED && trim((string) $o->department_name) !== '') {
+                $names[] = trim((string) $o->department_name);
+            }
+            foreach (($o->prorektor_approvals ?? []) as $decision) {
+                if (($decision['decision'] ?? null) === LessonOpening::DECISION_APPROVED && trim((string) ($decision['name'] ?? '')) !== '') {
+                    $names[] = trim((string) $decision['name']);
+                }
+            }
+            // Eski oqim (bosqich ustunlarisiz): prorektor_status approved bo'lsa reviewed_by_name
+            if (empty($o->prorektor_approvals) && $o->prorektor_status === LessonOpening::DECISION_APPROVED
+                && trim((string) $o->reviewed_by_name) !== '') {
+                $names[] = trim((string) $o->reviewed_by_name);
+            }
+
+            return implode(', ', array_values(array_unique($names)));
+        };
+
         $records = [];
         $requested = [];   // arizasi bor kunlar
 
@@ -220,6 +243,9 @@ class LessonOpeningTeacherReport
                     'date' => $opening->lesson_date?->format('Y-m-d'),
                     'request_number' => $opening->request_number,
                     'requested_at' => $opening->created_at,
+                    // So'rovni kim yuborgan va kim(lar) tasdiqlagan
+                    'applicant' => trim((string) $opening->opened_by_name),
+                    'approvers' => $approversOf($opening),
                     // Baho qo'yilmagan juftliklar (completed = to'liq baholangan, ular bo'sh)
                     'pairs' => $isCompleted ? [] : ($own['pairs'] ?? []),
                 ];
@@ -243,6 +269,8 @@ class LessonOpeningTeacherReport
                     'date' => $entry['date'],
                     'request_number' => null,
                     'requested_at' => null,
+                    'applicant' => '',   // ariza yubormagan
+                    'approvers' => '',
                     'pairs' => $entry['pairs'],
                 ];
             }
@@ -322,6 +350,8 @@ class LessonOpeningTeacherReport
                 'status' => $record['status'],
                 'request_number' => $record['request_number'],
                 'requested_at' => $record['requested_at'],
+                'applicant' => $record['applicant'] ?? '',
+                'approvers' => $record['approvers'] ?? '',
             ];
             $pairs = $record['pairs'] ?? [];
             if ($pairs) {

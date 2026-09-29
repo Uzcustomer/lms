@@ -95,10 +95,11 @@
         .lo-hero-chip b { font-weight:800; }
 
         .lo-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:10px; padding:12px; background:#f8fafc; }
-        .lo-stat { display:flex; align-items:center; gap:11px; min-height:68px; padding:10px 13px; border:1px solid #e2e8f0; border-top-width:3px; border-radius:10px; background:#fff; text-decoration:none; box-shadow:0 2px 7px rgba(15,23,42,.04); transition:transform .12s, box-shadow .12s; }
+        .lo-stat { display:flex; align-items:center; justify-content:flex-start; gap:11px; min-height:68px; padding:10px 13px; border:1px solid #e2e8f0; border-top-width:3px; border-radius:10px; background:#fff; text-decoration:none; box-shadow:0 2px 7px rgba(15,23,42,.04); transition:transform .12s, box-shadow .12s; }
         .lo-stat:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(15,23,42,.08); }
-        .lo-stat-icon { width:38px; height:38px; flex:0 0 38px; display:flex; align-items:center; justify-content:center; border-radius:10px; }
+        .lo-stat-icon { width:38px; height:38px; flex:0 0 38px; align-self:center; display:flex; align-items:center; justify-content:center; border-radius:10px; }
         .lo-stat-icon svg { width:20px; height:20px; }
+        .lo-stat > div { display:flex; flex-direction:column; justify-content:center; }
         .lo-stat span { display:block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#64748b; }
         .lo-stat strong { display:block; margin-top:3px; font-size:21px; line-height:1; font-weight:800; color:#172554; }
         .lo-stat-amber { border-top-color:#f59e0b; } .lo-stat-amber .lo-stat-icon { background:#fffbeb; color:#d97706; }
@@ -127,10 +128,10 @@
         .lo-export-title h2 { margin:0; font-size:14px; font-weight:800; color:#1e293b; }
         .lo-export-title p { margin:3px 0 0; font-size:12px; line-height:1.45; color:#64748b; }
         .lo-export-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; }
-        .lo-export-controls label { display:flex; flex-direction:column; gap:3px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; }
-        .lo-export-controls input[type=date] { border:1px solid #cbd5e1; border-radius:8px; padding:7px 9px; font-size:13px; font-weight:600; color:#1e293b; background:#fff; }
+        .lo-export-controls label { display:flex; flex-direction:column; gap:3px; margin:0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; }
+        .lo-export-controls input[type=date] { margin:0; height:38px; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:8px; padding:7px 9px; font-size:13px; font-weight:600; color:#1e293b; background:#fff; }
         .lo-export-controls input[type=date]:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 2px rgba(43,94,167,.15); }
-        .lo-export-btn { display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border:0; border-radius:8px; background:#059669; color:#fff; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .12s; }
+        .lo-export-btn { display:inline-flex; align-items:center; gap:7px; margin:0; height:38px; box-sizing:border-box; padding:0 16px; border:0; border-radius:8px; background:#059669; color:#fff; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .12s; }
         .lo-export-btn:hover { background:#047857; }
         .lo-export-btn:disabled { opacity:.65; cursor:progress; }
         .lo-export-btn svg { width:17px; height:17px; }

@@ -84,10 +84,15 @@ class LessonOpeningTeacherReport
             ->whereDate('lesson_date', '<=', $to)
             ->get(['id', 'group_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'teacher_id', 'teacher_name', 'request_number', 'status', 'created_at']);
 
-        $groupIds = $slots->pluck('group_id')->merge($openings->pluck('group_hemis_id'))->unique()->values()->all();
-        $subjectIds = $slots->pluck('subject_id')->merge($openings->pluck('subject_id'))->unique()->values()->all();
+        // Faqat bakalavr: faol bakalavr talabasi bor guruhlar bilan cheklaymiz;
+        // magistr/ordinatura guruhlari hisobotга kirmaydi.
+        $candidateGroups = $slots->pluck('group_id')->merge($openings->pluck('group_hemis_id'))->unique()->values()->all();
+        $active = $candidateGroups ? $this->missed->groupsWithActiveStudents($candidateGroups, bachelorOnly: true) : [];
+        $slots = $slots->filter(fn ($s) => isset($active[(string) $s->group_id]))->values();
+        $openings = $openings->filter(fn ($o) => isset($active[(string) $o->group_hemis_id]))->values();
 
-        $active = $groupIds ? $this->missed->groupsWithActiveStudents($groupIds) : [];
+        $groupIds = array_keys($active);
+        $subjectIds = $slots->pluck('subject_id')->merge($openings->pluck('subject_id'))->unique()->values()->all();
         $marked = $groupIds ? $this->missed->markedPairs($groupIds, $subjectIds, $from, $upper) : [];
 
         // Kunda kamida bitta juftlik hisobga olinganmi (o'qituvchi jadvalda topilmasa kerak)
@@ -107,11 +112,17 @@ class LessonOpeningTeacherReport
                 'subject' => (string) $slot->subject_name,
                 'date' => $slot->lesson_day,
                 'unmarked' => false,
+                'pairs' => [],   // baho qo'yilmagan juftliklar: kod => ['label', 'time']
             ];
 
             $pairKey = $this->missed->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
             if (! isset($marked[$pairKey]) && isset($active[(string) $slot->group_id])) {
                 $byDay[$dayKey][$employee]['unmarked'] = true;
+                $code = (string) $slot->lesson_pair_code;
+                $byDay[$dayKey][$employee]['pairs'][$code] ??= [
+                    'label' => $this->pairLabel($slot),
+                    'time' => $this->pairTime($slot),
+                ];
             }
         }
 
@@ -200,6 +211,8 @@ class LessonOpeningTeacherReport
                     'date' => $opening->lesson_date?->format('Y-m-d'),
                     'request_number' => $opening->request_number,
                     'requested_at' => $opening->created_at,
+                    // Aynan shu o'qituvchining shu kundagi baho qo'yilmagan juftliklari
+                    'pairs' => $own['pairs'] ?? [],
                 ];
             }
         }
@@ -221,11 +234,37 @@ class LessonOpeningTeacherReport
                     'date' => $entry['date'],
                     'request_number' => null,
                     'requested_at' => null,
+                    'pairs' => $entry['pairs'],
                 ];
             }
         }
 
         return $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($to));
+    }
+
+    /** Juftlik yorlig'i: jadvaldagi nomi, bo'lmasa "N-juftlik". */
+    private function pairLabel(object $slot): string
+    {
+        $name = trim((string) ($slot->lesson_pair_name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+        $code = trim((string) ($slot->lesson_pair_code ?? ''));
+
+        return $code !== '' ? $code.'-juftlik' : '';
+    }
+
+    /** Juftlik vaqti: "08:30-09:50" (jadvaldagi boshlanish va tugash soati). */
+    private function pairTime(object $slot): string
+    {
+        $hm = fn ($v) => ($v = trim((string) $v)) !== '' ? substr($v, 0, 5) : '';
+        $start = $hm($slot->lesson_pair_start_time ?? '');
+        $end = $hm($slot->lesson_pair_end_time ?? '');
+        if ($start === '' && $end === '') {
+            return '';
+        }
+
+        return $end !== '' ? $start.'-'.$end : $start;
     }
 
     /**
@@ -260,17 +299,33 @@ class LessonOpeningTeacherReport
             }
         }
 
-        $days = array_map(fn ($record) => [
-            'teacher' => $people[$record['who']]['name'],
-            'group' => $record['group'],
-            'subject' => $record['subject'],
-            'date' => $record['date'],
-            'status' => $record['status'],
-            'request_number' => $record['request_number'],
-            'requested_at' => $record['requested_at'],
-        ], $records);
+        // Har bir kun uchun baho qo'yilmagan juftliklar alohida qatorga chiqadi
+        // (qaysi sanada, qaysi guruhda, qaysi juftlikda, qaysi soatda). Juftlik
+        // ma'lumoti bo'lmasa (masalan baho qo'yib bo'lingan ariza) — bitta qator.
+        $days = [];
+        foreach ($records as $record) {
+            $base = [
+                'teacher' => $people[$record['who']]['name'],
+                'department' => $people[$record['who']]['department'],
+                'group' => $record['group'],
+                'subject' => $record['subject'],
+                'date' => $record['date'],
+                'status' => $record['status'],
+                'request_number' => $record['request_number'],
+                'requested_at' => $record['requested_at'],
+            ];
+            $pairs = $record['pairs'] ?? [];
+            if ($pairs) {
+                foreach ($pairs as $pair) {
+                    $days[] = $base + ['pair' => $pair['label'], 'time' => $pair['time']];
+                }
+            } else {
+                $days[] = $base + ['pair' => '', 'time' => ''];
+            }
+        }
         usort($days, fn ($a, $b) => strcmp(mb_strtolower($a['teacher']), mb_strtolower($b['teacher']))
-            ?: strcmp((string) $a['date'], (string) $b['date']));
+            ?: strcmp((string) $a['date'], (string) $b['date'])
+            ?: strcmp((string) $a['pair'], (string) $b['pair']));
 
         return [
             'from' => $from,

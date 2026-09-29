@@ -111,11 +111,13 @@ function loGrade(int $studentHemis, int $subject, string $date, string $pair = '
     ]);
 }
 
-function loOpening(string $status, int $group, int $subject, string $date, ?int $teacherId, ?string $teacherName): void
+function loOpening(string $status, int $group, int $subject, string $date, ?int $teacherId, ?string $teacherName, string $applicant = 'Ariza Yuboruvchi', ?string $approver = 'Registrator Boshliq'): void
 {
+    // Ochilgan (completed/active/expired) arizalarni registrator tasdiqlagan bo'ladi
+    $opened = in_array($status, ['completed', 'active', 'expired'], true);
     DB::table('lesson_openings')->insert([
         'group_hemis_id' => $group, 'subject_id' => $subject, 'semester_code' => '11',
-        'lesson_date' => $date, 'opened_by_id' => 1, 'opened_by_name' => 'Ariza yuboruvchi',
+        'lesson_date' => $date, 'opened_by_id' => 1, 'opened_by_name' => $applicant,
         'opened_by_guard' => 'teacher', 'status' => $status,
         // Faol ariza muddati kelajakda, tugagani o'tmishda, kutilayotgan/rad etilganda yo'q
         'deadline' => match ($status) {
@@ -123,6 +125,8 @@ function loOpening(string $status, int $group, int $subject, string $date, ?int 
             'expired', 'completed' => now('Asia/Tashkent')->subDay(),
             default => null,
         },
+        'registrar_status' => $opened ? 'approved' : ($status === 'rejected' ? 'rejected' : null),
+        'registrar_name' => $opened ? $approver : null,
         'teacher_id' => $teacherId, 'teacher_name' => $teacherName, 'request_number' => $teacherId ? 1 : null,
         'created_at' => now(), 'updated_at' => now(),
     ]);
@@ -343,6 +347,17 @@ test('Excel ikki varaqli: yig\'ma va kunlar, sonlar hisobotdagiga teng', functio
     expect($days->getCell('F7')->getValue())->toBe('10.09.2026');
     expect($days->getCell('G7')->getValue())->toBe('2-juftlik');
     expect($days->getCell('H7')->getValue())->toBe('10:00-11:20');
+    // Yangi ustunlar: So'rov yuborgan (L) va Tasdiqlaganlar (M)
+    expect($days->getCell('L1')->getValue())->toBe("So'rov yuborgan");
+    expect($days->getCell('M1')->getValue())->toBe('Tasdiqlaganlar');
+    // 2-qator (Aliyev, 03-sentabr) — ariza yubormagan, ustunlar bo'sh
+    expect($days->getCell('L2')->getValue())->toBeIn(['', null]);
+    expect($days->getCell('M2')->getValue())->toBeIn(['', null]);
+    // 3-qator (Aliyev, 04-sentabr) — ochilgan ariza: yuboruvchi va tasdiqlagan
+    expect($days->getCell('F3')->getValue())->toBe('04.09.2026');
+    expect($days->getCell('L3')->getValue())->toBe('Ariza Yuboruvchi');
+    expect($days->getCell('M3')->getValue())->toBe('Registrator Boshliq');
+
     // Magistr o'qituvchi umuman yo'q
     $allNames = [];
     for ($r = 2; $r <= 11; $r++) {
@@ -497,6 +512,32 @@ test('completed holati baho qo\'yilgan deb sanaladi, PENDINGga tushmaydi', funct
     $row = collect($report['days'])->firstWhere('teacher', 'Complete Ustoz');
     expect($row['status'])->toBe('graded');
     expect($row['pair'])->toBe('');
+});
+
+test('bir necha tasdiqlovchi bitta katakda vergul bilan chiqadi', function () {
+    // 3-so'rov: registrator + o'quv bo'limi + prorektor tasdiqlaydi
+    loTeacher(1010, 'Uch Bosqich Ustoz', 'Test kafedrasi');
+    loGroup(509, 'B1-33');
+    loSlot(1010, 'Uch Bosqich Ustoz', 509, 9301, 'W fan', '2026-09-20');
+    $tid = (int) DB::table('teachers')->where('hemis_id', 1010)->value('id');
+    DB::table('lesson_openings')->insert([
+        'group_hemis_id' => 509, 'subject_id' => 9301, 'semester_code' => '11',
+        'lesson_date' => '2026-09-20', 'opened_by_id' => 1, 'opened_by_name' => 'Domla Yuboruvchi',
+        'opened_by_guard' => 'teacher', 'status' => 'completed', 'deadline' => now()->subDay(),
+        'registrar_status' => 'approved', 'registrar_name' => 'Registrator F.I.Sh',
+        'department_status' => 'approved', 'department_name' => "O'quv Bo'limi F.I.Sh",
+        'prorektor_status' => 'approved',
+        'prorektor_approvals' => json_encode(['teacher:5' => ['name' => 'Prorektor F.I.Sh', 'decision' => 'approved', 'at' => now()->toDateTimeString()]]),
+        'teacher_id' => $tid, 'teacher_name' => 'Uch Bosqich Ustoz', 'request_number' => 3,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $report = app(LessonOpeningTeacherReport::class)->build();
+    $row = collect($report['days'])->firstWhere('teacher', 'Uch Bosqich Ustoz');
+
+    expect($row['applicant'])->toBe('Domla Yuboruvchi');
+    // Uch bosqich bitta katakda, vergul bilan
+    expect($row['approvers'])->toBe("Registrator F.I.Sh, O'quv Bo'limi F.I.Sh, Prorektor F.I.Sh");
 });
 
 test('bir kunda bir necha juftlik ochilmagan bo\'lsa — har biri alohida qator, holat bitta', function () {

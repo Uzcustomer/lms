@@ -422,7 +422,22 @@
                         el('loExpMsg').textContent = msg;
                         el('loExpBarFill').style.width = Math.max(0, Math.min(100, percent || 0)) + '%';
                     }
-                    function fail(msg) { clearInterval(timer); busy(false); show(msg || 'Xatolik', 0, true); }
+                    function fail(msg) { clearInterval(timer); store(''); busy(false); show(msg || 'Xatolik', 0, true); }
+
+                    // Eksport kaliti localStorage da saqlanadi: sahifada boshqa amal qilinsa yoki
+                    // sahifa qayta yuklansa ham, jarayon davom etadi va tayyor bo'lgach fayl yuklanadi.
+                    var STORE = 'loExportKey';
+                    function store(k) { try { k ? localStorage.setItem(STORE, k) : localStorage.removeItem(STORE); } catch (e) {} }
+                    function stored() { try { return localStorage.getItem(STORE) || ''; } catch (e) { return ''; } }
+
+                    // Yuklab olish — yashirin iframe orqali: sahifadan chiqmaydi, joriy ish uzilmaydi.
+                    function download(key) {
+                        var f = document.createElement('iframe');
+                        f.style.display = 'none';
+                        f.src = downloadUrl + '?export_key=' + encodeURIComponent(key);
+                        document.body.appendChild(f);
+                        setTimeout(function () { try { document.body.removeChild(f); } catch (e) {} }, 60000);
+                    }
 
                     window.loExportStart = function () {
                         var from = el('loExpFrom').value, to = el('loExpTo').value;
@@ -436,11 +451,14 @@
                             body: JSON.stringify({ date_from: from || null, date_to: to || null })
                         }).then(function (r) { return r.json(); }).then(function (d) {
                             if (!d || !d.export_key) { fail((d && d.message) || 'Hisoblashni boshlab bo\'lmadi'); return; }
-                            poll(d.export_key);
+                            store(d.export_key);
+                            poll(d.export_key, false);
                         }).catch(function () { fail('Tarmoq xatosi'); });
                     };
 
-                    function poll(key) {
+                    // resuming = true bo'lsa (sahifa qayta yuklangач davom ettirish), xato/topilmaganda
+                    // jimgina tozalaymiz — foydalanuvchini bezovta qilmaymiz.
+                    function poll(key, resuming) {
                         timer = setInterval(function () {
                             fetch(statusUrl + '?export_key=' + encodeURIComponent(key), { headers: { 'Accept': 'application/json' } })
                                 .then(function (r) { return r.json(); })
@@ -449,15 +467,28 @@
                                     if (d.status === 'running') { show(d.message || 'Hisoblanmoqda...', d.percent || 30, false); return; }
                                     clearInterval(timer);
                                     if (d.status === 'done') {
+                                        store('');
                                         show('Tayyor. Fayl yuklanmoqda...', 100, false);
-                                        window.location = downloadUrl + '?export_key=' + encodeURIComponent(key);
-                                        setTimeout(function () { busy(false); el('loExpStatus').hidden = true; }, 2000);
+                                        download(key);
+                                        setTimeout(function () { busy(false); el('loExpStatus').hidden = true; }, 2500);
+                                    } else if (resuming) {
+                                        // Oldingi eksport topilmadi yoki muddati tugagan — jimgina yopamiz
+                                        store(''); busy(false); el('loExpStatus').hidden = true;
                                     } else {
                                         fail(d.message || 'Eksport xatosi');
                                     }
                                 }).catch(function () { /* vaqtinchalik uzilish — keyingi tekshiruvda davom etadi */ });
                         }, 2500);
                     }
+
+                    // Sahifa ochilганda: oldin boshlangan eksport bo'lsa — davom ettiramiz
+                    (function () {
+                        var key = stored();
+                        if (!key) { return; }
+                        busy(true);
+                        show('Oldingi hisoblash davom etmoqda...', 30, false);
+                        poll(key, true);
+                    })();
                 })();
             </script>
 

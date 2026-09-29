@@ -67,6 +67,13 @@ class LessonOpening extends Model
     public const STATUS_EXPIRED = 'expired';
     public const STATUS_REJECTED = 'rejected';
 
+    /**
+     * completed — dars ochilgan va baho TO'LIQ qo'yilgan. Buni
+     * SendLessonOpeningReminders komandasi belgilaydi (barcha baho kiritilgach).
+     * active/expired bilan bir xil "ochilgan" bosqich, faqat to'liq baholangani.
+     */
+    public const STATUS_COMPLETED = 'completed';
+
     /** Bosqich qarorlari */
     public const DECISION_APPROVED = 'approved';
     public const DECISION_REJECTED = 'rejected';

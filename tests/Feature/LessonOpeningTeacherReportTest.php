@@ -490,11 +490,12 @@ test('baho qo\'yilmaganlik birligi: guruh + fan + kun (juftlik emas)', function 
     // 3 ta alohida holat: (X,22), (X,23), (Y,22). 22-kundagi 2 juftlik bitta holat.
     expect($ustoz)->toMatchArray(['total' => 3, 'no_request' => 3]);
 
-    // Kunlar varag'ida esa 22-kun X fan ikkala juftlik alohida qator (jami 4 qator)
+    // Kunlar varag'ida har holat bitta qator (jami 3); 22-kun X fan ikkala
+    // juftlik o'sha qatorда birga ko'rsatiladi.
     $rows = collect($report['days'])->where('teacher', 'Birlik Ustoz')->values();
-    expect($rows->count())->toBe(4);
-    $x22 = $rows->where('subject', 'X fan')->where('date', '2026-09-22')->pluck('pair')->all();
-    expect($x22)->toBe(['1-juftlik', '2-juftlik']);
+    expect($rows->count())->toBe(3);
+    $x22 = $rows->where('subject', 'X fan')->where('date', '2026-09-22')->first();
+    expect($x22['pair'])->toBe('1-juftlik, 2-juftlik');
 });
 
 test('completed holati baho qo\'yilgan deb sanaladi, PENDINGga tushmaydi', function () {
@@ -546,7 +547,7 @@ test('bir necha tasdiqlovchi bitta katakda vergul bilan chiqadi', function () {
     expect($row['approvers'])->toBe("Registrator F.I.Sh, O'quv Bo'limi F.I.Sh, Prorektor F.I.Sh");
 });
 
-test('bir kunda bir necha juftlik ochilmagan bo\'lsa — har biri alohida qator, holat bitta', function () {
+test('bir kunda bir necha juftlik ochilmagan bo\'lsa — bitta qator, juftliklar birga', function () {
     // Sobirovga 09-22 kuni ikkala juftlik ham ochilmagan (baho yo'q, ariza yo'q)
     loSlot(1004, 'Sobirov Anvar', 502, 9002, 'Patologik anatomiya', '2026-09-22', '1');
     loSlot(1004, 'Sobirov Anvar', 502, 9002, 'Patologik anatomiya', '2026-09-22', '2');
@@ -557,12 +558,12 @@ test('bir kunda bir necha juftlik ochilmagan bo\'lsa — har biri alohida qator,
     $sobirov = collect($report['teachers'])->firstWhere('name', 'Sobirov Anvar');
     expect($sobirov)->toMatchArray(['total' => 1, 'no_request' => 1]);
 
-    // Kunlar varag'ida esa qaysi juftlik va qaysi soatda ekani — har biri alohida qator
+    // Kunlar varag'ida ham bitta qator; qaysi juftlik va soat — o'sha katakda birga
     $rows = collect($report['days'])->where('teacher', 'Sobirov Anvar')->where('date', '2026-09-22')->values();
-    expect($rows->pluck('pair')->all())->toBe(['1-juftlik', '2-juftlik']);
-    expect($rows->pluck('time')->all())->toBe(['08:30-09:50', '10:00-11:20']);
-    expect($rows->pluck('status')->unique()->all())->toBe(['no_request']);
-    expect($rows->pluck('department')->unique()->all())->toBe(['']);   // Sobirov kafedrasi berilmagan
+    expect($rows->count())->toBe(1);
+    expect($rows->first()['pair'])->toBe('1-juftlik, 2-juftlik');
+    expect($rows->first()['time'])->toBe('08:30-09:50, 10:00-11:20');
+    expect($rows->first()['status'])->toBe('no_request');
 });
 
 test('sahifada faqat tasdiqlovchi tanlovlari va Excel tugmasi qoladi', function () {

@@ -304,16 +304,25 @@ class LessonOpeningTeacherReport
         return [$course, $semester];
     }
 
-    /** Juftlik yorlig'i: jadvaldagi nomi, bo'lmasa "N-juftlik". */
+    /**
+     * Juftlik nomi — raqam emas. HEMIS nomi ko'pincha faqat kod bo'ladi
+     * ("2", "5.1"), shuning uchun "N-juftlik" ko'rinishiga keltiramiz
+     * ("2-juftlik", "5.1-juftlik"). Nom allaqachon "juftlik"/"para" so'zini
+     * o'z ichiga olsa — tegmaymiz.
+     */
     private function pairLabel(object $slot): string
     {
         $name = trim((string) ($slot->lesson_pair_name ?? ''));
-        if ($name !== '') {
-            return $name;
-        }
         $code = trim((string) ($slot->lesson_pair_code ?? ''));
+        $base = $name !== '' ? $name : $code;
+        if ($base === '') {
+            return '';
+        }
+        if (mb_stripos($base, 'juftlik') !== false || mb_stripos($base, 'para') !== false) {
+            return $base;
+        }
 
-        return $code !== '' ? $code.'-juftlik' : '';
+        return $base.'-juftlik';
     }
 
     /** Juftlik vaqti: "08:30-09:50" (jadvaldagi boshlanish va tugash soati). */
@@ -381,14 +390,21 @@ class LessonOpeningTeacherReport
                 'applicant' => $record['applicant'] ?? '',
                 'approvers' => $record['approvers'] ?? '',
             ];
+            // Har bir holat (guruh+fan+kun) — bitta qator; baho qo'yilmagan
+            // juftliklar o'sha qatorда birga ko'rsatiladi (mas. "2, 5.1").
             $pairs = $record['pairs'] ?? [];
-            if ($pairs) {
-                foreach ($pairs as $pair) {
-                    $days[] = $base + ['pair' => $pair['label'], 'time' => $pair['time']];
+            $labels = [];
+            $times = [];
+            foreach ($pairs as $pair) {
+                $labels[] = $pair['label'];
+                if (trim((string) $pair['time']) !== '') {
+                    $times[] = $pair['time'];
                 }
-            } else {
-                $days[] = $base + ['pair' => '', 'time' => ''];
             }
+            $days[] = $base + [
+                'pair' => implode(', ', $labels),
+                'time' => implode(', ', $times),
+            ];
         }
         usort($days, fn ($a, $b) => strcmp(mb_strtolower($a['teacher']), mb_strtolower($b['teacher']))
             ?: strcmp((string) $a['date'], (string) $b['date'])

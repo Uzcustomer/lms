@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Exports\LessonOpeningTeacherReportExport;
 use App\Http\Controllers\Controller;
+use App\Jobs\LessonOpeningTeacherReportJob;
 use App\Models\LessonOpening;
 use App\Models\Setting;
 use App\Services\LessonOpeningNotifier;
-use App\Services\LessonOpeningTeacherReport;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -97,6 +97,9 @@ class LessonOpeningRequestController extends Controller
             'canReview' => $stage !== null,
             'canDelete' => $this->canDelete(),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
+            // Excel hisoboti sana oralig'i uchun sukut qiymatlar
+            'exportFrom' => LessonOpening::periodStart()->format('Y-m-d'),
+            'exportMax' => now('Asia/Tashkent')->subDay()->format('Y-m-d'),
             // Bosqichlarni kim imzolaydi: rolga ega bir nechtasidan bittasi
             'stageApprovers' => [
                 LessonOpening::STAGE_REGISTRAR => LessonOpening::stageApprovers(LessonOpening::STAGE_REGISTRAR),
@@ -110,19 +113,97 @@ class LessonOpeningRequestController extends Controller
     }
 
     /**
-     * Excel: har bir o'qituvchi joriy semestrda necha marta baho qo'ymagan va
-     * shulardan nechtasi uchun ariza orqali tasdiq olib baho qo'ygan.
-     * Hisob LessonOpeningTeacherReport da (o'qituvchi popupi bilan bir xil qoida).
+     * Excel hisoboti (o'qituvchilar kesimida) — sana oralig'i bo'yicha fon
+     * jarayonida tayyorlanadi. Butun semestrni bir so'rovda hisoblash 504 ga
+     * olib kelardi; endi job navbatda ishlaydi, frontend holatni tekshiradi va
+     * tayyor bo'lgach faylni yuklab oladi. Hisob LessonOpeningTeacherReport da
+     * (o'qituvchi popupi bilan bir xil qoida).
      */
-    public function export(LessonOpeningTeacherReport $report): BinaryFileResponse
+    public function startExport(Request $request): JsonResponse
     {
-        // Butun semestrning jadvali va baholari ko'riladi — vaqt ketishi mumkin
-        @set_time_limit(300);
-        @ini_set('memory_limit', '1024M');
+        $data = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d'],
+        ]);
 
-        $name = 'dars-ochish-oqituvchilar-'.now('Asia/Tashkent')->format('Y-m-d-Hi').'.xlsx';
+        $from = $data['date_from'] ?? null;
+        $to = $data['date_to'] ?? null;
+        if ($from && $to && $from > $to) {
+            [$from, $to] = [$to, $from];
+        }
 
-        return Excel::download(new LessonOpeningTeacherReportExport($report->build()), $name);
+        $filters = ['from' => $from, 'to' => $to];
+        $exportKey = 'lesson_opening_teacher_export_'.(auth()->id() ?? 'guest').'_'.md5(json_encode($filters));
+
+        $existing = Cache::get($exportKey);
+        if ($existing && ($existing['status'] ?? '') === 'running') {
+            return response()->json(['export_key' => $exportKey] + $existing);
+        }
+
+        // Eski tayyor fayl bo'lsa — qayta hisoblanadi (baholar o'zgargan bo'lishi mumkin)
+        Cache::put($exportKey, [
+            'status' => 'running',
+            'message' => "Navbatga qo'shilmoqda...",
+            'percent' => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 1800);
+
+        LessonOpeningTeacherReportJob::dispatch($filters, $exportKey);
+
+        return response()->json([
+            'export_key' => $exportKey,
+            'status' => 'running',
+            'message' => 'Hisoblash boshlandi',
+            'percent' => 0,
+        ]);
+    }
+
+    /** Fon eksporti holati (frontend har necha soniyada tekshiradi). */
+    public function exportStatus(Request $request): JsonResponse
+    {
+        $exportKey = (string) $request->get('export_key');
+        if ($exportKey === '') {
+            return response()->json(['status' => 'error', 'message' => 'Kalit topilmadi'], 400);
+        }
+
+        $data = Cache::get($exportKey);
+        if (! $data) {
+            $paths = LessonOpeningTeacherReportJob::pathsFor($exportKey);
+            if (file_exists($paths['meta'])) {
+                $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+            }
+        }
+
+        if (! $data) {
+            return response()->json(['status' => 'error', 'message' => 'Eksport topilmadi yoki muddati tugagan']);
+        }
+
+        return response()->json($data);
+    }
+
+    /** Tayyor Excel faylni yuklab berish. */
+    public function exportDownload(Request $request): BinaryFileResponse|JsonResponse
+    {
+        $exportKey = (string) $request->get('export_key');
+        if ($exportKey === '') {
+            return response()->json(['error' => 'Kalit topilmadi'], 400);
+        }
+
+        $paths = LessonOpeningTeacherReportJob::pathsFor($exportKey);
+        $data = Cache::get($exportKey);
+        if (! $data && file_exists($paths['meta'])) {
+            $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+        }
+
+        if (! $data || ($data['status'] ?? '') !== 'done' || ! file_exists($paths['xlsx'])) {
+            return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
+        }
+
+        return response()->download(
+            $paths['xlsx'],
+            $data['file_name'] ?? 'dars-ochish-oqituvchilar.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        );
     }
 
     /**

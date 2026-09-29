@@ -119,6 +119,30 @@
         .lo-list-head h2 { margin:0; font-size:14px; font-weight:800; color:#1e293b; }
         .lo-list-head small { font-size:12px; color:#64748b; }
 
+        /* O'qituvchilar hisoboti (Excel) — sana oralig'i toolbari */
+        .lo-export { margin-top:14px; }
+        .lo-export-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; padding:14px 16px; }
+        .lo-export-title { display:flex; align-items:flex-start; gap:11px; flex:1 1 320px; min-width:240px; }
+        .lo-export-title > svg { width:22px; height:22px; flex:0 0 22px; color:#059669; margin-top:2px; }
+        .lo-export-title h2 { margin:0; font-size:14px; font-weight:800; color:#1e293b; }
+        .lo-export-title p { margin:3px 0 0; font-size:12px; line-height:1.45; color:#64748b; }
+        .lo-export-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; }
+        .lo-export-controls label { display:flex; flex-direction:column; gap:3px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#64748b; }
+        .lo-export-controls input[type=date] { border:1px solid #cbd5e1; border-radius:8px; padding:7px 9px; font-size:13px; font-weight:600; color:#1e293b; background:#fff; }
+        .lo-export-controls input[type=date]:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 2px rgba(43,94,167,.15); }
+        .lo-export-btn { display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border:0; border-radius:8px; background:#059669; color:#fff; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .12s; }
+        .lo-export-btn:hover { background:#047857; }
+        .lo-export-btn:disabled { opacity:.65; cursor:progress; }
+        .lo-export-btn svg { width:17px; height:17px; }
+        .lo-export-status { display:flex; align-items:center; gap:10px; padding:11px 16px; border-top:1px solid #e2e8f0; font-size:13px; color:#334155; }
+        .lo-export-status[hidden] { display:none; }
+        .lo-export-status.is-error { color:#b91c1c; }
+        .lo-export-status.is-error .lo-export-spin, .lo-export-status.is-error .lo-export-bar { display:none; }
+        .lo-export-bar { flex:1; max-width:260px; height:8px; border-radius:99px; background:#e2e8f0; overflow:hidden; }
+        .lo-export-bar i { display:block; height:100%; width:0; background:#059669; transition:width .3s; }
+        .lo-export-spin { width:15px; height:15px; flex:0 0 15px; border:2px solid #cbd5e1; border-top-color:#059669; border-radius:50%; animation:loSpin .7s linear infinite; }
+        @keyframes loSpin { to { transform:rotate(360deg); } }
+
         .lo-table-scroll { overflow-x:auto; }
         .lo-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
         .lo-table thead tr { background:linear-gradient(135deg,#e8edf5,#dbe4ef,#d1d9e6); }
@@ -311,13 +335,6 @@
                                 @endif
                             @endforeach
                         @endif
-                        {{-- O'qituvchilar hisoboti: necha marta baho qo'yilmagan va nechtasi ariza orqali ochilib baholangan --}}
-                        <a class="lo-hero-chip" style="text-decoration:none; background:#059669; border-color:#059669;"
-                           href="{{ route('admin.lesson-opening-requests.export') }}"
-                           title="Joriy semestr: har bir o'qituvchining baho qo'yilmagan kunlari va ariza orqali tasdiq olib baho qo'yganlari soni">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-                            Excel
-                        </a>
                     </div>
                 </header>
 
@@ -349,6 +366,97 @@
                     </a>
                 </div>
             </section>
+
+            {{-- O'qituvchilar bo'yicha Excel hisoboti. Butun semestr jadvali va baholari
+                 og'ir bo'lgani uchun hisob fon jarayonida ketadi (aks holda 504); tayyor bo'lgach
+                 fayl avtomatik yuklanadi. Qoida o'qituvchi popupi bilan bir xil. --}}
+            <section class="lo-panel lo-export">
+                <div class="lo-export-head">
+                    <div class="lo-export-title">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-6 4h6m2 4H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>
+                        <div>
+                            <h2>O'qituvchilar bo'yicha hisobot (Excel)</h2>
+                            <p>Tanlangan sana oralig'ida har bir o'qituvchi necha marta baho qo'ymay qoldirgan va nechtasi uchun ariza orqali tasdiq olib baho qo'yganini yuklaydi. Faqat o'tgan kunlar hisobga olinadi.</p>
+                        </div>
+                    </div>
+                    <div class="lo-export-controls">
+                        <label>Sanadan
+                            <input type="date" id="loExpFrom" value="{{ $exportFrom }}" max="{{ $exportMax }}">
+                        </label>
+                        <label>Sanagacha
+                            <input type="date" id="loExpTo" value="{{ $exportMax }}" max="{{ $exportMax }}">
+                        </label>
+                        <button type="button" id="loExpBtn" class="lo-export-btn" onclick="loExportStart()">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                            <span id="loExpBtnText">Hisoblab, Excel yuklash</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="loExpStatus" class="lo-export-status" hidden>
+                    <span class="lo-export-spin" id="loExpSpin"></span>
+                    <span class="lo-export-bar"><i id="loExpBarFill"></i></span>
+                    <span id="loExpMsg">Hisoblanmoqda...</span>
+                </div>
+            </section>
+
+            <script>
+                (function () {
+                    var startUrl = @json(route('admin.lesson-opening-requests.export.start'));
+                    var statusUrl = @json(route('admin.lesson-opening-requests.export.status'));
+                    var downloadUrl = @json(route('admin.lesson-opening-requests.export.download'));
+                    var csrf = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
+                    var timer = null;
+
+                    function el(id) { return document.getElementById(id); }
+                    function busy(on) {
+                        el('loExpBtn').disabled = on;
+                        el('loExpBtnText').textContent = on ? 'Hisoblanmoqda...' : 'Hisoblab, Excel yuklash';
+                    }
+                    function show(msg, percent, error) {
+                        var box = el('loExpStatus');
+                        box.hidden = false;
+                        box.classList.toggle('is-error', !!error);
+                        el('loExpMsg').textContent = msg;
+                        el('loExpBarFill').style.width = Math.max(0, Math.min(100, percent || 0)) + '%';
+                    }
+                    function fail(msg) { clearInterval(timer); busy(false); show(msg || 'Xatolik', 0, true); }
+
+                    window.loExportStart = function () {
+                        var from = el('loExpFrom').value, to = el('loExpTo').value;
+                        if (from && to && from > to) { el('loExpFrom').value = to; el('loExpTo').value = from; from = el('loExpFrom').value; to = el('loExpTo').value; }
+                        clearInterval(timer);
+                        busy(true);
+                        show("Hisoblash boshlanmoqda...", 5, false);
+                        fetch(startUrl, {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            body: JSON.stringify({ date_from: from || null, date_to: to || null })
+                        }).then(function (r) { return r.json(); }).then(function (d) {
+                            if (!d || !d.export_key) { fail((d && d.message) || 'Hisoblashni boshlab bo\'lmadi'); return; }
+                            poll(d.export_key);
+                        }).catch(function () { fail('Tarmoq xatosi'); });
+                    };
+
+                    function poll(key) {
+                        timer = setInterval(function () {
+                            fetch(statusUrl + '?export_key=' + encodeURIComponent(key), { headers: { 'Accept': 'application/json' } })
+                                .then(function (r) { return r.json(); })
+                                .then(function (d) {
+                                    if (!d) { return; }
+                                    if (d.status === 'running') { show(d.message || 'Hisoblanmoqda...', d.percent || 30, false); return; }
+                                    clearInterval(timer);
+                                    if (d.status === 'done') {
+                                        show('Tayyor. Fayl yuklanmoqda...', 100, false);
+                                        window.location = downloadUrl + '?export_key=' + encodeURIComponent(key);
+                                        setTimeout(function () { busy(false); el('loExpStatus').hidden = true; }, 2000);
+                                    } else {
+                                        fail(d.message || 'Eksport xatosi');
+                                    }
+                                }).catch(function () { /* vaqtinchalik uzilish — keyingi tekshiruvda davom etadi */ });
+                        }, 2500);
+                    }
+                })();
+            </script>
 
             <section class="lo-panel">
                 <div class="lo-list-head">

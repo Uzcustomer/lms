@@ -60,17 +60,18 @@ function loTeacher(int $hemis, string $name, string $department = ''): void
 }
 
 /** Guruh va uning bitta talabasini yaratadi; talabaning HEMIS id'sini qaytaradi. */
-function loGroup(int $hemis, string $name, bool $withActiveStudent = true, string $educationType = 'Bakalavr'): int
+function loGroup(int $hemis, string $name, bool $withActiveStudent = true, string $educationType = 'Bakalavr', ?string $educationCode = null): int
 {
     loRow('groups', ['group_hemis_id' => $hemis, 'name' => $name]);
     $seq = loSeq();
 
     // Faol talaba: student_status_code = 11 ("O'qimoqda"); boshqa kod — faol emas.
-    // education_type_name — hisobot faqat bakalavrni chiqaradi.
+    // LMS bakalavrni education_type_code = '11' yoki nom (bakalavr) bo'yicha ajratadi.
+    $code = $educationCode ?? ($educationType === 'Bakalavr' ? '11' : '12');
     loRow('students', [
         'hemis_id' => $seq, 'student_id_number' => 'S'.$seq, 'full_name' => 'Talaba '.$seq,
         'group_id' => $hemis, 'student_status_code' => $withActiveStudent ? 11 : 12,
-        'education_type_name' => $educationType, 'education_type_code' => $educationType === 'Bakalavr' ? '11' : '12',
+        'education_type_name' => $educationType, 'education_type_code' => $code,
     ]);
 
     return $seq;   // talabaning HEMIS id'si — baholar shunga bog'lanadi
@@ -429,11 +430,52 @@ test('sana oralig\'i faqat shu oraliqdagi kunlarni hisoblaydi', function () {
     expect($capped['to']->toDateString())->toBe('2026-09-28');
 });
 
-test('faqat bakalavr: magistratura guruhi va o\'qituvchisi hisobotda yo\'q', function () {
-    $report = app(LessonOpeningTeacherReport::class)->build();
+test('faqat bakalavr: magistr va ordinatura guruhlari chiqmaydi, bakalavr (kod 11) chiqadi', function () {
+    // Ordinatura guruhi (kod 12, nomi Ordinatura) — chiqmasligi kerak
+    loTeacher(1006, 'Ordinator Ustoz', 'Ordinatura kafedrasi');
+    loGroup(505, 'TRAVMA-2027', true, 'Ordinatura');
+    loSlot(1006, 'Ordinator Ustoz', 505, 9005, 'Travmatologiya', '2026-09-05');
 
-    expect(collect($report['teachers'])->pluck('name')->all())->not->toContain('Magistr Ustoz');
-    expect(collect($report['days'])->pluck('teacher')->all())->not->toContain('Magistr Ustoz');
+    // Bakalavr guruhi, lekin nomi bo'sh — faqat education_type_code = '11' bo'yicha aniqlanadi
+    loTeacher(1007, 'Kodli Ustoz', 'Anatomiya kafedrasi');
+    loGroup(506, 'B1-99', true, '', '11');
+    loSlot(1007, 'Kodli Ustoz', 506, 9006, 'Anatomiya', '2026-09-05');
+
+    $report = app(LessonOpeningTeacherReport::class)->build();
+    $names = collect($report['teachers'])->pluck('name')->all();
+
+    // Magistr (loWorld dan) va ordinatura chiqmaydi
+    expect($names)->not->toContain('Magistr Ustoz');
+    expect($names)->not->toContain('Ordinator Ustoz');
+    expect(collect($report['days'])->pluck('teacher')->all())->not->toContain('Ordinator Ustoz');
+
+    // Kod bo'yicha bakalavr (nomi bo'sh) — chiqadi
+    expect($names)->toContain('Kodli Ustoz');
+});
+
+test('baho qo\'yilmaganlik birligi: guruh + fan + kun (juftlik emas)', function () {
+    // Bitta o'qituvchi, bitta bakalavr guruh:
+    //   - X fan, 22-kun: ikkala juftlik ochilmagan  -> 1 holat
+    //   - X fan, 23-kun: bitta juftlik ochilmagan     -> alohida (boshqa kun) 1 holat
+    //   - Y fan, 22-kun: ochilmagan                    -> alohida (boshqa fan) 1 holat
+    loTeacher(1008, 'Birlik Ustoz', 'Test kafedrasi');
+    loGroup(507, 'B1-77');
+    loSlot(1008, 'Birlik Ustoz', 507, 9101, 'X fan', '2026-09-22', '1');
+    loSlot(1008, 'Birlik Ustoz', 507, 9101, 'X fan', '2026-09-22', '2');   // o'sha kun, o'sha fan, 2-juftlik
+    loSlot(1008, 'Birlik Ustoz', 507, 9101, 'X fan', '2026-09-23', '1');   // boshqa kun
+    loSlot(1008, 'Birlik Ustoz', 507, 9102, 'Y fan', '2026-09-22', '1');   // o'sha kun, boshqa fan
+
+    $report = app(LessonOpeningTeacherReport::class)->build();
+    $ustoz = collect($report['teachers'])->firstWhere('name', 'Birlik Ustoz');
+
+    // 3 ta alohida holat: (X,22), (X,23), (Y,22). 22-kundagi 2 juftlik bitta holat.
+    expect($ustoz)->toMatchArray(['total' => 3, 'no_request' => 3]);
+
+    // Kunlar varag'ida esa 22-kun X fan ikkala juftlik alohida qator (jami 4 qator)
+    $rows = collect($report['days'])->where('teacher', 'Birlik Ustoz')->values();
+    expect($rows->count())->toBe(4);
+    $x22 = $rows->where('subject', 'X fan')->where('date', '2026-09-22')->pluck('pair')->all();
+    expect($x22)->toBe(['1-juftlik', '2-juftlik']);
 });
 
 test('bir kunda bir necha juftlik ochilmagan bo\'lsa — har biri alohida qator, holat bitta', function () {

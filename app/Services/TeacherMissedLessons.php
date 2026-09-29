@@ -156,8 +156,14 @@ class TeacherMissedLessons
         return DB::table('students')
             ->whereIn('group_id', $groupIds)
             ->where('student_status_code', 11)
-            // Faqat bakalavr: hisobot magistr/ordinatura guruhlarini chiqarmaydi
-            ->when($bachelorOnly, fn ($q) => $q->whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%']))
+            // Faqat bakalavr: hisobot magistr/ordinatura guruhlarini chiqarmaydi.
+            // LMS bakalavrni ikki xil belgilaydi — education_type_code = '11'
+            // (rasmiy kod), yoki education_type_name ichida "bakalavr"/"bakalavriat".
+            // Ikkalasini ham qamraymiz (nomi bo'sh yoki boshqa yozuvda bo'lsa ham).
+            ->when($bachelorOnly, fn ($q) => $q->where(function ($w) {
+                $w->where('education_type_code', '11')
+                    ->orWhereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%']);
+            }))
             ->distinct()
             ->pluck('group_id')
             ->map(fn ($id) => (string) $id)

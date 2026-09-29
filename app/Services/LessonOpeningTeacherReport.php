@@ -110,6 +110,8 @@ class LessonOpeningTeacherReport
                 'name' => (string) $slot->employee_name,
                 'group' => (string) $slot->group_name,
                 'subject' => (string) $slot->subject_name,
+                'semester' => (string) ($slot->semester_name ?? ''),
+                'semester_code' => (string) $slot->semester_code,
                 'date' => $slot->lesson_day,
                 'unmarked' => false,
                 'pairs' => [],   // baho qo'yilmagan juftliklar: kod => ['label', 'time']
@@ -240,6 +242,8 @@ class LessonOpeningTeacherReport
                     },
                     'group' => $first['group'] ?? (string) ($groupNames[$opening->group_hemis_id] ?? ''),
                     'subject' => $first['subject'] ?? (string) ($subjectNames[$opening->subject_id] ?? ''),
+                    'semester_name' => $first['semester'] ?? '',
+                    'semester_code' => $first['semester_code'] ?? (string) $opening->semester_code,
                     'date' => $opening->lesson_date?->format('Y-m-d'),
                     'request_number' => $opening->request_number,
                     'requested_at' => $opening->created_at,
@@ -266,6 +270,8 @@ class LessonOpeningTeacherReport
                     'status' => self::NO_REQUEST,
                     'group' => $entry['group'],
                     'subject' => $entry['subject'],
+                    'semester_name' => $entry['semester'] ?? '',
+                    'semester_code' => $entry['semester_code'] ?? '',
                     'date' => $entry['date'],
                     'request_number' => null,
                     'requested_at' => null,
@@ -277,6 +283,25 @@ class LessonOpeningTeacherReport
         }
 
         return $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($to));
+    }
+
+    /**
+     * Semestr nomidan kurs va semestrni chiqaradi. Kurs = ceil(semestr/2)
+     * (1-2 semestr = 1-kurs, 3-4 = 2-kurs, ...). Semestr nomi bo'lmasa —
+     * kurs bo'sh, semestr sifatida kod ko'rsatiladi.
+     *
+     * @return array{0: string, 1: string} [kurs, semestr]
+     */
+    private function courseSemester(string $semesterName, string $semesterCode): array
+    {
+        $semNum = null;
+        if (preg_match('/(\\d+)/', $semesterName, $m)) {
+            $semNum = (int) $m[1];
+        }
+        $course = $semNum ? ((int) ceil($semNum / 2)).'-kurs' : '';
+        $semester = trim($semesterName) !== '' ? $semesterName : $semesterCode;
+
+        return [$course, $semester];
     }
 
     /** Juftlik yorlig'i: jadvaldagi nomi, bo'lmasa "N-juftlik". */
@@ -341,10 +366,13 @@ class LessonOpeningTeacherReport
         // ma'lumoti bo'lmasa (masalan baho qo'yib bo'lingan ariza) — bitta qator.
         $days = [];
         foreach ($records as $record) {
+            [$course, $semester] = $this->courseSemester($record['semester_name'] ?? '', $record['semester_code'] ?? '');
             $base = [
                 'teacher' => $people[$record['who']]['name'],
                 'department' => $people[$record['who']]['department'],
                 'group' => $record['group'],
+                'course' => $course,
+                'semester' => $semester,
                 'subject' => $record['subject'],
                 'date' => $record['date'],
                 'status' => $record['status'],

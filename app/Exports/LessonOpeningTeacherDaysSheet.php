@@ -14,15 +14,16 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
  * "Kunlar" varag'i: yig'madagi har bir son ortidagi dars kunlari — o'qituvchi,
- * kafedrasi, guruh, fan, dars sanasi va (baho qo'yilmagan bo'lsa) qaysi
- * juftlikda va qaysi soatda ekani, hamda ariza holati.
+ * kafedrasi, guruh, kurs, semestr, fan, dars sanasi va (baho qo'yilmagan bo'lsa)
+ * qaysi juftlikda va qaysi soatda ekani, ariza holati, so'rovni kim yuborgani va
+ * kim(lar) tasdiqlagani.
  */
 class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
-    /** Ustunlar: A..M (Holat — I ustun) */
-    private const LAST_COL = 'M';
+    /** Ustunlar: A..O (Holat — K ustun) */
+    private const LAST_COL = 'O';
 
-    private const STATUS_COL = 'I';
+    private const STATUS_COL = 'K';
 
     private int $lastRow = 0;
 
@@ -35,7 +36,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function array(): array
     {
-        $rows = [['№', "O'qituvchi", 'Kafedra', 'Guruh', 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat', "So'rov raqami", 'Ariza sanasi', "So'rov yuborgan", 'Tasdiqlaganlar']];
+        $rows = [['№', "O'qituvchi", 'Kafedra', 'Guruh', 'Kurs', 'Semestr', 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat', "So'rov raqami", 'Ariza sanasi', "So'rov yuborgan", 'Tasdiqlaganlar']];
 
         foreach ($this->report['days'] as $index => $day) {
             $rows[] = [
@@ -43,6 +44,8 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                 $day['teacher'],
                 $day['department'] ?? '',
                 $day['group'],
+                $day['course'] ?? '',
+                $day['semester'] ?? '',
                 $day['subject'],
                 $day['date'] ? \Carbon\Carbon::parse($day['date'])->format('d.m.Y') : '',
                 $day['pair'] ?? '',
@@ -62,7 +65,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 40, 'F' => 13, 'G' => 16, 'H' => 14, 'I' => 36, 'J' => 11, 'K' => 17, 'L' => 34, 'M' => 40];
+        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 9, 'F' => 12, 'G' => 40, 'H' => 13, 'I' => 16, 'J' => 14, 'K' => 36, 'L' => 11, 'M' => 17, 'N' => 34, 'O' => 40];
     }
 
     public function registerEvents(): array
@@ -90,9 +93,11 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                 $sheet->getStyle("A2:{$lc}{$last}")->getBorders()->getBottom()
                     ->setBorderStyle(Border::BORDER_HAIR)->getColor()->setRGB('CBD5E1');
                 $sheet->getStyle("A2:A{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                // Sana, juftlik, soat, so'rov raqami, ariza sanasi — markazda
-                $sheet->getStyle("F2:H{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("J2:K{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                // Kurs, semestr, sana, juftlik, soat — markazda
+                $sheet->getStyle("E2:F{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("H2:J{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                // So'rov raqami, ariza sanasi — markazda
+                $sheet->getStyle("L2:M{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Holat rangi: yashil — baho qo'yilgan, to'q sariq — tasdiqlangan lekin baho yo'q,
                 // ko'k — kutilmoqda, qizil — rad etilgan, kulrang — ariza yo'q

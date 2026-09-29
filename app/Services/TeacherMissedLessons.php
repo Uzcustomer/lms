@@ -136,6 +136,7 @@ class TeacherMissedLessons
                 'sch.subject_id',
                 'sch.semester_code',
                 DB::raw('MAX(sch.subject_name) as subject_name'),
+                DB::raw('MAX(sch.semester_name) as semester_name'),
                 DB::raw('DATE(sch.lesson_date) as lesson_day'),
                 'sch.lesson_pair_code',
                 DB::raw('MAX(sch.lesson_pair_name) as lesson_pair_name'),

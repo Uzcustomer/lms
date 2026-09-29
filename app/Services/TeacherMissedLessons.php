@@ -22,11 +22,15 @@ use Illuminate\Support\Facades\DB;
  * boshidan (LessonOpening::periodStart) kechagacha. Allaqachon so'rov
  * yuborilgan (rad etilmagan) kunlar chiqarilmaydi; rad etilgani qayta
  * yuborish mumkinligi uchun belgi bilan qoladi.
+ *
+ * Xuddi shu qoida registrator ofisining Excel hisobotida ham ishlaydi
+ * (LessonOpeningTeacherReport): u barcha o'qituvchilar uchun pastSlots() va
+ * markedPairs() ni chaqiradi, shuning uchun popup va hisobot bir xil javob beradi.
  */
 class TeacherMissedLessons
 {
     /** Jurnaldagi $excludedTrainingTypes bilan bir xil */
-    private const EXCLUDED_TYPE_NAMES = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+    private const EXCLUDED_TYPE_NAMES = ["Ma'ruza", "Mustaqil ta'lim", 'Oraliq nazorat', 'Oski', 'Yakuniy test', 'Quiz test'];
 
     /** @return Collection<int, array> eng yangi sana birinchi */
     public function forTeacher(Teacher $teacher): Collection
@@ -37,32 +41,10 @@ class TeacherMissedLessons
 
         $today = now('Asia/Tashkent')->toDateString();
         $from = LessonOpening::periodStart()->toDateString();
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
         // 1. O'qituvchining o'tgan amaliy dars juftliklari
         //    (guruh + fan + semestr + sana + juftlik)
-        $slots = DB::table('schedules as sch')
-            ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
-            ->where('sch.employee_id', $teacher->hemis_id)
-            ->where('sch.education_year_current', true)
-            ->whereNull('sch.deleted_at')
-            ->whereNotNull('sch.lesson_date')
-            ->whereNotIn('sch.training_type_name', self::EXCLUDED_TYPE_NAMES)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
-            ->whereRaw('DATE(sch.lesson_date) >= ?', [$from])
-            ->whereRaw('DATE(sch.lesson_date) < ?', [$today])
-            ->groupBy('g.id', 'g.name', 'sch.group_id', 'sch.subject_id', 'sch.semester_code', DB::raw('DATE(sch.lesson_date)'), 'sch.lesson_pair_code')
-            ->select(
-                'g.id as group_db_id',
-                'g.name as group_name',
-                'sch.group_id',
-                'sch.subject_id',
-                'sch.semester_code',
-                DB::raw('MAX(sch.subject_name) as subject_name'),
-                DB::raw('DATE(sch.lesson_date) as lesson_day'),
-                'sch.lesson_pair_code'
-            )
-            ->get();
+        $slots = $this->pastSlots($from, $today, $teacher->hemis_id);
 
         if ($slots->isEmpty()) {
             return collect();
@@ -72,34 +54,10 @@ class TeacherMissedLessons
         $subjectIds = $slots->pluck('subject_id')->unique()->values()->all();
 
         // Faol talabasi yo'q guruh uchun "baho qo'yilmagan" ma'nosiz
-        $groupsWithStudents = DB::table('students')
-            ->whereIn('group_id', $groupIds)
-            ->where('student_status_code', 11)
-            ->distinct()
-            ->pluck('group_id')
-            ->map(fn ($id) => (string) $id)
-            ->flip();
+        $groupsWithStudents = $this->groupsWithActiveStudents($groupIds);
 
         // 2. Qaysi juftliklarda kamida bitta baho yoki NB bor
-        $marked = [];
-        DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->whereIn('st.group_id', $groupIds)
-            ->whereIn('sg.subject_id', $subjectIds)
-            ->whereNull('sg.deleted_at')
-            ->whereNotNull('sg.lesson_date')
-            ->whereNotIn('sg.training_type_code', [99, 100, 101, 102, 103])
-            ->whereRaw('DATE(sg.lesson_date) >= ?', [$from])
-            ->whereRaw('DATE(sg.lesson_date) < ?', [$today])
-            ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
-            ->orderBy('sg.id')
-            ->chunk(2000, function ($rows) use (&$marked) {
-                foreach ($rows as $row) {
-                    if ($row->reason === 'absent' || $this->effectiveGrade($row) !== null) {
-                        $marked[$this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code)] = true;
-                    }
-                }
-            });
+        $marked = $this->markedPairs($groupIds, $subjectIds, $from, $today);
 
         // 3. Allaqachon so'rov yuborilgan kunlar: rad etilmaganlari chiqariladi
         $openings = LessonOpening::query()
@@ -119,7 +77,7 @@ class TeacherMissedLessons
                 $pairKey = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
                 $status = $openings[$key] ?? null;
 
-                return !isset($marked[$pairKey])
+                return ! isset($marked[$pairKey])
                     && isset($groupsWithStudents[(string) $slot->group_id])
                     && ($status === null || $status === LessonOpening::STATUS_REJECTED);
             })
@@ -134,21 +92,114 @@ class TeacherMissedLessons
                     'rejected' => ($openings[$key] ?? null) === LessonOpening::STATUS_REJECTED,
                     // Jurnal ochilishi bilan shu sana uchun so'rov oynasi ochiladi
                     'url' => route('admin.journal.show', [$slot->group_db_id, $slot->subject_id, $slot->semester_code])
-                        . '?open_lesson=' . $slot->lesson_day,
+                        .'?open_lesson='.$slot->lesson_day,
                 ];
             })
             ->sortByDesc('lesson_date')
             ->values();
     }
 
-    private function key($groupId, $subjectId, $semesterCode, ?string $day): string
+    /**
+     * Davr boshidan kechagacha o'tgan amaliy dars juftliklari: guruh + fan +
+     * semestr + sana + juftlik, har biri o'qituvchisi bilan. $employeeHemisId
+     * berilsa — faqat shu o'qituvchining, aks holda jadvaldagi barchasiniki
+     * (registrator hisoboti uchun).
+     *
+     * @return Collection<int, object>
+     */
+    public function pastSlots(string $from, string $today, string|int|null $employeeHemisId = null): Collection
     {
-        return $groupId . '|' . $subjectId . '|' . $semesterCode . '|' . $day;
+        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+        return DB::table('schedules as sch')
+            ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->when(
+                $employeeHemisId !== null,
+                fn ($query) => $query->where('sch.employee_id', $employeeHemisId),
+                fn ($query) => $query->whereNotNull('sch.employee_id')
+            )
+            ->where('sch.education_year_current', true)
+            ->whereNull('sch.deleted_at')
+            ->whereNotNull('sch.lesson_date')
+            ->whereNotIn('sch.training_type_name', self::EXCLUDED_TYPE_NAMES)
+            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereRaw('DATE(sch.lesson_date) >= ?', [$from])
+            ->whereRaw('DATE(sch.lesson_date) < ?', [$today])
+            ->groupBy('g.id', 'g.name', 'sch.employee_id', 'sch.group_id', 'sch.subject_id', 'sch.semester_code', DB::raw('DATE(sch.lesson_date)'), 'sch.lesson_pair_code')
+            ->select(
+                'g.id as group_db_id',
+                'g.name as group_name',
+                'sch.employee_id',
+                DB::raw('MAX(sch.employee_name) as employee_name'),
+                'sch.group_id',
+                'sch.subject_id',
+                'sch.semester_code',
+                DB::raw('MAX(sch.subject_name) as subject_name'),
+                DB::raw('DATE(sch.lesson_date) as lesson_day'),
+                'sch.lesson_pair_code'
+            )
+            ->get();
     }
 
-    private function pairKey($groupId, $subjectId, $semesterCode, ?string $day, ?string $pair): string
+    /**
+     * Faol (O'qimoqda) talabasi bor guruhlar: [group_id => index].
+     *
+     * @return array<string, int>
+     */
+    public function groupsWithActiveStudents(array $groupIds): array
     {
-        return $this->key($groupId, $subjectId, $semesterCode, $day) . '|' . $pair;
+        return DB::table('students')
+            ->whereIn('group_id', $groupIds)
+            ->where('student_status_code', 11)
+            ->distinct()
+            ->pluck('group_id')
+            ->map(fn ($id) => (string) $id)
+            ->flip()
+            ->all();
+    }
+
+    /**
+     * Kamida bitta talabaga baho yoki NB qo'yilgan juftliklar:
+     * [pairKey() => true]. Jurnaldagi "hisobga olingan juftlik" qoidasi.
+     *
+     * @return array<string, true>
+     */
+    public function markedPairs(array $groupIds, array $subjectIds, string $from, string $today): array
+    {
+        $marked = [];
+
+        DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereIn('st.group_id', $groupIds)
+            ->whereIn('sg.subject_id', $subjectIds)
+            ->whereNull('sg.deleted_at')
+            ->whereNotNull('sg.lesson_date')
+            ->whereNotIn('sg.training_type_code', [99, 100, 101, 102, 103])
+            ->whereRaw('DATE(sg.lesson_date) >= ?', [$from])
+            ->whereRaw('DATE(sg.lesson_date) < ?', [$today])
+            ->select('sg.id as id', 'st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
+            // Butun o'qituvchilar uchun qatorlar ko'p: offset emas, id bo'yicha bo'laklaymiz
+            ->chunkById(2000, function ($rows) use (&$marked) {
+                foreach ($rows as $row) {
+                    if ($row->reason === 'absent' || $this->effectiveGrade($row) !== null) {
+                        $marked[$this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code)] = true;
+                    }
+                }
+            }, 'sg.id', 'id');
+
+        return $marked;
+    }
+
+    /** Kun kaliti: guruh | fan | semestr | sana */
+    public function key($groupId, $subjectId, $semesterCode, ?string $day): string
+    {
+        return $groupId.'|'.$subjectId.'|'.$semesterCode.'|'.$day;
+    }
+
+    /** Juftlik kaliti: kun kaliti | juftlik kodi */
+    public function pairKey($groupId, $subjectId, $semesterCode, ?string $day, ?string $pair): string
+    {
+        return $this->key($groupId, $subjectId, $semesterCode, $day).'|'.$pair;
     }
 
     /**

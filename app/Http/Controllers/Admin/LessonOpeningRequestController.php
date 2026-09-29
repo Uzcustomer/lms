@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\LessonOpeningTeacherReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\LessonOpening;
 use App\Models\Setting;
 use App\Services\LessonOpeningNotifier;
+use App\Services\LessonOpeningTeacherReport;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Dars ochish so'rovlarini ko'rib chiqish.
@@ -89,11 +93,9 @@ class LessonOpeningRequestController extends Controller
             'reviewer' => $reviewer,
             // Shu foydalanuvchi qarorini kutayotganlar soni
             'myQueue' => $stage ? $this->myQueueCount($stage, $reviewer, $inPeriod) : null,
-            'periodStart' => LessonOpening::periodStart(),
             'allPeriods' => $allPeriods,
             'canReview' => $stage !== null,
             'canDelete' => $this->canDelete(),
-            'testMode' => (bool) Setting::get('lesson_opening_test_mode', false),
             'openingDays' => max((int) Setting::get('lesson_opening_days', 3), 1),
             // Bosqichlarni kim imzolaydi: rolga ega bir nechtasidan bittasi
             'stageApprovers' => [
@@ -105,6 +107,22 @@ class LessonOpeningRequestController extends Controller
                 LessonOpening::STAGE_PROREKTOR => LessonOpening::pinnedApproverKey(LessonOpening::STAGE_PROREKTOR),
             ],
         ]);
+    }
+
+    /**
+     * Excel: har bir o'qituvchi joriy semestrda necha marta baho qo'ymagan va
+     * shulardan nechtasi uchun ariza orqali tasdiq olib baho qo'ygan.
+     * Hisob LessonOpeningTeacherReport da (o'qituvchi popupi bilan bir xil qoida).
+     */
+    public function export(LessonOpeningTeacherReport $report): BinaryFileResponse
+    {
+        // Butun semestrning jadvali va baholari ko'riladi — vaqt ketishi mumkin
+        @set_time_limit(300);
+        @ini_set('memory_limit', '1024M');
+
+        $name = 'dars-ochish-oqituvchilar-'.now('Asia/Tashkent')->format('Y-m-d-Hi').'.xlsx';
+
+        return Excel::download(new LessonOpeningTeacherReportExport($report->build()), $name);
     }
 
     /**
@@ -122,13 +140,13 @@ class LessonOpeningRequestController extends Controller
         $opening = DB::transaction(function () use ($opening, $stage, $reviewer) {
             // Bir necha tasdiqlovchi bir vaqtda bossa ham holat to'g'ri qolsin
             $opening = LessonOpening::whereKey($opening->id)->lockForUpdate()->first();
-            if (!$opening || !($opening->awaits($stage, $reviewer) || $opening->canReapprove($stage, $reviewer))) {
+            if (! $opening || ! ($opening->awaits($stage, $reviewer) || $opening->canReapprove($stage, $reviewer))) {
                 return null;
             }
 
             $opening->setStageDecision($stage, LessonOpening::DECISION_APPROVED, $reviewer);
 
-            if ($opening->status === LessonOpening::STATUS_REJECTED && !$opening->anyStageRejected()) {
+            if ($opening->status === LessonOpening::STATUS_REJECTED && ! $opening->anyStageRejected()) {
                 $opening->fill(['status' => LessonOpening::STATUS_PENDING, 'review_comment' => null]);
             }
 
@@ -146,7 +164,7 @@ class LessonOpeningRequestController extends Controller
             return $opening;
         });
 
-        if (!$opening) {
+        if (! $opening) {
             return back()->with('error', "Bu so'rov bo'yicha sizning qaroringiz kerak emas yoki allaqachon ko'rib chiqilgan.");
         }
 
@@ -193,7 +211,7 @@ class LessonOpeningRequestController extends Controller
             $opening = LessonOpening::whereKey($opening->id)->lockForUpdate()->first();
             // Kutilayotgan so'rov yoki shu bosqich tasdiqlab ochilgan dars
             // (adashib tasdiqlangan bo'lsa qaytarib olinadi)
-            if (!$opening || !($opening->awaits($stage, $reviewer) || $opening->canRevoke($stage, $reviewer))) {
+            if (! $opening || ! ($opening->awaits($stage, $reviewer) || $opening->canRevoke($stage, $reviewer))) {
                 return null;
             }
             $wasOpen = $opening->status === LessonOpening::STATUS_ACTIVE;
@@ -210,7 +228,7 @@ class LessonOpeningRequestController extends Controller
             return $opening;
         });
 
-        if (!$opening) {
+        if (! $opening) {
             return back()->with('error', "Bu so'rov bo'yicha sizning qaroringiz kerak emas yoki allaqachon ko'rib chiqilgan.");
         }
 
@@ -250,7 +268,7 @@ class LessonOpeningRequestController extends Controller
     {
         abort_unless($this->canDelete(), 403);
 
-        $on = !(bool) Setting::get('lesson_opening_test_mode', false);
+        $on = ! (bool) Setting::get('lesson_opening_test_mode', false);
         Setting::set('lesson_opening_test_mode', $on ? '1' : '');
 
         return back()->with('success', $on
@@ -278,7 +296,7 @@ class LessonOpeningRequestController extends Controller
         $approvers = LessonOpening::stageApprovers($stage);
         $label = LessonOpening::STAGE_LABELS[$stage];
 
-        if ($key !== '' && !$approvers->has($key)) {
+        if ($key !== '' && ! $approvers->has($key)) {
             return back()->with('error', "Bunday xodim {$label} rolida topilmadi.");
         }
 
@@ -317,7 +335,7 @@ class LessonOpeningRequestController extends Controller
     private function canDelete(): bool
     {
         $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
-        if (!$user || !method_exists($user, 'hasAnyRole')) {
+        if (! $user || ! method_exists($user, 'hasAnyRole')) {
             return false;
         }
 
@@ -345,7 +363,7 @@ class LessonOpeningRequestController extends Controller
         $subjectIds = $openings->pluck('subject_id')->unique()->values();
         $dates = $openings->map(fn ($o) => $o->lesson_date?->format('Y-m-d'))->filter()->unique()->values();
 
-        $key = fn ($group, $subject, $semester) => $group . '|' . $subject . '|' . $semester;
+        $key = fn ($group, $subject, $semester) => $group.'|'.$subject.'|'.$semester;
 
         $byDay = [];
         DB::table('schedules')
@@ -356,13 +374,13 @@ class LessonOpeningRequestController extends Controller
             ->orderBy('lesson_pair_code')
             ->get(['group_id', 'subject_id', 'semester_code', 'employee_name', 'training_type_name', DB::raw('DATE(lesson_date) as day')])
             ->each(function ($row) use (&$byDay, $key) {
-                $byDay[$key($row->group_id, $row->subject_id, $row->semester_code) . '|' . $row->day][] = $row;
+                $byDay[$key($row->group_id, $row->subject_id, $row->semester_code).'|'.$row->day][] = $row;
             });
 
         $result = [];
         $missing = [];
         foreach ($openings as $opening) {
-            $rows = $byDay[$key($opening->group_hemis_id, $opening->subject_id, $opening->semester_code) . '|' . $opening->lesson_date?->format('Y-m-d')] ?? [];
+            $rows = $byDay[$key($opening->group_hemis_id, $opening->subject_id, $opening->semester_code).'|'.$opening->lesson_date?->format('Y-m-d')] ?? [];
             if ($rows) {
                 $result[$opening->id] = $this->uniqueTeachers($rows);
             } else {
@@ -403,7 +421,7 @@ class LessonOpeningRequestController extends Controller
             }
             $teachers[$name] ??= ['name' => $name, 'types' => []];
             $type = trim((string) $row->training_type_name);
-            if ($type !== '' && !in_array($type, $teachers[$name]['types'], true)) {
+            if ($type !== '' && ! in_array($type, $teachers[$name]['types'], true)) {
                 $teachers[$name]['types'][] = $type;
             }
         }
@@ -419,7 +437,7 @@ class LessonOpeningRequestController extends Controller
     private function stage(): ?string
     {
         $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
-        if (!$user || !method_exists($user, 'getRoleNames')) {
+        if (! $user || ! method_exists($user, 'getRoleNames')) {
             return null;
         }
 
@@ -431,7 +449,7 @@ class LessonOpeningRequestController extends Controller
 
         $roles = $user->getRoleNames()->all();
         $active = (string) session('active_role', '');
-        if (!in_array($active, $roles, true)) {
+        if (! in_array($active, $roles, true)) {
             $active = collect(array_keys($roleStages))->first(fn ($role) => in_array($role, $roles, true)) ?? '';
         }
 

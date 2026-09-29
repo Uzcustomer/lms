@@ -288,21 +288,7 @@
                                 Sizning qaroringizni kutmoqda: <b>{{ $myQueue }}</b>
                             </div>
                         @endif
-                        <div class="lo-hero-chip">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            Tasdiqlangach baho qo'yish muddati: <b>{{ $openingDays }} kun</b>
-                        </div>
                         @if($canDelete)
-                            {{-- Test rejimi: so'rov yuborishda raqamni qo'lda tanlash --}}
-                            <form method="POST" action="{{ route('admin.lesson-opening-requests.test-mode') }}" style="margin:0;">
-                                @csrf
-                                <button type="submit" class="lo-hero-chip" style="border:0; cursor:pointer; {{ ($testMode ?? false) ? 'background:#7c3aed; border-color:#7c3aed;' : '' }}"
-                                        title="Yoqilganda so'rov yuborayotgan kishi 1/2/3-so'rovni tanlaydi va limit tekshirilmaydi">
-                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-                                    Test rejimi: <b>{{ ($testMode ?? false) ? 'yoqilgan' : "o'chiq" }}</b>
-                                </button>
-                            </form>
-
                             {{-- Rolga ega bir nechta xodimdan kim imzolashi: registrator va prorektor --}}
                             @foreach(['registrar' => 'Registratordan', 'prorektor' => 'Prorektor'] as $apStage => $apLabel)
                                 @php $apList = ($stageApprovers[$apStage] ?? collect()); @endphp
@@ -325,16 +311,12 @@
                                 @endif
                             @endforeach
                         @endif
-                        {{-- Sanoq davri: joriy semestr (sozlamalardagi sana) yoki hammasi --}}
-                        <a class="lo-hero-chip" style="text-decoration:none;"
-                           href="{{ route('admin.lesson-opening-requests.index', ['status' => $status] + (($allPeriods ?? false) ? [] : ['period' => 'all'])) }}"
-                           title="{{ ($allPeriods ?? false) ? 'Faqat joriy semestr so\'rovlarini ko\'rsatish' : 'Oldingi semestrlar so\'rovlarini ham ko\'rsatish' }}">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                            @if($allPeriods ?? false)
-                                Barcha semestrlar · <b>faqat joriysini ko'rsatish</b>
-                            @else
-                                Joriy semestr: <b>{{ isset($periodStart) ? $periodStart->format('d.m.Y') : '' }}</b> dan · eskilarini ko'rsatish
-                            @endif
+                        {{-- O'qituvchilar hisoboti: necha marta baho qo'yilmagan va nechtasi ariza orqali ochilib baholangan --}}
+                        <a class="lo-hero-chip" style="text-decoration:none; background:#059669; border-color:#059669;"
+                           href="{{ route('admin.lesson-opening-requests.export') }}"
+                           title="Joriy semestr: har bir o'qituvchining baho qo'yilmagan kunlari va ariza orqali tasdiq olib baho qo'yganlari soni">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                            Excel
                         </a>
                     </div>
                 </header>

@@ -348,18 +348,49 @@ function loApprover(string $role, string $name): void
     App\Models\Teacher::where('full_name', $name)->firstOrFail()->assignRole($role);
 }
 
-test('registrator ofisi Excel\'ni yuklab oladi, rolsiz foydalanuvchi olmaydi', function () {
+test('fon eksporti: boshlash -> holat -> yuklab olish (sana oralig\'i bilan)', function () {
+    // Test muhitida navbat sync — job POST ichida darhol ishlaydi
     $registrar = loUser('registrator_ofisi', 'Registrator Bir');
 
-    $response = $this->actingAs($registrar, 'web')->get(route('admin.lesson-opening-requests.export'));
+    $start = $this->actingAs($registrar, 'web')->postJson(route('admin.lesson-opening-requests.export.start'), [
+        'date_from' => '2026-09-03',
+        'date_to' => '2026-09-10',
+    ]);
+    $start->assertOk();
+    $key = $start->json('export_key');
+    expect($key)->not->toBeNull();
 
-    $response->assertOk();
-    expect($response->headers->get('content-disposition'))
-        ->toContain('dars-ochish-oqituvchilar-2026-09-29-1000.xlsx');
+    // Sync navbat tugagach holat "done"
+    $status = $this->actingAs($registrar, 'web')->getJson(route('admin.lesson-opening-requests.export.status', ['export_key' => $key]));
+    $status->assertOk()->assertJson(['status' => 'done']);
+    expect($status->json('file_name'))->toBe('dars-ochish-oqituvchilar-2026-09-03_2026-09-10.xlsx');
+
+    // Fayl yuklab olinadi
+    $download = $this->actingAs($registrar, 'web')->get(route('admin.lesson-opening-requests.export.download', ['export_key' => $key]));
+    $download->assertOk();
+    expect($download->headers->get('content-disposition'))->toContain('dars-ochish-oqituvchilar-2026-09-03_2026-09-10.xlsx');
 
     // Ariza sahifasiga kira olmaydigan rol — RoleMiddleware boshqa sahifaga yo'naltiradi
     $teacher = loUser('oqituvchi', 'Oddiy Ustoz');
-    $this->actingAs($teacher, 'web')->get(route('admin.lesson-opening-requests.export'))->assertRedirect();
+    $this->actingAs($teacher, 'web')->post(route('admin.lesson-opening-requests.export.start'))->assertRedirect();
+});
+
+test('sana oralig\'i faqat shu oraliqdagi kunlarni hisoblaydi', function () {
+    $report = app(LessonOpeningTeacherReport::class);
+
+    // Aliyev kunlari: 03,04,07,08,09,10 (semestr bo'yicha). Faqat 07-09 oralig'i:
+    $range = $report->build('2026-09-07', '2026-09-09');
+    $aliyev = collect($range['teachers'])->firstWhere('name', 'Aliyev Vali');
+
+    expect($range['from']->toDateString())->toBe('2026-09-07');
+    expect($range['to']->toDateString())->toBe('2026-09-09');
+    expect(collect($range['days'])->where('teacher', 'Aliyev Vali')->pluck('date')->all())
+        ->toBe(['2026-09-07', '2026-09-08', '2026-09-09']);
+    expect($aliyev)->toMatchArray(['total' => 3, 'approved' => 1, 'pending' => 1, 'rejected' => 1]);
+
+    // Kelajakdagi yuqori chegara kechagacha qisqaradi (bugun 2026-09-29)
+    $capped = $report->build('2026-09-25', '2026-12-31');
+    expect($capped['to']->toDateString())->toBe('2026-09-28');
 });
 
 test('sahifada faqat tasdiqlovchi tanlovlari va Excel tugmasi qoladi', function () {
@@ -377,7 +408,11 @@ test('sahifada faqat tasdiqlovchi tanlovlari va Excel tugmasi qoladi', function 
 
     expect($html)->toContain('Registratordan:')
         ->toContain('Prorektor:')
-        ->toContain(route('admin.lesson-opening-requests.export'))
+        // Yangi sana oralig'i toolbari va uni boshlaydigan route
+        ->toContain('Hisoblab, Excel yuklash')
+        ->toContain('id="loExpFrom"')
+        ->toContain('id="loExpTo"')
+        ->toContain('loExportStart()')
         // Olib tashlangan elementlar
         ->not->toContain('Tasdiqlangach baho qo&#039;yish muddati')
         ->not->toContain("Tasdiqlangach baho qo'yish muddati")

@@ -62,21 +62,33 @@ class LessonOpeningTeacherReport
      *     teachers: list<array<string, mixed>>, days: list<array<string, mixed>>
      * }
      */
-    public function build(): array
+    public function build(?string $fromDate = null, ?string $toDate = null): array
     {
-        $today = now('Asia/Tashkent')->toDateString();
-        $from = LessonOpening::periodStart()->toDateString();
+        // Faqat o'tgan kunlar hisobga olinadi (bugun va kelajak "o'tkazib
+        // yuborilgan" bo'la olmaydi), shuning uchun yuqori chegara kechagacha.
+        $yesterday = now('Asia/Tashkent')->subDay()->toDateString();
+        $from = $fromDate ?: LessonOpening::periodStart()->toDateString();
+        $to = $toDate ?: $yesterday;
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+        if ($to > $yesterday) {
+            $to = $yesterday;   // kelajakdagi sana tanlansa — kechagacha
+        }
+        // pastSlots/markedPairs yuqori chegarani ISTISNOLI (< $upper) oladi
+        $upper = Carbon::parse($to)->addDay()->toDateString();
 
-        $slots = $this->missed->pastSlots($from, $today);
+        $slots = $this->missed->pastSlots($from, $upper);
         $openings = LessonOpening::query()
             ->whereDate('lesson_date', '>=', $from)
+            ->whereDate('lesson_date', '<=', $to)
             ->get(['id', 'group_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'teacher_id', 'teacher_name', 'request_number', 'status', 'created_at']);
 
         $groupIds = $slots->pluck('group_id')->merge($openings->pluck('group_hemis_id'))->unique()->values()->all();
         $subjectIds = $slots->pluck('subject_id')->merge($openings->pluck('subject_id'))->unique()->values()->all();
 
         $active = $groupIds ? $this->missed->groupsWithActiveStudents($groupIds) : [];
-        $marked = $groupIds ? $this->missed->markedPairs($groupIds, $subjectIds, $from, $today) : [];
+        $marked = $groupIds ? $this->missed->markedPairs($groupIds, $subjectIds, $from, $upper) : [];
 
         // Kunda kamida bitta juftlik hisobga olinganmi (o'qituvchi jadvalda topilmasa kerak)
         $dayMarked = [];
@@ -213,7 +225,7 @@ class LessonOpeningTeacherReport
             }
         }
 
-        return $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($today)->subDay());
+        return $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($to));
     }
 
     /**

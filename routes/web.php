@@ -312,8 +312,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->name('lesson-opening-requests.')
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'index'])->name('index');
-                // O'qituvchilar bo'yicha hisobot: necha marta baho qo'yilmagan, nechtasi ariza orqali ochilgan
-                Route::get('/export', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'export'])->name('export');
+                // O'qituvchilar bo'yicha hisobot (Excel): sana oralig'i, fon jarayonida hisoblanadi
+                Route::post('/export/start', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'startExport'])->name('export.start');
+                Route::get('/export/status', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'exportStatus'])->name('export.status');
+                Route::get('/export/download', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'exportDownload'])->name('export.download');
                 Route::post('/{opening}/approve', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'approve'])->name('approve');
                 Route::post('/{opening}/reject', [\App\Http\Controllers\Admin\LessonOpeningRequestController::class, 'reject'])->name('reject');
                 // Faqat admin/superadmin: so'rov va uning fayllarini butunlay o'chirish

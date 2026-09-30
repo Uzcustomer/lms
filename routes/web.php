@@ -1673,7 +1673,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/dashboard', [TeacherMainController::class, 'index'])->name('dashboard');
         Route::get('/info-me', [TeacherMainController::class, 'info'])->name('info-me');
 
-        // Tyutor: guruh starostalarini belgilash (accordion modal + saqlash)
+        // Tyutor: guruh starostalarini belgilash (sahifa + accordion + saqlash)
+        Route::get('/starosta', [TutorStarostaController::class, 'page'])->name('starosta.index');
         Route::get('/starosta/groups', [TutorStarostaController::class, 'groups'])->name('starosta.groups');
         Route::post('/starosta/set', [TutorStarostaController::class, 'set'])->name('starosta.set');
 

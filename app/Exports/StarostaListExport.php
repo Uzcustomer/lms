@@ -13,13 +13,13 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
- * Starostalar ro'yxati eksporti: guruh, kafedra, yo'nalish, kurs, starosta.
+ * Starostalar ro'yxati eksporti — talaba (starosta) kesimida.
  */
 class StarostaListExport implements FromArray, WithColumnWidths, WithEvents, WithHeadings, WithTitle
 {
     private const LAST_COL = 'J';
 
-    public function __construct(private Collection $rows) {}
+    public function __construct(private Collection $students) {}
 
     public function title(): string
     {
@@ -28,25 +28,25 @@ class StarostaListExport implements FromArray, WithColumnWidths, WithEvents, Wit
 
     public function headings(): array
     {
-        return ['№', 'Guruh', 'Kafedra', "Yo'nalish", 'Kurs', 'Talabalar soni', 'Starosta (F.I.SH)', 'Talaba ID', 'Telefon', 'Holat'];
+        return ['№', 'F.I.SH', 'HEMIS ID', 'Talaba ID', "Ta'lim turi", "Ta'lim shakli", 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh'];
     }
 
     public function array(): array
     {
         $out = [];
         $i = 1;
-        foreach ($this->rows as $r) {
+        foreach ($this->students as $s) {
             $out[] = [
                 $i++,
-                $r->group,
-                $r->department ?? '',
-                $r->specialty ?? '',
-                $r->course ? $r->course.'-kurs' : '',
-                $r->student_count,
-                $r->starosta ?? '',
-                $r->starosta_id_number ?? '',
-                $r->starosta_phone ?? '',
-                $r->starosta ? 'Belgilangan' : 'Belgilanmagan',
+                $s->full_name,
+                $s->hemis_id,
+                $s->student_id_number,
+                $s->education_type_name,
+                $s->education_form_name,
+                $s->department_name,
+                $s->specialty_name,
+                $s->level_name,
+                $s->group_name,
             ];
         }
 
@@ -55,7 +55,7 @@ class StarostaListExport implements FromArray, WithColumnWidths, WithEvents, Wit
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 18, 'C' => 32, 'D' => 30, 'E' => 8, 'F' => 14, 'G' => 36, 'H' => 14, 'I' => 16, 'J' => 16];
+        return ['A' => 6, 'B' => 34, 'C' => 10, 'D' => 16, 'E' => 14, 'F' => 14, 'G' => 26, 'H' => 28, 'I' => 12, 'J' => 16];
     }
 
     public function registerEvents(): array
@@ -64,7 +64,7 @@ class StarostaListExport implements FromArray, WithColumnWidths, WithEvents, Wit
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $lc = self::LAST_COL;
-                $last = $this->rows->count() + 1;
+                $last = $this->students->count() + 1;
 
                 $sheet->getStyle("A1:{$lc}1")->getFont()->setBold(true)->setSize(10)->getColor()->setRGB('FFFFFF');
                 $sheet->getStyle("A1:{$lc}1")->getFill()
@@ -77,7 +77,7 @@ class StarostaListExport implements FromArray, WithColumnWidths, WithEvents, Wit
                 if ($last >= 2) {
                     $sheet->setAutoFilter("A1:{$lc}{$last}");
                     $sheet->getStyle("A2:A{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle("E2:F{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("I2:I{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 }
             },
         ];

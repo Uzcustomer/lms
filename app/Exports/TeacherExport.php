@@ -32,6 +32,13 @@ class TeacherExport
                 return \App\Enums\ProjectRole::tryFrom($name)?->label() ?? $name;
             })->implode(', ');
 
+            // Fan mas'uli sifatida biriktirilgan fanlar (takrorlanmas nomlar)
+            $responsibleSubjects = $teacher->responsibleSubjects
+                ->pluck('subject_name')
+                ->filter()
+                ->unique()
+                ->implode(', ');
+
             $rowData = [
                 $index++,
                 $teacher->employee_id_number,
@@ -47,6 +54,7 @@ class TeacherExport
                 $teacher->telegram_username ?? '',
                 $teacher->telegram_verified_at ? 'Ha' : 'Yo\'q',
                 $roles,
+                $responsibleSubjects,
                 $teacher->status ? 'Faol' : 'Nofaol',
                 $teacher->is_active ? 'Aktiv' : 'Noaktiv',
                 $teacher->contract_number ?? '',
@@ -64,7 +72,7 @@ class TeacherExport
 
     private function buildQuery()
     {
-        $query = Teacher::with('roles');
+        $query = Teacher::with(['roles', 'responsibleSubjects']);
 
         if ($this->request->filled('search')) {
             $searchTerm = $this->request->search;
@@ -118,6 +126,7 @@ class TeacherExport
             'Telegram',
             'Telegram tasdiqlangan',
             'Rollar',
+            "Mas'ul fanlar",
             'Status',
             'Faollik',
             'Shartnoma raqami',

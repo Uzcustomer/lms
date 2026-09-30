@@ -93,7 +93,9 @@ class LessonOpeningTeacherReport
 
         $groupIds = array_keys($active);
         $subjectIds = $slots->pluck('subject_id')->merge($openings->pluck('subject_id'))->unique()->values()->all();
-        $marked = $groupIds ? $this->missed->markedPairs($groupIds, $subjectIds, $from, $upper) : [];
+        $analysis = $groupIds ? $this->missed->analyzePairs($groupIds, $subjectIds, $from, $upper) : ['marked' => [], 'missing' => []];
+        $marked = $analysis['marked'];
+        $missing = $analysis['missing']; // pairKey => baho qo'yilmagan talaba soni
 
         // Kunda kamida bitta juftlik hisobga olinganmi (o'qituvchi jadvalda topilmasa kerak)
         $dayMarked = [];
@@ -114,12 +116,17 @@ class LessonOpeningTeacherReport
                 'semester_code' => (string) $slot->semester_code,
                 'date' => $slot->lesson_day,
                 'unmarked' => false,
+                'missing_count' => 0,   // baho qo'yilmagan talaba soni (juftliklar bo'yicha eng ko'pi)
                 'pairs' => [],   // baho qo'yilmagan juftliklar: kod => ['label', 'time']
             ];
 
             $pairKey = $this->missed->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
             if (! isset($marked[$pairKey]) && isset($active[(string) $slot->group_id])) {
                 $byDay[$dayKey][$employee]['unmarked'] = true;
+                $byDay[$dayKey][$employee]['missing_count'] = max(
+                    (int) $byDay[$dayKey][$employee]['missing_count'],
+                    (int) ($missing[$pairKey] ?? 0)
+                );
                 $code = (string) $slot->lesson_pair_code;
                 $byDay[$dayKey][$employee]['pairs'][$code] ??= [
                     'label' => $this->pairLabel($slot),
@@ -252,6 +259,7 @@ class LessonOpeningTeacherReport
                     'approvers' => $approversOf($opening),
                     // Baho qo'yilmagan juftliklar (completed = to'liq baholangan, ular bo'sh)
                     'pairs' => $isCompleted ? [] : ($own['pairs'] ?? []),
+                    'missing_count' => $isCompleted ? 0 : (int) ($own['missing_count'] ?? 0),
                 ];
             }
         }
@@ -278,6 +286,7 @@ class LessonOpeningTeacherReport
                     'applicant' => '',   // ariza yubormagan
                     'approvers' => '',
                     'pairs' => $entry['pairs'],
+                    'missing_count' => (int) ($entry['missing_count'] ?? 0),
                 ];
             }
         }
@@ -389,6 +398,7 @@ class LessonOpeningTeacherReport
                 'requested_at' => $record['requested_at'],
                 'applicant' => $record['applicant'] ?? '',
                 'approvers' => $record['approvers'] ?? '',
+                'ungraded_students' => (int) ($record['missing_count'] ?? 0),
             ];
             // Har bir holat (guruh+fan+kun) — bitta qator; baho qo'yilmagan
             // juftliklar o'sha qatorда birga ko'rsatiladi (mas. "2, 5.1").

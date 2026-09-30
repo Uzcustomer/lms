@@ -469,6 +469,12 @@
                                                     @if($subject->semester_name)
                                                         <span style="font-size: 10px; color: #64748b;"> | {{ $subject->semester_name }}</span>
                                                     @endif
+                                                    @php $svMeta = ($subjectMeta ?? collect())->get($subject->id); @endphp
+                                                    @if($svMeta && ($svMeta->faculty_name || $svMeta->specialty_name))
+                                                        <div style="font-size: 10px; color: #94a3b8; margin-top: 1px;">
+                                                            {{ collect([$svMeta->faculty_name, $svMeta->specialty_name])->filter()->implode(' | ') }}
+                                                        </div>
+                                                    @endif
                                                 </div>
                                                 <button type="button" onclick="removeSubject(this)" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;">&times;</button>
                                             </div>

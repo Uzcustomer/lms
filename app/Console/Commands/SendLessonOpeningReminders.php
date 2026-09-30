@@ -231,35 +231,16 @@ class SendLessonOpeningReminders extends Command
             return 0;
         }
 
-        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->toArray();
 
-        // Baho qo'yilganlarni tekshirish (1-usul).
-        // Katta universitetda $scheduleHemisIds 10k+ ga yetadi va bitta
-        // whereIn() MySQL'ning 65535 placeholder limitini buzadi ("Prepared
-        // statement contains too many placeholders"). Shuning uchun chunk
-        // bo'lib so'rab, natijalarni birlashtiramiz.
-        $gradedScheduleIds = [];
-        foreach (array_chunk($scheduleHemisIds, 1000) as $chunk) {
-            $ids = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('subject_schedule_id', $chunk)
-                ->where(function ($q) {
-                    $q->where('grade', '>', 0)
-                      ->orWhere('retake_grade', '>', 0)
-                      ->orWhere('status', 'recorded');
-                })
-                ->pluck('subject_schedule_id')
-                ->all();
-            foreach ($ids as $id) {
-                $gradedScheduleIds[$id] = true;
-            }
-        }
-        $gradeByScheduleId = $gradedScheduleIds; // isset($gradeByScheduleId[$id]) bilan ishlatiladi
+        // Yangi qoida (Dars belgilashdek): dars faqat BARCHA faol talaba baho
+        // YOKI NB olgandagina "baho qo'yilgan". Shu bois har kun (guruh+fan+sana)
+        // uchun ishlov berilgan talaba soni jami faol talaba soni bilan solishtiriladi.
 
-        // Baho qo'yilganlarni tekshirish (2-usul)
-        $gradeRecords = DB::table('student_grades as sg')
+        // Ishlov berilgan (baho, retake, recorded yoki NB=absent) talabalar soni — kun bo'yicha
+        $processedByKey = [];
+        DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
@@ -268,17 +249,33 @@ class SendLessonOpeningReminders extends Command
             ->where(function ($q) {
                 $q->where('sg.grade', '>', 0)
                   ->orWhere('sg.retake_grade', '>', 0)
-                  ->orWhere('sg.status', 'recorded');
+                  ->orWhere('sg.status', 'recorded')
+                  ->orWhere('sg.reason', 'absent');
             })
-            ->select('st.group_id', 'sg.subject_id', 'sg.lesson_date')
-            ->distinct()
-            ->get();
+            ->select('st.group_id', 'sg.subject_id', DB::raw('DATE(sg.lesson_date) as d'), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+            ->groupBy('st.group_id', 'sg.subject_id', DB::raw('DATE(sg.lesson_date)'))
+            ->get()
+            ->each(function ($row) use (&$processedByKey) {
+                $processedByKey[$row->group_id . '|' . $row->subject_id . '|' . $row->d] = (int) $row->cnt;
+            });
 
-        $gradeByKey = [];
-        foreach ($gradeRecords as $row) {
-            $date = Carbon::parse($row->lesson_date)->format('Y-m-d');
-            $gradeByKey[$row->group_id . '|' . $row->subject_id . '|' . $date] = true;
-        }
+        // Jami faol talaba soni (fan bo'yicha — student_subjects, topilmasa guruh)
+        $semesterCodes = $schedules->pluck('semester_code')->unique()->toArray();
+        $subjectStudentCounts = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->whereIn('ss.semester_id', $semesterCodes)
+            ->where('st.student_status_code', 11)
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as k"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
+            ->pluck('cnt', 'k');
+        $groupStudentCounts = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', 11)
+            ->select('group_id', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('group_id')
+            ->pluck('cnt', 'group_id');
 
         // Dars ochilganlarni tekshirish
         $openedKeys = DB::table('lesson_openings')
@@ -294,11 +291,14 @@ class SendLessonOpeningReminders extends Command
         foreach ($schedules as $sch) {
             $gradeKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str;
 
-            $hasGrade = isset($gradeByScheduleId[$sch->schedule_hemis_id])
-                || isset($gradeByKey[$gradeKey]);
+            // Jami faol talaba (fan bo'yicha, topilmasa guruh) va ishlov berilganlar soni
+            $totalStudents = $subjectStudentCounts[$sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code]
+                ?? ($groupStudentCounts[$sch->group_id] ?? 0);
+            $processed = $processedByKey[$gradeKey] ?? 0;
 
-            if ($hasGrade) {
-                continue; // Baho qo'yilgan — o'tkazish
+            // Barcha faol talaba baho/NB olgan bo'lsa — baho qo'yilgan, o'tkazish
+            if ($totalStudents > 0 && $processed >= $totalStudents) {
+                continue; // Baho to'liq qo'yilgan — o'tkazish
             }
 
             // Dars ochilganmi?

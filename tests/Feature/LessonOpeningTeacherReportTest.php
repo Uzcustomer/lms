@@ -77,6 +77,19 @@ function loGroup(int $hemis, string $name, bool $withActiveStudent = true, strin
     return $seq;   // talabaning HEMIS id'si — baholar shunga bog'lanadi
 }
 
+/** Mavjud guruhga qo'shimcha faol bakalavr talaba qo'shadi; HEMIS id qaytaradi. */
+function loExtraStudent(int $group): int
+{
+    $seq = loSeq();
+    loRow('students', [
+        'hemis_id' => $seq, 'student_id_number' => 'S'.$seq, 'full_name' => 'Talaba '.$seq,
+        'group_id' => $group, 'student_status_code' => 11,
+        'education_type_name' => 'Bakalavr', 'education_type_code' => '11',
+    ]);
+
+    return $seq;
+}
+
 /** Jadvaldagi bitta juftlik: o'qituvchi, guruh, fan, sana, juftlik (kod, nomi, vaqti). */
 function loSlot(int $employee, string $employeeName, int $group, int $subject, string $subjectName, string $date, string $pair = '1', string $type = "Amaliy mashg'ulot", string $typeCode = '13'): void
 {
@@ -108,6 +121,18 @@ function loGrade(int $studentHemis, int $subject, string $date, string $pair = '
         'subject_id' => $subject, 'semester_code' => '11', 'training_type_code' => '13',
         'lesson_pair_code' => $pair, 'lesson_date' => $date.' 09:00:00',
         'grade' => 80, 'status' => 'recorded', 'reason' => null,
+    ]);
+}
+
+/** Juftlikka NB (davomat): grade=null, reason='absent'. */
+function loNb(int $studentHemis, int $subject, string $date, string $pair = '1'): void
+{
+    loRow('student_grades', [
+        'hemis_id' => loSeq(), 'student_id' => DB::table('students')->where('hemis_id', $studentHemis)->value('id'),
+        'student_hemis_id' => $studentHemis,
+        'subject_id' => $subject, 'semester_code' => '11', 'training_type_code' => '13',
+        'lesson_pair_code' => $pair, 'lesson_date' => $date.' 09:00:00',
+        'grade' => null, 'status' => 'recorded', 'reason' => 'absent',
     ]);
 }
 
@@ -591,4 +616,47 @@ test('sahifada faqat tasdiqlovchi tanlovlari va Excel tugmasi qoladi', function 
         ->not->toContain("Tasdiqlangach baho qo'yish muddati")
         ->not->toContain('Test rejimi')
         ->not->toContain("eskilarini ko'rsatish");
+});
+
+// ─── Yangi qoida: barcha faol talaba baho/NB olishi shart (Dars belgilashdek) ───
+
+test('qisman baholangan juftlik — bir faol talaba baholanmagan bo\'lsa baho qo\'yilmagan hisoblanadi', function () {
+    $s1 = loGroup(701, '701-guruh');   // 1-talaba (baholanadi)
+    $s2 = loExtraStudent(701);         // 2-talaba (baholanmaydi)
+    loSlot(1701, 'Qisman Ustoz', 701, 9701, 'Q fan', '2026-09-15', '1');
+    loGrade($s1, 9701, '2026-09-15', '1');   // faqat 1-talabaga baho
+
+    loTeacher(1701, 'Qisman Ustoz');
+    $teacher = App\Models\Teacher::where('hemis_id', 1701)->first();
+    $days = app(TeacherMissedLessons::class)->forTeacher($teacher);
+
+    expect($days->pluck('lesson_date')->all())->toBe(['2026-09-15']);
+});
+
+test('to\'liq baholangan juftlik — barcha faol talabaga baho qo\'yilgan bo\'lsa ro\'yxatda chiqmaydi', function () {
+    $s1 = loGroup(702, '702-guruh');
+    $s2 = loExtraStudent(702);
+    loSlot(1702, 'To\'liq Ustoz', 702, 9702, 'T fan', '2026-09-15', '1');
+    loGrade($s1, 9702, '2026-09-15', '1');
+    loGrade($s2, 9702, '2026-09-15', '1');   // ikkala talabaga ham baho
+
+    loTeacher(1702, 'To\'liq Ustoz');
+    $teacher = App\Models\Teacher::where('hemis_id', 1702)->first();
+    $days = app(TeacherMissedLessons::class)->forTeacher($teacher);
+
+    expect($days)->toHaveCount(0);
+});
+
+test('NB yozuv sifatida sanaladi — bir talabaga baho, ikkinchisiga NB bo\'lsa baho qo\'yilgan hisoblanadi', function () {
+    $s1 = loGroup(703, '703-guruh');
+    $s2 = loExtraStudent(703);
+    loSlot(1703, 'NB Ustoz', 703, 9703, 'N fan', '2026-09-15', '1');
+    loGrade($s1, 9703, '2026-09-15', '1');   // 1-talabaga baho
+    loNb($s2, 9703, '2026-09-15', '1');      // 2-talabaga NB
+
+    loTeacher(1703, 'NB Ustoz');
+    $teacher = App\Models\Teacher::where('hemis_id', 1703)->first();
+    $days = app(TeacherMissedLessons::class)->forTeacher($teacher);
+
+    expect($days)->toHaveCount(0);   // hamma faol talaba ishlov berilgan (baho/NB) → qo'yilgan
 });

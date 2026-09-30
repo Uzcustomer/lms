@@ -1293,13 +1293,22 @@ class TutorReportController extends Controller
         $subjectIds = $schedules->pluck('subject_id')->unique()->toArray();
         $scheduleGroupIds = $schedules->pluck('group_id')->unique()->toArray();
 
-        $students = Student::whereIn('group_id', $scheduleGroupIds)->get();
+        // Faqat faol (o'qimoqda) talabalar hisobga olinadi
+        $students = Student::whereIn('group_id', $scheduleGroupIds)
+            ->where('student_status_code', 11)
+            ->get();
         $studentMap = $students->groupBy('group_id');
 
+        // "Yozuv bor" = baho YOKI NB (reason=absent) YOKI retake — Dars belgilash bilan bir xil
         $existingGrades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $students->pluck('hemis_id')->toArray())
             ->whereIn('subject_id', $subjectIds)
             ->whereNotIn('training_type_name', $excludedNames)
+            ->where(function ($q) {
+                $q->whereNotNull('grade')
+                    ->orWhereNotNull('retake_grade')
+                    ->orWhere('reason', 'absent');
+            })
             ->select('student_hemis_id', 'subject_id', DB::raw('DATE(lesson_date) as lesson_date'))
             ->distinct()
             ->get();
@@ -1328,7 +1337,9 @@ class TutorReportController extends Controller
                 }
             }
 
-            if ($noGradeCount > 0 && $totalStudents > 0 && $noGradeCount == $totalStudents) {
+            // Yangi qoida (Dars belgilashdek): hatto bitta faol talabada ham
+            // na baho na NB bo'lmasa — dars baho qo'yilmagan hisoblanadi.
+            if ($noGradeCount > 0 && $totalStudents > 0) {
                 $unrated[] = [
                     'group_name' => $first->group_name,
                     'subject_name' => $first->subject_name,

@@ -20,8 +20,8 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
  */
 class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
-    /** Ustunlar: A..O (Holat — K ustun) */
-    private const LAST_COL = 'O';
+    /** Ustunlar: A..P (Holat — K ustun) */
+    private const LAST_COL = 'P';
 
     private const STATUS_COL = 'K';
 
@@ -36,7 +36,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function array(): array
     {
-        $rows = [['№', "O'qituvchi", 'Kafedra', 'Guruh', 'Kurs', 'Semestr', 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat', "So'rov raqami", 'Ariza sanasi', "So'rov yuborgan", 'Tasdiqlaganlar']];
+        $rows = [['№', "O'qituvchi", 'Kafedra', 'Guruh', 'Kurs', 'Semestr', 'Fan', 'Dars sanasi', 'Juftlik', 'Soat', 'Holat', "So'rov raqami", 'Ariza sanasi', "So'rov yuborgan", 'Tasdiqlaganlar', "Baho qo'yilmagan talaba"]];
 
         foreach ($this->report['days'] as $index => $day) {
             $rows[] = [
@@ -55,6 +55,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                 $day['requested_at'] ? $day['requested_at']->format('d.m.Y H:i') : '',
                 $day['applicant'] ?? '',
                 $day['approvers'] ?? '',
+                ($day['ungraded_students'] ?? 0) > 0 ? $day['ungraded_students'] : '',
             ];
         }
 
@@ -65,7 +66,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 9, 'F' => 12, 'G' => 40, 'H' => 13, 'I' => 16, 'J' => 14, 'K' => 36, 'L' => 11, 'M' => 17, 'N' => 34, 'O' => 40];
+        return ['A' => 6, 'B' => 34, 'C' => 32, 'D' => 16, 'E' => 9, 'F' => 12, 'G' => 40, 'H' => 13, 'I' => 16, 'J' => 14, 'K' => 36, 'L' => 11, 'M' => 17, 'N' => 34, 'O' => 40, 'P' => 22];
     }
 
     public function registerEvents(): array
@@ -98,6 +99,8 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                 $sheet->getStyle("H2:J{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 // So'rov raqami, ariza sanasi — markazda
                 $sheet->getStyle("L2:M{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                // Baho qo'yilmagan talaba soni — markazda
+                $sheet->getStyle("P2:P{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Holat rangi: yashil — baho qo'yilgan, to'q sariq — tasdiqlangan lekin baho yo'q,
                 // ko'k — kutilmoqda, qizil — rad etilgan, kulrang — ariza yo'q

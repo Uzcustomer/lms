@@ -19,6 +19,18 @@ use Illuminate\Support\Facades\DB;
 class TutorStarostaController extends Controller
 {
     /**
+     * Tyutor uchun alohida sahifa: guruh starostalarini ko'rish/tahrirlash.
+     */
+    public function page()
+    {
+        if (! is_active_tyutor()) {
+            abort(403);
+        }
+
+        return view('teacher.starosta');
+    }
+
+    /**
      * Tyutorning guruhlari + har guruhdagi talabalar (accordion uchun).
      */
     public function groups(): JsonResponse

@@ -63,8 +63,12 @@
                     </div>
                 </form>
 
-                <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                    <span class="badge" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ $students->total() }} ta starosta</span>
+                <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span class="badge" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami guruh: {{ $stats['total'] }}</span>
+                        <span class="badge" style="background:#dcfce7;color:#166534;padding:6px 14px;font-size:13px;border-radius:8px;border:1px solid #bbf7d0;">Starosta belgilangan: {{ $stats['assigned'] }}</span>
+                        <span class="badge" style="background:#fee2e2;color:#991b1b;padding:6px 14px;font-size:13px;border-radius:8px;border:1px solid #fecaca;">Belgilanmagan: {{ $stats['missing'] }}</span>
+                    </div>
                     <a href="{{ route('admin.starostalar.export') }}?{{ http_build_query(request()->query()) }}"
                        style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:600;color:#fff;background:linear-gradient(135deg,#16a34a,#22c55e);border-radius:8px;text-decoration:none;transition:opacity 0.2s;"
                        onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">

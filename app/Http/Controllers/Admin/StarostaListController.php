@@ -34,7 +34,9 @@ class StarostaListController extends Controller
         // Ko'rinishda tanlangan ta'lim turi (standart — bakalavr)
         $selectedEducationType = $request->input('education_type', self::BAKALAVR_CODE);
 
-        return view('admin.starosta-list.index', compact('students', 'educationTypes', 'selectedEducationType'));
+        $stats = $this->groupStats($request);
+
+        return view('admin.starosta-list.index', compact('students', 'educationTypes', 'selectedEducationType', 'stats'));
     }
 
     public function export(Request $request)
@@ -46,12 +48,11 @@ class StarostaListController extends Controller
     }
 
     /**
-     * Faqat starostalar (is_starosta) bo'yicha filtrlangan so'rov.
+     * Filtrlangan faol talabalar so'rovi (starosta filtri BU'SIZ).
      */
-    private function buildQuery(Request $request)
+    private function baseQuery(Request $request)
     {
         $query = Student::query()
-            ->where('is_starosta', true)
             ->where('student_status_code', 11); // faqat faol talabalar
 
         // Ta'lim turi — standart bakalavr; "Barchasi" tanlanса bo'sh qiymat keladi
@@ -73,6 +74,41 @@ class StarostaListController extends Controller
             $query->where('group_id', $request->group);
         }
 
-        return $query->orderBy('group_name')->orderBy('full_name');
+        return $query;
+    }
+
+    /**
+     * Faqat starostalar (is_starosta) bo'yicha filtrlangan so'rov.
+     */
+    private function buildQuery(Request $request)
+    {
+        return $this->baseQuery($request)
+            ->where('is_starosta', true)
+            ->orderBy('group_name')
+            ->orderBy('full_name');
+    }
+
+    /**
+     * Filtr doirasidagi guruh statistikasi:
+     * jami guruhlar, starosta belgilanganlar, belgilanmaganlar.
+     */
+    private function groupStats(Request $request): array
+    {
+        $total = $this->baseQuery($request)
+            ->whereNotNull('group_id')
+            ->distinct()
+            ->count('group_id');
+
+        $assigned = $this->baseQuery($request)
+            ->where('is_starosta', true)
+            ->whereNotNull('group_id')
+            ->distinct()
+            ->count('group_id');
+
+        return [
+            'total' => $total,
+            'assigned' => $assigned,
+            'missing' => max(0, $total - $assigned),
+        ];
     }
 }

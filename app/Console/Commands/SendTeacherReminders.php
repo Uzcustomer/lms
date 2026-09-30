@@ -81,6 +81,7 @@ class SendTeacherReminders extends Command
                 'sch.employee_id',
                 'sch.subject_id',
                 'sch.subject_name',
+                'sch.semester_code',
                 'sch.group_id',
                 'sch.group_name',
                 'sch.training_type_code',
@@ -122,28 +123,53 @@ class SendTeacherReminders extends Command
             ->pluck('ck')
             ->flip();
 
-        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
-        $gradeByScheduleId = DB::table('student_grades')
+        // Yangi qoida (Dars belgilashdek): dars faqat BARCHA faol talaba baho
+        // YOKI NB olgandagina bajarilgan hisoblanadi. Shu bois "ishlov berilgan"
+        // (baho > 0, status=recorded yoki NB=absent) talabalar sonini jami faol
+        // talaba soni bilan solishtiramiz.
+
+        // Ishlov berilgan talaba soni (1-usul): subject_schedule_id orqali
+        $processedByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
-            ->pluck('subject_schedule_id')
-            ->unique()
-            ->flip();
+            ->where(function ($q) {
+                $q->where('grade', '>', 0)->orWhere('status', 'recorded')->orWhere('reason', 'absent');
+            })
+            ->select('subject_schedule_id', DB::raw('COUNT(DISTINCT student_hemis_id) as cnt'))
+            ->groupBy('subject_schedule_id')
+            ->pluck('cnt', 'subject_schedule_id');
 
-        // Baho (2-usul): student → group orqali tekshirish (zaxira)
-        $gradeByKey = DB::table('student_grades as sg')
+        // Ishlov berilgan talaba soni (2-usul): kalit orqali (zaxira)
+        $processedByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('sg.employee_id', $employeeIds)
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) = ?', [$today])
-            ->whereNotNull('sg.grade')
-            ->where('sg.grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
-            ->pluck('gk')
-            ->flip();
+            ->where(function ($q) {
+                $q->where('sg.grade', '>', 0)->orWhere('sg.status', 'recorded')->orWhere('sg.reason', 'absent');
+            })
+            ->select(DB::raw("CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code)"))
+            ->pluck('cnt', 'gk');
+
+        // Fanga biriktirilgan faol talabalar soni (student_subjects), topilmasa guruh soni
+        $semesterCodes = $schedules->pluck('semester_code')->unique()->values()->toArray();
+        $subjectStudentCounts = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->whereIn('ss.semester_id', $semesterCodes)
+            ->where('st.student_status_code', 11)
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as k"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
+            ->pluck('cnt', 'k');
+        $groupStudentCounts = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', 11)
+            ->select('group_id', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('group_id')
+            ->pluck('cnt', 'group_id');
 
         // 4-QADAM: O'qituvchilar bo'yicha guruhlash va tekshirish
         $schedulesByTeacher = $schedules->groupBy('employee_id');
@@ -186,10 +212,19 @@ class SendTeacherReminders extends Command
                     $gradeKey = $schedule->employee_id . '|' . $schedule->group_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
                               . '|' . $schedule->training_type_code . '|' . $schedule->lesson_pair_code;
 
-                    $hasGrade = isset($gradeByScheduleId[$schedule->schedule_hemis_id])
-                             || isset($gradeByKey[$gradeKey]);
+                    // Jami faol talaba (fan bo'yicha, topilmasa guruh)
+                    $gsKey = $schedule->group_id . '|' . $schedule->subject_id . '|' . $schedule->semester_code;
+                    $totalStudents = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$schedule->group_id] ?? 0);
 
-                    if (!$hasGrade) {
+                    // Ishlov berilgan (baho yoki NB olgan) talaba soni
+                    $processed = max(
+                        (int) ($processedByScheduleId[$schedule->schedule_hemis_id] ?? 0),
+                        (int) ($processedByKey[$gradeKey] ?? 0)
+                    );
+
+                    // Hatto bitta faol talaba baho/NB olmagan bo'lsa — baho qo'yilmagan
+                    if ($totalStudents > 0 && $processed < $totalStudents) {
+                        $schedule->missing_grade_count = $totalStudents - $processed;
                         $missingGrades[] = $schedule;
                     }
                 }
@@ -275,7 +310,9 @@ class SendTeacherReminders extends Command
                 $time = $schedule->lesson_pair_start_time
                     ? " ({$schedule->lesson_pair_start_time}-{$schedule->lesson_pair_end_time})"
                     : "";
-                $lines[] = "  - {$schedule->subject_name} | {$schedule->group_name} | {$schedule->training_type_name}{$time}";
+                $missingCnt = (int) ($schedule->missing_grade_count ?? 0);
+                $cntText = $missingCnt > 0 ? " — {$missingCnt} ta talabaga baho/NB yo'q" : "";
+                $lines[] = "  - {$schedule->subject_name} | {$schedule->group_name} | {$schedule->training_type_name}{$time}{$cntText}";
             }
             $lines[] = "";
         }

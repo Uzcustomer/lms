@@ -1423,16 +1423,41 @@ class JournalController extends Controller
         $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
-        // Tekshiruv juftlik bo'yicha. Juftlik "hisobga olingan" — o'sha juftlikda
-        // kamida bitta talabada baho yoki NB bo'lsa (NB qo'yilganga baho qo'yib
-        // bo'lmaydi). Kun "missed" (dars ochish kerak) — o'tgan kundagi kamida
-        // bitta juftlik hisobga olinmagan bo'lsa: kun ikki juftlikdan iborat
-        // bo'lib, birida baho bor, ikkinchisida yo'q bo'lsa ham "!" chiqadi.
-        // Davomat buni bloklamaydi.
-        $jbMarkedPairs = [];
+        // "Dars belgilash" qoidasi bilan bir xil (TeacherMissedLessons): juftlik
+        // faqat BARCHA faol talaba baho YOKI NB olgandagina "hisobga olingan".
+        // Agar hatto bitta faol talabada ham na baho na NB bo'lmasa — juftlik
+        // baho qo'yilmagan (kun "missed", dars ochish "!" chiqadi). NB qo'yilganga
+        // qayta baho qo'yib bo'lmaydi. Davomat buni bloklamaydi.
+
+        // Roster faol talabalari (o'qiyotgan): "hammasi baholanishi" uchun asos
+        $jbActiveHemis = $students
+            ->filter(fn ($s) => (int) $s->student_status_code === 11)
+            ->pluck('hemis_id')->map(fn ($h) => (string) $h)->flip()->all();
+        $jbActiveCount = count($jbActiveHemis);
+        if ($jbActiveCount === 0) {
+            // Zaxira: status aniqlanmagan bo'lsa butun rosterni olamiz
+            $jbActiveHemis = $students->pluck('hemis_id')->map(fn ($h) => (string) $h)->flip()->all();
+            $jbActiveCount = count($jbActiveHemis);
+        }
+
+        // Har juftlikda ishlov berilgan (baho yoki NB olgan) faol talabalar to'plami
+        $jbProcessedByPair = [];
         foreach ($jbGradesRaw as $g) {
+            $hemis = (string) $g->student_hemis_id;
+            if (! isset($jbActiveHemis[$hemis])) {
+                continue; // rosterda bo'lmagan talaba hisobga olinmaydi
+            }
             if ($getEffectiveGrade($g) !== null || $g->reason === 'absent') {
-                $jbMarkedPairs[\Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') . '_' . $g->lesson_pair_code] = true;
+                $pk = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d') . '_' . $g->lesson_pair_code;
+                $jbProcessedByPair[$pk][$hemis] = true;
+            }
+        }
+
+        // Juftlik "hisobga olingan" — BARCHA faol talaba baho/NB olgan bo'lsa
+        $jbMarkedPairs = [];
+        foreach ($jbProcessedByPair as $pk => $set) {
+            if ($jbActiveCount > 0 && count($set) >= $jbActiveCount) {
+                $jbMarkedPairs[$pk] = true;
             }
         }
 

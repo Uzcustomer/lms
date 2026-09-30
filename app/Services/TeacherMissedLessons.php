@@ -10,13 +10,14 @@ use Illuminate\Support\Facades\DB;
 /**
  * O'qituvchining baho qo'yilmay qolgan darslari — dashboard popupi uchun.
  *
- * Jurnaldagi "o'tkazib yuborilgan kun" qoidasi bilan bir xil
- * (JournalController::showJournal): o'tgan kun (bugun va kelajak emas),
- * amaliy dars (ma'ruza, MT, ON, OSKI, test emas) va o'sha kuni kamida
- * bitta juftlikda guruhdagi birorta talabaga ham baho yoki NB qo'yilmagan.
- * Kun ikki juftlikdan iborat bo'lib, birida baho bor, ikkinchisida yo'q
- * bo'lsa ham kun ochilishi kerak. Bunday kunga o'qituvchi faqat dars ochish
- * so'rovi orqali baho qo'ya oladi.
+ * "Dars belgilash" hisoboti bilan bir xil qoida: o'tgan kun (bugun va
+ * kelajak emas), amaliy dars (ma'ruza, MT, ON, OSKI, test emas). Juftlik
+ * faqat BARCHA faol talaba baho YOKI NB olgandagina "hisobga olingan"
+ * bo'ladi. Agar juftlikda hatto bitta faol talabada ham na baho na NB
+ * bo'lmasa — o'sha juftlik baho qo'yilmagan hisoblanadi. Kun ikki
+ * juftlikdan iborat bo'lib, birortasida ham to'liq baho bo'lmasa, kun
+ * ochilishi kerak. Bunday kunga o'qituvchi faqat dars ochish so'rovi
+ * orqali baho qo'ya oladi.
  *
  * Faqat shu o'qituvchi nomiga jadvalda qo'yilgan darslar, joriy semestr
  * boshidan (LessonOpening::periodStart) kechagacha. Allaqachon so'rov
@@ -173,14 +174,17 @@ class TeacherMissedLessons
     }
 
     /**
-     * Kamida bitta talabaga baho yoki NB qo'yilgan juftliklar:
-     * [pairKey() => true]. Jurnaldagi "hisobga olingan juftlik" qoidasi.
+     * Juftliklar tahlili — "Dars belgilash" hisoboti bilan bir xil qoida:
+     * juftlik faqat BARCHA faol talaba baho YOKI NB olgandagina "hisobga
+     * olingan" (marked) bo'ladi. Kimdadir ikkalasi ham yo'q bo'lsa — juftlik
+     * baho qo'yilmagan hisoblanadi va nechta talabada yo'qligi (missing) qaytadi.
      *
-     * @return array<string, true>
+     * @return array{marked: array<string,true>, missing: array<string,int>}
      */
-    public function markedPairs(array $groupIds, array $subjectIds, string $from, string $today): array
+    public function analyzePairs(array $groupIds, array $subjectIds, string $from, string $today): array
     {
-        $marked = [];
+        // 1. Har juftlikda ishlov berilgan (baho yoki NB olgan) distinct talabalar
+        $processedSets = [];
 
         DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
@@ -191,17 +195,76 @@ class TeacherMissedLessons
             ->whereNotIn('sg.training_type_code', [99, 100, 101, 102, 103])
             ->where('sg.lesson_date', '>=', $from.' 00:00:00')
             ->where('sg.lesson_date', '<', $today.' 00:00:00')
-            ->select('sg.id as id', 'st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
+            ->select('sg.id as id', 'st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.student_hemis_id', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
             // Butun o'qituvchilar uchun qatorlar ko'p: offset emas, id bo'yicha bo'laklaymiz
-            ->chunkById(2000, function ($rows) use (&$marked) {
+            ->chunkById(2000, function ($rows) use (&$processedSets) {
                 foreach ($rows as $row) {
                     if ($row->reason === 'absent' || $this->effectiveGrade($row) !== null) {
-                        $marked[$this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code)] = true;
+                        $pk = $this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code);
+                        $processedSets[$pk][$row->student_hemis_id] = true;
                     }
                 }
             }, 'sg.id', 'id');
 
-        return $marked;
+        // 2. Guruh+fan+semestr bo'yicha jami faol talaba soni
+        [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds);
+
+        $marked = [];
+        $missing = [];
+        foreach ($processedSets as $pk => $set) {
+            $parts = explode('|', $pk); // group|subject|semester|day|pair
+            $total = $bySubject[$parts[0].'|'.$parts[1].'|'.$parts[2]] ?? ($byGroup[$parts[0]] ?? 0);
+            $cnt = count($set);
+            if ($total > 0 && $cnt >= $total) {
+                $marked[$pk] = true; // barcha faol talaba baho/NB olgan
+            } elseif ($total > 0) {
+                $missing[$pk] = $total - $cnt; // qisman — baho qo'yilmagan
+            }
+        }
+
+        return ['marked' => $marked, 'missing' => $missing];
+    }
+
+    /**
+     * Faqat to'liq baho/NB olgan juftliklar (barcha faol talaba): [pairKey => true].
+     *
+     * @return array<string, true>
+     */
+    public function markedPairs(array $groupIds, array $subjectIds, string $from, string $today): array
+    {
+        return $this->analyzePairs($groupIds, $subjectIds, $from, $today)['marked'];
+    }
+
+    /**
+     * Guruh+fan+semestr bo'yicha jami faol talaba soni.
+     * student_subjects (biriktirilgan faol talabalar), topilmasa guruh soni.
+     *
+     * @return array{0: array<string,int>, 1: array<string,int>}
+     *                                                           [0] => "group|subject|semester" => son, [1] => "group" => son
+     */
+    private function activeStudentTotals(array $groupIds, array $subjectIds): array
+    {
+        $bySubject = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->where('st.student_status_code', 11)
+            ->groupBy('st.group_id', 'ss.subject_id', 'ss.semester_id')
+            ->select('st.group_id', 'ss.subject_id', 'ss.semester_id', DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->group_id.'|'.$r->subject_id.'|'.$r->semester_id => (int) $r->cnt])
+            ->all();
+
+        $byGroup = DB::table('students')
+            ->whereIn('group_id', $groupIds)
+            ->where('student_status_code', 11)
+            ->groupBy('group_id')
+            ->select('group_id', DB::raw('COUNT(*) as cnt'))
+            ->get()
+            ->mapWithKeys(fn ($r) => [(string) $r->group_id => (int) $r->cnt])
+            ->all();
+
+        return [$bySubject, $byGroup];
     }
 
     /** Kun kaliti: guruh | fan | semestr | sana */

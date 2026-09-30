@@ -25,6 +25,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
+use App\Http\Controllers\Teacher\TutorStarostaController;
 use App\Http\Controllers\Teacher\FanTestiController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
@@ -1664,6 +1665,10 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         });
         Route::get('/dashboard', [TeacherMainController::class, 'index'])->name('dashboard');
         Route::get('/info-me', [TeacherMainController::class, 'info'])->name('info-me');
+
+        // Tyutor: guruh starostalarini belgilash (accordion modal + saqlash)
+        Route::get('/starosta/groups', [TutorStarostaController::class, 'groups'])->name('starosta.groups');
+        Route::post('/starosta/set', [TutorStarostaController::class, 'set'])->name('starosta.set');
 
         Route::prefix('test-collections')->name('fan-testlari.')
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':kafedra_mudiri|oqituvchi')

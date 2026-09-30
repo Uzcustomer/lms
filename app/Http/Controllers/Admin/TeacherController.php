@@ -74,6 +74,25 @@ class TeacherController extends Controller
         } catch (\Exception $e) {
             // teacher_responsible_subjects jadvali mavjud bo'lmasa
         }
+
+        // Tayinlangan fanlar bir xil ko'rinmasligi uchun — har biriga fakultet/mutaxassislik.
+        // Bitta fan (mas. "Ftiziatriya") ko'p mutaxassislik/semestrda bo'lsa, curriculum_subjects
+        // da har biri alohida qator; shu bilan ularni farqlash mumkin bo'ladi.
+        $subjectMeta = collect();
+        $assignedIds = $teacher->relationLoaded('responsibleSubjects')
+            ? $teacher->responsibleSubjects->pluck('id')->all()
+            : [];
+        if (! empty($assignedIds)) {
+            $subjectMeta = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+                ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+                ->whereIn('cs.id', $assignedIds)
+                ->select('cs.id', 'sp.name as specialty_name', 'f.name as faculty_name', 'c.education_type_name')
+                ->get()
+                ->keyBy('id');
+        }
+
         $departments = Department::where('structure_type_code', '11')
             ->where('active', true)
             ->orderBy('name')
@@ -109,7 +128,7 @@ class TeacherController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'department_name']);
 
-        return view('admin.teachers.show', compact('teacher', 'departments', 'roles', 'tutorGroups', 'nazoratchiGroups', 'allGroups'));
+        return view('admin.teachers.show', compact('teacher', 'departments', 'roles', 'tutorGroups', 'nazoratchiGroups', 'allGroups', 'subjectMeta'));
     }
 
     public function edit(Teacher $teacher)

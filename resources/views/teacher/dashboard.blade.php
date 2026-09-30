@@ -392,11 +392,10 @@
                 <span class="tsm-ico">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-4.66"/></svg>
                 </span>
-                <h3 id="tsmRemindTitle">Guruh starostalari</h3>
-                <p>Iltimos, guruh starostalarini belgilab chiqing.</p>
+                <h3 id="tsmRemindTitle">Guruh yetakchilari (starosta)</h3>
+                <p>Har bir guruh yetakchisini (starosta) belgilab chiqing.</p>
                 <div class="tsm-remind-actions">
                     <button type="button" class="tsm-btn tsm-btn--primary" onclick="tsmOpenAssign()">Belgilash</button>
-                    <button type="button" class="tsm-btn tsm-btn--ghost" onclick="tsmClose('tsmRemind')">Keyinroq</button>
                 </div>
             </div>
         </div>
@@ -406,8 +405,9 @@
             <div class="tsm-card tsm-card--lg">
                 <div class="tsm-head">
                     <h3 id="tsmAssignTitle">Guruh starostalarini belgilash</h3>
-                    <button type="button" class="tsm-x" onclick="tsmClose('tsmAssign')" aria-label="Yopish">&times;</button>
+                    <button type="button" class="tsm-x" id="tsmAssignX" onclick="tsmClose('tsmAssign')" aria-label="Yopish" style="display:none;">&times;</button>
                 </div>
+                <div class="tsm-note" id="tsmNote">Har bir guruh yetakchisini (starosta) belgilab chiqing.</div>
                 <div class="tsm-body" id="tsmAccordion">
                     <div class="tsm-loading">Yuklanmoqda...</div>
                 </div>
@@ -436,6 +436,8 @@
             .tsm-x:hover { color:#475569; }
             .tsm-body { padding:14px 18px 18px; overflow-y:auto; }
             .tsm-loading, .tsm-empty { text-align:center; color:#64748b; padding:26px 0; font-size:14px; }
+            .tsm-note { margin:0; padding:11px 18px; background:#fef2f2; color:#991b1b; font-size:13px; font-weight:600; border-bottom:1px solid #fee2e2; }
+            .tsm-note--ok { background:#f0fdf4; color:#166534; border-bottom-color:#dcfce7; }
             .tsm-group { border:1px solid #e2e8f0; border-radius:12px; margin-bottom:10px; overflow:hidden; }
             .tsm-group-head { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 15px; background:#f8fafc; border:0; cursor:pointer; text-align:left; }
             .tsm-group-head:hover { background:#f1f5f9; }
@@ -474,12 +476,27 @@
                         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                 }
+                var tsmLocked = false;
+                function recomputeLock() {
+                    tsmLocked = groupsData.some(function (g) { return !g.starosta && g.student_count > 0; });
+                    var x = document.getElementById('tsmAssignX');
+                    if (x) x.style.display = tsmLocked ? 'none' : '';
+                    var note = document.getElementById('tsmNote');
+                    if (note) {
+                        note.innerHTML = tsmLocked
+                            ? 'Har bir guruh yetakchisini (starosta) belgilab chiqing. <b>Barcha guruhlarga belgilamaguningizcha oyna yopilmaydi.</b>'
+                            : '✅ Barcha guruhlarga starosta belgilandi. Oynani yopishingiz mumkin.';
+                        note.className = 'tsm-note' + (tsmLocked ? '' : ' tsm-note--ok');
+                    }
+                }
                 window.tsmClose = function (id) {
+                    if (tsmLocked) return; // barcha guruhlarga belgilanmaguncha yopilmaydi
                     var m = document.getElementById(id);
                     if (m) m.classList.remove('is-open');
                 };
                 window.tsmOpenAssign = function () {
-                    tsmClose('tsmRemind');
+                    var r = document.getElementById('tsmRemind');
+                    if (r) r.classList.remove('is-open'); // qulf bo'lsa ham eslatmadan belgilashga o'tadi
                     var m = document.getElementById('tsmAssign');
                     if (m) m.classList.add('is-open');
                 };
@@ -547,6 +564,7 @@
                         var chosen = g.students.find(function (s) { return s.id === sid; });
                         g.starosta = chosen ? { id: chosen.id, name: chosen.name } : null;
                         render();
+                        recomputeLock();
                         var el = document.querySelector('.tsm-group[data-gi="' + gi + '"]');
                         if (el) el.classList.add('is-open');
                     }).catch(function () {
@@ -599,6 +617,7 @@
                     .then(function (res) {
                         groupsData = (res && res.groups) ? res.groups : [];
                         render();
+                        recomputeLock();
                         if (res && res.has_missing) {
                             var m = document.getElementById('tsmRemind');
                             if (m) m.classList.add('is-open');

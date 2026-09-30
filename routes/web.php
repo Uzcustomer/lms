@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Teacher\TutorStarostaController;
+use App\Http\Controllers\Admin\StarostaListController;
 use App\Http\Controllers\Teacher\FanTestiController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
@@ -186,6 +187,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         })->name('switch-role');
 
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
+
+        // Starostalar ro'yxati — faqat registrator ofisi va admin(lar)
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class.':superadmin|admin|kichik_admin|registrator_ofisi')->group(function () {
+            Route::get('/starostalar', [StarostaListController::class, 'index'])->name('starostalar.index');
+            Route::get('/starostalar/export', [StarostaListController::class, 'export'])->name('starostalar.export');
+        });
         Route::get('/students-statistics', [AdminStudentController::class, 'statistics'])->name('students.statistics');
         Route::get('/students/disabled', [AdminStudentController::class, 'disabledIndex'])->name('students.disabled');
         Route::get('/students/disabled/{student}/info', [AdminStudentController::class, 'disabledInfo'])->name('students.disabled.info');

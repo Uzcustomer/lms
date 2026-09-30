@@ -50,6 +50,7 @@ class Student extends Authenticatable
         'login_code',
         'login_code_expires_at',
         'face_id_enabled',
+        'is_starosta',
     ];
 
     protected $casts = [
@@ -67,6 +68,7 @@ class Student extends Authenticatable
         'phone_added_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
         'face_id_enabled'       => 'boolean',
+        'is_starosta'           => 'boolean',
     ];
 
     protected $hidden = [

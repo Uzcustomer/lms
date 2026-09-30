@@ -383,4 +383,229 @@
             })();
         </script>
     @endif
+
+    {{-- Tyutor: guruh starostalarini (yetakchilarini) belgilash --}}
+    @if(function_exists('is_active_tyutor') && is_active_tyutor())
+        {{-- 1) Eslatma modali: kamida bitta guruhda starosta belgilanmagan bo'lsa chiqadi --}}
+        <div id="tsmRemind" class="tsm-overlay" role="dialog" aria-modal="true" aria-labelledby="tsmRemindTitle">
+            <div class="tsm-card tsm-card--sm">
+                <span class="tsm-ico">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-4.66"/></svg>
+                </span>
+                <h3 id="tsmRemindTitle">Guruh starostalari</h3>
+                <p>Iltimos, guruh starostalarini belgilab chiqing.</p>
+                <div class="tsm-remind-actions">
+                    <button type="button" class="tsm-btn tsm-btn--primary" onclick="tsmOpenAssign()">Belgilash</button>
+                    <button type="button" class="tsm-btn tsm-btn--ghost" onclick="tsmClose('tsmRemind')">Keyinroq</button>
+                </div>
+            </div>
+        </div>
+
+        {{-- 2) Belgilash modali: guruhlar accordion, ochilganda talabalar --}}
+        <div id="tsmAssign" class="tsm-overlay" role="dialog" aria-modal="true" aria-labelledby="tsmAssignTitle">
+            <div class="tsm-card tsm-card--lg">
+                <div class="tsm-head">
+                    <h3 id="tsmAssignTitle">Guruh starostalarini belgilash</h3>
+                    <button type="button" class="tsm-x" onclick="tsmClose('tsmAssign')" aria-label="Yopish">&times;</button>
+                </div>
+                <div class="tsm-body" id="tsmAccordion">
+                    <div class="tsm-loading">Yuklanmoqda...</div>
+                </div>
+            </div>
+        </div>
+
+        <style>
+            .tsm-overlay { position:fixed; inset:0; z-index:10000; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(15,23,42,.55); }
+            .tsm-overlay.is-open { display:flex; }
+            .tsm-card { width:100%; background:#fff; border-radius:16px; box-shadow:0 20px 50px rgba(15,23,42,.3); animation:tsmPop .18s ease-out; }
+            .tsm-card--sm { max-width:420px; padding:28px 24px; text-align:center; }
+            .tsm-card--lg { max-width:640px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
+            .tsm-ico { display:inline-flex; align-items:center; justify-content:center; width:64px; height:64px; margin-bottom:14px; border-radius:50%; background:#eff6ff; color:#2563eb; }
+            .tsm-ico svg { width:32px; height:32px; }
+            .tsm-card--sm h3 { margin:0 0 8px; font-size:19px; font-weight:800; color:#0f172a; }
+            .tsm-card--sm p { margin:0 0 20px; font-size:14.5px; line-height:1.5; color:#475569; }
+            .tsm-remind-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+            .tsm-btn { display:inline-flex; align-items:center; justify-content:center; min-width:120px; padding:11px 20px; border:0; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; transition:.12s; }
+            .tsm-btn--primary { background:#2563eb; color:#fff; }
+            .tsm-btn--primary:hover { background:#1d4ed8; }
+            .tsm-btn--ghost { background:#f1f5f9; color:#334155; }
+            .tsm-btn--ghost:hover { background:#e2e8f0; }
+            .tsm-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 22px; border-bottom:1px solid #e2e8f0; }
+            .tsm-head h3 { margin:0; font-size:17px; font-weight:800; color:#0f172a; }
+            .tsm-x { border:0; background:transparent; font-size:26px; line-height:1; color:#94a3b8; cursor:pointer; padding:0 4px; }
+            .tsm-x:hover { color:#475569; }
+            .tsm-body { padding:14px 18px 18px; overflow-y:auto; }
+            .tsm-loading, .tsm-empty { text-align:center; color:#64748b; padding:26px 0; font-size:14px; }
+            .tsm-group { border:1px solid #e2e8f0; border-radius:12px; margin-bottom:10px; overflow:hidden; }
+            .tsm-group-head { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 15px; background:#f8fafc; border:0; cursor:pointer; text-align:left; }
+            .tsm-group-head:hover { background:#f1f5f9; }
+            .tsm-group-name { font-size:14.5px; font-weight:700; color:#0f172a; }
+            .tsm-group-meta { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+            .tsm-badge { font-size:11.5px; font-weight:700; padding:4px 9px; border-radius:999px; white-space:nowrap; }
+            .tsm-badge--ok { background:#dcfce7; color:#166534; }
+            .tsm-badge--none { background:#fee2e2; color:#991b1b; }
+            .tsm-chev { width:16px; height:16px; color:#94a3b8; transition:transform .18s; }
+            .tsm-group.is-open .tsm-chev { transform:rotate(180deg); }
+            .tsm-group-body { display:none; padding:10px 12px; border-top:1px solid #e2e8f0; }
+            .tsm-group.is-open .tsm-group-body { display:block; }
+            .tsm-search { width:100%; box-sizing:border-box; padding:8px 11px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; margin-bottom:8px; }
+            .tsm-slist { max-height:280px; overflow-y:auto; }
+            .tsm-student { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 6px; border-bottom:1px solid #f1f5f9; }
+            .tsm-student:last-child { border-bottom:0; }
+            .tsm-student-info { min-width:0; }
+            .tsm-student-name { display:block; font-size:13.5px; font-weight:600; color:#1e293b; }
+            .tsm-student-id { display:block; font-size:11.5px; color:#94a3b8; }
+            .tsm-set { border:1px solid #2563eb; background:#fff; color:#2563eb; font-size:12.5px; font-weight:700; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; transition:.12s; }
+            .tsm-set:hover { background:#2563eb; color:#fff; }
+            .tsm-set[disabled] { opacity:.6; cursor:default; }
+            .tsm-current { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; color:#166534; background:#dcfce7; padding:6px 11px; border-radius:8px; white-space:nowrap; }
+            @keyframes tsmPop { from { transform:scale(.96); opacity:0; } to { transform:scale(1); opacity:1; } }
+        </style>
+
+        <script>
+            (function () {
+                var GROUPS_URL = "{{ route('teacher.starosta.groups') }}";
+                var SET_URL = "{{ route('teacher.starosta.set') }}";
+                var CSRF = "{{ csrf_token() }}";
+                var groupsData = [];
+
+                function esc(s) {
+                    return String(s == null ? '' : s)
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                }
+                window.tsmClose = function (id) {
+                    var m = document.getElementById(id);
+                    if (m) m.classList.remove('is-open');
+                };
+                window.tsmOpenAssign = function () {
+                    tsmClose('tsmRemind');
+                    var m = document.getElementById('tsmAssign');
+                    if (m) m.classList.add('is-open');
+                };
+
+                function badge(g) {
+                    if (g.starosta) {
+                        return '<span class="tsm-badge tsm-badge--ok">Starosta: ' + esc(g.starosta.name) + '</span>';
+                    }
+                    if (!g.student_count) {
+                        return '<span class="tsm-badge tsm-badge--none">Talaba yo\'q</span>';
+                    }
+                    return '<span class="tsm-badge tsm-badge--none">Belgilanmagan</span>';
+                }
+
+                function studentRow(gi, s) {
+                    var right = s.is_starosta
+                        ? '<span class="tsm-current">Starosta ✓</span>'
+                        : '<button type="button" class="tsm-set" data-gi="' + gi + '" data-sid="' + s.id + '">Starosta qilish</button>';
+                    return '<div class="tsm-student" data-name="' + esc((s.name || '').toLowerCase()) + '">'
+                        + '<span class="tsm-student-info">'
+                        + '<span class="tsm-student-name">' + esc(s.name) + '</span>'
+                        + (s.student_id_number ? '<span class="tsm-student-id">' + esc(s.student_id_number) + '</span>' : '')
+                        + '</span>' + right + '</div>';
+                }
+
+                function render() {
+                    var box = document.getElementById('tsmAccordion');
+                    if (!box) return;
+                    if (!groupsData.length) {
+                        box.innerHTML = '<div class="tsm-empty">Sizga biriktirilgan faol guruh topilmadi.</div>';
+                        return;
+                    }
+                    var html = '';
+                    groupsData.forEach(function (g, gi) {
+                        var slist = g.students.length
+                            ? g.students.map(function (s) { return studentRow(gi, s); }).join('')
+                            : '<div class="tsm-empty">Bu guruhda faol talaba yo\'q.</div>';
+                        var search = g.students.length > 6
+                            ? '<input type="text" class="tsm-search" placeholder="Talabani qidirish..." data-gi="' + gi + '">'
+                            : '';
+                        html += '<div class="tsm-group" data-gi="' + gi + '">'
+                            + '<button type="button" class="tsm-group-head">'
+                            + '<span class="tsm-group-name">' + esc(g.name) + '</span>'
+                            + '<span class="tsm-group-meta">' + badge(g)
+                            + '<svg class="tsm-chev" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>'
+                            + '</span></button>'
+                            + '<div class="tsm-group-body">' + search + '<div class="tsm-slist">' + slist + '</div></div>'
+                            + '</div>';
+                    });
+                    box.innerHTML = html;
+                }
+
+                function setStarosta(gi, sid, btn) {
+                    if (btn) { btn.disabled = true; btn.textContent = 'Saqlanmoqda...'; }
+                    fetch(SET_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                        body: JSON.stringify({ student_id: sid })
+                    }).then(function (r) {
+                        if (!r.ok) throw new Error('xatolik');
+                        return r.json();
+                    }).then(function (res) {
+                        var g = groupsData[gi];
+                        g.students.forEach(function (s) { s.is_starosta = (s.id === sid); });
+                        var chosen = g.students.find(function (s) { return s.id === sid; });
+                        g.starosta = chosen ? { id: chosen.id, name: chosen.name } : null;
+                        render();
+                        var el = document.querySelector('.tsm-group[data-gi="' + gi + '"]');
+                        if (el) el.classList.add('is-open');
+                    }).catch(function () {
+                        if (btn) { btn.disabled = false; btn.textContent = 'Starosta qilish'; }
+                        alert('Saqlashda xatolik yuz berdi. Qayta urinib ko\'ring.');
+                    });
+                }
+
+                // Hodisalar (event delegation)
+                var acc = document.getElementById('tsmAccordion');
+                if (acc) {
+                    acc.addEventListener('click', function (e) {
+                        var head = e.target.closest('.tsm-group-head');
+                        if (head) {
+                            var grp = head.parentElement;
+                            var wasOpen = grp.classList.contains('is-open');
+                            acc.querySelectorAll('.tsm-group.is-open').forEach(function (o) { o.classList.remove('is-open'); });
+                            if (!wasOpen) grp.classList.add('is-open');
+                            return;
+                        }
+                        var setBtn = e.target.closest('.tsm-set');
+                        if (setBtn) {
+                            setStarosta(parseInt(setBtn.dataset.gi, 10), parseInt(setBtn.dataset.sid, 10), setBtn);
+                        }
+                    });
+                    acc.addEventListener('input', function (e) {
+                        var inp = e.target.closest('.tsm-search');
+                        if (!inp) return;
+                        var q = inp.value.trim().toLowerCase();
+                        var body = inp.closest('.tsm-group-body');
+                        body.querySelectorAll('.tsm-student').forEach(function (row) {
+                            row.style.display = (!q || (row.dataset.name || '').indexOf(q) !== -1) ? '' : 'none';
+                        });
+                    });
+                }
+
+                // Fon bosilса yopiladi
+                ['tsmRemind', 'tsmAssign'].forEach(function (id) {
+                    var ov = document.getElementById(id);
+                    if (ov) ov.addEventListener('click', function (e) { if (e.target === ov) tsmClose(id); });
+                });
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') { tsmClose('tsmRemind'); tsmClose('tsmAssign'); }
+                });
+
+                // Ma'lumotni yuklab, accordion tayyorlash; kamida bitta guruhda
+                // starosta yo'q bo'lsa — eslatma popupini ochish.
+                fetch(GROUPS_URL, { headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        groupsData = (res && res.groups) ? res.groups : [];
+                        render();
+                        if (res && res.has_missing) {
+                            var m = document.getElementById('tsmRemind');
+                            if (m) m.classList.add('is-open');
+                        }
+                    })
+                    .catch(function () { /* jim: dashboard baribir ochilaveradi */ });
+            })();
+        </script>
+    @endif
 </x-teacher-app-layout>

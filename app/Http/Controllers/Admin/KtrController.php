@@ -39,6 +39,24 @@ class KtrController extends Controller
         }
     }
 
+    /**
+     * Joriy semestr filtri: curriculum_weeks bugunni qamragan semestrlar YOKI
+     * HEMIS "current" bayrog'i. Haftalar kiritilmagan/eskirgan bo'lsa ham joriy
+     * semestr fanlari (masalan fan mas'uli fanlari) tushib qolmasligi uchun.
+     */
+    private function applyCurrentSemesterFilter($query): void
+    {
+        $today = now()->toDateString();
+        $query->where(function ($q) use ($today) {
+            $q->whereIn('s.semester_hemis_id', function ($sub) use ($today) {
+                $sub->select('semester_hemis_id')
+                    ->from('curriculum_weeks')
+                    ->groupBy('semester_hemis_id')
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [$today, $today]);
+            })->orWhere('s.current', 1);
+        });
+    }
+
     public function index(Request $request)
     {
         $this->checkKtrAccess();
@@ -186,16 +204,11 @@ class KtrController extends Controller
               )");
         });
 
-        // Joriy semestr (barcha rollar uchun default ON)
-        // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
+        // Joriy semestr (barcha rollar uchun default ON) — curriculum_weeks
+        // bugunni qamrasa YOKI HEMIS "current" bayrog'i (fallback)
         $currentSemesterDefault = '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
-            });
+            $this->applyCurrentSemesterFilter($query);
         }
 
         // KTR holati filtri (yaratildi/yaratilmadi/tasdiqlanmoqda)
@@ -342,12 +355,7 @@ class KtrController extends Controller
             $query->where('f.id', $request->faculty_id);
         }
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
-            });
+            $this->applyCurrentSemesterFilter($query);
         }
 
         $specialties = $query
@@ -435,12 +443,7 @@ class KtrController extends Controller
             $query->where('c.education_type_code', $request->education_type);
         }
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
-            });
+            $this->applyCurrentSemesterFilter($query);
         }
 
         $subjects = $query
@@ -510,12 +513,7 @@ class KtrController extends Controller
         }
 
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
-            });
+            $this->applyCurrentSemesterFilter($query);
         }
 
         $query->orderBy('f.name')->orderBy('cs.subject_name');

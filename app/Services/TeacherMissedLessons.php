@@ -19,6 +19,11 @@ use Illuminate\Support\Facades\DB;
  * ochilishi kerak. Bunday kunga o'qituvchi faqat dars ochish so'rovi
  * orqali baho qo'ya oladi.
  *
+ * Baho qo'yilmaydigan fanlar (o'quv amaliyoti, tanishuv amaliyoti) chiqarib
+ * tashlanadi — ular config('app.grade_excluded_subject_patterns') da sanalgan
+ * va Telegram hisobotlari allaqachon shu ro'yxatga tayanadi. Bu fanlarda
+ * davomat olinadi, lekin har bir darsga baho qo'yilmaydi.
+ *
  * Faqat shu o'qituvchi nomiga jadvalda qo'yilgan darslar, joriy semestr
  * boshidan (LessonOpening::periodStart) kechagacha. Allaqachon so'rov
  * yuborilgan (rad etilmagan) kunlar chiqarilmaydi; rad etilgani qayta
@@ -111,6 +116,8 @@ class TeacherMissedLessons
     public function pastSlots(string $from, string $today, string|int|null $employeeHemisId = null): Collection
     {
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+        // Baho qo'yilmaydigan fanlar — Telegram hisobotlaridagi ro'yxat bilan bir xil
+        $excludedSubjects = config('app.grade_excluded_subject_patterns', []);
 
         return DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
@@ -124,6 +131,12 @@ class TeacherMissedLessons
             ->whereNotNull('sch.lesson_date')
             ->whereNotIn('sch.training_type_name', self::EXCLUDED_TYPE_NAMES)
             ->whereNotIn('sch.training_type_code', $excludedCodes)
+            // O'quv/tanishuv amaliyoti: davomat bor, baho yo'q
+            ->when($excludedSubjects !== [], function ($query) use ($excludedSubjects) {
+                foreach ($excludedSubjects as $pattern) {
+                    $query->whereRaw('LOWER(sch.subject_name) NOT LIKE ?', ['%'.mb_strtolower($pattern).'%']);
+                }
+            })
             // Indeksdan foydalanish uchun DATE() emas, sana chegaralari bilan
             ->where('sch.lesson_date', '>=', $from.' 00:00:00')
             ->where('sch.lesson_date', '<', $today.' 00:00:00')

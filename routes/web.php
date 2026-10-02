@@ -662,6 +662,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/export/groups', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\GroupsExport, 'groups.xlsx');
         })->name('export.groups');
+        Route::get('/export/teachers', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\TeachersDbExport,
+                'xodimlar_'.now('Asia/Tashkent')->format('Y-m-d').'.xlsx'
+            );
+        })->name('export.teachers');
 
         // Tyutorlar ro'yxati + har bir tyutor guruhlarini Excelga eksport qilish
         Route::get('/tutors', function () {

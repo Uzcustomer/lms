@@ -197,21 +197,11 @@
 
         @if(!$hasActiveRole(['test_markazi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'oqituvchi']))
         <a href="{{ $r('admin.students.index', $hasActiveRole('registrator_ofisi') ? null : 'teacher.students') }}"
-           class="sidebar-link {{ $isActive('admin.students.*', 'teacher.students') && !request()->routeIs('admin.students.statistics') ? 'sidebar-active' : '' }}">
+           class="sidebar-link {{ ($isActive('admin.students.*', 'teacher.students') || request()->routeIs('admin.starostalar.*')) && !request()->routeIs('admin.students.statistics') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
             </svg>
             Talabalar
-        </a>
-        @endif
-
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
-        <a href="{{ route('admin.starostalar.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.starostalar.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            Starostalar ro'yxati
         </a>
         @endif
 

@@ -36,10 +36,6 @@
 
                 {{-- Filtrlar --}}
                 <form id="filterForm" method="GET" action="{{ route('admin.international-students.index') }}">
-                    {{-- Filtr o'zgarganda ism bo'yicha saralash yo'qolmasin --}}
-                    @if(in_array(request('name_sort'), ['asc', 'desc'], true))
-                        <input type="hidden" name="name_sort" value="{{ request('name_sort') }}">
-                    @endif
                     <div class="filter-container">
                         {{-- 1-qator --}}
                         <div class="filter-row">
@@ -48,6 +44,17 @@
                                 <div class="filter-wrap">
                                     <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism bo'yicha qidirish" class="filter-input" style="padding-right:28px;" onkeydown="if(event.key==='Enter'){document.getElementById('filterForm').submit();}">
                                     @if(request('search'))<button type="button" class="filter-clear" onclick="clearFilter('search')">&times;</button>@endif
+                                </div>
+                            </div>
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Saralash</label>
+                                <div class="filter-wrap">
+                                    {{-- Jadval sarlavhasidagi F.I.Sh tugmasi bilan bir xil saralash --}}
+                                    <select name="name_sort" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Odatiy tartib</option>
+                                        <option value="asc" {{ request('name_sort') === 'asc' ? 'selected' : '' }}>Ism: A → Z</option>
+                                        <option value="desc" {{ request('name_sort') === 'desc' ? 'selected' : '' }}>Ism: Z → A</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="filter-item" style="min-width:100px;">

@@ -59,7 +59,8 @@ class LessonOpeningTeacherReport
     /**
      * @return array{
      *     from: Carbon, to: Carbon, totals: array<string, int>,
-     *     teachers: list<array<string, mixed>>, days: list<array<string, mixed>>
+     *     teachers: list<array<string, mixed>>, days: list<array<string, mixed>>,
+     *     students: list<array<string, mixed>>
      * }
      */
     public function build(?string $fromDate = null, ?string $toDate = null): array
@@ -432,6 +433,77 @@ class LessonOpeningTeacherReport
             'totals' => $totals,
             'teachers' => $teachers,
             'days' => $days,
+            'students' => $this->studentRows($records, $people),
         ];
+    }
+
+    /**
+     * "Talabalar kesimida" varag'i: baho qo'yilmagan HAR BIR talaba alohida
+     * qator. Bir talaba bir necha kunda qoldirilsa, har kun alohida qator
+     * bo'ladi — "Kunlar" varag'idagi son shu qatorlar soniga teng.
+     *
+     * Ismlar bitta so'rovda olinadi: qatorlar ko'p bo'lishi mumkin.
+     *
+     * @param  list<array<string, mixed>>  $records
+     * @param  array<string, array{name: string, department: string}>  $people
+     * @return list<array<string, mixed>>
+     */
+    private function studentRows(array $records, array $people): array
+    {
+        $hemisIds = [];
+        foreach ($records as $record) {
+            foreach (array_keys($record['missing_students'] ?? []) as $hemisId) {
+                $hemisIds[$hemisId] = true;
+            }
+        }
+
+        if ($hemisIds === []) {
+            return [];
+        }
+
+        $students = DB::table('students')
+            ->whereIn('hemis_id', array_keys($hemisIds))
+            ->get(['hemis_id', 'full_name', 'student_id_number'])
+            ->keyBy(fn ($row) => (string) $row->hemis_id);
+
+        $rows = [];
+        foreach ($records as $record) {
+            $missing = $record['missing_students'] ?? [];
+            if ($missing === []) {
+                continue;
+            }
+
+            [$course, $semester] = $this->courseSemester($record['semester_name'] ?? '', $record['semester_code'] ?? '');
+            // Baho qo'yilmagan juftliklar — kundagidek bitta satrda
+            $pairs = [];
+            foreach (($record['pairs'] ?? []) as $pair) {
+                $pairs[] = $pair['label'];
+            }
+
+            foreach (array_keys($missing) as $hemisId) {
+                $student = $students[(string) $hemisId] ?? null;
+                $rows[] = [
+                    'student' => (string) ($student->full_name ?? ''),
+                    'student_id_number' => (string) ($student->student_id_number ?? ''),
+                    'student_hemis_id' => (string) $hemisId,
+                    'group' => $record['group'],
+                    'course' => $course,
+                    'semester' => $semester,
+                    'subject' => $record['subject'],
+                    'date' => $record['date'],
+                    'pair' => implode(', ', $pairs),
+                    'teacher' => $people[$record['who']]['name'],
+                    'department' => $people[$record['who']]['department'],
+                    'status' => $record['status'],
+                ];
+            }
+        }
+
+        // Talaba bo'yicha, keyin sana bo'yicha: bir talabaning qarzlari birga tursin
+        usort($rows, fn ($a, $b) => strcmp(mb_strtolower($a['student']), mb_strtolower($b['student']))
+            ?: strcmp((string) $a['date'], (string) $b['date'])
+            ?: strcmp(mb_strtolower($a['subject']), mb_strtolower($b['subject'])));
+
+        return $rows;
     }
 }

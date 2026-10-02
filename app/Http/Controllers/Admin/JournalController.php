@@ -737,6 +737,15 @@ class JournalController extends Controller
             }
         }
 
+        // NB kataklari: reason = absent bo'lsa katak "hisobga olingan" —
+        // $jbGrades ga tushmaydi, chunki effectiveGrade null bo'ladi.
+        $jbNbCells = [];
+        foreach ($jbGradesRaw as $g) {
+            if ($g->reason === 'absent') {
+                $jbNbCells[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = true;
+            }
+        }
+
         $mtGrades = [];
         foreach ($mtGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
@@ -975,6 +984,57 @@ class JournalController extends Controller
                 ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
                 ->orderBy('full_name')
                 ->get();
+        }
+
+        // ===== YN ga yuborish: qo'yilmay qolgan baho bormi =====
+        // Mezon "baho qo'yilmaganlar hisoboti" bilan bir xil
+        // (SendUnratedRegistrationsReport): katakda baho bo'lsa YOKI NB
+        // (reason = absent) bo'lsa — hisobga olingan. Ikkalasi ham yo'q
+        // bo'lsa YN ga yuborib bo'lmaydi.
+        //
+        // Faqat o'tgan juftliklar tekshiriladi: hali bo'lmagan darsga baho
+        // qo'yilmagani normal. Chetlashgan talabalar (status 60) hisobga
+        // olinmaydi — ularga baho qo'yib bo'lmaydi.
+        $ungradedCells = 0;
+        $ungradedStudents = [];
+        $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+
+        $pastJbColumns = array_values(array_filter(
+            $jbColumns,
+            fn ($col) => \Carbon\Carbon::parse($col['date'])->format('Y-m-d') < $todayStr
+        ));
+
+        if (!empty($pastJbColumns)) {
+            foreach ($students as $stu) {
+                // Faqat o'qiyotgan talaba (status 11) — dars-ochish qoidasi
+                // bilan bir xil. Chetlashgan/akademik ta'tildagiga baho
+                // qo'yib bo'lmaydi, ular YN ga yuborishni to'smaydi.
+                if ((int) ($stu->student_status_code ?? 0) !== 11) {
+                    continue;
+                }
+
+                $missingForStudent = 0;
+                foreach ($pastJbColumns as $col) {
+                    $cell = $jbGrades[$stu->hemis_id][$col['date']][$col['pair']] ?? null;
+                    // $jbGrades da faqat effectiveGrade !== null bo'lganlar bor,
+                    // shuning uchun NB ni alohida tekshiramiz.
+                    if ($cell !== null) {
+                        continue;
+                    }
+                    if (isset($jbNbCells[$stu->hemis_id][$col['date']][$col['pair']])) {
+                        continue;
+                    }
+                    $missingForStudent++;
+                }
+
+                if ($missingForStudent > 0) {
+                    $ungradedCells += $missingForStudent;
+                    $ungradedStudents[] = [
+                        'name' => $stu->full_name,
+                        'count' => $missingForStudent,
+                    ];
+                }
+            }
         }
 
         // Get other averages (ON, OSKI, Test, Quiz) with status-based grade calculation
@@ -2324,6 +2384,8 @@ class JournalController extends Controller
             'allLessonsCompleted',
             'remainingLessonsCount',
             'lastLessonDate',
+            'ungradedCells',
+            'ungradedStudents',
             'levelDeadline',
             'approvedExcuses',
             'broadExcuses',
@@ -7256,6 +7318,89 @@ class JournalController extends Controller
     /**
      * O'qituvchi YN ga yuborish — barcha baholarni qulflaydi
      */
+    /**
+     * Baho ham, NB ham qo'yilmagan kataklar soni (guruh + fan + semestr).
+     *
+     * Mezon "baho qo'yilmaganlar hisoboti" bilan bir xil
+     * (SendUnratedRegistrationsReport): katak hisobga olingan deb
+     * baho bo'lsa yoki reason = absent (NB) bo'lsa qaraladi.
+     * Faqat o'tgan darslar va faol talabalar hisobga olinadi.
+     *
+     * @return array{cells:int, students:int}
+     */
+    private function countUngradedCells(string $groupHemisId, string $subjectId, string $semesterCode): array
+    {
+        $today = now('Asia/Tashkent')->toDateString();
+        $excluded = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+        // O'tgan dars juftliklari
+        $slots = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotIn('training_type_code', $excluded)
+            ->whereRaw('DATE(lesson_date) < ?', [$today])
+            ->selectRaw('DATE(lesson_date) as d, lesson_pair_code as p')
+            ->distinct()
+            ->get();
+
+        if ($slots->isEmpty()) {
+            return ['cells' => 0, 'students' => 0];
+        }
+
+        // Faqat o'qiyotgan talabalar (11) — jurnal va hisobot qoidasi bilan bir xil
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->where('student_status_code', 11)
+            ->whereNotNull('hemis_id')
+            ->pluck('hemis_id');
+
+        if ($studentHemisIds->isEmpty()) {
+            return ['cells' => 0, 'students' => 0];
+        }
+
+        // Hisobga olingan kataklar: baho yoki NB
+        $marked = [];
+        DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('lesson_date')
+            ->where(function ($q) {
+                $q->where('grade', '>', 0)
+                    ->orWhere('retake_grade', '>', 0)
+                    ->orWhere('status', 'recorded')
+                    ->orWhere('reason', 'absent');
+            })
+            ->selectRaw('student_hemis_id, DATE(lesson_date) as d, lesson_pair_code as p')
+            ->orderBy('student_hemis_id')
+            ->chunk(5000, function ($rows) use (&$marked) {
+                foreach ($rows as $r) {
+                    $marked[$r->student_hemis_id . '|' . $r->d . '|' . $r->p] = true;
+                }
+            });
+
+        $cells = 0;
+        $students = 0;
+        foreach ($studentHemisIds as $hemisId) {
+            $missing = 0;
+            foreach ($slots as $slot) {
+                if (!isset($marked[$hemisId . '|' . $slot->d . '|' . $slot->p])) {
+                    $missing++;
+                }
+            }
+            if ($missing > 0) {
+                $cells += $missing;
+                $students++;
+            }
+        }
+
+        return ['cells' => $cells, 'students' => $students];
+    }
+
     public function submitToYn(Request $request)
     {
         $request->validate([
@@ -7317,6 +7462,18 @@ class JournalController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => "Hali {$remainingLessons} ta dars qolgan. Barcha darslar tugagandan keyin YN ga yuborish mumkin.",
+            ], 422);
+        }
+
+        // Qo'yilmay qolgan baho bo'lsa yuborib bo'lmaydi: har katakda yo baho,
+        // yo NB turishi kerak. Tugma ham nofaol, lekin eski sahifadan yoki
+        // to'g'ridan-to'g'ri so'rov yuborilishi mumkin.
+        $ungraded = $this->countUngradedCells($groupHemisId, $subjectId, $semesterCode);
+        if ($ungraded['cells'] > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "{$ungraded['cells']} ta katak bo'sh ({$ungraded['students']} ta talabada). "
+                    . "Har bir darsga baho yoki NB qo'ying, keyin YN ga yuboring.",
             ], 422);
         }
 

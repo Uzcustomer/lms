@@ -2725,6 +2725,37 @@
                                                     @endif
                                                 </div>
                                             </div>
+                                        @elseif(($ungradedCells ?? 0) > 0)
+                                            {{-- Qo'yilmay qolgan baho bo'lsa YN ga yuborib bo'lmaydi:
+                                                 har katakda yo baho, yo NB turishi kerak. --}}
+                                            @php
+                                                $ungradedList = collect($ungradedStudents ?? [])->sortByDesc('count')->values();
+                                                $ungradedShown = $ungradedList->take(8);
+                                            @endphp
+                                            <div class="flex flex-column items-end" style="max-width: 420px;">
+                                                <button type="button" id="btn-submit-yn"
+                                                    class="px-6 py-3 bg-red-700 text-white font-bold rounded-lg cursor-not-allowed shadow-md border-2 border-red-800"
+                                                    disabled
+                                                    title="Avval barcha kataklarga baho yoki NB qo'ying"
+                                                    style="background-color: #b91c1c !important; color: #fff !important;">
+                                                    YN ga yuborish (nofaol)
+                                                </button>
+                                                <div class="text-sm text-red-600 mt-2 font-medium text-right">
+                                                    {{ $ungradedCells }} ta katak bo'sh — {{ $ungradedList->count() }} ta talabada
+                                                    baho ham, NB ham qo'yilmagan.
+                                                </div>
+                                                <details class="mt-1 text-right">
+                                                    <summary class="text-xs text-red-700 cursor-pointer select-none">Kimlar — ko'rsatish</summary>
+                                                    <div class="mt-1 text-xs text-gray-700 leading-relaxed">
+                                                        @foreach($ungradedShown as $u)
+                                                            <div>{{ $u['name'] }} <span class="text-red-600 font-semibold">({{ $u['count'] }})</span></div>
+                                                        @endforeach
+                                                        @if($ungradedList->count() > $ungradedShown->count())
+                                                            <div class="text-gray-500">va yana {{ $ungradedList->count() - $ungradedShown->count() }} ta talaba</div>
+                                                        @endif
+                                                    </div>
+                                                </details>
+                                            </div>
                                         @else
                                             <button type="button" id="btn-submit-yn"
                                                 class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"

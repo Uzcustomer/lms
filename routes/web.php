@@ -662,6 +662,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/export/groups', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\GroupsExport, 'groups.xlsx');
         })->name('export.groups');
+        Route::get('/export/lesson-pairs', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\LessonPairsExport,
+                'juftliklar_'.now('Asia/Tashkent')->format('Y-m-d').'.xlsx'
+            );
+        })->name('export.lesson-pairs');
         Route::get('/export/teachers', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(
                 new \App\Exports\TeachersDbExport,

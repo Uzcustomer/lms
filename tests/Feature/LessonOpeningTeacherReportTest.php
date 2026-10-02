@@ -302,7 +302,9 @@ test('baho qo\'yilmagan holati yo\'q o\'qituvchi va hisobga kirmaydigan kunlar r
 test('umumiy qator o\'qituvchilar yig\'indisiga teng va davr kechagacha', function () {
     $report = app(LessonOpeningTeacherReport::class)->build();
 
-    expect($report['totals'])->toBe([
+    // ungraded_students — baho qo'yilmagan talabalar yig'indisi (ustun sifatida
+    // Excelda chiqadi); bu yerda holatlar sonini tekshiramiz.
+    expect(collect($report['totals'])->except('ungraded_students')->all())->toBe([
         'graded' => 3, 'approved' => 1, 'pending' => 1, 'rejected' => 1, 'no_request' => 4, 'total' => 10,
     ]);
     expect(count($report['days']))->toBe(10);

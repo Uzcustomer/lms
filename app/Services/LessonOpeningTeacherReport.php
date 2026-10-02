@@ -355,13 +355,17 @@ class LessonOpeningTeacherReport
      */
     private function assemble(array $records, array $people, Carbon $from, Carbon $to): array
     {
-        $blank = array_fill_keys(array_keys(self::LABELS), 0) + ['total' => 0];
+        $blank = array_fill_keys(array_keys(self::LABELS), 0) + ['total' => 0, 'ungraded_students' => 0];
 
         $counts = [];
         foreach ($records as $record) {
             $counts[$record['who']] ??= $blank;
             $counts[$record['who']][$record['status']]++;
             $counts[$record['who']]['total']++;
+            // Baho qo'yilmagan talaba-kun soni: har holatdagi talabalar yig'indisi.
+            // Bir talaba bir necha kunda qoldirilsa, har kun alohida sanaladi —
+            // "holat" ham shunday hisoblanadi.
+            $counts[$record['who']]['ungraded_students'] += (int) ($record['missing_count'] ?? 0);
         }
 
         $teachers = [];

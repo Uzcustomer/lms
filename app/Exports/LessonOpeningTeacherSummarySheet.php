@@ -33,7 +33,7 @@ class LessonOpeningTeacherSummarySheet implements FromArray, WithColumnWidths, W
 
     public function array(): array
     {
-        $pad = fn (array $cells): array => array_pad($cells, 9, '');
+        $pad = fn (array $cells): array => array_pad($cells, 10, '');
         $labels = LessonOpeningTeacherReport::LABELS;
 
         $rows = [
@@ -46,7 +46,11 @@ class LessonOpeningTeacherSummarySheet implements FromArray, WithColumnWidths, W
                 "Baho qo'yilmagan holat — o'tgan amaliy dars kunida kamida bitta juftlikda na baho, na NB qo'yilmagan "
                 ."(jurnaldagi qoida). Ariza yuborilgan kunlar ham shu hisobga kiradi. Faqat kamida bitta holati bor o'qituvchilar ko'rsatilgan.",
             ]),
-            ['№', "O'qituvchi", 'Kafedra', "Baho qo'yilmagan holatlar (jami)", ...array_values($labels)],
+            [
+                '№', "O'qituvchi", 'Kafedra', "Baho qo'yilmagan holatlar (jami)",
+                "Baho qo'yilmagan talabalar (jami)",
+                ...array_values($labels),
+            ],
         ];
 
         foreach ($this->report['teachers'] as $index => $teacher) {
@@ -55,6 +59,7 @@ class LessonOpeningTeacherSummarySheet implements FromArray, WithColumnWidths, W
                 $teacher['name'],
                 $teacher['department'],
                 $teacher['total'],
+                $teacher['ungraded_students'] ?? 0,
                 ...array_map(fn (string $status) => $teacher[$status], array_keys($labels)),
             ];
         }
@@ -68,6 +73,7 @@ class LessonOpeningTeacherSummarySheet implements FromArray, WithColumnWidths, W
                 'Jami',
                 '',
                 $totals['total'],
+                $totals['ungraded_students'] ?? 0,
                 ...array_map(fn (string $status) => $totals[$status], array_keys($labels)),
             ];
         }
@@ -79,7 +85,7 @@ class LessonOpeningTeacherSummarySheet implements FromArray, WithColumnWidths, W
 
     public function columnWidths(): array
     {
-        return ['A' => 5, 'B' => 38, 'C' => 32, 'D' => 18, 'E' => 20, 'F' => 20, 'G' => 14, 'H' => 14, 'I' => 14];
+        return ['A' => 5, 'B' => 38, 'C' => 32, 'D' => 18, 'E' => 18, 'F' => 20, 'G' => 20, 'H' => 14, 'I' => 14, 'J' => 14];
     }
 
     public function registerEvents(): array
@@ -92,52 +98,52 @@ class LessonOpeningTeacherSummarySheet implements FromArray, WithColumnWidths, W
                 $hasRows = $this->report['teachers'] !== [];
                 $lastData = $hasRows ? $last - 1 : $last;   // oxirgi qator — "Jami"
 
-                $sheet->mergeCells('A1:I1');
+                $sheet->mergeCells('A1:J1');
                 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14)->getColor()->setRGB('0F2748');
                 $sheet->getRowDimension(1)->setRowHeight(24);
 
-                $sheet->mergeCells('A2:I2');
+                $sheet->mergeCells('A2:J2');
                 $sheet->getStyle('A2')->getFont()->setSize(10)->getColor()->setRGB('475569');
 
-                $sheet->mergeCells('A3:I3');
+                $sheet->mergeCells('A3:J3');
                 $sheet->getStyle('A3')->getFont()->setSize(9)->setItalic(true)->getColor()->setRGB('64748B');
                 $sheet->getStyle('A3')->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
                 $sheet->getRowDimension(3)->setRowHeight(40);
 
-                $sheet->getStyle("A{$header}:I{$header}")->getFont()->setBold(true)->setSize(10)->getColor()->setRGB('FFFFFF');
-                $sheet->getStyle("A{$header}:I{$header}")->getFill()
+                $sheet->getStyle("A{$header}:J{$header}")->getFont()->setBold(true)->setSize(10)->getColor()->setRGB('FFFFFF');
+                $sheet->getStyle("A{$header}:J{$header}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B3A63');
-                $sheet->getStyle("A{$header}:I{$header}")->getAlignment()
+                $sheet->getStyle("A{$header}:J{$header}")->getAlignment()
                     ->setWrapText(true)->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
                 $sheet->getRowDimension($header)->setRowHeight(48);
                 // So'ralgan ikki son ajralib tursin: jami (ko'k) va ariza orqali baho qo'yilgani (yashil)
-                $sheet->getStyle("E{$header}")->getFill()->getStartColor()->setRGB('0F7A52');
+                $sheet->getStyle("F{$header}")->getFill()->getStartColor()->setRGB('0F7A52');
                 $sheet->freezePane('A'.($header + 1));
 
                 if (! $hasRows) {
-                    $sheet->mergeCells("A{$last}:I{$last}");
+                    $sheet->mergeCells("A{$last}:J{$last}");
 
                     return;
                 }
 
-                $sheet->setAutoFilter("A{$header}:I{$lastData}");
+                $sheet->setAutoFilter("A{$header}:J{$lastData}");
                 $body = $header + 1;
-                $sheet->getStyle("A{$body}:I{$last}")->getBorders()->getBottom()
+                $sheet->getStyle("A{$body}:J{$last}")->getBorders()->getBottom()
                     ->setBorderStyle(Border::BORDER_HAIR)->getColor()->setRGB('CBD5E1');
                 $sheet->getStyle("A{$body}:A{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("D{$body}:I{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("D{$body}:J{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("B{$body}:B{$lastData}")->getFont()->setBold(true);
-                $sheet->getStyle("D{$body}:E{$last}")->getFont()->setBold(true);
-                $sheet->getStyle("E{$body}:E{$lastData}")->getFont()->getColor()->setRGB('0F7A52');
+                $sheet->getStyle("D{$body}:F{$last}")->getFont()->setBold(true);
+                $sheet->getStyle("F{$body}:F{$lastData}")->getFont()->getColor()->setRGB('0F7A52');
 
                 // "Jami" qatori
-                $sheet->getStyle("A{$last}:I{$last}")->getFont()->setBold(true);
-                $sheet->getStyle("A{$last}:I{$last}")->getFill()
+                $sheet->getStyle("A{$last}:J{$last}")->getFont()->setBold(true);
+                $sheet->getStyle("A{$last}:J{$last}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E8EEF7');
-                $sheet->getStyle("A{$last}:I{$last}")->getBorders()->getTop()
+                $sheet->getStyle("A{$last}:J{$last}")->getBorders()->getTop()
                     ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('1B3A63');
 
-                $sheet->getStyle("A{$body}:I{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle("A{$body}:J{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
             },
         ];
     }

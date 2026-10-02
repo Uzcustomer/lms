@@ -38,6 +38,31 @@ class TeacherMissedLessons
     /** Jurnaldagi $excludedTrainingTypes bilan bir xil */
     private const EXCLUDED_TYPE_NAMES = ["Ma'ruza", "Mustaqil ta'lim", 'Oraliq nazorat', 'Oski', 'Yakuniy test', 'Quiz test'];
 
+    /**
+     * Katak "hisobga olingan"mi — effectiveGrade() ning SQL ko'rinishi.
+     *
+     * PHP tomoni: reason = 'absent' (NB) YOKI effectiveGrade() null emas.
+     * Quyidagi CASE effectiveGrade() ning shoxlarini AYNAN o'sha tartibda
+     * takrorlaydi va natijasi null emasligini tekshiradi. Tartib muhim:
+     * birinchi mos kelgan shox g'olib chiqadi.
+     *
+     * Ikki tomon teng ekani testda tasdiqlanadi (TeacherMissedLessonsSqlTest).
+     */
+    private const PROCESSED_SQL = <<<'SQL'
+        (
+            sg.reason = 'absent'
+            OR (CASE
+                WHEN sg.grade IS NOT NULL AND sg.grade < 60 AND sg.retake_grade IS NOT NULL THEN sg.retake_grade
+                WHEN sg.status = 'pending' AND sg.reason = 'low_grade' AND sg.grade IS NOT NULL THEN sg.grade
+                WHEN sg.status = 'pending' THEN NULL
+                WHEN sg.reason = 'absent' AND sg.grade IS NULL THEN sg.retake_grade
+                WHEN sg.status = 'closed' AND sg.reason = 'teacher_victim' AND sg.grade = 0 AND sg.retake_grade IS NULL THEN NULL
+                WHEN sg.status IN ('recorded', 'closed') THEN sg.grade
+                ELSE sg.retake_grade
+            END) IS NOT NULL
+        )
+        SQL;
+
     /** @return Collection<int, array> eng yangi sana birinchi */
     public function forTeacher(Teacher $teacher): Collection
     {
@@ -205,6 +230,10 @@ class TeacherMissedLessons
         // 1. Har juftlikda ishlov berilgan (baho yoki NB olgan) distinct talabalar
         $processedSets = [];
 
+        // "Hisobga olingan" shartini SQL bajaradi: jadvalda 17 mln+ qator bor va
+        // hammasini PHP ga tortib olish hisobotning asosiy sekinligi edi. Endi
+        // baza faqat shartni qanoatlantirgan qatorlarni qaytaradi — mantiq
+        // effectiveGrade() bilan bir xil (ProcessedGradeCondition da tasvirlangan).
         DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereIn('st.group_id', $groupIds)
@@ -214,16 +243,16 @@ class TeacherMissedLessons
             ->whereNotIn('sg.training_type_code', [99, 100, 101, 102, 103])
             ->where('sg.lesson_date', '>=', $from.' 00:00:00')
             ->where('sg.lesson_date', '<', $today.' 00:00:00')
-            ->select('sg.id as id', 'st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.student_hemis_id', 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', DB::raw('DATE(sg.lesson_date) as lesson_day'))
-            // Butun o'qituvchilar uchun qatorlar ko'p: offset emas, id bo'yicha bo'laklaymiz
-            ->chunkById(2000, function ($rows) use (&$processedSets) {
-                foreach ($rows as $row) {
-                    if ($row->reason === 'absent' || $this->effectiveGrade($row) !== null) {
-                        $pk = $this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code);
-                        $processedSets[$pk][$row->student_hemis_id] = true;
-                    }
-                }
-            }, 'sg.id', 'id');
+            ->whereRaw(self::PROCESSED_SQL)
+            ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.student_hemis_id', DB::raw('DATE(sg.lesson_date) as lesson_day'))
+            // Oqim bilan o'qiymiz: bo'laklash har safar "id > oxirgi" shartini
+            // qo'shib qayta saralar edi; cursor() bitta so'rov bilan kifoya
+            // qiladi va qatorlarni birma-bir beradi (xotira o'smaydi).
+            ->cursor()
+            ->each(function ($row) use (&$processedSets) {
+                $pk = $this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code);
+                $processedSets[$pk][$row->student_hemis_id] = true;
+            });
 
         // 2. Jadvaldagi juftliklar: bahosi umuman yo'qlari ham ro'yxatga kirsin.
         //    Aks holda ular $processedSets da bo'lmaydi va "nechta talabada baho
@@ -279,30 +308,31 @@ class TeacherMissedLessons
      */
     private function activeStudentTotals(array $groupIds, array $subjectIds, ?string $from = null, ?string $to = null): array
     {
+        // Ikkala ro'yxat ham oqim bilan o'qiladi: bo'laklash har bo'lakda
+        // qayta saralashga majbur qilardi, cursor() esa bitta so'rov bilan
+        // kifoya qiladi va qatorlarni birma-bir beradi.
         $bySubject = [];
         DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->whereIn('st.group_id', $groupIds)
             ->whereIn('ss.subject_id', $subjectIds)
             ->where('st.student_status_code', 11)
-            ->select('ss.id as id', 'st.group_id', 'ss.subject_id', 'ss.semester_id', 'ss.student_hemis_id')
+            ->select('st.group_id', 'ss.subject_id', 'ss.semester_id', 'ss.student_hemis_id')
             ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss', $from, $to))
-            ->chunkById(5000, function ($rows) use (&$bySubject) {
-                foreach ($rows as $r) {
-                    $bySubject[$r->group_id.'|'.$r->subject_id.'|'.$r->semester_id][(string) $r->student_hemis_id] = true;
-                }
-            }, 'ss.id', 'id');
+            ->cursor()
+            ->each(function ($r) use (&$bySubject) {
+                $bySubject[$r->group_id.'|'.$r->subject_id.'|'.$r->semester_id][(string) $r->student_hemis_id] = true;
+            });
 
         $byGroup = [];
         DB::table('students')
             ->whereIn('group_id', $groupIds)
             ->where('student_status_code', 11)
             ->whereNotNull('hemis_id')
-            ->select('id', 'group_id', 'hemis_id')
-            ->chunkById(5000, function ($rows) use (&$byGroup) {
-                foreach ($rows as $r) {
-                    $byGroup[(string) $r->group_id][(string) $r->hemis_id] = true;
-                }
+            ->select('group_id', 'hemis_id')
+            ->cursor()
+            ->each(function ($r) use (&$byGroup) {
+                $byGroup[(string) $r->group_id][(string) $r->hemis_id] = true;
             });
 
         return [$bySubject, $byGroup];

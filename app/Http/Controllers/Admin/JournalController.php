@@ -991,14 +991,14 @@ class JournalController extends Controller
         }
 
         $students = $studentsQuery
-            ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
+            ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code', 'student_status_name')
             ->orderBy('full_name')
             ->get();
 
         if ($students->isEmpty()) {
             $students = DB::table('students')
                 ->where('group_id', $group->group_hemis_id)
-                ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
+                ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code', 'student_status_name')
                 ->orderBy('full_name')
                 ->get();
         }

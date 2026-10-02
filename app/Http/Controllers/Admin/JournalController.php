@@ -19,7 +19,6 @@ use App\Services\ActivityLogService;
 use App\Services\HemisService;
 use App\Services\MissedGradeAccess;
 use App\Services\ScheduleImportService;
-use App\Services\StudentSubjectScope;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -918,15 +917,11 @@ class JournalController extends Controller
         // Aks holda (import qilinmagan) — guruhdagi barcha talabalarni ko'rsatish (eski logika)
         // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
         // Joriy semestrga tegishli biriktirishlarni aniqlash
-        // Faqat joriy o'quv yili biriktirishlari (StudentSubjectScope): semestr
-        // kodi yilga bog'lanmagan, shuning uchun o'tgan yilgi qatorlar ham shu
-        // kod ostida turadi — qayta tiklangan talaba eski fanlariga tushib qolmasin.
         $hasSubjectAssignments = DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->where('st.group_id', $group->group_hemis_id)
             ->where('ss.subject_id', $subjectId)
             ->where('ss.semester_id', $semesterCode)
-            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
             ->exists();
 
         $studentsQuery = DB::table('students')
@@ -934,7 +929,7 @@ class JournalController extends Controller
 
         if ($hasSubjectAssignments) {
             // student_subjects da ma'lumot bor — faqat fanga biriktirilgan talabalarni ko'rsatish
-            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId, $educationYearCode, $minScheduleDate) {
+            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
                     ->where(function ($q) use ($subjectId, $semesterCode) {
                         $q->where(function ($q2) {
@@ -947,27 +942,15 @@ class JournalController extends Controller
                                 ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
                                 ->where('student_subjects.subject_id', $subjectId)
                                 ->where('student_subjects.semester_id', $semesterCode);
-                            StudentSubjectScope::apply($sub, 'student_subjects');
                         });
                     })
-                    // Bahosi borlar (chetlashganlar ham) — lekin faqat shu o'quv
-                    // yilidagi baholar: o'tgan yili shu fanni o'qib bo'lgan talaba
-                    // eski baholari bilan bu yilgi jurnalga tushmasin.
-                    // Yil filtri jurnaldagi boshqa baho so'rovlari bilan bir xil.
-                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode, $educationYearCode, $minScheduleDate) {
+                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
                         $sub->select(DB::raw(1))
                             ->from('student_grades')
                             ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
                             ->where('student_grades.subject_id', $subjectId)
                             ->where('student_grades.semester_code', $semesterCode)
-                            ->whereNull('student_grades.deleted_at')
-                            ->when($educationYearCode !== null, fn ($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                                $q2->where('student_grades.education_year_code', $educationYearCode)
-                                    ->orWhere(function ($q3) use ($minScheduleDate) {
-                                        $q3->whereNull('student_grades.education_year_code')
-                                            ->when($minScheduleDate !== null, fn ($q4) => $q4->where('student_grades.lesson_date', '>=', $minScheduleDate));
-                                    });
-                            }));
+                            ->whereNull('student_grades.deleted_at');
                     });
             });
         } else {
@@ -7375,27 +7358,12 @@ class JournalController extends Controller
             return ['cells' => 0, 'students' => 0];
         }
 
-        // Faqat o'qiyotgan (11) va shu fanga biriktirilgan talabalar — jurnal
-        // ro'yxati va hisobot (TeacherMissedLessons) qoidasi bilan bir xil:
-        // student_subjects (joriy o'quv yili), biriktirish bo'lmasa butun guruh.
-        // Aks holda qayta tiklangan talaba o'qimaydigan fanida ham YN ni bloklaydi.
-        $studentHemisIds = DB::table('student_subjects as ss')
-            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
-            ->where('st.group_id', $groupHemisId)
-            ->where('ss.subject_id', $subjectId)
-            ->where('ss.semester_id', $semesterCode)
-            ->where('st.student_status_code', 11)
-            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
-            ->distinct()
-            ->pluck('ss.student_hemis_id');
-
-        if ($studentHemisIds->isEmpty()) {
-            $studentHemisIds = DB::table('students')
-                ->where('group_id', $groupHemisId)
-                ->where('student_status_code', 11)
-                ->whereNotNull('hemis_id')
-                ->pluck('hemis_id');
-        }
+        // Faqat o'qiyotgan talabalar (11) — jurnal va hisobot qoidasi bilan bir xil
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->where('student_status_code', 11)
+            ->whereNotNull('hemis_id')
+            ->pluck('hemis_id');
 
         if ($studentHemisIds->isEmpty()) {
             return ['cells' => 0, 'students' => 0];

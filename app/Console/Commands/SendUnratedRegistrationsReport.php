@@ -7,7 +7,6 @@ use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use App\Services\StudentSubjectScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -168,7 +167,6 @@ class SendUnratedRegistrationsReport extends Command
             ->whereIn('ss.subject_id', $subjectIds)
             ->whereIn('ss.semester_id', $semesterCodes)
             ->where('st.student_status_code', self::ACTIVE_STATUS)
-            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
             ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');

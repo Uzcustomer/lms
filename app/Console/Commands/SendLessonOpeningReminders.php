@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use App\Services\StudentSubjectScope;
+use App\Services\TeacherMissedLessons;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -18,7 +19,7 @@ class SendLessonOpeningReminders extends Command
 
     protected $description = 'Dars ochilganlarga baho eslatmasi + dars ochilmaganlarga Registrator ofisi eslatmasi';
 
-    public function handle(TelegramService $telegram): int
+    public function handle(TelegramService $telegram, TeacherMissedLessons $missedLessons): int
     {
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
@@ -28,6 +29,26 @@ class SendLessonOpeningReminders extends Command
         $this->info('1-qism: Dars ochilishi eslatmalari tekshirilmoqda...');
 
         $openings = LessonOpening::where('status', 'active')->whereNotNull('deadline')->get();
+
+        // To'liqlik qoidasi — jurnal va registrator hisoboti bilan BIR XIL
+        // (TeacherMissedLessons): juftlik faqat barcha faol, fanga biriktirilgan
+        // talaba baho YOKI NB olganda to'liq hisoblanadi.
+        //
+        // Avval buyruq "juftlikda kamida bitta baho bor" deb tekshirardi. Jurnal
+        // esa yangi qoida bilan qisman baholangan kunni ochiq deb ko'rsatib,
+        // o'qituvchidan so'rov olardi — tasdiqlangach shu buyruq o'sha kuni
+        // 18:00 da ochilishni darhol "completed" qilib yopib qo'yardi.
+        $marked = [];
+        if ($openings->isNotEmpty()) {
+            $days = $openings->map(fn ($o) => $o->lesson_date->format('Y-m-d'));
+            $marked = $missedLessons->markedPairs(
+                $openings->pluck('group_hemis_id')->unique()->values()->all(),
+                $openings->pluck('subject_id')->unique()->values()->all(),
+                $days->min(),
+                // Yuqori chegara ochiq ([from, to)) — oxirgi kun ham kirsin
+                Carbon::parse($days->max())->addDay()->format('Y-m-d')
+            );
+        }
 
         $confirmedCount = 0;
         $reminderCount = 0;
@@ -47,65 +68,20 @@ class SendLessonOpeningReminders extends Command
                 ->whereRaw('DATE(lesson_date) = ?', [$lessonDate])
                 ->whereNotIn('training_type_code', $gradeExcludedTypes)
                 ->whereNull('deleted_at')
-                ->select('employee_id', 'subject_name', 'group_name', 'schedule_hemis_id')
+                ->select('employee_id', 'subject_name', 'group_name', 'lesson_pair_code')
                 ->get();
 
             if ($teacherSchedules->isEmpty()) {
                 continue;
             }
 
-            $scheduleHemisIds = $teacherSchedules->pluck('schedule_hemis_id')->unique()->toArray();
-
-            // Baho qo'yilganini tekshirish (1-usul: schedule_hemis_id orqali).
-            // Chunk qilib so'raymiz, aks holda katta partiyalarda MySQL
-            // placeholder limitidan oshib ketadi.
-            $gradeByScheduleId = [];
-            foreach (array_chunk($scheduleHemisIds, 1000) as $chunk) {
-                $ids = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->whereIn('subject_schedule_id', $chunk)
-                    ->where(function ($q) {
-                        $q->where('grade', '>', 0)
-                          ->orWhere('retake_grade', '>', 0)
-                          ->orWhere('status', 'recorded');
-                    })
-                    ->pluck('subject_schedule_id')
-                    ->all();
-                foreach ($ids as $id) {
-                    $gradeByScheduleId[$id] = true;
-                }
-            }
-
-            // Baho qo'yilganini tekshirish (2-usul: guruh+fan+sana orqali)
-            $gradeByKey = DB::table('student_grades as sg')
-                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                ->whereNull('sg.deleted_at')
-                ->where('st.group_id', $groupHemisId)
-                ->where('sg.subject_id', $subjectId)
-                ->whereRaw('DATE(sg.lesson_date) = ?', [$lessonDate])
-                ->where(function ($q) {
-                    $q->where('sg.grade', '>', 0)
-                      ->orWhere('sg.retake_grade', '>', 0)
-                      ->orWhere('sg.status', 'recorded');
-                })
-                ->exists();
-
-            // Barcha schedule lar uchun baho bormi
-            $allGraded = true;
-            $anyGradeFoundByScheduleId = false;
-            foreach ($teacherSchedules as $ts) {
-                if (isset($gradeByScheduleId[$ts->schedule_hemis_id])) {
-                    $anyGradeFoundByScheduleId = true;
-                } else {
-                    $allGraded = false;
-                    break;
-                }
-            }
-
-            // Agar schedule_hemis_id orqali hech baho topilmasa, fallback sifatida 2-usulni ishlatish
-            if (!$anyGradeFoundByScheduleId) {
-                $allGraded = $gradeByKey;
-            }
+            // Kun to'liq — faqat uning HAR BIR juftligi to'liq belgilanganda
+            // (bitta talabada ham bo'sh katak qolmagan). Bahosi umuman yo'q
+            // juftlik $marked da bo'lmaydi — u ham to'liq emas.
+            $allGraded = $teacherSchedules->pluck('lesson_pair_code')->unique()
+                ->every(fn ($pair) => isset($marked[$missedLessons->pairKey(
+                    $groupHemisId, $subjectId, $semesterCode, $lessonDate, (string) $pair
+                )]));
 
             $employeeIds = $teacherSchedules->pluck('employee_id')->unique();
             $subjectName = $teacherSchedules->first()->subject_name ?? 'Noma\'lum fan';

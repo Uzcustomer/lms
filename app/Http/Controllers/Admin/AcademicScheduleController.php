@@ -2123,12 +2123,22 @@ class AcademicScheduleController extends Controller
             return $item;
         });
 
-        // Test markazi faqat YN ga yuborilgan fanlar bilan ishlaydi: o'qituvchi
-        // jurnalni yopib YN ga yubormaguncha imtihon vaqti belgilanmaydi.
-        // Ilgari yuborilmaganlar ham ro'yxatda turib, ularga sana/kompyuter
-        // qo'yish mumkin edi.
+        // Test markazi asosan YN ga yuborilgan fanlar bilan ishlaydi: o'qituvchi
+        // jurnalni yopib YN ga yubormaguncha yakuniy testga vaqt belgilanmaydi.
+        //
+        // OSKI bunga kirmaydi: unga sana jurnal yopilishidan oldin ham
+        // qo'yiladi va test markazi o'sha sanani ko'rishi kerak. Shuning uchun
+        // OSKI qatori sanasi bo'lsa YN'siz ham qoladi; sanasi yo'q OSKI va
+        // har qanday Test esa YN ga yuborilgandagina ko'rinadi.
         $transformedData = $transformedData
-            ->filter(fn ($item) => !empty($item['yn_submitted']))
+            ->filter(function ($item) {
+                if (! empty($item['yn_submitted'])) {
+                    return true;
+                }
+
+                return strcasecmp((string) ($item['yn_type'] ?? ''), 'OSKI') === 0
+                    && trim((string) ($item['yn_date'] ?? '')) !== '';
+            })
             ->values();
 
         $excuseCounts = [];

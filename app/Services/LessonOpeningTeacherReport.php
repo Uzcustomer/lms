@@ -93,7 +93,9 @@ class LessonOpeningTeacherReport
 
         $groupIds = array_keys($active);
         $subjectIds = $slots->pluck('subject_id')->merge($openings->pluck('subject_id'))->unique()->values()->all();
-        $analysis = $groupIds ? $this->missed->analyzePairs($groupIds, $subjectIds, $from, $upper) : ['marked' => [], 'missing' => []];
+        // $slots ham uzatiladi: bahosi umuman yo'q juftliklarda ham
+        // "nechta talabada baho yo'q" soni to'g'ri chiqsin.
+        $analysis = $groupIds ? $this->missed->analyzePairs($groupIds, $subjectIds, $from, $upper, $slots) : ['marked' => [], 'missing' => []];
         $marked = $analysis['marked'];
         $missing = $analysis['missing']; // pairKey => [baho qo'yilmagan talaba hemis_id => true]
 
@@ -227,12 +229,12 @@ class LessonOpeningTeacherReport
 
             foreach ($whos as $who) {
                 $own = str_starts_with($who, 'h') ? ($onDay[substr($who, 1)] ?? null) : null;
-                $isCompleted = $opening->status === LessonOpening::STATUS_COMPLETED;
-                // "completed" — tizim baholarni to'liq deb belgilagan (SendLessonOpeningReminders).
-                // Aks holda real baholarga qaraymiz: o'z juftliklari jadvalda bo'lsa hammasi
-                // hisobga olinganmi, bo'lmasa kunda biror belgi bormi.
-                $graded = $isCompleted
-                    || ($own !== null ? ! $own['unmarked'] : isset($dayMarked[$dayKey]));
+                // Baho qo'yilgan-yo'qligini REAL baholardan aniqlaymiz, arizaning
+                // "completed" bayrog'idan emas. Bayroqqa ishonib bo'lmaydi: uni
+                // SendLessonOpeningReminders qo'yadi va u avval juftlikda bitta
+                // baho bo'lsa ham kunni to'liq deb hisoblardi, shuning uchun
+                // bazada noto'g'ri "completed" yozuvlari bor.
+                $graded = $own !== null ? ! $own['unmarked'] : isset($dayMarked[$dayKey]);
 
                 $records[] = [
                     'who' => $who,
@@ -256,9 +258,10 @@ class LessonOpeningTeacherReport
                     // So'rovni kim yuborgan va kim(lar) tasdiqlagan
                     'applicant' => trim((string) $opening->opened_by_name),
                     'approvers' => $approversOf($opening),
-                    // Baho qo'yilmagan juftliklar (completed = to'liq baholangan, ular bo'sh)
-                    'pairs' => $isCompleted ? [] : ($own['pairs'] ?? []),
-                    'missing_students' => $isCompleted ? [] : ($own['missing_students'] ?? []),
+                    // Baho qo'yilmagan juftliklar va ularda baho kutayotgan
+                    // talabalar — har doim real holatdan (to'liq bo'lsa bo'sh bo'ladi)
+                    'pairs' => $own['pairs'] ?? [],
+                    'missing_students' => $own['missing_students'] ?? [],
                 ];
             }
         }

@@ -179,10 +179,15 @@ class TeacherMissedLessons
      * olingan" (marked) bo'ladi. Kimdadir ikkalasi ham yo'q bo'lsa — juftlik
      * baho qo'yilmagan hisoblanadi va nechta talabada yo'qligi (missing) qaytadi.
      *
+     * $slots berilsa (pastSlots natijasi), bahosi UMUMAN yo'q juftliklar ham
+     * hisobga olinadi: ularda butun ro'yxat baho kutayotgan bo'ladi. Berilmasa
+     * faqat kamida bitta bahosi bor juftliklar ko'riladi.
+     *
+     * @param  iterable<object>  $slots  pastSlots() qaytargan jadval juftliklari
      * @return array{marked: array<string,true>, missing: array<string,array<string,true>>}
      *                missing: pairKey => [baho qo'yilmagan talaba hemis_id => true]
      */
-    public function analyzePairs(array $groupIds, array $subjectIds, string $from, string $today): array
+    public function analyzePairs(array $groupIds, array $subjectIds, string $from, string $today, iterable $slots = []): array
     {
         // 1. Har juftlikda ishlov berilgan (baho yoki NB olgan) distinct talabalar
         $processedSets = [];
@@ -207,7 +212,15 @@ class TeacherMissedLessons
                 }
             }, 'sg.id', 'id');
 
-        // 2. Guruh+fan+semestr bo'yicha faol talabalar ro'yxati
+        // 2. Jadvaldagi juftliklar: bahosi umuman yo'qlari ham ro'yxatga kirsin.
+        //    Aks holda ular $processedSets da bo'lmaydi va "nechta talabada baho
+        //    yo'q" ustuni bo'sh qolardi, holbuki butun guruh baho kutayotgan bo'ladi.
+        foreach ($slots as $slot) {
+            $pk = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
+            $processedSets[$pk] ??= [];
+        }
+
+        // 3. Guruh+fan+semestr bo'yicha faol talabalar ro'yxati
         [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds, $from, $today);
 
         $marked = [];

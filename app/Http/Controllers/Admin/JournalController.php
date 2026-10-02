@@ -2073,6 +2073,13 @@ class JournalController extends Controller
             foreach ($students as $stu) {
                 $h = $stu->hemis_id;
 
+                // Chetlashgan talaba (60) YN bosqichidan o'tmaydi: unga
+                // "PULLIK", "1-urinish" kabi belgilar ma'nosiz. Ismi yonida
+                // faqat CHETLASHGAN belgisi qoladi.
+                if ((string) ($stu->student_status_code ?? '') === '60') {
+                    continue;
+                }
+
                 // JN/MT o'rtacha — jurnal jadvalidagi "JN %"/"MT %" bilan AYNI.
                 $jnDailySum = 0;
                 foreach ($jbDatesForAvg as $date) {

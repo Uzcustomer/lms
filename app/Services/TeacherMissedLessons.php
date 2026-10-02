@@ -179,7 +179,8 @@ class TeacherMissedLessons
      * olingan" (marked) bo'ladi. Kimdadir ikkalasi ham yo'q bo'lsa — juftlik
      * baho qo'yilmagan hisoblanadi va nechta talabada yo'qligi (missing) qaytadi.
      *
-     * @return array{marked: array<string,true>, missing: array<string,int>}
+     * @return array{marked: array<string,true>, missing: array<string,array<string,true>>}
+     *                missing: pairKey => [baho qo'yilmagan talaba hemis_id => true]
      */
     public function analyzePairs(array $groupIds, array $subjectIds, string $from, string $today): array
     {
@@ -206,19 +207,23 @@ class TeacherMissedLessons
                 }
             }, 'sg.id', 'id');
 
-        // 2. Guruh+fan+semestr bo'yicha jami faol talaba soni
+        // 2. Guruh+fan+semestr bo'yicha faol talabalar ro'yxati
         [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds);
 
         $marked = [];
         $missing = [];
         foreach ($processedSets as $pk => $set) {
             $parts = explode('|', $pk); // group|subject|semester|day|pair
-            $total = $bySubject[$parts[0].'|'.$parts[1].'|'.$parts[2]] ?? ($byGroup[$parts[0]] ?? 0);
-            $cnt = count($set);
-            if ($total > 0 && $cnt >= $total) {
+            $roster = $bySubject[$parts[0].'|'.$parts[1].'|'.$parts[2]] ?? ($byGroup[$parts[0]] ?? []);
+            if ($roster === []) {
+                continue;
+            }
+            // Ro'yxatdan baho/NB olganlarni ayiramiz — qolgani baho qo'yilmaganlar
+            $left = array_diff_key($roster, $set);
+            if ($left === []) {
                 $marked[$pk] = true; // barcha faol talaba baho/NB olgan
-            } elseif ($total > 0) {
-                $missing[$pk] = $total - $cnt; // qisman — baho qo'yilmagan
+            } else {
+                $missing[$pk] = $left;
             }
         }
 
@@ -236,33 +241,42 @@ class TeacherMissedLessons
     }
 
     /**
-     * Guruh+fan+semestr bo'yicha jami faol talaba soni.
-     * student_subjects (biriktirilgan faol talabalar), topilmasa guruh soni.
+     * Guruh+fan+semestr bo'yicha faol talabalar RO'YXATI (son emas).
+     * student_subjects (biriktirilgan faol talabalar), topilmasa guruh ro'yxati.
      *
-     * @return array{0: array<string,int>, 1: array<string,int>}
-     *                                                           [0] => "group|subject|semester" => son, [1] => "group" => son
+     * Ro'yxat kerak, chunki bir kunning ikki juftligida turli talabalar baho
+     * olmagan bo'lishi mumkin — kun bo'yicha noyob talabalarni sanash uchun
+     * kimligini bilish shart (son bilan buni aniqlab bo'lmaydi).
+     *
+     * @return array{0: array<string,array<string,true>>, 1: array<string,array<string,true>>}
+     *                                                           [0] => "group|subject|semester" => [hemis_id => true], [1] => "group" => [hemis_id => true]
      */
     private function activeStudentTotals(array $groupIds, array $subjectIds): array
     {
-        $bySubject = DB::table('student_subjects as ss')
+        $bySubject = [];
+        DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->whereIn('st.group_id', $groupIds)
             ->whereIn('ss.subject_id', $subjectIds)
             ->where('st.student_status_code', 11)
-            ->groupBy('st.group_id', 'ss.subject_id', 'ss.semester_id')
-            ->select('st.group_id', 'ss.subject_id', 'ss.semester_id', DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
-            ->get()
-            ->mapWithKeys(fn ($r) => [$r->group_id.'|'.$r->subject_id.'|'.$r->semester_id => (int) $r->cnt])
-            ->all();
+            ->select('ss.id as id', 'st.group_id', 'ss.subject_id', 'ss.semester_id', 'ss.student_hemis_id')
+            ->chunkById(5000, function ($rows) use (&$bySubject) {
+                foreach ($rows as $r) {
+                    $bySubject[$r->group_id.'|'.$r->subject_id.'|'.$r->semester_id][(string) $r->student_hemis_id] = true;
+                }
+            }, 'ss.id', 'id');
 
-        $byGroup = DB::table('students')
+        $byGroup = [];
+        DB::table('students')
             ->whereIn('group_id', $groupIds)
             ->where('student_status_code', 11)
-            ->groupBy('group_id')
-            ->select('group_id', DB::raw('COUNT(*) as cnt'))
-            ->get()
-            ->mapWithKeys(fn ($r) => [(string) $r->group_id => (int) $r->cnt])
-            ->all();
+            ->whereNotNull('hemis_id')
+            ->select('id', 'group_id', 'hemis_id')
+            ->chunkById(5000, function ($rows) use (&$byGroup) {
+                foreach ($rows as $r) {
+                    $byGroup[(string) $r->group_id][(string) $r->hemis_id] = true;
+                }
+            });
 
         return [$bySubject, $byGroup];
     }

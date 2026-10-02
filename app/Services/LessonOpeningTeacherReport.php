@@ -95,7 +95,7 @@ class LessonOpeningTeacherReport
         $subjectIds = $slots->pluck('subject_id')->merge($openings->pluck('subject_id'))->unique()->values()->all();
         $analysis = $groupIds ? $this->missed->analyzePairs($groupIds, $subjectIds, $from, $upper) : ['marked' => [], 'missing' => []];
         $marked = $analysis['marked'];
-        $missing = $analysis['missing']; // pairKey => baho qo'yilmagan talaba soni
+        $missing = $analysis['missing']; // pairKey => [baho qo'yilmagan talaba hemis_id => true]
 
         // Kunda kamida bitta juftlik hisobga olinganmi (o'qituvchi jadvalda topilmasa kerak)
         $dayMarked = [];
@@ -116,17 +116,16 @@ class LessonOpeningTeacherReport
                 'semester_code' => (string) $slot->semester_code,
                 'date' => $slot->lesson_day,
                 'unmarked' => false,
-                'missing_count' => 0,   // baho qo'yilmagan talaba soni (juftliklar bo'yicha eng ko'pi)
+                'missing_students' => [],   // kun bo'yicha noyob talabalar (juftliklar birlashmasi)
                 'pairs' => [],   // baho qo'yilmagan juftliklar: kod => ['label', 'time']
             ];
 
             $pairKey = $this->missed->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
             if (! isset($marked[$pairKey]) && isset($active[(string) $slot->group_id])) {
                 $byDay[$dayKey][$employee]['unmarked'] = true;
-                $byDay[$dayKey][$employee]['missing_count'] = max(
-                    (int) $byDay[$dayKey][$employee]['missing_count'],
-                    (int) ($missing[$pairKey] ?? 0)
-                );
+                // Juftliklarni birlashtiramiz: bir talaba ikki juftlikda ham
+                // qoldirilsa bir marta sanaladi, turli talabalar bo'lsa ikkalasi ham.
+                $byDay[$dayKey][$employee]['missing_students'] += $missing[$pairKey] ?? [];
                 $code = (string) $slot->lesson_pair_code;
                 $byDay[$dayKey][$employee]['pairs'][$code] ??= [
                     'label' => $this->pairLabel($slot),
@@ -259,7 +258,7 @@ class LessonOpeningTeacherReport
                     'approvers' => $approversOf($opening),
                     // Baho qo'yilmagan juftliklar (completed = to'liq baholangan, ular bo'sh)
                     'pairs' => $isCompleted ? [] : ($own['pairs'] ?? []),
-                    'missing_count' => $isCompleted ? 0 : (int) ($own['missing_count'] ?? 0),
+                    'missing_students' => $isCompleted ? [] : ($own['missing_students'] ?? []),
                 ];
             }
         }
@@ -286,7 +285,7 @@ class LessonOpeningTeacherReport
                     'applicant' => '',   // ariza yubormagan
                     'approvers' => '',
                     'pairs' => $entry['pairs'],
-                    'missing_count' => (int) ($entry['missing_count'] ?? 0),
+                    'missing_students' => $entry['missing_students'] ?? [],
                 ];
             }
         }
@@ -365,7 +364,7 @@ class LessonOpeningTeacherReport
             // Baho qo'yilmagan talaba-kun soni: har holatdagi talabalar yig'indisi.
             // Bir talaba bir necha kunda qoldirilsa, har kun alohida sanaladi —
             // "holat" ham shunday hisoblanadi.
-            $counts[$record['who']]['ungraded_students'] += (int) ($record['missing_count'] ?? 0);
+            $counts[$record['who']]['ungraded_students'] += count($record['missing_students'] ?? []);
         }
 
         $teachers = [];
@@ -402,7 +401,7 @@ class LessonOpeningTeacherReport
                 'requested_at' => $record['requested_at'],
                 'applicant' => $record['applicant'] ?? '',
                 'approvers' => $record['approvers'] ?? '',
-                'ungraded_students' => (int) ($record['missing_count'] ?? 0),
+                'ungraded_students' => count($record['missing_students'] ?? []),
             ];
             // Har bir holat (guruh+fan+kun) — bitta qator; baho qo'yilmagan
             // juftliklar o'sha qatorда birga ko'rsatiladi (mas. "2, 5.1").

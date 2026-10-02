@@ -94,6 +94,9 @@ class LessonOpeningTeacherSummarySheet implements FromArray, WithColumnWidths, W
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $header = self::HEADER_ROW;
+                // Butun hujjat Times New Roman (rasmiy hisobot ko'rinishi).
+                // Varaq uslubi — keyingi aniq uslublar buni bekor qilmaydi.
+                $sheet->getParent()->getDefaultStyle()->getFont()->setName('Times New Roman')->setSize(11);
                 $last = max($header + 1, $this->lastRow);
                 $hasRows = $this->report['teachers'] !== [];
                 $lastData = $hasRows ? $last - 1 : $last;   // oxirgi qator — "Jami"

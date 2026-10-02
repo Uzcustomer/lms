@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use App\Services\StudentSubjectScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -161,6 +162,7 @@ class SendTeacherReminders extends Command
             ->whereIn('ss.subject_id', $subjectIds)
             ->whereIn('ss.semester_id', $semesterCodes)
             ->where('st.student_status_code', 11)
+            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
             ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as k"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'k');

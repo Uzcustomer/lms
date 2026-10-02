@@ -208,7 +208,7 @@ class TeacherMissedLessons
             }, 'sg.id', 'id');
 
         // 2. Guruh+fan+semestr bo'yicha faol talabalar ro'yxati
-        [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds);
+        [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds, $from, $today);
 
         $marked = [];
         $missing = [];
@@ -251,7 +251,7 @@ class TeacherMissedLessons
      * @return array{0: array<string,array<string,true>>, 1: array<string,array<string,true>>}
      *                                                           [0] => "group|subject|semester" => [hemis_id => true], [1] => "group" => [hemis_id => true]
      */
-    private function activeStudentTotals(array $groupIds, array $subjectIds): array
+    private function activeStudentTotals(array $groupIds, array $subjectIds, ?string $from = null, ?string $to = null): array
     {
         $bySubject = [];
         DB::table('student_subjects as ss')
@@ -260,6 +260,7 @@ class TeacherMissedLessons
             ->whereIn('ss.subject_id', $subjectIds)
             ->where('st.student_status_code', 11)
             ->select('ss.id as id', 'st.group_id', 'ss.subject_id', 'ss.semester_id', 'ss.student_hemis_id')
+            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss', $from, $to))
             ->chunkById(5000, function ($rows) use (&$bySubject) {
                 foreach ($rows as $r) {
                     $bySubject[$r->group_id.'|'.$r->subject_id.'|'.$r->semester_id][(string) $r->student_hemis_id] = true;

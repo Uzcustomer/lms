@@ -2123,6 +2123,14 @@ class AcademicScheduleController extends Controller
             return $item;
         });
 
+        // Test markazi faqat YN ga yuborilgan fanlar bilan ishlaydi: o'qituvchi
+        // jurnalni yopib YN ga yubormaguncha imtihon vaqti belgilanmaydi.
+        // Ilgari yuborilmaganlar ham ro'yxatda turib, ularga sana/kompyuter
+        // qo'yish mumkin edi.
+        $transformedData = $transformedData
+            ->filter(fn ($item) => !empty($item['yn_submitted']))
+            ->values();
+
         $excuseCounts = [];
         if (!empty($groupHemisIds) && !empty($subjectIds)) {
             $excuseRows = AbsenceExcuseMakeup::join('absence_excuses as ae', 'ae.id', '=', 'absence_excuse_makeups.absence_excuse_id')
@@ -2220,6 +2228,15 @@ class AcademicScheduleController extends Controller
             $selectedGroup, $selectedSubject, $localSemesterCodes
         );
         foreach ($individualItems as $indItem) {
+            // Individual yozuvlar ham faqat YN ga yuborilgan fan uchun
+            // ko'rsatiladi — guruh yozuvlari bilan bir xil qoida.
+            $indKey = ($indItem['group']->group_hemis_id ?? '') . '|'
+                . ($indItem['subject']->subject_id ?? '') . '|'
+                . ($indItem['subject']->semester_code ?? '');
+            if (!isset($ynSubmissions[$indKey])) {
+                continue;
+            }
+            $indItem['yn_submitted'] = true;
             $transformedData->push($indItem);
         }
 

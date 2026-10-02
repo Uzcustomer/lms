@@ -4791,19 +4791,24 @@ class JournalController extends Controller
     }
 
     /**
-     * Jurnal sahifasi uchun "joriy semestr" oynasi — HEMIS dagi current
-     * bayrog'i bo'yicha.
-     *
-     * Ilgari butun o'quv yili olinardi, shu sabab kuzgi va bahorgi semestr
-     * fanlari birga chiqib chalg'itardi. Endi faqat hozir davom etayotgan
-     * semestr(lar) ko'rinadi; eski semestrlarni ko'rish uchun sahifadagi
-     * "Joriy semestr" filtrini o'chirish kerak.
+     * Jurnal sahifasi uchun "joriy semestr" oynasi.
+     * Sanaga qattiq bog'lanmaymiz: dars haftasi tugagan kurslar ham joriy o'quv
+     * yili jurnalida ko'rinishi kerak.
      */
     private function journalCurrentSemesterWindowQuery()
     {
+        $currentEducationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
+
         return DB::table('semesters')
             ->select('semester_hemis_id')
-            ->where('current', true)
+            ->when(
+                $currentEducationYear,
+                fn ($query) => $query->where('education_year', $currentEducationYear),
+                fn ($query) => $query->where('current', true)
+            )
             ->whereNotNull('semester_hemis_id')
             ->groupBy('semester_hemis_id');
     }

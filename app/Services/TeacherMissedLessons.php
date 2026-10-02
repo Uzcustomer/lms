@@ -260,6 +260,7 @@ class TeacherMissedLessons
             ->whereIn('ss.subject_id', $subjectIds)
             ->where('st.student_status_code', 11)
             ->select('ss.id as id', 'st.group_id', 'ss.subject_id', 'ss.semester_id', 'ss.student_hemis_id')
+            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
             ->chunkById(5000, function ($rows) use (&$bySubject) {
                 foreach ($rows as $r) {
                     $bySubject[$r->group_id.'|'.$r->subject_id.'|'.$r->semester_id][(string) $r->student_hemis_id] = true;

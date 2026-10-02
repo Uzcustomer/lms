@@ -4283,12 +4283,20 @@ class JournalController extends Controller
 
     public function saveRetakeGrade(Request $request)
     {
-        // Check admin or teacher role
-        $isAdmin = auth()->user()->hasAnyRole(['admin', 'superadmin']);
+        // Admin/superadmin baho qo'ya olishi "Superadmin baho tahriri"
+        // toggle'iga bog'liq: o'chiq bo'lsa ularning ham huquqi yo'q.
+        // O'qituvchi o'z muddati doirasida avvalgidek qo'yaveradi.
+        $hasAdminRole = auth()->user()->hasAnyRole(['admin', 'superadmin']);
+        $isAdmin = $hasAdminRole && Setting::get('feature_superadmin_grade_edit', '0') === '1';
         $isTeacher = is_active_oqituvchi();
 
         if (!$isAdmin && !$isTeacher) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            return response()->json([
+                'success' => false,
+                'message' => $hasAdminRole
+                    ? "Baho tahrirlash yopiq. Sozlamalardan \"Superadmin baho tahriri\" toggle'ini yoqing."
+                    : 'Unauthorized',
+            ], 403);
         }
 
         $request->validate([

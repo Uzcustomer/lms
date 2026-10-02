@@ -1899,7 +1899,11 @@
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
-                                                        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                                        // Admin/superadmin baho qo'yishi "Superadmin baho tahriri"
+                                                        // toggle'iga bog'liq (feature-toggles sahifasi). Toggle
+                                                        // o'chiq bo'lsa ular ham baho qo'ya/tahrirlay olmaydi —
+                                                        // $isSuperAdmin allaqachon shu toggle'ni tekshiradi.
+                                                        $isAdminRole = $isSuperAdmin;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
                                                         // Superadmin override: feature_superadmin_grade_edit toggle yoqilgan bo'lsa,
@@ -3878,7 +3882,8 @@
 
     <script>
         window.minimumLimit = {{ $minimumLimit ?? 60 }};
-        window.isAdminRole = {{ (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false) ? 'true' : 'false' }};
+        // Toggle o'chiq bo'lsa admin ham baho o'chira olmaydi (server ham tekshiradi)
+        window.isAdminRole = {{ $isSuperAdmin ? 'true' : 'false' }};
 
         // ====== Cascading Sidebar Filters ======
         // Zanjir: Fakultet(erkin) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]

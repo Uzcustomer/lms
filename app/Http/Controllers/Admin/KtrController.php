@@ -476,6 +476,7 @@ class KtrController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
             ->select([
+                'cs.id as curriculum_subject_id',
                 'f.name as faculty_name',
                 'sp.name as specialty_name',
                 's.level_name',
@@ -485,6 +486,27 @@ class KtrController extends Controller
                 'cs.total_acload',
                 'cs.subject_details',
             ]);
+
+        // KTR yaratilgan-yaratilmaganini ko'rsatish uchun — sahifadagi
+        // "Yaratildi / Tasdiqlanmoqda / Yaratilmadi" belgisi bilan bir xil
+        if (Schema::hasTable('ktr_plans')) {
+            $query->leftJoin('ktr_plans as kp', 'kp.curriculum_subject_id', '=', 'cs.id')
+                ->addSelect(DB::raw('kp.id as ktr_plan_id'));
+        } else {
+            $query->addSelect(DB::raw('NULL as ktr_plan_id'));
+        }
+
+        if (Schema::hasTable('ktr_change_requests')) {
+            $query->addSelect(DB::raw("(SELECT kcr.status FROM ktr_change_requests kcr WHERE kcr.curriculum_subject_id = cs.id AND kcr.status = 'pending' ORDER BY kcr.id DESC LIMIT 1) as pending_change_status"));
+        } else {
+            $query->addSelect(DB::raw('NULL as pending_change_status'));
+        }
+
+        // Fan mas'uli sahifada faqat o'ziga biriktirilgan fanlarni ko'radi —
+        // eksport ham shu doirada bo'lsin
+        if (session('active_role', '') === 'fan_masuli') {
+            $query->whereIn('cs.id', get_fan_masuli_subject_ids());
+        }
 
         if ($request->filled('education_type')) {
             $query->where('c.education_type_code', $request->education_type);
@@ -518,6 +540,20 @@ class KtrController extends Controller
 
         $query->orderBy('f.name')->orderBy('cs.subject_name');
         $items = $query->get();
+
+        // Har bir fanning mas'ul xodimlari. KTR yaratilmagan fanlarda ham
+        // ko'rinishi uchun alohida olinadi (biriktirmalar jadvali kichik).
+        $responsibleNames = [];
+        if (Schema::hasTable('teacher_responsible_subjects')) {
+            $responsibleNames = DB::table('teacher_responsible_subjects as trs')
+                ->join('teachers as t', 't.id', '=', 'trs.teacher_id')
+                ->select('trs.curriculum_subject_id', 't.full_name')
+                ->orderBy('t.full_name')
+                ->get()
+                ->groupBy('curriculum_subject_id')
+                ->map(fn ($rows) => $rows->pluck('full_name')->filter()->unique()->implode(', '))
+                ->all();
+        }
 
         // Barcha training type larni yig'ish
         $allTypes = [];
@@ -560,12 +596,12 @@ class KtrController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ];
 
-        $callback = function () use ($items, $allTypes, $typeCodes) {
+        $callback = function () use ($items, $allTypes, $typeCodes, $responsibleNames) {
             $file = fopen('php://output', 'w');
             fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM for UTF-8
 
             // Header
-            $header = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Kredit', 'Jami yuklama'];
+            $header = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'KTR holati', "Fan mas'uli", 'Kredit', 'Jami yuklama'];
             foreach ($allTypes as $name) {
                 $header[] = $name;
             }
@@ -584,6 +620,13 @@ class KtrController extends Controller
                     }
                 }
 
+                $ktrStatus = 'Yaratilmadi';
+                if (!empty($item->ktr_plan_id)) {
+                    $ktrStatus = ($item->pending_change_status ?? null) === 'pending'
+                        ? 'Tasdiqlanmoqda'
+                        : 'Yaratildi';
+                }
+
                 $row = [
                     $i++,
                     $item->faculty_name ?? '-',
@@ -591,6 +634,8 @@ class KtrController extends Controller
                     $item->level_name ?? '-',
                     $item->semester_name ?? '-',
                     $item->subject_name ?? '-',
+                    $ktrStatus,
+                    $responsibleNames[$item->curriculum_subject_id] ?? '-',
                     $item->credit ?? '-',
                     $item->total_acload ?? '-',
                 ];

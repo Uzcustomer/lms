@@ -68,7 +68,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         <span class="text-sm font-bold text-gray-800">Baho qo'yish vaqti</span>
-                        <span class="text-xs text-gray-500 mt-1 text-center">o'qituvchilar kesimida · sana, guruh va semestr bo'yicha · faqat bakalavr</span>
+                        <span class="text-xs text-gray-500 mt-1 text-center">o'qituvchi kesimida · sana oralig'i va o'qituvchi bo'yicha, uning har bir guruhi va fani alohida · faqat bakalavr</span>
                         <span class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
@@ -105,7 +105,6 @@
             .tm-label { display:block; font-size:11px; font-weight:700; color:#475569; margin-bottom:4px; }
             .tm-input { width:100%; box-sizing:border-box; height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; }
             .tm-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.18); }
-            .tm-input:disabled { background:#f1f5f9; color:#94a3b8; }
             .tm-full { grid-column:1 / -1; }
             .tm-btn { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 16px; border-radius:9px; font-size:13px; font-weight:700; cursor:pointer; border:none; }
             /* select2 — jurnal sahifasidagi ko'rinish */
@@ -122,7 +121,7 @@
                     </svg>
                     <div style="min-width:0;">
                         <div style="font-size:14px; font-weight:700; line-height:1.2;">Baho qo'yish vaqti</div>
-                        <div style="font-size:11px; opacity:.85;">Faqat bakalavr · guruh tanlanmasa — hammasi</div>
+                        <div style="font-size:11px; opacity:.85;">Faqat bakalavr · o'qituvchi tanlanmasa — hammasi</div>
                     </div>
                     <button type="button" @click="timingOpen = false" style="margin-left:auto; background:none; border:none; color:#fff; font-size:22px; line-height:1; cursor:pointer; opacity:.85;">&times;</button>
                 </div>
@@ -141,16 +140,13 @@
                         </div>
 
                         <div class="tm-full">
-                            <label class="tm-label">Guruh</label>
-                            {{-- Jurnal sahifasidagi kabi: yozib qidiriladi, AJAX orqali topiladi --}}
-                            <select name="group_id" id="tm-group" style="width:100%;"><option value="">Barchasi</option></select>
-                        </div>
-
-                        <div class="tm-full">
-                            <label class="tm-label">Semestr <span id="tm-sem-hint" style="font-weight:400; color:#94a3b8;">— avval guruhni tanlang</span></label>
-                            <select name="semester_code" id="tm-semester" class="tm-input" disabled><option value="">Barchasi</option></select>
+                            <label class="tm-label">O'qituvchi</label>
+                            {{-- Ism-familiya yozib qidiriladi; tanlangan o'qituvchining barcha guruhlari hisobotga kiradi --}}
+                            <select name="employee_id" id="tm-teacher" style="width:100%;"><option value="">Barchasi</option></select>
                         </div>
                     </div>
+
+                    <p style="margin:10px 0 0; font-size:11px; color:#94a3b8;">Hisobot tanlangan sana oralig'ida o'qituvchi dars bergan har bir guruh va fan bo'yicha alohida qator beradi.</p>
 
                     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
                         <button type="button" @click="timingOpen = false" class="tm-btn" style="background:#f1f5f9; color:#475569;">Bekor qilish</button>
@@ -170,13 +166,8 @@
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
         <script>
         $(function () {
-            var BAKALAVR = @json($bakalavrCode ?? '');
-            var $group = $('#tm-group');
-            var $semester = $('#tm-semester');
-            var $hint = $('#tm-sem-hint');
-
-            // Guruh: jurnaldagi filtr bilan bir xil — har bir yozilgan harfda serverdan qidiradi
-            $group.select2({
+            // O'qituvchi: guruh filtri kabi — har bir yozilgan harfda serverdan qidiradi
+            $('#tm-teacher').select2({
                 theme: 'classic',
                 width: '100%',
                 allowClear: true,
@@ -184,12 +175,10 @@
                 minimumInputLength: 0,
                 dropdownParent: $('#timingModalBox'),
                 ajax: {
-                    url: '{{ route("admin.journal.get-groups") }}',
+                    url: '{{ route("admin.export.teacher-grade-timing.teachers") }}',
                     dataType: 'json',
                     delay: 200,
-                    data: function (params) {
-                        return { education_type: BAKALAVR, search: params.term || '' };
-                    },
+                    data: function (params) { return { search: params.term || '' }; },
                     processResults: function (data) {
                         var results = [];
                         $.each(data, function (id, name) { results.push({ id: id, text: name }); });
@@ -203,31 +192,6 @@
                     if (sf) sf.focus();
                 }, 10);
             });
-
-            // Guruh tanlangach — shu guruh o'qigan semestrlar
-            function loadSemesters(groupId) {
-                $semester.html('<option value="">Barchasi</option>');
-                if (!groupId) {
-                    $semester.prop('disabled', true);
-                    $hint.text('— avval guruhni tanlang');
-                    return;
-                }
-                $semester.prop('disabled', true);
-                $hint.text('yuklanmoqda...');
-                $.getJSON('{{ route("admin.export.teacher-grade-timing.semesters") }}', { group_id: groupId })
-                    .done(function (data) {
-                        var n = 0;
-                        $.each(data, function (code, name) {
-                            $semester.append($('<option>', { value: code, text: name }));
-                            n++;
-                        });
-                        $hint.text(n ? '(' + n + ' ta)' : '— bu guruhda semestr topilmadi');
-                    })
-                    .fail(function () { $hint.text("— yuklab bo'lmadi"); })
-                    .always(function () { $semester.prop('disabled', false); });
-            }
-
-            $group.on('change', function () { loadSemesters($(this).val()); });
         });
         </script>
     </div>

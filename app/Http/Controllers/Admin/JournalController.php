@@ -950,24 +950,36 @@ class JournalController extends Controller
                             StudentSubjectScope::apply($sub, 'student_subjects');
                         });
                     })
-                    // Bahosi borlar (chetlashganlar ham) — lekin faqat shu o'quv
-                    // yilidagi baholar: o'tgan yili shu fanni o'qib bo'lgan talaba
-                    // eski baholari bilan bu yilgi jurnalga tushmasin.
-                    // Yil filtri jurnaldagi boshqa baho so'rovlari bilan bir xil.
-                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode, $educationYearCode, $minScheduleDate) {
-                        $sub->select(DB::raw(1))
-                            ->from('student_grades')
-                            ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
-                            ->where('student_grades.subject_id', $subjectId)
-                            ->where('student_grades.semester_code', $semesterCode)
-                            ->whereNull('student_grades.deleted_at')
-                            ->when($educationYearCode !== null, fn ($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                                $q2->where('student_grades.education_year_code', $educationYearCode)
-                                    ->orWhere(function ($q3) use ($minScheduleDate) {
-                                        $q3->whereNull('student_grades.education_year_code')
-                                            ->when($minScheduleDate !== null, fn ($q4) => $q4->where('student_grades.lesson_date', '>=', $minScheduleDate));
-                                    });
-                            }));
+                    // Bahosi bor CHETLASHGAN talabalar — ular biriktirmadan
+                    // chiqarilgan bo'lsa ham jurnalda qoladi, chunki semestr
+                    // o'rtasida ketgan talabaning baholari yakuniy hisobga kiradi.
+                    //
+                    // Faol talabaga bu qo'llanmaydi: HEMIS fanni undan olib
+                    // tashlagan bo'lsa, u endi bu fanni o'qimaydi va jurnalda
+                    // turmasligi kerak. Aks holda unga baho kutilib, YN ga
+                    // yuborish bloklanib qolardi. Baholari bazada saqlanadi:
+                    // qayta biriktirilsa o'sha yerdan topiladi.
+                    //
+                    // Yil filtri jurnaldagi boshqa baho so'rovlari bilan bir xil:
+                    // o'tgan yili shu fanni o'qib bo'lgan talaba eski baholari
+                    // bilan bu yilgi jurnalga tushmasin.
+                    ->orWhere(function ($q) use ($subjectId, $semesterCode, $educationYearCode, $minScheduleDate) {
+                        $q->where('student_status_code', '60')
+                            ->whereExists(function ($sub) use ($subjectId, $semesterCode, $educationYearCode, $minScheduleDate) {
+                                $sub->select(DB::raw(1))
+                                    ->from('student_grades')
+                                    ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
+                                    ->where('student_grades.subject_id', $subjectId)
+                                    ->where('student_grades.semester_code', $semesterCode)
+                                    ->whereNull('student_grades.deleted_at')
+                                    ->when($educationYearCode !== null, fn ($g) => $g->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                                        $q2->where('student_grades.education_year_code', $educationYearCode)
+                                            ->orWhere(function ($q3) use ($minScheduleDate) {
+                                                $q3->whereNull('student_grades.education_year_code')
+                                                    ->when($minScheduleDate !== null, fn ($q4) => $q4->where('student_grades.lesson_date', '>=', $minScheduleDate));
+                                            });
+                                    }));
+                            });
                     });
             });
         } else {

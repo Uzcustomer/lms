@@ -668,6 +668,26 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 'juftliklar_'.now('Asia/Tashkent')->format('Y-m-d').'.xlsx'
             );
         })->name('export.lesson-pairs');
+        // O'qituvchilar baholarni qachon qo'ygani (dars vaqtida / ish vaqtida / 18:00 dan keyin)
+        Route::get('/export/teacher-grade-timing', function (\Illuminate\Http\Request $request) {
+            $data = $request->validate([
+                'date_from' => 'required|date_format:Y-m-d',
+                'date_to' => 'required|date_format:Y-m-d|after_or_equal:date_from',
+            ], [
+                'date_to.after_or_equal' => "Tugash sanasi boshlanish sanasidan oldin bo'lmasin.",
+            ]);
+
+            $from = \Carbon\Carbon::parse($data['date_from']);
+            $to = \Carbon\Carbon::parse($data['date_to']);
+            if ($from->diffInDays($to) > 366) {
+                return back()->with('error', "Sana oralig'i 1 yildan oshmasin.");
+            }
+
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\TeacherGradeTimingExport($from->toDateString(), $to->toDateString()),
+                'baho_vaqti_' . $from->format('Y-m-d') . '_' . $to->format('Y-m-d') . '.xlsx'
+            );
+        })->name('export.teacher-grade-timing');
         Route::get('/export/teachers', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(
                 new \App\Exports\TeachersDbExport,

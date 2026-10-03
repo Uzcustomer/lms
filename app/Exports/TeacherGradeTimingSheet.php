@@ -94,12 +94,12 @@ class TeacherGradeTimingSheet implements FromCollection, WithHeadings, WithStyle
         return $this->byGroup ? "Guruhlar bo'yicha" : 'Umumiy';
     }
 
-    /** Shu varaqning ustunlari — "Umumiy" varaqda guruh ustuni yo'q */
+    /** Shu varaqning ustunlari — "Umumiy" varaqda fan va guruh ustunlari yo'q */
     private function columns(): array
     {
         return array_values(array_filter(
             self::COLUMNS,
-            fn ($col) => $this->byGroup || $col[0] !== 'group'
+            fn ($col) => $this->byGroup || !in_array($col[0], ['subject', 'group'], true)
         ));
     }
 
@@ -172,9 +172,7 @@ class TeacherGradeTimingSheet implements FromCollection, WithHeadings, WithStyle
                 'sg.employee_name',
                 't.full_name',
                 't.department',
-                DB::raw($this->byGroup
-                    ? 'sg.subject_name'
-                    : "GROUP_CONCAT(DISTINCT sg.subject_name ORDER BY sg.subject_name SEPARATOR ', ') AS subject_name"),
+                DB::raw($this->byGroup ? 'sg.subject_name' : 'NULL as subject_name'),
                 DB::raw($this->byGroup ? 'g.name as group_name' : 'NULL as group_name'),
                 DB::raw("SUM(CASE WHEN {$during} THEN 1 ELSE 0 END) AS during_lesson"),
                 DB::raw("SUM(CASE WHEN {$evening} THEN 1 ELSE 0 END) AS evening"),
@@ -266,7 +264,7 @@ class TeacherGradeTimingSheet implements FromCollection, WithHeadings, WithStyle
         $endRow = $totalRow ?? $lastRow;
         $columns = $this->columns();
         $lastCol = count($columns);
-        $firstNumeric = $this->byGroup ? 6 : 5;   // '#', o'qituvchi, kafedra, fan[, guruh] dan keyin
+        $firstNumeric = $this->byGroup ? 6 : 4;   // '#', o'qituvchi, kafedra[, fan, guruh] dan keyin
 
         // Har bir ustun o'z rangida: sarlavha to'q, qatorlar och
         foreach ($columns as $index => [$key, $heading, $headerColor, $bodyColor]) {
@@ -315,9 +313,9 @@ class TeacherGradeTimingSheet implements FromCollection, WithHeadings, WithStyle
             $num,
             $teacher,
             $dept,
-            $subject,
         ];
         if ($this->byGroup) {
+            $cells[] = $subject;
             $cells[] = $group;
         }
 

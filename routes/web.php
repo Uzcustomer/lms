@@ -648,7 +648,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // DB ma'lumotlar sahifasi va eksport
         Route::get('/db-export', function () {
-            return view('admin.db-export');
+            // "Baho qo'yish vaqti" modalidagi filtr ro'yxatlari
+            $timingGroups = \App\Models\Group::where('active', true)->orderBy('name')->get(['group_hemis_id', 'name']);
+            $timingSemesters = \Illuminate\Support\Facades\DB::table('semesters')
+                ->select('code', \Illuminate\Support\Facades\DB::raw('MIN(name) as name'))
+                ->whereNotNull('code')
+                ->groupBy('code')
+                ->orderByRaw('CAST(code AS UNSIGNED)')
+                ->get();
+            $timingTeachers = \App\Models\Teacher::whereNotNull('hemis_id')->orderBy('full_name')->get(['hemis_id', 'full_name']);
+
+            return view('admin.db-export', compact('timingGroups', 'timingSemesters', 'timingTeachers'));
         })->name('db-export.index');
         Route::get('/export/curriculum-subjects', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculumSubjectsExport, 'curriculum_subjects.xlsx');
@@ -673,6 +683,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             $data = $request->validate([
                 'date_from' => 'required|date_format:Y-m-d',
                 'date_to' => 'required|date_format:Y-m-d|after_or_equal:date_from',
+                'group_hemis_id' => 'nullable|string|max:50',
+                'semester_code' => 'nullable|string|max:10',
+                'employee_id' => 'nullable|string|max:30',
             ], [
                 'date_to.after_or_equal' => "Tugash sanasi boshlanish sanasidan oldin bo'lmasin.",
             ]);
@@ -683,8 +696,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 return back()->with('error', "Sana oralig'i 1 yildan oshmasin.");
             }
 
+            $filters = array_filter([
+                'group_hemis_id' => $data['group_hemis_id'] ?? null,
+                'semester_code' => $data['semester_code'] ?? null,
+                'employee_id' => $data['employee_id'] ?? null,
+            ]);
+
             return \Maatwebsite\Excel\Facades\Excel::download(
-                new \App\Exports\TeacherGradeTimingExport($from->toDateString(), $to->toDateString()),
+                new \App\Exports\TeacherGradeTimingExport($from->toDateString(), $to->toDateString(), $filters),
                 'baho_vaqti_' . $from->format('Y-m-d') . '_' . $to->format('Y-m-d') . '.xlsx'
             );
         })->name('export.teacher-grade-timing');

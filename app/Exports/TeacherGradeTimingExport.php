@@ -72,7 +72,10 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
 
     private int $dataRows = 0;
 
-    public function __construct(private string $dateFrom, private string $dateTo)
+    /**
+     * @param array{group_hemis_id?: string|null, semester_code?: string|null, employee_id?: string|null} $filters
+     */
+    public function __construct(private string $dateFrom, private string $dateTo, private array $filters = [])
     {
     }
 
@@ -110,6 +113,10 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
             ->whereBetween('sg.lesson_date', [$this->dateFrom . ' 00:00:00', $this->dateTo . ' 23:59:59'])
             ->whereNotIn('sg.training_type_code', self::EXCLUDED_TRAINING_TYPES)
             ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
+            // Modal filtrlari: guruh — talabaning guruhi, semestr va o'qituvchi — baho qatoridan
+            ->when(!empty($this->filters['group_hemis_id']), fn ($q) => $q->where('st.group_id', $this->filters['group_hemis_id']))
+            ->when(!empty($this->filters['semester_code']), fn ($q) => $q->where('sg.semester_code', $this->filters['semester_code']))
+            ->when(!empty($this->filters['employee_id']), fn ($q) => $q->where('sg.employee_id', $this->filters['employee_id']))
             ->groupBy('sg.employee_id', 'sg.employee_name', 't.department')
             ->orderBy('sg.employee_name')
             ->select([

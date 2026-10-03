@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\LessonOpening;
-use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,15 +24,10 @@ use Illuminate\Support\Facades\Schema;
  * qo'shgan va HemisService uni to'ldiradi. Shu ustunni filtr sifatida
  * ishlatamiz: faqat joriy o'quv yilidagi biriktirishlar hisobga olinadi.
  *
- * MUHIM ISTISNO. student_subjects yagona haqiqat manbai emas: HEMIS ba'zan
- * davom etayotgan fanga joriy yil biriktirmasini yaratmaydi. Haqiqiy misol —
- * talaba Organik kimyoni uzluksiz o'qiydi va unga yangi o'quv yilida ham baho
- * qo'yilgan, lekin biriktirma faqat o'tgan yilniki. Faqat yil bo'yicha filtrlasa,
- * bunday talaba jurnaldan va hisobotdan butunlay yo'qolardi.
- *
- * Shuning uchun qoida ikki shartli: talaba ro'yxatda qoladi, agar joriy yil
- * biriktirmasi bor YOKI shu fandan ko'rilayotgan davrda bahosi bor. Baho —
- * darsga haqiqatan qatnashayotganining eng ishonchli belgisi.
+ * QOIDA QAT'IY: biriktirma joriy o'quv yiliga tegishli bo'lishi shart. Boshqa
+ * yil yoki boshqa semestr biriktirmasi hisobga olinmaydi, talabaning shu fandan
+ * bahosi bo'lsa ham. Baho — o'tmishning izi, biriktirma esa hozir kim o'qiyotganini
+ * belgilaydi; ikkisi ziddiyatga tushsa HEMIS biriktirmasi ustun turadi.
  *
  * EHTIYOT CHORASI. Ustun bo'sh bo'lgan o'rnatmalarda (eski ma'lumot, hali
  * sinxronlanmagan) filtr hamma narsani kesib tashlamasligi kerak — u holda
@@ -43,7 +36,7 @@ use Illuminate\Support\Facades\Schema;
  *   - jadvalda to'ldirilgan education_year umuman bo'lmasa ham qo'llanmaydi;
  *   - qo'llanganda NULL qiymatlar ham o'tkaziladi (sinxronlanmagan qatorlar
  *     yo'qolib qolmasin).
- * Ya'ni filtr faqat ANIQ boshqa yilga tegishli va bahosi ham yo'q qatorlarni chiqaradi.
+ * Ya'ni filtr faqat ANIQ boshqa yilga tegishli qatorlarni chiqaradi.
  */
 class StudentSubjectScope
 {
@@ -127,14 +120,13 @@ class StudentSubjectScope
     /**
      * student_subjects so'roviga joriy o'quv yili filtrini qo'shish.
      *
-     * $from/$to berilsa, shu oraliqda bahosi bor talaba yil mos kelmasa ham
-     * qoladi (yuqoridagi "MUHIM ISTISNO"). Oraliq berilmasa — joriy davr
-     * boshidan bugungacha, ya'ni LessonOpening::periodStart() oynasi.
+     * $from/$to endi ishlatilmaydi (ilgari "shu davrda bahosi bor" istisnosi
+     * uchun kerak edi). Imzo chaqiruvchilarni buzmaslik uchun saqlangan.
      *
      * @param  Builder  $query  student_subjects (yoki uning aliasi) bo'yicha so'rov
      * @param  string  $table  jadval nomi yoki alias — "ss" kabi
-     * @param  string|null  $from  "Y-m-d" — baho qidiriladigan oraliq boshi
-     * @param  string|null  $to  "Y-m-d" — oraliq oxiri (ochiq chegara: shu kundan oldin)
+     * @param  string|null  $from  ishlatilmaydi
+     * @param  string|null  $to  ishlatilmaydi
      */
     public static function apply(Builder $query, string $table = 'student_subjects', ?string $from = null, ?string $to = null): Builder
     {
@@ -144,40 +136,12 @@ class StudentSubjectScope
 
         $year = self::currentYear();
         $column = $table.'.education_year';
-        [$from, $to] = self::gradeWindow($from, $to);
 
-        return $query->where(function ($w) use ($column, $year, $table, $from, $to) {
-            // 1) Joriy yil biriktirmasi. NULL ham o'tadi: sinxronlanmagan
-            //    qator yo'qolib ketmasin.
-            $w->where($column, $year)
-                ->orWhereNull($column)
-                // 2) Yoki shu fandan bu davrda bahosi bor — HEMIS biriktirmani
-                //    yangilamagan bo'lsa ham talaba darsga qatnashyapti.
-                ->orWhereExists(function ($sub) use ($table, $from, $to) {
-                    $sub->select(DB::raw(1))
-                        ->from('student_grades as sg_scope')
-                        ->whereColumn('sg_scope.student_hemis_id', $table.'.student_hemis_id')
-                        ->whereColumn('sg_scope.subject_id', $table.'.subject_id')
-                        ->whereNull('sg_scope.deleted_at')
-                        ->whereNotNull('sg_scope.lesson_date')
-                        ->where('sg_scope.lesson_date', '>=', $from.' 00:00:00')
-                        ->where('sg_scope.lesson_date', '<', $to.' 00:00:00');
-                });
+        // Joriy yil biriktirmasi. NULL ham o'tadi: sinxronlanmagan qator
+        // yo'qolib ketmasin (yili noma'lum, aniq "boshqa yil" emas).
+        return $query->where(function ($w) use ($column, $year) {
+            $w->where($column, $year)->orWhereNull($column);
         });
-    }
-
-    /**
-     * Baho qidiriladigan oraliq. Berilmasa — joriy davr boshidan ertangacha
-     * (ochiq yuqori chegara, shuning uchun bugungi baho ham kiradi).
-     *
-     * @return array{0: string, 1: string}
-     */
-    private static function gradeWindow(?string $from, ?string $to): array
-    {
-        $from ??= LessonOpening::periodStart()->format('Y-m-d');
-        $to ??= Carbon::now('Asia/Tashkent')->addDay()->format('Y-m-d');
-
-        return [$from, $to];
     }
 
     /** Testlar va uzoq ishlaydigan jarayonlar uchun keshni tozalash */

@@ -161,16 +161,20 @@ class TeacherGradeTimingSheet implements FromCollection, WithHeadings, WithStyle
             ->when(!empty($this->filters['group_hemis_id']), fn ($q) => $q->where('st.group_id', $this->filters['group_hemis_id']))
             ->when(!empty($this->filters['semester_code']), fn ($q) => $q->where('sg.semester_code', $this->filters['semester_code']))
             ->when(!empty($this->filters['employee_id']), fn ($q) => $q->where('sg.employee_id', $this->filters['employee_id']))
-            ->groupBy('sg.employee_id', 'sg.employee_name', 't.department', 'sg.subject_id', 'sg.subject_name')
-            ->when($this->byGroup, fn ($q) => $q->groupBy('g.group_hemis_id', 'g.name'))
-            ->orderBy('sg.employee_name')
-            ->orderBy('sg.subject_name')
-            ->when($this->byGroup, fn ($q) => $q->orderBy('g.name'))
+            // "Umumiy" — o'qituvchi bo'yicha bitta qator (fanlari ro'yxat bo'lib);
+            // "Guruhlar bo'yicha" — har fan va guruh alohida
+            ->groupBy('sg.employee_id', 'sg.employee_name', 't.department', 't.full_name')
+            ->when($this->byGroup, fn ($q) => $q->groupBy('sg.subject_id', 'sg.subject_name', 'g.group_hemis_id', 'g.name'))
+            ->orderByRaw('COALESCE(t.full_name, sg.employee_name)')
+            ->when($this->byGroup, fn ($q) => $q->orderBy('sg.subject_name')->orderBy('g.name'))
             ->select([
                 'sg.employee_id',
                 'sg.employee_name',
+                't.full_name',
                 't.department',
-                'sg.subject_name',
+                DB::raw($this->byGroup
+                    ? 'sg.subject_name'
+                    : "GROUP_CONCAT(DISTINCT sg.subject_name ORDER BY sg.subject_name SEPARATOR ', ') AS subject_name"),
                 DB::raw($this->byGroup ? 'g.name as group_name' : 'NULL as group_name'),
                 DB::raw("SUM(CASE WHEN {$during} THEN 1 ELSE 0 END) AS during_lesson"),
                 DB::raw("SUM(CASE WHEN {$evening} THEN 1 ELSE 0 END) AS evening"),
@@ -223,7 +227,8 @@ class TeacherGradeTimingSheet implements FromCollection, WithHeadings, WithStyle
 
             $out->push($this->row(
                 $i + 1,
-                $r->employee_name,
+                // Xodimlar jadvalidagi to'liq ism; u yo'q bo'lsa HEMIS'dagi qisqa shakl
+                blank($r->full_name) ? $r->employee_name : $r->full_name,
                 blank($r->department) ? ($scheduleDepartments[$r->employee_id] ?? '-') : $r->department,
                 $r->subject_name ?? '-',
                 $r->group_name ?? '-',

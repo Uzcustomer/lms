@@ -722,7 +722,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
             return \Maatwebsite\Excel\Facades\Excel::download(
                 new \App\Exports\TeacherGradeTimingExport($from->toDateString(), $to->toDateString(), $filters),
-                'baho_vaqti_' . $from->format('Y-m-d') . '_' . $to->format('Y-m-d') . '.xlsx'
+                'baho_vaqti_lms.xlsx'
             );
         })->name('export.teacher-grade-timing');
         Route::get('/export/teachers', function () {

@@ -162,7 +162,8 @@
                         </div>
 
                         <div class="tm-full">
-                            <label class="tm-label">Guruh</label>
+                            <label class="tm-label">Guruh <span id="tm-group-count" style="font-weight:400; color:#94a3b8;"></span></label>
+                            <input type="text" id="tm-group-search" class="tm-input" placeholder="Guruh nomini yozing — ro'yxat shunga qarab qisqaradi" autocomplete="off" style="margin-bottom:6px;">
                             <select name="group_id" id="tm-group" class="tm-input"><option value="">Barchasi</option></select>
                         </div>
 
@@ -208,9 +209,6 @@
             function params(extra) {
                 var p = new URLSearchParams();
                 if (BAKALAVR) p.set('education_type', BAKALAVR);
-                // Faqat joriy semestrdagi rejalar: aks holda "1-kurs 2-semestr"
-                // barcha qabul yillarining rejalariga to'g'ri kelib, eski guruhlar ham chiqadi
-                p.set('current_semester', '1');
                 if (faculty.value) p.set('faculty_id', faculty.value);
                 if (extra.specialty && specialty.value) p.set('specialty_id', specialty.value);
                 if (extra.level && level.value) p.set('level_code', level.value);
@@ -231,11 +229,34 @@
                 if (prev && select.querySelector('option[value="' + prev + '"]')) select.value = prev;
             }
 
+            // Guruhlar to'liq ro'yxati — qidiruv maydoni shundan filtrlaydi
+            var groupAll = {};
+            var groupSearch = el('tm-group-search');
+            var groupCount = el('tm-group-count');
+
+            function renderGroups() {
+                var term = (groupSearch.value || '').trim().toLowerCase();
+                var filtered = {};
+                Object.keys(groupAll).forEach(function (key) {
+                    if (!term || String(groupAll[key]).toLowerCase().indexOf(term) !== -1) filtered[key] = groupAll[key];
+                });
+                fill(group, filtered);
+                var n = Object.keys(filtered).length;
+                groupCount.textContent = n ? '(' + n + ' ta)' : '(topilmadi)';
+                // Bitta qolsa — o'sha guruhni o'zi tanlab qo'yadi
+                if (n === 1) group.value = Object.keys(filtered)[0];
+            }
+
+            groupSearch.addEventListener('input', renderGroups);
+
             function load(url, query, select) {
                 select.disabled = true;
                 return fetch(url + '?' + query, { headers: { 'Accept': 'application/json' } })
                     .then(function (r) { return r.json(); })
-                    .then(function (data) { fill(select, data || {}); })
+                    .then(function (data) {
+                        if (select === group) { groupAll = data || {}; renderGroups(); }
+                        else { fill(select, data || {}); }
+                    })
                     .catch(function () { fill(select, {}); })
                     .finally(function () { select.disabled = false; });
             }

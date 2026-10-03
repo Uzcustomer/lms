@@ -134,8 +134,6 @@ return [
     "training_type_code" => [11, 99, 100, 101, 102, 103],
     // Davomat nazorati uchun chiqarib tashlanadigan mashg'ulot turlari (Ma'ruza=11 kiritilmagan)
     "attendance_excluded_training_types" => [99, 100, 101, 102],
-    // "DB ma'lumotlar" bo'limiga ruxsat etilgan HEMIS xodim id lari (vergul bilan)
-    'db_export_employee_ids' => env('DB_EXPORT_EMPLOYEE_IDS', '3682611021'),
     // Reyting hisobotidan chiqariladigan fanlar (baho qo'yilmaydigan fanlar)
     "excluded_rating_subject_patterns" => ["tanishuv amaliyoti", "quv amaliyoti"],
     // Davomat eslatmalarida baho tekshirishdan chiqariladigan fanlar (davomat olinadi, baho qo'yilmaydi)

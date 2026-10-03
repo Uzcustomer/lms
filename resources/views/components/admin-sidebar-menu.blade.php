@@ -1369,8 +1369,7 @@
         @endif
 
         {{-- ============ DB MA'LUMOTLAR ============ --}}
-        {{-- Butun bazani Excelga chiqaradi — faqat sozlamada ko'rsatilgan xodimga --}}
-        @can('access-db-export')
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
         <a href="{{ route('admin.db-export.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.db-export.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1378,7 +1377,7 @@
             </svg>
             DB ma'lumotlar
         </a>
-        @endcan
+        @endif
 
         @if($hasActiveRole(['superadmin', 'admin']) && \Illuminate\Support\Facades\Route::has('admin.face-id.logs'))
         <a href="{{ route('admin.face-id.logs') }}"

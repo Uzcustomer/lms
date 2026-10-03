@@ -10,6 +10,7 @@ use App\Models\StudentGrade;
 use App\Observers\StudentGradeObserver;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
@@ -37,6 +38,24 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         StudentGrade::observe(StudentGradeObserver::class);
+
+        // "DB ma'lumotlar" — butun bazani Excelga chiqaradi, shuning uchun
+        // barcha superadminlarga emas, sozlamada ko'rsatilgan HEMIS xodim
+        // id(lar)iga ochiq (DB_EXPORT_EMPLOYEE_IDS, vergul bilan).
+        Gate::define('access-db-export', function ($user = null) {
+            $allowed = collect(explode(',', (string) config('app.db_export_employee_ids')))
+                ->map(fn ($id) => trim($id))
+                ->filter()
+                ->values();
+
+            if ($allowed->isEmpty()) {
+                return false;
+            }
+
+            $hemisId = get_teacher_hemis_id();
+
+            return $hemisId !== null && $allowed->contains((string) $hemisId);
+        });
 
         App::alias('DataTables', DataTables::class);
         Blade::component('layouts.student-app', 'student-app-layout');

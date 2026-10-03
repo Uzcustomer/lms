@@ -208,6 +208,9 @@
             function params(extra) {
                 var p = new URLSearchParams();
                 if (BAKALAVR) p.set('education_type', BAKALAVR);
+                // Faqat joriy semestrdagi rejalar: aks holda "1-kurs 2-semestr"
+                // barcha qabul yillarining rejalariga to'g'ri kelib, eski guruhlar ham chiqadi
+                p.set('current_semester', '1');
                 if (faculty.value) p.set('faculty_id', faculty.value);
                 if (extra.specialty && specialty.value) p.set('specialty_id', specialty.value);
                 if (extra.level && level.value) p.set('level_code', level.value);

@@ -98,60 +98,77 @@
             </div>
         </div>
 
-        {{-- Baho qo'yish vaqti — filtrlar modali --}}
-        <div x-show="timingOpen" x-cloak style="display:none;"
-             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
-            <div class="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" @click.outside="timingOpen = false">
-                <div class="flex items-center gap-3 px-5 py-4 bg-indigo-600 text-white">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        {{-- Baho qo'yish vaqti — filtrlar modali (Tailwind build yo'q, shuning uchun inline stil) --}}
+        <style>
+            .tm-overlay { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(15,23,42,.55); }
+        </style>
+        <div x-show="timingOpen" class="tm-overlay" style="display:none;">
+            <div style="width:100%; max-width:520px; background:#fff; border-radius:14px; box-shadow:0 24px 60px rgba(15,23,42,.3); overflow:hidden;" @click.outside="timingOpen = false">
+                <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(135deg,#4338ca,#6366f1); color:#fff;">
+                    <svg style="width:20px;height:20px;flex:0 0 20px;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <div>
-                        <div class="text-base font-bold">Baho qo'yish vaqti</div>
-                        <div class="text-xs text-indigo-100">Dars vaqtida / ish vaqtida / 18:00 dan keyin / necha kun keyin · faqat bakalavr</div>
+                    <div style="min-width:0;">
+                        <div style="font-size:14px; font-weight:700; line-height:1.2;">Baho qo'yish vaqti</div>
+                        <div style="font-size:11px; opacity:.85;">Faqat bakalavr · bo'sh filtr = barchasi</div>
                     </div>
-                    <button type="button" @click="timingOpen = false" class="ml-auto text-2xl leading-none text-indigo-100 hover:text-white">&times;</button>
+                    <button type="button" @click="timingOpen = false" style="margin-left:auto; background:none; border:none; color:#fff; font-size:22px; line-height:1; cursor:pointer; opacity:.85;">&times;</button>
                 </div>
 
-                <form method="GET" action="{{ route('admin.export.teacher-grade-timing') }}" class="px-5 py-4 space-y-4">
-                    <div class="grid grid-cols-2 gap-3">
+                <form method="GET" action="{{ route('admin.export.teacher-grade-timing') }}" id="timingForm" style="padding:14px 16px;">
+                    <style>
+                        .tm-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+                        .tm-label { display:block; font-size:11px; font-weight:700; color:#475569; margin-bottom:4px; }
+                        .tm-input { width:100%; box-sizing:border-box; height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; }
+                        .tm-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.18); }
+                        .tm-input:disabled { background:#f1f5f9; color:#94a3b8; }
+                        .tm-full { grid-column:1 / -1; }
+                        .tm-btn { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 16px; border-radius:9px; font-size:13px; font-weight:700; cursor:pointer; border:none; }
+                    </style>
+
+                    <div class="tm-grid">
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Sanadan <span class="text-red-500">*</span></label>
-                            <input type="date" name="date_from" required
-                                   value="{{ old('date_from', now('Asia/Tashkent')->startOfMonth()->toDateString()) }}"
-                                   class="w-full rounded-lg border-gray-300 text-sm">
+                            <label class="tm-label">Sanadan <span style="color:#dc2626;">*</span></label>
+                            <input type="date" name="date_from" required class="tm-input"
+                                   value="{{ old('date_from', now('Asia/Tashkent')->startOfMonth()->toDateString()) }}">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Sanagacha <span class="text-red-500">*</span></label>
-                            <input type="date" name="date_to" required
-                                   value="{{ old('date_to', now('Asia/Tashkent')->subDay()->toDateString()) }}"
-                                   class="w-full rounded-lg border-gray-300 text-sm">
+                            <label class="tm-label">Sanagacha <span style="color:#dc2626;">*</span></label>
+                            <input type="date" name="date_to" required class="tm-input"
+                                   value="{{ old('date_to', now('Asia/Tashkent')->subDay()->toDateString()) }}">
                         </div>
-                    </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Guruh</label>
-                        <select name="group_hemis_id" class="w-full rounded-lg border-gray-300 text-sm">
-                            <option value="">Barchasi</option>
-                            @foreach(($timingGroups ?? []) as $grp)
-                                <option value="{{ $grp->group_hemis_id }}" {{ old('group_hemis_id') == $grp->group_hemis_id ? 'selected' : '' }}>{{ $grp->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Semestr</label>
-                            <select name="semester_code" class="w-full rounded-lg border-gray-300 text-sm">
+                            <label class="tm-label">Fakultet</label>
+                            <select name="faculty_id" id="tm-faculty" class="tm-input">
                                 <option value="">Barchasi</option>
-                                @foreach(($timingSemesters ?? []) as $sem)
-                                    <option value="{{ $sem->code }}" {{ old('semester_code') == $sem->code ? 'selected' : '' }}>{{ $sem->name }} ({{ $sem->code }})</option>
+                                @foreach(($timingFaculties ?? []) as $fac)
+                                    <option value="{{ $fac->id }}" {{ old('faculty_id') == $fac->id ? 'selected' : '' }}>{{ $fac->name }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">O'qituvchi</label>
-                            <select name="employee_id" class="w-full rounded-lg border-gray-300 text-sm">
+                            <label class="tm-label">Yo'nalish</label>
+                            <select name="specialty_id" id="tm-specialty" class="tm-input"><option value="">Barchasi</option></select>
+                        </div>
+
+                        <div>
+                            <label class="tm-label">Kurs</label>
+                            <select name="level_code" id="tm-level" class="tm-input"><option value="">Barchasi</option></select>
+                        </div>
+                        <div>
+                            <label class="tm-label">Semestr</label>
+                            <select name="semester_code" id="tm-semester" class="tm-input"><option value="">Barchasi</option></select>
+                        </div>
+
+                        <div class="tm-full">
+                            <label class="tm-label">Guruh</label>
+                            <select name="group_id" id="tm-group" class="tm-input"><option value="">Barchasi</option></select>
+                        </div>
+
+                        <div class="tm-full">
+                            <label class="tm-label">O'qituvchi</label>
+                            <select name="employee_id" class="tm-input">
                                 <option value="">Barchasi</option>
                                 @foreach(($timingTeachers ?? []) as $tch)
                                     <option value="{{ $tch->hemis_id }}" {{ old('employee_id') == $tch->hemis_id ? 'selected' : '' }}>{{ $tch->full_name }}</option>
@@ -160,14 +177,10 @@
                         </div>
                     </div>
 
-                    <p class="text-xs text-gray-400">Guruh talabaning hozirgi guruhi bo'yicha, semestr va o'qituvchi baho qatori bo'yicha filtrlanadi. Filtrlar bo'sh qolsa — hammasi.</p>
-
-                    <div class="flex justify-end gap-2 pt-1">
-                        <button type="button" @click="timingOpen = false"
-                                class="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">Bekor qilish</button>
-                        <button type="submit"
-                                class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+                        <button type="button" @click="timingOpen = false" class="tm-btn" style="background:#f1f5f9; color:#475569;">Bekor qilish</button>
+                        <button type="submit" class="tm-btn" style="background:#4f46e5; color:#fff;">
+                            <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                             </svg>
                             Excel yuklab olish
@@ -176,5 +189,72 @@
                 </form>
             </div>
         </div>
+
+        <script>
+        (function () {
+            // Kaskad: fakultet → yo'nalish → kurs → semestr → guruh. Faqat bakalavr —
+            // jurnal filtr endpointlariga education_type bilan beriladi.
+            var BAKALAVR = @json($bakalavrCode ?? '');
+            var urls = {
+                specialties: '{{ route("admin.journal.get-specialties") }}',
+                levels: '{{ route("admin.journal.get-level-codes") }}',
+                semesters: '{{ route("admin.journal.get-semesters") }}',
+                groups: '{{ route("admin.journal.get-groups") }}'
+            };
+            var el = function (id) { return document.getElementById(id); };
+            var faculty = el('tm-faculty'), specialty = el('tm-specialty'), level = el('tm-level'),
+                semester = el('tm-semester'), group = el('tm-group');
+
+            function params(extra) {
+                var p = new URLSearchParams();
+                if (BAKALAVR) p.set('education_type', BAKALAVR);
+                if (faculty.value) p.set('faculty_id', faculty.value);
+                if (extra.specialty && specialty.value) p.set('specialty_id', specialty.value);
+                if (extra.level && level.value) p.set('level_code', level.value);
+                if (extra.semester && semester.value) p.set('semester_code', semester.value);
+                return p.toString();
+            }
+
+            // {kalit: nom} javobini select'ga to'kish, avvalgi tanlov saqlansa saqlanadi
+            function fill(select, data) {
+                var prev = select.value;
+                select.innerHTML = '<option value="">Barchasi</option>';
+                Object.keys(data).forEach(function (key) {
+                    var o = document.createElement('option');
+                    o.value = key;
+                    o.textContent = data[key];
+                    select.appendChild(o);
+                });
+                if (prev && select.querySelector('option[value="' + prev + '"]')) select.value = prev;
+            }
+
+            function load(url, query, select) {
+                select.disabled = true;
+                return fetch(url + '?' + query, { headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) { fill(select, data || {}); })
+                    .catch(function () { fill(select, {}); })
+                    .finally(function () { select.disabled = false; });
+            }
+
+            function reload(from) {
+                // Yuqoridagi tanlov o'zgarsa, pastdagilar qayta yuklanadi
+                var chain = [];
+                if (from === 'faculty') chain.push(load(urls.specialties, params({}), specialty));
+                if (from === 'faculty' || from === 'specialty') chain.push(load(urls.levels, params({ specialty: true }), level));
+                if (from !== 'semester') chain.push(load(urls.semesters, params({ specialty: true, level: true }), semester));
+                Promise.all(chain).then(function () {
+                    load(urls.groups, params({ specialty: true, level: true, semester: true }), group);
+                });
+            }
+
+            faculty.addEventListener('change', function () { reload('faculty'); });
+            specialty.addEventListener('change', function () { reload('specialty'); });
+            level.addEventListener('change', function () { reload('level'); });
+            semester.addEventListener('change', function () { reload('semester'); });
+
+            reload('faculty');
+        })();
+        </script>
     </div>
 </x-app-layout>

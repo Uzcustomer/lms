@@ -648,17 +648,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // DB ma'lumotlar sahifasi va eksport
         Route::get('/db-export', function () {
-            // "Baho qo'yish vaqti" modalidagi filtr ro'yxatlari
-            $timingGroups = \App\Models\Group::where('active', true)->orderBy('name')->get(['group_hemis_id', 'name']);
-            $timingSemesters = \Illuminate\Support\Facades\DB::table('semesters')
-                ->select('code', \Illuminate\Support\Facades\DB::raw('MIN(name) as name'))
-                ->whereNotNull('code')
-                ->groupBy('code')
-                ->orderByRaw('CAST(code AS UNSIGNED)')
-                ->get();
+            // "Baho qo'yish vaqti" modali: fakultetlar va o'qituvchilar sahifada,
+            // yo'nalish/kurs/semestr/guruh jurnal filtr endpointlaridan kaskad bilan
+            $timingFaculties = \App\Models\Department::where('structure_type_code', 11)
+                ->where('active', true)->orderBy('name')->get(['id', 'name']);
             $timingTeachers = \App\Models\Teacher::whereNotNull('hemis_id')->orderBy('full_name')->get(['hemis_id', 'full_name']);
+            $bakalavrCode = \App\Models\Curriculum::whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
+                ->whereNotNull('education_type_code')->value('education_type_code');
 
-            return view('admin.db-export', compact('timingGroups', 'timingSemesters', 'timingTeachers'));
+            return view('admin.db-export', compact('timingFaculties', 'timingTeachers', 'bakalavrCode'));
         })->name('db-export.index');
         Route::get('/export/curriculum-subjects', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculumSubjectsExport, 'curriculum_subjects.xlsx');
@@ -683,8 +681,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             $data = $request->validate([
                 'date_from' => 'required|date_format:Y-m-d',
                 'date_to' => 'required|date_format:Y-m-d|after_or_equal:date_from',
-                'group_hemis_id' => 'nullable|string|max:50',
+                'faculty_id' => 'nullable|integer',
+                'specialty_id' => 'nullable|string|max:50',
+                'level_code' => 'nullable|string|max:10',
                 'semester_code' => 'nullable|string|max:10',
+                'group_id' => 'nullable|integer',
                 'employee_id' => 'nullable|string|max:30',
             ], [
                 'date_to.after_or_equal' => "Tugash sanasi boshlanish sanasidan oldin bo'lmasin.",
@@ -696,9 +697,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 return back()->with('error', "Sana oralig'i 1 yildan oshmasin.");
             }
 
+            // Modal fakultetni DB id, guruhni DB id bilan beradi — HEMIS id ga o'giramiz
             $filters = array_filter([
-                'group_hemis_id' => $data['group_hemis_id'] ?? null,
+                'faculty_hemis_id' => !empty($data['faculty_id'])
+                    ? \App\Models\Department::where('id', $data['faculty_id'])->value('department_hemis_id')
+                    : null,
+                'specialty_hemis_id' => $data['specialty_id'] ?? null,
+                'level_code' => $data['level_code'] ?? null,
                 'semester_code' => $data['semester_code'] ?? null,
+                'group_hemis_id' => !empty($data['group_id'])
+                    ? \App\Models\Group::where('id', $data['group_id'])->value('group_hemis_id')
+                    : null,
                 'employee_id' => $data['employee_id'] ?? null,
             ]);
 

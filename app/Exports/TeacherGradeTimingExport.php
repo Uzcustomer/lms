@@ -73,7 +73,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
     private int $dataRows = 0;
 
     /**
-     * @param array{group_hemis_id?: string|null, semester_code?: string|null, employee_id?: string|null} $filters
+     * @param array{faculty_hemis_id?: string|null, specialty_hemis_id?: string|null, level_code?: string|null, semester_code?: string|null, group_hemis_id?: string|null, employee_id?: string|null} $filters
      */
     public function __construct(private string $dateFrom, private string $dateTo, private array $filters = [])
     {
@@ -113,7 +113,17 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
             ->whereBetween('sg.lesson_date', [$this->dateFrom . ' 00:00:00', $this->dateTo . ' 23:59:59'])
             ->whereNotIn('sg.training_type_code', self::EXCLUDED_TRAINING_TYPES)
             ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
-            // Modal filtrlari: guruh — talabaning guruhi, semestr va o'qituvchi — baho qatoridan
+            // Modal filtrlari: fakultet/yo'nalish/guruh — talabaning guruhi orqali,
+            // semestr va o'qituvchi — baho qatoridan, kurs — semestr jadvalidan
+            ->when(!empty($this->filters['faculty_hemis_id']), fn ($q) => $q->where('g.department_hemis_id', $this->filters['faculty_hemis_id']))
+            ->when(!empty($this->filters['specialty_hemis_id']), fn ($q) => $q->where('g.specialty_hemis_id', $this->filters['specialty_hemis_id']))
+            ->when(!empty($this->filters['level_code']), fn ($q) => $q->whereExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('semesters as sem')
+                    ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
+                    ->whereColumn('sem.code', 'sg.semester_code')
+                    ->where('sem.level_code', $this->filters['level_code']);
+            }))
             ->when(!empty($this->filters['group_hemis_id']), fn ($q) => $q->where('st.group_id', $this->filters['group_hemis_id']))
             ->when(!empty($this->filters['semester_code']), fn ($q) => $q->where('sg.semester_code', $this->filters['semester_code']))
             ->when(!empty($this->filters['employee_id']), fn ($q) => $q->where('sg.employee_id', $this->filters['employee_id']))

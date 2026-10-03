@@ -68,7 +68,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         <span class="text-sm font-bold text-gray-800">Baho qo'yish vaqti</span>
-                        <span class="text-xs text-gray-500 mt-1 text-center">o'qituvchilar kesimida: dars vaqtida / ish vaqtida / 18:00 dan keyin · faqat bakalavr</span>
+                        <span class="text-xs text-gray-500 mt-1 text-center">o'qituvchilar kesimida: dars vaqtida / ish vaqtida / 18:00 dan keyin / necha kun keyin · HEMIS va LMS baholari · faqat bakalavr</span>
                         <div class="flex items-center gap-2 mt-3 w-full">
                             <input type="date" name="date_from" required
                                    value="{{ old('date_from', now('Asia/Tashkent')->startOfMonth()->toDateString()) }}"

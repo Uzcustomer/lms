@@ -15,9 +15,18 @@ use Illuminate\Support\Facades\Log;
  * jadvalda shu darsni o'tadigan o'qituvchi(lar). Ular ko'pincha bitta odam;
  * bir kishiga bir marta boradi. Telegram ulanmagan o'qituvchi o'tkazib
  * yuboriladi. Xabar yuborilmasa ham tasdiqlash to'xtamaydi.
+ *
+ * Ma'ruza o'qituvchisi xabar olmaydi: ma'ruzaga baho qo'yilmaydi, shuning
+ * uchun dars ochish unga tegishli emas.
  */
 class LessonOpeningNotifier
 {
+    /**
+     * Baho qo'yilmaydigan mashg'ulot turlari — TeacherMissedLessons bilan
+     * bir xil ro'yxat. Bu turlarning o'qituvchisi dars ochish xabarini olmaydi.
+     */
+    private const EXCLUDED_TYPE_NAMES = ["Ma'ruza", "Mustaqil ta'lim", 'Oraliq nazorat', 'Oski', 'Yakuniy test', 'Quiz test'];
+
     public function __construct(private readonly TelegramService $telegram)
     {
     }
@@ -184,7 +193,11 @@ class LessonOpeningNotifier
         }
     }
 
-    /** So'rovda o'qituvchi yozilmagan bo'lsa — o'sha kungi jadvaldagi o'qituvchi(lar). */
+    /**
+     * So'rovda o'qituvchi yozilmagan bo'lsa — o'sha kungi jadvaldagi
+     * o'qituvchi(lar). Ma'ruza o'qituvchisi kirmaydi: unga baho qo'yilmaydi,
+     * shuning uchun xabarda ham ko'rinmaydi (recipients() bilan bir xil).
+     */
     private function scheduleTeacherNames(LessonOpening $opening): string
     {
         if (!$opening->lesson_date) {
@@ -197,6 +210,8 @@ class LessonOpeningNotifier
             ->where('semester_code', $opening->semester_code)
             ->whereDate('lesson_date', $opening->lesson_date->format('Y-m-d'))
             ->whereNull('deleted_at')
+            ->whereNotIn('training_type_name', self::EXCLUDED_TYPE_NAMES)
+            ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102, 103]))
             ->distinct()
             ->pluck('employee_name')
             ->filter()
@@ -223,7 +238,14 @@ class LessonOpeningNotifier
         }
     }
 
-    /** So'rov egasi + o'sha kungi jadvaldagi o'qituvchilar, Telegram ulanganlari. */
+    /**
+     * So'rov egasi + o'sha kungi jadvaldagi o'qituvchilar, Telegram ulanganlari.
+     *
+     * Ma'ruza o'qituvchisi chiqarib tashlanadi: dars ochish faqat baho
+     * qo'yiladigan mashg'ulotlarga tegishli, ma'ruzaga esa baho qo'yilmaydi.
+     * Bir kunda ikkala tur ham bo'lsa, xabar faqat amaliyot/seminar
+     * o'qituvchisiga boradi.
+     */
     private function recipients(LessonOpening $opening): Collection
     {
         $scheduleEmployeeIds = $opening->lesson_date
@@ -233,6 +255,8 @@ class LessonOpeningNotifier
                 ->where('semester_code', $opening->semester_code)
                 ->whereDate('lesson_date', $opening->lesson_date->format('Y-m-d'))
                 ->whereNull('deleted_at')
+                ->whereNotIn('training_type_name', self::EXCLUDED_TYPE_NAMES)
+                ->whereNotIn('training_type_code', config('app.training_type_code', [11, 99, 100, 101, 102, 103]))
                 ->distinct()
                 ->pluck('employee_id')
             : collect();

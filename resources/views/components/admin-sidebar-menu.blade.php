@@ -1369,7 +1369,8 @@
         @endif
 
         {{-- ============ DB MA'LUMOTLAR ============ --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
+        {{-- Butun jadvallarni Excelga chiqaradi — faqat superadmin --}}
+        @if($hasActiveRole('superadmin'))
         <a href="{{ route('admin.db-export.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.db-export.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

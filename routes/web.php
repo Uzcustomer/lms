@@ -646,7 +646,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return view('admin.job-listings');
         })->name('job-listings.index');
 
-        // DB ma'lumotlar sahifasi va eksport
+        // DB ma'lumotlar sahifasi va eksport — faqat superadmin
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin')->group(function () {
         Route::get('/db-export', function () {
             // "Semestr fanlari" modali: o'quv yillari (standart — joriy yildan bitta oldingisi) va ta'lim turlari
             $subjectYears = \Illuminate\Support\Facades\DB::table('semesters')
@@ -769,6 +770,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 'xodimlar_'.now('Asia/Tashkent')->format('Y-m-d').'.xlsx'
             );
         })->name('export.teachers');
+        });
 
         // Tyutorlar ro'yxati + har bir tyutor guruhlarini Excelga eksport qilish
         Route::get('/tutors', function () {

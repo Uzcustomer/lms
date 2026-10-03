@@ -216,7 +216,7 @@ return [
         // every ~15 s while open, so keep this well above that.
         'presence_window_seconds' => (int) env('ATTENDANCE_PRESENCE_WINDOW_SECONDS', 120),
         // Weakest RSSI (dBm) accepted when confirming; lower = farther away.
-        'min_rssi' => (int) env('ATTENDANCE_MIN_RSSI', -95),
+        'min_rssi' => (int) env('ATTENDANCE_MIN_RSSI', -75),
         // Ask for a selfie on confirm and match it against the approved
         // student photo (same source as the Face ID login). Teachers can
         // still switch it off for a single lesson.

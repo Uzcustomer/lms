@@ -323,7 +323,7 @@ class AttendanceSessionService
             return [];
         }
         $window = (int) config('services.attendance.presence_window_seconds', 120);
-        $minRssi = (int) config('services.attendance.min_rssi', -95);
+        $minRssi = (int) config('services.attendance.min_rssi', -75);
 
         return PresenceLog::where('beacon_id', $beaconId)
             ->where('seen_at', '>=', $reference->copy()->subSeconds($window))

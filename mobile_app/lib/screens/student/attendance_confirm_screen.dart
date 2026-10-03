@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../services/attendance_service.dart';
@@ -10,14 +9,11 @@ import '../../services/presence_scanner.dart';
 import '../../widgets/clinic_header.dart';
 import '../../l10n/app_localizations.dart';
 
-/// "Davomat": lists the attendance windows this student was prompted for
-/// (detected in the room), and lets them confirm while the session's beacon
-/// is heard. Scanning itself runs app-wide in [PresenceScanner].
-///
-/// Doubles as the site-survey tool: the signal card shows the median (not
-/// the peak) of a rolling window per beacon and can record a fixed-length
-/// sample at a labelled spot, which is how the RSSI threshold for a room
-/// gets chosen.
+/// "Davomat": the attendance windows this student was prompted for, each
+/// with one button. Pressing it checks the room beacon in the background
+/// (strong enough = in the room), takes a selfie, and sends both to the
+/// server, which matches the face against the student's approved photo.
+/// No signal readouts - the student sees only the result.
 class AttendanceConfirmScreen extends StatefulWidget {
   const AttendanceConfirmScreen({super.key});
 
@@ -26,58 +22,41 @@ class AttendanceConfirmScreen extends StatefulWidget {
 }
 
 class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
+  /// Weakest signal that still counts as "in the room". Matches the server.
+  static const int minRssi = -75;
+
+  /// How long the button waits for the beacon before giving up.
+  static const _listenFor = Duration(seconds: 6);
+
   final _service = AttendanceService();
   final _beacons = BeaconService();
   final _scanner = PresenceScanner.instance;
-  BeaconSignalTracker get _tracker => _scanner.tracker;
 
   List<PendingAttendance> _pending = const [];
   bool _loading = true;
   String? _error;
-
-  BeaconReadiness? get _readiness => _scanner.readiness.value;
-  Timer? _tick;
   int? _confirming;
-
-  // Site survey
-  static const _recordFor = Duration(seconds: 30);
-  final _spotController = TextEditingController();
-  DateTime? _recordingStartedAt;
-  List<BeaconSignalStats> _survey = const [];
-  String _surveyLabel = '';
+  Timer? _tick;
 
   @override
   void initState() {
     super.initState();
-    _scanner.ticks.addListener(_rebuild);
-    _scanner.readiness.addListener(_rebuild);
     AttendanceWatcher.pending.addListener(_onPending);
-    // Countdown and the survey timer; the scanner may be paused (no ticks).
+    // Keeps the countdown moving.
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() {});
-      _finishRecordingIfDue();
+      if (mounted) setState(() {});
     });
     _load();
   }
 
-  void _rebuild() {
-    if (mounted) setState(() {});
-  }
-
-  /// The scanner's presence reports return the fresh list — a student who
-  /// walks in with this screen open sees the lesson appear.
   void _onPending() {
     if (mounted) setState(() => _pending = AttendanceWatcher.pending.value);
   }
 
   @override
   void dispose() {
-    _scanner.ticks.removeListener(_rebuild);
-    _scanner.readiness.removeListener(_rebuild);
     AttendanceWatcher.pending.removeListener(_onPending);
     _tick?.cancel();
-    _spotController.dispose();
     super.dispose();
   }
 
@@ -96,54 +75,143 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     }
     if (!mounted) return;
     setState(() => _loading = false);
-    // Tell the server what we hear right away rather than on the next cycle.
     _scanner.report();
   }
 
-  BeaconSignalStats? _statsFor(PendingAttendance p) {
-    final b = p.beacon;
-    return b == null ? null : _tracker.statsFor(b.key);
-  }
+  // ── Confirm ─────────────────────────────────────────
 
   Future<void> _confirm(PendingAttendance p) async {
-    final stats = _statsFor(p);
     final beacon = p.beacon;
-    if (stats == null || beacon == null) return;
+    if (beacon == null) {
+      _snack(context.l10n.pick(
+          uz: 'Bu xona uchun beacon sozlanmagan.',
+          ru: 'Для этой аудитории маяк не настроен.',
+          en: 'No beacon is configured for this room.'), error: true);
+      return;
+    }
 
     setState(() => _confirming = p.sessionId);
     try {
-      // Second layer: a selfie, matched on the server against the student's
-      // approved LMS photo — the same one the Face ID login uses.
+      // 1. Bluetooth: on, permitted, and the room's beacon heard loud
+      //    enough. The student never sees a number - just pass or fail.
+      final rssi = await _hearBeacon(beacon.key);
+      if (rssi == null) return;
+
+      // 2. Selfie, matched on the server against the approved LMS photo.
       File? selfie;
       if (p.requireFace) {
         selfie = await _takeSelfie();
         if (selfie == null) {
-          if (mounted) _snack(context.l10n.pick(uz: 'Davomat uchun yuzingizni suratga olish kerak.', ru: 'Для переклички нужно сфотографировать лицо.', en: 'A selfie is required to confirm attendance.'), error: true);
+          _snack(context.l10n.pick(
+              uz: 'Davomat uchun yuzingizni suratga olish kerak.',
+              ru: 'Для переклички нужно сфотографировать лицо.',
+              en: 'A selfie is required to confirm attendance.'), error: true);
           return;
         }
       }
 
+      // 3. Server: beacon, signal, face - all checked again there.
       final res = await _service.confirm(
         p.sessionId,
         uuid: beacon.uuid,
         major: beacon.major,
         minor: beacon.minor,
-        rssi: stats.median,
+        rssi: rssi,
         photo: selfie,
       );
       if (!mounted) return;
-      _snack(res['message']?.toString() ?? context.l10n.pick(uz: 'Davomat tasdiqlandi.', ru: 'Присутствие подтверждено.', en: 'Attendance confirmed.'));
+      _snack(res['message']?.toString() ??
+          context.l10n.pick(uz: 'Davomat tasdiqlandi.', ru: 'Присутствие подтверждено.', en: 'Attendance confirmed.'));
       await _load();
     } on ApiException catch (e) {
       if (mounted) _snack(e.message, error: true);
     } catch (_) {
-      if (mounted) _snack(context.l10n.retryError, error: true);
+      if (mounted) _snack(AppLocalizations.current.retryError, error: true);
     } finally {
       if (mounted) setState(() => _confirming = null);
     }
   }
 
-  /// Front camera only — no gallery, so an old photo cannot be picked.
+  /// Checks Bluetooth, then listens for up to [_listenFor] for the room's
+  /// beacon at [minRssi] or stronger. Returns the signal it accepted, or
+  /// null after telling the student what was wrong.
+  Future<int?> _hearBeacon(String key) async {
+    final readiness = await _beacons.prepare();
+    if (!mounted) return null;
+    if (readiness != BeaconReadiness.ready) {
+      await _explainReadiness(readiness);
+      return null;
+    }
+    await _scanner.retry();
+
+    // The app-wide scanner keeps a 15 s window per beacon; wait for it to
+    // hold a usable median, re-checking every half second.
+    final deadline = DateTime.now().add(_listenFor);
+    while (DateTime.now().isBefore(deadline)) {
+      final stats = _scanner.tracker.statsFor(key);
+      if (stats != null && stats.count >= 3 && stats.median >= minRssi) {
+        return stats.median;
+      }
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return null;
+    }
+
+    final stats = _scanner.tracker.statsFor(key);
+    _snack(
+      stats == null
+          ? context.l10n.pick(
+              uz: 'Xona signali topilmadi. Dars xonasida ekaningizga ishonch hosil qiling.',
+              ru: 'Сигнал аудитории не найден. Убедитесь, что вы в аудитории.',
+              en: 'Room signal not found. Make sure you are in the classroom.')
+          : context.l10n.pick(
+              uz: 'Signal juda kuchsiz. Xona ichiga kiring va qayta urinib ko\'ring.',
+              ru: 'Сигнал слишком слабый. Войдите в аудиторию и попробуйте снова.',
+              en: 'Signal too weak. Move inside the room and try again.'),
+      error: true,
+    );
+    return null;
+  }
+
+  Future<void> _explainReadiness(BeaconReadiness r) async {
+    final l = context.l10n;
+    final (text, action, onTap) = switch (r) {
+      BeaconReadiness.bluetoothOff => (
+          l.pick(uz: 'Bluetooth o\'chiq. Davomat uchun uni yoqing.', ru: 'Bluetooth выключен. Включите его для переклички.', en: 'Bluetooth is off. Turn it on to confirm attendance.'),
+          l.bluetoothSettings,
+          _beacons.openBluetoothSettings,
+        ),
+      BeaconReadiness.permissionDenied => (
+          l.pick(uz: 'Davomat uchun Bluetooth ruxsati kerak.', ru: 'Для переклички нужно разрешение Bluetooth.', en: 'Bluetooth permission is required to confirm attendance.'),
+          l.permissionGrant,
+          _beacons.openAppPermissionSettings,
+        ),
+      _ => (
+          l.pick(uz: 'Bu qurilma Bluetooth skanerlashni qo\'llab-quvvatlamaydi.', ru: 'Это устройство не поддерживает сканирование Bluetooth.', en: 'This device does not support Bluetooth scanning.'),
+          null,
+          null,
+        ),
+    };
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.bluetooth_disabled, size: 40),
+        content: Text(text, textAlign: TextAlign.center),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.close)),
+          if (action != null)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                onTap?.call();
+              },
+              child: Text(action),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Front camera only - no gallery, so an old photo cannot be picked.
   Future<File?> _takeSelfie() async {
     try {
       final picked = await ImagePicker().pickImage(
@@ -155,7 +223,9 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
       );
       return picked == null ? null : File(picked.path);
     } catch (_) {
-      if (mounted) _snack(context.l10n.pick(uz: 'Kamerani ochib bo\'lmadi. Ruxsatlarni tekshiring.', ru: 'Не удалось открыть камеру. Проверьте разрешения.', en: 'Could not open the camera. Check permissions.'), error: true);
+      if (mounted) {
+        _snack(context.l10n.pick(uz: 'Kamerani ochib bo\'lmadi. Ruxsatlarni tekshiring.', ru: 'Не удалось открыть камеру. Проверьте разрешения.', en: 'Could not open the camera. Check permissions.'), error: true);
+      }
       return null;
     }
   }
@@ -163,49 +233,8 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
   void _snack(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? const Color(0xFFBE123C) : ClinicTheme.greenOf(context),
+      backgroundColor: error ? const Color(0xFFBE123C) : const Color(0xFF047857),
     ));
-  }
-
-  // ── Site survey ─────────────────────────────────────
-
-  void _startRecording() {
-    setState(() {
-      _survey = const [];
-      _surveyLabel = _spotController.text.trim();
-      _recordingStartedAt = DateTime.now();
-      _tracker.startRecording();
-    });
-  }
-
-  void _finishRecordingIfDue() {
-    final startedAt = _recordingStartedAt;
-    if (startedAt == null) return;
-    if (DateTime.now().difference(startedAt) < _recordFor) {
-      setState(() {}); // tick the countdown
-      return;
-    }
-    setState(() {
-      _survey = _tracker.stopRecording();
-      _recordingStartedAt = null;
-    });
-  }
-
-  void _cancelRecording() {
-    _tracker.stopRecording();
-    setState(() => _recordingStartedAt = null);
-  }
-
-  void _copySurvey() {
-    final label = _surveyLabel.isEmpty ? context.l10n.pick(uz: 'Nuqta', ru: 'Точка', en: 'Spot') : _surveyLabel;
-    final lines = <String>['$label — ${_recordFor.inSeconds}s'];
-    for (final s in _survey) {
-      lines.add('${s.major}/${s.minor}: mediana ${s.median} dBm · '
-          '10% ${s.percentile(10)} · 90% ${s.percentile(90)} · '
-          'min ${s.min} · max ${s.max} · ${context.l10n.pick(uz: '${s.count} ta', ru: '${s.count} шт', en: '${s.count}')}');
-    }
-    Clipboard.setData(ClipboardData(text: lines.join('\n')));
-    _snack(context.l10n.pick(uz: 'Natija nusxalandi.', ru: 'Результат скопирован.', en: 'Result copied.'));
   }
 
   // ── UI ──────────────────────────────────────────────
@@ -224,11 +253,6 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 30),
                 children: [
-                  if (_readiness != null && _readiness != BeaconReadiness.ready) _readinessCard(),
-                  if (_readiness == BeaconReadiness.ready) ...[
-                    _signalCard(),
-                    if (_survey.isNotEmpty) _surveyCard(),
-                  ],
                   if (_loading)
                     const Padding(
                       padding: EdgeInsets.only(top: 40),
@@ -237,8 +261,12 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
                   else if (_error != null)
                     _message(Icons.wifi_off_rounded, _error!)
                   else if (_pending.isEmpty)
-                    _message(Icons.event_available_outlined,
-                        context.l10n.pick(uz: 'Hozir ochiq davomat yo\'q.\\nO\'qituvchi davomatni boshlaganda, xonada bo\'lsangiz shu yerda ko\'rinadi.', ru: 'Сейчас открытой переклички нет.\\nКогда преподаватель начнёт, она появится здесь, если вы в аудитории.', en: 'No attendance is open right now.\\nWhen the teacher starts one, it appears here if you are in the room.'))
+                    _message(
+                        Icons.event_available_outlined,
+                        context.l10n.pick(
+                            uz: 'Hozir ochiq davomat yo\'q.\nO\'qituvchi davomatni boshlaganda, xonada bo\'lsangiz shu yerda ko\'rinadi.',
+                            ru: 'Сейчас открытой переклички нет.\nКогда преподаватель начнёт, она появится здесь, если вы в аудитории.',
+                            en: 'No attendance is open right now.\nWhen the teacher starts one, it appears here if you are in the room.'))
                   else
                     ..._pending.map(_sessionCard),
                 ],
@@ -265,298 +293,10 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     );
   }
 
-  /// Live signal per beacon — median of the rolling window, with the spread
-  /// that produced it, plus the recorder.
-  Widget _signalCard() {
-    final live = _tracker.live;
-    final recording = _recordingStartedAt != null;
-    final left = recording
-        ? _recordFor - DateTime.now().difference(_recordingStartedAt!)
-        : Duration.zero;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ClinicTheme.surfaceOf(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ClinicTheme.dividerOf(context)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.bluetooth_searching, size: 18, color: ClinicTheme.tealOf(context)),
-              const SizedBox(width: 8),
-              Text(context.l10n.pick(uz: 'Signal — ${_tracker.window.inSeconds}s mediana', ru: 'Сигнал — медиана за ${_tracker.window.inSeconds}с', en: 'Signal — ${_tracker.window.inSeconds}s median'),
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
-              const Spacer(),
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(strokeWidth: 2, color: ClinicTheme.tealOf(context)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (live.isEmpty)
-            Text(context.l10n.pick(uz: 'Hech qanday beacon eshitilmayapti', ru: 'Маяки не слышны', en: 'No beacon is being heard'),
-                style: TextStyle(fontSize: 12.5, color: ClinicTheme.mutedOf(context)))
-          else
-            ...live.map(_signalRow),
-          const Divider(height: 24),
-          if (recording)
-            Row(
-              children: [
-                Icon(Icons.fiber_manual_record, color: ClinicTheme.redOf(context), size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    context.l10n.pick(uz: 'Yozilmoqda… ${left.inSeconds}s qoldi — telefonni qimirlatmasdan turing', ru: 'Запись… осталось ${left.inSeconds}с — не двигайте телефон', en: 'Recording… ${left.inSeconds}s left — hold the phone still'),
-                    style: TextStyle(
-                        fontSize: 12.5, fontWeight: FontWeight.w700, color: ClinicTheme.inkOf(context)),
-                  ),
-                ),
-                TextButton(onPressed: _cancelRecording, child: Text(context.l10n.cancel)),
-              ],
-            )
-          else ...[
-            TextField(
-              controller: _spotController,
-              style: const TextStyle(fontSize: 13),
-              decoration: InputDecoration(
-                isDense: true,
-                labelText: context.l10n.pick(uz: 'Nuqta nomi', ru: 'Название точки', en: 'Spot name'),
-                hintText: context.l10n.pick(uz: 'masalan: oxirgi qator / eshik oldi / koridor', ru: 'например: последний ряд / у двери / коридор', en: 'e.g. back row / by the door / corridor'),
-                hintStyle: TextStyle(fontSize: 12, color: ClinicTheme.faint),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              height: 42,
-              child: ElevatedButton.icon(
-                onPressed: live.isEmpty ? null : _startRecording,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ClinicTheme.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
-                ),
-                icon: const Icon(Icons.fiber_manual_record, size: 18),
-                label: Text(context.l10n.pick(uz: '${_recordFor.inSeconds} soniya yozib olish', ru: 'Записать ${_recordFor.inSeconds} с', en: 'Record ${_recordFor.inSeconds} s'),
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _signalRow(BeaconSignalStats s) {
-    final strength = ((s.median + 100) / 60).clamp(0.0, 1.0);
-    final color = s.median >= -75
-        ? ClinicTheme.greenOf(context)
-        : s.median >= -88
-            ? const Color(0xFFB45309)
-            : const Color(0xFFBE123C);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 92,
-                child: Text('${s.major} / ${s.minor}',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        color: ClinicTheme.inkOf(context))),
-              ),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: strength,
-                    minHeight: 8,
-                    backgroundColor: ClinicTheme.dividerOf(context),
-                    color: color,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 72,
-                child: Text('${s.median} dBm',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        color: color)),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 92, top: 3),
-            child: Text(
-              'min ${s.min} · max ${s.max} · ${context.l10n.pick(uz: '${s.count} ta o\'lchov', ru: '${s.count} измер.', en: '${s.count} readings')}',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: ClinicTheme.mutedOf(context)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _surveyCard() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0FDFA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ClinicTheme.tealOf(context).withOpacity(0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.assignment_turned_in_outlined, size: 18, color: ClinicTheme.tealOf(context)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${_surveyLabel.isEmpty ? context.l10n.pick(uz: 'Natija', ru: 'Результат', en: 'Result') : _surveyLabel} — ${_recordFor.inSeconds}s',
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w800, color: ClinicTheme.ink),
-                ),
-              ),
-              IconButton(
-                onPressed: _copySurvey,
-                icon: const Icon(Icons.copy_rounded, size: 18),
-                tooltip: context.l10n.pick(uz: 'Nusxalash', ru: 'Копировать', en: 'Copy'),
-                color: ClinicTheme.tealOf(context),
-              ),
-              IconButton(
-                onPressed: () => setState(() => _survey = const []),
-                icon: const Icon(Icons.close_rounded, size: 18),
-                color: ClinicTheme.muted,
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          ..._survey.map((s) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${s.major} / ${s.minor}',
-                        style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w700, color: ClinicTheme.muted)),
-                    const SizedBox(height: 2),
-                    Text(context.l10n.pick(uz: 'Mediana ${s.median} dBm', ru: 'Медиана ${s.median} дБм', en: 'Median ${s.median} dBm'),
-                        style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            fontFeatures: [FontFeature.tabularFigures()],
-                            color: ClinicTheme.ink)),
-                    const SizedBox(height: 2),
-                    Text(
-                      '10% ${s.percentile(10)} · 90% ${s.percentile(90)} · '
-                      'min ${s.min} · max ${s.max} · ${context.l10n.pick(uz: '${s.count} ta', ru: '${s.count} шт', en: '${s.count}')}',
-                      style: const TextStyle(
-                          fontSize: 11.5,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                          color: ClinicTheme.muted),
-                    ),
-                  ],
-                ),
-              )),
-          Text(
-            context.l10n.pick(uz: 'Xona ichida "10%" qiymatiga, koridorda "90%" qiymatiga qarang — chegara shu ikkisining orasida bo\'ladi.', ru: 'В аудитории смотрите на значение «10%», в коридоре — на «90%»: порог между ними.', en: 'Inside the room look at the "10%" value, in the corridor at "90%" — the threshold lies between them.'),
-            style: TextStyle(fontSize: 11, height: 1.35, color: ClinicTheme.muted.withOpacity(0.9)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _readinessCard() {
-    final (text, action, onTap) = switch (_readiness!) {
-      BeaconReadiness.bluetoothOff => (
-          context.l10n.pick(uz: 'Bluetooth o\'chiq. Xona signalini eshitish uchun uni yoqing.', ru: 'Bluetooth выключен. Включите его, чтобы слышать сигнал аудитории.', en: 'Bluetooth is off. Turn it on to hear the room signal.'),
-          context.l10n.bluetoothSettings,
-          _beacons.openBluetoothSettings,
-        ),
-      BeaconReadiness.permissionDenied => (
-          context.l10n.pick(uz: 'Bluetooth ruxsati kerak — busiz xona beacon\'i aniqlanmaydi.', ru: 'Нужно разрешение Bluetooth — без него маяк аудитории не определяется.', en: 'Bluetooth permission is required — without it the room beacon cannot be detected.'),
-          context.l10n.permissionGrant,
-          _beacons.openAppPermissionSettings,
-        ),
-      _ => (context.l10n.pick(uz: 'Bu qurilma BLE skanerlashni qo\'llab-quvvatlamaydi.', ru: 'Это устройство не поддерживает сканирование BLE.', en: 'This device does not support BLE scanning.'), null, null),
-    };
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(Icons.bluetooth_disabled, color: ClinicTheme.amberOf(context)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text,
-                  style: const TextStyle(
-                      color: Color(0xFF78350F), fontSize: 13, fontWeight: FontWeight.w600)),
-            ),
-          ]),
-          if (action != null) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () async {
-                  await onTap?.call();
-                  await _scanner.retry();
-                },
-                child: Text(action),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _sessionCard(PendingAttendance p) {
-    final stats = _statsFor(p);
-    final inRoom = stats != null;
     final left = p.timeLeft;
     final busy = _confirming == p.sessionId;
-    final scanning = _readiness == BeaconReadiness.ready;
-
-    final Color accent = p.isPresent
-        ? ClinicTheme.greenOf(context)
-        : inRoom
-            ? ClinicTheme.tealOf(context)
-            : const Color(0xFFB45309);
+    final l = context.l10n;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -565,100 +305,68 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
         color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: ClinicTheme.dividerOf(context)),
+        boxShadow: ClinicTheme.cardShadowOf(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(p.subjectName,
-              style: TextStyle(
-                  fontSize: 15.5, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
+              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: ClinicTheme.inkOf(context))),
           const SizedBox(height: 4),
           Text(
-            [p.lessonPairName, p.auditoriumName]
-                .where((s) => s != null && s.isNotEmpty)
-                .join(' · '),
+            [p.lessonPairName, p.auditoriumName].where((s) => s != null && s.isNotEmpty).join(' · '),
             style: TextStyle(fontSize: 12.5, color: ClinicTheme.mutedOf(context)),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(
-                p.isPresent
-                    ? Icons.check_circle
-                    : inRoom
-                        ? Icons.bluetooth_connected
-                        : scanning
-                            ? Icons.bluetooth_searching
-                            : Icons.bluetooth_disabled,
-                color: accent,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  p.isPresent
-                      ? (inRoom ? '${context.l10n.confirmed} · ${stats.median} dBm' : context.l10n.confirmed)
-                      : inRoom
-                          ? context.l10n.pick(uz: 'Xona topildi · ${stats.median} dBm', ru: 'Аудитория найдена · ${stats.median} дБм', en: 'Room found · ${stats.median} dBm')
-                          : scanning
-                              ? context.l10n.pick(uz: 'Xona signali qidirilmoqda…', ru: 'Поиск сигнала аудитории…', en: 'Looking for the room signal…')
-                              : context.l10n.pick(uz: 'Skanerlash yoqilmagan', ru: 'Сканирование выключено', en: 'Scanning is off'),
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: accent),
+          if (p.isPresent)
+            Row(
+              children: [
+                Icon(Icons.check_circle, color: ClinicTheme.greenOf(context), size: 20),
+                const SizedBox(width: 8),
+                Text(l.confirmed,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: ClinicTheme.greenOf(context))),
+              ],
+            )
+          else ...[
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, size: 18, color: ClinicTheme.mutedOf(context)),
+                const SizedBox(width: 6),
+                Text(
+                  l.pick(uz: 'Tasdiqlash uchun qoldi', ru: 'Осталось на подтверждение', en: 'Time left to confirm'),
+                  style: TextStyle(fontSize: 12.5, color: ClinicTheme.mutedOf(context)),
                 ),
-              ),
-              if (!p.isPresent)
+                const Spacer(),
                 Text(
                   '${left.inMinutes.toString().padLeft(2, '0')}:${(left.inSeconds % 60).toString().padLeft(2, '0')}',
                   style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                       fontFeatures: const [FontFeature.tabularFigures()],
-                      color: left.inMinutes < 2 ? const Color(0xFFBE123C) : ClinicTheme.mutedOf(context)),
+                      color: left.inMinutes < 2 ? ClinicTheme.redOf(context) : ClinicTheme.inkOf(context)),
                 ),
-            ],
-          ),
-          if (!p.isPresent) ...[
-            if (p.requireFace) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.face_retouching_natural, size: 16, color: ClinicTheme.mutedOf(context)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      context.l10n.pick(uz: 'Tasdiqlashda old kamera ochiladi — yuzingiz LMS\'dagi rasmingiz bilan solishtiriladi.', ru: 'При подтверждении откроется фронтальная камера — лицо сравнится с вашим фото в LMS.', en: 'The front camera opens on confirm — your face is matched against your LMS photo.'),
-                      style: TextStyle(fontSize: 11.5, color: ClinicTheme.mutedOf(context)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
-              height: 46,
+              height: 48,
               child: ElevatedButton.icon(
-                onPressed: inRoom && !busy && left > Duration.zero ? () => _confirm(p) : null,
+                onPressed: !busy && left > Duration.zero ? () => _confirm(p) : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: ClinicTheme.tealFillOf(context),
+                  backgroundColor: ClinicTheme.primaryOf(context),
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: ClinicTheme.dividerOf(context),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: busy
                     ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Icon(p.requireFace ? Icons.camera_front : Icons.how_to_reg),
+                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.how_to_reg),
                 label: Text(
-                    !inRoom
-                        ? context.l10n.enterRoom
-                        : busy
-                            ? context.l10n.checking
-                            : p.requireFace
-                            ? context.l10n.pick(uz: 'Yuz bilan tasdiqlash', ru: 'Подтвердить лицом', en: 'Confirm with face')
-                            : context.l10n.pick(uz: 'Davomatni tasdiqlash', ru: 'Подтвердить присутствие', en: 'Confirm attendance'),
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                  busy ? l.checking : l.pick(uz: 'Davomatni tasdiqlash', ru: 'Подтвердить присутствие', en: 'Confirm attendance'),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
               ),
             ),
           ],

@@ -510,7 +510,7 @@
                 statusLabel(st) {
                     const by = st.decided_by === 'teacher' ? ' · qo\'lda belgilangan' : (st.decided_by === 'system' ? ' · oynada tasdiqlanmadi' : '');
                     if (st.status === 'present') {
-                        const sig = st.rssi != null ? ' · signal ' + st.rssi + ' dBm' : '';
+                        const sig = '';
                         return 'Keldi' + (st.decided_by === 'student' ? ' · telefondan tasdiqladi' + sig : by);
                     }
                     if (st.status === 'absent') return 'Kelmadi' + by;

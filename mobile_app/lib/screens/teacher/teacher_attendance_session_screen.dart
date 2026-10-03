@@ -310,7 +310,6 @@ class _TeacherAttendanceSessionScreenState extends State<TeacherAttendanceSessio
           TextSpan(children: [
             TextSpan(
               text: '${st['group_name'] ?? ''} · $label${byTeacher ? ' (${context.l10n.pick(uz: 'qo\'lda', ru: 'вручную', en: 'manual')})' : ''}'
-                  '${st['rssi'] != null && status == 'present' ? ' · ${st['rssi']} dBm' : ''}',
             ),
             if (_faceLabel(st) case final face?)
               TextSpan(text: ' · ${face.$1}', style: TextStyle(color: face.$2, fontWeight: FontWeight.w700)),

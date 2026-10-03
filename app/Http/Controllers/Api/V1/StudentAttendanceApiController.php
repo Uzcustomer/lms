@@ -81,7 +81,7 @@ class StudentAttendanceApiController extends Controller
         $source = $data['source'] ?? 'background';
         $now = now();
         $recorded = 0;
-        $minRssi = (int) config('services.attendance.min_rssi', -95);
+        $minRssi = (int) config('services.attendance.min_rssi', -75);
         $heard = []; // beacons heard well enough to count as "in the room"
 
         foreach ($data['sightings'] as $sighting) {
@@ -169,7 +169,7 @@ class StudentAttendanceApiController extends Controller
             return response()->json(['message' => "Siz dars xonasida emassiz — xona beacon signali topilmadi."], 422);
         }
 
-        $minRssi = (int) config('services.attendance.min_rssi', -95);
+        $minRssi = (int) config('services.attendance.min_rssi', -75);
         if (isset($data['rssi']) && $data['rssi'] < $minRssi) {
             return response()->json(['message' => "Signal juda kuchsiz. Xona ichiga kiring va qayta urinib ko'ring."], 422);
         }

@@ -86,22 +86,17 @@ class BeaconSignalStats {
   }
 }
 
-/// Collects sightings per beacon: a rolling window for the live view and,
-/// on demand, a fixed-length recording for a site survey.
+/// Collects sightings per beacon over a rolling window, so a decision is
+/// made on the median of several readings rather than on one packet.
 class BeaconSignalTracker {
   final Duration window;
   final Map<String, List<BeaconSighting>> _live = {};
-  final Map<String, List<BeaconSighting>> _recording = {};
-  bool _isRecording = false;
 
   BeaconSignalTracker({this.window = const Duration(seconds: 15)});
-
-  bool get isRecording => _isRecording;
 
   void add(Iterable<BeaconSighting> sightings) {
     for (final s in sightings) {
       _live.putIfAbsent(s.key, () => []).add(s);
-      if (_isRecording) _recording.putIfAbsent(s.key, () => []).add(s);
     }
     prune();
   }
@@ -127,27 +122,8 @@ class BeaconSignalTracker {
     return readings == null || readings.isEmpty ? null : BeaconSignalStats.from(key, readings);
   }
 
-  void startRecording() {
-    _recording.clear();
-    _isRecording = true;
-  }
-
-  /// Ends the recording and returns what was captured, strongest first.
-  List<BeaconSignalStats> stopRecording() {
-    _isRecording = false;
-    final stats = _recording.entries
-        .where((e) => e.value.isNotEmpty)
-        .map((e) => BeaconSignalStats.from(e.key, e.value))
-        .toList();
-    stats.sort((a, b) => b.median.compareTo(a.median));
-    _recording.clear();
-    return stats;
-  }
-
   void clear() {
     _live.clear();
-    _recording.clear();
-    _isRecording = false;
   }
 }
 

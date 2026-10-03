@@ -16,7 +16,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * O'qituvchilar baholarni qachon qo'ygani — tanlangan sana oralig'idagi
- * bakalavr darslari bo'yicha, har bir talabaga qo'yilgan baho kesimida.
+ * bakalavr darslari bo'yicha, o'qituvchi + fan kesimida, har bir talabaga
+ * qo'yilgan baho sanaladi.
  *
  * Baho qo'yilgan vaqt manbasi qatorning kelib chiqishiga qarab:
  *   - HEMIS'dan kelgan baho        — created_at_api (HEMIS vaqti);
@@ -51,6 +52,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
         ['num',       '#',                       '1A3268', 'FFFFFF'],
         ['teacher',   "O'qituvchi",              '1A3268', 'FFFFFF'],
         ['dept',      'Kafedra',                 '1A3268', 'FFFFFF'],
+        ['subject',   'Fan',                     '1A3268', 'FFFFFF'],
         ['during',    'Dars vaqtida (soni)',     '548235', 'E2EFDA'],
         ['work',      'Ish vaqtida (soni)',      '2F75B5', 'DDEBF7'],
         ['evening',   '18:00 dan keyin (soni)',  'BF8F00', 'FFF2CC'],
@@ -127,12 +129,14 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
             ->when(!empty($this->filters['group_hemis_id']), fn ($q) => $q->where('st.group_id', $this->filters['group_hemis_id']))
             ->when(!empty($this->filters['semester_code']), fn ($q) => $q->where('sg.semester_code', $this->filters['semester_code']))
             ->when(!empty($this->filters['employee_id']), fn ($q) => $q->where('sg.employee_id', $this->filters['employee_id']))
-            ->groupBy('sg.employee_id', 'sg.employee_name', 't.department')
+            ->groupBy('sg.employee_id', 'sg.employee_name', 't.department', 'sg.subject_id', 'sg.subject_name')
             ->orderBy('sg.employee_name')
+            ->orderBy('sg.subject_name')
             ->select([
                 'sg.employee_id',
                 'sg.employee_name',
                 't.department',
+                'sg.subject_name',
                 DB::raw("SUM(CASE WHEN {$during} THEN 1 ELSE 0 END) AS during_lesson"),
                 DB::raw("SUM(CASE WHEN {$evening} THEN 1 ELSE 0 END) AS evening"),
                 DB::raw("SUM(CASE WHEN {$daysLate} = 1 THEN 1 ELSE 0 END) AS d1"),
@@ -186,6 +190,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
                 $i + 1,
                 $r->employee_name,
                 blank($r->department) ? ($scheduleDepartments[$r->employee_id] ?? '-') : $r->department,
+                $r->subject_name ?? '-',
                 $c,
                 round((float) $r->avg_late, 1)
             ));
@@ -197,6 +202,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
             $out->push($this->row(
                 '',
                 'JAMI',
+                '',
                 '',
                 $totals,
                 $totals['total'] > 0 ? round($lateDaysSum / $totals['total'], 1) : 0.0
@@ -234,7 +240,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
                     ->setFillType('solid')->getStartColor()->setRGB($bodyColor);
             }
 
-            if ($col >= 4) {
+            if ($col >= 5) {
                 $sheet->getStyle("{$letter}2:{$letter}{$endRow}")->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER);
             }
@@ -247,7 +253,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
         $sheet->getStyle("A1:{$endLetter}{$endRow}")->getBorders()->getAllBorders()
             ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('BFBFBF');
         $sheet->getRowDimension(1)->setRowHeight(44);
-        $sheet->freezePane('D2');
+        $sheet->freezePane('E2');
 
         $styles = [];
         if ($totalRow) {
@@ -257,7 +263,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
         return $styles;
     }
 
-    private function row($num, string $teacher, string $dept, array $c, float $avgLate): array
+    private function row($num, string $teacher, string $dept, string $subject, array $c, float $avgLate): array
     {
         $t = $c['total'];
 
@@ -265,6 +271,7 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
             $num,
             $teacher,
             $dept,
+            $subject,
             $c['during'],
             $c['work'],
             $c['evening'],

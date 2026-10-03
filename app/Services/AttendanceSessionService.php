@@ -70,6 +70,33 @@ class AttendanceSessionService
             ->all();
     }
 
+    /**
+     * Nearest days on either side of [$date] that have lessons, within 60
+     * days - so an empty day can offer "jump to the next lesson day".
+     * @return array{prev: ?string, next: ?string}
+     */
+    public function nearestLessonDays(Teacher $teacher, Carbon $date): array
+    {
+        $base = DB::table('schedules')
+            ->where('employee_id', $teacher->hemis_id)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date');
+
+        $next = (clone $base)
+            ->whereDate('lesson_date', '>', $date->toDateString())
+            ->whereDate('lesson_date', '<=', $date->copy()->addDays(60)->toDateString())
+            ->min('lesson_date');
+        $prev = (clone $base)
+            ->whereDate('lesson_date', '<', $date->toDateString())
+            ->whereDate('lesson_date', '>=', $date->copy()->subDays(60)->toDateString())
+            ->max('lesson_date');
+
+        return [
+            'prev' => $prev ? Carbon::parse($prev)->toDateString() : null,
+            'next' => $next ? Carbon::parse($next)->toDateString() : null,
+        ];
+    }
+
     /** Open the confirmation window for one lesson slot (idempotent while open). */
     public function start(
         Teacher $teacher,

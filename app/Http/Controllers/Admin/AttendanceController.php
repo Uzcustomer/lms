@@ -62,9 +62,13 @@ class AttendanceController extends Controller
         $teacher = $this->requireTeacher();
         $date = $request->filled('date') ? Carbon::parse($request->input('date'))->startOfDay() : today();
 
+        $lessons = $this->service->lessonsFor($teacher, $date);
+
         return response()->json(['data' => [
             'date' => $date->toDateString(),
-            'lessons' => $this->service->lessonsFor($teacher, $date),
+            'lessons' => $lessons,
+            // For the empty state: where the nearest lessons are.
+            'nearest' => $lessons === [] ? $this->service->nearestLessonDays($teacher, $date) : null,
         ]]);
     }
 

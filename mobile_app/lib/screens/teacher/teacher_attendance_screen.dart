@@ -19,6 +19,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   final _service = AttendanceService();
   DateTime _date = DateTime.now();
   List<dynamic> _lessons = const [];
+  Map<String, dynamic>? _nearest;
   bool _loading = true;
   String? _error;
   String? _starting; // lesson key while the start call is in flight
@@ -37,12 +38,49 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     try {
       final data = await _service.teacherLessons(date: _date);
       _lessons = data['lessons'] as List<dynamic>? ?? const [];
+      final n = data['nearest'];
+      _nearest = n is Map ? Map<String, dynamic>.from(n) : null;
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
       _error = AppLocalizations.current.networkError;
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// "Jump to the nearest day with lessons", shown under the empty state.
+  Widget _nearestButtons() {
+    final prev = _nearest?['prev']?.toString();
+    final next = _nearest?['next']?.toString();
+    if (prev == null && next == null) return const SizedBox.shrink();
+    final l = context.l10n;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (prev != null)
+            OutlinedButton(
+              onPressed: () => _jumpTo(prev),
+              child: Text('‹ ${l.pick(uz: 'Oldingi dars', ru: 'Пред. занятие', en: 'Previous lesson')}: $prev'),
+            ),
+          if (next != null)
+            ElevatedButton(
+              onPressed: () => _jumpTo(next),
+              child: Text('${l.pick(uz: 'Keyingi dars', ru: 'След. занятие', en: 'Next lesson')}: $next ›'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _jumpTo(String ymd) {
+    final d = DateTime.tryParse(ymd);
+    if (d == null) return;
+    setState(() => _date = d);
+    _load();
   }
 
   void _shiftDate(int days) {

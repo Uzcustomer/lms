@@ -105,7 +105,11 @@
                     <div x-show="loadingLessons" class="text-center text-gray-500 text-sm py-8">Yuklanmoqda…</div>
                     <div x-show="!loadingLessons && lessonsError" x-cloak class="text-center text-red-600 text-sm py-6" x-text="lessonsError"></div>
                     <div x-show="!loadingLessons && !lessonsError && lessons.length === 0" x-cloak class="text-center text-gray-500 text-sm py-8">
-                        Bu kunda jadvalda dars yo'q.
+                        <div>Bu kunda jadvalda dars yo'q.</div>
+                        <div class="flex justify-center gap-2 mt-3" x-show="nearest && (nearest.prev || nearest.next)">
+                            <button x-show="nearest && nearest.prev" class="att-btn att-btn-outline" @click="date = nearest.prev; loadLessons()">‹ Oldingi dars kuni: <span x-text="nearest && nearest.prev"></span></button>
+                            <button x-show="nearest && nearest.next" class="att-btn att-btn-primary" @click="date = nearest.next; loadLessons()">Keyingi dars kuni: <span x-text="nearest && nearest.next"></span> ›</button>
+                        </div>
                     </div>
 
                     <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -257,6 +261,7 @@
                 today: @json($today),
                 date: @json($today),
                 lessons: [],
+                nearest: null,
                 loadingLessons: false,
                 lessonsError: null,
                 windowFor: {},
@@ -341,6 +346,7 @@
                     try {
                         const data = await this.api(urls.lessons + '?date=' + this.date);
                         this.lessons = data.data.lessons || [];
+                        this.nearest = data.data.nearest || null;
                         for (const l of this.lessons) {
                             const k = this.lessonKey(l);
                             if (!this.windowFor[k]) this.windowFor[k] = 10;

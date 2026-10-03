@@ -68,7 +68,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         <span class="text-sm font-bold text-gray-800">Baho qo'yish vaqti</span>
-                        <span class="text-xs text-gray-500 mt-1 text-center">o'qituvchilar kesimida · sana, guruh, semestr, o'qituvchi bo'yicha · faqat bakalavr</span>
+                        <span class="text-xs text-gray-500 mt-1 text-center">o'qituvchilar kesimida · sana, guruh va semestr bo'yicha · faqat bakalavr</span>
                         <span class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
@@ -101,31 +101,33 @@
         {{-- Baho qo'yish vaqti — filtrlar modali (Tailwind build yo'q, shuning uchun inline stil) --}}
         <style>
             .tm-overlay { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(15,23,42,.55); }
+            .tm-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+            .tm-label { display:block; font-size:11px; font-weight:700; color:#475569; margin-bottom:4px; }
+            .tm-input { width:100%; box-sizing:border-box; height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; }
+            .tm-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.18); }
+            .tm-input:disabled { background:#f1f5f9; color:#94a3b8; }
+            .tm-full { grid-column:1 / -1; }
+            .tm-btn { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 16px; border-radius:9px; font-size:13px; font-weight:700; cursor:pointer; border:none; }
+            /* select2 — jurnal sahifasidagi ko'rinish */
+            #timingModalBox .select2-container--classic .select2-selection--single { height:34px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; }
+            #timingModalBox .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height:32px; font-size:13px; color:#1e293b; padding-left:10px; }
+            #timingModalBox .select2-container--classic .select2-selection--single .select2-selection__arrow { height:32px; }
+            #timingModalBox .select2-dropdown { border-color:#cbd5e1; border-radius:8px; font-size:13px; }
         </style>
         <div x-show="timingOpen" class="tm-overlay" style="display:none;">
-            <div style="width:100%; max-width:520px; background:#fff; border-radius:14px; box-shadow:0 24px 60px rgba(15,23,42,.3); overflow:hidden;" @click.outside="timingOpen = false">
-                <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(135deg,#4338ca,#6366f1); color:#fff;">
+            <div id="timingModalBox" style="width:100%; max-width:480px; background:#fff; border-radius:14px; box-shadow:0 24px 60px rgba(15,23,42,.3); overflow:visible;" @click.outside="timingOpen = false">
+                <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(135deg,#4338ca,#6366f1); color:#fff; border-radius:14px 14px 0 0;">
                     <svg style="width:20px;height:20px;flex:0 0 20px;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     <div style="min-width:0;">
                         <div style="font-size:14px; font-weight:700; line-height:1.2;">Baho qo'yish vaqti</div>
-                        <div style="font-size:11px; opacity:.85;">Faqat bakalavr · bo'sh filtr = barchasi</div>
+                        <div style="font-size:11px; opacity:.85;">Faqat bakalavr · guruh tanlanmasa — hammasi</div>
                     </div>
                     <button type="button" @click="timingOpen = false" style="margin-left:auto; background:none; border:none; color:#fff; font-size:22px; line-height:1; cursor:pointer; opacity:.85;">&times;</button>
                 </div>
 
                 <form method="GET" action="{{ route('admin.export.teacher-grade-timing') }}" id="timingForm" style="padding:14px 16px;">
-                    <style>
-                        .tm-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-                        .tm-label { display:block; font-size:11px; font-weight:700; color:#475569; margin-bottom:4px; }
-                        .tm-input { width:100%; box-sizing:border-box; height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; color:#1e293b; background:#fff; }
-                        .tm-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.18); }
-                        .tm-input:disabled { background:#f1f5f9; color:#94a3b8; }
-                        .tm-full { grid-column:1 / -1; }
-                        .tm-btn { display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 16px; border-radius:9px; font-size:13px; font-weight:700; cursor:pointer; border:none; }
-                    </style>
-
                     <div class="tm-grid">
                         <div>
                             <label class="tm-label">Sanadan <span style="color:#dc2626;">*</span></label>
@@ -138,43 +140,15 @@
                                    value="{{ old('date_to', now('Asia/Tashkent')->subDay()->toDateString()) }}">
                         </div>
 
-                        <div>
-                            <label class="tm-label">Fakultet</label>
-                            <select name="faculty_id" id="tm-faculty" class="tm-input">
-                                <option value="">Barchasi</option>
-                                @foreach(($timingFaculties ?? []) as $fac)
-                                    <option value="{{ $fac->id }}" {{ old('faculty_id') == $fac->id ? 'selected' : '' }}>{{ $fac->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="tm-label">Yo'nalish</label>
-                            <select name="specialty_id" id="tm-specialty" class="tm-input"><option value="">Barchasi</option></select>
-                        </div>
-
-                        <div>
-                            <label class="tm-label">Kurs</label>
-                            <select name="level_code" id="tm-level" class="tm-input"><option value="">Barchasi</option></select>
-                        </div>
-                        <div>
-                            <label class="tm-label">Semestr</label>
-                            <select name="semester_code" id="tm-semester" class="tm-input"><option value="">Barchasi</option></select>
+                        <div class="tm-full">
+                            <label class="tm-label">Guruh</label>
+                            {{-- Jurnal sahifasidagi kabi: yozib qidiriladi, AJAX orqali topiladi --}}
+                            <select name="group_id" id="tm-group" style="width:100%;"><option value="">Barchasi</option></select>
                         </div>
 
                         <div class="tm-full">
-                            <label class="tm-label">Guruh <span id="tm-group-count" style="font-weight:400; color:#94a3b8;"></span></label>
-                            <input type="text" id="tm-group-search" class="tm-input" placeholder="Guruh nomini yozing — ro'yxat shunga qarab qisqaradi" autocomplete="off" style="margin-bottom:6px;">
-                            <select name="group_id" id="tm-group" class="tm-input"><option value="">Barchasi</option></select>
-                        </div>
-
-                        <div class="tm-full">
-                            <label class="tm-label">O'qituvchi</label>
-                            <select name="employee_id" class="tm-input">
-                                <option value="">Barchasi</option>
-                                @foreach(($timingTeachers ?? []) as $tch)
-                                    <option value="{{ $tch->hemis_id }}" {{ old('employee_id') == $tch->hemis_id ? 'selected' : '' }}>{{ $tch->full_name }}</option>
-                                @endforeach
-                            </select>
+                            <label class="tm-label">Semestr <span id="tm-sem-hint" style="font-weight:400; color:#94a3b8;">— avval guruhni tanlang</span></label>
+                            <select name="semester_code" id="tm-semester" class="tm-input" disabled><option value="">Barchasi</option></select>
                         </div>
                     </div>
 
@@ -191,94 +165,70 @@
             </div>
         </div>
 
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
         <script>
-        (function () {
-            // Kaskad: fakultet → yo'nalish → kurs → semestr → guruh. Faqat bakalavr —
-            // jurnal filtr endpointlariga education_type bilan beriladi.
+        $(function () {
             var BAKALAVR = @json($bakalavrCode ?? '');
-            var urls = {
-                specialties: '{{ route("admin.journal.get-specialties") }}',
-                levels: '{{ route("admin.journal.get-level-codes") }}',
-                semesters: '{{ route("admin.journal.get-semesters") }}',
-                groups: '{{ route("admin.journal.get-groups") }}'
-            };
-            var el = function (id) { return document.getElementById(id); };
-            var faculty = el('tm-faculty'), specialty = el('tm-specialty'), level = el('tm-level'),
-                semester = el('tm-semester'), group = el('tm-group');
+            var $group = $('#tm-group');
+            var $semester = $('#tm-semester');
+            var $hint = $('#tm-sem-hint');
 
-            function params(extra) {
-                var p = new URLSearchParams();
-                if (BAKALAVR) p.set('education_type', BAKALAVR);
-                if (faculty.value) p.set('faculty_id', faculty.value);
-                if (extra.specialty && specialty.value) p.set('specialty_id', specialty.value);
-                if (extra.level && level.value) p.set('level_code', level.value);
-                if (extra.semester && semester.value) p.set('semester_code', semester.value);
-                return p.toString();
-            }
+            // Guruh: jurnaldagi filtr bilan bir xil — har bir yozilgan harfda serverdan qidiradi
+            $group.select2({
+                theme: 'classic',
+                width: '100%',
+                allowClear: true,
+                placeholder: 'Barchasi',
+                minimumInputLength: 0,
+                dropdownParent: $('#timingModalBox'),
+                ajax: {
+                    url: '{{ route("admin.journal.get-groups") }}',
+                    dataType: 'json',
+                    delay: 200,
+                    data: function (params) {
+                        return { education_type: BAKALAVR, search: params.term || '' };
+                    },
+                    processResults: function (data) {
+                        var results = [];
+                        $.each(data, function (id, name) { results.push({ id: id, text: name }); });
+                        return { results: results };
+                    },
+                    cache: true
+                }
+            }).on('select2:open', function () {
+                setTimeout(function () {
+                    var sf = document.querySelector('.select2-container--open .select2-search__field');
+                    if (sf) sf.focus();
+                }, 10);
+            });
 
-            // {kalit: nom} javobini select'ga to'kish, avvalgi tanlov saqlansa saqlanadi
-            function fill(select, data) {
-                var prev = select.value;
-                select.innerHTML = '<option value="">Barchasi</option>';
-                Object.keys(data).forEach(function (key) {
-                    var o = document.createElement('option');
-                    o.value = key;
-                    o.textContent = data[key];
-                    select.appendChild(o);
-                });
-                if (prev && select.querySelector('option[value="' + prev + '"]')) select.value = prev;
-            }
-
-            // Guruhlar to'liq ro'yxati — qidiruv maydoni shundan filtrlaydi
-            var groupAll = {};
-            var groupSearch = el('tm-group-search');
-            var groupCount = el('tm-group-count');
-
-            function renderGroups() {
-                var term = (groupSearch.value || '').trim().toLowerCase();
-                var filtered = {};
-                Object.keys(groupAll).forEach(function (key) {
-                    if (!term || String(groupAll[key]).toLowerCase().indexOf(term) !== -1) filtered[key] = groupAll[key];
-                });
-                fill(group, filtered);
-                var n = Object.keys(filtered).length;
-                groupCount.textContent = n ? '(' + n + ' ta)' : '(topilmadi)';
-                // Bitta qolsa — o'sha guruhni o'zi tanlab qo'yadi
-                if (n === 1) group.value = Object.keys(filtered)[0];
-            }
-
-            groupSearch.addEventListener('input', renderGroups);
-
-            function load(url, query, select) {
-                select.disabled = true;
-                return fetch(url + '?' + query, { headers: { 'Accept': 'application/json' } })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        if (select === group) { groupAll = data || {}; renderGroups(); }
-                        else { fill(select, data || {}); }
+            // Guruh tanlangach — shu guruh o'qigan semestrlar
+            function loadSemesters(groupId) {
+                $semester.html('<option value="">Barchasi</option>');
+                if (!groupId) {
+                    $semester.prop('disabled', true);
+                    $hint.text('— avval guruhni tanlang');
+                    return;
+                }
+                $semester.prop('disabled', true);
+                $hint.text('yuklanmoqda...');
+                $.getJSON('{{ route("admin.export.teacher-grade-timing.semesters") }}', { group_id: groupId })
+                    .done(function (data) {
+                        var n = 0;
+                        $.each(data, function (code, name) {
+                            $semester.append($('<option>', { value: code, text: name }));
+                            n++;
+                        });
+                        $hint.text(n ? '(' + n + ' ta)' : '— bu guruhda semestr topilmadi');
                     })
-                    .catch(function () { fill(select, {}); })
-                    .finally(function () { select.disabled = false; });
+                    .fail(function () { $hint.text("— yuklab bo'lmadi"); })
+                    .always(function () { $semester.prop('disabled', false); });
             }
 
-            function reload(from) {
-                // Yuqoridagi tanlov o'zgarsa, pastdagilar qayta yuklanadi
-                var chain = [];
-                if (from === 'faculty') chain.push(load(urls.specialties, params({}), specialty));
-                if (from === 'faculty' || from === 'specialty') chain.push(load(urls.levels, params({ specialty: true }), level));
-                if (from !== 'semester') chain.push(load(urls.semesters, params({ specialty: true, level: true }), semester));
-                Promise.all(chain).then(function () {
-                    load(urls.groups, params({ specialty: true, level: true, semester: true }), group);
-                });
-            }
-
-            faculty.addEventListener('change', function () { reload('faculty'); });
-            specialty.addEventListener('change', function () { reload('specialty'); });
-            level.addEventListener('change', function () { reload('level'); });
-            semester.addEventListener('change', function () { reload('semester'); });
-
-            reload('faculty');
-        })();
+            $group.on('change', function () { loadSemesters($(this).val()); });
+        });
         </script>
     </div>
 </x-app-layout>

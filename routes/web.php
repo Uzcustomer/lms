@@ -648,15 +648,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // DB ma'lumotlar sahifasi va eksport
         Route::get('/db-export', function () {
-            // "Baho qo'yish vaqti" modali: fakultetlar va o'qituvchilar sahifada,
-            // yo'nalish/kurs/semestr/guruh jurnal filtr endpointlaridan kaskad bilan
-            $timingFaculties = \App\Models\Department::where('structure_type_code', 11)
-                ->where('active', true)->orderBy('name')->get(['id', 'name']);
-            $timingTeachers = \App\Models\Teacher::whereNotNull('hemis_id')->orderBy('full_name')->get(['hemis_id', 'full_name']);
+            // "Baho qo'yish vaqti" modali: guruh jurnal endpointidan qidiriladi (faqat bakalavr)
             $bakalavrCode = \App\Models\Curriculum::whereRaw('LOWER(education_type_name) LIKE ?', ['%bakalavr%'])
                 ->whereNotNull('education_type_code')->value('education_type_code');
 
-            return view('admin.db-export', compact('timingFaculties', 'timingTeachers', 'bakalavrCode'));
+            return view('admin.db-export', compact('bakalavrCode'));
         })->name('db-export.index');
         Route::get('/export/curriculum-subjects', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculumSubjectsExport, 'curriculum_subjects.xlsx');
@@ -676,6 +672,36 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 'juftliklar_'.now('Asia/Tashkent')->format('Y-m-d').'.xlsx'
             );
         })->name('export.lesson-pairs');
+        // "Baho qo'yish vaqti" modali: tanlangan guruh o'qigan semestrlar
+        Route::get('/export/teacher-grade-timing/semesters', function (\Illuminate\Http\Request $request) {
+            $group = \App\Models\Group::find($request->integer('group_id'));
+            if (!$group) {
+                return response()->json([]);
+            }
+
+            // O'qigan semestrlar — dars jadvalida bo'lganlari; jadval bo'lmasa reja bo'yicha hammasi
+            $studied = \Illuminate\Support\Facades\DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->whereNull('deleted_at')
+                ->whereNotNull('semester_code')
+                ->distinct()
+                ->pluck('semester_code')
+                ->map(fn ($c) => (string) $c);
+
+            $semesters = \Illuminate\Support\Facades\DB::table('semesters')
+                ->where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->whereNotNull('code')
+                ->orderByRaw('CAST(code AS UNSIGNED)')
+                ->get(['code', 'name', 'education_year'])
+                ->unique('code')
+                ->when($studied->isNotEmpty(), fn ($c) => $c->filter(fn ($s) => $studied->contains((string) $s->code)))
+                ->values();
+
+            return response()->json(
+                $semesters->mapWithKeys(fn ($s) => [(string) $s->code => $s->name . ($s->education_year ? " · {$s->education_year}" : '')])
+            );
+        })->name('export.teacher-grade-timing.semesters');
+
         // O'qituvchilar baholarni qachon qo'ygani (dars vaqtida / ish vaqtida / 18:00 dan keyin)
         Route::get('/export/teacher-grade-timing', function (\Illuminate\Http\Request $request) {
             $data = $request->validate([

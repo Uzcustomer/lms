@@ -648,7 +648,29 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // DB ma'lumotlar sahifasi va eksport
         Route::get('/db-export', function () {
-            return view('admin.db-export');
+            // "Semestr fanlari" modali: o'quv yillari (standart — joriy yildan bitta oldingisi) va ta'lim turlari
+            $subjectYears = \Illuminate\Support\Facades\DB::table('semesters')
+                ->whereNotNull('education_year')
+                ->distinct()
+                ->orderByDesc('education_year')
+                ->pluck('education_year')
+                ->map(fn ($y) => (string) $y)
+                ->values();
+            $currentYear = \Illuminate\Support\Facades\DB::table('semesters')
+                ->where('current', true)
+                ->orderByDesc('education_year')
+                ->value('education_year');
+            $subjectDefaultYear = $currentYear && is_numeric($currentYear)
+                ? (string) ((int) $currentYear - 1)
+                : ($subjectYears[1] ?? $subjectYears[0] ?? '');
+            $subjectEducationTypes = \App\Models\Curriculum::query()
+                ->whereNotNull('education_type_code')
+                ->select('education_type_code', 'education_type_name')
+                ->distinct()
+                ->orderBy('education_type_name')
+                ->get();
+
+            return view('admin.db-export', compact('subjectYears', 'subjectDefaultYear', 'subjectEducationTypes'));
         })->name('db-export.index');
         Route::get('/export/curriculum-subjects', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculumSubjectsExport, 'curriculum_subjects.xlsx');
@@ -668,6 +690,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 'juftliklar_'.now('Asia/Tashkent')->format('Y-m-d').'.xlsx'
             );
         })->name('export.lesson-pairs');
+        // Semestr fanlari: fakultet → yo'nalish → kurs kesimida, yopilish shakli va soatlari bilan
+        Route::get('/export/semester-subjects', function (\Illuminate\Http\Request $request) {
+            $data = $request->validate([
+                'education_year' => 'required|string|max:10',
+                'half' => 'required|in:spring,autumn',
+                'education_type' => 'nullable|string|max:20',
+            ]);
+
+            $label = $data['half'] === 'spring' ? 'bahorgi' : 'kuzgi';
+
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\SemesterSubjectsExport($data['education_year'], $data['half'] === 'spring', $data['education_type'] ?? null),
+                "semestr_fanlari_{$data['education_year']}_{$label}.xlsx"
+            );
+        })->name('export.semester-subjects');
+
         // "Baho qo'yish vaqti" modali: o'qituvchini ism-familiya bo'yicha qidirish
         Route::get('/export/teacher-grade-timing/teachers', function (\Illuminate\Http\Request $request) {
             $term = trim((string) $request->get('search', ''));

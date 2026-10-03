@@ -3,7 +3,7 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">DB ma'lumotlar</h2>
     </x-slot>
 
-    <div class="py-6" x-data="{ timingOpen: {{ $errors->any() ? 'true' : 'false' }} }" @keydown.escape.window="timingOpen = false">
+    <div class="py-6" x-data="{ timingOpen: {{ $errors->any() ? 'true' : 'false' }}, subjectsOpen: false }" @keydown.escape.window="timingOpen = false; subjectsOpen = false">
         <div class="w-full px-4 sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Ma'lumotlar bazasidan Excel eksport</h3>
@@ -72,6 +72,22 @@
                         <span class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                            Hisoblash
+                        </span>
+                    </button>
+
+                    {{-- Semestr fanlari: o'quv yili va semestr turi modalda tanlanadi --}}
+                    <button type="button" @click="subjectsOpen = true"
+                            class="flex flex-col items-center p-5 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition text-left">
+                        <svg class="w-10 h-10 text-emerald-600 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+                        </svg>
+                        <span class="text-sm font-bold text-gray-800">Semestr fanlari</span>
+                        <span class="text-xs text-gray-500 mt-1 text-center">fakultet → yo'nalish → kurs kesimida: fanlar, yopilish shakli va soatlari · tanlangan o'quv yilining bahorgi yoki kuzgi semestri</span>
+                        <span class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 rounded-lg">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                             </svg>
                             Hisoblash
                         </span>
@@ -151,6 +167,63 @@
                     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
                         <button type="button" @click="timingOpen = false" class="tm-btn" style="background:#f1f5f9; color:#475569;">Bekor qilish</button>
                         <button type="submit" class="tm-btn" style="background:#4f46e5; color:#fff;">
+                            <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+                            </svg>
+                            Excel yuklab olish
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {{-- Semestr fanlari — modal --}}
+        <div x-show="subjectsOpen" class="tm-overlay" style="display:none;">
+            <div style="width:100%; max-width:440px; background:#fff; border-radius:14px; box-shadow:0 24px 60px rgba(15,23,42,.3); overflow:hidden;" @click.outside="subjectsOpen = false">
+                <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(135deg,#047857,#10b981); color:#fff;">
+                    <svg style="width:20px;height:20px;flex:0 0 20px;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+                    </svg>
+                    <div style="min-width:0;">
+                        <div style="font-size:14px; font-weight:700; line-height:1.2;">Semestr fanlari</div>
+                        <div style="font-size:11px; opacity:.85;">Fakultet → yo'nalish → kurs · fan, yopilish shakli, soatlar</div>
+                    </div>
+                    <button type="button" @click="subjectsOpen = false" style="margin-left:auto; background:none; border:none; color:#fff; font-size:22px; line-height:1; cursor:pointer; opacity:.85;">&times;</button>
+                </div>
+
+                <form method="GET" action="{{ route('admin.export.semester-subjects') }}" style="padding:14px 16px;">
+                    <div class="tm-grid">
+                        <div>
+                            <label class="tm-label">O'quv yili <span style="color:#dc2626;">*</span></label>
+                            <select name="education_year" required class="tm-input">
+                                @foreach(($subjectYears ?? []) as $year)
+                                    <option value="{{ $year }}" {{ (string) $year === (string) ($subjectDefaultYear ?? '') ? 'selected' : '' }}>{{ $year }}–{{ is_numeric($year) ? $year + 1 : '' }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="tm-label">Semestr <span style="color:#dc2626;">*</span></label>
+                            <select name="half" required class="tm-input">
+                                <option value="spring" selected>Bahorgi (juft)</option>
+                                <option value="autumn">Kuzgi (toq)</option>
+                            </select>
+                        </div>
+                        <div class="tm-full">
+                            <label class="tm-label">Ta'lim turi</label>
+                            <select name="education_type" class="tm-input">
+                                <option value="">Barchasi</option>
+                                @foreach(($subjectEducationTypes ?? []) as $type)
+                                    <option value="{{ $type->education_type_code }}" {{ str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr') ? 'selected' : '' }}>{{ $type->education_type_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <p style="margin:10px 0 0; font-size:11px; color:#94a3b8;">Standart: joriy o'quv yilidan bitta oldingi yilning bahorgi semestri. Ma'lumot o'quv rejasidan olinadi.</p>
+
+                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+                        <button type="button" @click="subjectsOpen = false" class="tm-btn" style="background:#f1f5f9; color:#475569;">Bekor qilish</button>
+                        <button type="submit" class="tm-btn" style="background:#059669; color:#fff;">
                             <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                             </svg>

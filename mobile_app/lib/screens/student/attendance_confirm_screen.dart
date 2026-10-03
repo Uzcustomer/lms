@@ -184,9 +184,14 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
           _beacons.openBluetoothSettings,
         ),
       BeaconReadiness.permissionDenied => (
-          l.pick(uz: 'Davomat uchun Bluetooth ruxsati kerak.', ru: 'Для переклички нужно разрешение Bluetooth.', en: 'Bluetooth permission is required to confirm attendance.'),
+          l.pick(uz: 'Davomat uchun Bluetooth va joylashuv ruxsati kerak. Ilova GPS ishlatmaydi — ruxsat faqat xona signalini eshitish uchun.', ru: 'Для переклички нужны разрешения Bluetooth и геолокации. GPS не используется — только сигнал аудитории.', en: 'Bluetooth and location permissions are required. GPS is not used — only the room signal.'),
           l.permissionGrant,
           _beacons.openAppPermissionSettings,
+        ),
+      BeaconReadiness.locationOff => (
+          l.pick(uz: 'Joylashuv xizmati o\'chiq. Android Bluetooth signalini faqat u yoqilganda eshitadi — GPS ishlatilmaydi.', ru: 'Геолокация выключена. Android слышит Bluetooth-сигнал только при включённой геолокации — GPS не используется.', en: 'Location services are off. Android only hears Bluetooth signals while they are on — GPS is not used.'),
+          l.pick(uz: 'Joylashuvni yoqish', ru: 'Включить геолокацию', en: 'Turn on location'),
+          _beacons.openLocationSettings,
         ),
       _ => (
           l.pick(uz: 'Bu qurilma Bluetooth skanerlashni qo\'llab-quvvatlamaydi.', ru: 'Это устройство не поддерживает сканирование Bluetooth.', en: 'This device does not support Bluetooth scanning.'),

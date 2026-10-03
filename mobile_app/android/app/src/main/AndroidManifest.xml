@@ -7,23 +7,17 @@
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.front" android:required="false"/>
 
-    <!-- Beacon attendance: BLE scanning only, to tell whether the phone is in
-         the lecture hall. We never derive the physical location of the user,
-         hence neverForLocation; on Android 11 and older the system still ties
-         BLE scanning to the location permission, so it is requested there. -->
+    <!-- Beacon attendance: BLE scanning to tell whether the phone is in the
+         lecture hall. Location permission is required on every Android
+         version: with BLUETOOTH_SCAN marked neverForLocation, Android 12+
+         strips iBeacon frames from scan results, so the room beacon is never
+         heard. The app never reads GPS. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="s"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
-    <uses-permission
-        android:name="android.permission.ACCESS_COARSE_LOCATION"
-        android:maxSdkVersion="30"/>
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
     <!-- Push notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>

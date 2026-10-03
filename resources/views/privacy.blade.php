@@ -174,10 +174,9 @@
     <div class="note">
         <strong>Ilova sizning geografik joylashuvingizni aniqlamaydi va yig'maydi.</strong>
         GPS ishlatilmaydi. Ilova faqat "bu telefon shu ma'ruza xonasida" degan xulosani chiqaradi.
-        Android 12 va undan yuqori versiyalarda ilova joylashuv ruxsatini umuman so'ramaydi
-        (<code>neverForLocation</code> bayrog'i). Android 11 va undan eski versiyalarda
-        tizimning o'z talabi sababli joylashuv ruxsati so'raladi, lekin u yana faqat
-        Bluetooth signalini eshitish uchun ishlatiladi.
+        Android tizimi Bluetooth mayoqlarini eshitish uchun joylashuv ruxsatini talab qiladi —
+        shuning uchun ilova bu ruxsatni so'raydi, lekin uni faqat mayoq signalini qabul qilish
+        uchun ishlatadi. Geografik koordinatalar hech qachon o'qilmaydi va saqlanmaydi.
     </div>
     <p>
         Skanerlash faqat ilova ochiq turganda ishlaydi. Ilovani yopsangiz yoki telefonni

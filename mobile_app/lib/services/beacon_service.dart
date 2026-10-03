@@ -128,7 +128,7 @@ class BeaconSignalTracker {
 }
 
 /// Why scanning cannot start — shown to the student with a fix action.
-enum BeaconReadiness { ready, unsupported, permissionDenied, bluetoothOff }
+enum BeaconReadiness { ready, unsupported, permissionDenied, bluetoothOff, locationOff }
 
 /// Thin wrapper over flutter_beacon: permissions, Bluetooth state, ranging.
 class BeaconService {
@@ -144,30 +144,26 @@ class BeaconService {
   Future<BeaconReadiness> prepare({bool request = true}) async {
     if (kIsWeb) return BeaconReadiness.unsupported;
 
-    // Android 12+ scans with BLUETOOTH_SCAN alone, because the manifest
-    // declares neverForLocation. Android 11 and older have no such
-    // permission and gate BLE scanning behind location instead, so ask for
-    // location only there and never bother newer phones with it.
-    final needsLocation = await _needsLocationPermission();
+    // Location permission on every Android version: Android ties BLE
+    // scanning to it, and marking BLUETOOTH_SCAN neverForLocation (the way
+    // around that) makes the system drop iBeacon frames from the results.
+    // Android 12+ also wants the two Bluetooth runtime permissions.
+    final hasScanPermission = await _hasBluetoothScanPermission();
     final needed = [
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      if (needsLocation) Permission.locationWhenInUse,
+      Permission.locationWhenInUse,
+      if (hasScanPermission) Permission.bluetoothScan,
+      if (hasScanPermission) Permission.bluetoothConnect,
     ];
     final statuses = request
         ? await needed.request()
         : {for (final p in needed) p: await p.status};
 
-    if (needsLocation) {
-      final location = statuses[Permission.locationWhenInUse];
-      if (location?.isGranted != true && location?.isLimited != true) {
-        return BeaconReadiness.permissionDenied;
-      }
-    } else {
-      final scan = statuses[Permission.bluetoothScan];
-      if (scan?.isGranted != true) {
-        return BeaconReadiness.permissionDenied;
-      }
+    final location = statuses[Permission.locationWhenInUse];
+    if (location?.isGranted != true && location?.isLimited != true) {
+      return BeaconReadiness.permissionDenied;
+    }
+    if (hasScanPermission && statuses[Permission.bluetoothScan]?.isGranted != true) {
+      return BeaconReadiness.permissionDenied;
     }
 
     if (!_initialized) {
@@ -184,17 +180,31 @@ class BeaconService {
       if (state == BluetoothState.stateOff) return BeaconReadiness.bluetoothOff;
     } catch (_) {/* some devices don't report; try ranging anyway */}
 
+    // Android returns no BLE scan results while the location toggle is off,
+    // permission or not.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        if (!await flutterBeacon.checkLocationServicesIfEnabled) {
+          return BeaconReadiness.locationOff;
+        }
+      } catch (_) {/* cannot tell; try ranging anyway */}
+    }
+
     return BeaconReadiness.ready;
   }
 
-  /// True on Android 11 and older, where BLE scanning is gated behind the
-  /// location permission because BLUETOOTH_SCAN does not exist yet. On
-  /// Android 12+ the manifest declares neverForLocation, so location is
-  /// neither needed nor asked for. iOS never needs it for ranging.
-  Future<bool> _needsLocationPermission() async {
+  /// Android 12+ (API 31) has the BLUETOOTH_SCAN / CONNECT runtime
+  /// permissions; older versions only know location.
+  Future<bool> _hasBluetoothScanPermission() async {
     if (defaultTargetPlatform != TargetPlatform.android) return false;
     _androidSdk ??= (await DeviceInfoPlugin().androidInfo).version.sdkInt;
-    return _androidSdk! < 31; // Android 12 = API 31
+    return _androidSdk! >= 31;
+  }
+
+  Future<void> openLocationSettings() async {
+    try {
+      await flutterBeacon.openLocationSettings;
+    } catch (_) {}
   }
 
   Future<void> openBluetoothSettings() async {

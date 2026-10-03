@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_service.dart';
 import '../../services/attendance_service.dart';
 import '../../services/beacon_service.dart';
-import '../../services/presence_scanner.dart';
 import '../../widgets/clinic_header.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -30,7 +29,6 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
 
   final _service = AttendanceService();
   final _beacons = BeaconService();
-  final _scanner = PresenceScanner.instance;
 
   List<PendingAttendance> _pending = const [];
   bool _loading = true;
@@ -75,7 +73,6 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     }
     if (!mounted) return;
     setState(() => _loading = false);
-    _scanner.report();
   }
 
   // ── Confirm ─────────────────────────────────────────
@@ -94,7 +91,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     try {
       // 1. Bluetooth: on, permitted, and the room's beacon heard loud
       //    enough. The student never sees a number - just pass or fail.
-      final rssi = await _hearBeacon(beacon.key);
+      final rssi = await _hearBeacon(beacon);
       if (rssi == null) return;
 
       // 2. Selfie, matched on the server against the approved LMS photo.
@@ -132,31 +129,37 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     }
   }
 
-  /// Checks Bluetooth, then listens for up to [_listenFor] for the room's
+  /// Checks Bluetooth, then scans for up to [_listenFor] for the room's
   /// beacon at [minRssi] or stronger. Returns the signal it accepted, or
   /// null after telling the student what was wrong.
-  Future<int?> _hearBeacon(String key) async {
+  Future<int?> _hearBeacon(BeaconInfo beacon) async {
     final readiness = await _beacons.prepare();
     if (!mounted) return null;
     if (readiness != BeaconReadiness.ready) {
       await _explainReadiness(readiness);
       return null;
     }
-    await _scanner.retry();
 
-    // The app-wide scanner keeps a 15 s window per beacon; wait for it to
-    // hold a usable median, re-checking every half second.
-    final deadline = DateTime.now().add(_listenFor);
-    while (DateTime.now().isBefore(deadline)) {
-      final stats = _scanner.tracker.statsFor(key);
-      if (stats != null && stats.count >= 3 && stats.median >= minRssi) {
-        return stats.median;
+    // Scan only now, only for this beacon. Several readings go into a
+    // median, since one BLE packet can be 10-20 dB off.
+    final tracker = BeaconSignalTracker();
+    final sub = _beacons.range([beacon.uuid]).listen(tracker.add, onError: (_) {});
+    final key = beacon.key;
+    try {
+      final deadline = DateTime.now().add(_listenFor);
+      while (DateTime.now().isBefore(deadline)) {
+        final stats = tracker.statsFor(key);
+        if (stats != null && stats.count >= 3 && stats.median >= minRssi) {
+          return stats.median;
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return null;
       }
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return null;
+    } finally {
+      await sub.cancel();
     }
 
-    final stats = _scanner.tracker.statsFor(key);
+    final stats = tracker.statsFor(key);
     _snack(
       stats == null
           ? context.l10n.pick(

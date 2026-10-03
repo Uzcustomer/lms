@@ -104,9 +104,8 @@ class AttendanceSessionService
         $requireFace ??= (bool) config('services.attendance.require_face', true);
         $groupIds = $rows->pluck('group_id')->unique()->values();
         $students = Student::whereIn('group_id', $groupIds)->get(['id', 'hemis_id']);
-        $seenIds = $beacon ? $this->seenInRoom($beacon->id, $students->pluck('id')->all(), now()) : [];
 
-        $session = DB::transaction(function () use ($teacher, $first, $rows, $beacon, $window, $requireFace, $students, $seenIds) {
+        $session = DB::transaction(function () use ($teacher, $first, $rows, $beacon, $window, $requireFace, $students) {
             $session = AttendanceSession::create([
                 'teacher_id' => $teacher->id,
                 'teacher_hemis_id' => $teacher->hemis_id,
@@ -134,15 +133,14 @@ class AttendanceSessionService
                 ]);
             }
 
-            $seenSet = array_flip($seenIds);
             $now = now();
             $inserts = $students->map(fn ($s) => [
                 'session_id' => $session->id,
                 'student_id' => $s->id,
                 'student_hemis_id' => $s->hemis_id,
                 'status' => AttendanceConfirmation::STATUS_PENDING,
-                'beacon_seen' => isset($seenSet[$s->id]),
-                'notified' => isset($seenSet[$s->id]),
+                'beacon_seen' => false,
+                'notified' => true,
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all();
@@ -154,7 +152,10 @@ class AttendanceSessionService
         });
 
         $session->load(['beacon', 'groups']);
-        $this->notify($session, $seenIds);
+        // The whole group is told. Whether a student is actually in the room
+        // is settled when they press confirm: the phone must hear the room's
+        // beacon at a usable strength, and the server checks the same.
+        $this->notify($session, $students->pluck('id')->all());
 
         return $session;
     }
@@ -223,23 +224,10 @@ class AttendanceSessionService
             throw new AttendanceException('Davomat oynasi yopilgan.');
         }
 
-        $pending = AttendanceConfirmation::where('session_id', $session->id)
+        $ids = AttendanceConfirmation::where('session_id', $session->id)
             ->where('status', AttendanceConfirmation::STATUS_PENDING)
-            ->get(['student_id', 'notified']);
-
-        // Already prompted (they were in the room) plus anyone the beacon
-        // has picked up just now; the rest of the group gets nothing.
-        $seenNow = $session->beacon
-            ? $this->seenInRoom($session->beacon->id, $pending->pluck('student_id')->all(), now())
-            : [];
-        if ($seenNow !== []) {
-            AttendanceConfirmation::where('session_id', $session->id)
-                ->whereIn('student_id', $seenNow)
-                ->update(['beacon_seen' => true, 'notified' => true]);
-        }
-
-        $ids = $pending->where('notified', true)->pluck('student_id')
-            ->merge($seenNow)->unique()->values()->all();
+            ->pluck('student_id')
+            ->all();
         $this->notify($session, $ids);
 
         return count($ids);

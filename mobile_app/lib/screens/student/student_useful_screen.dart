@@ -13,7 +13,6 @@ import 'student_rating_screen.dart';
 import 'chat_contacts_screen.dart';
 import 'library_webview_screen.dart';
 import 'ai_chat_screen.dart';
-import 'attendance_confirm_screen.dart';
 import 'student_home_screen.dart';
 import '../../widgets/clinic_header.dart';
 
@@ -37,21 +36,6 @@ class StudentUsefulScreen extends StatelessWidget {
 
     final services = [
       _ServiceCard(
-        icon: Icons.how_to_reg_outlined,
-        title: l.pick(
-          uz: 'Davomat (beacon)',
-          ru: 'Посещаемость (beacon)',
-          en: 'Attendance (beacon)',
-        ),
-        subtitle: l.pick(
-          uz: 'Xonada tasdiqlash va signal',
-          ru: 'Подтверждение в аудитории и сигнал',
-          en: 'Confirm in the room and signal',
-        ),
-        color: ClinicTheme.tileOf(context, 0),
-        screen: const AttendanceConfirmScreen(),
-      ),
-      _ServiceCard(
         icon: Icons.auto_awesome,
         title: l.pick(
           uz: 'AI Yordamchi',
@@ -63,7 +47,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Вопросы и ответы с Gemini AI',
           en: 'Q&A with Gemini AI',
         ),
-        color: ClinicTheme.tileOf(context, 1),
+        color: ClinicTheme.tileOf(context, 0),
         screen: const AiChatScreen(),
       ),
       _ServiceCard(
@@ -78,7 +62,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Расчет и прогноз GPA',
           en: 'Calculate and forecast GPA',
         ),
-        color: ClinicTheme.tileOf(context, 2),
+        color: ClinicTheme.tileOf(context, 1),
         screen: const GpaCalculatorScreen(),
       ),
       _ServiceCard(
@@ -93,7 +77,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Посещаемость и оценки',
           en: 'Attendance and grades table',
         ),
-        color: ClinicTheme.tileOf(context, 3),
+        color: ClinicTheme.tileOf(context, 2),
         screen: const AttendanceStatsScreen(),
       ),
       _ServiceCard(
@@ -108,7 +92,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Рейтинг группы и направления',
           en: 'Group and major ranking',
         ),
-        color: ClinicTheme.tileOf(context, 4),
+        color: ClinicTheme.tileOf(context, 3),
         screen: const StudentRatingScreen(),
       ),
       _ServiceCard(
@@ -119,7 +103,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Переписка с участниками группы',
           en: 'Chat with your group members',
         ),
-        color: ClinicTheme.tileOf(context, 5),
+        color: ClinicTheme.tileOf(context, 4),
         screen: const ChatContactsScreen(),
       ),
       _ServiceCard(
@@ -134,7 +118,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Дни OSCE и тестов',
           en: 'OSCE and test dates',
         ),
-        color: ClinicTheme.tileOf(context, 6),
+        color: ClinicTheme.tileOf(context, 5),
         screen: const ExamScheduleScreen(),
       ),
       _ServiceCard(
@@ -145,7 +129,7 @@ class StudentUsefulScreen extends StatelessWidget {
           ru: 'Электронные учебники',
           en: 'Digital textbooks',
         ),
-        color: ClinicTheme.tileOf(context, 7),
+        color: ClinicTheme.tileOf(context, 6),
         screen: const LibraryWebViewScreen(),
       ),
     ];

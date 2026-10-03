@@ -292,16 +292,10 @@ class StudentAttendanceApiController extends Controller
         ]);
     }
 
-    /**
-     * Open sessions of the student's group that this student has been
-     * prompted for, i.e. was detected in the room. Nobody else in the group
-     * sees the session in the app at all.
-     */
+    /** Open sessions of the student's group, with the student's own status. */
     private function pendingFor(Student $student): array
     {
         $mine = AttendanceConfirmation::where('student_id', $student->id)
-            ->where(fn ($q) => $q->where('notified', true)
-                ->orWhere('status', AttendanceConfirmation::STATUS_PRESENT))
             ->whereHas('session', fn ($q) => $q->open())
             ->get()
             ->keyBy('session_id');

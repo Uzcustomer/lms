@@ -4716,8 +4716,11 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Fan topilmadi: subject_id=' . $subjectId . ', semester=' . $semesterCode], 404);
             }
 
-            // Get schedule info for training type (whereDate for datetime column)
+            // Dars jadvalidan o'sha dars: talabaning GURUHI bo'yicha. Guruhsiz
+            // qidirilsa, shu fan/sana/juftlikdagi boshqa guruhning darsi topilib,
+            // bahoga begona o'qituvchi yozilib qolardi.
             $schedule = DB::table('schedules')
+                ->where('group_id', $student->group_id)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereNull('deleted_at')
@@ -4753,7 +4756,8 @@ class JournalController extends Controller
                 'semester_name' => $subject->semester_name ?? '',
                 'education_year_code' => $educationYearCode,
                 'education_year_name' => $educationYearName,
-                'subject_schedule_id' => $schedule->id ?? 0,
+                // Boshqa qatorlar kabi HEMIS jadval id si — shunda baho darsga bog'lanadi
+                'subject_schedule_id' => $schedule->schedule_hemis_id ?? 0,
                 'subject_id' => $subjectId,
                 'subject_name' => $subject->subject_name ?? '',
                 'subject_code' => $subject->subject_code ?? '',

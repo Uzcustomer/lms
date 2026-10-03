@@ -29,8 +29,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * vaqtida / 18:00 dan keyin), keyingi kunlarda qo'yilganlar esa necha kun
  * kechikkani bo'yicha (1, 2–3, 4–7, 7+) ajratiladi.
  *
- * Faqat o'qituvchiga biriktirilgan fan+guruh juftliklari kiradi (dars
- * jadvali yoki HEMIS biriktirmasi bo'yicha). NB (grade = null) qatorlar
+ * Baho faqat shu o'qituvchi o'zi o'tgan darsga tegishli bo'lsa kiradi
+ * (dars jadvalida guruh+fan+sana+juftlik+o'qituvchi mos kelishi shart). NB (grade = null) qatorlar
  * hisobga olinmaydi; OSKI, test, oraliq nazorat, mustaqil ta'lim va quiz
  * ham — ular kundalik dars bahosi emas.
  */
@@ -118,24 +118,20 @@ class TeacherGradeTimingExport implements FromCollection, WithHeadings, WithStyl
             ->whereBetween('sg.lesson_date', [$this->dateFrom . ' 00:00:00', $this->dateTo . ' 23:59:59'])
             ->whereNotIn('sg.training_type_code', self::EXCLUDED_TRAINING_TYPES)
             ->whereRaw('LOWER(c.education_type_name) LIKE ?', ['%bakalavr%'])
-            // Faqat o'qituvchiga biriktirilgan fan+guruh: dars jadvalida shu guruhga
-            // shu fandan darsi bo'lgan, yoki HEMIS biriktirmasida bor. Begona
-            // guruhga (masalan admin xato bilan yozgan) baholar hisobga kirmaydi.
-            ->where(function ($q) {
-                $q->whereExists(function ($sub) {
-                    $sub->select(DB::raw(1))
-                        ->from('schedules as sch')
-                        ->whereColumn('sch.employee_id', 'sg.employee_id')
-                        ->whereColumn('sch.group_id', 'g.group_hemis_id')
-                        ->whereColumn('sch.subject_id', 'sg.subject_id')
-                        ->whereNull('sch.deleted_at');
-                })->orWhereExists(function ($sub) {
-                    $sub->select(DB::raw(1))
-                        ->from('curriculum_subject_teachers as cst')
-                        ->whereColumn('cst.employee_id', 'sg.employee_id')
-                        ->whereColumn('cst.group_id', 'g.group_hemis_id')
-                        ->whereColumn('cst.subject_id', 'sg.subject_id');
-                });
+            // Baho faqat shu o'qituvchi O'ZI O'TGAN darsga tegishli bo'lsa kiradi:
+            // dars jadvalida o'sha guruh, fan, sana va juftlikda aynan shu
+            // o'qituvchi turishi shart. Boshqa o'qituvchining darsiga uning nomi
+            // bilan yozilib qolgan baholar (masalan admin xato bilan kiritgan)
+            // hisobga kirmaydi — u guruh uning qatorida umuman ko'rinmaydi.
+            ->whereExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('schedules as sch')
+                    ->whereColumn('sch.group_id', 'g.group_hemis_id')
+                    ->whereColumn('sch.subject_id', 'sg.subject_id')
+                    ->whereColumn('sch.employee_id', 'sg.employee_id')
+                    ->whereRaw('DATE(sch.lesson_date) = DATE(sg.lesson_date)')
+                    ->whereColumn('sch.lesson_pair_code', 'sg.lesson_pair_code')
+                    ->whereNull('sch.deleted_at');
             })
             // Modal filtrlari: fakultet/yo'nalish/guruh — talabaning guruhi orqali,
             // semestr va o'qituvchi — baho qatoridan, kurs — semestr jadvalidan

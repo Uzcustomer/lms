@@ -100,7 +100,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
                         </svg>
                         <span class="text-sm font-bold text-gray-800">LMS ga kirishlar</span>
-                        <span class="text-xs text-gray-500 mt-1 text-center">talabalar kirishlari soni kunlik, haftalik va oylik · fakultet va kurs kesimida · sana oralig'i bo'yicha</span>
+                        <span class="text-xs text-gray-500 mt-1 text-center">bakalavr talabalari kirishlari kunlik, haftalik va oylik · nechta talaba kirgan va jami bakalavrning necha foizi · sana oralig'i bo'yicha</span>
                         <span class="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-orange-600 rounded-lg">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
@@ -259,7 +259,7 @@
                     </svg>
                     <div style="min-width:0;">
                         <div style="font-size:14px; font-weight:700; line-height:1.2;">LMS ga kirishlar</div>
-                        <div style="font-size:11px; opacity:.85;">Uch varaq: kunlik · haftalik · oylik — fakultet va kurs kesimida</div>
+                        <div style="font-size:11px; opacity:.85;">Uch varaq: kunlik · haftalik · oylik — faqat bakalavr, butun universitet</div>
                     </div>
                     <button type="button" @click="activityOpen = false" style="margin-left:auto; background:none; border:none; color:#fff; font-size:22px; line-height:1; cursor:pointer; opacity:.85;">&times;</button>
                 </div>
@@ -278,7 +278,7 @@
                         </div>
                     </div>
 
-                    <p style="margin:10px 0 0; font-size:11px; color:#94a3b8;">Kirish — tizimga kirish yozuvi (web va mobil ilova). Har kirish alohida sanaladi; "Kirgan talabalar" — davr ichida kamida bir marta kirgan noyob talabalar. Faqat o'qiyotgan talabalar.</p>
+                    <p style="margin:10px 0 0; font-size:11px; color:#94a3b8;">Kirish — tizimga kirish yozuvi (web va mobil ilova). "Kirgan talabalar" — davr ichida kamida bir marta kirgan noyob talabalar; foiz jami o'qiyotgan bakalavr talabalariga nisbatan.</p>
 
                     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
                         <button type="button" @click="activityOpen = false" class="tm-btn" style="background:#f1f5f9; color:#475569;">Bekor qilish</button>

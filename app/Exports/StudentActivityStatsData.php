@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  * noyob talabalar soni ham beriladi.
  *
  * Faqat o'qiyotgan talabalar (student_status_code = 11): chetlashgan yoki
- * ta'tildagi talabaning kirishi hisobga olinmaydi, ammo faol talabalar soni
+ * ta'tildagi talabaning kirishi hisobga olinmaydi; jami o'qiyotganlar soni
  * foiz uchun maxraj bo'ladi.
  */
 class StudentActivityStatsData
@@ -24,8 +24,8 @@ class StudentActivityStatsData
     /** @var list<object{faculty:string, course:string, day:string, student_id:int}> */
     private ?array $logins = null;
 
-    /** @var array<string, int> "fakultet|kurs" => faol talabalar soni */
-    private ?array $activeStudents = null;
+    /** @var array<string, int> "fakultet|kurs" => jami o'qiyotgan talabalar */
+    private ?array $totalStudents = null;
 
     public function __construct(private string $from, private string $to)
     {
@@ -34,29 +34,19 @@ class StudentActivityStatsData
     /** Kunlik: fakultet + kurs + kun */
     public function daily(): array
     {
-        return $this->aggregate(fn (string $day) => [$day, Carbon::parse($day)->format('d.m.Y')]);
+        return $this->aggregate($this->dailyPeriod());
     }
 
     /** Haftalik: fakultet + kurs + hafta (dushanbadan boshlanadi) */
     public function weekly(): array
     {
-        return $this->aggregate(function (string $day) {
-            $d = Carbon::parse($day);
-            $start = $d->copy()->startOfWeek(Carbon::MONDAY);
-            $end = $d->copy()->endOfWeek(Carbon::SUNDAY);
-
-            return [$start->toDateString(), $start->format('d.m').' – '.$end->format('d.m.Y')];
-        });
+        return $this->aggregate($this->weeklyPeriod());
     }
 
     /** Oylik: fakultet + kurs + oy */
     public function monthly(): array
     {
-        return $this->aggregate(function (string $day) {
-            $d = Carbon::parse($day);
-
-            return [$d->format('Y-m'), self::MONTHS[(int) $d->format('n')].' '.$d->format('Y')];
-        });
+        return $this->aggregate($this->monthlyPeriod());
     }
 
     private const MONTHS = [1 => 'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'];
@@ -86,12 +76,15 @@ class StudentActivityStatsData
             $acc[$key]['students'][$row->student_id] = true;
         }
 
-        uksort($acc, fn ($a, $b) => strcmp($a, $b));
+        // Sana o'sib borish tartibida; bir davr ichida fakultet va kurs bo'yicha
+        uasort($acc, fn ($a, $b) => strcmp($a['period_sort'], $b['period_sort'])
+            ?: strcmp($a['faculty'], $b['faculty'])
+            ?: strcmp($a['course'], $b['course']));
 
-        $active = $this->activeStudents();
+        $totals = $this->totalStudents();
         $rows = [];
         foreach ($acc as $a) {
-            $total = $active[$a['faculty'].'|'.$a['course']] ?? 0;
+            $total = $totals[$a['faculty'].'|'.$a['course']] ?? 0;
             $unique = count($a['students']);
             $rows[] = [
                 'faculty' => $a['faculty'],
@@ -99,12 +92,74 @@ class StudentActivityStatsData
                 'period' => $a['period'],
                 'logins' => $a['logins'],
                 'unique_students' => $unique,
-                'active_students' => $total,
+                'total_students' => $total,
                 'percent' => $total > 0 ? round($unique * 100 / $total, 1) : 0,
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * Umumiy jadval (o'ng tomon): davr bo'yicha, fakultet va kursga
+     * bo'linmasdan. Noyob talabalar butun universitet bo'yicha, foiz esa
+     * barcha o'qiyotgan talabalarga nisbatan.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function summarize(callable $period): array
+    {
+        // Noyob talabalarni fakultet kesimidan yig'ib bo'lmaydi: bir talaba
+        // bitta fakultetda, lekin davr ichida qayta sanalmasligi kerak
+        $acc = [];
+        foreach ($this->logins() as $row) {
+            [$sort, $label] = $period($row->day);
+            $acc[$sort] ??= ['period' => $label, 'logins' => 0, 'students' => []];
+            $acc[$sort]['logins']++;
+            $acc[$sort]['students'][$row->student_id] = true;
+        }
+        ksort($acc);
+
+        $total = array_sum($this->totalStudents());
+        $out = [];
+        foreach ($acc as $a) {
+            $unique = count($a['students']);
+            $out[] = [
+                'period' => $a['period'],
+                'logins' => $a['logins'],
+                'unique_students' => $unique,
+                'total_students' => $total,
+                'percent' => $total > 0 ? round($unique * 100 / $total, 1) : 0,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Davr funksiyalari: kun => [tartib kaliti, yorliq] */
+    public function dailyPeriod(): callable
+    {
+        return fn (string $day) => [$day, Carbon::parse($day)->format('d.m.Y')];
+    }
+
+    public function weeklyPeriod(): callable
+    {
+        return function (string $day) {
+            $d = Carbon::parse($day);
+            $start = $d->copy()->startOfWeek(Carbon::MONDAY);
+            $end = $d->copy()->endOfWeek(Carbon::SUNDAY);
+
+            return [$start->toDateString(), $start->format('d.m').' – '.$end->format('d.m.Y')];
+        };
+    }
+
+    public function monthlyPeriod(): callable
+    {
+        return function (string $day) {
+            $d = Carbon::parse($day);
+
+            return [$d->format('Y-m'), self::MONTHS[(int) $d->format('n')].' '.$d->format('Y')];
+        };
     }
 
     /**
@@ -143,14 +198,14 @@ class StudentActivityStatsData
     }
 
     /**
-     * Fakultet + kurs bo'yicha faol talabalar soni — foiz uchun maxraj.
+     * Fakultet + kurs bo'yicha jami o'qiyotgan talabalar — foiz uchun maxraj.
      *
      * @return array<string, int>
      */
-    private function activeStudents(): array
+    private function totalStudents(): array
     {
-        if ($this->activeStudents !== null) {
-            return $this->activeStudents;
+        if ($this->totalStudents !== null) {
+            return $this->totalStudents;
         }
 
         $out = [];
@@ -166,6 +221,6 @@ class StudentActivityStatsData
                 $out[$f.'|'.$c] = (int) $r->cnt;
             });
 
-        return $this->activeStudents = $out;
+        return $this->totalStudents = $out;
     }
 }

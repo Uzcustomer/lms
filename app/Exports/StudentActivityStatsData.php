@@ -8,12 +8,18 @@ use Illuminate\Support\Facades\DB;
 /**
  * "LMS ga kirishlar" hisobotining so'rovlari: tanlangan oraliqdagi bakalavr
  * talabalari kirishlari kunlik, haftalik va oylik kesimda, butun universitet
- * bo'yicha.
+ * bo'yicha, hamda har bir talaba kesimida.
  *
  * Kirish — activity_logs dagi guard='student', action='login' yozuvi (web va
  * mobil ilova ikkalasi ham shu yerga yozadi). Davr ichida bir talaba necha
  * marta kirganidan qat'i nazar bir marta sanaladi; foiz jami bakalavr
  * talabalariga nisbatan.
+ *
+ * XOTIRA. Olti oyda yuz minglab kirish bo'ladi; ularni ro'yxat qilib saqlash
+ * 128 MB ni oshirib yuborardi (o'lchangan: 239 ming talaba-kun = 76 MB).
+ * Shuning uchun baza talaba-kun bo'yicha guruhlab beradi va har qator
+ * kelishi bilan to'rtta yig'uvchiga qo'shilib, tashlab yuboriladi. Xotirada
+ * faqat natija qoladi: kunlar, haftalar, oylar va talabalar soni qadar.
  *
  * Faqat bakalavr va faqat o'qiyotganlar (student_status_code = 11).
  * Bakalavr LMS da ikki xil belgilanadi — education_type_code = '11' yoki
@@ -26,8 +32,17 @@ class StudentActivityStatsData
 
     private const MONTHS = [1 => 'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'];
 
-    /** @var list<object{day:string, at:string, student_id:int}> */
-    private ?array $logins = null;
+    /** @var array<string, array{period:string, logins:int, students:array<int,true>}> */
+    private array $byDay = [];
+
+    private array $byWeek = [];
+
+    private array $byMonth = [];
+
+    /** @var array<int, array{logins:int, days:int, last:string|null}> */
+    private array $byStudent = [];
+
+    private bool $loaded = false;
 
     private ?int $totalStudents = null;
 
@@ -35,53 +50,37 @@ class StudentActivityStatsData
     {
     }
 
-    /** Kunlik */
     public function daily(): array
     {
-        return $this->aggregate(fn (string $day) => [$day, Carbon::parse($day)->format('d.m.Y')]);
+        $this->load();
+
+        return $this->finish($this->byDay);
     }
 
-    /** Haftalik: dushanbadan yakshanbagacha */
     public function weekly(): array
     {
-        return $this->aggregate(function (string $day) {
-            $d = Carbon::parse($day);
-            $start = $d->copy()->startOfWeek(Carbon::MONDAY);
-            $end = $d->copy()->endOfWeek(Carbon::SUNDAY);
+        $this->load();
 
-            return [$start->toDateString(), $start->format('d.m').' – '.$end->format('d.m.Y')];
-        });
+        return $this->finish($this->byWeek);
     }
 
-    /** Oylik */
     public function monthly(): array
     {
-        return $this->aggregate(function (string $day) {
-            $d = Carbon::parse($day);
+        $this->load();
 
-            return [$d->format('Y-m'), self::MONTHS[(int) $d->format('n')].' '.$d->format('Y')];
-        });
+        return $this->finish($this->byMonth);
     }
 
     /**
      * Talaba kesimi: har bir o'qiyotgan bakalavr alohida qator — oraliqda
-     * necha marta kirgan, nechta kunda kirgan, oxirgi kirishi. Kirmaganlar ham
-     * ro'yxatda (0 bilan) — ular ham kerak. Ko'p kirganlar birinchi.
+     * necha marta kirgan, nechta kunda, oxirgi kirishi. Kirmaganlar ham
+     * ro'yxatda (0 bilan). Ko'p kirganlar birinchi.
      *
      * @return list<array<string, mixed>>
      */
     public function perStudent(): array
     {
-        // Oraliqdagi kirishlar talaba bo'yicha
-        $acc = [];
-        foreach ($this->logins() as $row) {
-            $acc[$row->student_id] ??= ['logins' => 0, 'days' => [], 'last' => null];
-            $acc[$row->student_id]['logins']++;
-            $acc[$row->student_id]['days'][$row->day] = true;
-            if ($acc[$row->student_id]['last'] === null || $row->at > $acc[$row->student_id]['last']) {
-                $acc[$row->student_id]['last'] = $row->at;
-            }
-        }
+        $this->load();
 
         $rows = [];
         DB::table('students as st')
@@ -91,8 +90,8 @@ class StudentActivityStatsData
             ->select('st.id', 'st.full_name', 'st.student_id_number', 'st.level_name', 'g.name as group_name', 'g.department_name')
             ->orderBy('st.full_name')
             ->cursor()
-            ->each(function ($st) use (&$rows, $acc) {
-                $a = $acc[$st->id] ?? null;
+            ->each(function ($st) use (&$rows) {
+                $a = $this->byStudent[$st->id] ?? null;
                 $rows[] = [
                     'student' => (string) $st->full_name,
                     'student_id_number' => (string) ($st->student_id_number ?? ''),
@@ -100,7 +99,7 @@ class StudentActivityStatsData
                     'course' => (string) ($st->level_name ?? ''),
                     'group' => (string) ($st->group_name ?? ''),
                     'logins' => $a['logins'] ?? 0,
-                    'days' => $a ? count($a['days']) : 0,
+                    'days' => $a['days'] ?? 0,
                     'last_login' => $a['last'] ?? null,
                 ];
             });
@@ -111,7 +110,7 @@ class StudentActivityStatsData
         return $rows;
     }
 
-    /** Jami bakalavr talabalar — varaq sarlavhasi uchun */
+    /** Jami bakalavr talabalar — varaq sarlavhasi va foiz maxraji */
     public function totalStudents(): int
     {
         if ($this->totalStudents !== null) {
@@ -125,22 +124,74 @@ class StudentActivityStatsData
     }
 
     /**
-     * Davr bo'yicha yig'ish, sana o'sib borish tartibida.
+     * Bitta o'tishda to'rtta yig'uvchini to'ldirish. Baza talaba-kun bo'yicha
+     * guruhlab beradi (kirishlar soni va oxirgi vaqt bilan); har qator
+     * kelishi bilan yig'iladi, saqlanmaydi.
+     */
+    private function load(): void
+    {
+        if ($this->loaded) {
+            return;
+        }
+        $this->loaded = true;
+
+        DB::table('activity_logs as l')
+            ->join('students as st', 'st.id', '=', 'l.user_id')
+            ->where('l.guard', 'student')
+            ->where('l.action', 'login')
+            ->whereBetween('l.created_at', [$this->from.' 00:00:00', $this->to.' 23:59:59'])
+            ->where('st.student_status_code', self::ACTIVE_STATUS)
+            ->where(fn ($q) => $this->bachelorOnly($q, 'st.'))
+            ->groupBy('l.user_id', DB::raw('DATE(l.created_at)'))
+            ->select(
+                'l.user_id as student_id',
+                DB::raw('DATE(l.created_at) as day'),
+                DB::raw('COUNT(*) as logins'),
+                DB::raw('MAX(l.created_at) as last_at')
+            )
+            ->cursor()
+            ->each(function ($r) {
+                $sid = (int) $r->student_id;
+                $day = (string) $r->day;
+                $n = (int) $r->logins;
+                $d = Carbon::parse($day);
+
+                $this->bump($this->byDay, $day, $d->format('d.m.Y'), $sid, $n);
+
+                $ws = $d->copy()->startOfWeek(Carbon::MONDAY);
+                $we = $d->copy()->endOfWeek(Carbon::SUNDAY);
+                $this->bump($this->byWeek, $ws->toDateString(), $ws->format('d.m').' – '.$we->format('d.m.Y'), $sid, $n);
+
+                $this->bump($this->byMonth, $d->format('Y-m'), self::MONTHS[(int) $d->format('n')].' '.$d->format('Y'), $sid, $n);
+
+                $s = &$this->byStudent[$sid];
+                $s ??= ['logins' => 0, 'days' => 0, 'last' => null];
+                $s['logins'] += $n;
+                $s['days']++;
+                $last = (string) $r->last_at;
+                if ($s['last'] === null || $last > $s['last']) {
+                    $s['last'] = $last;
+                }
+                unset($s);
+            });
+    }
+
+    private function bump(array &$acc, string $key, string $label, int $studentId, int $logins): void
+    {
+        $acc[$key] ??= ['period' => $label, 'logins' => 0, 'students' => []];
+        $acc[$key]['logins'] += $logins;
+        $acc[$key]['students'][$studentId] = true;
+    }
+
+    /**
+     * Yig'uvchini qatorlarga aylantirish: sana o'sib borish tartibida, noyob
+     * talabalar soni va foiz bilan.
      *
-     * @param  callable(string): array{0: string, 1: string}  $period  kun => [tartib kaliti, yorliq]
      * @return list<array<string, mixed>>
      */
-    private function aggregate(callable $period): array
+    private function finish(array $acc): array
     {
-        $acc = [];
-        foreach ($this->logins() as $row) {
-            [$sort, $label] = $period($row->day);
-            $acc[$sort] ??= ['period' => $label, 'logins' => 0, 'students' => []];
-            $acc[$sort]['logins']++;
-            $acc[$sort]['students'][$row->student_id] = true;
-        }
         ksort($acc);
-
         $total = $this->totalStudents();
         $rows = [];
         foreach ($acc as $a) {
@@ -155,40 +206,6 @@ class StudentActivityStatsData
         }
 
         return $rows;
-    }
-
-    /**
-     * Oraliqdagi bakalavr talabalari kirishlari. Bir marta o'qiladi, uch varaq
-     * shundan hisoblanadi.
-     *
-     * @return list<object>
-     */
-    private function logins(): array
-    {
-        if ($this->logins !== null) {
-            return $this->logins;
-        }
-
-        $rows = [];
-        DB::table('activity_logs as l')
-            ->join('students as st', 'st.id', '=', 'l.user_id')
-            ->where('l.guard', 'student')
-            ->where('l.action', 'login')
-            ->whereBetween('l.created_at', [$this->from.' 00:00:00', $this->to.' 23:59:59'])
-            ->where('st.student_status_code', self::ACTIVE_STATUS)
-            ->where(fn ($q) => $this->bachelorOnly($q, 'st.'))
-            ->select('l.user_id as student_id', 'l.created_at')
-            ->orderBy('l.created_at')
-            ->cursor()
-            ->each(function ($r) use (&$rows) {
-                $rows[] = (object) [
-                    'student_id' => (int) $r->student_id,
-                    'day' => substr((string) $r->created_at, 0, 10),
-                    'at' => (string) $r->created_at,
-                ];
-            });
-
-        return $this->logins = $rows;
     }
 
     /** Bakalavr sharti — kod yoki nom bo'yicha */

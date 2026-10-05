@@ -779,6 +779,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 return back()->with('error', "Sana oralig'i 1 yildan oshmasin.");
             }
 
+            // Talabalar varag'i har bir bakalavr uchun qator beradi (~6 ming) va
+            // PhpSpreadsheet butun kitobni xotirada quradi — 128 MB kam keladi.
+            @ini_set('memory_limit', '512M');
+            @set_time_limit(300);
+
             return \Maatwebsite\Excel\Facades\Excel::download(
                 new \App\Exports\StudentActivityStatsExport($from->toDateString(), $to->toDateString()),
                 'lms_kirishlar_'.$from->format('Y-m-d').'_'.$to->format('Y-m-d').'.xlsx'

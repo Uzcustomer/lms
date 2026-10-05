@@ -26,7 +26,7 @@ class StudentActivityStatsData
 
     private const MONTHS = [1 => 'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'];
 
-    /** @var list<object{day:string, student_id:int}> */
+    /** @var list<object{day:string, at:string, student_id:int}> */
     private ?array $logins = null;
 
     private ?int $totalStudents = null;
@@ -61,6 +61,54 @@ class StudentActivityStatsData
 
             return [$d->format('Y-m'), self::MONTHS[(int) $d->format('n')].' '.$d->format('Y')];
         });
+    }
+
+    /**
+     * Talaba kesimi: har bir o'qiyotgan bakalavr alohida qator — oraliqda
+     * necha marta kirgan, nechta kunda kirgan, oxirgi kirishi. Kirmaganlar ham
+     * ro'yxatda (0 bilan) — ular ham kerak. Ko'p kirganlar birinchi.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function perStudent(): array
+    {
+        // Oraliqdagi kirishlar talaba bo'yicha
+        $acc = [];
+        foreach ($this->logins() as $row) {
+            $acc[$row->student_id] ??= ['logins' => 0, 'days' => [], 'last' => null];
+            $acc[$row->student_id]['logins']++;
+            $acc[$row->student_id]['days'][$row->day] = true;
+            if ($acc[$row->student_id]['last'] === null || $row->at > $acc[$row->student_id]['last']) {
+                $acc[$row->student_id]['last'] = $row->at;
+            }
+        }
+
+        $rows = [];
+        DB::table('students as st')
+            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
+            ->where('st.student_status_code', self::ACTIVE_STATUS)
+            ->where(fn ($q) => $this->bachelorOnly($q, 'st.'))
+            ->select('st.id', 'st.full_name', 'st.student_id_number', 'st.level_name', 'g.name as group_name', 'g.department_name')
+            ->orderBy('st.full_name')
+            ->cursor()
+            ->each(function ($st) use (&$rows, $acc) {
+                $a = $acc[$st->id] ?? null;
+                $rows[] = [
+                    'student' => (string) $st->full_name,
+                    'student_id_number' => (string) ($st->student_id_number ?? ''),
+                    'faculty' => (string) ($st->department_name ?? ''),
+                    'course' => (string) ($st->level_name ?? ''),
+                    'group' => (string) ($st->group_name ?? ''),
+                    'logins' => $a['logins'] ?? 0,
+                    'days' => $a ? count($a['days']) : 0,
+                    'last_login' => $a['last'] ?? null,
+                ];
+            });
+
+        usort($rows, fn ($x, $y) => $y['logins'] <=> $x['logins']
+            ?: strcmp(mb_strtolower($x['student']), mb_strtolower($y['student'])));
+
+        return $rows;
     }
 
     /** Jami bakalavr talabalar — varaq sarlavhasi uchun */
@@ -136,6 +184,7 @@ class StudentActivityStatsData
                 $rows[] = (object) [
                     'student_id' => (int) $r->student_id,
                     'day' => substr((string) $r->created_at, 0, 10),
+                    'at' => (string) $r->created_at,
                 ];
             });
 

@@ -764,7 +764,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 'baho_vaqti_lms.xlsx'
             );
         })->name('export.teacher-grade-timing');
-        // Talabalar faolligi va mustaqil ta'lim — sana oralig'i bo'yicha to'rt varaq
+        // LMS ga kirishlar — kunlik / haftalik / oylik, fakultet va kurs kesimida
         Route::get('/export/student-activity-stats', function (\Illuminate\Http\Request $request) {
             $data = $request->validate([
                 'date_from' => 'required|date_format:Y-m-d',
@@ -781,7 +781,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
             return \Maatwebsite\Excel\Facades\Excel::download(
                 new \App\Exports\StudentActivityStatsExport($from->toDateString(), $to->toDateString()),
-                'faollik_mustaqil_talim_'.$from->format('Y-m-d').'_'.$to->format('Y-m-d').'.xlsx'
+                'lms_kirishlar_'.$from->format('Y-m-d').'_'.$to->format('Y-m-d').'.xlsx'
             );
         })->name('export.student-activity-stats');
         Route::get('/export/teachers', function () {

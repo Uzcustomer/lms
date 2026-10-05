@@ -2,228 +2,105 @@
 
 namespace App\Exports;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * "Faollik va mustaqil ta'lim" hisobotining so'rovlari. Har metod bitta
- * varaqning qatorlarini beradi; Excel ko'rinishi StudentActivityStatsSheet da.
+ * "LMS ga kirishlar" hisobotining so'rovlari: tanlangan oraliqdagi talaba
+ * kirishlari kunlik, haftalik va oylik kesimda, fakultet va kurs bo'yicha.
  *
- * Oraliq ikkala chetdan yopiq: [$from 00:00:00, $to 23:59:59].
+ * Kirish — activity_logs dagi guard='student', action='login' yozuvi (web va
+ * mobil ilova ikkalasi ham shu yerga yozadi). Har kirish alohida sanaladi,
+ * noyob talabalar soni ham beriladi.
  *
- * Faqat o'qiyotgan talabalar (student_status_code = 11) sanaladi — chetlashgan
- * yoki akademik ta'tildagi talabadan faollik kutilmaydi.
+ * Faqat o'qiyotgan talabalar (student_status_code = 11): chetlashgan yoki
+ * ta'tildagi talabaning kirishi hisobga olinmaydi, ammo faol talabalar soni
+ * foiz uchun maxraj bo'ladi.
  */
 class StudentActivityStatsData
 {
     private const ACTIVE_STATUS = '11';
 
-    /** Mustaqil ta'lim bahosi student_grades da shu tur kodi bilan turadi */
-    private const MT_TRAINING_TYPE = 99;
+    /** @var list<object{faculty:string, course:string, day:string, student_id:int}> */
+    private ?array $logins = null;
 
-    private string $fromTs;
-
-    private string $toTs;
+    /** @var array<string, int> "fakultet|kurs" => faol talabalar soni */
+    private ?array $activeStudents = null;
 
     public function __construct(private string $from, private string $to)
     {
-        $this->fromTs = $from.' 00:00:00';
-        $this->toTs = $to.' 23:59:59';
     }
 
-    /**
-     * Guruh kesimida kirish faolligi.
-     *
-     * Kirish — activity_logs dagi guard='student', action='login' yozuvi.
-     * Mobil ilovadan kirish ham shu jadvalga yoziladi (AuthController).
-     *
-     * @return list<array<string, mixed>>
-     */
-    public function loginsByGroup(): array
+    /** Kunlik: fakultet + kurs + kun */
+    public function daily(): array
     {
-        // Oraliqdagi kirishlar: talaba => [kirishlar soni, oxirgi kirish]
-        $logins = DB::table('activity_logs')
-            ->where('guard', 'student')
-            ->where('action', 'login')
-            ->whereBetween('created_at', [$this->fromTs, $this->toTs])
-            ->groupBy('user_id')
-            ->select('user_id', DB::raw('COUNT(*) as cnt'), DB::raw('MAX(created_at) as last_at'))
-            ->get()
-            ->keyBy('user_id');
-
-        $rows = [];
-        DB::table('students as st')
-            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
-            ->where('st.student_status_code', self::ACTIVE_STATUS)
-            ->select('st.id', 'st.group_id', 'g.name as group_name', 'g.department_name', 'st.level_name', 'st.education_type_name')
-            ->orderBy('g.department_name')->orderBy('g.name')
-            ->cursor()
-            ->each(function ($st) use (&$rows, $logins) {
-                $key = (string) $st->group_id;
-                $rows[$key] ??= [
-                    'department' => (string) ($st->department_name ?? ''),
-                    'group' => (string) ($st->group_name ?? $st->group_id),
-                    'course' => (string) ($st->level_name ?? ''),
-                    'education_type' => (string) ($st->education_type_name ?? ''),
-                    'students' => 0,
-                    'logged_in' => 0,
-                    'not_logged_in' => 0,
-                    'logins' => 0,
-                    'last_login' => null,
-                ];
-                $rows[$key]['students']++;
-                $l = $logins[$st->id] ?? null;
-                if ($l) {
-                    $rows[$key]['logged_in']++;
-                    $rows[$key]['logins'] += (int) $l->cnt;
-                    if ($rows[$key]['last_login'] === null || $l->last_at > $rows[$key]['last_login']) {
-                        $rows[$key]['last_login'] = $l->last_at;
-                    }
-                } else {
-                    $rows[$key]['not_logged_in']++;
-                }
-            });
-
-        foreach ($rows as &$r) {
-            $r['percent'] = $r['students'] > 0 ? round($r['logged_in'] * 100 / $r['students'], 1) : 0;
-        }
-        unset($r);
-
-        return array_values($rows);
+        return $this->aggregate(fn (string $day) => [$day, Carbon::parse($day)->format('d.m.Y')]);
     }
 
-    /**
-     * Oraliqda birorta ham kirmagan faol talabalar — ro'yxat.
-     * Umuman hech qachon kirgan-kirmagani ham ko'rsatiladi (oxirgi kirish).
-     *
-     * @return list<array<string, mixed>>
-     */
-    public function neverLoggedIn(): array
+    /** Haftalik: fakultet + kurs + hafta (dushanbadan boshlanadi) */
+    public function weekly(): array
     {
-        $inRange = DB::table('activity_logs')
-            ->where('guard', 'student')->where('action', 'login')
-            ->whereBetween('created_at', [$this->fromTs, $this->toTs])
-            ->distinct()->pluck('user_id')->flip()->all();
+        return $this->aggregate(function (string $day) {
+            $d = Carbon::parse($day);
+            $start = $d->copy()->startOfWeek(Carbon::MONDAY);
+            $end = $d->copy()->endOfWeek(Carbon::SUNDAY);
 
-        // Umumiy oxirgi kirish (oraliqdan tashqarida bo'lsa ham) — "hech qachon" ni ajratish uchun
-        $lastEver = DB::table('activity_logs')
-            ->where('guard', 'student')->where('action', 'login')
-            ->groupBy('user_id')
-            ->select('user_id', DB::raw('MAX(created_at) as last_at'))
-            ->pluck('last_at', 'user_id');
-
-        $rows = [];
-        DB::table('students as st')
-            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
-            ->where('st.student_status_code', self::ACTIVE_STATUS)
-            ->select('st.id', 'st.full_name', 'st.student_id_number', 'g.name as group_name', 'g.department_name', 'st.level_name', 'st.phone', 'st.telegram_chat_id')
-            ->orderBy('g.department_name')->orderBy('g.name')->orderBy('st.full_name')
-            ->cursor()
-            ->each(function ($st) use (&$rows, $inRange, $lastEver) {
-                if (isset($inRange[$st->id])) {
-                    return;
-                }
-                $rows[] = [
-                    'department' => (string) ($st->department_name ?? ''),
-                    'group' => (string) ($st->group_name ?? ''),
-                    'course' => (string) ($st->level_name ?? ''),
-                    'student' => (string) $st->full_name,
-                    'student_id_number' => (string) ($st->student_id_number ?? ''),
-                    'last_login' => $lastEver[$st->id] ?? null,
-                    'telegram' => ! empty($st->telegram_chat_id) ? 'Ha' : "Yo'q",
-                ];
-            });
-
-        return $rows;
+            return [$start->toDateString(), $start->format('d.m').' – '.$end->format('d.m.Y')];
+        });
     }
 
+    /** Oylik: fakultet + kurs + oy */
+    public function monthly(): array
+    {
+        return $this->aggregate(function (string $day) {
+            $d = Carbon::parse($day);
+
+            return [$d->format('Y-m'), self::MONTHS[(int) $d->format('n')].' '.$d->format('Y')];
+        });
+    }
+
+    private const MONTHS = [1 => 'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'];
+
     /**
-     * Fan kesimida mustaqil ta'lim: oraliqda yuklangan fayllar, shundan
-     * baholangani va baholanmagani.
+     * Umumiy yig'uvchi. $period kunni [tartib kaliti, ko'rsatiladigan yorliq]
+     * juftligiga aylantiradi; natija fakultet → kurs → davr bo'yicha saralanadi.
      *
-     * "Yuklangan" — independent_submissions.submitted_at oraliqda.
-     * "Baholangan" — student_grades da shu independent_id va shu talaba uchun
-     * MT bahosi (training_type_code = 99) bor.
-     *
-     * Fan nomi independents.subject_name dan olinadi: avtomatik yaratilgan
-     * topshiriqlarda subject_id to'ldirilmaydi, nom esa har doim bor.
-     *
+     * @param  callable(string): array{0: string, 1: string}  $period
      * @return list<array<string, mixed>>
      */
-    public function independentBySubject(): array
+    private function aggregate(callable $period): array
     {
-        // 1-qadam: oraliqdagi yuklashlar — kichik jadval, submitted_at bo'yicha.
-        //   Bu yerda student_grades ga JOIN qilinmaydi: u 17 mln+ qatorli va
-        //   independent_id bo'yicha indeksi yo'q edi, JOIN butun jadvalni
-        //   ko'rib chiqib timeout berardi.
-        $subs = DB::table('independent_submissions as s')
-            ->join('independents as i', 'i.id', '=', 's.independent_id')
-            ->whereBetween('s.submitted_at', [$this->fromTs, $this->toTs])
-            ->select('s.independent_id', 's.student_hemis_id', 's.submitted_at',
-                'i.subject_name', 'i.deportment_name', 'i.group_hemis_id', 'i.teacher_hemis_id')
-            ->get();
-
-        if ($subs->isEmpty()) {
-            return [];
-        }
-
-        // 2-qadam: faqat shu talabalar va shu topshiriqlar uchun MT baholari.
-        //   Avval student_hemis_id bo'yicha toraytiriladi (indeksli), keyin
-        //   independent_id bo'yicha — natija bir necha ming qator.
-        $graded = [];
-        $studentIds = $subs->pluck('student_hemis_id')->unique()->values();
-        $taskIds = $subs->pluck('independent_id')->unique()->values()->all();
-        foreach ($studentIds->chunk(1000) as $chunk) {
-            DB::table('student_grades')
-                ->whereIn('student_hemis_id', $chunk->all())
-                ->whereIn('independent_id', $taskIds)
-                ->where('training_type_code', self::MT_TRAINING_TYPE)
-                ->whereNull('deleted_at')
-                ->whereNotNull('grade')
-                ->select('independent_id', 'student_hemis_id')
-                ->cursor()
-                ->each(function ($g) use (&$graded) {
-                    $graded[$g->independent_id.'|'.$g->student_hemis_id] = true;
-                });
-        }
-
-        // 3-qadam: fan kesimida yig'ish — PHP da, qatorlar oz
         $acc = [];
-        foreach ($subs as $s) {
-            $key = $s->deportment_name.'|'.$s->subject_name;
+        foreach ($this->logins() as $row) {
+            [$sort, $label] = $period($row->day);
+            $key = $row->faculty.'|'.$row->course.'|'.$sort;
             $acc[$key] ??= [
-                'department' => (string) ($s->deportment_name ?? ''),
-                'subject' => (string) $s->subject_name,
-                'groups' => [], 'teachers' => [], 'students' => [],
-                'uploaded' => 0, 'graded' => 0, 'last_upload' => null,
+                'faculty' => $row->faculty,
+                'course' => $row->course,
+                'period_sort' => $sort,
+                'period' => $label,
+                'logins' => 0,
+                'students' => [],
             ];
-            $a = &$acc[$key];
-            $a['uploaded']++;
-            $a['groups'][$s->group_hemis_id] = true;
-            $a['teachers'][$s->teacher_hemis_id] = true;
-            $a['students'][$s->student_hemis_id] = true;
-            if (isset($graded[$s->independent_id.'|'.$s->student_hemis_id])) {
-                $a['graded']++;
-            }
-            if ($a['last_upload'] === null || $s->submitted_at > $a['last_upload']) {
-                $a['last_upload'] = $s->submitted_at;
-            }
-            unset($a);
+            $acc[$key]['logins']++;
+            $acc[$key]['students'][$row->student_id] = true;
         }
 
-        ksort($acc);
+        uksort($acc, fn ($a, $b) => strcmp($a, $b));
+
+        $active = $this->activeStudents();
         $rows = [];
         foreach ($acc as $a) {
+            $total = $active[$a['faculty'].'|'.$a['course']] ?? 0;
+            $unique = count($a['students']);
             $rows[] = [
-                'department' => $a['department'],
-                'subject' => $a['subject'],
-                'groups' => count($a['groups']),
-                'teachers' => count($a['teachers']),
-                'students' => count($a['students']),
-                'uploaded' => $a['uploaded'],
-                'graded' => $a['graded'],
-                'ungraded' => $a['uploaded'] - $a['graded'],
-                'percent' => $a['uploaded'] > 0 ? round($a['graded'] * 100 / $a['uploaded'], 1) : 0,
-                'last_upload' => $a['last_upload'],
+                'faculty' => $a['faculty'],
+                'course' => $a['course'],
+                'period' => $a['period'],
+                'logins' => $a['logins'],
+                'unique_students' => $unique,
+                'active_students' => $total,
+                'percent' => $total > 0 ? round($unique * 100 / $total, 1) : 0,
             ];
         }
 
@@ -231,47 +108,64 @@ class StudentActivityStatsData
     }
 
     /**
-     * Fan kesimida materiallar: oraliqda boshlanadigan (start_date) MT
-     * topshiriqlari soni va shundan nechtasiga o'qituvchi fayl biriktirgan.
+     * Oraliqdagi barcha talaba kirishlari, fakultet va kurs bilan. Bir marta
+     * o'qiladi, uch varaq shundan hisoblanadi.
      *
-     * Tizimda alohida "material" jadvali yo'q — o'qituvchi fayli topshiriq
-     * qatorining o'zida (independents.file_path) turadi. Shuning uchun
-     * "fanda material bor" = kamida bitta topshiriqda fayl bor.
-     *
-     * @return list<array<string, mixed>>
+     * @return list<object>
      */
-    public function materialsBySubject(): array
+    private function logins(): array
     {
-        $rows = [];
+        if ($this->logins !== null) {
+            return $this->logins;
+        }
 
-        DB::table('independents as i')
-            ->whereBetween('i.start_date', [$this->from, $this->to])
-            ->groupBy('i.subject_name', 'i.deportment_name')
-            ->select(
-                'i.subject_name',
-                'i.deportment_name',
-                DB::raw('COUNT(*) as tasks'),
-                DB::raw("SUM(CASE WHEN i.file_path IS NOT NULL AND i.file_path <> '' THEN 1 ELSE 0 END) as with_file"),
-                DB::raw('COUNT(DISTINCT i.group_hemis_id) as groups_cnt'),
-                DB::raw('COUNT(DISTINCT i.teacher_hemis_id) as teachers')
-            )
-            ->orderBy('i.deportment_name')->orderBy('i.subject_name')
+        $rows = [];
+        DB::table('activity_logs as l')
+            ->join('students as st', 'st.id', '=', 'l.user_id')
+            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
+            ->where('l.guard', 'student')
+            ->where('l.action', 'login')
+            ->whereBetween('l.created_at', [$this->from.' 00:00:00', $this->to.' 23:59:59'])
+            ->where('st.student_status_code', self::ACTIVE_STATUS)
+            ->select('l.user_id as student_id', 'l.created_at', 'g.department_name', 'st.level_name')
+            ->orderBy('l.created_at')
             ->cursor()
             ->each(function ($r) use (&$rows) {
-                $tasks = (int) $r->tasks;
-                $withFile = (int) $r->with_file;
-                $rows[] = [
-                    'department' => (string) ($r->deportment_name ?? ''),
-                    'subject' => (string) $r->subject_name,
-                    'groups' => (int) $r->groups_cnt,
-                    'teachers' => (int) $r->teachers,
-                    'tasks' => $tasks,
-                    'with_file' => $withFile,
-                    'without_file' => $tasks - $withFile,
-                    'has_material' => $withFile > 0 ? 'Bor' : "Yo'q",
+                $rows[] = (object) [
+                    'student_id' => (int) $r->student_id,
+                    'day' => substr((string) $r->created_at, 0, 10),
+                    'faculty' => trim((string) ($r->department_name ?? '')) ?: "Noma'lum",
+                    'course' => trim((string) ($r->level_name ?? '')) ?: "Noma'lum",
                 ];
             });
 
-        return $rows;
+        return $this->logins = $rows;
+    }
+
+    /**
+     * Fakultet + kurs bo'yicha faol talabalar soni — foiz uchun maxraj.
+     *
+     * @return array<string, int>
+     */
+    private function activeStudents(): array
+    {
+        if ($this->activeStudents !== null) {
+            return $this->activeStudents;
+        }
+
+        $out = [];
+        DB::table('students as st')
+            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
+            ->where('st.student_status_code', self::ACTIVE_STATUS)
+            ->groupBy('g.department_name', 'st.level_name')
+            ->select('g.department_name', 'st.level_name', DB::raw('COUNT(*) as cnt'))
+            ->get()
+            ->each(function ($r) use (&$out) {
+                $f = trim((string) ($r->department_name ?? '')) ?: "Noma'lum";
+                $c = trim((string) ($r->level_name ?? '')) ?: "Noma'lum";
+                $out[$f.'|'.$c] = (int) $r->cnt;
+            });
+
+        return $this->activeStudents = $out;
     }
 }

@@ -151,47 +151,81 @@ class StudentActivityStatsData
      */
     public function independentBySubject(): array
     {
-        $rows = [];
-
-        DB::table('independent_submissions as s')
+        // 1-qadam: oraliqdagi yuklashlar — kichik jadval, submitted_at bo'yicha.
+        //   Bu yerda student_grades ga JOIN qilinmaydi: u 17 mln+ qatorli va
+        //   independent_id bo'yicha indeksi yo'q edi, JOIN butun jadvalni
+        //   ko'rib chiqib timeout berardi.
+        $subs = DB::table('independent_submissions as s')
             ->join('independents as i', 'i.id', '=', 's.independent_id')
-            ->leftJoin('student_grades as sg', function ($j) {
-                $j->on('sg.independent_id', '=', 's.independent_id')
-                    ->on('sg.student_hemis_id', '=', 's.student_hemis_id')
-                    ->where('sg.training_type_code', self::MT_TRAINING_TYPE)
-                    ->whereNull('sg.deleted_at')
-                    ->whereNotNull('sg.grade');
-            })
             ->whereBetween('s.submitted_at', [$this->fromTs, $this->toTs])
-            ->groupBy('i.subject_name', 'i.deportment_name')
-            ->select(
-                'i.subject_name',
-                'i.deportment_name',
-                DB::raw('COUNT(*) as uploaded'),
-                DB::raw('COUNT(sg.id) as graded'),
-                DB::raw('COUNT(DISTINCT s.student_hemis_id) as students'),
-                DB::raw('COUNT(DISTINCT i.group_hemis_id) as groups_cnt'),
-                DB::raw('COUNT(DISTINCT i.teacher_hemis_id) as teachers'),
-                DB::raw('MAX(s.submitted_at) as last_upload')
-            )
-            ->orderBy('i.deportment_name')->orderBy('i.subject_name')
-            ->cursor()
-            ->each(function ($r) use (&$rows) {
-                $uploaded = (int) $r->uploaded;
-                $graded = (int) $r->graded;
-                $rows[] = [
-                    'department' => (string) ($r->deportment_name ?? ''),
-                    'subject' => (string) $r->subject_name,
-                    'groups' => (int) $r->groups_cnt,
-                    'teachers' => (int) $r->teachers,
-                    'students' => (int) $r->students,
-                    'uploaded' => $uploaded,
-                    'graded' => $graded,
-                    'ungraded' => $uploaded - $graded,
-                    'percent' => $uploaded > 0 ? round($graded * 100 / $uploaded, 1) : 0,
-                    'last_upload' => $r->last_upload,
-                ];
-            });
+            ->select('s.independent_id', 's.student_hemis_id', 's.submitted_at',
+                'i.subject_name', 'i.deportment_name', 'i.group_hemis_id', 'i.teacher_hemis_id')
+            ->get();
+
+        if ($subs->isEmpty()) {
+            return [];
+        }
+
+        // 2-qadam: faqat shu talabalar va shu topshiriqlar uchun MT baholari.
+        //   Avval student_hemis_id bo'yicha toraytiriladi (indeksli), keyin
+        //   independent_id bo'yicha — natija bir necha ming qator.
+        $graded = [];
+        $studentIds = $subs->pluck('student_hemis_id')->unique()->values();
+        $taskIds = $subs->pluck('independent_id')->unique()->values()->all();
+        foreach ($studentIds->chunk(1000) as $chunk) {
+            DB::table('student_grades')
+                ->whereIn('student_hemis_id', $chunk->all())
+                ->whereIn('independent_id', $taskIds)
+                ->where('training_type_code', self::MT_TRAINING_TYPE)
+                ->whereNull('deleted_at')
+                ->whereNotNull('grade')
+                ->select('independent_id', 'student_hemis_id')
+                ->cursor()
+                ->each(function ($g) use (&$graded) {
+                    $graded[$g->independent_id.'|'.$g->student_hemis_id] = true;
+                });
+        }
+
+        // 3-qadam: fan kesimida yig'ish — PHP da, qatorlar oz
+        $acc = [];
+        foreach ($subs as $s) {
+            $key = $s->deportment_name.'|'.$s->subject_name;
+            $acc[$key] ??= [
+                'department' => (string) ($s->deportment_name ?? ''),
+                'subject' => (string) $s->subject_name,
+                'groups' => [], 'teachers' => [], 'students' => [],
+                'uploaded' => 0, 'graded' => 0, 'last_upload' => null,
+            ];
+            $a = &$acc[$key];
+            $a['uploaded']++;
+            $a['groups'][$s->group_hemis_id] = true;
+            $a['teachers'][$s->teacher_hemis_id] = true;
+            $a['students'][$s->student_hemis_id] = true;
+            if (isset($graded[$s->independent_id.'|'.$s->student_hemis_id])) {
+                $a['graded']++;
+            }
+            if ($a['last_upload'] === null || $s->submitted_at > $a['last_upload']) {
+                $a['last_upload'] = $s->submitted_at;
+            }
+            unset($a);
+        }
+
+        ksort($acc);
+        $rows = [];
+        foreach ($acc as $a) {
+            $rows[] = [
+                'department' => $a['department'],
+                'subject' => $a['subject'],
+                'groups' => count($a['groups']),
+                'teachers' => count($a['teachers']),
+                'students' => count($a['students']),
+                'uploaded' => $a['uploaded'],
+                'graded' => $a['graded'],
+                'ungraded' => $a['uploaded'] - $a['graded'],
+                'percent' => $a['uploaded'] > 0 ? round($a['graded'] * 100 / $a['uploaded'], 1) : 0,
+                'last_upload' => $a['last_upload'],
+            ];
+        }
 
         return $rows;
     }

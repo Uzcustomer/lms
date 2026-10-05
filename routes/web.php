@@ -959,6 +959,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // To'garak arizalari
         Route::prefix('club-applications')->name('club-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'index'])->name('index');
+            // "export" {application} dan oldin turishi shart — aks holda id deb o'qiladi
+            Route::get('/export', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'export'])->name('export');
             Route::get('/{application}', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'show'])->name('show');
             Route::post('/{application}/approve', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'approve'])->name('approve');
             Route::post('/{application}/reject', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'reject'])->name('reject');

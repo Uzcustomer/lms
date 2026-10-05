@@ -10,6 +10,25 @@ class ClubApplicationController extends Controller
 {
     public function index()
     {
+        return view('admin.club-applications', ['applications' => $this->visibleApplications()]);
+    }
+
+    /**
+     * Sahifadagi arizalarni Excelga: to'garaklar kesimida yig'ma va barcha
+     * arizalar. Rol cheklovi index bilan bir xil — kafedra mudiri faqat o'z
+     * kafedrasini oladi.
+     */
+    public function export()
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ClubApplicationsExport($this->visibleApplications()),
+            'togarak_arizalari_'.now('Asia/Tashkent')->format('Y-m-d').'.xlsx'
+        );
+    }
+
+    /** Joriy rol ko'ra oladigan arizalar (index va export uchun bir xil) */
+    private function visibleApplications()
+    {
         $user = auth()->user();
         $activeRole = session('active_role', '');
 
@@ -19,17 +38,15 @@ class ClubApplicationController extends Controller
 
         try {
             if ($activeRole === 'kafedra_mudiri') {
-                $applications = ClubMembership::where('department_hemis_id', $user->department_hemis_id)
+                return ClubMembership::where('department_hemis_id', $user->department_hemis_id)
                     ->orderByDesc('created_at')
                     ->get();
-            } else {
-                $applications = ClubMembership::orderByDesc('created_at')->get();
             }
-        } catch (\Exception $e) {
-            $applications = collect();
-        }
 
-        return view('admin.club-applications', compact('applications'));
+            return ClubMembership::orderByDesc('created_at')->get();
+        } catch (\Exception $e) {
+            return collect();
+        }
     }
 
     public function show(ClubMembership $application)

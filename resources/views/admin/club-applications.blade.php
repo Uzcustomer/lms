@@ -1,6 +1,17 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">To'garak arizalari</h2>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">To'garak arizalari</h2>
+            {{-- Excel: sahifada ko'ringan arizalar — to'garaklar yig'masi va to'liq ro'yxat --}}
+            <a href="{{ route('admin.club-applications.export') }}"
+               style="display:inline-flex; align-items:center; gap:7px; padding:8px 14px; border-radius:9px; font-size:13px; font-weight:700; color:#fff; background:#0f7a52; text-decoration:none; white-space:nowrap;"
+               title="To'garaklar bo'yicha: biriktirilgan, kutilayotgan, rad etilgan soni va mas'ul shaxslar">
+                <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+                </svg>
+                Excel
+            </a>
+        </div>
     </x-slot>
 
     <style>

@@ -75,6 +75,13 @@
            Jurnalda qoladi (eski baholari va NB lari kerak), lekin
            "baho qo'yilmaganlar" hisobotida sanalmaydi. */
         .stage-badge.stage-expelled { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+        /* Baho qo'yilmagan talaba qatori — o'qituvchi darhol ko'rsin.
+           Katak ranglari (sariq fon, NB) ustidan bosmasligi uchun och tus. */
+        tr.jr-row-ungraded > td { background-color: #fff1f2; }
+        tr.jr-row-ungraded:hover > td { background-color: #ffe4e6; }
+        /* Dashboard popupidan kelinganda shu kun ustuni ajratiladi */
+        .jr-focus-day { outline: 2px solid #f59e0b; outline-offset: -2px; }
+        .jr-focus-btn { box-shadow: 0 0 0 3px rgba(245, 158, 11, .55); }
 
         .tab-content {
             overflow-x: auto;
@@ -1109,6 +1116,16 @@
             </div>
 
             <!-- Amaliyot Tab Content -->
+            @php
+                // Baho qo'yilmagan talabalar — qatori qizg'ish fonda ajraladi.
+                // Ro'yxatni kontroller beradi ($ungradedStudents), bu yerda
+                // faqat hemis_id larni ajratib olamiz.
+                $ungradedHemisIds = collect($ungradedStudents ?? [])
+                    ->pluck('hemis_id')
+                    ->filter()
+                    ->map(fn ($id) => (string) $id)
+                    ->all();
+            @endphp
             <div id="content-amaliyot" class="tab-content">
                 <div class="bg-white">
                     @if(($mtUngradedCount ?? 0) > 0)
@@ -1317,7 +1334,7 @@
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
-                                        <tr>
+                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($jbLessonDates as $idx => $date)
@@ -1863,7 +1880,7 @@
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
-                                        <tr>
+                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @php $prevDate = null; @endphp
@@ -5730,25 +5747,33 @@
             if (e.target === this) closeLessonModal();
         });
 
-        // Dashboard popupidan kelinganda (?open_lesson=YYYY-MM-DD) shu sana uchun
-        // so'rov oynasi o'zi ochiladi. Jurnaldagi "!" tugmasi orqali — u faqat so'rov
-        // yuborish mumkin bo'lgan kunlarda bor va rad etilgan so'rov sababini ham
-        // uzatadi. Parametr URL'dan olib tashlanadi: so'rovdan keyingi qayta
-        // yuklashda oyna yana ochilmasin.
+        // Dashboard popupidan kelinganda (?focus_lesson=YYYY-MM-DD) jurnal shu
+        // kunga suriladi va ustun ajratib ko'rsatiladi. So'rov oynasi O'ZI
+        // OCHILMAYDI: o'qituvchi avval jurnalni ko'rsin — baho qo'yilmagan
+        // talabalar qatori qizg'ish fonda ajralib turadi. So'rov kerak bo'lsa
+        // ustundagi "!" ni o'zi bosadi.
+        //
+        // Parametr URL'dan olib tashlanadi: qayta yuklashda takrorlanmasin.
         document.addEventListener('DOMContentLoaded', function () {
             var params = new URLSearchParams(window.location.search);
-            var day = params.get('open_lesson');
+            var day = params.get('focus_lesson');
             if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
 
-            params.delete('open_lesson');
+            params.delete('focus_lesson');
             var qs = params.toString();
             history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
 
+            // Shu kunning kataklari (jurnal jadvalidagi data-date) va
+            // ustun sarlavhasidagi "!" tugmasi — ikkalasini ham ajratamiz.
+            var cells = document.querySelectorAll('[data-date="' + day + '"]');
             var trigger = document.querySelector('[onclick*="openLessonModal(\'' + day + '\'"]');
-            if (trigger) {
-                trigger.click();
-            } else {
-                alert(day.split('-').reverse().join('.') + " sanasi uchun so'rov yuborib bo'lmaydi: baho allaqachon qo'yilgan yoki so'rov yuborilgan.");
+
+            cells.forEach(function (cell) { cell.classList.add('jr-focus-day'); });
+            if (trigger) { trigger.classList.add('jr-focus-btn'); }
+
+            var target = trigger || cells[0];
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             }
         });
     </script>

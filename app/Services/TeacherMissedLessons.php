@@ -121,9 +121,11 @@ class TeacherMissedLessons
                     'subject_name' => $slot->subject_name,
                     'lesson_date' => $slot->lesson_day,
                     'rejected' => ($openings[$key] ?? null) === LessonOpening::STATUS_REJECTED,
-                    // Jurnal ochilishi bilan shu sana uchun so'rov oynasi ochiladi
+                    // Jurnal shu kunga o'tib ochiladi. So'rov oynasi O'ZI
+                    // ochilmaydi: o'qituvchi avval jurnalni ko'rsin, so'ng
+                    // kerak bo'lsa ustundagi "!" ni bossin.
                     'url' => route('admin.journal.show', [$slot->group_db_id, $slot->subject_id, $slot->semester_code])
-                        .'?open_lesson='.$slot->lesson_day,
+                        .'?focus_lesson='.$slot->lesson_day,
                 ];
             })
             ->sortByDesc('lesson_date')

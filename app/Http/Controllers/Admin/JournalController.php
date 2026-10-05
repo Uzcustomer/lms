@@ -1059,6 +1059,9 @@ class JournalController extends Controller
                 if ($missingForStudent > 0) {
                     $ungradedCells += $missingForStudent;
                     $ungradedStudents[] = [
+                        // hemis_id ham kerak: jurnal jadvalida shu talabaning
+                        // qatori qizg'ish fonda ajratiladi
+                        'hemis_id' => (string) $stu->hemis_id,
                         'name' => $stu->full_name,
                         'count' => $missingForStudent,
                     ];

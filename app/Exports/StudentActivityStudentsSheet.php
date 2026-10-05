@@ -13,12 +13,13 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
  * "Talabalar" varag'i: har bir o'qiyotgan bakalavr alohida qator — oraliqda
- * necha marta kirgan, nechta kunda, oxirgi kirishi. Kirmaganlar ham bor (0),
- * ular qizg'ish rangda ajralib turadi. Ko'p kirganlar birinchi.
+ * necha marta kirgan, nechta kunda, oraliqdagi birinchi va oxirgi kirishi,
+ * hamda umuman oxirgi kirishi (oraliqdan tashqarida bo'lsa ham). Kirmaganlar
+ * ham bor (0), ular qizg'ish rangda ajralib turadi. Ko'p kirganlar birinchi.
  */
 class StudentActivityStudentsSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
-    private const LAST_COL = 'I';
+    private const LAST_COL = 'K';
 
     private const HEADER_ROW = 2;
 
@@ -47,8 +48,9 @@ class StudentActivityStudentsSheet implements FromArray, WithColumnWidths, WithE
                 .' · jami bakalavr: '.number_format($this->totalStudents, 0, '.', ' ')
                 .' · kirgan: '.number_format($loggedIn, 0, '.', ' ')
                 .' · kirmagan: '.number_format($this->totalStudents - $loggedIn, 0, '.', ' '),
-            ], 9, ''),
-            ['#', 'Talaba', 'Talaba ID', 'Fakultet', 'Kurs', 'Guruh', 'Kirishlar soni', 'Kirgan kunlar', 'Oxirgi kirish'],
+            ], 11, ''),
+            ['#', 'Talaba', 'Talaba ID', 'Fakultet', 'Kurs', 'Guruh', 'Kirishlar soni', 'Kirgan kunlar',
+                'Birinchi kirish (oraliqda)', 'Oxirgi kirish (oraliqda)', 'Oxirgi kirish (umuman)'],
         ];
 
         foreach ($this->rows as $i => $r) {
@@ -62,12 +64,14 @@ class StudentActivityStudentsSheet implements FromArray, WithColumnWidths, WithE
                 // Satr sifatida: PhpSpreadsheet butun 0 ni bo'sh katak qilib saqlaydi
                 (string) $r['logins'],
                 (string) $r['days'],
+                $r['first_login'] ? \Carbon\Carbon::parse($r['first_login'])->format('d.m.Y H:i') : '',
                 $r['last_login'] ? \Carbon\Carbon::parse($r['last_login'])->format('d.m.Y H:i') : '',
+                $r['last_ever'] ? \Carbon\Carbon::parse($r['last_ever'])->format('d.m.Y H:i') : "hech qachon",
             ];
         }
 
         if ($this->rows === []) {
-            $out[] = array_pad(['Bakalavr talaba topilmadi.'], 9, '');
+            $out[] = array_pad(['Bakalavr talaba topilmadi.'], 11, '');
         }
         $this->lastRow = count($out);
 
@@ -76,7 +80,7 @@ class StudentActivityStudentsSheet implements FromArray, WithColumnWidths, WithE
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 40, 'C' => 16, 'D' => 28, 'E' => 9, 'F' => 16, 'G' => 14, 'H' => 13, 'I' => 18];
+        return ['A' => 6, 'B' => 40, 'C' => 16, 'D' => 28, 'E' => 9, 'F' => 16, 'G' => 14, 'H' => 13, 'I' => 20, 'J' => 20, 'K' => 20];
     }
 
     public function registerEvents(): array

@@ -647,13 +647,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  // ── Weekly activity ──────────────────────────────────
+  // ── Heartbeat card ───────────────────────────────────
+  // Purely decorative: the ECG trace says "the app is alive and well". It
+  // used to show the attendance streak, which confused students.
   Widget _buildWeeklyActivity(Map<String, dynamic>? data) {
-    // Attendance streak — consecutive lesson days without an absence (API).
-    final streakRaw = data?['attendance_streak_days'];
-    final streak = streakRaw is num ? streakRaw.toInt() : 0;
-    final isGood = streak >= 5;
-
     return _calmCard(
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -673,29 +670,33 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   children: [
                     Text(
                       context.l10n.pick(
-                        uz: 'DAVOMAT KETMA-KETLIGI',
-                        ru: 'СЕРИЯ ПОСЕЩЕНИЙ',
-                        en: 'ATTENDANCE STREAK',
+                        uz: 'Toshkent davlat tibbiyot universiteti',
+                        ru: 'Ташкентский государственный медицинский университет',
+                        en: 'Tashkent State Medical University',
                       ),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.3,
                         color: _muted,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       context.l10n.pick(
-                        uz: '$streak dars kuni · NB\'siz',
-                        ru: '$streak уч. дн. · без пропусков',
-                        en: '$streak lesson days · no absences',
+                        uz: 'Termiz filiali LMS mobil ilovasi',
+                        ru: 'Термезский филиал · мобильное приложение LMS',
+                        en: 'Termez branch · LMS mobile app',
                       ),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: _ink,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -703,21 +704,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isGood
-                      ? const Color(0xFFF0FDF4)
-                      : AppTheme.warningColor.withOpacity(0.12),
+                  color: ClinicTheme.greenOf(context).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  isGood
-                      ? context.l10n.pick(uz: 'NORMA', ru: 'НОРМА', en: 'GOOD')
-                      : context.l10n.pick(uz: 'PAST', ru: 'НИЗКО', en: 'LOW'),
+                  context.l10n.pick(uz: 'FAOL', ru: 'АКТИВНО', en: 'ONLINE'),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: isGood
-                        ? ClinicTheme.greenOf(context)
-                        : AppTheme.warningColor,
+                    color: ClinicTheme.greenOf(context),
                   ),
                 ),
               ),

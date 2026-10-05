@@ -25,12 +25,17 @@ void showSettingsSheet(BuildContext context) {
       return StatefulBuilder(
         builder: (ctx, setSheetState) {
           final isDark = settings.isDark;
-          return SafeArea(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(ctx).size.height * 0.85,
-              ),
+          // The sheet's own scroll controller drives the drag, so pulling it
+          // down past the minimum size closes it instead of just scrolling.
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.72,
+            minChildSize: 0.35,
+            maxChildSize: 0.9,
+            builder: (ctx, scrollController) => SafeArea(
+              top: false,
               child: SingleChildScrollView(
+                controller: scrollController,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 16,
@@ -278,34 +283,32 @@ Widget _buildAccentOption(
       settings.setAccent(theme);
       onChanged();
     },
-    child: Center(
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 36,
-        height: 36,
-        padding: const EdgeInsets.all(3),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 36,
+      height: 36,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isSelected
+              ? theme.start
+              : (isDk ? AppTheme.darkBorderColor : Colors.grey[300]!),
+          width: isSelected ? 2.5 : 1,
+        ),
+      ),
+      child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected
-                ? theme.start
-                : (isDk ? AppTheme.darkBorderColor : Colors.grey[300]!),
-            width: isSelected ? 2.5 : 1,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: theme.gradient,
           ),
         ),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: theme.gradient,
-            ),
-          ),
-          child: isSelected
-              ? const Icon(Icons.check, size: 16, color: Colors.white)
-              : null,
-        ),
+        child: isSelected
+            ? const Icon(Icons.check, size: 16, color: Colors.white)
+            : null,
       ),
     ),
   );

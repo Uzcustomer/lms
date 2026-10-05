@@ -42,6 +42,28 @@ ios_crop = sheet.crop(ios_sq).resize((S, S), Image.LANCZOS)
 and_crop = sheet.crop(and_sq).resize((S, S), Image.LANCZOS)
 print("ios", ios_sq, "android", and_sq)
 
+
+# ── Recolour: deeper blue emblem on a bright white ground ─────────
+# The designer's glass render is pale blue on pale blue; on a phone it
+# read as washed out. Saturated pixels (the emblem) get darker and more
+# saturated, everything else is pushed most of the way to white.
+def recolor(img, emblem_v=0.72, emblem_s=1.25, ground_white=0.70):
+    a = np.array(img.convert("RGB")).astype(np.float32)
+    mx, mn = a.max(axis=2), a.min(axis=2)
+    sat = (mx - mn) / np.maximum(mx, 1.0)
+    w = np.clip((sat - 0.22) / 0.20, 0, 1)[..., None]
+    hsv = np.array(img.convert("HSV")).astype(np.float32)
+    hsv[..., 1] = np.clip(hsv[..., 1] * emblem_s, 0, 255)
+    hsv[..., 2] = hsv[..., 2] * emblem_v
+    dark = np.array(Image.fromarray(hsv.astype(np.uint8), "HSV").convert("RGB")).astype(np.float32)
+    white = a + (255 - a) * ground_white
+    out = w * dark + (1 - w) * white
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
+
+
+ios_crop = recolor(ios_crop)
+and_crop = recolor(and_crop)
+
 # ── iOS: grow the interior over the rounded corners ────────────────
 # Sample a ring just inside the shape and mirror it outward, so the dark
 # board never shows in a corner once iOS applies its own mask.

@@ -2905,7 +2905,9 @@ class QuizResultController extends Controller
                     'training_type_code' => $trainingTypeCode,
                     'training_type_name' => $trainingTypeName,
                     'employee_id' => 0,
-                    'employee_name' => auth()->user()->name ?? 'Test markazi',
+                    'employee_name' => (auth()->user() ?? auth()->guard('teacher')->user())?->name
+                        ?? (auth()->guard('teacher')->user())?->full_name
+                        ?? 'Test markazi',
                     'lesson_pair_name' => '',
                     'lesson_pair_code' => '',
                     'lesson_pair_start_time' => '',
@@ -3836,8 +3838,10 @@ class QuizResultController extends Controller
         // Eski push mexanizmi ham ishlayversin (zaxira sifatida).
         Setting::set('moodle_sync_requested', now()->toIso8601String());
 
-        $user = auth()->user();
-        $userName = $user->name ?? $user->full_name ?? 'unknown';
+        // Test markazi teacher guard orqali kiradi — auth()->user() (web guard)
+        // u yerda null bo'lib, ->name chaqirig'i 500 berardi
+        $user = auth()->user() ?? auth()->guard('teacher')->user();
+        $userName = $user?->name ?? $user?->full_name ?? 'unknown';
 
         // Bir vaqtda ikkinchi tortish boshlanmaydi — har biri PHP jarayonini
         // band qiladi va bir xil natijalarni qayta yozadi.

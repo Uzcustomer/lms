@@ -764,6 +764,26 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 'baho_vaqti_lms.xlsx'
             );
         })->name('export.teacher-grade-timing');
+        // Talabalar faolligi va mustaqil ta'lim — sana oralig'i bo'yicha to'rt varaq
+        Route::get('/export/student-activity-stats', function (\Illuminate\Http\Request $request) {
+            $data = $request->validate([
+                'date_from' => 'required|date_format:Y-m-d',
+                'date_to' => 'required|date_format:Y-m-d|after_or_equal:date_from',
+            ], [
+                'date_to.after_or_equal' => "Tugash sanasi boshlanish sanasidan oldin bo'lmasin.",
+            ]);
+
+            $from = \Carbon\Carbon::parse($data['date_from']);
+            $to = \Carbon\Carbon::parse($data['date_to']);
+            if ($from->diffInDays($to) > 366) {
+                return back()->with('error', "Sana oralig'i 1 yildan oshmasin.");
+            }
+
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\StudentActivityStatsExport($from->toDateString(), $to->toDateString()),
+                'faollik_mustaqil_talim_'.$from->format('Y-m-d').'_'.$to->format('Y-m-d').'.xlsx'
+            );
+        })->name('export.student-activity-stats');
         Route::get('/export/teachers', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(
                 new \App\Exports\TeachersDbExport,

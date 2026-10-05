@@ -87,8 +87,23 @@ class TeacherMissedLessons
         // Faol talabasi yo'q guruh uchun "baho qo'yilmagan" ma'nosiz
         $groupsWithStudents = $this->groupsWithActiveStudents($groupIds);
 
-        // 2. Qaysi juftliklarda kamida bitta baho yoki NB bor
-        $marked = $this->markedPairs($groupIds, $subjectIds, $from, $today);
+        // 2. Juftliklar tahlili: qaysilari to'liq (marked) va to'liq
+        //    bo'lmaganlarida kimlar baho olmagan (missing). $slots ham
+        //    uzatiladi — bahosi umuman yo'q juftlikda butun ro'yxat sanalsin.
+        $analysis = $this->analyzePairs($groupIds, $subjectIds, $from, $today, $slots);
+        $marked = $analysis['marked'];
+        $missing = $analysis['missing'];
+
+        // Kun bo'yicha noyob talabalar: bir talaba ikki juftlikda ham
+        // qoldirilsa bir marta sanaladi (hisobot bilan bir xil qoida)
+        $missingByDay = [];
+        foreach ($slots as $slot) {
+            $pairKey = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
+            if (isset($missing[$pairKey])) {
+                $dayKey = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
+                $missingByDay[$dayKey] = ($missingByDay[$dayKey] ?? []) + $missing[$pairKey];
+            }
+        }
 
         // 3. Allaqachon so'rov yuborilgan kunlar: rad etilmaganlari chiqariladi
         $openings = LessonOpening::query()
@@ -113,7 +128,7 @@ class TeacherMissedLessons
                     && ($status === null || $status === LessonOpening::STATUS_REJECTED);
             })
             ->unique(fn ($slot) => $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day))
-            ->map(function ($slot) use ($openings) {
+            ->map(function ($slot) use ($openings, $missingByDay) {
                 $key = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
 
                 return [
@@ -121,6 +136,8 @@ class TeacherMissedLessons
                     'subject_name' => $slot->subject_name,
                     'lesson_date' => $slot->lesson_day,
                     'rejected' => ($openings[$key] ?? null) === LessonOpening::STATUS_REJECTED,
+                    // Shu kunda nechta talabada baho yo'q (popupda ko'rsatiladi)
+                    'ungraded_students' => count($missingByDay[$key] ?? []),
                     // Jurnal shu kunga o'tib ochiladi. So'rov oynasi O'ZI
                     // ochilmaydi: o'qituvchi avval jurnalni ko'rsin, so'ng
                     // kerak bo'lsa ustundagi "!" ni bossin.

@@ -305,6 +305,7 @@
             .mlp-subject { font-size: 16px; font-weight: 700; color: #1e293b; }
             .mlp-meta { font-size: 13px; color: #64748b; margin-top: 3px; }
             .mlp-tag { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #fee2e2; color: #b91c1c; }
+            .mlp-count { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
             .mlp-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none !important; white-space: nowrap; background: #16a34a; color: #fff !important; }
             .mlp-btn:hover { background: #15803d; }
             .mlp-btn.is-muted { background: #e2e8f0; color: #334155 !important; }
@@ -342,6 +343,9 @@
                                 <div class="mlp-subject">{{ $lesson['subject_name'] }}</div>
                                 <div class="mlp-meta">
                                     {{ $lesson['group_name'] }} guruhi · {{ $mlpDate->format('d.m.Y') }}
+                                    @if(($lesson['ungraded_students'] ?? 0) > 0)
+                                        <span class="mlp-count">{{ $lesson['ungraded_students'] }} talabada baho yo'q</span>
+                                    @endif
                                     @if($lesson['rejected'])
                                         <span class="mlp-tag">so'rov rad etilgan</span>
                                     @endif

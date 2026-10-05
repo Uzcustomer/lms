@@ -378,14 +378,15 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           final semesterName =
               provider.profile?['semester_name']?.toString() ?? '';
 
-          return RefreshIndicator(
-            onRefresh: () => provider.refreshAll(),
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
-                  _buildHeader(context, l, semesterName),
-                  Padding(
+          // Header stays put; only the content below it scrolls.
+          return Column(
+            children: [
+              _buildHeader(context, l, semesterName),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => provider.refreshAll(),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -445,9 +446,9 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           );
         },
       ),

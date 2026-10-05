@@ -290,17 +290,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              await provider.refreshAll();
-              _loadTodaySchedule();
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
-                  _buildHeader(context, l),
-                  Padding(
+          // Header stays put; only the content below it scrolls.
+          return Column(
+            children: [
+              _buildHeader(context, l),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    await provider.refreshAll();
+                    _loadTodaySchedule();
+                  },
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,9 +327,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           );
         },
       ),

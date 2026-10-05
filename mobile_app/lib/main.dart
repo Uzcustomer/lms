@@ -134,12 +134,18 @@ class _SessionEffectsState extends State<_SessionEffects> {
   late final AuthProvider _auth;
   String? _sessionKey;
 
+  // Attendance windows already shown as a modal, so a window pops up once
+  // and not again on every poll.
+  final Set<int> _promptedSessions = {};
+  bool _attendanceModalOpen = false;
+
   @override
   void initState() {
     super.initState();
     _auth = context.read<AuthProvider>();
     _auth.addListener(_sync);
     PushService.lastTap.addListener(_onPushTap);
+    AttendanceWatcher.pending.addListener(_onPendingChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
   }
 
@@ -147,7 +153,33 @@ class _SessionEffectsState extends State<_SessionEffects> {
   void dispose() {
     _auth.removeListener(_sync);
     PushService.lastTap.removeListener(_onPushTap);
+    AttendanceWatcher.pending.removeListener(_onPendingChanged);
     super.dispose();
+  }
+
+  /// A newly opened attendance window pops the confirm modal by itself -
+  /// whether the push arrived in the foreground or the poll found it.
+  void _onPendingChanged() {
+    if (!mounted || _auth.state != AuthState.authenticated || !_auth.isStudent) return;
+    final fresh = AttendanceWatcher.pending.value
+        .where((p) => !p.isPresent && p.timeLeft > Duration.zero && !_promptedSessions.contains(p.sessionId))
+        .map((p) => p.sessionId)
+        .toList();
+    if (fresh.isEmpty) return;
+    _promptedSessions.addAll(fresh);
+    _openAttendanceModal();
+  }
+
+  Future<void> _openAttendanceModal() async {
+    if (_attendanceModalOpen) return;
+    final ctx = LmsApp.navigatorKey.currentContext;
+    if (ctx == null) return;
+    _attendanceModalOpen = true;
+    try {
+      await showAttendanceConfirm(ctx);
+    } finally {
+      _attendanceModalOpen = false;
+    }
   }
 
   void _sync() {
@@ -169,6 +201,7 @@ class _SessionEffectsState extends State<_SessionEffects> {
       NotificationBadge.stopPolling();
       NotificationBadge.unread.value = 0;
       AttendanceWatcher.stop();
+      _promptedSessions.clear();
     }
     if (authed) {
       PushService.startSession(isTeacher: _auth.isTeacher);
@@ -183,8 +216,7 @@ class _SessionEffectsState extends State<_SessionEffects> {
     if (_auth.state != AuthState.authenticated || !_auth.isStudent) return;
     PushService.lastTap.value = null;
     AttendanceWatcher.refresh();
-    final ctx = LmsApp.navigatorKey.currentContext;
-    if (ctx != null) showAttendanceConfirm(ctx);
+    _openAttendanceModal();
   }
 
   @override

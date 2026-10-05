@@ -71,7 +71,8 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final cam = _camera;
     if (cam == null || !cam.value.isInitialized) return;
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       cam.dispose();
       _camera = null;
     } else if (state == AppLifecycleState.resumed && _stage == _Stage.preview) {
@@ -88,7 +89,11 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
         _referenceLoading = false;
       });
     } on ApiException catch (e) {
-      if (mounted) setState(() { _referenceError = e.message; _referenceLoading = false; });
+      if (mounted)
+        setState(() {
+          _referenceError = e.message;
+          _referenceLoading = false;
+        });
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -138,7 +143,8 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
 
   Future<void> _captureAndCompare() async {
     final cam = _camera;
-    if (cam == null || !cam.value.isInitialized || cam.value.isTakingPicture) return;
+    if (cam == null || !cam.value.isInitialized || cam.value.isTakingPicture)
+      return;
 
     setState(() {
       _stage = _Stage.comparing;
@@ -155,9 +161,10 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
       setState(() {
         _stage = _Stage.failed;
         _verdict = context.l10n.pick(
-            uz: 'Suratga olib bo\'lmadi. Qayta urinib ko\'ring.',
-            ru: 'Не удалось сделать снимок. Попробуйте снова.',
-            en: 'Could not take the picture. Try again.');
+          uz: 'Suratga olib bo\'lmadi. Qayta urinib ko\'ring.',
+          ru: 'Не удалось сделать снимок. Попробуйте снова.',
+          en: 'Could not take the picture. Try again.',
+        );
       });
       return;
     }
@@ -211,9 +218,15 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
         body: Column(
           children: [
             ClinicHeader(
-              title: l.pick(uz: 'Yuzni tasdiqlash', ru: 'Подтверждение лица', en: 'Face check'),
+              title: l.pick(
+                uz: 'Yuzni tasdiqlash',
+                ru: 'Подтверждение лица',
+                en: 'Face check',
+              ),
               overline: widget.subjectName,
-              onBack: _stage == _Stage.comparing ? null : () => Navigator.of(context).pop(_result),
+              onBack: _stage == _Stage.comparing
+                  ? null
+                  : () => Navigator.of(context).pop(_result),
             ),
             Expanded(
               child: ListView(
@@ -244,29 +257,51 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
     final Color tone;
     final IconData icon;
     if (_referenceLoading) {
-      title = l.pick(uz: 'Rasm qidirilmoqda…', ru: 'Поиск фото…', en: 'Looking up photo…');
-      sub = l.pick(uz: 'LMS dagi tasdiqlangan rasmingiz', ru: 'Ваше утверждённое фото в LMS', en: 'Your approved LMS photo');
+      title = l.pick(
+        uz: 'Rasm qidirilmoqda…',
+        ru: 'Поиск фото…',
+        en: 'Looking up photo…',
+      );
+      sub = l.pick(
+        uz: 'LMS dagi tasdiqlangan rasmingiz',
+        ru: 'Ваше утверждённое фото в LMS',
+        en: 'Your approved LMS photo',
+      );
       tone = ClinicTheme.mutedOf(context);
       icon = Icons.hourglass_top_rounded;
     } else if (_referenceError != null) {
-      title = l.pick(uz: 'Rasmni olib bo\'lmadi', ru: 'Не удалось получить фото', en: 'Could not load photo');
+      title = l.pick(
+        uz: 'Rasmni olib bo\'lmadi',
+        ru: 'Не удалось получить фото',
+        en: 'Could not load photo',
+      );
       sub = _referenceError!;
       tone = ClinicTheme.amberOf(context);
       icon = Icons.wifi_off_rounded;
     } else if (found) {
-      title = l.pick(uz: 'Talaba rasmi topildi', ru: 'Фото студента найдено', en: 'Student photo found');
+      title = l.pick(
+        uz: 'Talaba rasmi topildi',
+        ru: 'Фото студента найдено',
+        en: 'Student photo found',
+      );
       sub = l.pick(
-          uz: 'Yuzingiz shu rasm bilan solishtiriladi · chegara ${ref!.threshold.toStringAsFixed(0)}%',
-          ru: 'Лицо сравнивается с этим фото · порог ${ref.threshold.toStringAsFixed(0)}%',
-          en: 'Your face is matched to this photo · threshold ${ref.threshold.toStringAsFixed(0)}%');
+        uz: 'Yuzingiz shu rasm bilan solishtiriladi · chegara ${ref!.threshold.toStringAsFixed(0)}%',
+        ru: 'Лицо сравнивается с этим фото · порог ${ref.threshold.toStringAsFixed(0)}%',
+        en: 'Your face is matched to this photo · threshold ${ref.threshold.toStringAsFixed(0)}%',
+      );
       tone = ClinicTheme.greenOf(context);
       icon = Icons.verified_rounded;
     } else {
-      title = l.pick(uz: 'Tasdiqlangan rasm topilmadi', ru: 'Утверждённое фото не найдено', en: 'No approved photo');
+      title = l.pick(
+        uz: 'Tasdiqlangan rasm topilmadi',
+        ru: 'Утверждённое фото не найдено',
+        en: 'No approved photo',
+      );
       sub = l.pick(
-          uz: 'LMS da tasdiqlangan suratingiz yo\'q — yuz tekshirilmaydi, davomat belgi bilan o\'tadi.',
-          ru: 'В LMS нет утверждённого фото — лицо не проверяется, отметка пройдёт с пометкой.',
-          en: 'No approved photo in LMS — face is not checked, attendance passes with a note.');
+        uz: 'LMS da tasdiqlangan suratingiz yo\'q — yuz tekshirilmaydi, davomat belgi bilan o\'tadi.',
+        ru: 'В LMS нет утверждённого фото — лицо не проверяется, отметка пройдёт с пометкой.',
+        en: 'No approved photo in LMS — face is not checked, attendance passes with a note.',
+      );
       tone = ClinicTheme.amberOf(context);
       icon = Icons.no_photography_outlined;
     }
@@ -301,14 +336,26 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
                     Icon(icon, size: 18, color: tone),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(title,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: tone)),
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: tone,
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(sub,
-                    style: TextStyle(fontSize: 12, height: 1.35, color: ClinicTheme.mutedOf(context))),
+                Text(
+                  sub,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: ClinicTheme.mutedOf(context),
+                  ),
+                ),
               ],
             ),
           ),
@@ -318,11 +365,14 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
   }
 
   Widget _photoPlaceholder({bool broken = false}) => Container(
-        color: ClinicTheme.dividerOf(context),
-        alignment: Alignment.center,
-        child: Icon(broken ? Icons.broken_image_outlined : Icons.person_outline,
-            color: ClinicTheme.faintOf(context), size: 28),
-      );
+    color: ClinicTheme.dividerOf(context),
+    alignment: Alignment.center,
+    child: Icon(
+      broken ? Icons.broken_image_outlined : Icons.person_outline,
+      color: ClinicTheme.faintOf(context),
+      size: 28,
+    ),
+  );
 
   /// Bottom: live front camera, or the frozen shot while comparing.
   Widget _cameraCard() {
@@ -333,14 +383,22 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
     } else if (_cameraDenied) {
       body = _cameraMessage(
         Icons.no_photography_outlined,
-        l.pick(uz: 'Kamera ruxsati berilmagan.', ru: 'Нет разрешения на камеру.', en: 'Camera permission not granted.'),
+        l.pick(
+          uz: 'Kamera ruxsati berilmagan.',
+          ru: 'Нет разрешения на камеру.',
+          en: 'Camera permission not granted.',
+        ),
         action: l.permissionGrant,
         onAction: openAppSettings,
       );
     } else if (_cameraError != null) {
       body = _cameraMessage(
         Icons.videocam_off_outlined,
-        l.pick(uz: 'Kamerani ochib bo\'lmadi.', ru: 'Не удалось открыть камеру.', en: 'Could not open the camera.'),
+        l.pick(
+          uz: 'Kamerani ochib bo\'lmadi.',
+          ru: 'Не удалось открыть камеру.',
+          en: 'Could not open the camera.',
+        ),
         action: l.pick(uz: 'Qayta urinish', ru: 'Повторить', en: 'Retry'),
         onAction: _openCamera,
       );
@@ -375,32 +433,58 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          AspectRatio(
-            aspectRatio: 3 / 4,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: Colors.black, child: body),
-                // Oval guide so the student centres their face.
-                if (_stage == _Stage.preview && _camera != null)
-                  IgnorePointer(child: CustomPaint(painter: _FaceGuidePainter(verdictTone))),
-                if (_stage == _Stage.comparing)
-                  Container(
-                    color: Colors.black45,
-                    alignment: Alignment.center,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+          // A 230 px wide 3:4 box rather than the full card width: the
+          // face only needs to fill the oval, and the page stays short.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+            child: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 230,
+                  child: AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        const CircularProgressIndicator(color: Colors.white),
-                        const SizedBox(height: 12),
-                        Text(
-                          l.pick(uz: 'Solishtirilmoqda…', ru: 'Сравнение…', en: 'Comparing…'),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                        ),
+                        ColoredBox(color: Colors.black, child: body),
+                        // Oval guide so the student centres their face.
+                        if (_stage == _Stage.preview && _camera != null)
+                          IgnorePointer(
+                            child: CustomPaint(
+                              painter: _FaceGuidePainter(verdictTone),
+                            ),
+                          ),
+                        if (_stage == _Stage.comparing)
+                          Container(
+                            color: Colors.black45,
+                            alignment: Alignment.center,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const CircularProgressIndicator(
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  l.pick(
+                                    uz: 'Solishtirilmoqda…',
+                                    ru: 'Сравнение…',
+                                    en: 'Comparing…',
+                                  ),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ),
-              ],
+                ),
+              ),
             ),
           ),
           Padding(
@@ -422,16 +506,27 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
                   child: Text(
                     _verdict ??
                         l.pick(
-                            uz: 'Yuzingizni ramka ichiga joylashtiring, yorug\' joyda turing.',
-                            ru: 'Поместите лицо в рамку, стойте на свету.',
-                            en: 'Put your face inside the frame, in good light.'),
-                    style: TextStyle(fontSize: 12.5, height: 1.35, color: ClinicTheme.inkOf(context)),
+                          uz: 'Yuzingizni ramka ichiga joylashtiring, yorug\' joyda turing.',
+                          ru: 'Поместите лицо в рамку, стойте на свету.',
+                          en: 'Put your face inside the frame, in good light.',
+                        ),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: ClinicTheme.inkOf(context),
+                    ),
                   ),
                 ),
                 if (_similarity != null) ...[
                   const SizedBox(width: 8),
-                  Text('${_similarity!.toStringAsFixed(0)}%',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: verdictTone)),
+                  Text(
+                    '${_similarity!.toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: verdictTone,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -441,19 +536,31 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
     );
   }
 
-  Widget _cameraMessage(IconData icon, String text, {String? action, VoidCallback? onAction}) {
+  Widget _cameraMessage(
+    IconData icon,
+    String text, {
+    String? action,
+    VoidCallback? onAction,
+  }) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 44, color: Colors.white70),
           const SizedBox(height: 10),
-          Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white),
+          ),
           if (action != null) ...[
             const SizedBox(height: 10),
             OutlinedButton(
               onPressed: onAction,
-              style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white70)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white70),
+              ),
               child: Text(action),
             ),
           ],
@@ -468,24 +575,33 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
 
     final (label, icon, onTap, color) = switch (_stage) {
       _Stage.preview => (
-          l.pick(uz: 'Suratga olish va solishtirish', ru: 'Снять и сравнить', en: 'Take photo and compare'),
-          Icons.camera_alt_rounded,
-          cameraReady && !_referenceLoading ? _captureAndCompare : null,
-          ClinicTheme.primaryOf(context),
+        l.pick(
+          uz: 'Suratga olish va solishtirish',
+          ru: 'Снять и сравнить',
+          en: 'Take photo and compare',
         ),
-      _Stage.comparing => (l.checking, Icons.hourglass_top_rounded, null, ClinicTheme.primaryOf(context)),
+        Icons.camera_alt_rounded,
+        cameraReady && !_referenceLoading ? _captureAndCompare : null,
+        ClinicTheme.primaryOf(context),
+      ),
+      _Stage.comparing => (
+        l.checking,
+        Icons.hourglass_top_rounded,
+        null,
+        ClinicTheme.primaryOf(context),
+      ),
       _Stage.matched => (
-          l.pick(uz: 'Yopish', ru: 'Закрыть', en: 'Close'),
-          Icons.check_rounded,
-          () => Navigator.of(context).pop(_result),
-          ClinicTheme.greenOf(context),
-        ),
+        l.pick(uz: 'Yopish', ru: 'Закрыть', en: 'Close'),
+        Icons.check_rounded,
+        () => Navigator.of(context).pop(_result),
+        ClinicTheme.greenOf(context),
+      ),
       _Stage.failed => (
-          l.pick(uz: 'Qayta urinish', ru: 'Попробовать снова', en: 'Try again'),
-          Icons.refresh_rounded,
-          _retry,
-          ClinicTheme.primaryOf(context),
-        ),
+        l.pick(uz: 'Qayta urinish', ru: 'Попробовать снова', en: 'Try again'),
+        Icons.refresh_rounded,
+        _retry,
+        ClinicTheme.primaryOf(context),
+      ),
     };
 
     return SizedBox(
@@ -497,20 +613,25 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
           backgroundColor: color,
           foregroundColor: Colors.white,
           disabledBackgroundColor: ClinicTheme.dividerOf(context),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         icon: Icon(icon),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+        label: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+        ),
       ),
     );
   }
 
   BoxDecoration _cardDeco() => BoxDecoration(
-        color: ClinicTheme.surfaceOf(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ClinicTheme.dividerOf(context)),
-        boxShadow: ClinicTheme.cardShadowOf(context),
-      );
+    color: ClinicTheme.surfaceOf(context),
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: ClinicTheme.dividerOf(context)),
+    boxShadow: ClinicTheme.cardShadowOf(context),
+  );
 }
 
 /// Dashed oval in the middle of the preview, darkened outside.
@@ -529,7 +650,10 @@ class _FaceGuidePainter extends CustomPainter {
       ..addRect(Offset.zero & size)
       ..addOval(oval)
       ..fillType = PathFillType.evenOdd;
-    canvas.drawPath(outside, Paint()..color = Colors.black.withValues(alpha: 0.35));
+    canvas.drawPath(
+      outside,
+      Paint()..color = Colors.black.withValues(alpha: 0.35),
+    );
     canvas.drawOval(
       oval,
       Paint()

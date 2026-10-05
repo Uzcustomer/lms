@@ -136,86 +136,85 @@ class StudentUsefulScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
-      body: SingleChildScrollView(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Container(
-              padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: ClinicTheme.heroGradientOf(context),
-                ),
-              ),
-              child: Row(
-                children: [
-                  _HeaderIconButton(
-                    isDark: isDark,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.arrow_back_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      onPressed: () => StudentHomeScreen.switchToHome(context),
-                    ),
-                  ),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.useful.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                            color: Colors.white.withValues(alpha: 0.75),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          l.useful,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _HeaderIconButton(
-                    isDark: isDark,
-                    child: NotificationBell(
-                      iconColor: Colors.white,
-                      iconSize: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _HeaderIconButton(
-                    isDark: isDark,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.settings_outlined,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                      onPressed: () => showSettingsSheet(context),
-                    ),
-                  ),
-                ],
+      // Header stays put; only the content below it scrolls.
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: ClinicTheme.heroGradientOf(context),
               ),
             ),
-
-            Padding(
+            child: Row(
+              children: [
+                _HeaderIconButton(
+                  isDark: isDark,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    onPressed: () => StudentHomeScreen.switchToHome(context),
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l.useful.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l.useful,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _HeaderIconButton(
+                  isDark: isDark,
+                  child: NotificationBell(
+                    iconColor: Colors.white,
+                    iconSize: 18,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _HeaderIconButton(
+                  isDark: isDark,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.settings_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                    onPressed: () => showSettingsSheet(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,8 +254,8 @@ class StudentUsefulScreen extends StatelessWidget {
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

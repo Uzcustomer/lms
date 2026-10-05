@@ -357,55 +357,61 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             return sa.compareTo(sb);
           });
 
-          return RefreshIndicator(
-            onRefresh: () => provider.refreshAll(),
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _buildHeader(context, l),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          // Header stays put; only the content below it scrolls.
+          return Column(
+            children: [
+              _buildHeader(context, l),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => provider.refreshAll(),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
                     children: [
-                      _buildWeekNavigator(
-                        weeks: weeks,
-                        currentIndex: currentWeekIndex,
-                        weekLabel: weekLabel,
-                        provider: provider,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildWeekNavigator(
+                            weeks: weeks,
+                            currentIndex: currentWeekIndex,
+                            weekLabel: weekLabel,
+                            provider: provider,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildDaySelector(
+                            weekDays: weekDays,
+                            activeIndex: activeIndex,
+                            dateSchedule: dateSchedule,
+                            days: days,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildSelectedDayHeader(
+                            date: selectedDate,
+                            lessons: selectedLessons,
+                          ),
+                          const SizedBox(height: 12),
+                          if (selectedLessons.isEmpty)
+                            _buildEmptyState(l)
+                          else
+                            ...selectedLessons.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final lesson =
+                                  entry.value as Map<String, dynamic>;
+                              final isLast =
+                                  index == selectedLessons.length - 1;
+                              return _buildTimelineLesson(
+                                lesson,
+                                index,
+                                isLast,
+                                _isSameDay(selectedDate, DateTime.now()),
+                              );
+                            }),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      _buildDaySelector(
-                        weekDays: weekDays,
-                        activeIndex: activeIndex,
-                        dateSchedule: dateSchedule,
-                        days: days,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildSelectedDayHeader(
-                        date: selectedDate,
-                        lessons: selectedLessons,
-                      ),
-                      const SizedBox(height: 12),
-                      if (selectedLessons.isEmpty)
-                        _buildEmptyState(l)
-                      else
-                        ...selectedLessons.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final lesson = entry.value as Map<String, dynamic>;
-                          final isLast = index == selectedLessons.length - 1;
-                          return _buildTimelineLesson(
-                            lesson,
-                            index,
-                            isLast,
-                            _isSameDay(selectedDate, DateTime.now()),
-                          );
-                        }),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),

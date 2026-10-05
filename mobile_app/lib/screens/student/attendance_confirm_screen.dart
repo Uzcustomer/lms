@@ -266,8 +266,10 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
     final (text, action, onTap) = switch (r) {
       BeaconReadiness.bluetoothOff => (
           l.pick(uz: 'Bluetooth o\'chiq. Davomat uchun uni yoqing.', ru: 'Bluetooth выключен. Включите его для переклички.', en: 'Bluetooth is off. Turn it on to confirm attendance.'),
-          l.bluetoothSettings,
-          _beacons.openBluetoothSettings,
+          l.pick(uz: 'Bluetooth yoqish', ru: 'Включить Bluetooth', en: 'Turn on Bluetooth'),
+          () async {
+            if (await _beacons.requestBluetoothOn()) _startScan();
+          },
         ),
       BeaconReadiness.permissionDenied => (
           l.pick(uz: 'Davomat uchun Bluetooth va joylashuv ruxsati kerak. Ilova GPS ishlatmaydi — ruxsat faqat xona signalini eshitish uchun.', ru: 'Для переклички нужны разрешения Bluetooth и геолокации. GPS не используется — только сигнал аудитории.', en: 'Bluetooth and location permissions are required. GPS is not used — only the room signal.'),
@@ -549,7 +551,13 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
       icon = inRoom ? Icons.bluetooth_connected : Icons.bluetooth_searching;
     }
 
-    return Container(
+    // Tapping a "Bluetooth off" / "no permission" row re-runs the checks,
+    // which re-asks the system for whatever is missing.
+    final blocked = p.beacon != null && r != null && r != BeaconReadiness.ready;
+    return InkWell(
+      onTap: blocked ? () => _startScan() : null,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: tone.withValues(alpha: 0.08),
@@ -574,6 +582,7 @@ class _AttendanceConfirmScreenState extends State<AttendanceConfirmScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

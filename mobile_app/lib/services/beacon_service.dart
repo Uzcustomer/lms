@@ -176,7 +176,11 @@ class BeaconService {
     }
 
     try {
-      final state = await flutterBeacon.bluetoothState;
+      var state = await flutterBeacon.bluetoothState;
+      if (state == BluetoothState.stateOff && request) {
+        await requestBluetoothOn();
+        state = await flutterBeacon.bluetoothState;
+      }
       if (state == BluetoothState.stateOff) return BeaconReadiness.bluetoothOff;
     } catch (_) {/* some devices don't report; try ranging anyway */}
 
@@ -207,10 +211,18 @@ class BeaconService {
     } catch (_) {}
   }
 
-  Future<void> openBluetoothSettings() async {
+  /// Asks the system to switch Bluetooth on: Android shows its own
+  /// "allow this app to turn on Bluetooth?" sheet and the call resolves once
+  /// it closes; iOS opens Settings. True when Bluetooth is on afterwards.
+  Future<bool> requestBluetoothOn() async {
     try {
       await flutterBeacon.openBluetoothSettings;
-    } catch (_) {}
+    } catch (_) {/* declined - the plugin reports "bluetooth disabled" */}
+    try {
+      return await flutterBeacon.bluetoothState != BluetoothState.stateOff;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> openAppPermissionSettings() => openAppSettings();

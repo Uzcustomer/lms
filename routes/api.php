@@ -195,6 +195,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/presence', [StudentAttendanceApiController::class, 'presence'])
                 ->middleware('throttle:120,1');
             Route::get('/attendance/pending', [StudentAttendanceApiController::class, 'pending']);
+            Route::get('/attendance/face-reference', [StudentAttendanceApiController::class, 'faceReference']);
             Route::get('/attendance/history', [StudentAttendanceApiController::class, 'history']);
             Route::post('/attendance/{session}/confirm', [StudentAttendanceApiController::class, 'confirm']);
         });

@@ -225,11 +225,12 @@ class ApiService {
       final message = errors?.values.first is List
           ? (errors!.values.first as List).first.toString()
           : body['message']?.toString() ?? AppLocalizations.current.genericError;
-      throw ApiException(message, response.statusCode);
+      throw ApiException(message, response.statusCode, body: body);
     } else {
       throw ApiException(
         body['message']?.toString() ?? AppLocalizations.current.serverError,
         response.statusCode,
+        body: body,
       );
     }
   }
@@ -239,7 +240,11 @@ class ApiException implements Exception {
   final String message;
   final int statusCode;
 
-  ApiException(this.message, this.statusCode);
+  /// The decoded error body, for callers that need more than the message
+  /// (e.g. the face similarity behind a "face did not match" 422).
+  final Map<String, dynamic>? body;
+
+  ApiException(this.message, this.statusCode, {this.body});
 
   @override
   String toString() => message;

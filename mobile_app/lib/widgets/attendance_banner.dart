@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/student/attendance_confirm_screen.dart';
 import '../services/attendance_service.dart';
-import '../utils/page_transitions.dart';
 import 'clinic_header.dart';
 import '../l10n/app_localizations.dart';
 
@@ -24,9 +23,7 @@ class AttendanceBanner extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 8),
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              SlideFadePageRoute(builder: (_) => const AttendanceConfirmScreen()),
-            ),
+            onTap: () => showAttendanceConfirm(context),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(

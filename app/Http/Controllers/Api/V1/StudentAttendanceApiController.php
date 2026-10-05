@@ -10,6 +10,7 @@ use App\Models\DeviceToken;
 use App\Models\PresenceLog;
 use App\Models\Student;
 use App\Services\AttendanceSessionService;
+use App\Services\FaceIdService;
 use App\Services\StudentFaceVerifier;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -132,6 +133,26 @@ class StudentAttendanceApiController extends Controller
     public function pending(Request $request): JsonResponse
     {
         return response()->json(['data' => $this->pendingFor($request->user())]);
+    }
+
+    /**
+     * The approved photo the attendance face check compares against — the
+     * same one FaceIdService::referenceImageFor() hands to ArcFace — so the
+     * app can show the student what they are being matched to before the
+     * camera opens.
+     */
+    public function faceReference(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        $photo = FaceIdService::getApprovedStudentPhoto($student);
+
+        return response()->json(['data' => [
+            'found' => $photo !== null,
+            'photo_url' => $photo?->photo_url,
+            'approved_at' => $photo?->reviewed_at?->toIso8601String(),
+            'enabled' => FaceIdService::isEnabledForStudent($student) && FaceIdService::isArcFaceEnabled(),
+            'threshold' => FaceIdService::getArcFaceThreshold(),
+        ]]);
     }
 
     public function confirm(Request $request, int $sessionId): JsonResponse

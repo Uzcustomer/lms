@@ -149,9 +149,10 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                       children: [
                         if (_error != null)
                           _empty(Icons.wifi_off_rounded, _error!)
-                        else if (_lessons.isEmpty)
-                          _empty(Icons.event_busy_outlined, context.l10n.pick(uz: 'Bu kunda jadvalda darsingiz yo\'q.', ru: 'На этот день занятий в расписании нет.', en: 'No lessons in your timetable for this day.'))
-                        else
+                        else if (_lessons.isEmpty) ...[
+                          _empty(Icons.event_busy_outlined, context.l10n.pick(uz: 'Bu kunda jadvalda darsingiz yo\'q.', ru: 'На этот день занятий в расписании нет.', en: 'No lessons in your timetable for this day.')),
+                          _nearestButtons(),
+                        ] else
                           ..._lessons.whereType<Map>().map((l) => _lessonCard(Map<String, dynamic>.from(l))),
                       ],
                     ),

@@ -69,6 +69,7 @@ class ApiConfig {
   static const String studentPresence = '/student/presence';
   static const String studentAttendancePending = '/student/attendance/pending';
   static const String studentAttendanceHistory = '/student/attendance/history';
+  static const String studentAttendanceFaceReference = '/student/attendance/face-reference';
   static String studentAttendanceConfirm(int sessionId) => '/student/attendance/$sessionId/confirm';
   static const String teacherDeviceToken = '/teacher/device-token';
   static const String teacherAttendanceLessons = '/teacher/attendance/lessons';

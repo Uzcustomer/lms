@@ -36,6 +36,28 @@ class BeaconInfo {
   String get key => '$uuid/$major/$minor';
 }
 
+/// The approved LMS photo the attendance face check compares against.
+class FaceReference {
+  final bool found;
+  final String? photoUrl;
+  final bool enabled;
+  final double threshold;
+
+  const FaceReference({
+    required this.found,
+    required this.photoUrl,
+    required this.enabled,
+    required this.threshold,
+  });
+
+  factory FaceReference.fromJson(Map<String, dynamic> json) => FaceReference(
+        found: json['found'] == true,
+        photoUrl: json['photo_url']?.toString(),
+        enabled: json['enabled'] == true,
+        threshold: (json['threshold'] as num?)?.toDouble() ?? 85,
+      );
+}
+
 /// An open attendance window the student may confirm.
 class PendingAttendance {
   final int sessionId;
@@ -130,6 +152,11 @@ class AttendanceService {
   Future<List<PendingAttendance>> pending() async {
     final res = await _api.get(ApiConfig.studentAttendancePending);
     return _pendingList(res['data']);
+  }
+
+  Future<FaceReference> faceReference() async {
+    final res = await _api.get(ApiConfig.studentAttendanceFaceReference);
+    return FaceReference.fromJson(res['data'] as Map<String, dynamic>? ?? const {});
   }
 
   Future<Map<String, dynamic>> confirm(

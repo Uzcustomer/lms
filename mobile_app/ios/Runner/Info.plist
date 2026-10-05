@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Davomatni tasdiqlashda va Face ID bilan kirishda yuzingizni suratga olish uchun.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Dars xonasidagi Bluetooth mayoq signalini eshitib, davomatni tasdiqlash uchun.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Dars xonasidagi Bluetooth mayoqni aniqlash uchun. GPS joylashuv ishlatilmaydi.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

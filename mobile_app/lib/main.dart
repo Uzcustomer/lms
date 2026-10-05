@@ -183,9 +183,8 @@ class _SessionEffectsState extends State<_SessionEffects> {
     if (_auth.state != AuthState.authenticated || !_auth.isStudent) return;
     PushService.lastTap.value = null;
     AttendanceWatcher.refresh();
-    LmsApp.navigatorKey.currentState?.push(
-      MaterialPageRoute(builder: (_) => const AttendanceConfirmScreen()),
-    );
+    final ctx = LmsApp.navigatorKey.currentContext;
+    if (ctx != null) showAttendanceConfirm(ctx);
   }
 
   @override

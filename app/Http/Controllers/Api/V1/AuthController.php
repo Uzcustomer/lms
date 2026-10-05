@@ -371,6 +371,9 @@ class AuthController extends Controller
 
         $token = $student->createToken('mobile-app', ['student'], now()->addDays(30));
 
+        // Kirish faolligi hisoboti uchun: web kirish kabi activity_logs ga yoziladi
+        ActivityLogService::logLoginFor($student, 'student', 'mobil');
+
         return response()->json([
             'token' => $token->plainTextToken,
             'user' => $student,

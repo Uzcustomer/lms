@@ -102,6 +102,34 @@ class ActivityLogService
     }
 
     /**
+     * Kirish logi — foydalanuvchi oldindan ma'lum bo'lganda (mobil API).
+     *
+     * logLogin() Auth::guard() dan oladi; token orqali kirishda esa sessiya
+     * yo'q, foydalanuvchi qo'lda uzatiladi. Yozuv shakli logLogin() bilan
+     * bir xil, shuning uchun hisobotlar ikkalasini bir qatorda ko'radi.
+     */
+    public static function logLoginFor(object $user, string $guard, string $via = 'mobil'): ?ActivityLog
+    {
+        try {
+            return ActivityLog::create([
+                'guard' => $guard,
+                'user_id' => $user->id ?? null,
+                'user_name' => self::getUserName($user),
+                'role' => self::getActiveRole($user),
+                'action' => 'login',
+                'module' => 'auth',
+                'description' => "Tizimga kirdi ({$via})",
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('ActivityLog write failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Logout log
      */
     public static function logLogout(?string $guard = null): ?ActivityLog

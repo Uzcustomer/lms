@@ -433,58 +433,43 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          // A 230 px wide 3:4 box rather than the full card width: the
-          // face only needs to fill the oval, and the page stays short.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-            child: Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: SizedBox(
-                  width: 230,
-                  child: AspectRatio(
-                    aspectRatio: 3 / 4,
-                    child: Stack(
-                      fit: StackFit.expand,
+          // Edge to edge in the card, a little taller than wide: enough for
+          // the oval without the page growing past the button.
+          AspectRatio(
+            aspectRatio: 0.9,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: Colors.black, child: body),
+                // Oval guide so the student centres their face.
+                if (_stage == _Stage.preview && _camera != null)
+                  IgnorePointer(
+                    child: CustomPaint(painter: _FaceGuidePainter(verdictTone)),
+                  ),
+                if (_stage == _Stage.comparing)
+                  Container(
+                    color: Colors.black45,
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        ColoredBox(color: Colors.black, child: body),
-                        // Oval guide so the student centres their face.
-                        if (_stage == _Stage.preview && _camera != null)
-                          IgnorePointer(
-                            child: CustomPaint(
-                              painter: _FaceGuidePainter(verdictTone),
-                            ),
+                        const CircularProgressIndicator(color: Colors.white),
+                        const SizedBox(height: 12),
+                        Text(
+                          l.pick(
+                            uz: 'Solishtirilmoqda…',
+                            ru: 'Сравнение…',
+                            en: 'Comparing…',
                           ),
-                        if (_stage == _Stage.comparing)
-                          Container(
-                            color: Colors.black45,
-                            alignment: Alignment.center,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const CircularProgressIndicator(
-                                  color: Colors.white,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  l.pick(
-                                    uz: 'Solishtirilmoqda…',
-                                    ru: 'Сравнение…',
-                                    en: 'Comparing…',
-                                  ),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
                           ),
+                        ),
                       ],
                     ),
                   ),
-                ),
-              ),
+              ],
             ),
           ),
           Padding(

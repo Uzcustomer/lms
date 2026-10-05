@@ -405,8 +405,14 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
     } else if (_camera == null || !_camera!.value.isInitialized) {
       body = const Center(child: CircularProgressIndicator());
     } else {
-      // Fill the frame the way a mirror would: crop, do not letterbox.
+      // Crop to fill the frame, do not letterbox. Android mirrors the front
+      // camera preview but saves the photo un-mirrored, so the shot looked
+      // flipped the moment it was taken; flip the preview back so what the
+      // student sees is exactly what is sent.
       final cam = _camera!;
+      final mirrored =
+          Platform.isAndroid &&
+          cam.description.lensDirection == CameraLensDirection.front;
       body = ClipRect(
         child: OverflowBox(
           alignment: Alignment.center,
@@ -415,7 +421,7 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
             child: SizedBox(
               width: cam.value.previewSize?.height ?? 480,
               height: cam.value.previewSize?.width ?? 640,
-              child: CameraPreview(cam),
+              child: Transform.flip(flipX: mirrored, child: CameraPreview(cam)),
             ),
           ),
         ),

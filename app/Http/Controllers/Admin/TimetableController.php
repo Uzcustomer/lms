@@ -3951,17 +3951,6 @@ class TimetableController extends Controller
             ?? $board->semester_parity;
     }
 
-    private function cardMatchesBoardSeason(TimetableBoard $board, TimetableCard $card, array $seasonLookup): bool
-    {
-        return $this->subjectEffectiveSeason(
-            $board,
-            $seasonLookup,
-            (string) $card->specialty_name,
-            (int) $card->course,
-            (string) $card->subject_name
-        ) === $board->semester_parity;
-    }
-
     /**
      * Guruhlar dialogi — doskaning tasdiqlangan oqim snapshotlaridagi
      * guruhchalar (yo'nalish+kurs+oqim+til kesimida, talaba soni bilan).

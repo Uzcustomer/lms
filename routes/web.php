@@ -1147,14 +1147,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::delete('/boards/{board}', [\App\Http\Controllers\Admin\TimetableController::class, 'destroyBoard'])->name('boards.destroy');
                 Route::post('/boards/{board}/generate', [\App\Http\Controllers\Admin\TimetableController::class, 'generateCards'])->name('boards.generate');
                 Route::post('/boards/{board}/refresh-names', [\App\Http\Controllers\Admin\TimetableController::class, 'refreshSubjectNames'])->name('boards.refresh-names');
-                Route::post('/boards/{board}/auto-place', [\App\Http\Controllers\Admin\TimetableController::class, 'autoPlace'])->name('boards.auto-place');
                 Route::post('/boards/{board}/unplace', [\App\Http\Controllers\Admin\TimetableController::class, 'unplaceAll'])->name('boards.unplace');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::get('/boards/{board}/unplaced-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedExport'])->name('boards.unplaced-export');
                 Route::post('/boards/{board}/grid', [\App\Http\Controllers\Admin\TimetableController::class, 'saveGrid'])->name('boards.grid');
                 Route::post('/cards/{card}/place', [\App\Http\Controllers\Admin\TimetableController::class, 'placeCard'])->name('cards.place');
-                Route::post('/boards/{board}/compact-week', [\App\Http\Controllers\Admin\TimetableController::class, 'compactWeek'])->name('boards.compact-week');
                 Route::post('/cards/{card}/week-override', [\App\Http\Controllers\Admin\TimetableController::class, 'weekOverride'])->name('cards.week-override');
                 Route::post('/cards/{card}/update', [\App\Http\Controllers\Admin\TimetableController::class, 'updateCard'])->name('cards.update');
                 Route::get('/teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'teachers'])->name('teachers');

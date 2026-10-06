@@ -109,7 +109,7 @@
             </div>
 
             {{-- Yo'nalish tanlash + statistika + shu yo'nalish uchun panjara sozlamasi --}}
-            <div id="specBar" class="hidden tt-control-panel tt-work-panel mb-3" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin. Avtomatik joylash — guruh/o'qituvchi to'qnashuvisiz, oynasiz, fanni hafta bo'ylab teng taqsimlab qo'yadi.">
+            <div id="specBar" class="hidden tt-control-panel tt-work-panel mb-3" title="Kartani bosing → yashil katakni bosing. Joylashgan kartani bosib olib tashlash/ko'chirish/o'qituvchi-xona biriktirish mumkin.">
                 <div class="tt-filters-row">
                     <div class="tt-field">
                         <label>Fakultet</label>
@@ -149,7 +149,6 @@
                     </div>
 
                     <div class="tt-main-actions">
-                        <button type="button" id="autoBtn" class="toolbar-action tt-success-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/Avtomatik yuklash.png') }}" alt="" aria-hidden="true"></span>Avtomatik joylash</button>
                         <button type="button" id="unplaceBtn" class="toolbar-action tt-danger-btn" title="Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatib, kartochkalarni panelga qaytaradi"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/11_delete.png') }}" alt="" aria-hidden="true"></span>Bo'shatish</button>
                     </div>
                 </div>
@@ -157,20 +156,6 @@
                 <div class="tt-bottom-row">
                     <div class="tt-toggle-group">
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoScope"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span>Butun doska</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoReset"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/06_qaytadan_joylash.png') }}" alt="" aria-hidden="true"></span>Qaytadan joylash</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoRooms" checked><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/07_building.png') }}" alt="" aria-hidden="true"></span>Auditoriya</label>
-                        <label class="tt-toggle-chip"><input type="checkbox" id="autoLecRooms" checked><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/08_maruza_xonasi.png') }}" alt="" aria-hidden="true"></span>Ma'ruza xonasi</label>
-                    </div>
-                    <div id="autoProgress" class="hidden" style="width:min(420px,100%);min-width:260px">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;font-size:11px;font-weight:600;color:#047857">
-                            <span id="autoProgressLabel"></span>
-                            <span id="autoProgressPercent">0%</span>
-                        </div>
-                        <div id="autoProgressTrack" role="progressbar" aria-label="Avtomatik joylashtirish jarayoni"
-                             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
-                             style="height:7px;overflow:hidden;border-radius:9999px;background:#d1fae5">
-                            <div id="autoProgressBar" style="width:0;height:100%;border-radius:9999px;background:#059669;transition:width .25s ease"></div>
-                        </div>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -520,23 +505,6 @@
                                     <label class="flex items-center gap-2 text-sm text-gray-600">
                                         <input id="stShowNum" type="checkbox" class="rounded border-gray-300"> Kun nomi o'rniga raqamini ko'rsatish
                                     </label>
-                                    <div class="mt-1 pt-2 border-t border-gray-100">
-                                        <div class="text-xs font-semibold text-gray-500 mb-1">Avtomatik joylash qoidalari (bir fanning haftalik paralari):</div>
-                                        <label class="flex items-center gap-2 text-sm text-gray-600">
-                                            <input id="stSameDay" type="checkbox" class="rounded border-gray-300"> Bitta fanning paralarini bir kunga qo'yish
-                                        </label>
-                                        <label class="flex items-center gap-2 text-sm text-gray-600">
-                                            <input id="stConsec" type="checkbox" class="rounded border-gray-300"> Ketma-ket (yonma-yon) paralarga qo'yish
-                                        </label>
-                                        <p class="text-[11px] text-gray-400 mt-0.5">Masalan 4 soatlik dars — ikki para bir kunda, ketma-ket (2+2 alohida kunga bo'linmaydi).
-                                            Bu — <b>qat'iy</b> qoida: guruh, o'qituvchi yoki auditoriya band bo'lib blok butunligicha sig'masa,
-                                            kartalar bo'linmaydi — joylashmaganlar panelida qoladi.</p>
-                                        <label class="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                                            Auditoriya sig'imi toleransi:
-                                            <input id="stRoomTol" type="number" min="0" max="30" class="w-16 rounded border-gray-300 text-sm"> %
-                                        </label>
-                                        <p class="text-[11px] text-gray-400 mt-0.5">Oqim xona sig'imidan shu %gача katta bo'lsa ham joylanadi (mas. 120 o'rinli xona — 125 oqim). Katta farq baribir rad etiladi.</p>
-                                    </div>
                                 </div>
                                 <p class="col-span-2 text-xs text-gray-400">O'quv yili va semestr doska yaratilganda belgilangan — o'zgartirish uchun yangi doska yarating.</p>
                             </div>
@@ -1747,13 +1715,9 @@
         #excelViewBtn .toolbar-icon { color: #0f766e; }
         #checkBtn .toolbar-icon { color: #1d4ed8; }
         #gsSave .toolbar-icon { color: #2563eb; }
-        #autoBtn .toolbar-icon { color: #fff; }
         #unplaceBtn .toolbar-icon { color: #dc2626; }
         .tt-toggle-icon { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
         #autoScope + .tt-toggle-icon { color: #2563eb; }
-        #autoReset + .tt-toggle-icon { color: #7c3aed; }
-        #autoRooms + .tt-toggle-icon { color: #0891b2; }
-        #autoLecRooms + .tt-toggle-icon { color: #d97706; }
         .tt-control-panel .toolbar-icon .bi,
         .tt-control-panel .tt-toggle-icon .bi { line-height: 1; }
         .tt-danger-btn {
@@ -1999,7 +1963,6 @@
         .tt-custom-icon { width: 100%; height: 100%; object-fit: contain; }
         #specBar .toolbar-row { row-gap: 8px; }
         #specBar .toolbar-row > .h-6 { margin-inline: 2px; }
-        #autoBtn.toolbar-action { font-weight: 700; }
         .assign-modal-content { flex: 1 1 auto; }
         .assign-pane, .assign-teacher-pane { min-height: 0; }
         .assign-toolbar select, .assign-toolbar input:not([type="checkbox"]) { min-height: 34px; }
@@ -2240,11 +2203,11 @@
                 const restrictedIds = [
                     'newBoardBtn', 'genBtn', 'refreshNamesBtn', 'delBoardBtn',
                     'settingsBtn', 'managerBtn', 'excelViewBtn', 'checkBtn', 'rulesBtn',
-                    'autoBtn', 'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
+                    'unplaceBtn', 'gsSave', 'cycleHolAddBtn',
                     'cycleRefresh', 'cmSave', 'cmUnplace', 'cmResetWeek'
                 ];
                 restrictedIds.forEach(id => {
-                    if (TIMETABLE_CAN_PLACE && ['autoBtn', 'unplaceBtn', 'cycleHolAddBtn', 'cycleRefresh'].includes(id)) return;
+                    if (TIMETABLE_CAN_PLACE && ['unplaceBtn', 'cycleHolAddBtn', 'cycleRefresh'].includes(id)) return;
                     if (id === 'managerBtn' && TIMETABLE_CAN_USE_MANAGER) return;
                     const el = $(id);
                     if (!el) return;
@@ -2636,7 +2599,7 @@
             // ===== Ko'p tanlovli tanlov: Fakultet → Yo'nalish → Kurs (dropdown) =====
             // Uch o'lcham ham checkbox dropdown'idan tanlanadi (bir nechtasini
             // birga ko'rsatish mumkin). selectedFaculties/selectedDirs/selectedCourses
-            // to'plamlari ko'rinishni (specCards) va avtomatik joylash qamrovini boshqaradi.
+            // to'plamlari ko'rinishni (specCards) va bo'shatish qamrovini boshqaradi.
             const facLabel = f => f || '— (fakultetsiz)';
             const facultiesList = () => [...new Set(specList.map(s => s.faculty))].sort((a, b) => a.localeCompare(b, 'uz'));
             // Tanlangan fakultet(lar)ga tegishli yo'nalishlar; fakultet(lar)+yo'nalish(lar)ga tegishli kurslar.
@@ -2703,7 +2666,7 @@
             }
             // Boshlang'ich to'ldirish (loadBoard'dan). Tanlov bo'sh bo'lsa (yangi doska)
             // curSpec'dan urug'lantiramiz; aks holda mavjud tanlovni saqlab, mavjud
-            // variantlarga moslaymiz (avtomatik joylash/bo'shatishdan keyingi qayta yuklashda
+            // variantlarga moslaymiz (bo'shatishdan keyingi qayta yuklashda
             // ko'p tanlov yo'qolib qolmasin).
             function fillSpecControls() {
                 const empty = !selectedFaculties.size && !selectedDirs.size && !selectedCourses.size;
@@ -2859,146 +2822,6 @@
                 return fl + ' · ' + dl + ' · ' + cl;
             }
 
-            // ===== Avtomatik (optimal) joylashtirish =====
-            function setAutoProgress(phase, completed, total, detail = '') {
-                const safeTotal = Math.max(1, +total || 0);
-                const fraction = Math.max(0, Math.min(1, (+completed || 0) / safeTotal));
-                const phaseStart = phase === 1 ? 0 : 50;
-                const percent = Math.round(phaseStart + fraction * 50);
-                const phaseLabel = phase === 1 ? '1/2 · Asosiy jadval' : '2/2 · Haftalarni moslash';
-                $('autoProgress').classList.remove('hidden');
-                $('autoProgressLabel').textContent = phaseLabel + (detail ? ' · ' + detail : '');
-                $('autoProgressPercent').textContent = percent + '%';
-                $('autoProgressBar').style.width = percent + '%';
-                $('autoProgressTrack').setAttribute('aria-valuenow', String(percent));
-            }
-            function hideAutoProgress() {
-                $('autoProgress').classList.add('hidden');
-                $('autoProgressBar').style.width = '0%';
-                $('autoProgressTrack').setAttribute('aria-valuenow', '0');
-            }
-
-            async function doAutoPlace() {
-                if (!board || !curSpec) return;
-                const whole = $('autoScope').checked;
-                const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
-                // Qamrov: butun doska / ko'rinayotgan tanlov (fakultet×yo'nalish×kurs).
-                const scopeLabel = (whole ? 'Butun doska' : scopeLabelText()) + typeLbl;
-                if ($('autoReset').checked &&
-                    !confirm(scopeLabel + ' bo\'yicha mavjud joylashuvlar bo\'shatilib qaytadan joylanadi. Davom etamizmi?')) return;
-
-                // Katta qamrovni fakultet+yo'nalish+kurs bo'yicha kichik requestlarga
-                // bo'lamiz. Oldingi requestlar yozgan bandlik keyingi requestlarda ham
-                // hisobga olinadi, ammo reverse-proxy 504 vaqt chegarasi urilmaydi.
-                const scopeCards = whole ? cards : cards.filter(c =>
-                    selectedFaculties.has(c.faculty_name || '') &&
-                    selectedDirs.has(c.specialty_name) &&
-                    selectedCourses.has(+c.course));
-                const chunkMap = new Map();
-                scopeCards.forEach(c => {
-                    const item = { faculty: c.faculty_name || '', specialty: c.specialty_name || '', course: +c.course };
-                    const key = item.faculty + '¦' + item.specialty + '¦' + item.course;
-                    if (item.specialty && item.course && !chunkMap.has(key)) chunkMap.set(key, item);
-                });
-                const chunks = [...chunkMap.values()];
-                if (!chunks.length) {
-                    $('autoMsg').textContent = 'Joylashtirish uchun qamrov topilmadi.';
-                    return;
-                }
-
-                $('autoBtn').disabled = true;
-                $('autoMsg').textContent = '';
-                setAutoProgress(1, 0, chunks.length, 'Tayyorlanmoqda');
-                const result = { placed: 0, unplaced: 0, rooms_assigned: 0, compacted: 0 };
-                const weeksSet = new Set();
-                try {
-                    const common = { reset: $('autoReset').checked ? 1 : 0, assign_rooms: $('autoRooms').checked ? 1 : 0,
-                        lecture_rooms: $('autoLecRooms').checked ? 1 : 0 };
-                    if (typeFilter !== 'all') common.training_type = typeFilter;
-
-                    for (let i = 0; i < chunks.length; i++) {
-                        const chunk = chunks[i];
-                        const chunkLabel = (i + 1) + '/' + chunks.length + ' · ' +
-                            chunk.specialty + ' · ' + chunk.course + '-kurs';
-                        setAutoProgress(1, i, chunks.length, chunkLabel);
-                        const body = {
-                            ...common,
-                            faculty_names: [chunk.faculty],
-                            specialty_names: [chunk.specialty],
-                            courses: [chunk.course],
-                        };
-                        const part = await api(BASE + '/boards/' + board.id + '/auto-place', 'POST', body);
-                        result.placed += +(part.placed || 0);
-                        result.unplaced += +(part.unplaced || 0);
-                        result.rooms_assigned += +(part.rooms_assigned || 0);
-                        (part.weeks_to_compact || []).forEach(w => weeksSet.add(+w));
-                        setAutoProgress(1, i + 1, chunks.length, chunkLabel);
-                    }
-
-                    // Ma'ruza o'tilmaydigan haftalarni foydalanuvchi bosmasdan, bittadan
-                    // hisoblaymiz. Bitta ulkan request o'rniga kichik requestlar 504
-                    // timeoutini chetlab o'tadi va progress ekranda ko'rinadi.
-                    const weeks = [...weeksSet].filter(Boolean).sort((a, b) => a - b);
-                    if (weeks.length) {
-                        setAutoProgress(2, 0, weeks.length, '1/' + weeks.length + ' · ' + weeks[0] + '-hafta');
-                    } else {
-                        setAutoProgress(2, 1, 1, 'Haftalik o\'zgarish yo\'q');
-                    }
-                    for (let i = 0; i < weeks.length; i++) {
-                        const weekLabel = (i + 1) + '/' + weeks.length + ' · ' + weeks[i] + '-hafta';
-                        setAutoProgress(2, i, weeks.length, weekLabel);
-                        const compactBody = { week: weeks[i] };
-                        if (!whole) Object.assign(compactBody, scopeBody());
-                        if (typeFilter !== 'all') compactBody.training_type = typeFilter;
-                        const weekResult = await api(BASE + '/boards/' + board.id + '/compact-week', 'POST', compactBody);
-                        result.compacted += +(weekResult.moved || 0);
-                        setAutoProgress(2, i + 1, weeks.length, weekLabel);
-                    }
-
-                    await loadBoard(board.id);
-                    setAutoProgress(2, 1, 1, 'Tugallandi');
-                    $('autoMsg').textContent = 'Joylandi: ' + result.placed +
-                        (result.unplaced ? (' · joy topilmadi: ' + result.unplaced) : '') +
-                        (result.rooms_assigned ? (' · xona biriktirildi: ' + result.rooms_assigned) : '') +
-                        (result.compacted ? (' · haftalarda tepaga surildi: ' + result.compacted) : '') +
-                        (weeks.length ? (' · hisoblangan hafta: ' + weeks.length) : '');
-                    // Hammasi allaqachon joylashgan va reset belgilanmagan — yangi
-                    // sozlama bo'yicha qayta taqsimlash uchun yo'l ko'rsatamiz.
-                    if (!$('autoReset').checked && !result.placed && !result.unplaced &&
-                        !result.rooms_assigned && !result.compacted && !weeks.length) {
-                        $('autoMsg').textContent = 'Hammasi joylashgan. Yangi sozlama bo\'yicha qayta joylash kerak.';
-                        if (confirm('Barcha kartalar allaqachon joylashgan.\nYangi sozlama (bir kunga / ketma-ket) bo\'yicha mavjud joylashuvlarni bo\'shatib QAYTA joylaymizmi?')) {
-                            $('autoReset').checked = true;
-                            $('autoBtn').disabled = false;
-                            return doAutoPlace();
-                        }
-                    }
-                } catch (e) {
-                    // Oldingi bo'laklar yozilgan bo'lishi mumkin; ekranni serverdagi
-                    // haqiqiy holat bilan yangilab qo'yamiz.
-                    try { await loadBoard(board.id); } catch (_) {}
-                    hideAutoProgress();
-                    $('autoMsg').textContent = '';
-                    alert('Xatolik: ' + e.message);
-                }
-                $('autoBtn').disabled = false;
-            }
-            async function doCycleAutoPlace() {
-                if (!board || !curSpec) return;
-                $('autoBtn').disabled = true;
-                $('autoMsg').textContent = 'Sikl fanlari joylashtirilmoqda...';
-                try {
-                    await loadCyclePlan({ auto: true });
-                    const total = (cyclePlanData && cyclePlanData.cycle_cards) ? cyclePlanData.cycle_cards.length : 0;
-                    $('autoMsg').textContent = 'Sikl avtomatik joylandi: ' + total + ' ta fan kartasi.';
-                } catch (e) {
-                    $('autoMsg').textContent = '';
-                    alert('Siklni avtomatik joylab bo‘lmadi: ' + e.message);
-                }
-                $('autoBtn').disabled = false;
-            }
-            $('autoBtn').onclick = () => viewMode === 'cycle' ? doCycleAutoPlace() : doAutoPlace();
-
             // Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatish (panelga qaytarish)
             $('unplaceBtn').onclick = async function () {
                 if (!board || !curSpec) return;
@@ -3048,7 +2871,7 @@
             // uchun panjara/konflikt kaliti nom emas — fakultet+yo'nalish+kurs+nom.
             const gkey = (c, g) => (c.faculty_name || '') + '¦' + (c.specialty_name || '') + '¦' + c.course + '¦' + g;
             const cardGKeys = c => cardGroups(c).map(g => gkey(c, g));
-            // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara, stat va avtomatik joylashga ta'sir qiladi
+            // Dars turi filtri (Hammasi / Ma'ruza / Amaliy) — panel, panjara va statistikaga ta'sir qiladi
             let typeFilter = 'all';
             const typeVisible = c => typeFilter === 'all' || c.training_type === typeFilter;
             const visibleSpecCards = () => specCards().filter(typeVisible);
@@ -3307,7 +3130,6 @@
                 const body = scopeBody();
                if ($('cycleStart').value) body.start_date = $('cycleStart').value;
                 body.holidays = cycleHolidays;
-                if (options.auto) body.auto = 1;
                 if (options.clear) body.clear = 1;
                 body.view = cycleViewMode;
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
@@ -6125,9 +5947,6 @@
                     $('stDayOff').value = (set.days_off || []).join(', ');
                     $('stAllowZero').checked = !!set.allow_zero;
                     $('stShowNum').checked = !!set.show_day_number;
-                    $('stSameDay').checked = !!set.pair_same_day;
-                    $('stConsec').checked = !!set.pair_consecutive;
-                    $('stRoomTol').value = (set.room_tolerance_pct != null ? set.room_tolerance_pct : 5);
                     bellDraft = (s.bell_schedule || []).map(x => ({ ...x }));
                     dayDraft = (s.day_names || []).slice();
                     renderBellTable(); renderDayNames();
@@ -6408,9 +6227,6 @@
                 dayOff.forEach((d, i) => fd.append('settings[days_off][' + i + ']', d));
                 fd.append('settings[allow_zero]', $('stAllowZero').checked ? 1 : 0);
                 fd.append('settings[show_day_number]', $('stShowNum').checked ? 1 : 0);
-                fd.append('settings[pair_same_day]', $('stSameDay').checked ? 1 : 0);
-                fd.append('settings[pair_consecutive]', $('stConsec').checked ? 1 : 0);
-                fd.append('settings[room_tolerance_pct]', $('stRoomTol').value || 5);
                 try {
                     const r = await fetch(SETTINGS_URL(board.id), { method: 'POST', headers: { 'Accept': 'application/json' }, body: fd });
                     const j = await r.json();

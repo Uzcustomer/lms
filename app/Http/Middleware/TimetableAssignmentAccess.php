@@ -48,11 +48,9 @@ class TimetableAssignmentAccess
 
             if (in_array($activeRole, $placementRoles, true)) {
                 $allowed = array_merge($allowed, [
-                    'admin.timetable.boards.auto-place',
                     'admin.timetable.boards.unplace',
                     'admin.timetable.cards.place',
                     'admin.timetable.cards.week-override',
-                    'admin.timetable.boards.compact-week',
                     'admin.timetable.cycle-plan',
                     'admin.timetable.cycle-place',
                     'admin.timetable.cycle-assign-options',

@@ -152,7 +152,9 @@ class LessonOpeningNotifier
      */
     private function announceToRegistrarGroup(LessonOpening $opening): void
     {
-        $chatId = config('services.telegram.registrar_group_id');
+        // Alohida mavzu sozlangan bo'lsa — o'sha yerga, aks holda registrator guruhiga
+        $chatId = config('services.telegram.lesson_opening_chat_id')
+            ?: config('services.telegram.registrar_group_id');
         if (!$chatId) {
             return;
         }

@@ -16,10 +16,12 @@ class SendPendingAbsenceExcuseReminder extends Command
 
     public function handle(TelegramService $telegram): int
     {
-        $chatId = config('services.telegram.registrar_group_id');
+        // Alohida mavzu sozlangan bo'lsa — o'sha yerga, aks holda registrator guruhiga
+        $chatId = config('services.telegram.absence_excuse_chat_id')
+            ?: config('services.telegram.registrar_group_id');
 
         if (!$chatId) {
-            $this->error('TELEGRAM_REGISTRAR_GROUP_ID sozlanmagan.');
+            $this->error('TELEGRAM_ABSENCE_EXCUSE_CHAT_ID yoki TELEGRAM_REGISTRAR_GROUP_ID sozlanmagan.');
             return 1;
         }
 

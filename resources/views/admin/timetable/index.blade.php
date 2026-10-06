@@ -850,6 +850,8 @@
         /* Drag-and-drop: sudralayotgan katak ustidan o'tganda */
         #grid td.drag-ok { outline: 3px solid #16a34a; outline-offset: -3px; }
         #grid td.drag-bad { outline: 3px solid #ef4444; outline-offset: -3px; }
+        /* Joylashgan kartani panelga qaytarish uchun tashlash nishoni */
+        #cardPanel.pn-drop { outline: 3px dashed #16a34a; outline-offset: -3px; background: #f0fdf4; }
         #grid [data-chip] { cursor: grab; }
         .pn-card { cursor: grab; }
         /* Faol katak — sichqoncha ustidan o'tganda / strelkalar bilan */
@@ -4332,6 +4334,20 @@
             }
 
             // ===== Joylash (bosish yoki drag-and-drop uchun umumiy) =====
+            // Kartani joyidan olib tashlash — modal tugmasi va panelga sudrash uchun umumiy.
+            // Shablon ko'rinishida barcha haftalardan; hafta tanlangan bo'lsa faqat shu haftada.
+            async function unplaceOneCard(card) {
+                if (!curWeek) {
+                    await api(BASE + '/cards/' + card.id + '/place', 'POST', {});
+                    card.day = null; card.pair = null;
+                } else {
+                    await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'cancel' });
+                    overrides[card.id + '|' + curWeek] = {
+                        day: null, pair: null, cancelled: true,
+                        auditorium_code: null, auditorium_name: null, auditorium_volume: null,
+                    };
+                }
+            }
             async function placeOneCard(card, d, p) {
                 if (!curWeek) {
                     await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p });
@@ -4370,6 +4386,8 @@
             document.addEventListener('dragend', () => {
                 dragCardIds = null;
                 document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
+                const panel = document.getElementById('cardPanel');
+                if (panel) panel.classList.remove('pn-drop');
             });
 
             // ===== Faol katak: sichqoncha ustidan o'tganda belgilash + strelkalar bilan yurish =====
@@ -4526,6 +4544,37 @@
                     };
                     el.addEventListener('dragstart', ev => startDrag(+el.dataset.id, ev));
                 });
+
+                // Joylashgan kartani panelga sudrab tashlash — joyidan olib tashlanadi.
+                // Paneldagi (joylashmagan) kartani yana panelga tashlash hech narsa qilmaydi.
+                // Sikl rejimi panelga o'z hodisalarini qo'yadi; bu yerda ularni almashtiramiz.
+                const panel = $('cardPanel');
+                const placedDragged = () => (dragCardIds || [])
+                    .map(id => cards.find(x => x.id === id))
+                    .filter(c => c && effPlace(c));
+                panel.ondragover = ev => {
+                    if (!placedDragged().length) return;
+                    ev.preventDefault();
+                    ev.dataTransfer.dropEffect = 'move';
+                    panel.classList.add('pn-drop');
+                };
+                panel.ondragleave = ev => {
+                    if (!panel.contains(ev.relatedTarget)) panel.classList.remove('pn-drop');
+                };
+                panel.ondrop = async ev => {
+                    ev.preventDefault();
+                    panel.classList.remove('pn-drop');
+                    const toUnplace = placedDragged();
+                    dragCardIds = null;
+                    if (!toUnplace.length) return;
+                    try {
+                        for (const c of toUnplace) await unplaceOneCard(c);
+                    } catch (e) {
+                        alert('Xatolik: ' + e.message);
+                    }
+                    selected = null;
+                    renderAll();
+                };
             }
 
             // Jadval kesimi (faqat ko'rish): o'qituvchi / auditoriya / fan ustunlari
@@ -5093,18 +5142,7 @@
             $('cmUnplace').onclick = async () => {
                 if (!modalCard) return;
                 try {
-                    if (!curWeek) {
-                        // Shablondan olib tashlash (barcha haftalardan)
-                        await api(BASE + '/cards/' + modalCard.id + '/place', 'POST', {});
-                        modalCard.day = null; modalCard.pair = null;
-                    } else {
-                        // Faqat shu haftada bekor qilish
-                        await api(BASE + '/cards/' + modalCard.id + '/week-override', 'POST', { week: curWeek, action: 'cancel' });
-                        overrides[modalCard.id + '|' + curWeek] = {
-                            day: null, pair: null, cancelled: true,
-                            auditorium_code: null, auditorium_name: null, auditorium_volume: null,
-                        };
-                    }
+                    await unplaceOneCard(modalCard);
                 } catch (e) { alert('Xatolik: ' + e.message); return; }
                 $('cardModal').classList.add('hidden'); modalCard = null; selected = null;
                 renderAll();

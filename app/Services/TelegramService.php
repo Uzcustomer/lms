@@ -19,6 +19,31 @@ class TelegramService
         )));
     }
 
+    /**
+     * Manzil: "chat_id" yoki "chat_id:mavzu_id".
+     *
+     * Forum (Topics) guruhida xabarni aniq mavzuga yuborish uchun chat id
+     * yoniga mavzu raqami ikki nuqta bilan yoziladi: "-1001234567890:15".
+     * Mavzu raqami — mavzudagi istalgan xabar havolasidagi o'rta son
+     * (t.me/c/1234567890/15/27 -> 15). Shunday qilib .env dagi istalgan guruh
+     * sozlamasi kod o'zgarmasdan mavzuga yo'naltiriladi.
+     *
+     * @return array{chat_id: string, message_thread_id?: int}
+     */
+    public static function target(string $chatId): array
+    {
+        $chatId = trim($chatId);
+        $pos = strrpos($chatId, ':');
+        if ($pos !== false) {
+            $thread = substr($chatId, $pos + 1);
+            if ($thread !== '' && ctype_digit($thread)) {
+                return ['chat_id' => substr($chatId, 0, $pos), 'message_thread_id' => (int) $thread];
+            }
+        }
+
+        return ['chat_id' => $chatId];
+    }
+
     public function notify(string $message): void
     {
         $this->notifyChat(config('services.telegram.chat_id'), $message);
@@ -41,7 +66,7 @@ class TelegramService
         try {
             Http::retry(3, 1000)
                 ->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
-                    'chat_id' => $chatId,
+                    ...self::target($chatId),
                     'text' => $message,
                 ])
                 ->throw();
@@ -65,7 +90,7 @@ class TelegramService
         try {
             $response = Http::retry(3, 1000)
                 ->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
-                    'chat_id' => $chatId,
+                    ...self::target($chatId),
                     'text' => $message,
                 ]);
 
@@ -93,7 +118,7 @@ class TelegramService
         try {
             $response = Http::retry(2, 500)
                 ->post("https://api.telegram.org/bot{$botToken}/editMessageText", [
-                    'chat_id' => $chatId,
+                    'chat_id' => self::target($chatId)['chat_id'],
                     'message_id' => $messageId,
                     'text' => $newText,
                 ]);
@@ -131,7 +156,7 @@ class TelegramService
         try {
             Http::retry(3, 1000)
                 ->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
-                    'chat_id' => $chatId,
+                    ...self::target($chatId),
                     'text' => $message,
                     'parse_mode' => 'HTML',
                 ])
@@ -157,7 +182,8 @@ class TelegramService
         }
 
         try {
-            $params = ['chat_id' => $chatId];
+            // Multipart: hamma qiymat matn bo'lsin (mavzu raqami ham)
+            $params = array_map('strval', self::target($chatId));
             if ($caption) {
                 $params['caption'] = $caption;
             }
@@ -187,7 +213,8 @@ class TelegramService
         }
 
         try {
-            $params = ['chat_id' => $chatId];
+            // Multipart: hamma qiymat matn bo'lsin (mavzu raqami ham)
+            $params = array_map('strval', self::target($chatId));
             if ($caption) {
                 $params['caption'] = $caption;
             }

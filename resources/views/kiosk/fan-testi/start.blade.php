@@ -8,19 +8,24 @@
             border-left: 3px solid var(--gold); border-radius: 0 4px 4px 0;
             background: #fdfaf0; color: var(--ink-soft); font-size: 13.5px; line-height: 1.65;
         }
-        .s-rules { margin: 0 0 24px; padding: 0; list-style: none; }
+        /* Qoidalar: yashil, qalin — talaba o'qimay o'tib ketmasligi uchun */
+        .s-rules {
+            margin: 0 0 24px; padding: 4px 18px; list-style: none;
+            border: 1px solid #bbf7d0; border-radius: 6px; background: #f0fdf4;
+        }
         .s-rules li {
-            display: flex; gap: 11px; padding: 9px 0;
-            border-bottom: 1px dashed var(--line-soft);
-            color: var(--ink-soft); font-size: 13.5px;
+            display: flex; align-items: flex-start; gap: 12px; padding: 11px 0;
+            border-bottom: 1px dashed #bbf7d0;
+            color: #166534; font-size: 15px; font-weight: 600; line-height: 1.5;
         }
         .s-rules li:last-child { border-bottom: 0; }
-        .s-rules b { flex: none; color: var(--navy); font-weight: 500; }
+        .s-rules b { color: #14532d; font-weight: 800; }
         .s-num {
             flex: none; display: grid; place-items: center;
-            width: 21px; height: 21px; margin-top: 1px; border-radius: 50%;
-            background: #eaeff7; color: var(--navy);
-            font-size: 11px; font-weight: 700;
+            width: 26px; height: 26px; margin-top: -1px; border-radius: 50%;
+            background: #16a34a; color: #fff;
+            font-size: 13px; font-weight: 800;
+            box-shadow: 0 1px 3px rgba(22, 101, 52, .35);
         }
 
         /* ---- Yuz tekshiruvi ---- */

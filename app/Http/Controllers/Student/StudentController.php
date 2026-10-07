@@ -1355,11 +1355,7 @@ class StudentController extends Controller
                 $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
 
                 // YN ga yuborilganligini tekshirish
-                $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
-                    ->where('subject_id', $independent->subject_hemis_id)
-                    ->where('semester_code', $independent->semester_code)
-                    ->where('is_yn_locked', true)
-                    ->exists();
+                $ynLocked = $this->mtYnLocked($student, $independent, $resolvedSubjectId);
 
                 return [
                     'id' => $independent->id,
@@ -1437,6 +1433,37 @@ class StudentController extends Controller
      * ichiga tushgan; (4) hozir sababli oyna ichida — ariza ko'rilgan sana +
      * ariza kunlari (o'qituvchi tomonidagi baho oynasi bilan bir xil).
      */
+    /**
+     * Fan YN ga yuborilgan bo'lsa MT topshirish yopiladi.
+     *
+     * Independent.subject_hemis_id — o'quv rejadagi fan yozuvining HEMIS id si
+     * (curriculum_subject_hemis_id), student_grades.subject_id esa fan id si.
+     * Shuning uchun tekshiruv aniqlangan fan id si bilan qilinadi: avval
+     * guruhning YN yuborishi (yn_submissions), so'ng talabaning qulflangan
+     * baholari.
+     */
+    private function mtYnLocked($student, $independent, $subjectId): bool
+    {
+        if (!$subjectId) {
+            return false;
+        }
+
+        $groupSubmitted = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $independent->semester_code)
+            ->where('group_hemis_id', $student->group_id)
+            ->exists();
+
+        if ($groupSubmitted) {
+            return true;
+        }
+
+        return StudentGrade::where('student_hemis_id', $student->hemis_id)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $independent->semester_code)
+            ->where('is_yn_locked', true)
+            ->exists();
+    }
+
     private function mtSubmissionOpenBySababli($student, $independent, ?int $subjectId): bool
     {
         if (!$subjectId) {
@@ -1524,13 +1551,7 @@ class StudentController extends Controller
         }
 
         // YN ga yuborilganligini tekshirish — qulflangan bo'lsa fayl yuklash mumkin emas
-        $ynLocked = StudentGrade::where('student_hemis_id', $student->hemis_id)
-            ->where('subject_id', $independent->subject_hemis_id)
-            ->where('semester_code', $independent->semester_code)
-            ->where('is_yn_locked', true)
-            ->exists();
-
-        if ($ynLocked) {
+        if ($this->mtYnLocked($student, $independent, $resolvedSubjectId)) {
             return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas.');
         }
 

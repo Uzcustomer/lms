@@ -1028,9 +1028,21 @@ class JournalController extends Controller
         $ungradedStudents = [];
         $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
 
+        // Bugun oxirgi dars kuni bo'lsa (YN ga yuborish shu kuni ochiladi)
+        // bugungi darslar ham tekshiriladi — aks holda oxirgi kundagi bo'sh
+        // kataklar bilan YN ga yuborib yuborish mumkin edi.
+        $lastJbDate = '';
+        foreach ($jbColumns as $col) {
+            $lastJbDate = max($lastJbDate, \Carbon\Carbon::parse($col['date'])->format('Y-m-d'));
+        }
+        $checkToday = $lastJbDate !== '' && $lastJbDate <= $todayStr;
         $pastJbColumns = array_values(array_filter(
             $jbColumns,
-            fn ($col) => \Carbon\Carbon::parse($col['date'])->format('Y-m-d') < $todayStr
+            function ($col) use ($todayStr, $checkToday) {
+                $date = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+
+                return $date < $todayStr || ($checkToday && $date === $todayStr);
+            }
         ));
 
         if (!empty($pastJbColumns)) {
@@ -7411,7 +7423,9 @@ class JournalController extends Controller
             ->whereNull('deleted_at')
             ->whereNotNull('lesson_date')
             ->whereNotIn('training_type_code', $excluded)
-            ->whereRaw('DATE(lesson_date) < ?', [$today])
+            // Bugungi darslar ham: YN ga faqat oxirgi dars kunidan keyin
+            // (yoki shu kuni) yuboriladi, oxirgi kundagi bo'sh katak ham to'sadi.
+            ->whereRaw('DATE(lesson_date) <= ?', [$today])
             ->selectRaw('DATE(lesson_date) as d, lesson_pair_code as p')
             ->distinct()
             ->get();

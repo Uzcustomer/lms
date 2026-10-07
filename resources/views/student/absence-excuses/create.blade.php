@@ -502,7 +502,7 @@
                                 <p class="text-sm text-gray-500 mt-0.5">{{ __('Har bir nazorat uchun qayta topshirish sanasini tanlang') }}</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.jn_submitted || (a.assessment_type === 'jn' ? (a.makeup_start && a.makeup_end) : !!a.makeup_date)).length + '/' + assessments.length"></span>
+                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.already_submitted || a.jn_submitted || (a.assessment_type === 'jn' ? (a.makeup_start && a.makeup_end) : !!a.makeup_date)).length + '/' + assessments.length"></span>
                                 <span class="text-gray-400 text-sm">{{ __('tanlangan') }}</span>
                             </div>
                         </div>
@@ -538,7 +538,15 @@
                                                 </span>
                                             </template>
                                         </div>
-                                        @include('student.absence-excuses._calendar-cell')
+                                        <template x-if="item.already_submitted">
+                                            <div class="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold inline-flex items-center gap-1.5">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                                MT yuklangan — qayta topshirish talab qilinmaydi
+                                            </div>
+                                        </template>
+                                        <template x-if="!item.already_submitted">
+                                            @include('student.absence-excuses._calendar-cell')
+                                        </template>
                                     </div>
                                 </template>
                             </div>
@@ -675,6 +683,8 @@
             },
             get allDatesSelected() {
                 return this.assessments.length > 0 && this.assessments.every(a => {
+                    // Fayli allaqachon yuklangan MT — sana so'ralmaydi
+                    if (a.already_submitted) return true;
                     if (a.jn_submitted) return true;
                     if (a.assessment_type === 'jn') return a.makeup_start && a.makeup_end;
                     return !!a.makeup_date;

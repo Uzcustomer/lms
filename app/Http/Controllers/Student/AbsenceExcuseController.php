@@ -7,6 +7,8 @@ use App\Models\AbsenceExcuse;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\ExamSchedule;
 use App\Models\ExamTest;
+use App\Models\Independent;
+use App\Models\IndependentSubmission;
 use App\Models\Notification;
 use App\Models\OraliqNazorat;
 use App\Models\Oski;
@@ -57,7 +59,7 @@ class AbsenceExcuseController extends Controller
         $groupId = $student->group_id;
 
         // 1. Sababli kunlar oralig'idagi nazoratlar
-        $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+        $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate, $student->id);
 
         // 1.1. Avvalgi tasdiqlangan arizadagi rejalashtirilgan lekin bajarilmagan
         //     retake'lar — agar ularning makeup_date i yangi sababli oraliqqa tushsa.
@@ -100,7 +102,7 @@ class AbsenceExcuseController extends Controller
             // endDate dan keyingi kundan makeupEnd gacha qidirish
             $searchStart = $endDate->copy()->addDay();
             if ($searchStart->lte($makeupEnd)) {
-                $makeupAssessments = $this->findMissedAssessments($groupId, $searchStart, $makeupEnd);
+                $makeupAssessments = $this->findMissedAssessments($groupId, $searchStart, $makeupEnd, $student->id);
 
                 $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
 
@@ -359,7 +361,7 @@ class AbsenceExcuseController extends Controller
         $endDate = $excuse->end_date;
         $groupId = $student->group_id;
 
-        $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+        $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate, $student->id);
 
         $existingMakeups = $excuse->makeups;
 
@@ -577,9 +579,38 @@ class AbsenceExcuseController extends Controller
     /**
      * Sana oralig'i bo'yicha o'tkazib yuborilgan nazoratlarni topish
      */
-    private function findMissedAssessments($groupId, $startDate, $endDate)
+    private function findMissedAssessments($groupId, $startDate, $endDate, $studentId = null)
     {
         $missedAssessments = collect();
+
+        // 0. Mustaqil ta'lim — o'z muddati bilan yashaydi (independents jadvali),
+        //    dars jadvalida ko'rinmaydi. Muddati sababli davrga tushgan va talaba
+        //    hali fayl yuklamagan MT lar arizaga tushadi; yuklangani esa
+        //    "MT yuklangan" deb belgilanadi va qayta yuklash so'ralmaydi.
+        if ($studentId) {
+            $independents = Independent::where('group_hemis_id', $groupId)
+                ->whereDate('deadline', '>=', $startDate)
+                ->whereDate('deadline', '<=', $endDate)
+                ->get();
+
+            if ($independents->isNotEmpty()) {
+                $submittedIds = IndependentSubmission::whereIn('independent_id', $independents->pluck('id'))
+                    ->where('student_id', $studentId)
+                    ->pluck('independent_id')
+                    ->flip();
+
+                foreach ($independents as $independent) {
+                    $missedAssessments->push([
+                        'subject_name' => $independent->subject_name,
+                        'subject_id' => $independent->subject_id,
+                        'assessment_type' => 'mt',
+                        'assessment_type_code' => '99',
+                        'original_date' => Carbon::parse($independent->deadline)->format('Y-m-d'),
+                        'already_submitted' => isset($submittedIds[$independent->id]),
+                    ]);
+                }
+            }
+        }
 
         // 1. Schedules jadvalidan (dars jadvali)
         $schedules = Schedule::where('group_id', $groupId)

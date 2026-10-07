@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/api_service.dart';
 import '../../services/attendance_service.dart';
@@ -155,7 +157,7 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
     File? file;
     try {
       final shot = await cam.takePicture();
-      file = File(shot.path);
+      file = await _upright(File(shot.path));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -193,6 +195,32 @@ class _AttendanceFaceScreenState extends State<AttendanceFaceScreen>
         _stage = _Stage.failed;
         _verdict = AppLocalizations.current.retryError;
       });
+    }
+  }
+
+  /// Android saves the shot as the sensor sees it (sideways) and only tags
+  /// the EXIF orientation. The compare service reads raw pixels, so the face
+  /// arrived lying on its side, the detector missed it and the whole frame
+  /// was matched instead (~35 % for the right person). Re-encode with the
+  /// rotation applied and EXIF dropped; this also shrinks the upload.
+  Future<File> _upright(File shot) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final target =
+          '${dir.path}/att_face_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final out = await FlutterImageCompress.compressAndGetFile(
+        shot.path,
+        target,
+        minWidth: 960,
+        minHeight: 960,
+        quality: 90,
+        autoCorrectionAngle: true,
+        keepExif: false,
+        format: CompressFormat.jpeg,
+      );
+      return out == null ? shot : File(out.path);
+    } catch (_) {
+      return shot; // the server also honours EXIF now
     }
   }
 

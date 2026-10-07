@@ -33,7 +33,7 @@ import requests
 from urllib.parse import urlsplit, urlunsplit, quote
 import numpy as np
 import cv2
-from PIL import Image
+from PIL import Image, ImageOps
 
 # DB ulanishlari (PyMySQL — sof Python, oddiy)
 import pymysql
@@ -204,10 +204,9 @@ def health():
 # ───────────────────────────── /compare ──────────────────────────────
 
 def _resolve_for_deepface(src: str):
-    """If `src` is a base64 data URI, decode it to a BGR ndarray DeepFace
-    can read directly; otherwise pass the URL/path through unchanged so
-    DeepFace handles fetching."""
-    if src.startswith("data:") or _DATA_URI_RE.match(src):
+    """Decode data URIs and fetch URLs ourselves (EXIF orientation applied)
+    so DeepFace gets an upright BGR ndarray; local paths pass through."""
+    if src.startswith(("data:", "http://", "https://")) or _DATA_URI_RE.match(src):
         return _load_image_bgr(src)
     return src
 
@@ -459,6 +458,19 @@ def _decode_data_uri(src: str) -> bytes:
     return base64.b64decode(payload, validate=False)
 
 
+def _open_upright(fp) -> Image.Image:
+    """Open as RGB with the EXIF orientation applied. Phone cameras store
+    the pixels sideways and only tag the rotation; without this the face
+    lies on its side, the detector misses it and the whole frame gets
+    compared instead."""
+    pil = Image.open(fp)
+    try:
+        pil = ImageOps.exif_transpose(pil)
+    except Exception:
+        pass
+    return pil.convert("RGB")
+
+
 def _load_image_bgr(src: str) -> np.ndarray:
     """Load an image into a BGR OpenCV array.
 
@@ -471,7 +483,7 @@ def _load_image_bgr(src: str) -> np.ndarray:
       - Absolute local path.
     """
     if src.startswith("data:") or _DATA_URI_RE.match(src):
-        pil = Image.open(io.BytesIO(_decode_data_uri(src))).convert("RGB")
+        pil = _open_upright(io.BytesIO(_decode_data_uri(src)))
     elif src.startswith(("http://", "https://")):
         parts = urlsplit(src)
         safe_path = quote(parts.path, safe="/%")
@@ -484,9 +496,9 @@ def _load_image_bgr(src: str) -> np.ndarray:
             verify=False,
         )
         resp.raise_for_status()
-        pil = Image.open(io.BytesIO(resp.content)).convert("RGB")
+        pil = _open_upright(io.BytesIO(resp.content))
     else:
-        pil = Image.open(src).convert("RGB")
+        pil = _open_upright(src)
     rgb = np.array(pil)
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 

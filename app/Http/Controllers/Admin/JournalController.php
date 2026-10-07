@@ -19,6 +19,7 @@ use App\Services\ActivityLogService;
 use App\Services\HemisService;
 use App\Services\MissedGradeAccess;
 use App\Services\ScheduleImportService;
+use App\Services\SababliMtWindow;
 use App\Services\StudentSubjectScope;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
@@ -2362,6 +2363,21 @@ class JournalController extends Controller
             $retakeEmployeeNames = DB::table('teachers')->whereIn('hemis_id', $retakeEmployeeIds)->pluck('full_name', 'hemis_id')->toArray();
         }
 
+        // YN dan keyin sababli MT bahosi: MT turi belgilanmagan arizalar ham
+        // (talabaga yuklashni ochgan qoida bo'yicha) — talaba => yopilish vaqti.
+        $mtSababliClosesAt = [];
+        if (!empty($ynSubmission) && !empty($mtSubmissions)) {
+            $mtDeadlines = DB::table('independents')
+                ->whereIn('id', collect($mtSubmissions)->pluck('independent_id')->unique()->all())
+                ->pluck('deadline', 'id');
+            foreach ($mtSubmissions as $hemisId => $sub) {
+                $excuse = SababliMtWindow::excuse((string) $hemisId, $subjectId, $mtDeadlines[$sub->independent_id] ?? null);
+                if ($excuse) {
+                    $mtSababliClosesAt[$hemisId] = SababliMtWindow::closesAt($excuse);
+                }
+            }
+        }
+
         // YN ga yuborish tugmasi: baholanmagan MT ishlari (submitToYn bilan bir xil qoida)
         $ungradedMtStudents = empty($ynSubmission)
             ? $this->ungradedMtStudents((string) $group->group_hemis_id, (string) $subjectId, (string) $semesterCode)
@@ -2443,6 +2459,7 @@ class JournalController extends Controller
             'ungradedCells',
             'ungradedStudents',
             'ungradedMtStudents',
+            'mtSababliClosesAt',
             'levelDeadline',
             'approvedExcuses',
             'broadExcuses',
@@ -3415,6 +3432,16 @@ class JournalController extends Controller
                 })
                 ->latest('reviewed_at')
                 ->first();
+
+            // MT turi belgilanmagan bo'lsa ham: talabaga MT yuklashni ochgan ariza
+            // (fan qamrab olingan, MT muddati yo'qlik davriga tushgan) baho qo'yishni ham ochadi.
+            if (!$sababliExcuse) {
+                $sababliExcuse = SababliMtWindow::excuse(
+                    (string) $studentHemisId,
+                    $subjectId,
+                    $this->studentMtDeadline((string) $studentHemisId, (string) $subjectId, (string) $semesterCode)
+                );
+            }
 
             if ($sababliExcuse) {
                 if ($isAdminRole) {
@@ -7406,6 +7433,52 @@ class JournalController extends Controller
     /**
      * O'qituvchi YN ga yuborish — barcha baholarni qulflaydi
      */
+    /**
+     * Talaba MT faylini yuklagan topshiriqning muddati (yuklamagan bo'lsa —
+     * guruhning shu fan bo'yicha birinchi topshirig'i). Topshiriq bo'lmasa null.
+     */
+    private function studentMtDeadline(string $studentHemisId, string $subjectId, string $semesterCode): ?string
+    {
+        $groupHemisId = DB::table('students')->where('hemis_id', $studentHemisId)->value('group_id');
+        if (!$groupHemisId) {
+            return null;
+        }
+
+        $csRows = DB::table('curriculum_subjects')
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->get(['curriculum_subject_hemis_id', 'subject_name']);
+        $csHemisIds = $csRows->pluck('curriculum_subject_hemis_id')->filter()->all();
+        $subjectName = (string) ($csRows->pluck('subject_name')->filter()->first() ?? '');
+
+        $independents = DB::table('independents')
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('semester_code', $semesterCode)
+            ->where(function ($q) use ($csHemisIds, $subjectName) {
+                $q->whereIn('subject_hemis_id', !empty($csHemisIds) ? $csHemisIds : [0]);
+                if ($subjectName !== '') {
+                    $q->orWhereRaw('LOWER(subject_name) = ?', [mb_strtolower($subjectName)]);
+                }
+            })
+            ->orderBy('id')
+            ->get(['id', 'deadline']);
+        if ($independents->isEmpty()) {
+            return null;
+        }
+
+        $submittedId = \Illuminate\Support\Facades\Schema::hasTable('independent_submissions')
+            ? DB::table('independent_submissions')
+                ->whereIn('independent_id', $independents->pluck('id'))
+                ->where('student_hemis_id', $studentHemisId)
+                ->orderByDesc('submitted_at')
+                ->value('independent_id')
+            : null;
+
+        $independent = $submittedId ? $independents->firstWhere('id', $submittedId) : $independents->first();
+
+        return $independent?->deadline;
+    }
+
     /**
      * MT ishi baholanmagan o'qiyotgan talabalar (guruh + fan + semestr).
      *

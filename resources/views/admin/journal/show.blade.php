@@ -3376,6 +3376,11 @@
                                                     $mtSababliDeadlinePassed = now()->greaterThan($mtExcuseDeadline);
                                                 }
                                             }
+                                            // MT turi belgilanmagan ariza: talabaga yuklashni ochgan qoida bo'yicha
+                                            if (!$hasMtSababli && isset($mtSababliClosesAt[$student->hemis_id])) {
+                                                $hasMtSababli = true;
+                                                $mtSababliDeadlinePassed = now()->greaterThan($mtSababliClosesAt[$student->hemis_id]);
+                                            }
                                             $mtSababliCanGrade = $hasMtSababli && !$isDekan && !$isRegistrator
                                                 && (!$mtSababliDeadlinePassed || $isAdminMt);
 

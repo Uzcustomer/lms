@@ -31,6 +31,7 @@ use App\Models\AdmissionIndicator;
 use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnSubmission;
+use App\Services\SababliMtWindow;
 
 class StudentController extends Controller
 {
@@ -1341,8 +1342,8 @@ class StudentController extends Controller
                 // Muddat o'tgan bo'lsa ham, tasdiqlangan sababli arizada MT
                 // ko'rsatilgan bo'lsa yuklash ochiq qoladi — submitIndependent()
                 // ham aynan shu shartni qo'llaydi, ro'yxat unga mos bo'lsin.
-                $isOverdue = Carbon::now()->gt($deadlineDateTime)
-                    && !$this->mtSubmissionOpenBySababli($student, $independent, $resolvedSubjectId);
+                $sababliOpen = $this->mtSubmissionOpenBySababli($student, $independent, $resolvedSubjectId);
+                $isOverdue = Carbon::now()->gt($deadlineDateTime) && !$sababliOpen;
 
                 // Use mt_grade_history count for accurate resubmission tracking
                 $mtHistoryCount = DB::table('mt_grade_history')
@@ -1354,8 +1355,8 @@ class StudentController extends Controller
                 $studentMinLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
                 $gradeLocked = $grade && $grade->grade >= $studentMinLimit;
 
-                // YN ga yuborilganligini tekshirish
-                $ynLocked = $this->mtYnLocked($student, $independent, $resolvedSubjectId);
+                // YN ga yuborilganligini tekshirish — sababli ariza bilan ochilgan MT bundan mustasno
+                $ynLocked = !$sababliOpen && $this->mtYnLocked($student, $independent, $resolvedSubjectId);
 
                 return [
                     'id' => $independent->id,
@@ -1466,55 +1467,10 @@ class StudentController extends Controller
 
     private function mtSubmissionOpenBySababli($student, $independent, ?int $subjectId): bool
     {
-        if (!$subjectId) {
-            return false;
-        }
+        // Qoida SababliMtWindow da — o'qituvchining sababli MT bahosi ham shundan foydalanadi.
+        $excuse = SababliMtWindow::excuse((string) $student->hemis_id, $subjectId, $independent->deadline);
 
-        // Ariza shu fanni qamrab olgan bo'lsa yetarli: nazorat turlari ro'yxatiga
-        // MT alohida kiritilmagan bo'lishi mumkin (masalan faqat JN va OSKI
-        // belgilangan), lekin MT muddati yo'qlik davriga tushgan bo'lsa talaba
-        // aynan kasalligi sababli ulgurmagan bo'ladi.
-        $excuses = AbsenceExcuse::where('status', 'approved')
-            ->where('student_hemis_id', $student->hemis_id)
-            ->whereNotNull('reviewed_at')
-            ->whereHas('makeups', function ($q) use ($subjectId) {
-                $q->where('subject_id', $subjectId);
-            })
-            ->orderByDesc('reviewed_at')
-            ->get();
-
-        $deadline = Carbon::parse($independent->deadline);
-
-        $excuse = $excuses->first(function ($candidate) use ($deadline, $subjectId) {
-            $start = Carbon::parse($candidate->start_date);
-
-            // MT muddati yo'qlik boshlanishidan OLDIN tugagan bo'lsa — bu yo'qlikka
-            // aloqador emas, ochilmaydi.
-            if ($deadline->lt($start)) {
-                return false;
-            }
-
-            // MT turi aniq belgilangan bo'lsa — shart bajarildi
-            $hasMtMakeup = $candidate->makeups
-                ->where('subject_id', $subjectId)
-                ->where('assessment_type', 'mt')
-                ->isNotEmpty();
-            if ($hasMtMakeup) {
-                return true;
-            }
-
-            // Aks holda: MT muddati yo'qlik davri ichida tugagan bo'lishi kerak
-            return $deadline->lte(Carbon::parse($candidate->end_date)->endOfDay());
-        });
-
-        if (!$excuse) {
-            return false;
-        }
-
-        $sababliDays = Carbon::parse($excuse->start_date)->diffInDays(Carbon::parse($excuse->end_date)) + 1;
-        $sababliDeadline = Carbon::parse($excuse->reviewed_at)->addDays($sababliDays)->endOfDay();
-
-        return now()->lessThanOrEqualTo($sababliDeadline);
+        return $excuse !== null && now()->lessThanOrEqualTo(SababliMtWindow::closesAt($excuse));
     }
 
     public function submitIndependent(Request $request, $id)
@@ -1550,8 +1506,10 @@ class StudentController extends Controller
             }
         }
 
-        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa fayl yuklash mumkin emas
-        if ($this->mtYnLocked($student, $independent, $resolvedSubjectId)) {
+        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa fayl yuklash mumkin emas.
+        // Sababli ariza bilan ochilgan MT bundan mustasno: o'qituvchi uni YN dan keyin ham baholaydi.
+        if ($this->mtYnLocked($student, $independent, $resolvedSubjectId)
+            && !$this->mtSubmissionOpenBySababli($student, $independent, $resolvedSubjectId)) {
             return back()->with('error', 'YN ga yuborilgan. Fayl yuklash mumkin emas.');
         }
 

@@ -14,6 +14,9 @@ use Symfony\Component\HttpFoundation\Response;
  * bilan beriladi (IP yoki CIDR, masalan "213.230.64.10,10.0.0.0/8").
  * Ro'yxat bo'sh bo'lsa cheklov o'chiq — sozlanmagan serverda testlar
  * to'xtab qolmasin.
+ *
+ * Tarmoqdan tashqarida oddiy 404 qaytadi: sahifa borligi ham, sababi ham
+ * aytilmaydi.
  */
 class UniversityNetworkOnly
 {
@@ -25,13 +28,6 @@ class UniversityNetworkOnly
             return $next($request);
         }
 
-        $message = "Test faqat universitet tarmog'idan ochiladi.";
-        if ($request->expectsJson()) {
-            return response()->json(['message' => $message], 403);
-        }
-
-        return response()->view('kiosk.fan-testi.network', [
-            'ip' => $request->ip(),
-        ], 403);
+        abort(404);
     }
 }

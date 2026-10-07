@@ -2774,7 +2774,14 @@ class JournalController extends Controller
                                 'updated_at' => now(),
                             ]);
                             $absenceGradesCreated++;
-                        } elseif ($existingGrade->reason !== 'absent' || $existingGrade->grade !== null) {
+                        } elseif (
+                            ($existingGrade->reason !== 'absent' || $existingGrade->grade !== null)
+                            // NB ustiga keyin qo'yilgan baho (sababli ariza / dars ochish) — HEMIS NB si
+                            // uni bekor qilmaydi. Ariza asosida yangi qator ochilgan bo'lsa reason=null,
+                            // shuning uchun tasdiqlangan LMS arizasi ham alohida tekshiriladi.
+                            && !($existingGrade->reason === 'absent' && $existingGrade->grade !== null)
+                            && !$this->hasApprovedLmsExcuse((string) $studentHemisId, (int) $item['subject']['id'], $lessonDate->format('Y-m-d'))
+                        ) {
                             // HEMIS'da baho NB ga o'zgartirilgan — mavjud yozuvni yangilash kerak.
                             // Aks holda eski son baho LMS'da qolib ketadi.
                             DB::table('student_grades')
@@ -2795,14 +2802,11 @@ class JournalController extends Controller
                     // LMS ariza statusi attendance sinxronizatsiyasi paytida o'zgarmaydi,
                     // shuning uchun effektiv holat faqat HEMIS tomonidan o'zgarishi mumkin.
                     if ($oldAbsentOn !== null && $oldAbsentOn !== $newAbsentOn) {
-                        $hasLmsExcuse = DB::table('absence_excuses as ae')
-                            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
-                            ->where('ae.student_hemis_id', $item['student']['id'])
-                            ->where('ae.status', 'approved')
-                            ->whereDate('ae.start_date', '<=', $lessonDate->format('Y-m-d'))
-                            ->whereDate('ae.end_date', '>=', $lessonDate->format('Y-m-d'))
-                            ->where('aem.subject_id', $item['subject']['id'])
-                            ->exists();
+                        $hasLmsExcuse = $this->hasApprovedLmsExcuse(
+                            (string) $item['student']['id'],
+                            (int) $item['subject']['id'],
+                            $lessonDate->format('Y-m-d')
+                        );
 
                         $oldIsExcused = ($oldAbsentOn > 0) || $hasLmsExcuse;
                         $newIsExcused = ($newAbsentOn > 0) || $hasLmsExcuse;
@@ -2842,6 +2846,21 @@ class JournalController extends Controller
             'absence_grades_created' => $absenceGradesCreated,
             'total_api_items' => $totalApiItems,
         ];
+    }
+
+    /**
+     * Talabaning shu sana va fan uchun LMS'da tasdiqlangan sababli arizasi bormi.
+     */
+    private function hasApprovedLmsExcuse(string $studentHemisId, int $subjectId, string $date): bool
+    {
+        return DB::table('absence_excuses as ae')
+            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+            ->where('ae.student_hemis_id', $studentHemisId)
+            ->where('ae.status', 'approved')
+            ->whereDate('ae.start_date', '<=', $date)
+            ->whereDate('ae.end_date', '>=', $date)
+            ->where('aem.subject_id', $subjectId)
+            ->exists();
     }
 
     /**

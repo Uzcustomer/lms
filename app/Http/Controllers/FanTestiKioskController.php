@@ -54,25 +54,22 @@ class FanTestiKioskController extends Controller
     }
 
     /**
-     * 1-bosqich: ID bo'yicha talabani tekshiradi va uning tasdiqlangan rasmini
-     * qaytaradi — keyingi yuz tekshiruvi aynan shu rasm bilan solishtiriladi.
+     * 1-bosqich: ID bo'yicha talabani va uning tasdiqlangan rasmi borligini
+     * tekshiradi. Ism ham, rasm ham qaytarilmaydi — ID terib talabalarning
+     * shaxsi va rasmlarini yig'ib bo'lmasin. Solishtirish serverda jim bo'ladi.
      */
     public function check(Request $request, FanTesti $fanTesti)
     {
         $this->assertTableReady();
-        $this->throttle($request, 'fan_testi_check', 60);
+        $this->throttle($request, 'fan_testi_check', 20, 600);
 
         $data = $request->validate([
             'student_id_number' => ['required', 'string', 'max:64'],
         ], [], ['student_id_number' => 'Talaba ID']);
 
-        $student = $this->eligibleStudent($fanTesti, $data['student_id_number']);
+        $this->eligibleStudent($fanTesti, $data['student_id_number']);
 
-        return response()->json([
-            'full_name' => $student->full_name,
-            'group_name' => $student->group_name,
-            'photo_url' => FaceIdService::referenceImageFor($student),
-        ]);
+        return response()->json(['photo_found' => true]);
     }
 
     /**
@@ -84,7 +81,7 @@ class FanTestiKioskController extends Controller
     public function start(Request $request, FanTesti $fanTesti)
     {
         $this->assertTableReady();
-        $this->throttle($request, 'fan_testi_start', 30);
+        $this->throttle($request, 'fan_testi_start', 10, 300);
 
         $data = $request->validate([
             'student_id_number' => ['required', 'string', 'max:64'],
@@ -214,6 +211,94 @@ class FanTestiKioskController extends Controller
     }
 
     /**
+     * Test davomidagi jim kuzatuv: brauzer vaqti-vaqti bilan surat yuboradi
+     * (talaba monitorga to'g'ri qarab turganda) va monitordan chalg'ish
+     * holatlari sonini xabar qiladi. Surat talabaning tasdiqlangan rasmi bilan
+     * solishtiriladi; mos kelmasa brauzer testni to'xtatib turadi.
+     *
+     * Xizmat javob bermasa match = null qaytadi va test to'xtatilmaydi —
+     * ArcFace nosozligi butun sinfning testini bloklamasin.
+     */
+    public function monitorFace(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return response()->json(['message' => 'Sessiya topilmadi.'], 403);
+        }
+        if ($attempt->isFinished()) {
+            return response()->json(['finished' => true]);
+        }
+
+        $key = 'fan_testi_face:' . $attempt->id;
+        if (RateLimiter::tooManyAttempts($key, 12)) {
+            return response()->json(['match' => null]);
+        }
+        RateLimiter::hit($key, 60);
+
+        $data = $request->validate([
+            'snapshot' => ['nullable', 'string', 'max:500000'],
+            'away' => ['nullable', 'integer', 'min:0', 'max:50'],
+        ]);
+
+        $updates = [];
+        if (!empty($data['away']) && $this->hasMonitorColumns()) {
+            $updates['away_count'] = (int) $attempt->away_count + (int) $data['away'];
+        }
+
+        $match = null;
+        $similarity = null;
+        if (!empty($data['snapshot'])) {
+            $student = Student::find($attempt->student_id);
+            $similarity = $student ? $this->compareFace($student, $data['snapshot']) : null;
+
+            if ($similarity !== null) {
+                $threshold = FaceIdService::getArcFaceThreshold();
+                $match = $similarity >= $threshold;
+
+                if ($this->hasMonitorColumns()) {
+                    $updates['face_checks'] = (int) $attempt->face_checks + 1;
+                    if (!$match) {
+                        $updates['face_mismatches'] = (int) $attempt->face_mismatches + 1;
+                    }
+                }
+
+                // Mos kelmaganlar logga tushadi — kim o'tirganini keyin ko'rish uchun.
+                if (!$match) {
+                    FaceIdService::logAttempt([
+                        'attempt_type' => 'fan_test_monitor',
+                        'ip_address' => $request->ip(),
+                        'user_agent' => $request->userAgent(),
+                        'student_id' => $attempt->student_id,
+                        'student_id_number' => $attempt->student_id_number,
+                        'target_student_id' => $attempt->student_id,
+                        'target_student_id_number' => $attempt->student_id_number,
+                        'result' => 'failed',
+                        'confidence' => round($similarity / 100, 4),
+                        'failure_reason' => "Fan testi davomida yuz mos kelmadi ({$similarity}% < {$threshold}%, test #{$fanTesti->id}, urinish #{$attempt->id})",
+                        'snapshot' => $data['snapshot'],
+                    ]);
+                }
+            }
+        }
+
+        if ($updates) {
+            $attempt->update($updates);
+        }
+
+        return response()->json([
+            'match' => $match,
+            'similarity' => $similarity !== null ? round($similarity, 1) : null,
+        ]);
+    }
+
+    private function hasMonitorColumns(): bool
+    {
+        static $has = null;
+
+        return $has ??= Schema::hasColumn('fan_testi_attempts', 'face_checks');
+    }
+
+    /**
      * Testga kirish shartlari: test ochiq, talaba topildi, guruhi fanga
      * biriktirilgan, savol bor va yuz solishtirish uchun tasdiqlangan rasmi bor.
      */
@@ -329,13 +414,26 @@ class FanTestiKioskController extends Controller
             ->withErrors(['student_id_number' => "Bu sahifani faqat testni topshirgan talabaning o'zi ko'radi. ID raqamingizni kiriting va yuz tekshiruvidan o'ting."]);
     }
 
-    private function throttle(Request $request, string $prefix, int $perMinute): void
+    /**
+     * Urinishlar cheklovi asosan talaba ID si bo'yicha: sinf kompyuterlari
+     * serverga bitta IP orqali chiqadi, IP bo'yicha qattiq cheklov butun
+     * sinfni bloklab qo'yardi. IP uchun faqat katta umumiy chegara qoladi.
+     */
+    private function throttle(Request $request, string $prefix, int $perStudent, int $perIp): void
     {
-        $key = $prefix . ':' . $request->ip();
-        if (RateLimiter::tooManyAttempts($key, $perMinute)) {
-            throw ValidationException::withMessages(['student_id_number' => "Juda ko'p urinish. Bir daqiqadan keyin qayta urinib ko'ring."]);
+        $keys = [
+            [$prefix . ':ip:' . $request->ip(), $perIp],
+            [$prefix . ':id:' . mb_strtolower(trim((string) $request->input('student_id_number'))), $perStudent],
+        ];
+
+        foreach ($keys as [$key, $limit]) {
+            if (RateLimiter::tooManyAttempts($key, $limit)) {
+                throw ValidationException::withMessages(['student_id_number' => "Juda ko'p urinish. Bir daqiqadan keyin qayta urinib ko'ring."]);
+            }
         }
-        RateLimiter::hit($key, 60);
+        foreach ($keys as [$key]) {
+            RateLimiter::hit($key, 60);
+        }
     }
 
     private function assertTableReady(): void

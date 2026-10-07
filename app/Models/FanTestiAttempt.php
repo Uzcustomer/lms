@@ -15,6 +15,7 @@ class FanTestiAttempt extends Model
         'status', 'started_at', 'expires_at', 'submitted_at', 'duration_seconds',
         'questions_count', 'answers_count', 'correct_count',
         'total_points', 'score', 'percent', 'is_passed',
+        'face_checks', 'face_mismatches', 'away_count',
         'questions_snapshot', 'ip_address',
     ];
 
@@ -31,6 +32,9 @@ class FanTestiAttempt extends Model
         'score' => 'decimal:2',
         'percent' => 'decimal:2',
         'is_passed' => 'boolean',
+        'face_checks' => 'integer',
+        'face_mismatches' => 'integer',
+        'away_count' => 'integer',
         'questions_snapshot' => 'array',
     ];
 

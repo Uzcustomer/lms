@@ -95,13 +95,16 @@ Route::get('/tv/jadval', [AcademicScheduleController::class, 'tvJadval'])->name(
 // Fan testi kioski: o'qituvchi havolani sinf kompyuterlarida ochib qo'yadi,
 // talaba ID raqamini kiritib, yuz (liveness + rasm bilan solishtirish)
 // tekshiruvidan o'tadi. Login talab qilinmaydi.
-Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')->group(function () {
+Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')
+    ->middleware(\App\Http\Middleware\UniversityNetworkOnly::class)
+    ->group(function () {
     Route::get('/', [\App\Http\Controllers\FanTestiKioskController::class, 'show'])->name('show');
     Route::post('/check', [\App\Http\Controllers\FanTestiKioskController::class, 'check'])->name('check');
     Route::post('/start', [\App\Http\Controllers\FanTestiKioskController::class, 'start'])->name('start');
     Route::get('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'take'])->name('take');
     Route::post('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'submit'])->name('submit');
     Route::get('/attempt/{attempt}/natija', [\App\Http\Controllers\FanTestiKioskController::class, 'result'])->name('result');
+    Route::post('/attempt/{attempt}/face', [\App\Http\Controllers\FanTestiKioskController::class, 'monitorFace'])->name('face');
 });
 
 // Sababli ariza tekshirish (QR kod orqali, public)
@@ -122,7 +125,7 @@ Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->n
 Route::get('/fan-testi-images/{fanTesti}/{question}', [\App\Http\Controllers\FanTestiQuestionImageController::class, 'show'])
     ->whereNumber('question')->name('fan-testi.question-image');
 Route::get('/fan-testi-attempt-images/{attempt}/{question}', [\App\Http\Controllers\FanTestiQuestionImageController::class, 'attemptImage'])
-    ->whereNumber('question')->name('fan-testi.attempt-image');
+    ->whereNumber('question')->middleware(\App\Http\Middleware\UniversityNetworkOnly::class)->name('fan-testi.attempt-image');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {

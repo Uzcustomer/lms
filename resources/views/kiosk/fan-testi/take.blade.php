@@ -180,6 +180,36 @@
         .t-foot-note b { color: var(--navy); font-weight: 700; }
         .t-foot .k-btn { width: auto; min-width: 210px; }
 
+        /* ---------- Yuz kuzatuvi: test to'xtaganda butun sahifani yopadi ---------- */
+        .m-veil {
+            position: fixed; inset: 0; z-index: 1000;
+            display: grid; place-items: center; padding: 20px;
+            background: rgba(15, 23, 42, .93); backdrop-filter: blur(10px);
+        }
+        .m-veil[hidden] { display: none; }
+        .m-box {
+            max-width: 480px; padding: 30px 28px; border-radius: 10px;
+            background: #fff; text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+        }
+        .m-icon {
+            display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 14px;
+            border-radius: 50%; background: #fef3c7; color: #b45309;
+            font-size: 34px; font-weight: 800;
+        }
+        .m-box h2 { margin: 0 0 8px; color: var(--navy); font-size: 22px; font-weight: 800; }
+        .m-box p { margin: 0; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
+        .m-box small { display: block; margin-top: 12px; color: var(--muted); font-size: 12.5px; }
+        .m-box .k-btn { margin-top: 18px; }
+        .m-video { position: fixed; left: 0; bottom: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+        .m-cam {
+            position: fixed; left: 14px; bottom: 14px; z-index: 30;
+            padding: 5px 11px; border-radius: 999px;
+            background: rgba(15, 23, 42, .78); color: #fff; font-size: 12px; font-weight: 600;
+        }
+        .m-cam::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #22c55e; vertical-align: 1px; }
+        .m-cam[hidden] { display: none; }
+
         @media (max-width: 720px) {
             .t-bar { flex-direction: column; align-items: stretch; gap: 13px; }
             .t-right { justify-content: space-between; }
@@ -331,6 +361,21 @@
             <button class="k-btn" type="submit" id="submitBtn">Testni topshirish</button>
         </div>
     </form>
+
+    @unless($isPreview)
+        {{-- Yuz kuzatuvi: yashirin kamera va test to'xtaganda chiqadigan oyna --}}
+        <video id="monVideo" class="m-video" autoplay playsinline muted></video>
+        <div class="m-cam" id="monCam" hidden>Kamera yoqilgan</div>
+        <div class="m-veil" id="monVeil" hidden role="alertdialog" aria-modal="true" aria-labelledby="monTitle">
+            <div class="m-box">
+                <div class="m-icon" aria-hidden="true">!</div>
+                <h2 id="monTitle">Iltimos, boshqa tomonga burilmang</h2>
+                <p id="monText"></p>
+                <small>Test vaqti to'xtamaydi.</small>
+                <button type="button" class="k-btn" id="monRetry" hidden>Kamerani qayta yoqish</button>
+            </div>
+        </div>
+    @endunless
 @endsection
 
 @section('scripts')
@@ -458,4 +503,192 @@
     });
 })();
 </script>
+@unless($preview ?? false)
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+// Test davomidagi yuz kuzatuvi: talaba monitorga to'g'ri qaramasa test to'xtab
+// turadi; vaqti-vaqti bilan jim olingan surat serverda tasdiqlangan rasm bilan
+// solishtiriladi. Vaqt to'xtamaydi — u serverdagi tugash vaqtiga bog'langan.
+(() => {
+    const CFG = {
+        models: @json(asset('face-models')),
+        faceUrl: @json(route('kiosk.fan-testi.face', [$test, $attempt])),
+        csrf: document.querySelector('meta[name="csrf-token"]').content,
+        tickMs: 700,          // kadr tekshirish oralig'i
+        yawLimit: 0.25,       // shundan ko'p burilsa — "boshqa tomonga qaradi"
+        awayMs: 2000,         // shuncha vaqt qaramasa test to'xtaydi
+        backMs: 1000,         // shuncha vaqt to'g'ri qarasa test davom etadi
+        firstCheckMs: 15000,  // birinchi jim tekshiruv
+        checkMinMs: 45000,    // keyingi tekshiruvlar oralig'i (tasodifiy)
+        checkMaxMs: 90000,
+        recheckMs: 6000,      // yuz mos kelmaganda qayta tekshirish
+    };
+
+    const form = document.getElementById('testForm');
+    const veil = document.getElementById('monVeil');
+    const video = document.getElementById('monVideo');
+    const camChip = document.getElementById('monCam');
+    const state = {
+        stream: null, timer: null, busy: false,
+        paused: null,          // null | 'away' | 'face' | 'camera'
+        badSince: null, goodSince: null,
+        checking: false, nextCheckAt: Date.now() + CFG.firstCheckMs,
+    };
+
+    const TEXT = {
+        turn: ['Iltimos, boshqa tomonga burilmang', "Test to'xtatildi. Monitorga to'g'ri qarang — test avtomatik davom etadi."],
+        none: ["Yuzingiz ko'rinmayapti", "Test to'xtatildi. Kameraga yuzingiz ko'rinadigan qilib monitorga to'g'ri qarang."],
+        many: ["Kamerada faqat siz bo'lishingiz kerak", "Test to'xtatildi. Yoningizdagi odam kamera ko'rinishidan chiqsin."],
+        face: ['Yuzingiz tasdiqlanmadi', "Test to'xtatildi. Testni boshlagan talaba monitorga to'g'ri qarasin — yuz tasdiqlangach test davom etadi."],
+        camera: ['Kamera kerak', "Test davom etishi uchun kamerani ulang va unga ruxsat bering."],
+    };
+
+    function showVeil(kind) {
+        const [title, text] = TEXT[kind];
+        document.getElementById('monTitle').textContent = title;
+        document.getElementById('monText').textContent = text;
+        document.getElementById('monRetry').hidden = kind !== 'camera';
+        veil.hidden = false;
+        form.inert = true;
+    }
+
+    function pause(reason, kind) {
+        // Yuz mos kelmasligi chalg'ishdan ustun turadi.
+        if (state.paused === 'face' && reason === 'away') return;
+        const wasPaused = state.paused;
+        state.paused = reason;
+        showVeil(kind || reason);
+        if (reason === 'away' && wasPaused !== 'away') report({ away: 1 });
+    }
+
+    function resume() {
+        state.paused = null;
+        veil.hidden = true;
+        form.inert = false;
+    }
+
+    async function report(body) {
+        try {
+            const resp = await fetch(CFG.faceUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CFG.csrf },
+                body: JSON.stringify(body),
+            });
+            return resp.ok ? await resp.json() : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function yawOf(landmarks) {
+        const p = landmarks.positions;
+        const cx = (p[39].x + p[42].x) / 2;
+        const fw = Math.abs(p[42].x - p[39].x);
+        return fw > 0 ? (p[30].x - cx) / fw : 0;
+    }
+
+    function snapshot() {
+        const canvas = document.createElement('canvas');
+        const vw = video.videoWidth || 640;
+        const vh = video.videoHeight || 480;
+        canvas.width = Math.min(vw, 640);
+        canvas.height = Math.round(vh * canvas.width / vw);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.85);
+    }
+
+    const nextDelay = () => CFG.checkMinMs + Math.random() * (CFG.checkMaxMs - CFG.checkMinMs);
+
+    async function identityCheck() {
+        state.checking = true;
+        const data = await report({ snapshot: snapshot() });
+        state.checking = false;
+        if (data && data.match === false) {
+            pause('face');
+            state.nextCheckAt = Date.now() + CFG.recheckMs;
+            return;
+        }
+        if (data && data.match === true && state.paused === 'face') {
+            resume();
+        }
+        // Xizmat javob bermasa (match = null) test to'xtatilmaydi.
+        state.nextCheckAt = Date.now() + (state.paused === 'face' ? CFG.recheckMs : nextDelay());
+    }
+
+    async function tick() {
+        if (state.busy || !state.stream) return;
+        state.busy = true;
+        let faces = [];
+        try {
+            faces = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })).withFaceLandmarks();
+        } catch (e) {
+            state.busy = false;
+            return;
+        }
+        state.busy = false;
+
+        const now = Date.now();
+        let kind = null;
+        if (faces.length === 0) kind = 'none';
+        else if (faces.length > 1) kind = 'many';
+        else if (Math.abs(yawOf(faces[0].landmarks)) > CFG.yawLimit) kind = 'turn';
+
+        if (kind) {
+            state.goodSince = null;
+            state.badSince = state.badSince || now;
+            if (state.paused !== 'face' && now - state.badSince >= CFG.awayMs) {
+                pause('away', kind);
+            }
+            return;
+        }
+
+        state.badSince = null;
+        state.goodSince = state.goodSince || now;
+        if (state.paused === 'away' && now - state.goodSince >= CFG.backMs) {
+            resume();
+        }
+        if (!state.checking && now >= state.nextCheckAt) {
+            identityCheck();
+        }
+    }
+
+    async function start() {
+        try {
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(CFG.models),
+                faceapi.nets.faceLandmark68Net.loadFromUri(CFG.models),
+            ]);
+            state.stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+                audio: false,
+            });
+        } catch (e) {
+            pause('camera');
+            return;
+        }
+        video.srcObject = state.stream;
+        await new Promise((resolve) => { video.onloadedmetadata = resolve; });
+        await video.play();
+        camChip.hidden = false;
+        if (state.paused === 'camera') resume();
+        // Kamera uzilib qolsa ham test to'xtaydi.
+        state.stream.getVideoTracks().forEach((track) => track.addEventListener('ended', () => {
+            state.stream = null;
+            camChip.hidden = true;
+            pause('camera');
+        }));
+        state.timer = setInterval(tick, CFG.tickMs);
+    }
+
+    document.getElementById('monRetry').addEventListener('click', () => {
+        if (state.timer) { clearInterval(state.timer); state.timer = null; }
+        start();
+    });
+    window.addEventListener('pagehide', () => {
+        if (state.stream) state.stream.getTracks().forEach((t) => t.stop());
+    });
+    start();
+})();
+</script>
+@endunless
 @endsection

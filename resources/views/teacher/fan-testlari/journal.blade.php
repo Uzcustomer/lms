@@ -147,6 +147,12 @@
     .jr-table tbody tr:hover { background: #fafcfe; }
 
     .jr-student { color: var(--ink); font-weight: 500; }
+    .jr-flag {
+        display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px;
+        font-size: 11px; font-weight: 700; white-space: nowrap;
+    }
+    .jr-flag.is-bad { background: #fee2e2; color: #b91c1c; }
+    .jr-flag.is-warn { background: #fef3c7; color: #a35a06; }
     .jr-sid { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
 
     .jr-pill {
@@ -434,6 +440,13 @@
                                                 @if($attempt->status === 'expired')
                                                     <span class="jr-mini">vaqt tugagan</span>
                                                 @endif
+                                            @endif
+                                            {{-- Test davomidagi yuz kuzatuvi --}}
+                                            @if((int) $attempt->face_mismatches > 0)
+                                                <span class="jr-flag is-bad" title="Test davomida jim olingan suratlar talabaning rasmiga mos kelmadi">Yuz mos emas: {{ $attempt->face_mismatches }}/{{ $attempt->face_checks }}</span>
+                                            @endif
+                                            @if((int) $attempt->away_count > 0)
+                                                <span class="jr-flag is-warn" title="Monitordan chalg'igani uchun test to'xtatilgan holatlar">Chalg'idi: {{ $attempt->away_count }} marta</span>
                                             @endif
                                         </td>
                                         <td><span class="jr-num">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</span></td>

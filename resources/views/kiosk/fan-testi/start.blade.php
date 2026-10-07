@@ -34,8 +34,12 @@
             margin-bottom: 14px; padding: 10px 12px;
             border: 1px solid var(--line); border-radius: 6px; background: #f7f9fc;
         }
-        .f-who img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid var(--navy); background: #e5ebf3; }
-        .f-who b { display: block; color: var(--navy); font-size: 14.5px; }
+        .f-who-mark {
+            flex: none; display: grid; place-items: center;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: #16a34a; color: #fff; font-size: 20px; font-weight: 800;
+        }
+        .f-who b { display: block; color: #166534; font-size: 15px; }
         .f-who span { color: var(--muted); font-size: 12.5px; }
         .f-who button { margin-left: auto; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; text-decoration: underline; cursor: pointer; }
         /* Kamera oynasi: ekran balandligiga sig'adigan darajada katta (4:3) */
@@ -147,8 +151,8 @@
             {{-- 2-bosqich: yuz tekshiruvi (liveness + tasdiqlangan rasm bilan solishtirish) --}}
             <div id="stepFace" style="display:none">
                 <div class="f-who">
-                    <img id="whoPhoto" src="" alt="">
-                    <div><b id="whoName"></b><span id="whoGroup"></span></div>
+                    <span class="f-who-mark" aria-hidden="true">&#10003;</span>
+                    <div><b>Rasm topildi</b><span id="whoId"></span></div>
                     <button type="button" id="btnBack">Boshqa ID</button>
                 </div>
 
@@ -253,10 +257,9 @@
             const r = await postJson(CFG.checkUrl, { student_id_number: idNumber });
             if (!r.ok) { showError('idError', messageFrom(r.data, 'Talaba topilmadi.')); return; }
 
+            // Ism va rasm ko'rsatilmaydi — faqat rasm borligi aytiladi, solishtirish serverda.
             state.idNumber = idNumber;
-            $('whoName').textContent = r.data.full_name || '';
-            $('whoGroup').textContent = (r.data.group_name ? r.data.group_name + ' · ' : '') + idNumber;
-            $('whoPhoto').src = r.data.photo_url || '';
+            $('whoId').textContent = 'ID: ' + idNumber + ' · yuzingiz shu rasm bilan solishtiriladi';
             $('stepId').style.display = 'none';
             $('stepFace').style.display = '';
             await startCamera();

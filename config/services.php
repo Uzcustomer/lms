@@ -195,6 +195,12 @@ return [
         'photo_allowed_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('FACEID_PHOTO_ALLOWED_ORIGINS', ''))))),
     ],
 
+    'fan_test' => [
+        // Fan testi (kiosk) faqat shu tarmoqlardan ochiladi: IP yoki CIDR, vergul bilan.
+        // Masalan: 213.230.64.10,10.0.0.0/8. Bo'sh bo'lsa cheklov o'chiq.
+        'allowed_networks' => array_values(array_filter(array_map('trim', explode(',', (string) env('FAN_TEST_ALLOWED_NETWORKS', ''))))),
+    ],
+
     'exam_access' => [
         // Whether ExamAccessGuardService should enforce the
         // "student must sit at a specific computer" rule. When false

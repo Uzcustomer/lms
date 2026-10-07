@@ -33,23 +33,58 @@
         .f-who b { display: block; color: var(--navy); font-size: 14.5px; }
         .f-who span { color: var(--muted); font-size: 12.5px; }
         .f-who button { margin-left: auto; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; text-decoration: underline; cursor: pointer; }
-        .f-stage { position: relative; max-width: 420px; margin: 0 auto; }
+        /* Kamera oynasi: ekran balandligiga sig'adigan darajada katta (4:3) */
+        .f-stage {
+            position: relative; overflow: hidden;
+            width: min(100%, 760px, calc(72vh * 4 / 3)); margin: 0 auto;
+            border-radius: 10px; background: #0f172a;
+        }
         .f-stage video {
             display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
-            border-radius: 8px; background: #0f172a; transform: scaleX(-1);
+            transform: scaleX(-1);
         }
-        .f-ring { position: absolute; inset: 0; border: 3px solid transparent; border-radius: 8px; pointer-events: none; transition: border-color .2s; }
-        .f-ring.ok { border-color: #16a34a; }
-        .f-ring.bad { border-color: #dc2626; }
-        .f-prompt { margin: 14px 0 10px; color: var(--navy); font-size: 17px; font-weight: 700; text-align: center; }
-        .f-sub { margin: -4px 0 12px; color: var(--muted); font-size: 13px; text-align: center; min-height: 1.4em; }
+        .f-ring { position: absolute; inset: 0; border: 4px solid transparent; border-radius: 10px; pointer-events: none; transition: border-color .2s; }
+        .f-ring.ok { border-color: #22c55e; }
+        .f-ring.bad { border-color: #ef4444; }
+
+        /* Yuz uchun yo'naltiruvchi oval */
+        .f-oval {
+            position: absolute; left: 50%; top: 50%; width: 42%; aspect-ratio: 3 / 4;
+            transform: translate(-50%, -50%);
+            border: 3px dashed rgba(255, 255, 255, .55); border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* Buyruqlar video ichida: tepada matn, pastda bosqichlar */
+        .f-top, .f-bottom { position: absolute; left: 0; right: 0; padding: 16px 18px; pointer-events: none; text-align: center; }
+        .f-top { top: 0; background: linear-gradient(180deg, rgba(15, 23, 42, .78), rgba(15, 23, 42, 0)); padding-bottom: 34px; }
+        .f-bottom { bottom: 0; background: linear-gradient(0deg, rgba(15, 23, 42, .78), rgba(15, 23, 42, 0)); padding-top: 30px; }
+        .f-prompt { color: #fff; font-size: clamp(19px, 3.2vw, 28px); font-weight: 800; line-height: 1.25; text-shadow: 0 2px 8px rgba(0, 0, 0, .45); }
+        .f-sub { margin-top: 4px; color: rgba(255, 255, 255, .88); font-size: 14px; min-height: 1.4em; text-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
         .f-steps { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
         .f-step {
-            padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
-            color: var(--muted); font-size: 12.5px; font-weight: 600; background: #fff;
+            padding: 6px 13px; border: 1px solid rgba(255, 255, 255, .35); border-radius: 999px;
+            background: rgba(15, 23, 42, .45); color: rgba(255, 255, 255, .8);
+            font-size: 13px; font-weight: 700;
         }
-        .f-step.done { border-color: #86efac; background: #ecfdf5; color: #166534; }
-        .f-step.now { border-color: var(--navy); color: var(--navy); }
+        .f-step.done { border-color: #22c55e; background: rgba(22, 163, 74, .85); color: #fff; }
+        .f-step.now { border-color: #fff; background: rgba(255, 255, 255, .95); color: var(--navy); }
+
+        /* Burilish strelkalari: talaba o'zini ko'zgudagidek ko'radi — o'ngga = ekranning o'ng tomoni */
+        .f-arrow {
+            position: absolute; top: 50%; display: none;
+            width: clamp(64px, 12vw, 104px); height: clamp(64px, 12vw, 104px);
+            margin-top: calc(clamp(64px, 12vw, 104px) / -2);
+            color: #fff; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, .55));
+            pointer-events: none;
+        }
+        .f-arrow svg { width: 100%; height: 100%; }
+        .f-arrow.show { display: block; }
+        .f-arrow-right { right: 4%; animation: f-nudge-right 1s ease-in-out infinite; }
+        .f-arrow-left { left: 4%; animation: f-nudge-left 1s ease-in-out infinite; }
+        @keyframes f-nudge-right { 0%, 100% { transform: translateX(0); opacity: .75; } 50% { transform: translateX(14px); opacity: 1; } }
+        @keyframes f-nudge-left { 0%, 100% { transform: translateX(0); opacity: .75; } 50% { transform: translateX(-14px); opacity: 1; } }
+        @media (prefers-reduced-motion: reduce) { .f-arrow-right, .f-arrow-left { animation: none; } }
         .f-actions { display: flex; gap: 10px; margin-top: 16px; }
         .f-actions .k-btn { flex: 1; }
 @endsection
@@ -114,15 +149,27 @@
 
                 <div class="f-stage">
                     <video id="faceVideo" autoplay playsinline muted></video>
+                    <div class="f-oval"></div>
                     <div class="f-ring" id="faceRing"></div>
-                </div>
 
-                <div class="f-prompt" id="facePrompt">Kamera ochilmoqda...</div>
-                <div class="f-sub" id="faceSub"></div>
-                <div class="f-steps">
-                    <span class="f-step" data-step="right">1. O'ngga qarang</span>
-                    <span class="f-step" data-step="left">2. Chapga qarang</span>
-                    <span class="f-step" data-step="center">3. To'g'riga qarang</span>
+                    <div class="f-arrow f-arrow-left" id="arrowLeft" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 4 12l7 7"/><path d="M19 5l-7 7 7 7"/></svg>
+                    </div>
+                    <div class="f-arrow f-arrow-right" id="arrowRight" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m13 5 7 7-7 7"/><path d="m5 5 7 7-7 7"/></svg>
+                    </div>
+
+                    <div class="f-top" aria-live="polite">
+                        <div class="f-prompt" id="facePrompt">Kamera ochilmoqda...</div>
+                        <div class="f-sub" id="faceSub"></div>
+                    </div>
+                    <div class="f-bottom">
+                        <div class="f-steps">
+                            <span class="f-step" data-step="right">1. O'ngga &rarr;</span>
+                            <span class="f-step" data-step="left">2. &larr; Chapga</span>
+                            <span class="f-step" data-step="center">3. To'g'riga</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="k-error" id="faceError" style="display:none;margin-top:14px"><span>&#9888;</span><span></span></div>
@@ -265,12 +312,19 @@
         });
     }
 
+    // Qaysi tomonga burilish kerakligini video ichidagi strelka bilan ko'rsatadi.
+    function arrow(side) {
+        $('arrowRight').classList.toggle('show', side === 'right');
+        $('arrowLeft').classList.toggle('show', side === 'left');
+    }
+
     function ring(kind) {
         $('faceRing').className = 'f-ring' + (kind ? ' ' + kind : '');
     }
 
     function fail(message) {
         stopCamera();
+        arrow(null);
         ring('bad');
         setPrompt("Tekshiruv to'xtadi", '');
         showError('faceError', message);
@@ -297,6 +351,7 @@
         $('btnRetry').style.display = 'none';
         ring('');
         markSteps(done, 'right');
+        arrow('right');
         setPrompt("Boshingizni o'ngga burang", "Yuzingiz kamerada to'liq ko'rinsin");
 
         state.timer = setInterval(async () => {
@@ -337,11 +392,13 @@
             if (!done.right || !done.left) {
                 const next = !done.right ? 'right' : 'left';
                 markSteps(done, next);
+                arrow(next);
                 setPrompt(next === 'right' ? "Boshingizni o'ngga burang" : 'Boshingizni chapga burang', '');
                 return;
             }
 
             markSteps(done, 'center');
+            arrow(null);
             if (Math.abs(yaw) > CFG.yawCenter) {
                 centerSince = null;
                 setPrompt("Endi kameraga to'g'ri qarang", '');

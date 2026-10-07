@@ -1338,7 +1338,11 @@ class StudentController extends Controller
 
                 $deadlineDateTime = Carbon::parse($independent->deadline)->setTime($hour, $minute, 0);
                 $submissionCount = $submission?->submission_count ?? 0;
-                $isOverdue = Carbon::now()->gt($deadlineDateTime);
+                // Muddat o'tgan bo'lsa ham, tasdiqlangan sababli arizada MT
+                // ko'rsatilgan bo'lsa yuklash ochiq qoladi — submitIndependent()
+                // ham aynan shu shartni qo'llaydi, ro'yxat unga mos bo'lsin.
+                $isOverdue = Carbon::now()->gt($deadlineDateTime)
+                    && !$this->mtSubmissionOpenBySababli($student, $independent, $resolvedSubjectId);
 
                 // Use mt_grade_history count for accurate resubmission tracking
                 $mtHistoryCount = DB::table('mt_grade_history')

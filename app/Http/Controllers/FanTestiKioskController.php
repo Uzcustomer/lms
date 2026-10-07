@@ -6,9 +6,11 @@ use App\Models\FanTesti;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
 use App\Models\Student;
+use App\Services\FaceIdService;
 use App\Services\FanTestiGroups;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
@@ -16,17 +18,24 @@ use Illuminate\Validation\ValidationException;
  * Talaba testni ishlaydigan public sahifa (kiosk).
  *
  * Login talab qilinmaydi: o'qituvchi havolani sinf kompyuterlarida ochib
- * qo'yadi, talaba faqat o'z ID raqamini kiritadi. Tashqi kirishdan himoya
- * veb-server darajasida (nginx allow/deny) qilinadi — /tv/jadval bilan bir xil
- * yondashuv. Kelajakda bu yerga Face ID tekshiruvi qo'shiladi.
+ * qo'yadi. Talaba ID raqamini kiritadi, boshini o'ngga va chapga burib
+ * jonlilikni ko'rsatadi, so'ng yuzi tasdiqlangan rasmi bilan solishtiriladi.
+ * Test va natija sahifalari faqat shu tekshiruvdan o'tgan sessiyaga ochiq.
  */
 class FanTestiKioskController extends Controller
 {
     private const TZ = 'Asia/Tashkent';
 
+    /** Yuz tekshiruvidan o'tgan urinish id si — test va natija faqat shu sessiyaga ochiq. */
+    private const SESSION_KEY = 'fan_testi_attempt_id';
+
     public function show(FanTesti $fanTesti)
     {
         $this->assertTableReady();
+
+        // Sinf kompyuterida keyingi talaba oldingisining test yoki natija
+        // sahifasiga orqaga qaytib kira olmasin.
+        session()->forget(self::SESSION_KEY);
 
         // Yopilgan test 404 bermaydi: sinf kompyuterlarida havola ochiq
         // turgan bo'lishi mumkin, shuning uchun tushunarli xabar chiqadi.
@@ -40,94 +49,112 @@ class FanTestiKioskController extends Controller
 
         return view('kiosk.fan-testi.start', [
             'test' => $fanTesti->load('subject'),
+            'liveness' => FaceIdService::getLivenessConfig(),
         ]);
     }
 
-    public function start(Request $request, FanTesti $fanTesti)
+    /**
+     * 1-bosqich: ID bo'yicha talabani tekshiradi va uning tasdiqlangan rasmini
+     * qaytaradi — keyingi yuz tekshiruvi aynan shu rasm bilan solishtiriladi.
+     */
+    public function check(Request $request, FanTesti $fanTesti)
     {
         $this->assertTableReady();
-
-        // Yopilgan yoki fansiz testda yangi urinish boshlanmaydi.
-        if (!$fanTesti->is_active || !$fanTesti->curriculum_subject_id) {
-            return redirect()->route('kiosk.fan-testi.show', $fanTesti);
-        }
+        $this->throttle($request, 'fan_testi_check', 60);
 
         $data = $request->validate([
             'student_id_number' => ['required', 'string', 'max:64'],
         ], [], ['student_id_number' => 'Talaba ID']);
 
-        $student = $this->findStudent($data['student_id_number']);
-        if (!$student) {
-            throw ValidationException::withMessages([
-                'student_id_number' => 'Bunday ID raqamli talaba topilmadi. Raqamni tekshirib qayta kiriting.',
-            ]);
-        }
+        $student = $this->eligibleStudent($fanTesti, $data['student_id_number']);
 
-        // Testni faqat shu fan biriktirilgan guruhlar talabalari ishlaydi.
-        if (!$this->studentMayTake($fanTesti, $student)) {
-            throw ValidationException::withMessages([
-                'student_id_number' => 'Bu test sizning guruhingiz uchun mo\'ljallanmagan.',
-            ]);
-        }
-
-        $questions = $this->activeQuestions($fanTesti);
-        if ($questions->isEmpty()) {
-            throw ValidationException::withMessages([
-                'student_id_number' => 'Bu test to\'plamida hali savol yo\'q.',
-            ]);
-        }
-
-        $attempt = FanTestiAttempt::query()
-            ->where('fan_testi_id', $fanTesti->id)
-            ->where('student_id', $student->id)
-            ->first();
-
-        // Bir marta topshiriladi — tugatgan bo'lsa natijasini ko'rsatamiz.
-        if ($attempt && $attempt->isFinished()) {
-            return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
-        }
-
-        // Yarim qolgan urinish (brauzer yopilgan) — o'sha joyidan davom etadi.
-        if ($attempt) {
-            if ($attempt->secondsLeft() <= 0) {
-                $this->finalize($attempt, 'expired');
-
-                return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
-            }
-
-            return redirect()->route('kiosk.fan-testi.take', [$fanTesti, $attempt]);
-        }
-
-        $snapshot = $questions->values();
-        if ($fanTesti->shuffle_questions) {
-            $snapshot = $snapshot->shuffle()->values();
-        }
-
-        $attempt = FanTestiAttempt::create([
-            'fan_testi_id' => $fanTesti->id,
-            'student_id' => $student->id,
-            'student_hemis_id' => $student->hemis_id,
-            'student_name' => $student->full_name,
-            'student_id_number' => $student->student_id_number,
-            'group_id' => $student->group_id,
+        return response()->json([
+            'full_name' => $student->full_name,
             'group_name' => $student->group_name,
-            'faculty_name' => $student->department_name,
-            'specialty_name' => $student->specialty_name,
-            'status' => 'in_progress',
-            'started_at' => now(self::TZ),
-            'expires_at' => now(self::TZ)->addMinutes(max(1, (int) $fanTesti->duration_minutes)),
-            'questions_count' => $snapshot->count(),
-            'total_points' => $snapshot->sum(fn ($question) => max(1, (int) ($question['points'] ?? 1))),
-            'questions_snapshot' => $snapshot->all(),
+            'photo_url' => FaceIdService::referenceImageFor($student),
+        ]);
+    }
+
+    /**
+     * 2-bosqich: liveness (boshni o'ngga va chapga burish) brauzerda o'tgach,
+     * to'g'ridan olingan surat talabaning tasdiqlangan rasmi bilan serverda
+     * (ArcFace) solishtiriladi. O'xshashlik Face ID sozlamalaridagi chegaradan
+     * past bo'lsa testga kiritilmaydi.
+     */
+    public function start(Request $request, FanTesti $fanTesti)
+    {
+        $this->assertTableReady();
+        $this->throttle($request, 'fan_testi_start', 30);
+
+        $data = $request->validate([
+            'student_id_number' => ['required', 'string', 'max:64'],
+            'snapshot' => ['required', 'string', 'max:500000'],
+            'liveness_passed' => ['required', 'boolean'],
+        ], [], ['student_id_number' => 'Talaba ID', 'snapshot' => 'Yuz surati']);
+
+        $student = $this->eligibleStudent($fanTesti, $data['student_id_number']);
+
+        $log = [
+            'attempt_type' => 'fan_test',
             'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'student_id' => $student->id,
+            'student_id_number' => $student->student_id_number,
+            'target_student_id' => $student->id,
+            'target_student_id_number' => $student->student_id_number,
+        ];
+
+        if (!$request->boolean('liveness_passed')) {
+            FaceIdService::logAttempt($log + [
+                'result' => 'liveness_failed',
+                'failure_reason' => "Fan testi: jonlilik tekshiruvi o'tmadi (test #{$fanTesti->id})",
+                'snapshot' => $data['snapshot'],
+            ]);
+
+            return response()->json(['message' => "Jonlilik tekshiruvi o'tmadi. Boshingizni o'ngga va chapga burib, qayta urinib ko'ring."], 422);
+        }
+
+        $similarity = $this->compareFace($student, $data['snapshot']);
+        if ($similarity === null) {
+            FaceIdService::logAttempt($log + [
+                'result' => 'failed',
+                'failure_reason' => "Fan testi: ArcFace xizmati javob bermadi (test #{$fanTesti->id})",
+                'snapshot' => $data['snapshot'],
+            ]);
+
+            return response()->json(['message' => "Yuz tekshirish xizmati javob bermadi. Birozdan keyin qayta urinib ko'ring yoki o'qituvchiga murojaat qiling."], 503);
+        }
+
+        $threshold = FaceIdService::getArcFaceThreshold();
+        if ($similarity < $threshold) {
+            FaceIdService::logAttempt($log + [
+                'result' => 'failed',
+                'confidence' => round($similarity / 100, 4),
+                'failure_reason' => "Fan testi: yuz mos kelmadi ({$similarity}% < {$threshold}%, test #{$fanTesti->id})",
+                'snapshot' => $data['snapshot'],
+            ]);
+
+            return response()->json([
+                'message' => "Yuz rasmingizga mos kelmadi. Yorug' joyda kameraga to'g'ri qarab qayta urinib ko'ring.",
+                'confidence' => round($similarity, 1),
+            ], 422);
+        }
+
+        FaceIdService::logAttempt($log + [
+            'result' => 'success',
+            'confidence' => round($similarity / 100, 4),
+            'snapshot' => $data['snapshot'],
         ]);
 
-        return redirect()->route('kiosk.fan-testi.take', [$fanTesti, $attempt]);
+        return response()->json(['redirect' => $this->enterAttempt($request, $fanTesti, $student)]);
     }
 
     public function take(FanTesti $fanTesti, FanTestiAttempt $attempt)
     {
         $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return $this->denyAttempt($fanTesti);
+        }
 
         if ($attempt->isFinished()) {
             return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
@@ -150,6 +177,9 @@ class FanTestiKioskController extends Controller
     public function submit(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
     {
         $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return $this->denyAttempt($fanTesti);
+        }
 
         if ($attempt->isFinished()) {
             return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
@@ -169,14 +199,143 @@ class FanTestiKioskController extends Controller
         return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
     }
 
+    /** Natijani faqat yuz tekshiruvidan o'tib testni topshirgan talaba ko'radi. */
     public function result(FanTesti $fanTesti, FanTestiAttempt $attempt)
     {
         $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return $this->denyAttempt($fanTesti);
+        }
 
         return view('kiosk.fan-testi.result', [
             'test' => $fanTesti->load('subject'),
             'attempt' => $attempt->load('answers'),
         ]);
+    }
+
+    /**
+     * Testga kirish shartlari: test ochiq, talaba topildi, guruhi fanga
+     * biriktirilgan, savol bor va yuz solishtirish uchun tasdiqlangan rasmi bor.
+     */
+    private function eligibleStudent(FanTesti $fanTesti, string $identifier): Student
+    {
+        $fail = fn (string $message) => throw ValidationException::withMessages(['student_id_number' => $message]);
+
+        if (!$fanTesti->is_active || !$fanTesti->curriculum_subject_id) {
+            $fail('Bu test hozir yopiq.');
+        }
+
+        $student = $this->findStudent($identifier);
+        if (!$student) {
+            $fail('Bunday ID raqamli talaba topilmadi. Raqamni tekshirib qayta kiriting.');
+        }
+
+        if (!$this->studentMayTake($fanTesti, $student)) {
+            $fail('Bu test sizning guruhingiz uchun mo\'ljallanmagan.');
+        }
+
+        if ($this->activeQuestions($fanTesti)->isEmpty()) {
+            $fail('Bu test to\'plamida hali savol yo\'q.');
+        }
+
+        if (!FaceIdService::isArcFaceEnabled()) {
+            $fail("Yuz tekshiruvi tizimda o'chirilgan. O'qituvchiga murojaat qiling.");
+        }
+
+        if (!FaceIdService::hasApprovedPhoto($student)) {
+            $fail("Rasmingiz hali tasdiqlanmagan, shuning uchun yuzingizni tekshirib bo'lmaydi. Tutoringizga murojaat qiling.");
+        }
+
+        return $student;
+    }
+
+    /** Surat talabaning tasdiqlangan rasmi bilan o'xshashligi (%), xizmat javob bermasa null. */
+    private function compareFace(Student $student, string $snapshot): ?float
+    {
+        $reference = FaceIdService::referenceImageFor($student);
+        $live = $reference ? FaceIdService::saveTemporarySnapshot($snapshot) : null;
+        if (!$live) {
+            return null;
+        }
+
+        try {
+            $result = FaceIdService::compareViaArcFace($live['url'], $reference);
+        } finally {
+            FaceIdService::deleteTemporarySnapshot($live['rel']);
+        }
+
+        return $result ? (float) $result['similarity_percent'] : null;
+    }
+
+    /**
+     * Talabani urinishiga kiritadi (yangi, yarim qolgan yoki tugagan) va
+     * urinishni shu brauzer sessiyasiga bog'laydi.
+     */
+    private function enterAttempt(Request $request, FanTesti $fanTesti, Student $student): string
+    {
+        $attempt = FanTestiAttempt::query()
+            ->where('fan_testi_id', $fanTesti->id)
+            ->where('student_id', $student->id)
+            ->first();
+
+        if (!$attempt) {
+            $snapshot = $this->activeQuestions($fanTesti)->values();
+            if ($fanTesti->shuffle_questions) {
+                $snapshot = $snapshot->shuffle()->values();
+            }
+
+            $attempt = FanTestiAttempt::create([
+                'fan_testi_id' => $fanTesti->id,
+                'student_id' => $student->id,
+                'student_hemis_id' => $student->hemis_id,
+                'student_name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'group_id' => $student->group_id,
+                'group_name' => $student->group_name,
+                'faculty_name' => $student->department_name,
+                'specialty_name' => $student->specialty_name,
+                'status' => 'in_progress',
+                'started_at' => now(self::TZ),
+                'expires_at' => now(self::TZ)->addMinutes(max(1, (int) $fanTesti->duration_minutes)),
+                'questions_count' => $snapshot->count(),
+                'total_points' => $snapshot->sum(fn ($question) => max(1, (int) ($question['points'] ?? 1))),
+                'questions_snapshot' => $snapshot->all(),
+                'ip_address' => $request->ip(),
+            ]);
+        }
+
+        $request->session()->put(self::SESSION_KEY, (int) $attempt->id);
+
+        // Bir marta topshiriladi — tugatgan bo'lsa natijasini ko'rsatamiz.
+        // Yarim qolgan urinish (brauzer yopilgan) o'sha joyidan davom etadi.
+        if (!$attempt->isFinished() && $attempt->secondsLeft() <= 0) {
+            $this->finalize($attempt, 'expired');
+        }
+
+        return $attempt->isFinished()
+            ? route('kiosk.fan-testi.result', [$fanTesti, $attempt])
+            : route('kiosk.fan-testi.take', [$fanTesti, $attempt]);
+    }
+
+    private function ownsAttempt(FanTestiAttempt $attempt): bool
+    {
+        return (int) session(self::SESSION_KEY) === (int) $attempt->id;
+    }
+
+    private function denyAttempt(FanTesti $fanTesti)
+    {
+        return redirect()
+            ->route('kiosk.fan-testi.show', $fanTesti)
+            ->withErrors(['student_id_number' => "Bu sahifani faqat testni topshirgan talabaning o'zi ko'radi. ID raqamingizni kiriting va yuz tekshiruvidan o'ting."]);
+    }
+
+    private function throttle(Request $request, string $prefix, int $perMinute): void
+    {
+        $key = $prefix . ':' . $request->ip();
+        if (RateLimiter::tooManyAttempts($key, $perMinute)) {
+            throw ValidationException::withMessages(['student_id_number' => "Juda ko'p urinish. Bir daqiqadan keyin qayta urinib ko'ring."]);
+        }
+        RateLimiter::hit($key, 60);
     }
 
     private function assertTableReady(): void

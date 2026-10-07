@@ -93,10 +93,11 @@ Route::get('/refresh-csrf', function () {
 Route::get('/tv/jadval', [AcademicScheduleController::class, 'tvJadval'])->name('tv.jadval');
 
 // Fan testi kioski: o'qituvchi havolani sinf kompyuterlarida ochib qo'yadi,
-// talaba faqat o'z ID raqamini kiritadi. Login talab qilinmaydi — /tv/jadval
-// kabi, tashqi kirish veb-server (nginx allow/deny) darajasida cheklanadi.
+// talaba ID raqamini kiritib, yuz (liveness + rasm bilan solishtirish)
+// tekshiruvidan o'tadi. Login talab qilinmaydi.
 Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')->group(function () {
     Route::get('/', [\App\Http\Controllers\FanTestiKioskController::class, 'show'])->name('show');
+    Route::post('/check', [\App\Http\Controllers\FanTestiKioskController::class, 'check'])->name('check');
     Route::post('/start', [\App\Http\Controllers\FanTestiKioskController::class, 'start'])->name('start');
     Route::get('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'take'])->name('take');
     Route::post('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'submit'])->name('submit');

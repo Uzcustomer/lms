@@ -1,16 +1,16 @@
 <x-app-layout>
-<link rel="preconnect" href="https://fonts.bunny.net">
-<link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet">
 <style>
+    /* Shrift LMS sahifasidan olinadi; forma elementlari ham shunga ergashsin */
+    .jr input, .jr select, .jr textarea, .jr button { font-family: inherit; }
     .jr {
         --navy: #0f2748; --navy-soft: #1b3a63; --gold: #c9a227;
         --ink: #17233a; --ink-soft: #4d6180; --muted: #8798b1;
         --line: #dde5ef; --line-soft: #eef2f8;
         --ok: #0f7a52; --ok-bg: #e9f7f0; --bad: #b3261e; --bad-bg: #fdeceb;
         --warn: #a35a06; --warn-bg: #fdf3e4;
-        font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--ink);
+        font-family: inherit; color: var(--ink);
     }
-    .jr h1, .jr h2, .jr .slab { font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .jr h1, .jr h2, .jr .slab { font-family: inherit; }
 
     /* ---- Sarlavha ---- */
     .jr-head {
@@ -34,7 +34,7 @@
     .jr-filters input[type='search'] {
         width: 100%; height: 40px; padding: 0 11px;
         border: 1px solid #c4d0e0; border-radius: 5px; background: #fcfdff;
-        color: var(--ink); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13.5px; outline: none;
+        color: var(--ink); font-family: inherit; font-size: 13.5px; outline: none;
     }
     .jr-filters input[type='search']:focus { border-color: var(--navy-soft); box-shadow: 0 0 0 3px rgba(27,58,99,.1); }
     .jr-reset {
@@ -52,7 +52,7 @@
     .jr-group-clear { margin: 0; }
     .jr-group-clear button {
         padding: 5px 12px; border: 1px solid #e8c3c0; border-radius: 4px; background: #fff;
-        color: var(--bad); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 11px; cursor: pointer; transition: background .16s;
+        color: var(--bad); font-family: inherit; font-size: 11px; cursor: pointer; transition: background .16s;
     }
     .jr-group-clear button:hover { background: var(--bad-bg); }
 
@@ -69,13 +69,13 @@
     .jr-filters select {
         width: 100%; height: 40px; padding: 0 11px;
         border: 1px solid #c4d0e0; border-radius: 5px; background: #fcfdff;
-        color: var(--ink); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13.5px; outline: none;
+        color: var(--ink); font-family: inherit; font-size: 13.5px; outline: none;
     }
     .jr-filters select:focus { border-color: var(--navy-soft); box-shadow: 0 0 0 3px rgba(27,58,99,.1); }
     .jr-btn {
         height: 40px; padding: 0 22px; border: 0; border-radius: 5px;
         background: var(--navy); color: #fff;
-        font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13.5px; font-weight: 500;
+        font-family: inherit; font-size: 13.5px; font-weight: 500;
         letter-spacing: .04em; cursor: pointer; transition: background .16s;
     }
     .jr-btn:hover { background: var(--navy-soft); }
@@ -89,7 +89,7 @@
     .jr-stat:last-child { border-right: 0; }
     .jr-stat b {
         display: block; color: var(--navy);
-        font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 24px; font-weight: 600; line-height: 1.1;
+        font-family: inherit; font-size: 24px; font-weight: 600; line-height: 1.1;
     }
     .jr-stat span {
         display: block; margin-top: 4px; color: var(--muted);
@@ -111,7 +111,7 @@
     .jr-copy {
         padding: 6px 13px; border: 1px solid #c4d0e0; border-radius: 4px;
         background: #fff; color: var(--navy);
-        font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 11.5px; font-weight: 500; cursor: pointer;
+        font-family: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer;
     }
     .jr-copy:hover { background: #f1f5fa; }
 
@@ -125,11 +125,11 @@
         background: linear-gradient(180deg, #fbfcfe, #f5f8fc);
     }
     .jr-group-head b {
-        color: var(--navy); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 600;
+        color: var(--navy); font-family: inherit; font-size: 16px; font-weight: 600;
     }
     .jr-tags { display: flex; flex-wrap: wrap; gap: 16px; }
     .jr-tag { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; }
-    .jr-tag b { color: var(--navy); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; font-weight: 700; }
+    .jr-tag b { color: var(--navy); font-family: inherit; font-size: 13px; font-weight: 700; }
     .jr-tag.is-ok b { color: var(--ok); }
 
     /* ---- Jadval ---- */
@@ -158,7 +158,7 @@
     .jr-pill.wait { background: var(--warn-bg); color: var(--warn); }
     .jr-mini { display: block; margin-top: 3px; color: var(--muted); font-size: 10.5px; }
 
-    .jr-num { color: var(--navy); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 600; }
+    .jr-num { color: var(--navy); font-family: inherit; font-size: 14px; font-weight: 600; }
     .jr-num.is-bad { color: var(--bad); }
     .jr-when { color: var(--ink-soft); font-size: 12.5px; }
 
@@ -193,7 +193,7 @@
         padding: 56px 24px; border: 1px dashed #c9d5e4; border-radius: 6px;
         background: #fff; text-align: center;
     }
-    .jr-empty b { display: block; color: var(--navy); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 600; }
+    .jr-empty b { display: block; color: var(--navy); font-family: inherit; font-size: 16px; font-weight: 600; }
     .jr-empty span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
 
     .jr-alert {

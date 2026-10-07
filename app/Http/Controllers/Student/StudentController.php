@@ -1430,12 +1430,12 @@ class StudentController extends Controller
     }
 
     /**
-     * MT muddati o'tган bo'lsa ham talabaga yuklash ochiladimi — tasdiqlangan
-     * sababli ariza (MT makeup) bo'yicha. Shart: (1) shu fan uchun MT makeup'li
-     * tasdiqlangan sababli bor; (2) MT ning o'z muddati sababli davr boshidan
-     * OLDIN o'tmagan (talaba aynan yo'qligi sababli topshira olmagan); (3) hozir
-     * sababli oyna ichida — ariza ko'rilган sana + ariza kunlari (o'qituvchi
-     * tomonidagi grade_save bilan bir xil oyna).
+     * MT muddati o'tgan bo'lsa ham talabaga yuklash ochiladimi — tasdiqlangan
+     * sababli ariza bo'yicha. Shartlar: (1) shu fan arizada qamrab olingan;
+     * (2) MT muddati yo'qlik boshlanishidan OLDIN tugamagan; (3) MT turi
+     * arizada belgilangan, yoki belgilanmagan bo'lsa MT muddati yo'qlik davri
+     * ichiga tushgan; (4) hozir sababli oyna ichida — ariza ko'rilgan sana +
+     * ariza kunlari (o'qituvchi tomonidagi baho oynasi bilan bir xil).
      */
     private function mtSubmissionOpenBySababli($student, $independent, ?int $subjectId): bool
     {
@@ -1443,21 +1443,44 @@ class StudentController extends Controller
             return false;
         }
 
-        $excuse = AbsenceExcuse::where('status', 'approved')
+        // Ariza shu fanni qamrab olgan bo'lsa yetarli: nazorat turlari ro'yxatiga
+        // MT alohida kiritilmagan bo'lishi mumkin (masalan faqat JN va OSKI
+        // belgilangan), lekin MT muddati yo'qlik davriga tushgan bo'lsa talaba
+        // aynan kasalligi sababli ulgurmagan bo'ladi.
+        $excuses = AbsenceExcuse::where('status', 'approved')
             ->where('student_hemis_id', $student->hemis_id)
             ->whereNotNull('reviewed_at')
             ->whereHas('makeups', function ($q) use ($subjectId) {
-                $q->where('subject_id', $subjectId)->where('assessment_type', 'mt');
+                $q->where('subject_id', $subjectId);
             })
-            ->latest('reviewed_at')
-            ->first();
-        if (!$excuse) {
-            return false;
-        }
+            ->orderByDesc('reviewed_at')
+            ->get();
 
-        // MT muddati sababli davr boshidan oldin o'tган bo'lsa — bu yo'qlikка
-        // aloqador emas, ochilmaydi.
-        if (Carbon::parse($independent->deadline)->lt(Carbon::parse($excuse->start_date))) {
+        $deadline = Carbon::parse($independent->deadline);
+
+        $excuse = $excuses->first(function ($candidate) use ($deadline, $subjectId) {
+            $start = Carbon::parse($candidate->start_date);
+
+            // MT muddati yo'qlik boshlanishidan OLDIN tugagan bo'lsa — bu yo'qlikka
+            // aloqador emas, ochilmaydi.
+            if ($deadline->lt($start)) {
+                return false;
+            }
+
+            // MT turi aniq belgilangan bo'lsa — shart bajarildi
+            $hasMtMakeup = $candidate->makeups
+                ->where('subject_id', $subjectId)
+                ->where('assessment_type', 'mt')
+                ->isNotEmpty();
+            if ($hasMtMakeup) {
+                return true;
+            }
+
+            // Aks holda: MT muddati yo'qlik davri ichida tugagan bo'lishi kerak
+            return $deadline->lte(Carbon::parse($candidate->end_date)->endOfDay());
+        });
+
+        if (!$excuse) {
             return false;
         }
 

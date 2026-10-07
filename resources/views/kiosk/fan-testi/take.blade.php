@@ -16,7 +16,7 @@
         }
         .t-who b {
             display: block; color: var(--navy);
-            font-family: 'Roboto Slab', serif; font-size: 15px; font-weight: 600;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 15px; font-weight: 600;
         }
         .t-who span { display: block; margin-top: 1px; color: var(--muted); font-size: 11.5px; letter-spacing: .02em; }
         .t-right { display: flex; align-items: center; gap: 18px; }
@@ -34,12 +34,12 @@
             min-width: 116px; padding: 9px 15px;
             border: 1px solid #cdd8e6; border-radius: 5px;
             background: #f7f9fc; color: var(--navy);
-            font-family: 'Roboto Slab', serif; font-size: 23px; font-weight: 600;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 23px; font-weight: 600;
             font-variant-numeric: tabular-nums; text-align: center; line-height: 1.15;
         }
         .t-clock small {
             display: block; margin-top: 1px;
-            color: var(--muted); font-family: 'Roboto', sans-serif;
+            color: var(--muted); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
             font-size: 9px; font-weight: 500; letter-spacing: .13em; text-transform: uppercase;
         }
         .t-clock.is-warn { border-color: #edd0a0; background: var(--warn-bg); color: var(--warn); }
@@ -157,7 +157,7 @@
             width: 100%; height: 50px; padding: 0 16px;
             border: 1px solid #d5dfec; border-radius: 5px;
             background: #fcfdff; color: var(--ink);
-            font-family: 'Roboto', sans-serif; font-size: 16px; outline: none;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; outline: none;
             transition: border-color .14s, box-shadow .14s, background .14s;
         }
         .q-blank::placeholder { color: #b4c1d3; }

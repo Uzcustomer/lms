@@ -11,7 +11,7 @@
         }
         .c-wrap h1 {
             margin: 0; color: var(--navy);
-            font-family: 'Roboto Slab', Georgia, serif; font-size: 23px; font-weight: 600;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 23px; font-weight: 600;
         }
         .c-wrap > p { margin: 9px auto 0; max-width: 430px; color: var(--ink-soft); font-size: 14px; line-height: 1.65; }
         .c-meta {

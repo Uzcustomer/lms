@@ -8,7 +8,7 @@
 
     <link rel="icon" href="{{ asset('favicon.png') }}" type="image/png">
     <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=roboto:300,400,500,700,900|roboto-slab:400,600,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.bunny.net/css?family=figtree:300,400,500,600,700,800,900&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -40,13 +40,13 @@
                 radial-gradient(circle at 88% 8%, rgba(201, 162, 39, .07), transparent 38%);
             background-attachment: fixed;
             color: var(--ink);
-            font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
             font-size: 15px;
             line-height: 1.55;
             -webkit-font-smoothing: antialiased;
         }
 
-        h1, h2, .serif { font-family: 'Roboto Slab', Georgia, serif; }
+        h1, h2, .serif { font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; }
 
         .k-wrap { max-width: 880px; margin: 0 auto; padding: 34px 22px 64px; }
         .k-wide { max-width: 1140px; }
@@ -83,7 +83,7 @@
         .k-meta-item:last-child { padding-right: 0; margin-right: 0; border-right: 0; }
         .k-meta-item b {
             display: block; color: var(--navy);
-            font-family: 'Roboto Slab', serif; font-size: 19px; font-weight: 600;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 19px; font-weight: 600;
         }
         .k-meta-item span {
             display: block; margin-top: 1px;
@@ -103,7 +103,7 @@
             width: 100%; height: 58px; padding: 0 17px;
             border: 1px solid #c4d0e0; border-radius: 5px;
             background: #fcfdff; color: var(--ink);
-            font-family: 'Roboto', sans-serif; font-size: 21px; font-weight: 500;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 21px; font-weight: 500;
             letter-spacing: .06em; text-align: center;
             outline: none; transition: border-color .16s, box-shadow .16s, background .16s;
         }
@@ -118,7 +118,7 @@
             width: 100%; height: 52px; padding: 0 22px;
             border: 0; border-radius: 5px;
             background: var(--navy); color: #fff;
-            font-family: 'Roboto', sans-serif; font-size: 15px; font-weight: 500;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 15px; font-weight: 500;
             letter-spacing: .04em; text-decoration: none; cursor: pointer;
             transition: background .16s, box-shadow .16s;
         }

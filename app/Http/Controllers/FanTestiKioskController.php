@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\FanTesti;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
-use App\Models\CurriculumSubjectTeacher;
 use App\Models\Student;
+use App\Services\FanTestiGroups;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -189,54 +189,16 @@ class FanTestiKioskController extends Controller
     }
 
     /**
-     * Test fani biriktirilgan guruhlarning hemis id lari.
-     *
-     * Bitta fan bir necha o'quv reja va semestrda o'qitilgani uchun
-     * biriktirma o'quv reja va semestr bo'yicha toraytiriladi — aks holda
-     * boshqa kursdagi guruhlar ham ruxsat olib qolardi. Bu maydonlar bo'sh
-     * bo'lsa keng qidiruvga qaytiladi.
-     */
-    private function allowedGroupIds(FanTesti $fanTesti): array
-    {
-        $subject = $fanTesti->subject;
-
-        // HEMIS biriktirmasida curriculum_id = fanning curricula_hemis_id si,
-        // semester_id esa fanning semester_code i. Uchala shart bo'lmasa
-        // ro'yxat bo'sh qaytadi va testni hamma ishlay oladi — chunki
-        // noto'g'ri keng ro'yxat begona guruhlarga ruxsat berib qo'yardi.
-        if (!Schema::hasTable('curriculum_subject_teachers')
-            || !$subject?->subject_id
-            || !$subject->curricula_hemis_id
-            || !$subject->semester_code) {
-            return [];
-        }
-
-        return CurriculumSubjectTeacher::query()
-            ->where('subject_id', $subject->subject_id)
-            ->where('curriculum_id', $subject->curricula_hemis_id)
-            ->where('semester_id', $subject->semester_code)
-            ->where('active', true)
-            ->whereNotNull('group_id')
-            ->pluck('group_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Guruh biriktirmasi topilmasa test hammaga ochiq qoladi — eski
-     * to'plamlar va reja to'liq to'ldirilmagan holatlar ishlashda davom etadi.
+     * Testni faqat to'plam fani biriktirilgan guruhlar talabalari ishlaydi.
+     * Guruhlar aniqlanmasa (biriktirma ham, dars jadvali ham bo'sh) test
+     * hech kimga ochilmaydi — begona guruhlar kirib qolmasligi uchun.
      */
     private function studentMayTake(FanTesti $fanTesti, Student $student): bool
     {
-        $groupIds = $this->allowedGroupIds($fanTesti);
+        $groupIds = FanTestiGroups::forSubject($fanTesti->subject);
 
-        if (empty($groupIds)) {
-            return true;
-        }
-
-        return in_array((int) $student->group_id, $groupIds, true);
+        return $groupIds->isNotEmpty()
+            && $groupIds->contains((int) $student->group_id);
     }
 
     private function findStudent(string $identifier): ?Student

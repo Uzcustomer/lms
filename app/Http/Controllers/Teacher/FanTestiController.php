@@ -5,12 +5,11 @@ namespace App\Http\Controllers\Teacher;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
-use App\Models\CurriculumSubjectTeacher;
 use App\Models\FanTesti;
 use App\Models\Group;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
-use App\Models\Teacher;
+use App\Services\FanTestiGroups;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -35,7 +34,7 @@ class FanTestiController extends Controller
         return view('teacher.fan-testlari.builder', [
             'collection' => null,
             'subjects' => $subjects,
-            'collections' => $this->collectionsFor($subjects),
+            'collections' => $this->collectionsFor(),
         ]);
     }
 
@@ -71,69 +70,15 @@ class FanTestiController extends Controller
         return view('teacher.fan-testlari.builder', [
             'collection' => $collection,
             'subjects' => $subjects,
-            'collections' => $this->collectionsFor($subjects),
+            'collections' => $this->collectionsFor(),
             'allowedGroups' => $this->allowedGroupsFor($collection),
         ]);
     }
 
-    /**
-     * Test fani biriktirilgan guruhlar (hemis id).
-     *
-     * Bitta fan bir necha o'quv reja va semestrda o'qitiladi, shuning uchun
-     * faqat subject_id bo'yicha izlash barcha kurslardagi guruhlarni qaytarib
-     * yuboradi. Shu sababli biriktirma o'quv reja (curriculum) va semestr
-     * bo'yicha ham toraytiriladi — natijada aynan shu semestrdagi guruhlar
-     * qoladi. Bu maydonlar bo'sh bo'lsa keng qidiruvga qaytiladi.
-     */
-    /**
-     * Fan biriktirilgan guruhlar (hemis id).
-     *
-     * HEMIS biriktirmasida curriculum_id = fanning curricula_hemis_id si,
-     * semester_id esa fanning semester_code i — semesters jadvali orqali
-     * o'tilmaydi. Bu ikki shartsiz bitta subject_id barcha yillar va
-     * rejalardagi guruhlarni qaytaradi (bitta fanga yuzlab guruh).
-     *
-     * Shartlar bajarilmasa bo'sh ro'yxat qaytadi: noto'g'ri keng ro'yxatdan
-     * ko'ra hech nima ko'rsatmagan ma'qul, chunki kiosk aynan shu ro'yxat
-     * bo'yicha talabani kiritadi.
-     */
+    /** Fan biriktirilgan guruhlar (hemis id) — kiosk tekshiruvi bilan bir xil qoida. */
     private function subjectGroupIds(?CurriculumSubject $subject)
     {
-        if (!$subject?->subject_id || !$subject->curricula_hemis_id || !$subject->semester_code) {
-            return collect();
-        }
-
-        $assigned = Schema::hasTable('curriculum_subject_teachers')
-            ? CurriculumSubjectTeacher::query()
-                ->where('subject_id', $subject->subject_id)
-                ->where('curriculum_id', $subject->curricula_hemis_id)
-                ->where('semester_id', $subject->semester_code)
-                ->where('active', true)
-                ->whereNotNull('group_id')
-                ->pluck('group_id')
-                ->map(fn ($id) => (int) $id)
-                ->unique()
-                ->values()
-            : collect();
-
-        if ($assigned->isNotEmpty()) {
-            return $assigned;
-        }
-
-        // Biriktirma jadvali to'ldirilmagan fanlar uchun guruhlar dars
-        // jadvalidan olinadi — fan ro'yxati ham o'sha manbadan tuziladi.
-        return DB::table('schedules as sch')
-            ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
-            ->where('sch.subject_id', $subject->subject_id)
-            ->where('sch.semester_code', $subject->semester_code)
-            ->where('g.curriculum_hemis_id', $subject->curricula_hemis_id)
-            ->where('sch.education_year_current', true)
-            ->whereNull('sch.deleted_at')
-            ->distinct()
-            ->pluck('sch.group_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+        return FanTestiGroups::forSubject($subject);
     }
 
     private function allowedGroupsFor(FanTesti $fanTesti)
@@ -376,7 +321,7 @@ class FanTestiController extends Controller
     /** Test jurnali: guruhlar kesimida topshirilgan testlar va javoblar. */
     public function journal(Request $request)
     {
-        $subjects = $this->subjectsFor($this->teacher());
+        $this->teacher();
 
         if (!Schema::hasTable('fan_testi_attempts')) {
             return view('teacher.fan-testlari.journal', [
@@ -390,7 +335,7 @@ class FanTestiController extends Controller
             ]);
         }
 
-        $collections = $this->collectionsFor($subjects);
+        $collections = $this->collectionsFor();
 
         // Mavzu (fan) filtri: tanlangan fan bo'yicha to'plamlar toraytiriladi.
         $subjectId = $request->integer('subject_id') ?: null;
@@ -516,22 +461,13 @@ class FanTestiController extends Controller
      * jadvalda shu xodim nomiga qo'yilgan, joriy o'quv yiliga tegishli va
      * joriy semestr oynasidagi darslar. Biriktirma jadvali (curriculum_subject_teachers)
      * to'liq to'ldirilmagani uchun undan emas, jadvaldan olinadi.
-     *
-     * Kafedra mudiri butun kafedra o'qituvchilarining fanlarini ko'radi.
      */
     private function subjectsFor($teacher)
     {
         abort_unless($this->isAllowedDepartment($teacher), 403);
 
-        $departmentTeacherHemisIds = session('active_role') === 'kafedra_mudiri'
-            ? Teacher::query()
-                ->where('department_hemis_id', $teacher->department_hemis_id)
-                ->where('is_active', true)
-                ->whereNotNull('hemis_id')
-                ->pluck('hemis_id')
-            : collect($teacher->hemis_id ? [$teacher->hemis_id] : []);
-
-        if ($departmentTeacherHemisIds->isEmpty()) {
+        // Har bir o'qituvchi (kafedra mudiri ham) faqat o'zi dars beradigan fanlarni ko'radi.
+        if (!$teacher->hemis_id) {
             return collect();
         }
 
@@ -546,7 +482,7 @@ class FanTestiController extends Controller
                 $join->on('sch.subject_id', '=', 'cs.subject_id')
                     ->on('sch.group_id', '=', 'g.group_hemis_id');
             })
-            ->whereIn('sch.employee_id', $departmentTeacherHemisIds)
+            ->where('sch.employee_id', $teacher->hemis_id)
             ->where('sch.education_year_current', true)
             ->whereNull('sch.deleted_at')
             ->where('g.active', true)
@@ -602,18 +538,16 @@ class FanTestiController extends Controller
             ->values();
     }
 
-    private function collectionsFor($subjects)
+    /**
+     * O'qituvchining o'zi yaratgan to'plamlari. Har bir o'qituvchining testlari
+     * alohida: bir fanni o'tadigan hamkasblar ham bir-birining to'plamini
+     * ko'rmaydi (kafedra mudiri ham faqat o'zinikini).
+     */
+    private function collectionsFor()
     {
-        $ownerIds = $this->collectionOwnerIds($this->teacher());
-
         $collections = FanTesti::query()
             ->with('subject')
-            ->where(function ($query) use ($subjects, $ownerIds) {
-                $query->whereIn('curriculum_subject_id', $subjects->pluck('id'))
-                    // Fani hali biriktirilmagan o'z qoralamalari
-                    ->orWhere(fn ($draft) => $draft->whereNull('curriculum_subject_id')
-                        ->whereIn('created_by', $ownerIds));
-            })
+            ->where('created_by', $this->teacher()->id)
             ->latest()
             ->get();
 
@@ -701,35 +635,10 @@ class FanTestiController extends Controller
             && str_contains($normalized, 'huquqi');
     }
 
+    /** To'plamni faqat uni yaratgan o'qituvchi ko'radi va boshqaradi. */
     private function authorizeCollection(FanTesti $fanTesti): void
     {
-        $teacher = $this->teacher();
-
-        // Fansiz qoralamani faqat egasi (kafedra mudiri uchun — kafedradoshi)
-        // tahrirlaydi: fan bo'yicha tekshirish bu yerda ishlamaydi.
-        if (!$fanTesti->curriculum_subject_id) {
-            abort_unless($this->collectionOwnerIds($teacher)->contains((int) $fanTesti->created_by), 403);
-            return;
-        }
-
-        $allowedSubjectIds = $this->subjectsFor($teacher)->pluck('id');
-        abort_unless($allowedSubjectIds->contains((int) $fanTesti->curriculum_subject_id), 403);
-    }
-
-    /**
-     * Qoralama to'plam egalari: o'qituvchining o'zi, kafedra mudiri uchun
-     * esa butun kafedra — u kafedrasining testlarini boshqaradi.
-     */
-    private function collectionOwnerIds($teacher)
-    {
-        if (session('active_role') === 'kafedra_mudiri' && $teacher->department_hemis_id) {
-            return Teacher::query()
-                ->where('department_hemis_id', $teacher->department_hemis_id)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id);
-        }
-
-        return collect([(int) $teacher->id]);
+        abort_unless((int) $fanTesti->created_by === (int) $this->teacher()->id, 403);
     }
 
     private function validateSettings(Request $request, $subjects): array

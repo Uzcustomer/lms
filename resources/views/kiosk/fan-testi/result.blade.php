@@ -21,7 +21,7 @@
             box-shadow: 0 2px 10px rgba(15, 39, 72, .07);
         }
         .r-dial b {
-            color: var(--navy); font-family: 'Roboto Slab', serif;
+            color: var(--navy); font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
             font-size: 31px; font-weight: 700; line-height: 1;
         }
         .r-dial span {
@@ -30,7 +30,7 @@
         }
 
         .r-verdict {
-            font-family: 'Roboto Slab', serif; font-size: 21px; font-weight: 600; letter-spacing: -.01em;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 21px; font-weight: 600; letter-spacing: -.01em;
         }
         .r-verdict.ok { color: var(--ok); }
         .r-verdict.no { color: var(--bad); }
@@ -50,7 +50,7 @@
         .r-stat:last-child { border-right: 0; }
         .r-stat b {
             display: block; color: var(--navy);
-            font-family: 'Roboto Slab', serif; font-size: 20px; font-weight: 600;
+            font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 20px; font-weight: 600;
         }
         .r-stat span {
             display: block; margin-top: 3px; color: var(--muted);

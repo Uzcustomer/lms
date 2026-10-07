@@ -2362,6 +2362,11 @@ class JournalController extends Controller
             $retakeEmployeeNames = DB::table('teachers')->whereIn('hemis_id', $retakeEmployeeIds)->pluck('full_name', 'hemis_id')->toArray();
         }
 
+        // YN ga yuborish tugmasi: baholanmagan MT ishlari (submitToYn bilan bir xil qoida)
+        $ungradedMtStudents = empty($ynSubmission)
+            ? $this->ungradedMtStudents((string) $group->group_hemis_id, (string) $subjectId, (string) $semesterCode)
+            : [];
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -2437,6 +2442,7 @@ class JournalController extends Controller
             'lastLessonDate',
             'ungradedCells',
             'ungradedStudents',
+            'ungradedMtStudents',
             'levelDeadline',
             'approvedExcuses',
             'broadExcuses',
@@ -7401,6 +7407,97 @@ class JournalController extends Controller
      * O'qituvchi YN ga yuborish — barcha baholarni qulflaydi
      */
     /**
+     * MT ishi baholanmagan o'qiyotgan talabalar (guruh + fan + semestr).
+     *
+     * Qoida jurnaldagi MT belgisi bilan bir xil: talaba MT faylini yuklagan,
+     * lekin MT bahosi yo'q — yoki bahosi o'tish chegarasidan past bo'lib,
+     * shundan keyin faylni qayta yuklagan. Faylni umuman yuklamagan talaba
+     * bu ro'yxatga tushmaydi. Chetlashgan talabalar (status 11 emas)
+     * YN ga yuborishni to'smaydi.
+     *
+     * @return array<int, array{hemis_id:string, name:string}>
+     */
+    private function ungradedMtStudents(string $groupHemisId, string $subjectId, string $semesterCode): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('independent_submissions')) {
+            return [];
+        }
+
+        $csRows = DB::table('curriculum_subjects')
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->get(['curriculum_subject_hemis_id', 'subject_name']);
+        $csHemisIds = $csRows->pluck('curriculum_subject_hemis_id')->filter()->all();
+        $subjectName = (string) ($csRows->pluck('subject_name')->filter()->first() ?? '');
+        if (empty($csHemisIds)) {
+            return [];
+        }
+
+        // Jurnaldagi kabi: reja bo'yicha id yoki fan nomi bo'yicha topshiriqlar
+        $independentIds = DB::table('independents')
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('semester_code', $semesterCode)
+            ->where(function ($q) use ($csHemisIds, $subjectName) {
+                $q->whereIn('subject_hemis_id', $csHemisIds);
+                if ($subjectName !== '') {
+                    $q->orWhereRaw('LOWER(subject_name) = ?', [mb_strtolower($subjectName)]);
+                }
+            })
+            ->pluck('id');
+        if ($independentIds->isEmpty()) {
+            return [];
+        }
+
+        // Har talabaning eng oxirgi yuklagan fayli
+        $latest = [];
+        foreach (DB::table('independent_submissions')->whereIn('independent_id', $independentIds)->get(['student_hemis_id', 'submitted_at']) as $sub) {
+            $key = (string) $sub->student_hemis_id;
+            if (!isset($latest[$key]) || ($sub->submitted_at ?? '') > ($latest[$key]->submitted_at ?? '')) {
+                $latest[$key] = $sub;
+            }
+        }
+        if (empty($latest)) {
+            return [];
+        }
+
+        $students = DB::table('students')
+            ->whereIn('hemis_id', array_keys($latest))
+            ->where('group_id', $groupHemisId)
+            ->where('student_status_code', 11)
+            ->orderBy('full_name')
+            ->get(['hemis_id', 'full_name']);
+
+        $grades = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $students->pluck('hemis_id'))
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNull('lesson_date')
+            ->get(['student_hemis_id', 'grade', 'created_at', 'updated_at'])
+            ->keyBy('student_hemis_id');
+
+        $result = [];
+        foreach ($students as $student) {
+            $sub = $latest[(string) $student->hemis_id];
+            $gradeRow = $grades[$student->hemis_id] ?? null;
+
+            $ungraded = $gradeRow === null || $gradeRow->grade === null;
+            if (!$ungraded && $sub->submitted_at
+                && (float) $gradeRow->grade < MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit) {
+                $gradedAt = $gradeRow->updated_at ?? $gradeRow->created_at;
+                $ungraded = $gradedAt && \Carbon\Carbon::parse($sub->submitted_at)->gt(\Carbon\Carbon::parse($gradedAt));
+            }
+
+            if ($ungraded) {
+                $result[] = ['hemis_id' => (string) $student->hemis_id, 'name' => $student->full_name];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Baho ham, NB ham qo'yilmagan kataklar soni (guruh + fan + semestr).
      *
      * Mezon "baho qo'yilmaganlar hisoboti" bilan bir xil
@@ -7573,6 +7670,19 @@ class JournalController extends Controller
                 'success' => false,
                 'message' => "{$ungraded['cells']} ta katak bo'sh ({$ungraded['students']} ta talabada). "
                     . "Har bir darsga baho yoki NB qo'ying, keyin YN ga yuboring.",
+            ], 422);
+        }
+
+        // MT faylini yuklagan, lekin bahosi qo'yilmagan talaba bo'lsa yuborib bo'lmaydi.
+        $ungradedMt = $this->ungradedMtStudents($groupHemisId, $subjectId, $semesterCode);
+        if (!empty($ungradedMt)) {
+            $names = collect($ungradedMt)->pluck('name')->take(5)->implode(', ');
+            $more = count($ungradedMt) > 5 ? ' va yana ' . (count($ungradedMt) - 5) . ' ta' : '';
+
+            return response()->json([
+                'success' => false,
+                'message' => count($ungradedMt) . " ta talabaning MT ishi baholanmagan ({$names}{$more}). "
+                    . "Avval MT ishlarini baholang, keyin YN ga yuboring.",
             ], 422);
         }
 

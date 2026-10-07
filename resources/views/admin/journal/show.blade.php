@@ -2781,6 +2781,35 @@
                                                     </div>
                                                 </details>
                                             </div>
+                                        @elseif(!empty($ungradedMtStudents))
+                                            {{-- MT faylini yuklagan, lekin bahosi qo'yilmagan talaba bo'lsa YN ga yuborib bo'lmaydi --}}
+                                            @php
+                                                $mtList = collect($ungradedMtStudents);
+                                                $mtShown = $mtList->take(8);
+                                            @endphp
+                                            <div class="flex flex-column items-end" style="max-width: 420px;">
+                                                <button type="button" id="btn-submit-yn"
+                                                    class="px-6 py-3 bg-red-700 text-white font-bold rounded-lg cursor-not-allowed shadow-md border-2 border-red-800"
+                                                    disabled
+                                                    title="Avval talabalar yuklagan MT ishlarini baholang"
+                                                    style="background-color: #b91c1c !important; color: #fff !important;">
+                                                    YN ga yuborish (nofaol)
+                                                </button>
+                                                <div class="text-sm text-red-600 mt-2 font-medium text-right">
+                                                    {{ $mtList->count() }} ta talabaning MT ishi baholanmagan.
+                                                </div>
+                                                <details class="mt-1 text-right">
+                                                    <summary class="text-xs text-red-700 cursor-pointer select-none">Kimlar — ko'rsatish</summary>
+                                                    <div class="mt-1 text-xs text-gray-700 leading-relaxed">
+                                                        @foreach($mtShown as $u)
+                                                            <div>{{ $u['name'] }}</div>
+                                                        @endforeach
+                                                        @if($mtList->count() > $mtShown->count())
+                                                            <div class="text-gray-500">va yana {{ $mtList->count() - $mtShown->count() }} ta talaba</div>
+                                                        @endif
+                                                    </div>
+                                                </details>
+                                            </div>
                                         @else
                                             <button type="button" id="btn-submit-yn"
                                                 class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"

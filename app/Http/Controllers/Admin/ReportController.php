@@ -2570,7 +2570,7 @@ class ReportController extends Controller
                 $hemisLessonsByType[$code] = $list;
             }
 
-            // Sana orqali hafta indeksini aniqlash (KTR soatini taqsimlash uchun)
+            // Sana orqali hafta indeksini aniqlash
             $resolveWeekFromDate = function ($dateStr) use ($weekRanges, &$weekStartByIdx) {
                 if (!$dateStr) return null;
                 foreach ($weekRanges as $r) {
@@ -2582,153 +2582,71 @@ class ReportController extends Controller
                 return null;
             };
 
-            // Har bir dars turi uchun: haftadagi HEMIS darslar soni (KTR soatini taqsimlash uchun)
-            $lessonsPerWeekByType = [];
+            // Bir hafta = bitta dars: haftadagi barcha kunlar va dars turlari bitta
+            // qatorga yig'iladi (masalan dushanba ma'ruza + chorshanba amaliy = 1-dars).
+            $weekRows = []; // weekIdx => ['dates' => [Y-m-d => true], 'hemis' => [code => h], 'marked' => [code => h]]
             foreach ($hemisLessonsByType as $code => $list) {
                 foreach ($list as $lesson) {
-                    $w = $lesson['week'] ?? $resolveWeekFromDate(substr((string) $lesson['date'], 0, 10));
-                    if ($w === null) continue;
-                    $lessonsPerWeekByType[$code][$w] = ($lessonsPerWeekByType[$code][$w] ?? 0) + 1;
-                }
-            }
-
-            // Har bir hafta uchun: shu haftada HEMIS jadvalda dars qo'yilgan barcha sanalar
-            // (har qanday dars turi bo'yicha). Orphan KTR soatini bu sanalarga ulash uchun ishlatiladi.
-            $weekToHemisDates = [];
-            foreach ($hemisLessonsByType as $codeAny => $listAny) {
-                foreach ($listAny as $lessonAny) {
-                    $dAny = substr((string) ($lessonAny['date'] ?? ''), 0, 10);
-                    if ($dAny === '') continue;
-                    $wAny = $lessonAny['week'] ?? $resolveWeekFromDate($dAny);
-                    if ($wAny === null) continue;
-                    $weekToHemisDates[$wAny][$dAny] = true;
-                }
-            }
-
-            // Har bir dars turi uchun darslar ro'yxati (sana bo'yicha, HEMIS darslari + KTR-only haftalar)
-            $lessonsByType = [];
-            foreach ($trainingTypes as $code => $info) {
-                $list = [];
-                $hemisDatesSet = [];
-                $hemisWeeksSet = [];
-
-                // HEMIS darslari
-                foreach ($hemisLessonsByType[$code] ?? [] as $lesson) {
-                    $dateStr = substr((string) $lesson['date'], 0, 10);
+                    $dateStr = substr((string) ($lesson['date'] ?? ''), 0, 10);
                     $w = $lesson['week'] ?? $resolveWeekFromDate($dateStr);
-                    $ktrWeekHours = ($ktrExists && $w !== null) ? (int) ($ktrWeeks[$w][$code] ?? 0) : 0;
-                    $cnt = max(1, $lessonsPerWeekByType[$code][$w] ?? 1);
-                    $ktrPerLesson = $ktrWeekHours / $cnt;
-
-                    $list[] = [
-                        'date' => $dateStr,
-                        'hemis' => (int) $lesson['hours'],
-                        'ktr' => $ktrPerLesson,
-                        'marked' => (int) ($lesson['marked'] ?? 0),
-                    ];
-                    $hemisDatesSet[$dateStr] = true;
-                    if ($w !== null) $hemisWeeksSet[$w] = true;
-                }
-
-                // KTR rejada bor, lekin HEMIS'da shu turdagi dars qo'yilmagan haftalar.
-                // Avval shu haftada boshqa dars turi sanasiga ulanadi (yangi qator yaratilmaydi).
-                // Agar haftada hech qaysi turda dars yo'q bo'lsa — haftaning boshlanish sanasi bilan
-                // alohida "KTR rejada" qatori chiqariladi.
-                if ($ktrExists) {
-                    foreach ($ktrWeeks as $w => $wd) {
-                        if (empty($wd[$code])) continue;
-                        if (isset($hemisWeeksSet[$w])) continue;
-
-                        $borrowedDate = null;
-                        foreach (array_keys($weekToHemisDates[$w] ?? []) as $candDate) {
-                            if (!isset($hemisDatesSet[$candDate])) {
-                                $borrowedDate = $candDate;
-                                break;
-                            }
-                        }
-
-                        if ($borrowedDate !== null) {
-                            $list[] = [
-                                'date' => $borrowedDate,
-                                'hemis' => 0,
-                                'ktr' => (int) $wd[$code],
-                                'marked' => 0,
-                            ];
-                            $hemisDatesSet[$borrowedDate] = true;
-                        } else {
-                            $weekDate = $weekStartByIdx[$w] ?? '';
-                            if ($weekDate === '' || isset($hemisDatesSet[$weekDate])) continue;
-                            $list[] = [
-                                'date' => $weekDate,
-                                'hemis' => 0,
-                                'ktr' => (int) $wd[$code],
-                                'marked' => 0,
-                                'ktr_only' => true,
-                            ];
-                            $hemisDatesSet[$weekDate] = true;
-                        }
+                    if ($w === null) continue;
+                    if ($dateStr !== '') {
+                        $weekRows[$w]['dates'][$dateStr] = true;
                     }
-                }
-
-                // Sana bo'yicha saralash
-                usort($list, function ($a, $b) {
-                    $ad = $a['date'] ?: '9999-12-31';
-                    $bd = $b['date'] ?: '9999-12-31';
-                    return strcmp($ad, $bd);
-                });
-
-                $lessonsByType[$code] = $list;
-            }
-
-            // Har bir dars turi uchun sana -> lesson xaritasi
-            $byTypeByDate = [];
-            $allDates = [];
-            foreach ($lessonsByType as $code => $list) {
-                foreach ($list as $l) {
-                    $d = $l['date'] ?? '';
-                    if ($d === '') continue;
-                    $byTypeByDate[$code][$d] = $l;
-                    $allDates[$d] = true;
+                    $weekRows[$w]['hemis'][$code] = ($weekRows[$w]['hemis'][$code] ?? 0) + (int) $lesson['hours'];
+                    $weekRows[$w]['marked'][$code] = ($weekRows[$w]['marked'][$code] ?? 0) + (int) ($lesson['marked'] ?? 0);
                 }
             }
-            ksort($allDates);
-            $uniqueDates = array_keys($allDates);
-            $maxLessons = count($uniqueDates);
-            if ($maxLessons <= 0) $maxLessons = 1;
 
-            // Darslar ro'yxatini tuzish - har bir noyob sana = bitta qator
+            // KTR rejada soat bor, lekin HEMIS jadvalida shu haftada hech qanday dars yo'q
+            if ($ktrExists) {
+                foreach ($ktrWeeks as $w => $wd) {
+                    if (isset($weekRows[$w]) || array_sum(array_map('intval', $wd)) <= 0) continue;
+                    $weekRows[$w] = ['dates' => [], 'hemis' => [], 'marked' => [], 'ktr_only' => true];
+                }
+            }
+
+            // Haftalarni sana bo'yicha tartiblash (sintetik haftalar ham to'g'ri joyga tushsin)
+            $weekSortKey = function ($w) use ($weekRows, $weekStartByIdx) {
+                $dates = array_keys($weekRows[$w]['dates'] ?? []);
+                sort($dates);
+                return $dates[0] ?? ($weekStartByIdx[$w] ?? '9999-12-31');
+            };
+            $weekOrder = array_keys($weekRows);
+            usort($weekOrder, fn ($x, $y) => strcmp($weekSortKey($x), $weekSortKey($y)) ?: ($x <=> $y));
+
             $lessonsList = [];
-            foreach ($uniqueDates as $k => $date) {
+            foreach ($weekOrder as $k => $w) {
+                $row = $weekRows[$w];
+                $isKtrOnly = !empty($row['ktr_only']);
+                $dates = array_keys($row['dates'] ?? []);
+                sort($dates);
+                if ($isKtrOnly) {
+                    $label = !empty($weekStartByIdx[$w]) ? date('d.m.Y', strtotime($weekStartByIdx[$w])) : '';
+                } else {
+                    $label = implode(', ', array_map(fn ($d) => date('d.m.Y', strtotime($d)), $dates));
+                }
+
                 $rowData = [
                     'lesson' => $k + 1,
-                    'date' => date('d.m.Y', strtotime($date)),
+                    'date' => $label,
                     'cells' => [],
-                    'ktr_only' => true,
+                    'ktr_only' => $isKtrOnly,
                 ];
-                $rowHasHemis = false;
                 foreach ($trainingTypes as $code => $info) {
-                    $l = $byTypeByDate[$code][$date] ?? null;
-                    $hemisH = $l ? (int) $l['hemis'] : 0;
-                    $markedH = $l ? (int) ($l['marked'] ?? 0) : 0;
-                    if ($ktrExists) {
-                        $kRaw = $l ? (float) $l['ktr'] : 0;
-                        $ktrH = (abs($kRaw - round($kRaw)) < 0.01) ? (int) round($kRaw) : round($kRaw, 1);
-                    } else {
-                        $ktrH = null;
-                    }
-                    if ($l && empty($l['ktr_only'])) {
-                        $rowHasHemis = true;
-                    }
+                    $hemisH = (int) ($row['hemis'][$code] ?? 0);
+                    $markedH = (int) ($row['marked'][$code] ?? 0);
+                    $ktrH = $ktrExists ? (int) ($ktrWeeks[$w][$code] ?? 0) : null;
                     $rowData['cells'][$code] = [
                         'hemis' => $hemisH,
                         'ktr' => $ktrH,
                         'marked' => $markedH,
-                        'diff' => $ktrExists ? (round($ktrH - $hemisH, 1) + 0) : null,
+                        'diff' => $ktrExists ? ($ktrH - $hemisH) : null,
                     ];
                 }
-                if ($rowHasHemis) $rowData['ktr_only'] = false;
                 $lessonsList[] = $rowData;
             }
+            $maxLessons = max(1, count($lessonsList));
 
             return response()->json([
                 'subject_name' => $cs->subject_name,

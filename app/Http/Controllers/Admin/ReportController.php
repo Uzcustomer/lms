@@ -1841,7 +1841,7 @@ class ReportController extends Controller
         if ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
-        $kafedraQuery->where('s.current', true);
+        $this->whereScheduleReportCurrentSemester($kafedraQuery, 's');
 
         $kafedras = $kafedraQuery
             ->select('cs.department_id', 'cs.department_name')
@@ -1864,6 +1864,57 @@ class ReportController extends Controller
             'kafedras',
             'trainingTypes'
         ));
+    }
+
+    /**
+     * Jadval KTR mosligi: joriy semestr sharti.
+     * HEMIS yangi o'quv yili boshida `current` bayrog'ini hamma semestrga qo'ymaydi
+     * (masalan 2-kursda bitta guruhda turadi). Shuning uchun bayroq qo'yilgan
+     * semestrlardan o'quv yili va yarim yil (toq kod — kuz, juft — bahor) aniqlanib,
+     * shu yil va yarim yildagi barcha semestrlar joriy deb olinadi.
+     */
+    private function whereScheduleReportCurrentSemester($query, string $alias)
+    {
+        $window = $this->scheduleReportCurrentSemesterWindow();
+        if ($window === null) {
+            return $query->where("{$alias}.current", true);
+        }
+
+        return $query->where("{$alias}.education_year", $window['year'])
+            ->whereIn("{$alias}.code", $window['codes']);
+    }
+
+    private function scheduleReportCurrentSemesterWindow(): ?array
+    {
+        static $window = false;
+        if ($window !== false) {
+            return $window;
+        }
+
+        $flagged = DB::table('semesters')
+            ->where('current', true)
+            ->select('education_year', 'code')
+            ->distinct()
+            ->get();
+        if ($flagged->isEmpty()) {
+            return $window = null;
+        }
+
+        $year = $flagged->max(fn ($row) => (string) $row->education_year);
+        $parities = $flagged->where('education_year', $year)
+            ->map(fn ($row) => ((int) $row->code) % 2)
+            ->unique()
+            ->all();
+
+        $codes = DB::table('semesters')
+            ->where('education_year', $year)
+            ->distinct()
+            ->pluck('code')
+            ->filter(fn ($code) => in_array(((int) $code) % 2, $parities, true))
+            ->values()
+            ->all();
+
+        return $window = ['year' => $year, 'codes' => $codes];
     }
 
     /**
@@ -1890,7 +1941,7 @@ class ReportController extends Controller
 
         // Joriy semestr filtri
         if ($request->get('current_semester', '1') == '1') {
-            $csQuery->where('s.current', true);
+            $this->whereScheduleReportCurrentSemester($csQuery, 's');
         }
 
         // Filtrlar

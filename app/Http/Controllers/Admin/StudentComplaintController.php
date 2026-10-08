@@ -18,37 +18,39 @@ class StudentComplaintController extends Controller
 {
     public function index(Request $request)
     {
+        $emptyStats = ['total' => 0, 'new' => 0, 'resolved' => 0];
+
         if (!Schema::hasTable('student_complaints')) {
             return view('admin.student-complaints.index', [
-                'complaints' => collect(),
-                'status' => 'new',
-                'counts' => ['new' => 0, 'resolved' => 0],
+                'complaints' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20),
+                'stats' => $emptyStats,
                 'migrationPending' => true,
             ]);
         }
 
-        $status = in_array($request->get('status'), ['new', 'resolved', 'all'], true) ? $request->get('status') : 'new';
-        $search = trim((string) $request->get('q'));
+        $status = in_array($request->get('status'), ['new', 'resolved'], true) ? $request->get('status') : null;
+        $search = trim((string) $request->get('search'));
 
         $complaints = StudentComplaint::query()
-            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->when($status, fn ($q) => $q->where('status', $status))
             ->when($search !== '', fn ($q) => $q->where(function ($inner) use ($search) {
                 $inner->where('student_name', 'like', "%{$search}%")
                     ->orWhere('student_id_number', 'like', "%{$search}%")
                     ->orWhere('group_name', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%");
             }))
+            // Yangilari tepada
+            ->orderByRaw("CASE WHEN status = 'new' THEN 0 ELSE 1 END")
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
+        $new = StudentComplaint::where('status', StudentComplaint::STATUS_NEW)->count();
+        $resolved = StudentComplaint::where('status', StudentComplaint::STATUS_RESOLVED)->count();
+
         return view('admin.student-complaints.index', [
             'complaints' => $complaints,
-            'status' => $status,
-            'counts' => [
-                'new' => StudentComplaint::where('status', StudentComplaint::STATUS_NEW)->count(),
-                'resolved' => StudentComplaint::where('status', StudentComplaint::STATUS_RESOLVED)->count(),
-            ],
+            'stats' => ['total' => $new + $resolved, 'new' => $new, 'resolved' => $resolved],
             'migrationPending' => false,
         ]);
     }

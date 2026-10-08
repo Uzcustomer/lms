@@ -43,7 +43,7 @@ class TestDeviceController extends Controller
             'name' => ['required', 'string', 'max:120'],
         ], [], ['name' => 'Kompyuter nomi']);
 
-        $user = Auth::guard('web')->user();
+        $user = $this->currentUser();
         $token = TestDeviceToken::fromRequest($request);
         $device = TestDeviceToken::deviceFor($token);
 
@@ -54,7 +54,7 @@ class TestDeviceController extends Controller
             $device = new TestKioskDevice([
                 'name' => trim($data['name']),
                 'registered_by_user_id' => $user?->id,
-                'registered_by_name' => $user?->name ?? $user?->email,
+                'registered_by_name' => $user?->name ?? $user?->full_name ?? $user?->short_name ?? $user?->email,
             ]);
             $message = "Kompyuter ro'yxatdan o'tdi: " . trim($data['name']);
         }
@@ -97,10 +97,20 @@ class TestDeviceController extends Controller
             ->with('success', "{$device->name} bekor qilindi.");
     }
 
+    /**
+     * Admin LMS ga oddiy admin akkaunti (web) yoki o'qituvchi profili
+     * (teacher guard, admin roli bilan) orqali kirgan bo'lishi mumkin —
+     * menyu ham ikkalasini hisobga oladi.
+     */
+    private function currentUser()
+    {
+        return Auth::guard('web')->user() ?? Auth::guard('teacher')->user();
+    }
+
     private function isAdmin(): bool
     {
-        $user = Auth::guard('web')->user();
+        $user = $this->currentUser();
 
-        return $user && $user->hasAnyRole(['admin', 'superadmin']);
+        return $user && $user->getRoleNames()->intersect(['admin', 'superadmin'])->isNotEmpty();
     }
 }

@@ -1182,6 +1182,25 @@
             O'qishni ko'chirish arizalari
         </a>
 
+        @php
+            $newComplaintsCount = 0;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('student_complaints')) {
+                    $newComplaintsCount = \App\Models\StudentComplaint::where('status', 'new')->count();
+                }
+            } catch (\Throwable $e) {}
+        @endphp
+        <a href="{{ route('admin.student-complaints.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.student-complaints.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 6l3.2-3.2A2 2 0 018.6 16H19a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14z"/>
+            </svg>
+            Shikoyatlar
+            @if($newComplaintsCount > 0)
+                <span style="margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;">{{ $newComplaintsCount }}</span>
+            @endif
+        </a>
+
         <a href="{{ route('admin.academic-mobility.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.academic-mobility.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

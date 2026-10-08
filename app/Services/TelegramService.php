@@ -189,7 +189,8 @@ class TelegramService
             }
 
             Http::retry(3, 1000)
-                ->attach('photo', fopen($photoPath, 'r'), 'report.png')
+                // Mazmun satr bo'lib biriktiriladi: retry da oqim bo'sh qolmaydi, fayl ochiq qolmaydi
+                ->attach('photo', file_get_contents($photoPath), 'report.png')
                 ->post("https://api.telegram.org/bot{$botToken}/sendPhoto", $params)
                 ->throw();
 
@@ -222,7 +223,7 @@ class TelegramService
             $fileName = basename($filePath);
 
             Http::retry(3, 1000)
-                ->attach('document', fopen($filePath, 'r'), $fileName)
+                ->attach('document', file_get_contents($filePath), $fileName)
                 ->post("https://api.telegram.org/bot{$botToken}/sendDocument", $params)
                 ->throw();
 

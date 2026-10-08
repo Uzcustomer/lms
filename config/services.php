@@ -60,6 +60,8 @@ return [
         // yo'naltirish ("chat_id:mavzu_id"). Bo'sh bo'lsa registrator guruhiga.
         'lesson_opening_chat_id' => env('TELEGRAM_LESSON_OPENING_CHAT_ID'),
         'absence_excuse_chat_id' => env('TELEGRAM_ABSENCE_EXCUSE_CHAT_ID'),
+        // Xalqaro talabalar shikoyatlari ("chat_id:mavzu_id"). Bo'sh bo'lsa registrator guruhiga.
+        'complaints_chat_id' => env('TELEGRAM_COMPLAINTS_CHAT_ID'),
         // Baho qo'yilmaganlar hisoboti registrator guruhidan tashqari shu
         // guruhlarga ham boradi (vergul bilan ajratilgan chat_id lar).
         'unrated_report_chat_ids' => env('TELEGRAM_UNRATED_REPORT_CHAT_IDS'),

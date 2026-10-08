@@ -298,6 +298,18 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/{application}/basis-document', [\App\Http\Controllers\Admin\StudentTransferApplicationController::class, 'basisDocument'])->name('basis-document');
             });
 
+        // Xalqaro talabalar shikoyatlari (registrator ofisi ko'rib chiqadi)
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
+            ->prefix('student-complaints')
+            ->name('student-complaints.')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\StudentComplaintController::class, 'index'])->name('index');
+                Route::post('/{complaint}/resolve', [\App\Http\Controllers\Admin\StudentComplaintController::class, 'resolve'])->name('resolve');
+                Route::delete('/{complaint}', [\App\Http\Controllers\Admin\StudentComplaintController::class, 'destroy'])->name('destroy');
+                Route::get('/{complaint}/image/{index}', [\App\Http\Controllers\Admin\StudentComplaintController::class, 'image'])
+                    ->whereNumber('index')->name('image');
+            });
+
         // Fanlar farqi (hozircha bo'sh bo'lim)
         Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi')
             ->prefix('subject-differences')
@@ -1760,6 +1772,14 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'store'])->name('store');
             Route::get('/file/{field}', [\App\Http\Controllers\Student\StudentVisaController::class, 'showFile'])->name('file');
+        });
+
+        // Shikoyatlar (Complaints) — xalqaro ta'lim fakulteti talabalari
+        Route::prefix('complaints')->name('complaints.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentComplaintController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\StudentComplaintController::class, 'store'])->name('store');
+            Route::get('/{complaint}/image/{index}', [\App\Http\Controllers\Student\StudentComplaintController::class, 'image'])
+                ->whereNumber('index')->name('image');
         });
 
         // Nogironlik ma'lumotlari (nogiron talabalar)

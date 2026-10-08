@@ -613,7 +613,7 @@
         elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
         elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
         elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
-        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.contracts.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons') || request()->routeIs('student.visa-info.*') || request()->routeIs('student.retake.*') || request()->routeIs('student.retake-journal.*') || request()->routeIs('student.documents.*')) $activeTab = 'foydali';
+        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.contracts.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons') || request()->routeIs('student.visa-info.*') || request()->routeIs('student.complaints.*') || request()->routeIs('student.retake.*') || request()->routeIs('student.retake-journal.*') || request()->routeIs('student.documents.*')) $activeTab = 'foydali';
     @endphp
     <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
         <!-- Boshqalar popup overlay -->
@@ -672,6 +672,17 @@
                         </svg>
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Viza ma\'lumotlarim') }}</span>
+                </a>
+                @endif
+                @if($mobileStudent && $mobileStudent->isInternationalFaculty())
+                <a href="{{ route('student.complaints.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.complaints.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                    {{-- Rang inline: yig'ilgan CSS'da rose klasslari bo'lmasligi mumkin --}}
+                    <div class="rounded-xl flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;background:#ffe4e6;">
+                        <svg class="w-6 h-6" style="color:#e11d48;" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h8M8 14h5m-9 6l3.2-3.2A2 2 0 018.6 16H19a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14z" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Shikoyatlar') }}</span>
                 </a>
                 @endif
             </div>

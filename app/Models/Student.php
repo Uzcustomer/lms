@@ -359,6 +359,16 @@ class Student extends Authenticatable
         return !empty($this->phone);
     }
 
+    /** Xalqaro ta'lim fakulteti talabasimi (fakultet nomi bo'yicha, uch tilda). */
+    public function isInternationalFaculty(): bool
+    {
+        $faculty = mb_strtolower((string) ($this->department_name ?? ''));
+
+        return str_contains($faculty, 'xalqaro')
+            || str_contains($faculty, 'international')
+            || str_contains($faculty, 'международ');
+    }
+
     public function isTelegramVerified(): bool
     {
         return $this->telegram_verified_at !== null;

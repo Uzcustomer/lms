@@ -3380,6 +3380,45 @@ class AcademicScheduleController extends Controller
         // Har bir yozuvga urinish + kurs darajasi bo'yicha alohida ruxsat tekshiruvi.
         //  - 1-urinish: sozlamalardagi rollar mapping bo'yicha (level_code orqali).
         //  - 2+ urinish: faqat registrator_ofisi (yoki admin) qo'yadi.
+        //
+        // Forma sahifadagi BARCHA qatorlarni yuboradi — jumladan foydalanuvchi
+        // tegmagan 2/3-urinish qatorlarini ham. Shuning uchun 2+ urinish qatori
+        // faqat haqiqatan biror sana/vaqtni o'zgartirsa tekshiriladi; aks holda
+        // 1-urinishga sana qo'yayotgan rol bo'sh yoki registrator allaqachon
+        // to'ldirgan 2-urinish qatori sababli to'xtab qolardi.
+        $attemptRowChanges = function (array $schedule, int $attempt) use ($existingForValidation, $validationKey): bool {
+            $existing = $existingForValidation->get($validationKey(
+                $schedule['group_hemis_id'],
+                $schedule['subject_id'],
+                $schedule['semester_code'],
+                $schedule['student_hemis_id'] ?? null
+            ));
+            $suffix = $attempt === 2 ? 'resit' : 'resit2';
+            $pairs = [
+                ['oski_date', "oski_{$suffix}_date", 'date'],
+                ['test_date', "test_{$suffix}_date", 'date'],
+                ['oski_time', "oski_{$suffix}_time", 'time'],
+                ['test_time', "test_{$suffix}_time", 'time'],
+            ];
+            foreach ($pairs as [$field, $column, $kind]) {
+                $submitted = trim((string) ($schedule[$field] ?? ''));
+                $saved = $existing?->{$column};
+                if ($saved instanceof \DateTimeInterface) {
+                    $saved = $saved->format('Y-m-d');
+                }
+                $saved = trim((string) ($saved ?? ''));
+                if ($kind === 'time') {
+                    $submitted = substr($submitted, 0, 5);
+                    $saved = substr($saved, 0, 5);
+                }
+                if ($submitted !== $saved) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
         if (!$isAdmin) {
             foreach ($validSchedules as $schedule) {
                 $curriculumId = $groupCurriculumMap[$schedule['group_hemis_id']] ?? null;
@@ -3387,6 +3426,9 @@ class AcademicScheduleController extends Controller
                     ? (string) ($semesterLevelMap[$curriculumId . '_' . $schedule['semester_code']] ?? '')
                     : '';
                 $rowAttempt = (int) ($schedule['urinish'] ?? 1);
+                if ($rowAttempt >= 2 && !$attemptRowChanges($schedule, $rowAttempt)) {
+                    continue;
+                }
                 if (!ExamDateRoleService::canEditAttempt($activeRole, $lvl, $rowAttempt)) {
                     $msg = $rowAttempt >= 2
                         ? '2-urinish va keyingi urinishlar uchun YN sanasini faqat registrator ofisi belgilay oladi.'

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\IpUtils;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -27,6 +28,13 @@ class UniversityNetworkOnly
         if (empty($networks) || IpUtils::checkIp((string) $request->ip(), $networks)) {
             return $next($request);
         }
+
+        // Foydalanuvchiga hech narsa aytilmaydi, lekin admin qaysi IP
+        // bloklanganini logdan ko'rib, kerak bo'lsa ro'yxatga qo'sha oladi.
+        Log::info('[FanTest] Tarmoqdan tashqaridagi so\'rov bloklandi', [
+            'ip' => $request->ip(),
+            'url' => $request->path(),
+        ]);
 
         abort(404);
     }

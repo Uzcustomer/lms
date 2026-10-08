@@ -199,6 +199,8 @@ return [
         // Fan testi (kiosk) faqat shu tarmoqlardan ochiladi: IP yoki CIDR, vergul bilan.
         // Masalan: 213.230.64.10,10.0.0.0/8. Bo'sh bo'lsa cheklov o'chiq.
         'allowed_networks' => array_values(array_filter(array_map('trim', explode(',', (string) env('FAN_TEST_ALLOWED_NETWORKS', ''))))),
+        // true bo'lsa fan testi faqat /test-kompyuter orqali ro'yxatdan o'tgan kompyuterlarda ochiladi.
+        'require_device' => (bool) env('FAN_TEST_REQUIRE_DEVICE', false),
     ],
 
     'exam_access' => [

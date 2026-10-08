@@ -95,8 +95,14 @@ Route::get('/tv/jadval', [AcademicScheduleController::class, 'tvJadval'])->name(
 // Fan testi kioski: o'qituvchi havolani sinf kompyuterlarida ochib qo'yadi,
 // talaba ID raqamini kiritib, yuz (liveness + rasm bilan solishtirish)
 // tekshiruvidan o'tadi. Login talab qilinmaydi.
+// Sinf kompyuterlarini fan testi uchun ro'yxatdan o'tkazish (admin LMS ga kirib ochadi)
+Route::get('/test-kompyuter', [\App\Http\Controllers\TestDeviceController::class, 'index'])->name('test-devices.index');
+Route::post('/test-kompyuter', [\App\Http\Controllers\TestDeviceController::class, 'store'])->name('test-devices.store');
+Route::post('/test-kompyuter/forget', [\App\Http\Controllers\TestDeviceController::class, 'forget'])->name('test-devices.forget');
+Route::post('/test-kompyuter/{device}/revoke', [\App\Http\Controllers\TestDeviceController::class, 'revoke'])->name('test-devices.revoke');
+
 Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')
-    ->middleware(\App\Http\Middleware\UniversityNetworkOnly::class)
+    ->middleware([\App\Http\Middleware\UniversityNetworkOnly::class, \App\Http\Middleware\RegisteredTestDevice::class])
     ->group(function () {
     Route::get('/', [\App\Http\Controllers\FanTestiKioskController::class, 'show'])->name('show');
     Route::post('/check', [\App\Http\Controllers\FanTestiKioskController::class, 'check'])->name('check');
@@ -125,7 +131,9 @@ Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->n
 Route::get('/fan-testi-images/{fanTesti}/{question}', [\App\Http\Controllers\FanTestiQuestionImageController::class, 'show'])
     ->whereNumber('question')->name('fan-testi.question-image');
 Route::get('/fan-testi-attempt-images/{attempt}/{question}', [\App\Http\Controllers\FanTestiQuestionImageController::class, 'attemptImage'])
-    ->whereNumber('question')->middleware(\App\Http\Middleware\UniversityNetworkOnly::class)->name('fan-testi.attempt-image');
+    ->whereNumber('question')
+    ->middleware([\App\Http\Middleware\UniversityNetworkOnly::class, \App\Http\Middleware\RegisteredTestDevice::class])
+    ->name('fan-testi.attempt-image');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {

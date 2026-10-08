@@ -31,9 +31,14 @@ class UniversityNetworkOnly
 
         // Foydalanuvchiga hech narsa aytilmaydi, lekin admin qaysi IP
         // bloklanganini logdan ko'rib, kerak bo'lsa ro'yxatga qo'sha oladi.
+        // Proxy sarlavhalari ham yoziladi: server proxy ortida bo'lsa haqiqiy
+        // mijoz IP si shu yerda ko'rinadi.
         Log::info('[FanTest] Tarmoqdan tashqaridagi so\'rov bloklandi', [
             'ip' => $request->ip(),
             'url' => $request->path(),
+            'x_forwarded_for' => $request->header('X-Forwarded-For'),
+            'x_real_ip' => $request->header('X-Real-IP'),
+            'cf_connecting_ip' => $request->header('CF-Connecting-IP'),
         ]);
 
         abort(404);

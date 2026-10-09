@@ -556,7 +556,11 @@
                                             </div>
                                         </template>
                                         <template x-if="!item.already_submitted">
-                                            @include('student.absence-excuses._calendar-cell')
+                                            {{-- x-if faqat bitta ildiz elementni chizadi: partial esa
+                                                 kalendar + yashirin inputlardan iborat, shuning uchun o'raymiz --}}
+                                            <div>
+                                                @include('student.absence-excuses._calendar-cell')
+                                            </div>
                                         </template>
                                     </div>
                                 </template>

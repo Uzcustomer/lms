@@ -10,19 +10,24 @@ use Illuminate\Support\Facades\Storage;
  * Yangi shikoyat haqida registrator ofisi Telegram guruhiga (yoki uning
  * mavzusiga) xabar: matn, so'ng biriktirilgan rasmlar.
  *
- * Manzil: TELEGRAM_COMPLAINTS_CHAT_ID ("chat_id:mavzu_id"), bo'lmasa
- * TELEGRAM_REGISTRAR_GROUP_ID.
+ * Manzil: TELEGRAM_COMPLAINTS_CHAT_ID — bir yoki bir nechta, vergul bilan
+ * ("-100111,-100222:15"; ":15" — guruhdagi mavzu). Bo'sh bo'lsa
+ * TELEGRAM_REGISTRAR_GROUP_ID. Har bir manzilga alohida yuboriladi.
  */
 class StudentComplaintNotifier
 {
     public static function notify(StudentComplaint $complaint): void
     {
-        $chatId = (string) (config('services.telegram.complaints_chat_id')
+        $targets = TelegramService::chatIds(config('services.telegram.complaints_chat_id')
             ?: config('services.telegram.registrar_group_id'));
-        if ($chatId === '') {
-            return;
-        }
 
+        foreach ($targets as $chatId) {
+            self::sendTo($chatId, $complaint);
+        }
+    }
+
+    private static function sendTo(string $chatId, StudentComplaint $complaint): void
+    {
         try {
             $telegram = new TelegramService();
             $images = $complaint->images ?? [];

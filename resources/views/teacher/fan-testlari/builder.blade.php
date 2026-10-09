@@ -610,6 +610,13 @@
     /* Raqamlar bir xil kenglikda tursin — jadval va hisoblagichlar tekis */
     .bl-headnum b, .bl-num, .bl-panel-count, .bl-slot-no, .bl-table td { font-variant-numeric: tabular-nums; }
 
+    /* Oyna orqasi: sahifa xiralashib qoraysin (.bl ning umumiy foni bosib ketmasligi uchun aniq selektor) */
+    .bl.bl-modal, .bl.bl-qmodal {
+        background: rgba(15, 39, 72, .45);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+    }
+
     /* ---- Kompyuterlarda boshlash oynasi ---- */
     .bl-btn-launch { background: #1d4ed8; color: #fff; box-shadow: 0 4px 12px rgba(29, 78, 216, .22); }
     .bl-btn-launch:hover { background: #1e40af; }

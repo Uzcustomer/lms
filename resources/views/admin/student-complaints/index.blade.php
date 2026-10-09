@@ -6,7 +6,7 @@
            --amber: #d97706; --amber-bg: #fff6e5; --green: #059669; --green-bg: #e7f8f1; --sky: #0284c7; --sky-bg: #e6f4fc; --red: #c0262d; }
     .scx { min-height: 100%; padding: 22px 24px 40px; background: var(--bg); color: var(--ink); }
     .scx * { box-sizing: border-box; }
-    .scx-wrap { max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    .scx-wrap { width: 100%; display: flex; flex-direction: column; gap: 16px; }
 
     /* Sarlavha */
     .scx-hero {
@@ -64,7 +64,7 @@
 
     /* Jadval */
     .scx-scroll { overflow-x: auto; }
-    .scx-table { width: 100%; min-width: 1160px; border-collapse: collapse; font-size: 13.5px; }
+    .scx-table { width: 100%; min-width: 1160px; table-layout: auto; border-collapse: collapse; font-size: 13.5px; }
     .scx-table th {
         padding: 11px 16px; border-bottom: 1px solid var(--line); background: #f3f7fc;
         color: #5b6b82; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-align: left; text-transform: uppercase; white-space: nowrap;
@@ -85,7 +85,7 @@
     .scx-phone { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 9px; background: #eef5fe; color: var(--blue); font-weight: 700; text-decoration: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .scx-phone:hover { background: #e0edfd; }
 
-    .scx-msg { min-width: 260px; max-width: 420px; }
+    .scx-msg { min-width: 260px; max-width: 640px; }
     .scx-msg p { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.55; white-space: pre-line; word-break: break-word; }
     .scx-msg p.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .scx-more { margin-top: 4px; padding: 0; border: 0; background: none; color: var(--blue); font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }

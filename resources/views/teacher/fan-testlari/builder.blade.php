@@ -617,6 +617,27 @@
         backdrop-filter: blur(6px);
     }
 
+    /* ---- Qatordagi "⋯" menyusi ---- */
+    .bl-more { position: relative; display: inline-flex; }
+    .bl-more > summary { list-style: none; padding: 0 9px; }
+    .bl-more > summary::-webkit-details-marker { display: none; }
+    .bl-more > summary svg { width: 16px; height: 16px; margin: 0; }
+    .bl-more-menu {
+        position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+        min-width: 230px; padding: 6px; border: 1px solid var(--line); border-radius: 10px;
+        background: #fff; box-shadow: 0 14px 34px rgba(15, 39, 72, .16); text-align: left;
+    }
+    .bl-more-menu form { display: block; margin: 0; }
+    .bl-more-menu a, .bl-more-menu button {
+        display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px;
+        border: 0; border-radius: 7px; background: none; color: var(--ink);
+        font-family: inherit; font-size: 13px; font-weight: 600; text-align: left; text-decoration: none; cursor: pointer; white-space: nowrap;
+    }
+    .bl-more-menu a:hover, .bl-more-menu button:hover { background: #f1f5fa; }
+    .bl-more-menu svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+    .bl-more-menu .is-bad { color: var(--bad); }
+    .bl-more-menu .is-bad svg { color: var(--bad); }
+
     /* ---- Kompyuterlarda boshlash oynasi ---- */
     .bl-btn-launch { background: #1d4ed8; color: #fff; box-shadow: 0 4px 12px rgba(29, 78, 216, .22); }
     .bl-btn-launch:hover { background: #1e40af; }
@@ -974,50 +995,56 @@
                                 </td>
                                 <td style="text-align:right">
                                     <div class="bl-acts">
-                                        @if($item->questionCount() > 0)
-                                            <a href="{{ route('teacher.fan-testlari.preview', $item) }}" target="_blank"
-                                               class="bl-btn bl-btn-ghost bl-btn-sm"
-                                               title="Testni talaba ko'radigan holicha sinab ko'rish (natija saqlanmaydi)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Sinash</a>
-                                        @endif
+                                        @php $runningHere = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->count(); @endphp
+                                        {{-- Asosiy amal ko'rinadi, qolganlari "⋯" menyusida --}}
                                         @if($isDraft)
                                             <button type="button" class="bl-btn bl-btn-main bl-btn-sm bl-attach"
                                                     data-attach-id="{{ $item->id }}"
                                                     data-attach-name="{{ $item->name }}"
                                                     data-attach-url="{{ route('teacher.fan-testlari.attach-subject', $item) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Biriktirish</button>
-                                        @elseif($item->questionCount() > 0)
-                                            @php $runningHere = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->count(); @endphp
-                                            @if(!empty($kioskDevices))
-                                                <button type="button" class="bl-btn bl-btn-launch bl-btn-sm lm-open"
-                                                        data-test-id="{{ $item->id }}"
-                                                        data-test-name="{{ $item->name }}"
-                                                        data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
-                                                        title="Xonadagi kompyuterlarni tanlab testni boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kompyuterlarda boshlash</button>
-                                            @endif
-                                            @if($runningHere > 0)
-                                                <form method="POST" action="{{ route('teacher.fan-testlari.stop', $item) }}" onsubmit="return confirm('Test {{ $runningHere }} ta kompyuterda to\'xtatilsinmi? Kompyuterlar kutish ekraniga qaytadi.')">
-                                                    @csrf
-                                                    <button class="bl-btn bl-btn-warn bl-btn-sm" title="Kompyuterlarni kutish ekraniga qaytarish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>To'xtatish ({{ $runningHere }})</button>
-                                                </form>
-                                            @endif
-                                            @if($item->is_active)
-                                                <a href="{{ route('kiosk.fan-testi.show', $item) }}" target="_blank" class="bl-btn bl-btn-ok bl-btn-sm" title="Talabalar uchun test sahifasini ochish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Ochish</a>
-                                                <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}" onsubmit="return confirm('Test sahifasi yopilsinmi? Talabalar havola orqali kira olmaydi.')">
-                                                    @csrf
-                                                    <button class="bl-btn bl-btn-warn bl-btn-sm" title="Talabalar uchun test sahifasini yopish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>Yopish</button>
-                                                </form>
-                                            @else
-                                                <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}">
-                                                    @csrf
-                                                    <button class="bl-btn bl-btn-ok bl-btn-sm" title="Talabalar uchun test sahifasini ochish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Ochish</button>
-                                                </form>
-                                            @endif
+                                        @elseif($item->questionCount() > 0 && !empty($kioskDevices))
+                                            <button type="button" class="bl-btn bl-btn-launch bl-btn-sm lm-open"
+                                                    data-test-id="{{ $item->id }}"
+                                                    data-test-name="{{ $item->name }}"
+                                                    data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
+                                                    title="Xonadagi kompyuterlarni tanlab testni boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kompyuterlarda boshlash</button>
                                         @endif
-                                        <a href="{{ route('teacher.fan-testlari.edit', $item) }}" class="bl-btn bl-btn-ghost bl-btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>Tahrirlash</a>
-                                        <form method="POST" action="{{ route('teacher.fan-testlari.destroy', $item) }}" onsubmit="return confirm('Bu test to\'plami va savollarini o\'chirishni tasdiqlaysizmi?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button class="bl-btn bl-btn-bad bl-btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>O'chirish</button>
-                                        </form>
+                                        @if($runningHere > 0)
+                                            <form method="POST" action="{{ route('teacher.fan-testlari.stop', $item) }}" onsubmit="return confirm('Test {{ $runningHere }} ta kompyuterda to\'xtatilsinmi? Kompyuterlar kutish ekraniga qaytadi.')">
+                                                @csrf
+                                                <button class="bl-btn bl-btn-warn bl-btn-sm" title="Kompyuterlarni kutish ekraniga qaytarish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>To'xtatish ({{ $runningHere }})</button>
+                                            </form>
+                                        @endif
+
+                                        <details class="bl-more">
+                                            <summary class="bl-btn bl-btn-ghost bl-btn-sm" title="Boshqa amallar" aria-label="Boshqa amallar"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>
+                                            <div class="bl-more-menu" role="menu">
+                                                @if($item->questionCount() > 0)
+                                                    <a href="{{ route('teacher.fan-testlari.preview', $item) }}" target="_blank" role="menuitem"
+                                                       title="Testni talaba ko'radigan holicha sinab ko'rish (natija saqlanmaydi)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Sinab ko'rish</a>
+                                                @endif
+                                                @if(!$isDraft && $item->questionCount() > 0)
+                                                    @if($item->is_active)
+                                                        <a href="{{ route('kiosk.fan-testi.show', $item) }}" target="_blank" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>Test havolasini ochish</a>
+                                                        <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}" onsubmit="return confirm('Test sahifasi yopilsinmi? Talabalar havola orqali kira olmaydi.')">
+                                                            @csrf
+                                                            <button type="submit" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Talabalar uchun yopish</button>
+                                                        </form>
+                                                    @else
+                                                        <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}">
+                                                            @csrf
+                                                            <button type="submit" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>Talabalar uchun ochish</button>
+                                                        </form>
+                                                    @endif
+                                                @endif
+                                                <a href="{{ route('teacher.fan-testlari.edit', $item) }}" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>Tahrirlash</a>
+                                                <form method="POST" action="{{ route('teacher.fan-testlari.destroy', $item) }}" onsubmit="return confirm('Bu test to\'plami va savollarini o\'chirishni tasdiqlaysizmi?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" role="menuitem" class="is-bad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7"/></svg>O'chirish</button>
+                                                </form>
+                                            </div>
+                                        </details>
                                     </div>
                                 </td>
                             </tr>
@@ -1097,6 +1124,34 @@
         };
     }
 </script>
+
+    <script>
+    (() => {
+        document.addEventListener('click', (ev) => {
+            document.querySelectorAll('.bl-more[open]').forEach((menu) => {
+                if (!menu.contains(ev.target)) menu.removeAttribute('open');
+            });
+        });
+        // Menyu panel va jadvalning overflow chegarasida kesilmasin: ekranga
+        // nisbatan joylashtiriladi, pastda joy bo'lmasa yuqoriga ochiladi.
+        document.addEventListener('toggle', (ev) => {
+            const more = ev.target;
+            if (!more.classList || !more.classList.contains('bl-more') || !more.open) return;
+            document.querySelectorAll('.bl-more[open]').forEach((menu) => { if (menu !== more) menu.removeAttribute('open'); });
+            const btn = more.querySelector('summary').getBoundingClientRect();
+            const menu = more.querySelector('.bl-more-menu');
+            menu.style.position = 'fixed';
+            menu.style.right = Math.max(8, window.innerWidth - btn.right) + 'px';
+            const below = btn.bottom + 6;
+            const height = menu.offsetHeight;
+            menu.style.top = (below + height > window.innerHeight - 8 ? Math.max(8, btn.top - height - 6) : below) + 'px';
+        }, true);
+        const closeAll = () => document.querySelectorAll('.bl-more[open]').forEach((menu) => menu.removeAttribute('open'));
+        window.addEventListener('scroll', closeAll, true);
+        window.addEventListener('resize', closeAll);
+        document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeAll(); });
+    })();
+    </script>
 
     {{-- Kompyuterlarda boshlash: xona bo'yicha kompyuterlarni tanlash --}}
     <div class="bl bl-modal" id="launchModal">

@@ -539,9 +539,20 @@
                                             </template>
                                         </div>
                                         <template x-if="item.already_submitted">
-                                            <div class="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold inline-flex items-center gap-1.5">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                                MT yuklangan — qayta topshirish talab qilinmaydi
+                                            {{-- Fayl topshirilgan MT: sana so'ralmaydi, lekin qator
+                                                 arizaga tushishi uchun maydonlari baribir yuboriladi --}}
+                                            <div>
+                                                <div class="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold inline-flex items-center gap-1.5">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                                    MT yuklangan — qayta topshirish talab qilinmaydi
+                                                </div>
+                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][subject_name]'" :value="item.subject_name">
+                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][subject_id]'" :value="item.subject_id || ''">
+                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][assessment_type]'" :value="item.assessment_type">
+                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][assessment_type_code]'" :value="item.assessment_type_code">
+                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][original_date]'" :value="item.original_date">
+                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][jn_submitted]'" value="1">
+                                                <input type="hidden" :name="'makeup_dates['+item._idx+'][already_submitted]'" value="1">
                                             </div>
                                         </template>
                                         <template x-if="!item.already_submitted">

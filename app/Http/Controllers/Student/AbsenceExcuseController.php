@@ -232,8 +232,12 @@ class AbsenceExcuseController extends Controller
         // Har bir makeup uchun sana mavjudligini tekshirish
         $makeupDates = $request->input('makeup_dates', []);
         foreach ($makeupDates as $i => $makeup) {
-            // Topshirilgan bo'lsa (barcha nazorat turlari uchun), sana talab qilinmaydi
-            if (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1') {
+            // Topshirilgan bo'lsa (barcha nazorat turlari uchun), sana talab qilinmaydi.
+            // already_submitted — MT fayli allaqachon yuklangan qator.
+            if (
+                (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1')
+                || (!empty($makeup['already_submitted']) && $makeup['already_submitted'] === '1')
+            ) {
                 continue;
             }
 
@@ -276,7 +280,8 @@ class AbsenceExcuseController extends Controller
             // Makeup sanalarni saqlash
             foreach ($makeupDates as $makeup) {
                 $isJn = ($makeup['assessment_type'] ?? '') === 'jn';
-                $isSubmitted = !empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1';
+                $isSubmitted = (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1')
+                || (!empty($makeup['already_submitted']) && $makeup['already_submitted'] === '1');
 
                 // Topshirilgan bo'lsa, sanasiz saqlaymiz
                 $dateToSave = null;
@@ -583,35 +588,6 @@ class AbsenceExcuseController extends Controller
     {
         $missedAssessments = collect();
 
-        // 0. Mustaqil ta'lim — o'z muddati bilan yashaydi (independents jadvali),
-        //    dars jadvalida ko'rinmaydi. Muddati sababli davrga tushgan va talaba
-        //    hali fayl yuklamagan MT lar arizaga tushadi; yuklangani esa
-        //    "MT yuklangan" deb belgilanadi va qayta yuklash so'ralmaydi.
-        if ($studentId) {
-            $independents = Independent::where('group_hemis_id', $groupId)
-                ->whereDate('deadline', '>=', $startDate)
-                ->whereDate('deadline', '<=', $endDate)
-                ->get();
-
-            if ($independents->isNotEmpty()) {
-                $submittedIds = IndependentSubmission::whereIn('independent_id', $independents->pluck('id'))
-                    ->where('student_id', $studentId)
-                    ->pluck('independent_id')
-                    ->flip();
-
-                foreach ($independents as $independent) {
-                    $missedAssessments->push([
-                        'subject_name' => $independent->subject_name,
-                        'subject_id' => $independent->subject_id,
-                        'assessment_type' => 'mt',
-                        'assessment_type_code' => '99',
-                        'original_date' => Carbon::parse($independent->deadline)->format('Y-m-d'),
-                        'already_submitted' => isset($submittedIds[$independent->id]),
-                    ]);
-                }
-            }
-        }
-
         // 1. Schedules jadvalidan (dars jadvali)
         $schedules = Schedule::where('group_id', $groupId)
             ->whereDate('lesson_date', '>=', $startDate)
@@ -652,6 +628,56 @@ class AbsenceExcuseController extends Controller
                 'assessment_type_code' => '100',
                 'original_date' => Carbon::parse($on->start_date)->format('Y-m-d'),
             ]);
+        }
+
+        // 2.5. Mustaqil ta'lim — o'z muddati bilan yashaydi (independents jadvali)
+        //      va ko'p hollarda dars jadvalida ko'rinmaydi. Muddati sababli davrga
+        //      tushgan MT arizaga qo'shiladi; fayli yuklangani esa "MT yuklangan"
+        //      deb belgilanadi va qayta yuklash so'ralmaydi.
+        //      Dars jadvalidan (1-blok, kod 99) allaqachon tushgan MT takrorlanmaydi,
+        //      faqat already_submitted holati shu qatorga qo'shiladi.
+        if ($studentId) {
+            $independents = Independent::where('group_hemis_id', $groupId)
+                ->whereDate('deadline', '>=', $startDate)
+                ->whereDate('deadline', '<=', $endDate)
+                ->get();
+
+            if ($independents->isNotEmpty()) {
+                $submittedIds = IndependentSubmission::whereIn('independent_id', $independents->pluck('id'))
+                    ->where('student_id', $studentId)
+                    ->pluck('independent_id')
+                    ->flip();
+
+                foreach ($independents as $independent) {
+                    $deadline = Carbon::parse($independent->deadline)->format('Y-m-d');
+                    $isSubmitted = isset($submittedIds[$independent->id]);
+
+                    // Shu MT dars jadvalidan kelganmi? Fan nomi bo'yicha solishtiramiz —
+                    // MT sanasi jadvalda deadline bilan bir xil bo'lmasligi mumkin.
+                    $existingIndex = $missedAssessments->search(function ($a) use ($independent) {
+                        return $a['assessment_type'] === 'mt'
+                            && mb_strtolower($a['subject_name']) === mb_strtolower($independent->subject_name);
+                    });
+
+                    if ($existingIndex !== false) {
+                        if ($isSubmitted) {
+                            $row = $missedAssessments[$existingIndex];
+                            $row['already_submitted'] = true;
+                            $missedAssessments[$existingIndex] = $row;
+                        }
+                        continue;
+                    }
+
+                    $missedAssessments->push([
+                        'subject_name' => $independent->subject_name,
+                        'subject_id' => $independent->subject_id,
+                        'assessment_type' => 'mt',
+                        'assessment_type_code' => '99',
+                        'original_date' => $deadline,
+                        'already_submitted' => $isSubmitted,
+                    ]);
+                }
+            }
         }
 
         // 3. OSKI

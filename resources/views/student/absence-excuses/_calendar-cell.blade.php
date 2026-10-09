@@ -172,3 +172,4 @@
 <input type="hidden" :name="'makeup_dates['+item._idx+'][makeup_end]'" :value="item.assessment_type === 'jn' ? (item.makeup_end || '') : ''">
 <input type="hidden" :name="'makeup_dates['+item._idx+'][jn_submitted]'" :value="item.jn_submitted ? '1' : '0'">
 <input type="hidden" :name="'makeup_dates['+item._idx+'][is_makeup_period]'" :value="item.is_makeup_period ? '1' : '0'">
+<input type="hidden" :name="'makeup_dates['+item._idx+'][already_submitted]'" :value="item.already_submitted ? '1' : '0'">

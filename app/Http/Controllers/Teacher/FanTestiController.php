@@ -220,10 +220,18 @@ class FanTestiController extends Controller
         return back()->with('success', $message);
     }
 
-    /** Shu test berilgan kompyuterlarni bo'shatadi — ular kutish ekraniga qaytadi. */
+    /**
+     * Testni to'xtatadi: berilgan kompyuterlar bo'shab kutish ekraniga qaytadi
+     * va test talabalar uchun yopiladi (havola orqali ham ochilmaydi).
+     * Boshlangan urinishlar o'z vaqtida topshiriladi.
+     */
     public function stopLaunch(FanTesti $fanTesti)
     {
         $this->authorizeCollection($fanTesti);
+
+        if ($fanTesti->is_active) {
+            $fanTesti->update(['is_active' => false, 'updated_by' => $this->teacher()->id]);
+        }
 
         $count = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
             ? TestKioskDevice::where('assigned_fan_testi_id', $fanTesti->id)->update([
@@ -233,7 +241,9 @@ class FanTestiController extends Controller
             ])
             : 0;
 
-        return back()->with('success', "Test to'xtatildi — {$count} ta kompyuter kutish ekraniga qaytadi. Boshlangan urinishlar o'z vaqtida topshiriladi.");
+        return back()->with('success', "Test to'xtatildi va yopildi"
+            . ($count ? " — {$count} ta kompyuter kutish ekraniga qaytadi" : '')
+            . ". Boshlangan urinishlar o'z vaqtida topshiriladi.");
     }
 
     /**

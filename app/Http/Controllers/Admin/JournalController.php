@@ -6035,20 +6035,35 @@ class JournalController extends Controller
 
         $lessonDate = \Carbon\Carbon::parse($request->lesson_date)->format('Y-m-d');
 
-        // Shu kun uchun so'rov bormi. Rad etilgani qayta yuborilishi mumkin —
-        // yangi hujjat bilan; qolgan holatlar bloklanadi.
+        // Shu kun uchun eng oxirgi so'rov. Rad etilgani qayta yuborilishi mumkin —
+        // yangi hujjat bilan (o'sha yozuv yangilanadi). Muddati tugab, baho to'liq
+        // qo'yilmay qolgan kun uchun YANGI so'rov yuboriladi: eskisi tarixda qoladi
+        // va so'rovlar sonida hisoblanadi (yangisi navbatdagi raqam bilan).
+        // Qolgan holatlar bloklanadi.
+        LessonOpening::expireOverdue();
         $existing = LessonOpening::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
             ->where('lesson_date', $lessonDate)
+            ->orderByDesc('id')
             ->first();
 
         if ($existing && $existing->status === LessonOpening::STATUS_PENDING) {
             return response()->json(['success' => false, 'message' => "Bu kun uchun so'rov allaqachon yuborilgan va ko'rib chiqilmoqda."], 409);
         }
-        if ($existing && $existing->status !== LessonOpening::STATUS_REJECTED) {
+        if ($existing && $existing->status === LessonOpening::STATUS_EXPIRED) {
+            $dayUngraded = $this->countUngradedCells(
+                (string) $request->group_hemis_id, (string) $request->subject_id, (string) $request->semester_code, $lessonDate
+            );
+            if ($dayUngraded['cells'] === 0) {
+                return response()->json(['success' => false, 'message' => "Bu kunning barcha baholari qo'yilgan — qayta so'rov kerak emas."], 409);
+            }
+        } elseif ($existing && $existing->status !== LessonOpening::STATUS_REJECTED) {
             return response()->json(['success' => false, 'message' => 'Bu kun uchun dars allaqachon ochilgan'], 409);
         }
+
+        // Faqat rad etilgan so'rov qayta ishlatiladi; muddati tugagani tarixda qoladi
+        $reuse = $existing && $existing->status === LessonOpening::STATUS_REJECTED ? $existing : null;
 
         // So'rov kimning nomidan: o'qituvchi — o'zi; admin — o'sha kungi o'qituvchi
         $dayTeachers = self::lessonDayTeachers($request->group_hemis_id, $request->subject_id, $request->semester_code, $lessonDate);
@@ -6070,8 +6085,9 @@ class JournalController extends Controller
             }
         }
 
-        // Joriy semestrdagi nechanchi so'rov (rad etilganlar hisoblanmaydi)
-        $prior = LessonOpening::priorRequestCount($teacher->id, $existing?->id);
+        // Joriy semestrdagi nechanchi so'rov (rad etilganlar hisoblanmaydi;
+        // muddati tugab foydalanilmagani ham hisoblanadi)
+        $prior = LessonOpening::priorRequestCount($teacher->id, $reuse?->id);
         $number = $prior + 1;
 
         // Test rejimi: sozlamada yoqilgan bo'lsa, so'rov raqamini qo'lda tanlash
@@ -6126,15 +6142,15 @@ class JournalController extends Controller
             'review_comment' => null,
         ] + LessonOpening::emptyStageDecisions();
 
-        if ($existing) {
+        if ($reuse) {
             // Rad etilgan so'rov yangi hujjatlar bilan qayta yuboriladi
-            foreach ([$existing->file_path, $existing->explanation_file_path] as $oldPath) {
+            foreach ([$reuse->file_path, $reuse->explanation_file_path] as $oldPath) {
                 if ($oldPath) {
                     Storage::disk('public')->delete($oldPath);
                 }
             }
-            $existing->update($payload);
-            $opening = $existing->fresh();
+            $reuse->update($payload);
+            $opening = $reuse->fresh();
         } else {
             $opening = LessonOpening::create($payload);
         }
@@ -7580,7 +7596,7 @@ class JournalController extends Controller
      *
      * @return array{cells:int, students:int}
      */
-    private function countUngradedCells(string $groupHemisId, string $subjectId, string $semesterCode): array
+    private function countUngradedCells(string $groupHemisId, string $subjectId, string $semesterCode, ?string $onlyDate = null): array
     {
         $today = now('Asia/Tashkent')->toDateString();
         $excluded = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
@@ -7595,7 +7611,10 @@ class JournalController extends Controller
             ->whereNotIn('training_type_code', $excluded)
             // Bugungi darslar ham: YN ga faqat oxirgi dars kunidan keyin
             // (yoki shu kuni) yuboriladi, oxirgi kundagi bo'sh katak ham to'sadi.
-            ->whereRaw('DATE(lesson_date) <= ?', [$today])
+            // $onlyDate berilsa — faqat o'sha kun (dars ochish so'rovi uchun).
+            ->when($onlyDate !== null,
+                fn ($q) => $q->whereRaw('DATE(lesson_date) = ?', [$onlyDate]),
+                fn ($q) => $q->whereRaw('DATE(lesson_date) <= ?', [$today]))
             ->selectRaw('DATE(lesson_date) as d, lesson_pair_code as p')
             ->distinct()
             ->get();

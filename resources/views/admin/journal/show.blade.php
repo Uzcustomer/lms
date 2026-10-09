@@ -1252,15 +1252,16 @@
                                                 $isMissed = isset($missedDatesLookup[$dateStr]);
                                                 $openingInfo = ($lessonOpeningsMap ?? [])[$dateStr] ?? null;
                                                 $openingStatus = $openingInfo['status'] ?? null;
-                                                // Rad etilgan so'rov qayta yuborilishi mumkin — ochilmagan hisoblanadi
-                                                $isOpened = $openingInfo && $openingStatus !== 'rejected';
+                                                // Rad etilgan so'rov qayta yuborilishi mumkin — ochilmagan hisoblanadi.
+                                                // Muddati tugagan, lekin baho to'liq qo'yilmagan kun ham qayta so'raladi.
+                                                $isOpened = $openingInfo && !in_array($openingStatus, ['rejected', 'expired'], true);
                                                 $isActiveOpened = $openingStatus === 'active';
                                                 $isPendingOpened = $openingStatus === 'pending';
                                             @endphp
                                             <th class="font-bold text-gray-600 text-center date-header-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }}" style="min-width: 50px; width: 50px; height: 100px; position: relative; {{ $isMissed && !$isOpened ? 'background: #fef2f2;' : '' }}{{ $isActiveOpened ? 'background: #ecfdf5;' : '' }}{{ $isPendingOpened ? 'background: #fffbeb;' : '' }}">
                                                 <div class="date-text-wrapper">{{ format_date($date) }}</div>
                                                 @if($canOpenLesson && $isMissed && !$isOpened && $canRequestFor($dateStr))
-                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $openingStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : "O'tkazib yuborilgan kun — Dars ochish" }}">
+                                                    <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);" title="{{ $openingStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : ($openingStatus === 'expired' ? "Muddati tugagan, baho to'liq qo'yilmagan — qayta so'rov" : "O'tkazib yuborilgan kun — Dars ochish") }}">
                                                         <button type="button" onclick="openLessonModal('{{ $dateStr }}', @js($openingStatus === 'rejected' ? ($openingInfo['review_comment'] ?? '') : null))" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;">!</button>
                                                     </div>
                                                 @elseif($openingInfo)
@@ -1804,7 +1805,7 @@
                                                 $dIsMissed = isset($missedDatesLookup[$dDateStr]);
                                                 $dOpeningInfo = ($lessonOpeningsMap ?? [])[$dDateStr] ?? null;
                                                 $dOpeningStatus = $dOpeningInfo['status'] ?? null;
-                                                $dIsOpened = $dOpeningInfo && $dOpeningStatus !== 'rejected';
+                                                $dIsOpened = $dOpeningInfo && !in_array($dOpeningStatus, ['rejected', 'expired'], true);
                                                 $dIsActiveOpened = $dOpeningStatus === 'active';
                                                 $dIsPendingOpened = $dOpeningStatus === 'pending';
                                             @endphp
@@ -1812,7 +1813,7 @@
                                                 <div class="date-text-wrapper">{{ format_date($col['date']) }}({{ $col['pair'] }})</div>
                                                 @if($canOpenLesson && $dIsMissed && !$dIsOpened && $isFirstOfDate && $canRequestFor($dDateStr))
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">
-                                                        <button type="button" onclick="openLessonModal('{{ $dDateStr }}', @js($dOpeningStatus === 'rejected' ? ($dOpeningInfo['review_comment'] ?? '') : null))" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="{{ $dOpeningStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : 'Dars ochish' }}">!</button>
+                                                        <button type="button" onclick="openLessonModal('{{ $dDateStr }}', @js($dOpeningStatus === 'rejected' ? ($dOpeningInfo['review_comment'] ?? '') : null))" style="background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; line-height: 18px; padding: 0;" title="{{ $dOpeningStatus === 'rejected' ? "So'rov rad etilgan — qayta yuborish" : ($dOpeningStatus === 'expired' ? "Muddati tugagan, baho to'liq qo'yilmagan — qayta so'rov" : 'Dars ochish') }}">!</button>
                                                     </div>
                                                 @elseif($dOpeningInfo && ($dIsOpened || $isFirstOfDate))
                                                     <div style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);">

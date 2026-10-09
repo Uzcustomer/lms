@@ -105,11 +105,15 @@ class TeacherMissedLessons
             }
         }
 
-        // 3. Allaqachon so'rov yuborilgan kunlar: rad etilmaganlari chiqariladi
+        // 3. Allaqachon so'rov yuborilgan kunlar: rad etilmaganlari chiqariladi.
+        // Muddati tugagan so'rov kuni (baho hali to'liq emas) yana ko'rinadi —
+        // o'qituvchi qayta so'rov yuboradi. id tartibi: kunning eng oxirgi so'rovi.
+        LessonOpening::expireOverdue();
         $openings = LessonOpening::query()
             ->whereIn('group_hemis_id', $groupIds)
             ->whereIn('subject_id', $subjectIds)
             ->whereDate('lesson_date', '>=', $from)
+            ->orderBy('id')
             ->get(['group_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'status'])
             ->mapWithKeys(fn ($o) => [
                 $this->key($o->group_hemis_id, $o->subject_id, $o->semester_code, $o->lesson_date?->format('Y-m-d')) => $o->status,
@@ -125,7 +129,7 @@ class TeacherMissedLessons
 
                 return ! isset($marked[$pairKey])
                     && isset($groupsWithStudents[(string) $slot->group_id])
-                    && ($status === null || $status === LessonOpening::STATUS_REJECTED);
+                    && in_array($status, [null, LessonOpening::STATUS_REJECTED, LessonOpening::STATUS_EXPIRED], true);
             })
             ->unique(fn ($slot) => $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day))
             ->map(function ($slot) use ($openings, $missingByDay) {

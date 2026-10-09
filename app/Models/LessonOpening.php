@@ -764,9 +764,12 @@ class LessonOpening extends Model
      */
     public static function getAllOpenings(string $groupHemisId, string $subjectId, string $semesterCode): \Illuminate\Database\Eloquent\Collection
     {
+        // id bo'yicha: bir kunda bir nechta so'rov bo'lsa (muddati tugagandan
+        // keyin qayta so'ralgan) sana xaritasida eng yangisi qoladi.
         return static::where('group_hemis_id', $groupHemisId)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->orderBy('id')
             ->get();
     }
 

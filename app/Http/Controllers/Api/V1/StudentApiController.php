@@ -58,6 +58,10 @@ class StudentApiController extends Controller
         $educationYearCode = $curriculum?->education_year_code;
 
         $currentSemesterId = $student->semester_id;
+        // Qarzdorlik faqat o'tgan semestrlar bo'yicha: semester_id (HEMIS ichki id,
+        // masalan 1384) fanlardagi semestr kodi (13) bilan solishtirib bo'lmaydi,
+        // shuning uchun kod bo'yicha — joriy va kelgusi semestrlar qarz emas.
+        $currentSemesterCode = (int) ($student->semester_code ?? 0);
 
         // Talabaga biriktirilgan fanlar asosida qarzdorlikni hisoblash.
         // student_subjects jadvali bo'sh bo'lsa (import qilinmagan), academic_records ga fallback qilinadi.
@@ -86,7 +90,7 @@ class StudentApiController extends Controller
                 })
                 ->leftJoin('semesters as sem', 'sem.code', '=', 'ss.semester_id')
                 ->where('ss.student_hemis_id', $student->hemis_id)
-                ->when($currentSemesterId, fn($q) => $q->where('ss.semester_id', '!=', $currentSemesterId))
+                ->when($currentSemesterCode > 0, fn($q) => $q->whereRaw('CAST(ss.semester_id AS UNSIGNED) < ?', [$currentSemesterCode]))
                 ->where(function ($q) {
                     $q->whereNull('ar.id')                        // academic record umuman yo'q
                       ->orWhereNull('ar.grade')                   // baho kiritilmagan
@@ -105,7 +109,7 @@ class StudentApiController extends Controller
                       ->orWhereIn('grade', ['2', '0'])
                       ->orWhere('retraining_status', true);
                 })
-                ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+                ->when($currentSemesterCode > 0, fn($q) => $q->whereRaw('CAST(semester_id AS UNSIGNED) < ?', [$currentSemesterCode]))
                 ->orderBy('semester_name')
                 ->orderBy('subject_name')
                 ->get();

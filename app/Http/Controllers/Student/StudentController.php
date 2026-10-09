@@ -107,8 +107,9 @@ class StudentController extends Controller
             }
 
             foreach ($currSubjects as $sub) {
-                // Joriy semesterni chiqarib tashlash
-                if ($studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
+                // Faqat o'tgan semestrlar: joriy semestr hali yakunlanmagan, kelgusi
+                // semestr fanlariga esa hali baho yo'q — ular qarz emas.
+                if ($studentSemesterCode && (int) $sub->semester_code >= (int) $studentSemesterCode) continue;
 
                 $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
 

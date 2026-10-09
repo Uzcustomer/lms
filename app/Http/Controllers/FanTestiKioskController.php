@@ -45,20 +45,13 @@ class FanTestiKioskController extends Controller
         if (!$fanTesti->is_active || !$fanTesti->curriculum_subject_id) {
             return view('kiosk.fan-testi.closed', [
                 'test' => $fanTesti->load('subject'),
-            ]);
+            ] + $this->follow('closed'));
         }
-
-        // Kompyuterga bu test o'qituvchi tomonidan "berilgan" bo'lsa, sahifa
-        // holatni kuzatadi: test to'xtatilsa kutish ekraniga qaytadi.
-        $kioskDevice = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
-            ? TestDeviceToken::resolve(request())
-            : null;
 
         return view('kiosk.fan-testi.start', [
             'test' => $fanTesti->load('subject'),
             'liveness' => FaceIdService::getLivenessConfig(),
-            'followLaunch' => $kioskDevice && (int) $kioskDevice->assigned_fan_testi_id === (int) $fanTesti->id,
-        ]);
+        ] + $this->follow('start'));
     }
 
     /**
@@ -176,7 +169,7 @@ class FanTestiKioskController extends Controller
             'attempt' => $attempt,
             'questions' => collect($attempt->questions_snapshot ?? []),
             'secondsLeft' => $attempt->secondsLeft(),
-        ]);
+        ] + $this->follow('take'));
     }
 
     public function submit(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
@@ -215,7 +208,23 @@ class FanTestiKioskController extends Controller
         return view('kiosk.fan-testi.result', [
             'test' => $fanTesti->load('subject'),
             'attempt' => $attempt->load('answers'),
-        ]);
+        ] + $this->follow('result'));
+    }
+
+    /**
+     * Ro'yxatdagi sinf kompyuterida sahifa o'qituvchining "Boshlash/To'xtatish"
+     * buyrug'ini kuzatadi (layout dagi skript): test to'xtatilsa yoki boshqa
+     * test berilsa — boshlash/yopiq sahifasi darhol, natija sahifasi biroz
+     * kutib kutish ekraniga o'tadi; test ishlanayotgan bo'lsa javoblar avval
+     * avtomatik topshiriladi.
+     */
+    private function follow(string $mode): array
+    {
+        $device = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
+            ? TestDeviceToken::resolve(request())
+            : null;
+
+        return ['followDevice' => $device !== null, 'followMode' => $mode];
     }
 
     /**

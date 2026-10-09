@@ -410,6 +410,9 @@
         form.submit();
     }
 
+    // O'qituvchi testni to'xtatdi — belgilangan javoblar bilan topshiriladi
+    window.addEventListener('kiosk-stop', () => submitOnce());
+
     renderClock();
     const ticker = setInterval(() => {
         left -= 1;

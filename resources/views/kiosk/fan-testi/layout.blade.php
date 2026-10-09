@@ -162,5 +162,43 @@
     <div class="k-foot">© {{ date('Y') }} Toshkent tibbiyot akademiyasi Termiz filiali · Elektron ta'lim tizimi</div>
 
     @yield('scripts')
+
+    @if(($followDevice ?? false) && isset($test) && !($preview ?? false))
+    <script>
+    // Sinf kompyuteri o'qituvchi buyrug'ini kuzatadi: test to'xtatilsa yoki
+    // boshqa test berilsa kutish ekraniga (yoki yangi testga) o'tadi.
+    (function () {
+        const here = @json(route('kiosk.fan-testi.show', $test));
+        const statusUrl = @json(route('test-devices.status'));
+        const mode = @json($followMode ?? 'start');
+        let leaving = false;
+
+        async function tick() {
+            if (leaving) return;
+            // Talaba yuz tekshiruvida bo'lsa uni to'xtatmaymiz
+            const face = document.getElementById('stepFace');
+            if (mode === 'start' && face && face.style.display !== 'none') return;
+            let d;
+            try {
+                const r = await fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                if (!r.ok) return;
+                d = await r.json();
+            } catch (e) { return; }
+            if (!d.registered || d.test_url === here) return;
+
+            leaving = true;
+            const target = d.test_url || d.wait_url;
+            if (mode === 'take') {
+                // Javoblar yo'qolmasin: avval topshiriladi, natijadan keyin kutish ekrani
+                window.dispatchEvent(new CustomEvent('kiosk-stop'));
+                return;
+            }
+            setTimeout(() => { window.location.href = target; }, mode === 'result' ? 8000 : 0);
+        }
+
+        setInterval(tick, 5000);
+    })();
+    </script>
+    @endif
 </body>
 </html>

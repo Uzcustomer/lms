@@ -473,26 +473,4 @@
     window.addEventListener('beforeunload', stopCamera);
 })();
 </script>
-@if($followLaunch ?? false)
-<script>
-// O'qituvchi bergan test: to'xtatilsa yoki boshqa test berilsa kompyuter o'zi o'tadi.
-(function () {
-    const here = @json(route('kiosk.fan-testi.show', $test));
-    const statusUrl = @json(route('test-devices.status'));
-    setInterval(async () => {
-        // Talaba yuz tekshiruvida bo'lsa uni to'xtatmaymiz
-        const face = document.getElementById('stepFace');
-        if (face && face.style.display !== 'none') return;
-        try {
-            const r = await fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-            if (!r.ok) return;
-            const d = await r.json();
-            if (!d.registered) return;
-            const target = d.test_url || d.wait_url;
-            if (target && target !== here) window.location.href = target;
-        } catch (e) {}
-    }, 5000);
-})();
-</script>
-@endif
 @endsection

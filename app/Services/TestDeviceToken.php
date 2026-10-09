@@ -44,6 +44,29 @@ class TestDeviceToken
             ->first();
     }
 
+    /**
+     * So'rov yuborgan ro'yxatdagi faol kompyuter (joriy belgi yoki yangilangandan
+     * keyingi qisqa muddatdagi oldingi belgi). Belgini yangilamaydi va nusxa
+     * tekshiruvini qilmaydi — kutish ekrani va holat so'rovlari uchun.
+     */
+    public static function resolve(Request $request): ?TestKioskDevice
+    {
+        $token = self::fromRequest($request);
+        $device = self::deviceFor($token);
+        if (!$device || !$device->isActive()) {
+            return null;
+        }
+
+        if (!hash_equals((string) $device->token_hash, self::hash($token))) {
+            $inGrace = $device->rotated_at && $device->rotated_at->gt(now()->subMinutes(self::GRACE_MINUTES));
+            if (!$inGrace) {
+                return null;
+            }
+        }
+
+        return $device;
+    }
+
     /** Kompyuterga yangi belgi beradi; oldingisi qisqa muddat qabul qilinadi. */
     public static function rotate(TestKioskDevice $device, ?string $currentToken = null): string
     {

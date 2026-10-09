@@ -8,6 +8,7 @@ use App\Models\FanTestiAttemptAnswer;
 use App\Models\Student;
 use App\Services\FaceIdService;
 use App\Services\FanTestiGroups;
+use App\Services\TestDeviceToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -47,9 +48,16 @@ class FanTestiKioskController extends Controller
             ]);
         }
 
+        // Kompyuterga bu test o'qituvchi tomonidan "berilgan" bo'lsa, sahifa
+        // holatni kuzatadi: test to'xtatilsa kutish ekraniga qaytadi.
+        $kioskDevice = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
+            ? TestDeviceToken::resolve(request())
+            : null;
+
         return view('kiosk.fan-testi.start', [
             'test' => $fanTesti->load('subject'),
             'liveness' => FaceIdService::getLivenessConfig(),
+            'followLaunch' => $kioskDevice && (int) $kioskDevice->assigned_fan_testi_id === (int) $fanTesti->id,
         ]);
     }
 

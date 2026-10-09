@@ -9,6 +9,7 @@ use App\Models\FanTesti;
 use App\Models\Group;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
+use App\Models\TestKioskDevice;
 use App\Services\FanTestiGroups;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,7 @@ class FanTestiController extends Controller
             'collection' => null,
             'subjects' => $subjects,
             'collections' => $this->collectionsFor(),
+            'kioskDevices' => $this->kioskDevices(),
         ]);
     }
 
@@ -72,6 +74,7 @@ class FanTestiController extends Controller
             'subjects' => $subjects,
             'collections' => $this->collectionsFor(),
             'allowedGroups' => $this->allowedGroupsFor($collection),
+            'kioskDevices' => $this->kioskDevices(),
         ]);
     }
 
@@ -160,6 +163,112 @@ class FanTestiController extends Controller
         ]);
 
         return back()->withFragment('savollar')->with('success', 'Savol o\'chirildi.');
+    }
+
+    /**
+     * Tanlangan sinf kompyuterlarida testni boshlaydi: kompyuterlarga test
+     * "beriladi" — kutish ekranidagi kompyuter bir necha soniyada uni o'zi
+     * ochadi. Boshqa test bilan band kompyuterlarga tegilmaydi.
+     */
+    public function launch(Request $request, FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        if (!$fanTesti->curriculum_subject_id) {
+            return back()->with('error', "Avval to'plamga fan biriktiring.");
+        }
+        if ($this->previewQuestions($fanTesti)->isEmpty()) {
+            return back()->with('error', "Bu to'plamda hali savol yo'q.");
+        }
+        if (!Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')) {
+            return back()->with('error', "Server yangilanmagan: php artisan migrate ni ishga tushiring.");
+        }
+
+        $data = $request->validate([
+            'device_ids' => ['required', 'array', 'min:1'],
+            'device_ids.*' => ['integer'],
+        ], ['device_ids.required' => 'Kamida bitta kompyuter tanlang.']);
+
+        $devices = TestKioskDevice::whereIn('id', $data['device_ids'])->whereNull('revoked_at')->with('assignedTest:id,is_active')->get();
+        // O'chirilgan yoki yopilgan testga berilgan kompyuter band hisoblanmaydi.
+        $busy = $devices->filter(fn ($d) => $d->assigned_fan_testi_id
+            && (int) $d->assigned_fan_testi_id !== (int) $fanTesti->id
+            && $d->assignedTest?->is_active);
+        $free = $devices->diff($busy);
+
+        if ($free->isEmpty()) {
+            return back()->with('error', 'Tanlangan kompyuterlar boshqa test bilan band.');
+        }
+
+        $teacher = $this->teacher();
+        TestKioskDevice::whereIn('id', $free->pluck('id'))->update([
+            'assigned_fan_testi_id' => $fanTesti->id,
+            'assigned_at' => now(),
+            'assigned_by_name' => $teacher->short_name ?: $teacher->full_name,
+        ]);
+
+        // Test talabalar uchun yopiq bo'lsa ochiladi — aks holda kompyuterlar uni ocholmaydi.
+        if (!$fanTesti->is_active) {
+            $fanTesti->update(['is_active' => true, 'updated_by' => $teacher->id]);
+        }
+
+        $message = $free->count() . " ta kompyuterda test boshlandi — bir necha soniyada test oynasi ochiladi.";
+        if ($busy->isNotEmpty()) {
+            $message .= ' ' . $busy->count() . " ta kompyuter boshqa test bilan band bo'lgani uchun o'tkazib yuborildi.";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /** Shu test berilgan kompyuterlarni bo'shatadi — ular kutish ekraniga qaytadi. */
+    public function stopLaunch(FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        $count = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
+            ? TestKioskDevice::where('assigned_fan_testi_id', $fanTesti->id)->update([
+                'assigned_fan_testi_id' => null,
+                'assigned_at' => null,
+                'assigned_by_name' => null,
+            ])
+            : 0;
+
+        return back()->with('success', "Test to'xtatildi — {$count} ta kompyuter kutish ekraniga qaytadi. Boshlangan urinishlar o'z vaqtida topshiriladi.");
+    }
+
+    /**
+     * "Boshlash" oynasi uchun ro'yxatdagi kompyuterlar: xona, onlayn holati va
+     * qaysi testga berilgani (o'qituvchi faqat bo'sh yoki o'z testidagini tanlaydi).
+     */
+    private function kioskDevices(): array
+    {
+        if (!Schema::hasTable('test_kiosk_devices') || !Schema::hasColumn('test_kiosk_devices', 'room')) {
+            return [];
+        }
+
+        return TestKioskDevice::query()
+            ->whereNull('revoked_at')
+            ->with('assignedTest:id,name,is_active')
+            ->orderByRaw("COALESCE(room, '') = ''")
+            ->orderBy('room')
+            ->orderBy('name')
+            ->get()
+            ->map(function (TestKioskDevice $d) {
+                // O'chirilgan/yopilgan testga berilgani — bo'sh
+                $assigned = $d->assignedTest && $d->assignedTest->is_active ? $d->assignedTest : null;
+
+                return [
+                    'id' => $d->id,
+                    'name' => $d->name,
+                    'room' => $d->roomLabel(),
+                    'online' => $d->isOnline(),
+                    'assigned_test_id' => $assigned ? (int) $assigned->id : null,
+                    'assigned_test_name' => $assigned?->name,
+                    'assigned_by' => $assigned ? $d->assigned_by_name : null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -309,6 +418,11 @@ class FanTestiController extends Controller
 
         foreach ($fanTesti->questions ?? [] as $question) {
             $this->deleteQuestionImage($question['image_path'] ?? null);
+        }
+
+        if (Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')) {
+            TestKioskDevice::where('assigned_fan_testi_id', $fanTesti->id)
+                ->update(['assigned_fan_testi_id' => null, 'assigned_at' => null, 'assigned_by_name' => null]);
         }
 
         $fanTesti->delete();

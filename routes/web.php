@@ -100,6 +100,10 @@ Route::get('/test-kompyuter', [\App\Http\Controllers\TestDeviceController::class
 Route::post('/test-kompyuter', [\App\Http\Controllers\TestDeviceController::class, 'store'])->name('test-devices.store');
 Route::post('/test-kompyuter/forget', [\App\Http\Controllers\TestDeviceController::class, 'forget'])->name('test-devices.forget');
 Route::post('/test-kompyuter/{device}/revoke', [\App\Http\Controllers\TestDeviceController::class, 'revoke'])->name('test-devices.revoke');
+Route::post('/test-kompyuter/{device}/release', [\App\Http\Controllers\TestDeviceController::class, 'release'])->name('test-devices.release');
+// Sinf kompyuteridagi kutish ekrani: o'qituvchi test berganda o'zi ochadi
+Route::get('/test-kompyuter/kutish', [\App\Http\Controllers\TestDeviceController::class, 'wait'])->name('test-devices.wait');
+Route::get('/test-kompyuter/holat', [\App\Http\Controllers\TestDeviceController::class, 'status'])->name('test-devices.status');
 
 Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')
     ->middleware([\App\Http\Middleware\UniversityNetworkOnly::class, \App\Http\Middleware\RegisteredTestDevice::class])
@@ -1857,6 +1861,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::put('/{fanTesti}/questions/{question}', [FanTestiController::class, 'updateQuestion'])->name('questions.update');
                 Route::delete('/{fanTesti}/questions/{question}', [FanTestiController::class, 'destroyQuestion'])->name('questions.destroy');
                 Route::post('/{fanTesti}/toggle-active', [FanTestiController::class, 'toggleActive'])->name('toggle-active');
+                Route::post('/{fanTesti}/launch', [FanTestiController::class, 'launch'])->name('launch');
+                Route::post('/{fanTesti}/stop', [FanTestiController::class, 'stopLaunch'])->name('stop');
                 Route::post('/{fanTesti}/attach-subject', [FanTestiController::class, 'attachSubject'])->name('attach-subject');
                 Route::get('/{fanTesti}/preview', [FanTestiController::class, 'preview'])->name('preview');
                 Route::post('/{fanTesti}/preview', [FanTestiController::class, 'previewSubmit'])->name('preview.submit');

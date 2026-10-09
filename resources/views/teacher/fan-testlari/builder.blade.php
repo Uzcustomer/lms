@@ -609,6 +609,30 @@
     .bl-headnum b, .bl-num, .bl-slot-no, .bl-pair-no, .bl-step-no, .bl-pick span { font-weight: 600; }
     /* Raqamlar bir xil kenglikda tursin — jadval va hisoblagichlar tekis */
     .bl-headnum b, .bl-num, .bl-panel-count, .bl-slot-no, .bl-table td { font-variant-numeric: tabular-nums; }
+
+    /* ---- Kompyuterlarda boshlash oynasi ---- */
+    .bl-btn-launch { background: #1d4ed8; color: #fff; box-shadow: 0 4px 12px rgba(29, 78, 216, .22); }
+    .bl-btn-launch:hover { background: #1e40af; }
+    .bl-run-badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 8px; border-radius: 999px; background: #dbeafe; color: #1e40af; font-size: 11.5px; font-weight: 700; }
+    .bl-run-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #2563eb; }
+    .lm-box { width: min(760px, 100%); }
+    .lm-body { max-height: min(62vh, 560px); overflow-y: auto; padding: 16px 22px; display: grid; gap: 12px; }
+    .lm-room { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .lm-room-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; background: #f5f8fc; border-bottom: 1px solid var(--line); cursor: pointer; }
+    .lm-room-head label { display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--navy); font-size: 14.5px; font-weight: 700; }
+    .lm-room-head small { color: var(--muted); font-size: 12px; }
+    .lm-devs { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; padding: 10px; }
+    .lm-dev { display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; cursor: pointer; }
+    .lm-dev:hover { border-color: #93c5fd; }
+    .lm-dev.is-busy { background: #f8fafc; cursor: not-allowed; opacity: .75; }
+    .lm-dev.is-mine { border-color: #93c5fd; background: #eff6ff; }
+    .lm-dev input, .lm-room-head input { width: 17px; height: 17px; margin-top: 1px; accent-color: #1d4ed8; flex: none; }
+    .lm-dev b { display: block; color: var(--ink); font-size: 13.5px; font-weight: 700; }
+    .lm-dev span { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+    .lm-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #cbd5e1; vertical-align: 1px; }
+    .lm-dot.on { background: #16a34a; }
+    .lm-count { margin-right: auto; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+    .lm-empty { padding: 26px 10px; color: var(--muted); font-size: 13.5px; text-align: center; }
 </style>
 
 @php
@@ -935,6 +959,10 @@
                                         <span class="bl-pill draft">Qoralama</span>
                                     @else
                                         <span class="bl-pill {{ $item->is_active ? 'ok' : 'off' }}">{{ $item->is_active ? 'Ochiq' : 'Yopiq' }}</span>
+                                        @php $runCount = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->count(); @endphp
+                                        @if($runCount > 0)
+                                            <div><span class="bl-run-badge">{{ $runCount }} ta kompyuterda</span></div>
+                                        @endif
                                     @endif
                                 </td>
                                 <td style="text-align:right">
@@ -950,6 +978,20 @@
                                                     data-attach-name="{{ $item->name }}"
                                                     data-attach-url="{{ route('teacher.fan-testlari.attach-subject', $item) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Biriktirish</button>
                                         @elseif($item->questionCount() > 0)
+                                            @php $runningHere = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->count(); @endphp
+                                            @if(!empty($kioskDevices))
+                                                <button type="button" class="bl-btn bl-btn-launch bl-btn-sm lm-open"
+                                                        data-test-id="{{ $item->id }}"
+                                                        data-test-name="{{ $item->name }}"
+                                                        data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
+                                                        title="Xonadagi kompyuterlarni tanlab testni boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kompyuterlarda boshlash</button>
+                                            @endif
+                                            @if($runningHere > 0)
+                                                <form method="POST" action="{{ route('teacher.fan-testlari.stop', $item) }}" onsubmit="return confirm('Test {{ $runningHere }} ta kompyuterda to\'xtatilsinmi? Kompyuterlar kutish ekraniga qaytadi.')">
+                                                    @csrf
+                                                    <button class="bl-btn bl-btn-warn bl-btn-sm" title="Kompyuterlarni kutish ekraniga qaytarish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>To'xtatish ({{ $runningHere }})</button>
+                                                </form>
+                                            @endif
                                             @if($item->is_active)
                                                 <a href="{{ route('kiosk.fan-testi.show', $item) }}" target="_blank" class="bl-btn bl-btn-ok bl-btn-sm" title="Talabalar uchun test sahifasini ochish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Ochish</a>
                                                 <form method="POST" action="{{ route('teacher.fan-testlari.toggle-active', $item) }}" onsubmit="return confirm('Test sahifasi yopilsinmi? Talabalar havola orqali kira olmaydi.')">
@@ -1048,6 +1090,116 @@
         };
     }
 </script>
+
+    {{-- Kompyuterlarda boshlash: xona bo'yicha kompyuterlarni tanlash --}}
+    <div class="bl bl-modal" id="launchModal">
+        <form method="POST" action="" class="bl-modal-box lm-box" id="launchForm">
+            @csrf
+            <div class="bl-modal-head">
+                <span class="bl-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+                <div>
+                    <h3>Kompyuterlarda testni boshlash</h3>
+                    <p id="launchTestName"></p>
+                </div>
+            </div>
+            <div class="lm-body" id="launchRooms"></div>
+            <div class="bl-modal-foot">
+                <span class="lm-count" id="launchCount">0 ta kompyuter tanlandi</span>
+                <button type="button" class="bl-btn bl-btn-ghost" id="launchCancel">Bekor qilish</button>
+                <button type="submit" class="bl-btn bl-btn-launch" id="launchSubmit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Boshlash</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+    (() => {
+        const DEVICES = @json($kioskDevices ?? []);
+        const modal = document.getElementById('launchModal');
+        const form = document.getElementById('launchForm');
+        const box = document.getElementById('launchRooms');
+        const countEl = document.getElementById('launchCount');
+        const submit = document.getElementById('launchSubmit');
+        if (!modal || !form) return;
+
+        const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        function refresh() {
+            const picked = box.querySelectorAll('input[name="device_ids[]"]:checked').length;
+            countEl.textContent = picked + ' ta kompyuter tanlandi';
+            submit.disabled = picked === 0;
+            box.querySelectorAll('.lm-room').forEach((room) => {
+                const all = room.querySelectorAll('input[name="device_ids[]"]:not(:disabled)');
+                const on = room.querySelectorAll('input[name="device_ids[]"]:not(:disabled):checked');
+                const head = room.querySelector('.lm-room-all');
+                head.checked = all.length > 0 && on.length === all.length;
+                head.indeterminate = on.length > 0 && on.length < all.length;
+                head.disabled = all.length === 0;
+            });
+        }
+
+        function render(testId) {
+            const rooms = {};
+            DEVICES.forEach((d) => { (rooms[d.room] = rooms[d.room] || []).push(d); });
+            const names = Object.keys(rooms);
+            if (!names.length) {
+                box.innerHTML = '<div class="lm-empty">Ro\'yxatdan o\'tgan kompyuter yo\'q. Administrator /test-kompyuter sahifasida kompyuterlarni xonasi bilan ro\'yxatdan o\'tkazadi.</div>';
+                return;
+            }
+            box.innerHTML = names.map((room) => {
+                const list = rooms[room];
+                const online = list.filter((d) => d.online).length;
+                const title = room === 'Xonasiz' ? 'Xona belgilanmagan' : esc(room) + '-xona';
+                const devs = list.map((d) => {
+                    const mine = d.assigned_test_id === testId;
+                    const busy = d.assigned_test_id && !mine;
+                    const sub = busy
+                        ? 'Band: ' + esc(d.assigned_test_name || 'boshqa test') + (d.assigned_by ? ' · ' + esc(d.assigned_by) : '')
+                        : (mine ? 'Shu test ochiq' : '<i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + (d.online ? 'Kutish ekranida' : 'Oflayn'));
+                    return '<label class="lm-dev' + (busy ? ' is-busy' : '') + (mine ? ' is-mine' : '') + '">'
+                        + '<input type="checkbox" name="device_ids[]" value="' + d.id + '"' + (busy ? ' disabled' : '') + (mine ? ' checked' : '') + '>'
+                        + '<div><b>' + esc(d.name) + '</b><span>' + sub + '</span></div></label>';
+                }).join('');
+                return '<div class="lm-room"><div class="lm-room-head"><label><input type="checkbox" class="lm-room-all">'
+                    + title + '</label><small>' + list.length + ' ta · ' + online + ' ta onlayn</small></div>'
+                    + '<div class="lm-devs">' + devs + '</div></div>';
+            }).join('');
+        }
+
+        document.addEventListener('click', (ev) => {
+            const open = ev.target.closest ? ev.target.closest('.lm-open') : null;
+            if (open) {
+                const testId = parseInt(open.dataset.testId, 10);
+                form.action = open.dataset.launchUrl;
+                document.getElementById('launchTestName').textContent = open.dataset.testName || '';
+                render(testId);
+                refresh();
+                modal.classList.add('is-open');
+                return;
+            }
+            if (ev.target === modal || ev.target.id === 'launchCancel') {
+                modal.classList.remove('is-open');
+            }
+        });
+
+        // Xona belgisi — xonadagi barcha bo'sh kompyuterlarni tanlash/olib tashlash
+        box.addEventListener('change', (ev) => {
+            if (ev.target.classList.contains('lm-room-all')) {
+                const room = ev.target.closest('.lm-room');
+                room.querySelectorAll('input[name="device_ids[]"]:not(:disabled)').forEach((cb) => { cb.checked = ev.target.checked; });
+            }
+            refresh();
+        });
+
+        form.addEventListener('submit', () => {
+            submit.disabled = true;
+            submit.lastChild.textContent = 'Boshlanmoqda...';
+        });
+
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') modal.classList.remove('is-open');
+        });
+    })();
+    </script>
 
     {{-- Qoralamaga fan biriktirish --}}
     <div class="bl bl-modal" id="attachModal">

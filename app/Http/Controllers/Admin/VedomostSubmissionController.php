@@ -172,6 +172,14 @@ class VedomostSubmissionController extends Controller
         if ($request->filled('semester_code')) {
             $query->where('vs.semester_code', $request->semester_code);
         }
+        // Joriy semestr (standart yoqilgan): faqat guruhlar hozir o'qiyotgan
+        // semestr va o'sha o'quv yilining vedomostlari — o'tgan semestrlar yashiriladi.
+        if ($request->get('current_semester', '1') === '1') {
+            $pairs = $this->currentYearSemesterPairs();
+            if (!empty($pairs)) {
+                $query->whereIn(DB::raw("CONCAT(vs.education_year, '|', vs.semester_code)"), $pairs);
+            }
+        }
         if ($request->filled('subject_name')) {
             $query->where('vs.subject_name', 'like', '%' . $request->subject_name . '%');
         }
@@ -203,6 +211,47 @@ class VedomostSubmissionController extends Controller
         }
 
         return [$query, $educationTypes, $selectedEducationType];
+    }
+
+    /**
+     * Hozirgi "o'quv yili|semestr kodi" juftliklari: har guruhning joriy
+     * semestri talabalar jadvalidan (VedomostSubmissionService bilan bir xil),
+     * o'quv yili esa o'sha reja+semestrning semesters yozuvidan.
+     */
+    private function currentYearSemesterPairs(): array
+    {
+        static $pairs = null;
+        if ($pairs !== null) {
+            return $pairs;
+        }
+
+        $semByGroup = $this->service->currentSemestersByGroup();
+        if ($semByGroup->isEmpty()) {
+            return $pairs = [];
+        }
+
+        $groupCurricula = DB::table('groups')
+            ->whereIn('group_hemis_id', $semByGroup->keys()->all())
+            ->whereNotNull('curriculum_hemis_id')
+            ->pluck('curriculum_hemis_id', 'group_hemis_id');
+
+        $years = DB::table('semesters')
+            ->whereIn('curriculum_hemis_id', $groupCurricula->unique()->values()->all())
+            ->get(['curriculum_hemis_id', 'code', 'education_year'])
+            ->keyBy(fn ($s) => $s->curriculum_hemis_id . '|' . $s->code)
+            ->map(fn ($s) => $s->education_year);
+
+        $currentYear = $this->service->currentEducationYear();
+        $result = [];
+        foreach ($semByGroup as $groupId => $sem) {
+            $curriculum = $groupCurricula[$groupId] ?? null;
+            $year = $curriculum !== null ? ($years[$curriculum . '|' . $sem->code] ?? $currentYear) : $currentYear;
+            if ($year) {
+                $result[$year . '|' . $sem->code] = true;
+            }
+        }
+
+        return $pairs = array_keys($result);
     }
 
     /**

@@ -7,7 +7,10 @@ use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\Department;
 use Illuminate\Http\Request;
+use App\Jobs\SyncVedomostSubmissionsJob;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ClosingFormController extends Controller
 {
@@ -238,9 +241,38 @@ class ClosingFormController extends Controller
             }
         });
 
+        $this->queueVedomostSync();
+
         return redirect()
             ->route('admin.closing-form.index', $request->query())
-            ->with('success', "Yopilish shakli muvaffaqiyatli saqlandi.");
+            ->with('success', "Yopilish shakli muvaffaqiyatli saqlandi. Vedomost topshirish ro'yxati bir necha daqiqada avtomatik yangilanadi.");
+    }
+
+    /**
+     * Yopilish shakli o'zgargach vedomost ro'yxatini fonda yangilash.
+     * Ketma-ket saqlashlar bitta ishga yig'iladi (30 soniya kechikish);
+     * sinxronlash ishlab turgan bo'lsa, tugagach yana bir marta ishga tushadi.
+     */
+    private function queueVedomostSync(): void
+    {
+        try {
+            if (Cache::has('vedomost_submission_sync_lock')) {
+                Cache::put('vedomost_submission_sync_rerun', true, now()->addHours(2));
+                return;
+            }
+            if (!Cache::add('vedomost_submission_sync_queued', true, now()->addMinutes(15))) {
+                return;
+            }
+            Cache::put('vedomost_submission_sync_progress', [
+                'status' => 'queued',
+                'message' => "Yopilish shakli o'zgardi — vedomost ro'yxati yangilanishi navbatga qo'yildi.",
+                'updated_at' => now()->toDateTimeString(),
+            ], now()->addHours(2));
+            SyncVedomostSubmissionsJob::dispatch()->delay(now()->addSeconds(30));
+        } catch (\Throwable $e) {
+            // Navbat ishlamasa ham saqlash buzilmasin — ertalabki 06:00 sync baribir yangilaydi.
+            Log::warning('Vedomost sync navbatga qo\'yilmadi: ' . $e->getMessage());
+        }
     }
 
     public function getSpecialties(Request $request)

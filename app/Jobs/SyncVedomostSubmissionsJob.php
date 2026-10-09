@@ -21,8 +21,11 @@ class SyncVedomostSubmissionsJob implements ShouldQueue
     {
         $lockKey = 'vedomost_submission_sync_lock';
         $progressKey = 'vedomost_submission_sync_progress';
+        Cache::forget('vedomost_submission_sync_queued');
 
         if (Cache::has($lockKey)) {
+            // Boshqa sync ishlab turibdi — u tugagach yangi o'zgarishlar uchun yana ishlaydi
+            Cache::put('vedomost_submission_sync_rerun', true, now()->addHours(2));
             return;
         }
 
@@ -52,6 +55,10 @@ class SyncVedomostSubmissionsJob implements ShouldQueue
             throw $e;
         } finally {
             Cache::forget($lockKey);
+            // Sync paytida yopilish shakli o'zgargan bo'lsa — yana bir marta
+            if (Cache::pull('vedomost_submission_sync_rerun')) {
+                static::dispatch()->delay(now()->addSeconds(10));
+            }
         }
     }
 }

@@ -172,6 +172,18 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="filter-item" style="min-width:170px;">
+                                <label class="filter-label">&nbsp;</label>
+                                {{-- Standart yoqilgan: o'chirilganda yashirin "0" yuboriladi --}}
+                                <input type="hidden" name="current_semester" value="0">
+                                <label class="vs-switch" title="Faqat guruhlar hozir o'qiyotgan semestr vedomostlari">
+                                    <input type="checkbox" name="current_semester" value="1" id="current_semester"
+                                           {{ request('current_semester', '1') === '1' ? 'checked' : '' }}
+                                           onchange="this.form.submit()">
+                                    <span class="vs-switch-track" aria-hidden="true"><span class="vs-switch-thumb"></span></span>
+                                    Joriy semestr
+                                </label>
+                            </div>
                             <div class="filter-item" style="min-width:150px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;height:36px;">
@@ -666,5 +678,13 @@
         #manual-open-modal .select2-container {
             width: 100% !important;
         }
+            /* Joriy semestr toggle */
+        .vs-switch { display: flex; align-items: center; gap: 8px; height: 36px; font-size: 13px; font-weight: 600; color: #334155; cursor: pointer; user-select: none; }
+        .vs-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+        .vs-switch-track { position: relative; flex: none; width: 38px; height: 22px; border-radius: 999px; background: #cbd5e1; transition: background .18s; }
+        .vs-switch-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .18s; }
+        .vs-switch input:checked + .vs-switch-track { background: #16a34a; }
+        .vs-switch input:checked + .vs-switch-track .vs-switch-thumb { transform: translateX(16px); }
+        .vs-switch input:focus-visible + .vs-switch-track { outline: 2px solid #2563eb; outline-offset: 2px; }
     </style>
 </x-app-layout>

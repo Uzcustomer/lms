@@ -73,7 +73,7 @@ class StudentComplaintController extends Controller
 
         return redirect()
             ->route('student.complaints.index')
-            ->with('success', __("Shikoyatingiz yuborildi. Registrator ofisi ko'rib chiqadi."));
+            ->with('success', __("Shikoyatingiz yuborildi. Mas'ul xodimlar ko'rib chiqadi."));
     }
 
     /** Talaba o'z shikoyatidagi rasmni ko'radi. */

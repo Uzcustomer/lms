@@ -70,7 +70,7 @@
 
         <div class="cp-card">
             <h3>{{ __('Shikoyat yuborish') }}</h3>
-            <p class="cp-lead">{{ __("Muammoingizni yozing va kerak bo'lsa rasm biriktiring. Shikoyat registrator ofisiga yuboriladi, xodimlar siz bilan telefon orqali bog'lanadi.") }}</p>
+            <p class="cp-lead">{{ __("Muammoingizni yozing va kerak bo'lsa rasm biriktiring. Shikoyatingiz mas'ul xodimlarga yuboriladi, ular siz bilan telefon orqali bog'lanadi.") }}</p>
 
             <form method="POST" action="{{ route('student.complaints.store') }}" enctype="multipart/form-data" id="cpForm">
                 @csrf

@@ -38,8 +38,7 @@ class StudentComplaintNotifier
                 . ($complaint->student_id_number ? "🆔 ID: {$complaint->student_id_number}\n" : '')
                 . "📞 Telefon: {$complaint->phone}\n\n"
                 . "📝 " . mb_substr($complaint->message, 0, 3000) . "\n\n"
-                . (count($images) ? '🖼 Rasmlar: ' . count($images) . " ta (quyida)\n" : '')
-                . '🔗 ' . route('admin.student-complaints.index');
+                . (count($images) ? '🖼 Rasmlar: ' . count($images) . ' ta (quyida)' : '');
 
             $telegram->notifyChat($chatId, $text);
 

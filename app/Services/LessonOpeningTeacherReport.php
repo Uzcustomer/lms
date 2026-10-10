@@ -79,7 +79,11 @@ class LessonOpeningTeacherReport
         // pastSlots/markedPairs yuqori chegarani ISTISNOLI (< $upper) oladi
         $upper = Carbon::parse($to)->addDay()->toDateString();
 
+        $timings = [];
+        $started = microtime(true);
         $slots = $this->missed->pastSlots($from, $upper);
+        $timings['slots'] = round(microtime(true) - $started, 2);
+        $timings['slot_rows'] = $slots->count();
         $openings = LessonOpening::query()
             ->whereDate('lesson_date', '>=', $from)
             ->whereDate('lesson_date', '<=', $to)
@@ -96,7 +100,11 @@ class LessonOpeningTeacherReport
         $subjectIds = $slots->pluck('subject_id')->merge($openings->pluck('subject_id'))->unique()->values()->all();
         // $slots ham uzatiladi: bahosi umuman yo'q juftliklarda ham
         // "nechta talabada baho yo'q" soni to'g'ri chiqsin.
+        $started = microtime(true);
         $analysis = $groupIds ? $this->missed->analyzePairs($groupIds, $subjectIds, $from, $upper, $slots) : ['marked' => [], 'missing' => []];
+        $timings += $this->missed->lastTimings;
+        $timings['analyze'] = round(microtime(true) - $started, 2);
+        $assembleStarted = microtime(true);
         $marked = $analysis['marked'];
         $missing = $analysis['missing']; // pairKey => [baho qo'yilmagan talaba hemis_id => true]
 
@@ -434,6 +442,7 @@ class LessonOpeningTeacherReport
             'teachers' => $teachers,
             'days' => $days,
             'students' => $this->studentRows($records, $people),
+            'timings' => $timings + ['assemble' => round(microtime(true) - $assembleStarted, 2)],
         ];
     }
 

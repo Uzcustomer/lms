@@ -52,11 +52,18 @@ class SendUnratedExcelReport extends Command
         }
 
         $this->info("Hisoblanmoqda: {$from} — {$to}");
+        $started = microtime(true);
         $data = $report->build($from, $to);
+        $timings = ($data['timings'] ?? []) + ['build_total' => round(microtime(true) - $started, 2)];
+        $started = microtime(true);
 
         $relative = "exports/unrated_excel/baho-qoyilmaganlar_{$from}_{$to}.xlsx";
         Excel::store(new LessonOpeningTeacherReportExport($data), $relative, 'local');
         $path = Storage::disk('local')->path($relative);
+        $timings['excel'] = round(microtime(true) - $started, 2);
+        $timings['student_rows'] = count($data['students'] ?? []);
+        $timings['day_rows'] = count($data['days'] ?? []);
+        $started = microtime(true);
 
         $header = "📊 Baho qo'yilmaganlar hisoboti (Excel)\n"
             . '📅 ' . Carbon::parse($from)->format('d.m.Y') . ' — ' . Carbon::parse($to)->format('d.m.Y') . "\n"
@@ -84,7 +91,22 @@ class SendUnratedExcelReport extends Command
         $this->line($managers);
 
         @unlink($path);
-        Log::info('[UnratedExcel] Yuborildi', ['from' => $from, 'to' => $to, 'sent' => $sent, 'targets' => count($targets)]);
+        $timings['send'] = round(microtime(true) - $started, 2);
+
+        // Qaysi bosqich sekin ekanini ko'rish uchun (soniya / qator soni)
+        $labels = [
+            'slots' => "Dars jadvali (o'tgan darslar), s", 'slot_rows' => 'Jadval qatorlari',
+            'grades' => 'Baholar so\'rovi, s', 'grade_rows' => 'Baho qatorlari',
+            'roster' => 'Talabalar ro\'yxati, s', 'analyze' => 'Baholarni tahlil (jami), s',
+            'assemble' => 'Hisobotni yig\'ish, s', 'build_total' => 'Hisob jami, s',
+            'excel' => 'Excel yozish, s', 'student_rows' => 'Talabalar varag\'i qatorlari',
+            'day_rows' => 'Kunlar varag\'i qatorlari', 'send' => 'Telegramga yuborish, s',
+        ];
+        $this->table(['Bosqich', 'Qiymat'], collect($labels)
+            ->filter(fn ($label, $key) => array_key_exists($key, $timings))
+            ->map(fn ($label, $key) => [$label, $timings[$key]])
+            ->values()->all());
+        Log::info('[UnratedExcel] Yuborildi', ['from' => $from, 'to' => $to, 'sent' => $sent, 'targets' => count($targets), 'timings' => $timings]);
 
         return $sent > 0 ? self::SUCCESS : self::FAILURE;
     }

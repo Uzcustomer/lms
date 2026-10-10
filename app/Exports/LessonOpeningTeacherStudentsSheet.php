@@ -123,12 +123,18 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
                     LessonOpeningTeacherReport::LABELS[LessonOpeningTeacherReport::REJECTED] => 'B3261E',
                     LessonOpeningTeacherReport::LABELS[LessonOpeningTeacherReport::NO_REQUEST] => '64748B',
                 ];
-                for ($row = 2; $row <= $last; $row++) {
-                    $color = $colors[(string) $sheet->getCell("{$sc}{$row}")->getValue()] ?? null;
-                    if ($color) {
-                        $sheet->getStyle("{$sc}{$row}")->getFont()->setBold(true)->getColor()->setRGB($color);
-                    }
+                // Har qatorga alohida uslub o'n minglab qatorda sekin edi — butun
+                // ustunga holat bo'yicha shartli formatlash bir marta qo'yiladi.
+                $rules = [];
+                foreach ($colors as $label => $color) {
+                    $rule = new \PhpOffice\PhpSpreadsheet\Style\Conditional();
+                    $rule->setConditionType(\PhpOffice\PhpSpreadsheet\Style\Conditional::CONDITION_CELLIS)
+                        ->setOperatorType(\PhpOffice\PhpSpreadsheet\Style\Conditional::OPERATOR_EQUAL)
+                        ->addCondition('"' . str_replace('"', '""', $label) . '"');
+                    $rule->getStyle()->getFont()->setBold(true)->getColor()->setRGB($color);
+                    $rules[] = $rule;
                 }
+                $sheet->getStyle("{$sc}2:{$sc}{$last}")->setConditionalStyles($rules);
 
                 $sheet->getStyle("A1:{$lc}{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
             },

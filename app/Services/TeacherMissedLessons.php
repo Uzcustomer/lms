@@ -248,10 +248,15 @@ class TeacherMissedLessons
      * @return array{marked: array<string,true>, missing: array<string,array<string,true>>}
      *                missing: pairKey => [baho qo'yilmagan talaba hemis_id => true]
      */
+    /** Oxirgi analyzePairs bosqichlari vaqti (soniya) — sekinlikni aniqlash uchun. */
+    public array $lastTimings = [];
+
     public function analyzePairs(array $groupIds, array $subjectIds, string $from, string $today, iterable $slots = []): array
     {
         // 1. Har juftlikda ishlov berilgan (baho yoki NB olgan) distinct talabalar
         $processedSets = [];
+        $started = microtime(true);
+        $gradeRows = 0;
 
         // "Hisobga olingan" shartini SQL bajaradi: jadvalda 17 mln+ qator bor va
         // hammasini PHP ga tortib olish hisobotning asosiy sekinligi edi. Endi
@@ -272,10 +277,13 @@ class TeacherMissedLessons
             // qo'shib qayta saralar edi; cursor() bitta so'rov bilan kifoya
             // qiladi va qatorlarni birma-bir beradi (xotira o'smaydi).
             ->cursor()
-            ->each(function ($row) use (&$processedSets) {
+            ->each(function ($row) use (&$processedSets, &$gradeRows) {
+                $gradeRows++;
                 $pk = $this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code);
                 $processedSets[$pk][$row->student_hemis_id] = true;
             });
+        $this->lastTimings['grades'] = round(microtime(true) - $started, 2);
+        $this->lastTimings['grade_rows'] = $gradeRows;
 
         // 2. Jadvaldagi juftliklar: bahosi umuman yo'qlari ham ro'yxatga kirsin.
         //    Aks holda ular $processedSets da bo'lmaydi va "nechta talabada baho
@@ -286,7 +294,9 @@ class TeacherMissedLessons
         }
 
         // 3. Guruh+fan+semestr bo'yicha faol talabalar ro'yxati
+        $started = microtime(true);
         [$bySubject, $byGroup] = $this->activeStudentTotals($groupIds, $subjectIds, $from, $today);
+        $this->lastTimings['roster'] = round(microtime(true) - $started, 2);
 
         $marked = [];
         $missing = [];

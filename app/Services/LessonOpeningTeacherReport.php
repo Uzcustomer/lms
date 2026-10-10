@@ -302,7 +302,10 @@ class LessonOpeningTeacherReport
             }
         }
 
-        return $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($to));
+        $data = $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($to));
+        $data['timings'] = $timings + ['assemble' => round(microtime(true) - $assembleStarted, 2)];
+
+        return $data;
     }
 
     /**
@@ -442,7 +445,6 @@ class LessonOpeningTeacherReport
             'teachers' => $teachers,
             'days' => $days,
             'students' => $this->studentRows($records, $people),
-            'timings' => $timings + ['assemble' => round(microtime(true) - $assembleStarted, 2)],
         ];
     }
 

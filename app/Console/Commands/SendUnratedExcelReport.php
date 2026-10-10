@@ -118,6 +118,8 @@ class SendUnratedExcelReport extends Command
      * talabaning fakulteti, yo'nalishi va kursi bo'yicha topiladi
      * (StaffRegistrationDivision::findForStudent — talaba kartasidagi bilan
      * bir xil). Talaba bir necha darsda baholanmagan bo'lsa ham bir marta sanaladi.
+     * Dars kunlari "Kunlar" varag'i qatorlari bilan bir xil birlikda: guruh + fan
+     * + sana + o'qituvchi (yig'indisi umumiy "baholanmagan dars kunlari" ga teng).
      */
     private function managerSummary(array $studentRows): string
     {
@@ -131,11 +133,12 @@ class SendUnratedExcelReport extends Command
             ->keyBy(fn ($row) => (string) $row->hemis_id);
 
         $divisions = [];   // "fakultet|yo'nalish|kurs" => biriktirma yoki null
-        $byManager = [];   // teacher_id => [name, students => [hemis => true], cases]
-        $unassigned = ['students' => [], 'cases' => 0];
+        $byManager = [];   // teacher_id => [name, students => [hemis => true], days => [kun => true]]
+        $unassigned = ['students' => [], 'days' => []];
 
         foreach ($studentRows as $row) {
             $hemisId = (string) $row['student_hemis_id'];
+            $dayKey = $row['group'] . '|' . $row['subject'] . '|' . $row['date'] . '|' . $row['teacher'];
             $student = $students[$hemisId] ?? null;
             $division = null;
             if ($student && $student->department_id) {
@@ -150,7 +153,7 @@ class SendUnratedExcelReport extends Command
 
             if (!$division) {
                 $unassigned['students'][$hemisId] = true;
-                $unassigned['cases']++;
+                $unassigned['days'][$dayKey] = true;
                 continue;
             }
 
@@ -160,11 +163,11 @@ class SendUnratedExcelReport extends Command
                 $byManager[$teacherId] = [
                     'name' => $teacher?->full_name ?: ($teacher?->short_name ?: "Xodim #{$teacherId}"),
                     'students' => [],
-                    'cases' => 0,
+                    'days' => [],
                 ];
             }
             $byManager[$teacherId]['students'][$hemisId] = true;
-            $byManager[$teacherId]['cases']++;
+            $byManager[$teacherId]['days'][$dayKey] = true;
         }
 
         uasort($byManager, fn ($a, $b) => count($b['students']) <=> count($a['students']));
@@ -173,11 +176,11 @@ class SendUnratedExcelReport extends Command
         $i = 1;
         foreach ($byManager as $manager) {
             $lines[] = $i++ . '. ' . $manager['name'] . "\n    " . count($manager['students'])
-                . " ta talabaga baho qo'yilmagan (" . $manager['cases'] . ' ta dars)';
+                . " ta talabaga baho qo'yilmagan · " . count($manager['days']) . ' ta dars kuni';
         }
         if ($unassigned['students']) {
             $lines[] = "⚠️ Mas'ul biriktirilmagan: " . count($unassigned['students'])
-                . " ta talaba (" . $unassigned['cases'] . ' ta dars)';
+                . " ta talaba · " . count($unassigned['days']) . ' ta dars kuni';
         }
 
         return implode("\n", $lines);

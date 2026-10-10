@@ -1432,7 +1432,11 @@ class VedomostSubmissionService
     /**
      * Deadline uchun asos sana:
      *  - sinov / normativ → oxirgi dars sanasi (schedules.MAX(lesson_date))
-     *  - test / oski / oski_test → oxirgi YN sanasi (exam_schedules)
+     *  - oski → OSKI sanasi (exam_schedules)
+     *  - test / oski_test → test sanasi (exam_schedules); oski_test da test
+     *    qo'yilmaydigan (N/A) bo'lsa — OSKI sanasi.
+     *  Imtihonli fanlarda dars jadvaliga qaralmaydi: keyingi darslar hali
+     *  jadvalga qo'yilmagan bo'lishi mumkin.
      *
      * @return array{type:?string, date:?string}
      */
@@ -1463,17 +1467,20 @@ class VedomostSubmissionService
                 ->where('semester_code', $semCode)
                 ->first();
 
-            $dates = [];
+            $date = null;
             if ($exam) {
-                if (in_array($cf, ['oski', 'oski_test'], true) && !$exam->oski_na && $exam->oski_date) {
-                    $dates[] = $exam->oski_date->toDateString();
-                }
-                if (in_array($cf, ['test', 'oski_test'], true) && !$exam->test_na && $exam->test_date) {
-                    $dates[] = $exam->test_date->toDateString();
-                }
+                $oskiDate = !$exam->oski_na && $exam->oski_date ? $exam->oski_date->toDateString() : null;
+                $testDate = !$exam->test_na && $exam->test_date ? $exam->test_date->toDateString() : null;
+
+                $date = match ($cf) {
+                    'oski' => $oskiDate,
+                    'test' => $testDate,
+                    // OSKI+test — vedomost test sanasidan; test N/A bo'lsa OSKI dan
+                    'oski_test' => $exam->test_na ? $oskiDate : $testDate,
+                };
             }
 
-            return ['type' => 'exam', 'date' => !empty($dates) ? max($dates) : null];
+            return ['type' => 'exam', 'date' => $date];
         }
 
         return ['type' => null, 'date' => null];

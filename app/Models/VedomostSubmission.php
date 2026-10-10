@@ -110,6 +110,18 @@ class VedomostSubmission extends Model
         'manual_opened_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        // Muddat o'zgarsa (yangi dars/imtihon sanasi qo'yildi) — ogohlantirish
+        // bosqichini tiklaymiz, yangi muddat bo'yicha xabar qaytadan ketadi.
+        static::updating(function (VedomostSubmission $v) {
+            if ($v->isDirty('deadline')) {
+                $v->warning_stage = null;
+                $v->warned_at = null;
+            }
+        });
+    }
+
     public function curriculumSubject()
     {
         return $this->belongsTo(CurriculumSubject::class, 'curriculum_subject_id');

@@ -3583,6 +3583,8 @@ class AcademicScheduleController extends Controller
         // (per-student emas) — assign() ichidagi override pass shaxsiy
         // vaqtlarni qo'llaydi. "groupId|yn" kalit bilan dedup qilinadi.
         $assignReassign = [];
+        // Guruh 1-urinish OSKI/test sanasi saqlanganda — vedomost muddati xabari
+        $vedomostNotices = [];
         try {
             foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
@@ -3938,6 +3940,17 @@ class AcademicScheduleController extends Controller
                     }
                 }
 
+                // Guruh 1-urinish sanasi saqlandi — vedomost muddati xabari
+                // (yopilish shakliga mosligini job o'zi tekshiradi)
+                if (!$studentHemisIdForRow && $rowUrinish === 1) {
+                    if (array_key_exists('oski_date', $auditDirty) && $record->oski_date && !$record->oski_na) {
+                        $vedomostNotices[] = [$record->id, 'oski'];
+                    }
+                    if (array_key_exists('test_date', $auditDirty) && $record->test_date && !$record->test_na) {
+                        $vedomostNotices[] = [$record->id, 'test'];
+                    }
+                }
+
                 // Sana belgilangan bo'lsa — yn_submission(attempt=2/3) ni avtomatik yaratish
                 $this->autoOpenAttemptIfNeeded($record, 2, $resitOpened12a, $userId);
                 $this->autoOpenAttemptIfNeeded($record, 3, $resitOpened12b, $userId);
@@ -3999,6 +4012,9 @@ class AcademicScheduleController extends Controller
             // schedule id bo'yicha (assign() per-student override pass bilan).
             foreach ($assignReassign as [$gid, $yn]) {
                 AssignComputersJob::dispatch($gid, $yn);
+            }
+            foreach ($vedomostNotices as [$id, $yn]) {
+                \App\Jobs\SendVedomostExamDateNoticeJob::dispatch($id, $yn);
             }
             foreach ($autoDistributeToDispatch ?? [] as [$id, $yn]) {
                 \App\Jobs\AutoDistributeOnDateSetJob::dispatch($id, $yn);

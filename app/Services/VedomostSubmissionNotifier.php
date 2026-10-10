@@ -71,6 +71,33 @@ class VedomostSubmissionNotifier
     }
 
     /**
+     * Ixtiyoriy matnli xabar — o'qituvchi, fan mas'uli va kafedra mudiriga.
+     * (Masalan: YN sanasi belgilanganda vedomost muddati haqida.)
+     */
+    public function notifyCustom(VedomostSubmission $v, string $title, string $body): void
+    {
+        foreach ($this->recipientTeachers($v) as $teacher) {
+            $this->sendToTeacher($teacher, $title, $body, $v);
+        }
+    }
+
+    /**
+     * Qabul qiluvchilar ro'yxati (sinov/ko'rish uchun): ism va Telegram ulanganmi.
+     *
+     * @return array<int, array{name:string, telegram:bool}>
+     */
+    public function recipientNames(VedomostSubmission $v): array
+    {
+        return $this->recipientTeachers($v)
+            ->map(fn (Teacher $t) => [
+                'name' => (string) $t->full_name,
+                'telegram' => !empty($t->telegram_chat_id),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * Xabar oluvchi o'qituvchilar: o'qituvchi + fan mas'uli + kafedra mudiri.
      */
     private function recipientTeachers(VedomostSubmission $v)

@@ -6,9 +6,10 @@ use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
- * Dars ochish arizalari hisoboti — uch varaq:
+ * Dars ochish arizalari hisoboti — to'rt varaq:
  *   "O'qituvchilar" — har bir o'qituvchi necha marta baho qo'ymagan va shulardan
  *                     nechtasi uchun ariza orqali tasdiq olib baho qo'ygan;
+ *   "Mas'ul xodimlar" — mas'ul back ofis xodimi bo'yicha jami talabalar va kunlar;
  *   "Talabalar kesimida" — baho qo'yilmagan har bir talaba alohida qator;
  *   "Kunlar"        — o'sha holatlarning har biri alohida qator: guruh, fan, sana,
  *                     ariza holati (yig'madagi sonlarni tekshirish uchun).
@@ -25,6 +26,7 @@ class LessonOpeningTeacherReportExport implements WithMultipleSheets
     {
         return [
             new LessonOpeningTeacherSummarySheet($this->report),
+            new LessonOpeningTeacherManagersSheet($this->report),
             new LessonOpeningTeacherStudentsSheet($this->report),
             new LessonOpeningTeacherDaysSheet($this->report),
         ];

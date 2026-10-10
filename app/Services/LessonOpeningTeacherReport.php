@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\LessonOpening;
+use App\Models\StaffRegistrationDivision;
 use App\Models\Teacher;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -247,6 +248,7 @@ class LessonOpeningTeacherReport
 
                 $records[] = [
                     'who' => $who,
+                    'group_id' => (string) $opening->group_hemis_id,
                     // Ochilgan bosqich uchta ko'rinishda bo'ladi: completed (baholangan),
                     // active (muddat ichida) va expired (muddat o'tgan). Baho qo'yilgan-yo'qligi
                     // GRADED/APPROVED ni ajratadi.
@@ -286,6 +288,7 @@ class LessonOpeningTeacherReport
                 }
                 $records[] = [
                     'who' => $person('h'.$employee, $entry['name']),
+                    'group_id' => explode('|', (string) $dayKey, 2)[0],
                     'status' => self::NO_REQUEST,
                     'group' => $entry['group'],
                     'subject' => $entry['subject'],
@@ -302,7 +305,10 @@ class LessonOpeningTeacherReport
             }
         }
 
+        $this->attachManagers($records);
         $data = $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($to));
+        $data['managers'] = $this->managerTotals($data['students']);
+        $data['ungraded_students'] = count(array_unique(array_column($data['students'], 'student_hemis_id')));
         $data['timings'] = $timings + ['assemble' => round(microtime(true) - $assembleStarted, 2)];
 
         return $data;
@@ -417,6 +423,7 @@ class LessonOpeningTeacherReport
                 'applicant' => $record['applicant'] ?? '',
                 'approvers' => $record['approvers'] ?? '',
                 'ungraded_students' => count($record['missing_students'] ?? []),
+                'manager' => $record['manager'] ?? '',
             ];
             // Har bir holat (guruh+fan+kun) — bitta qator; baho qo'yilmagan
             // juftliklar o'sha qatorда birga ko'rsatiladi (mas. "2, 5.1").
@@ -446,6 +453,136 @@ class LessonOpeningTeacherReport
             'days' => $days,
             'students' => $this->studentRows($records, $people),
         ];
+    }
+
+    /**
+     * Mas'ul back ofis xodimlari kesimida jami: nechta noyob talabaga baho
+     * qo'yilmagan, nechta dars kunida (guruh + fan + sana + o'qituvchi —
+     * "Kunlar" varag'i bilan bir xil birlik) va nechta "talaba × kun" qatori.
+     * Mas'ul biriktirilmaganlar (manager_id = 0) oxirida.
+     *
+     * @param  list<array<string, mixed>>  $studentRows
+     * @return list<array{manager_id: int, name: string, students: int, days: int, cases: int}>
+     */
+    private function managerTotals(array $studentRows): array
+    {
+        $by = [];
+        foreach ($studentRows as $row) {
+            $id = (int) ($row['manager_id'] ?? 0);
+            $by[$id] ??= ['name' => (string) ($row['manager'] ?? ''), 'students' => [], 'days' => [], 'cases' => 0];
+            $by[$id]['students'][$row['student_hemis_id']] = true;
+            $by[$id]['days'][$row['group'].'|'.$row['subject'].'|'.$row['date'].'|'.$row['teacher']] = true;
+            $by[$id]['cases']++;
+        }
+
+        $list = [];
+        foreach ($by as $id => $entry) {
+            $list[] = [
+                'manager_id' => $id,
+                'name' => $entry['name'],
+                'students' => count($entry['students']),
+                'days' => count($entry['days']),
+                'cases' => $entry['cases'],
+            ];
+        }
+        usort($list, fn ($a, $b) => ($a['manager_id'] === 0) <=> ($b['manager_id'] === 0)
+            ?: $b['students'] <=> $a['students']);
+
+        return $list;
+    }
+
+    /**
+     * Mas'ul back ofis xodimi — "Registrator bo'linmalari" dagi faol biriktirma
+     * talabaning fakulteti, yo'nalishi va kursi bo'yicha (talaba kartasidagi
+     * bilan bir xil, StaffRegistrationDivision::findForStudent).
+     *
+     * Har yozuvga qo'shiladi:
+     *   student_managers — baho qo'yilmagan talaba => ['id', 'name'] (yoki null);
+     *   manager          — kun bo'yicha: shu talabalarning mas'ul(lar)i; baho
+     *                      qo'yilmagan talaba bo'lmasa — guruhdagi ko'pchilik
+     *                      talabaning mas'uli.
+     *
+     * @param  list<array<string, mixed>>  $records
+     */
+    private function attachManagers(array &$records): void
+    {
+        $groupIds = [];
+        $hemisIds = [];
+        foreach ($records as $record) {
+            if (($record['group_id'] ?? '') !== '') {
+                $groupIds[$record['group_id']] = true;
+            }
+            foreach (array_keys($record['missing_students'] ?? []) as $hemisId) {
+                $hemisIds[(string) $hemisId] = true;
+            }
+        }
+        if ($groupIds === [] && $hemisIds === []) {
+            return;
+        }
+
+        $columns = ['hemis_id', 'group_id', 'department_id', 'specialty_id', 'level_code'];
+        $students = $groupIds
+            ? DB::table('students')->whereIn('group_id', array_keys($groupIds))->get($columns)->keyBy(fn ($s) => (string) $s->hemis_id)
+            : collect();
+        // Boshqa guruhga o'tgan talabalar ham topilsin
+        $absent = array_values(array_diff(array_keys($hemisIds), $students->keys()->all()));
+        if ($absent) {
+            foreach (DB::table('students')->whereIn('hemis_id', $absent)->get($columns) as $student) {
+                $students[(string) $student->hemis_id] = $student;
+            }
+        }
+
+        $divisions = [];   // "fakultet|yo'nalish|kurs" => ['id', 'name'] yoki null
+        $managerOf = function ($student) use (&$divisions): ?array {
+            if (! $student || ! $student->department_id) {
+                return null;
+            }
+            $key = $student->department_id.'|'.$student->specialty_id.'|'.$student->level_code;
+            if (! array_key_exists($key, $divisions)) {
+                $division = StaffRegistrationDivision::findForStudent(
+                    $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
+                );
+                $teacher = $division?->teacher;
+                $divisions[$key] = $division ? [
+                    'id' => (int) $division->teacher_id,
+                    'name' => $teacher?->full_name ?: ($teacher?->short_name ?: "Xodim #{$division->teacher_id}"),
+                ] : null;
+            }
+
+            return $divisions[$key];
+        };
+
+        // Guruh mas'uli — guruhdagi ko'pchilik talabaning mas'uli
+        $votes = [];
+        foreach ($students as $student) {
+            $manager = $managerOf($student);
+            if ($manager && isset($groupIds[(string) $student->group_id])) {
+                $votes[(string) $student->group_id][$manager['id']] ??= ['manager' => $manager, 'count' => 0];
+                $votes[(string) $student->group_id][$manager['id']]['count']++;
+            }
+        }
+        $byGroup = [];
+        foreach ($votes as $groupId => $candidates) {
+            usort($candidates, fn ($a, $b) => $b['count'] <=> $a['count']);
+            $byGroup[$groupId] = $candidates[0]['manager'];
+        }
+
+        foreach ($records as &$record) {
+            $names = [];
+            $record['student_managers'] = [];
+            foreach (array_keys($record['missing_students'] ?? []) as $hemisId) {
+                $manager = $managerOf($students[(string) $hemisId] ?? null);
+                $record['student_managers'][(string) $hemisId] = $manager;
+                if ($manager) {
+                    $names[$manager['id']] = $manager['name'];
+                }
+            }
+            if ($names === [] && isset($byGroup[$record['group_id'] ?? ''])) {
+                $names[] = $byGroup[$record['group_id']]['name'];
+            }
+            $record['manager'] = implode(', ', $names);
+        }
+        unset($record);
     }
 
     /**
@@ -493,6 +630,7 @@ class LessonOpeningTeacherReport
 
             foreach (array_keys($missing) as $hemisId) {
                 $student = $students[(string) $hemisId] ?? null;
+                $manager = $record['student_managers'][(string) $hemisId] ?? null;
                 $rows[] = [
                     'student' => (string) ($student->full_name ?? ''),
                     'student_id_number' => (string) ($student->student_id_number ?? ''),
@@ -506,6 +644,8 @@ class LessonOpeningTeacherReport
                     'teacher' => $people[$record['who']]['name'],
                     'department' => $people[$record['who']]['department'],
                     'status' => $record['status'],
+                    'manager_id' => $manager['id'] ?? 0,
+                    'manager' => $manager['name'] ?? '',
                 ];
             }
         }

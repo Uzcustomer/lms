@@ -19,13 +19,20 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
  * bilan ko'rsatiladi; bu varaqda o'sha sonning ortidagi talabalar ism-familyasi
  * bilan ochib beriladi. Bir talaba bir necha kunda qoldirilsa, har kun uchun
  * alohida qator bo'ladi.
+ *
+ * 1-qator — jami (filtrlanganda ko'rinayotgan qatorlar soni ham yangilanadi),
+ * 2-qator — sarlavha, ma'lumot 3-qatordan.
  */
 class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
-    /** Ustunlar: A..L (Holat — L ustun) */
-    private const LAST_COL = 'L';
+    /** Ustunlar: A..M (Holat — L, Mas'ul xodim — M) */
+    private const LAST_COL = 'M';
 
     private const STATUS_COL = 'L';
+
+    private const HEADER_ROW = 2;
+
+    public const UNASSIGNED = '(biriktirilmagan)';
 
     private int $lastRow = 0;
 
@@ -38,12 +45,18 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
 
     public function array(): array
     {
-        $rows = [[
-            '№', 'Talaba', 'Talaba ID', 'Guruh', 'Kurs', 'Semestr',
-            'Fan', 'Dars sanasi', 'Juftlik', "O'qituvchi", 'Kafedra', 'Holat',
-        ]];
+        $students = $this->report['students'] ?? [];
+        $distinct = count(array_unique(array_column($students, 'student_hemis_id')));
 
-        foreach (($this->report['students'] ?? []) as $index => $row) {
+        $rows = [
+            array_pad(['', "Jami: {$distinct} ta talabaga baho qo'yilmagan · ".count($students).' ta qator'], 13, ''),
+            [
+                '№', 'Talaba', 'Talaba ID', 'Guruh', 'Kurs', 'Semestr',
+                'Fan', 'Dars sanasi', 'Juftlik', "O'qituvchi", 'Kafedra', 'Holat', "Mas'ul xodim",
+            ],
+        ];
+
+        foreach ($students as $index => $row) {
             $rows[] = [
                 $index + 1,
                 $row['student'] !== '' ? $row['student'] : '(nomi topilmadi)',
@@ -57,11 +70,12 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
                 $row['teacher'],
                 $row['department'] ?? '',
                 LessonOpeningTeacherReport::LABELS[$row['status']] ?? $row['status'],
+                ($row['manager'] ?? '') !== '' ? $row['manager'] : self::UNASSIGNED,
             ];
         }
 
-        if (($this->report['students'] ?? []) === []) {
-            $rows[] = array_pad(["Bu davrda baho qo'yilmagan talaba topilmadi."], 12, '');
+        if ($students === []) {
+            $rows[] = array_pad(["Bu davrda baho qo'yilmagan talaba topilmadi."], 13, '');
         }
 
         $this->lastRow = count($rows);
@@ -72,7 +86,7 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
     public function columnWidths(): array
     {
         return ['A' => 6, 'B' => 38, 'C' => 16, 'D' => 16, 'E' => 9, 'F' => 12,
-            'G' => 40, 'H' => 13, 'I' => 16, 'J' => 34, 'K' => 32, 'L' => 36];
+            'G' => 40, 'H' => 13, 'I' => 16, 'J' => 34, 'K' => 32, 'L' => 36, 'M' => 34];
     }
 
     public function registerEvents(): array
@@ -85,16 +99,24 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
                 $sheet->getParent()->getDefaultStyle()->getFont()->setName('Times New Roman')->setSize(11);
                 $lc = self::LAST_COL;
                 $sc = self::STATUS_COL;
+                $h = self::HEADER_ROW;
+                $first = $h + 1;
 
-                $sheet->getStyle("A1:{$lc}1")->getFont()->setBold(true)->setSize(10)->getColor()->setRGB('FFFFFF');
+                // Jami qatori
+                $sheet->getStyle("A1:{$lc}1")->getFont()->setBold(true)->getColor()->setRGB('1B3A63');
                 $sheet->getStyle("A1:{$lc}1")->getFill()
-                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B3A63');
-                $sheet->getStyle("A1:{$lc}1")->getAlignment()
-                    ->setWrapText(true)->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-                $sheet->getRowDimension(1)->setRowHeight(28);
-                $sheet->freezePane('A2');
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E8EEF7');
+                $sheet->getRowDimension(1)->setRowHeight(22);
 
-                if ($last < 2) {
+                $sheet->getStyle("A{$h}:{$lc}{$h}")->getFont()->setBold(true)->setSize(10)->getColor()->setRGB('FFFFFF');
+                $sheet->getStyle("A{$h}:{$lc}{$h}")->getFill()
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1B3A63');
+                $sheet->getStyle("A{$h}:{$lc}{$h}")->getAlignment()
+                    ->setWrapText(true)->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getRowDimension($h)->setRowHeight(28);
+                $sheet->freezePane("A{$first}");
+
+                if ($last < $first) {
                     return;
                 }
 
@@ -104,16 +126,19 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
                     return;
                 }
 
-                $sheet->setAutoFilter("A1:{$lc}{$last}");
-                $sheet->getStyle("A2:{$lc}{$last}")->getBorders()->getBottom()
+                // Filtr qo'yilganda faqat ko'rinayotgan qatorlar sanaladi
+                $sheet->setCellValue('G1', "=\"Filtrda ko'rinayotgan qatorlar: \"&SUBTOTAL(103,B{$first}:B{$last})");
+
+                $sheet->setAutoFilter("A{$h}:{$lc}{$last}");
+                $sheet->getStyle("A{$first}:{$lc}{$last}")->getBorders()->getBottom()
                     ->setBorderStyle(Border::BORDER_HAIR)->getColor()->setRGB('CBD5E1');
-                $sheet->getStyle("A2:A{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("A{$first}:A{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 // Talaba ismi ajralib tursin
-                $sheet->getStyle("B2:B{$last}")->getFont()->setBold(true);
+                $sheet->getStyle("B{$first}:B{$last}")->getFont()->setBold(true);
                 // Talaba ID, kurs, semestr — markazda
-                $sheet->getStyle("C2:F{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("C{$first}:F{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 // Sana, juftlik — markazda
-                $sheet->getStyle("H2:I{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("H{$first}:I{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Holat rangi — "Kunlar" varag'i bilan bir xil
                 $colors = [
@@ -134,9 +159,9 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
                     $rule->getStyle()->getFont()->setBold(true)->getColor()->setRGB($color);
                     $rules[] = $rule;
                 }
-                $sheet->getStyle("{$sc}2:{$sc}{$last}")->setConditionalStyles($rules);
+                $sheet->getStyle("{$sc}{$first}:{$sc}{$last}")->setConditionalStyles($rules);
 
-                $sheet->getStyle("A1:{$lc}{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle("A{$h}:{$lc}{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
             },
         ];
     }

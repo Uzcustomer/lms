@@ -79,6 +79,8 @@ Schedule::command('absence-excuses:send-pending-reminder')->dailyAt('16:00');
 
 // Registrator ofisiga baho qo'yilmaganlar hisoboti — back ofis menejerlari kesimida (har kuni 08:30 da)
 Schedule::command('registrar:send-unrated-report')->dailyAt('08:30');
+// Shu hisobotning Excel fayli (dars ochish so'rovlari sahifasidagi bilan bir xil) — xabardan keyin
+Schedule::command('registrar:send-unrated-excel')->dailyAt('08:35')->withoutOverlapping(60);
 
 // Xalqaro talabalar viza va registratsiya muddatlarini tekshirish (har kuni 09:00 da)
 Schedule::command('visa:check-expiry')->dailyAt('09:00');

@@ -65,6 +65,9 @@ return [
         // Baho qo'yilmaganlar hisoboti registrator guruhidan tashqari shu
         // guruhlarga ham boradi (vergul bilan ajratilgan chat_id lar).
         'unrated_report_chat_ids' => env('TELEGRAM_UNRATED_REPORT_CHAT_IDS'),
+        // Ertalabki Excel hisoboti (registrar:send-unrated-excel) boshlanish sanasi, Y-m-d.
+        // Bo'sh bo'lsa kuzgi semestrda 14-sentabrdan, bahorgi semestrda semestr boshidan.
+        'unrated_excel_from' => env('TELEGRAM_UNRATED_EXCEL_FROM'),
         // Test bahosi apelyatsiyasi xabarlari uchun (belgilanmasa — umumiy chat_id).
         'appeal_chat_id' => env('TELEGRAM_APPEAL_CHAT_ID'),
     ],

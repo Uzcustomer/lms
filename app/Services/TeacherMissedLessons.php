@@ -262,9 +262,21 @@ class TeacherMissedLessons
         // hammasini PHP ga tortib olish hisobotning asosiy sekinligi edi. Endi
         // baza faqat shartni qanoatlantirgan qatorlarni qaytaradi — mantiq
         // effectiveGrade() bilan bir xil (ProcessedGradeCondition da tasvirlangan).
+        //
+        // students bilan JOIN qilinmaydi: JOIN bo'lsa MySQL so'rovni talabalardan
+        // boshlab, har birining BARCHA yillardagi baholarini o'qib chiqardi
+        // (~70 s). Baholar faqat (subject_id, lesson_date) indeksi bo'yicha
+        // olinadi, talabaning guruhi esa PHP da shu ro'yxatdan topiladi.
+        $groupsOf = [];   // hemis_id => [group_id, ...]
+        DB::table('students')
+            ->whereIn('group_id', $groupIds)
+            ->select('hemis_id', 'group_id')
+            ->get()
+            ->each(function ($st) use (&$groupsOf) {
+                $groupsOf[(string) $st->hemis_id][(string) $st->group_id] = true;
+            });
+
         DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->whereIn('st.group_id', $groupIds)
             ->whereIn('sg.subject_id', $subjectIds)
             ->whereNull('sg.deleted_at')
             ->whereNotNull('sg.lesson_date')
@@ -272,15 +284,21 @@ class TeacherMissedLessons
             ->where('sg.lesson_date', '>=', $from.' 00:00:00')
             ->where('sg.lesson_date', '<', $today.' 00:00:00')
             ->whereRaw(self::PROCESSED_SQL)
-            ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.student_hemis_id', DB::raw('DATE(sg.lesson_date) as lesson_day'))
+            ->select('sg.subject_id', 'sg.semester_code', 'sg.lesson_pair_code', 'sg.student_hemis_id', DB::raw('DATE(sg.lesson_date) as lesson_day'))
             // Oqim bilan o'qiymiz: bo'laklash har safar "id > oxirgi" shartini
             // qo'shib qayta saralar edi; cursor() bitta so'rov bilan kifoya
             // qiladi va qatorlarni birma-bir beradi (xotira o'smaydi).
             ->cursor()
-            ->each(function ($row) use (&$processedSets, &$gradeRows) {
+            ->each(function ($row) use (&$processedSets, &$gradeRows, $groupsOf) {
+                $groups = $groupsOf[(string) $row->student_hemis_id] ?? null;
+                if ($groups === null) {
+                    return;   // tanlangan guruhlarda bo'lmagan talaba
+                }
                 $gradeRows++;
-                $pk = $this->pairKey($row->group_id, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code);
-                $processedSets[$pk][$row->student_hemis_id] = true;
+                foreach ($groups as $groupId => $_) {
+                    $pk = $this->pairKey($groupId, $row->subject_id, $row->semester_code, $row->lesson_day, $row->lesson_pair_code);
+                    $processedSets[$pk][$row->student_hemis_id] = true;
+                }
             });
         $this->lastTimings['grades'] = round(microtime(true) - $started, 2);
         $this->lastTimings['grade_rows'] = $gradeRows;

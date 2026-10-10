@@ -927,7 +927,8 @@ class TimetableController extends Controller
     /**
      * Joylashuvlarni bo'shatish (kartochkalarni panelga qaytarish) — qamrov
      * bo'yicha: yo'nalish+kurs / kurs (barcha yo'nalishlar) / butun doska.
-     * Kartochkalar o'chirilmaydi; faqat kun/para/auditoriya tozalanadi.
+     * Kartochkalar o'chirilmaydi; faqat kun/para/auditoriya va haftaga xos
+     * joylashuvlar tozalanadi.
      */
     public function unplaceAll(Request $request, TimetableBoard $board)
     {
@@ -953,12 +954,27 @@ class TimetableController extends Controller
         $q = (clone $scopeQuery)
             ->where(function ($w) { $w->whereNotNull('day')->orWhereNotNull('pair'); });
         $count = (clone $q)->count();
-        $q->update([
-            'day' => null,
-            'pair' => null,
-            'auditorium_code' => null,
-            'auditorium_name' => null,
-        ]);
+
+        // Haftaga xos joylashuvlar (tanlangan haftada boshqa joyga ko'chirilgan
+        // kartalar) ham bo'shatiladi — aks holda o'sha haftada jadval to'la
+        // qolib, kartalar panelga qaytmasdi. "Bu haftada o'tilmaydi" (cancelled)
+        // yozuvlari hafta taqsimoti bo'lgani uchun saqlanadi.
+        $weekMoves = null;
+        if (Schema::hasTable('timetable_card_overrides')) {
+            $weekMoves = TimetableCardOverride::whereIn('card_id', (clone $scopeQuery)->select('id'))
+                ->where('cancelled', false);
+            $count += (clone $weekMoves)->whereNotNull('day')->count();
+        }
+
+        DB::transaction(function () use ($q, $weekMoves) {
+            $q->update([
+                'day' => null,
+                'pair' => null,
+                'auditorium_code' => null,
+                'auditorium_name' => null,
+            ]);
+            $weekMoves?->delete();
+        });
 
         // Avtomatik joylash olib tashlangan; eski doskalarda qolgan sabab
         // yozuvlari bo'shatishda tozalanadi.

@@ -207,7 +207,7 @@
                             {{-- Paneldagi kartalarni fan, guruh va dars turi bo'yicha saralash --}}
                             <span id="pnFilters" class="flex items-center gap-1.5">
                                 <select id="pnSubject" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" style="max-width: 220px;" aria-label="Fan bo'yicha filtr"><option value="">Barcha fanlar</option></select>
-                                <select id="pnGroup" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" style="max-width: 160px;" aria-label="Guruh bo'yicha filtr"><option value="">Barcha guruhlar</option></select>
+                                <div class="tt-dd tt-dd-up"><button type="button" class="tt-dd-btn pn-dd-btn" id="pnGroupBtn" aria-label="Guruh bo'yicha filtr"></button><div class="tt-dd-menu" id="pnGroupMenu"></div></div>
                                 <select id="pnType" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" aria-label="Dars turi bo'yicha filtr">
                                     <option value="">Barcha turlar</option>
                                     <option value="lecture">Ma'ruza</option>
@@ -1020,6 +1020,8 @@
         .tt-dd-tools button { font-size: 11px; color: #2563eb; background: none; border: none; cursor: pointer; padding: 2px 4px; }
         .tt-dd-tools button:hover { text-decoration: underline; }
         .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
+        .tt-dd-up .tt-dd-menu { top: auto; bottom: calc(100% + 4px); }
+        .pn-dd-btn { padding: 4px 8px; font-size: 11px; max-width: 200px; color: #4b5563; }
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
         /* Sana qatori doim ko'rinib tursin: vertikal scroll wrap ichida
            bo'ladi (sticky top overflow konteynerga nisbatan ishlaydi). */
@@ -2763,18 +2765,42 @@
                 renderPanel();
             };
             // Joylashmagan kartalar paneli filtrlari: fan, guruh, dars turi
-            const pnFilter = { subject: '', group: '', type: '' };
+            const pnFilter = { subject: '', groups: new Set(), type: '' };
             const pnMatch = c =>
                 (!pnFilter.subject || c.subject_name === pnFilter.subject) &&
-                (!pnFilter.group || cardGroups(c).includes(pnFilter.group)) &&
+                (!pnFilter.groups.size || cardGroups(c).some(g => pnFilter.groups.has(g))) &&
                 (!pnFilter.type || c.training_type === pnFilter.type);
             $('pnSubject').onchange = function () { pnFilter.subject = this.value; renderPanel(); };
-            $('pnGroup').onchange = function () { pnFilter.group = this.value; renderPanel(); };
             $('pnType').onchange = function () { pnFilter.type = this.value; renderPanel(); };
+            // Guruhlar — bir nechtasini belgilash mumkin
+            $('pnGroupMenu').addEventListener('change', ev => {
+                if (!ev.target.matches('input[type=checkbox]')) return;
+                if (ev.target.checked) pnFilter.groups.add(ev.target.value);
+                else pnFilter.groups.delete(ev.target.value);
+                renderPanel();
+            });
+            $('pnGroupMenu').addEventListener('click', ev => {
+                if (ev.target.dataset.pnGroupsClear === undefined) return;
+                pnFilter.groups.clear();
+                renderPanel();
+            });
             $('pnReset').onclick = function () {
-                pnFilter.subject = pnFilter.group = pnFilter.type = '';
+                pnFilter.subject = pnFilter.type = '';
+                pnFilter.groups.clear();
                 renderPanel();
             };
+            // Guruh ro'yxatini chizadi; paneldan yo'qolgan guruhlar tanlovdan chiqadi.
+            function fillPnGroups(values) {
+                [...pnFilter.groups].forEach(g => { if (!values.includes(g)) pnFilter.groups.delete(g); });
+                const n = pnFilter.groups.size;
+                $('pnGroupMenu').innerHTML =
+                    (n ? '<div class="tt-dd-tools"><button type="button" data-pn-groups-clear="1">Tanlovni tozalash</button></div>' : '') +
+                    (values.map(g =>
+                        '<label class="tt-dd-item"><input type="checkbox" value="' + esc(g) + '"' + (pnFilter.groups.has(g) ? ' checked' : '') + '>' +
+                        esc(g) + '</label>').join('') || '<div class="tt-dd-empty">—</div>');
+                const sum = !n ? 'Barcha guruhlar' : n === 1 ? [...pnFilter.groups][0] : n + ' ta guruh';
+                $('pnGroupBtn').innerHTML = '<span class="tt-dd-sum">' + esc(sum) + '</span> <span class="tt-dd-caret">▾</span>';
+            }
             // Tanlov ro'yxatini paneldagi kartalardan to'ldiradi; tanlangan qiymat
             // endi yo'q bo'lsa (masalan, joylashtirilib bo'lindi) filtr tozalanadi.
             function fillPnSelect(id, allLabel, values, key) {
@@ -4558,9 +4584,9 @@
                 const pool = showSkipped ? un.concat(skipped) : un;
                 const uzSort = (a, b) => a.localeCompare(b, 'uz', { numeric: true });
                 fillPnSelect('pnSubject', 'Barcha fanlar', [...new Set(pool.map(c => c.subject_name))].sort(uzSort), 'subject');
-                fillPnSelect('pnGroup', 'Barcha guruhlar', [...new Set(pool.flatMap(cardGroups))].sort(uzSort), 'group');
+                fillPnGroups([...new Set(pool.flatMap(cardGroups))].sort(uzSort));
                 $('pnType').value = pnFilter.type;
-                const filtering = !!(pnFilter.subject || pnFilter.group || pnFilter.type);
+                const filtering = !!(pnFilter.subject || pnFilter.groups.size || pnFilter.type);
                 const unShown = un.filter(pnMatch);
                 const skippedShown = skipped.filter(pnMatch);
                 $('pnReset').classList.toggle('hidden', !filtering);

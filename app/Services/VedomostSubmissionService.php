@@ -1431,7 +1431,9 @@ class VedomostSubmissionService
 
     /**
      * Deadline uchun asos sana:
-     *  - sinov / normativ → oxirgi dars sanasi (schedules.MAX(lesson_date))
+     *  - sinov / normativ → oxirgi dars sanasi (schedules.MAX(lesson_date)),
+     *    faqat fanning barcha auditoriya soatlari jadvalga qo'yilgan bo'lsa.
+     *    Aks holda keyingi haftalar jadvali hali qo'yilmagan — muddat yo'q.
      *  - oski → OSKI sanasi (exam_schedules)
      *  - test / oski_test → test sanasi (exam_schedules); oski_test da test
      *    qo'yilmaydigan (N/A) bo'lsa — OSKI sanasi.
@@ -1451,13 +1453,30 @@ class VedomostSubmissionService
         ]));
 
         if (in_array($cf, ['sinov', 'normativ'], true)) {
-            $end = DB::table('schedules')
+            // Auditoriya darslari: MT (17) va nazorat turlari (99-102) hisobga olinmaydi
+            $lessons = DB::table('schedules')
                 ->whereNull('deleted_at')
                 ->where('group_id', $group->group_hemis_id)
                 ->whereIn('subject_id', $subjectKeys)
-                ->max('lesson_date');
+                ->where('semester_code', $semCode)
+                ->whereNotIn('training_type_code', ['17', '99', '100', '101', '102']);
 
-            return ['type' => 'lesson', 'date' => $end ? substr($end, 0, 10) : null];
+            $end = (clone $lessons)->max('lesson_date');
+            if (!$end) {
+                return ['type' => 'lesson', 'date' => null];
+            }
+
+            // Bir juftlik = 2 akademik soat. Kichik guruhlar bir vaqtda o'tsa —
+            // guruh uchun bitta juftlik (sana + juftlik bo'yicha noyob).
+            $scheduledHours = 2 * (clone $lessons)
+                ->distinct()
+                ->count(DB::raw("CONCAT(DATE(lesson_date), '|', lesson_pair_code)"));
+
+            if ($scheduledHours < $this->plannedAuditoriumHours($subject)) {
+                return ['type' => 'lesson', 'date' => null];
+            }
+
+            return ['type' => 'lesson', 'date' => substr($end, 0, 10)];
         }
 
         if (in_array($cf, ['test', 'oski', 'oski_test'], true)) {
@@ -1484,6 +1503,29 @@ class VedomostSubmissionService
         }
 
         return ['type' => null, 'date' => null];
+    }
+
+    /**
+     * O'quv rejadagi auditoriya soatlari (mustaqil ta'lim — 17 — kirmaydi).
+     * subject_details bo'sh bo'lsa — total_acload.
+     */
+    private function plannedAuditoriumHours(CurriculumSubject $subject): float
+    {
+        $details = is_string($subject->subject_details)
+            ? json_decode($subject->subject_details, true)
+            : $subject->subject_details;
+
+        $hours = 0.0;
+        if (is_array($details)) {
+            foreach ($details as $d) {
+                $code = (string) ($d['trainingType']['code'] ?? '');
+                if ($code !== '' && $code !== '17') {
+                    $hours += (float) ($d['academic_load'] ?? 0);
+                }
+            }
+        }
+
+        return $hours > 0 ? $hours : (float) ($subject->total_acload ?? 0);
     }
 
     /**

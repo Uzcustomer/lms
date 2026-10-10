@@ -204,6 +204,18 @@
                                  tushmaydi; kerak bo'lsa shu tugma orqali ko'rsatiladi. --}}
                             <button type="button" id="skipToggle"
                                 class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50"></button>
+                            {{-- Paneldagi kartalarni fan, guruh va dars turi bo'yicha saralash --}}
+                            <span id="pnFilters" class="flex items-center gap-1.5">
+                                <select id="pnSubject" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" style="max-width: 220px;" aria-label="Fan bo'yicha filtr"><option value="">Barcha fanlar</option></select>
+                                <select id="pnGroup" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" style="max-width: 160px;" aria-label="Guruh bo'yicha filtr"><option value="">Barcha guruhlar</option></select>
+                                <select id="pnType" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" aria-label="Dars turi bo'yicha filtr">
+                                    <option value="">Barcha turlar</option>
+                                    <option value="lecture">Ma'ruza</option>
+                                    <option value="practice">Amaliy</option>
+                                </select>
+                                <button type="button" id="pnReset" class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50" title="Filtrlarni tozalash">&times;</button>
+                                <span id="pnFilterCount" class="hidden text-[10px] text-slate-500"></span>
+                            </span>
                         </div>
                         <div class="flex items-center gap-2">
                             <select id="cycleGroupFilter" class="hidden text-[11px] rounded border-gray-300 py-1 pl-2 pr-7 text-gray-600" aria-label="Oqim bo'yicha filtr"><option value="">Barcha oqimlar</option></select>
@@ -2750,6 +2762,27 @@
                 showSkipped = !showSkipped;
                 renderPanel();
             };
+            // Joylashmagan kartalar paneli filtrlari: fan, guruh, dars turi
+            const pnFilter = { subject: '', group: '', type: '' };
+            const pnMatch = c =>
+                (!pnFilter.subject || c.subject_name === pnFilter.subject) &&
+                (!pnFilter.group || cardGroups(c).includes(pnFilter.group)) &&
+                (!pnFilter.type || c.training_type === pnFilter.type);
+            $('pnSubject').onchange = function () { pnFilter.subject = this.value; renderPanel(); };
+            $('pnGroup').onchange = function () { pnFilter.group = this.value; renderPanel(); };
+            $('pnType').onchange = function () { pnFilter.type = this.value; renderPanel(); };
+            $('pnReset').onclick = function () {
+                pnFilter.subject = pnFilter.group = pnFilter.type = '';
+                renderPanel();
+            };
+            // Tanlov ro'yxatini paneldagi kartalardan to'ldiradi; tanlangan qiymat
+            // endi yo'q bo'lsa (masalan, joylashtirilib bo'lindi) filtr tozalanadi.
+            function fillPnSelect(id, allLabel, values, key) {
+                if (pnFilter[key] && !values.includes(pnFilter[key])) pnFilter[key] = '';
+                $(id).innerHTML = '<option value="">' + allLabel + '</option>' +
+                    values.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
+                $(id).value = pnFilter[key];
+            }
             $('viewMode').onchange = function () {
                 viewMode = this.value;
                 selected = null;
@@ -4501,6 +4534,7 @@
             // ravishda ketma-ket chiqadi (fan bo'yicha saralangan, guruhlash chizig'i yo'q).
             // Hafta ko'rinishida shu haftada o'tilmaydigan kartalar bu yerga tushmaydi.
             function renderPanel() {
+                $('pnFilters').classList.toggle('hidden', viewMode === 'cycle');
                 if (viewMode === 'cycle') {
                     renderCycleCards(cyclePlanData);
                     return;
@@ -4520,6 +4554,19 @@
                 skipBtn.textContent = (showSkipped ? 'Yashirish' : 'Ko\'rsatish') +
                     ': bu haftada o\'tilmaydi (' + skipped.length + ' ta)';
 
+                // Filtr variantlari — paneldagi barcha kartalardan
+                const pool = showSkipped ? un.concat(skipped) : un;
+                const uzSort = (a, b) => a.localeCompare(b, 'uz', { numeric: true });
+                fillPnSelect('pnSubject', 'Barcha fanlar', [...new Set(pool.map(c => c.subject_name))].sort(uzSort), 'subject');
+                fillPnSelect('pnGroup', 'Barcha guruhlar', [...new Set(pool.flatMap(cardGroups))].sort(uzSort), 'group');
+                $('pnType').value = pnFilter.type;
+                const filtering = !!(pnFilter.subject || pnFilter.group || pnFilter.type);
+                const unShown = un.filter(pnMatch);
+                const skippedShown = skipped.filter(pnMatch);
+                $('pnReset').classList.toggle('hidden', !filtering);
+                $('pnFilterCount').classList.toggle('hidden', !filtering);
+                $('pnFilterCount').textContent = 'Filtrda: ' + unShown.length + ' / ' + un.length + ' ta';
+
                 const panelCard = (c, skip) =>
                     '<div class="pn-card ' + (c.training_type === 'lecture' ? 'lec' : 'prc') + (skip ? ' skip' : '') + (selected && selected.id === c.id ? ' sel' : '') +
                     ' lang-' + (c.lang || 'uz') + '" draggable="true" style="' + subjStyle(c) + 'border-left-width:3px;" data-id="' + c.id + '" title="' + esc(c.subject_name + (skip ? ' · bu haftada o\'tilmaydi' : '')) + '">' +
@@ -4532,9 +4579,11 @@
                     '</div></div>';
 
                 $('cardPanel').innerHTML =
-                    un.map(c => panelCard(c, false)).join('') +
-                    (showSkipped ? skipped.map(c => panelCard(c, true)).join('') : '')
-                    || '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>';
+                    unShown.map(c => panelCard(c, false)).join('') +
+                    (showSkipped ? skippedShown.map(c => panelCard(c, true)).join('') : '')
+                    || (filtering && un.length
+                        ? '<div class="text-xs text-gray-400 p-1">Filtrga mos karta yo\'q.</div>'
+                        : '<div class="text-xs text-gray-400 p-1">Hammasi joylashgan 🎉</div>');
 
                 document.querySelectorAll('.pn-card').forEach(el => {
                     el.onclick = () => {

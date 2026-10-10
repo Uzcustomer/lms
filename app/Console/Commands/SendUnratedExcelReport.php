@@ -4,10 +4,12 @@ namespace App\Console\Commands;
 
 use App\Exports\LessonOpeningTeacherReportExport;
 use App\Models\LessonOpening;
+use App\Models\StaffRegistrationDivision;
 use App\Services\LessonOpeningTeacherReport;
 use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
@@ -56,25 +58,107 @@ class SendUnratedExcelReport extends Command
         Excel::store(new LessonOpeningTeacherReportExport($data), $relative, 'local');
         $path = Storage::disk('local')->path($relative);
 
-        $caption = "📊 Baho qo'yilmaganlar hisoboti (Excel)\n"
+        $header = "📊 Baho qo'yilmaganlar hisoboti (Excel)\n"
             . '📅 ' . Carbon::parse($from)->format('d.m.Y') . ' — ' . Carbon::parse($to)->format('d.m.Y') . "\n"
             . "👨‍🏫 O'qituvchilar: " . count($data['teachers'] ?? []) . "\n"
             . "📆 Baholanmagan dars kunlari: " . count($data['days'] ?? []);
 
+        // Mas'ul back ofis xodimlari kesimida — nechta talabaga baho qo'yilmagan
+        $managers = $this->managerSummary($data['students'] ?? []);
+        $full = $managers !== '' ? $header . "\n\n" . $managers : $header;
+        // Telegram fayl izohi 1024 belgigacha — sig'masa ro'yxat alohida xabar bo'ladi
+        $fits = mb_strlen($full) <= 1000;
+
         $sent = 0;
         foreach ($targets as $target) {
-            if ($telegram->sendDocument($target, $path, $caption)) {
+            if ($telegram->sendDocument($target, $path, $fits ? $full : $header)) {
                 $sent++;
+                if (!$fits && $managers !== '') {
+                    $telegram->notifyChat($target, $managers);
+                }
                 $this->info("✓ {$target}");
             } else {
                 $this->error("✕ {$target} — yuborilmadi (laravel.log ga qarang)");
             }
         }
+        $this->line($managers);
 
         @unlink($path);
         Log::info('[UnratedExcel] Yuborildi', ['from' => $from, 'to' => $to, 'sent' => $sent, 'targets' => count($targets)]);
 
         return $sent > 0 ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Baho qo'yilmagan talabalar mas'ul back ofis xodimlari kesimida.
+     *
+     * Mas'ul "Registrator bo'linmalari" dagi faol back ofis biriktirmasidan
+     * talabaning fakulteti, yo'nalishi va kursi bo'yicha topiladi
+     * (StaffRegistrationDivision::findForStudent — talaba kartasidagi bilan
+     * bir xil). Talaba bir necha darsda baholanmagan bo'lsa ham bir marta sanaladi.
+     */
+    private function managerSummary(array $studentRows): string
+    {
+        if ($studentRows === []) {
+            return '';
+        }
+
+        $students = DB::table('students')
+            ->whereIn('hemis_id', array_values(array_unique(array_column($studentRows, 'student_hemis_id'))))
+            ->get(['hemis_id', 'department_id', 'specialty_id', 'level_code'])
+            ->keyBy(fn ($row) => (string) $row->hemis_id);
+
+        $divisions = [];   // "fakultet|yo'nalish|kurs" => biriktirma yoki null
+        $byManager = [];   // teacher_id => [name, students => [hemis => true], cases]
+        $unassigned = ['students' => [], 'cases' => 0];
+
+        foreach ($studentRows as $row) {
+            $hemisId = (string) $row['student_hemis_id'];
+            $student = $students[$hemisId] ?? null;
+            $division = null;
+            if ($student && $student->department_id) {
+                $key = $student->department_id . '|' . $student->specialty_id . '|' . $student->level_code;
+                if (!array_key_exists($key, $divisions)) {
+                    $divisions[$key] = StaffRegistrationDivision::findForStudent(
+                        $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
+                    );
+                }
+                $division = $divisions[$key];
+            }
+
+            if (!$division) {
+                $unassigned['students'][$hemisId] = true;
+                $unassigned['cases']++;
+                continue;
+            }
+
+            $teacherId = (int) $division->teacher_id;
+            if (!isset($byManager[$teacherId])) {
+                $teacher = $division->teacher;
+                $byManager[$teacherId] = [
+                    'name' => $teacher?->full_name ?: ($teacher?->short_name ?: "Xodim #{$teacherId}"),
+                    'students' => [],
+                    'cases' => 0,
+                ];
+            }
+            $byManager[$teacherId]['students'][$hemisId] = true;
+            $byManager[$teacherId]['cases']++;
+        }
+
+        uasort($byManager, fn ($a, $b) => count($b['students']) <=> count($a['students']));
+
+        $lines = ["👥 Mas'ul back ofis xodimlari kesimida:"];
+        $i = 1;
+        foreach ($byManager as $manager) {
+            $lines[] = $i++ . '. ' . $manager['name'] . "\n    " . count($manager['students'])
+                . " ta talabaga baho qo'yilmagan (" . $manager['cases'] . ' ta dars)';
+        }
+        if ($unassigned['students']) {
+            $lines[] = "⚠️ Mas'ul biriktirilmagan: " . count($unassigned['students'])
+                . " ta talaba (" . $unassigned['cases'] . ' ta dars)';
+        }
+
+        return implode("\n", $lines);
     }
 
     /** Ertalabki baho qo'yilmaganlar hisoboti boradigan manzillar bilan bir xil. */

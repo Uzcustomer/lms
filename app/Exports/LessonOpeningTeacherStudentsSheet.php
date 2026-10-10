@@ -48,8 +48,10 @@ class LessonOpeningTeacherStudentsSheet implements FromArray, WithColumnWidths, 
         $students = $this->report['students'] ?? [];
         $distinct = count(array_unique(array_column($students, 'student_hemis_id')));
 
+        // A1 bo'sh bo'lmasin: Laravel Excel qatorlarni 1000 talab yozadi va A1
+        // bo'sh bo'lsa keyingi bo'lakni yana 1-qatordan yozib, ma'lumotni bosadi.
         $rows = [
-            array_pad(['', "Jami: {$distinct} ta talabaga baho qo'yilmagan · ".count($students).' ta qator'], 13, ''),
+            array_pad(['Jami:', "{$distinct} ta talabaga baho qo'yilmagan · ".count($students).' ta qator'], 13, ''),
             [
                 '№', 'Talaba', 'Talaba ID', 'Guruh', 'Kurs', 'Semestr',
                 'Fan', 'Dars sanasi', 'Juftlik', "O'qituvchi", 'Kafedra', 'Holat', "Mas'ul xodim",

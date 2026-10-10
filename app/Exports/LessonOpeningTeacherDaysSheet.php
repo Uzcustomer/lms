@@ -44,8 +44,10 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
         $days = $this->report['days'] ?? [];
         $students = array_sum(array_map(fn ($day) => (int) ($day['ungraded_students'] ?? 0), $days));
 
+        // A1 bo'sh bo'lmasin: Laravel Excel qatorlarni 1000 talab yozadi va A1
+        // bo'sh bo'lsa keyingi bo'lakni yana 1-qatordan yozib, ma'lumotni bosadi.
         $rows = [
-            array_pad(['', 'Jami: '.count($days).' ta dars kuni', '', '', '', 'Jami:', $students], 17, ''),
+            array_pad(['Jami:', count($days).' ta dars kuni', '', '', '', 'Talabalar:', $students], 17, ''),
             [
                 '№', "O'qituvchi", 'Kafedra', 'Guruh', 'Kurs', 'Semestr',
                 "Baho qo'yilmagan talaba",
@@ -121,7 +123,7 @@ class LessonOpeningTeacherDaysSheet implements FromArray, WithColumnWidths, With
                 }
 
                 // Filtr qo'yilganda faqat ko'rinayotgan qatorlar hisoblanadi
-                $sheet->setCellValue('B1', "=\"Jami: \"&SUBTOTAL(103,B{$first}:B{$last})&\" ta dars kuni\"");
+                $sheet->setCellValue('B1', "=SUBTOTAL(103,B{$first}:B{$last})&\" ta dars kuni\"");
                 $sheet->setCellValue('G1', "=SUBTOTAL(109,G{$first}:G{$last})");
 
                 $sheet->setAutoFilter("A{$h}:{$lc}{$last}");

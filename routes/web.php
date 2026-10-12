@@ -1863,6 +1863,10 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::post('/{fanTesti}/toggle-active', [FanTestiController::class, 'toggleActive'])->name('toggle-active');
                 Route::post('/{fanTesti}/launch', [FanTestiController::class, 'launch'])->name('launch');
                 Route::post('/{fanTesti}/stop', [FanTestiController::class, 'stopLaunch'])->name('stop');
+                // "Kompyuterlar" oynasi: jonli holat va bitta kompyuterni boshqarish
+                Route::get('/{fanTesti}/devices', [FanTestiController::class, 'liveDevices'])->name('devices');
+                Route::post('/{fanTesti}/devices/{device}/stop', [FanTestiController::class, 'stopDevice'])->name('devices.stop');
+                Route::post('/{fanTesti}/devices/{device}/restart', [FanTestiController::class, 'restartDevice'])->name('devices.restart');
                 Route::post('/{fanTesti}/attach-subject', [FanTestiController::class, 'attachSubject'])->name('attach-subject');
                 Route::get('/{fanTesti}/preview', [FanTestiController::class, 'preview'])->name('preview');
                 Route::post('/{fanTesti}/preview', [FanTestiController::class, 'previewSubmit'])->name('preview.submit');

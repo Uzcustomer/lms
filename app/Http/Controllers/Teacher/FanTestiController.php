@@ -10,6 +10,7 @@ use App\Models\Group;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
 use App\Models\TestKioskDevice;
+use App\Services\FanTestiAttempts;
 use App\Services\FanTestiGroups;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -205,7 +206,12 @@ class FanTestiController extends Controller
             'assigned_fan_testi_id' => $fanTesti->id,
             'assigned_at' => now(),
             'assigned_by_name' => $teacher->short_name ?: $teacher->full_name,
-        ]);
+        ] + ($this->hasLiveColumns() ? [
+            'released_fan_testi_id' => null,
+            'released_attempt_id' => null,
+            'pending_command' => null,
+            'pending_attempt_id' => null,
+        ] : []));
 
         // Test talabalar uchun yopiq bo'lsa ochiladi — aks holda kompyuterlar uni ocholmaydi.
         if (!$fanTesti->is_active) {
@@ -238,12 +244,191 @@ class FanTestiController extends Controller
                 'assigned_fan_testi_id' => null,
                 'assigned_at' => null,
                 'assigned_by_name' => null,
-            ])
+            ] + ($this->hasLiveColumns() ? ['pending_command' => null, 'pending_attempt_id' => null] : []))
             : 0;
+        if ($this->hasLiveColumns()) {
+            TestKioskDevice::where('released_fan_testi_id', $fanTesti->id)
+                ->update(['released_fan_testi_id' => null, 'released_attempt_id' => null]);
+        }
 
         return back()->with('success', "Test to'xtatildi va yopildi"
             . ($count ? " — {$count} ta kompyuter kutish ekraniga qaytadi" : '')
             . ". Boshlangan urinishlar o'z vaqtida topshiriladi.");
+    }
+
+    /**
+     * "Kompyuterlar" oynasi: shu test berilgan (yoki unda alohida to'xtatilgan)
+     * kompyuterlarning jonli holati — qaysi bosqichda, kim ishlayapti, nechta
+     * savolga javob bergan, qancha vaqt qolgan va natijasi.
+     */
+    public function liveDevices(FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        if (!$this->hasLiveColumns()) {
+            return response()->json(['devices' => [], 'migrate' => true]);
+        }
+
+        $devices = TestKioskDevice::query()
+            ->whereNull('revoked_at')
+            ->where(fn ($q) => $q->where('assigned_fan_testi_id', $fanTesti->id)
+                ->orWhere('released_fan_testi_id', $fanTesti->id))
+            ->orderByRaw("COALESCE(room, '') = ''")
+            ->orderBy('room')
+            ->orderBy('name')
+            ->get();
+
+        $attemptIds = $devices->flatMap(fn ($d) => [$d->current_attempt_id, $d->released_attempt_id])->filter()->unique();
+        $attempts = FanTestiAttempt::query()
+            ->whereIn('id', $attemptIds)
+            ->where('fan_testi_id', $fanTesti->id)
+            ->get()
+            ->keyBy('id');
+
+        $rows = $devices->map(function (TestKioskDevice $d) use ($fanTesti, $attempts) {
+            $running = (int) $d->assigned_fan_testi_id === (int) $fanTesti->id;
+            $online = $d->isOnline();
+            $attempt = $attempts->get((int) $d->current_attempt_id)
+                ?? (!$running ? $attempts->get((int) $d->released_attempt_id) : null);
+            $stage = !$running ? 'stopped' : (!$online ? 'offline' : ($d->kiosk_stage ?: 'wait'));
+            // Yangi qayta boshlangan, lekin kompyuter hali so'ramagan
+            if ($running && $d->pending_command === 'restart') {
+                $stage = 'restarting';
+            }
+
+            return [
+                'id' => $d->id,
+                'name' => $d->name,
+                'room' => $d->roomLabel(),
+                'online' => $online,
+                'running' => $running,
+                'stage' => $stage,
+                'stage_label' => self::STAGE_LABELS[$stage] ?? $stage,
+                'stage_since' => $d->kiosk_stage_at && $running ? $d->kiosk_stage_at->diffForHumans(null, true) : null,
+                'answered' => $stage === 'take' ? $d->kiosk_answered : null,
+                'attempt' => $attempt ? [
+                    'student' => $attempt->student_name,
+                    'student_id' => $attempt->student_id_number,
+                    'group' => $attempt->group_name,
+                    'finished' => $attempt->isFinished(),
+                    'seconds_left' => $attempt->isFinished() ? 0 : $attempt->secondsLeft(),
+                    'questions' => (int) $attempt->questions_count,
+                    'percent' => $attempt->isFinished() && $attempt->percent !== null ? (float) $attempt->percent : null,
+                    'passed' => (bool) $attempt->is_passed,
+                    'away' => (int) $attempt->away_count,
+                    'face_mismatches' => (int) $attempt->face_mismatches,
+                ] : null,
+                'stop_url' => $running ? route('teacher.fan-testlari.devices.stop', [$fanTesti, $d]) : null,
+                'restart_url' => $attempt ? route('teacher.fan-testlari.devices.restart', [$fanTesti, $d]) : null,
+            ];
+        })
+            // To'xtatilgan, lekin talaba kirmagan kompyuter qayta boshlanmaydi — ko'rsatilmaydi
+            ->filter(fn ($row) => $row['running'] || $row['attempt'] !== null)
+            ->values();
+
+        return response()->json(['devices' => $rows]);
+    }
+
+    /**
+     * Testni bitta kompyuterda to'xtatadi: kompyuter kutish ekraniga qaytadi,
+     * talabaning belgilangan javoblari topshiriladi. Kompyuter ro'yxatda
+     * "to'xtatilgan" bo'lib qoladi — keyin shu talabaga qayta boshlash mumkin.
+     */
+    public function stopDevice(FanTesti $fanTesti, TestKioskDevice $device)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless($this->hasLiveColumns(), 409, 'php artisan migrate ni ishga tushiring.');
+
+        if ((int) $device->assigned_fan_testi_id !== (int) $fanTesti->id) {
+            return response()->json(['message' => "Bu kompyuterda test allaqachon to'xtatilgan."], 422);
+        }
+
+        $attemptId = $device->current_attempt_id
+            && FanTestiAttempt::whereKey($device->current_attempt_id)->where('fan_testi_id', $fanTesti->id)->exists()
+            ? $device->current_attempt_id
+            : null;
+
+        $device->update([
+            'assigned_fan_testi_id' => null,
+            'assigned_at' => null,
+            'assigned_by_name' => null,
+            'pending_command' => null,
+            'pending_attempt_id' => null,
+            'released_fan_testi_id' => $fanTesti->id,
+            'released_attempt_id' => $attemptId,
+        ]);
+
+        return response()->json(['message' => $this->deviceLabel($device) . ": test to'xtatildi."]);
+    }
+
+    /**
+     * Testni shu kompyuterda o'sha talabaga boshidan boshlaydi: javoblar
+     * o'chiriladi, savollar va vaqt yangilanadi, kompyuter bir necha soniyada
+     * test sahifasini o'zi ochadi (ID va yuz tekshiruvisiz).
+     */
+    public function restartDevice(FanTesti $fanTesti, TestKioskDevice $device)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless($this->hasLiveColumns(), 409, 'php artisan migrate ni ishga tushiring.');
+
+        $running = (int) $device->assigned_fan_testi_id === (int) $fanTesti->id;
+        $stopped = (int) $device->released_fan_testi_id === (int) $fanTesti->id;
+        if (!$running && !$stopped) {
+            return response()->json(['message' => 'Bu kompyuter boshqa testga berilgan.'], 422);
+        }
+        if (!$running && $device->assigned_fan_testi_id) {
+            return response()->json(['message' => 'Bu kompyuter hozir boshqa test bilan band.'], 422);
+        }
+
+        $attemptId = $running ? ($device->current_attempt_id ?: null) : $device->released_attempt_id;
+        $attempt = $attemptId
+            ? FanTestiAttempt::whereKey($attemptId)->where('fan_testi_id', $fanTesti->id)->first()
+            : null;
+        if (!$attempt) {
+            return response()->json(['message' => "Bu kompyuterda hali talaba kirmagan — qayta boshlash uchun talaba kerak."], 422);
+        }
+
+        FanTestiAttempts::restart($attempt);
+
+        $teacher = $this->teacher();
+        if (!$fanTesti->is_active) {
+            $fanTesti->update(['is_active' => true, 'updated_by' => $teacher->id]);
+        }
+        $device->update([
+            'assigned_fan_testi_id' => $fanTesti->id,
+            'assigned_at' => $running ? $device->assigned_at : now(),
+            'assigned_by_name' => $running ? $device->assigned_by_name : ($teacher->short_name ?: $teacher->full_name),
+            'pending_command' => 'restart',
+            'pending_attempt_id' => $attempt->id,
+            'released_fan_testi_id' => null,
+            'released_attempt_id' => null,
+        ]);
+
+        return response()->json(['message' => $this->deviceLabel($device) . ': test ' . $attempt->student_name . ' uchun qaytadan boshlanadi.']);
+    }
+
+    private const STAGE_LABELS = [
+        'wait' => 'Test ochilmoqda',
+        'start' => 'Talaba ID kutilmoqda',
+        'face' => 'Yuz tekshiruvi',
+        'take' => 'Test ishlanmoqda',
+        'result' => 'Topshirdi',
+        'closed' => 'Test yopiq',
+        'offline' => 'Oflayn',
+        'stopped' => "To'xtatilgan",
+        'restarting' => 'Qayta boshlanmoqda',
+    ];
+
+    private function hasLiveColumns(): bool
+    {
+        static $has = null;
+
+        return $has ??= Schema::hasColumn('test_kiosk_devices', 'kiosk_stage');
+    }
+
+    private function deviceLabel(TestKioskDevice $device): string
+    {
+        return trim(($device->room ? $device->room . '-xona, ' : '') . $device->name);
     }
 
     /**

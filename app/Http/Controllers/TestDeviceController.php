@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FanTesti;
+use App\Models\FanTestiAttempt;
 use App\Models\TestKioskDevice;
 use App\Services\TestDeviceToken;
 use Illuminate\Http\Request;
@@ -19,6 +20,9 @@ use Illuminate\Support\Facades\Schema;
  */
 class TestDeviceController extends Controller
 {
+    /** Kompyuter sahifasi bosqichlari: kutish, test ID, yuz tekshiruvi, test, natija, yopiq. */
+    private const STAGES = ['wait', 'start', 'face', 'take', 'result', 'closed'];
+
     public function index(Request $request)
     {
         if (!$this->isAdmin()) {
@@ -144,7 +148,10 @@ class TestDeviceController extends Controller
             return response()->json(['registered' => false]);
         }
 
-        if (!$device->last_seen_at || $device->last_seen_at->lt(now()->subSeconds(10))) {
+        $goUrl = null;
+        if (Schema::hasColumn('test_kiosk_devices', 'kiosk_stage')) {
+            $goUrl = $this->recordStage($request, $device);
+        } elseif (!$device->last_seen_at || $device->last_seen_at->lt(now()->subSeconds(10))) {
             $device->forceFill(['last_seen_at' => now()])->save();
         }
 
@@ -160,7 +167,49 @@ class TestDeviceController extends Controller
             'registered' => true,
             'test_url' => $testUrl,
             'wait_url' => route('test-devices.wait'),
+            'go_url' => $goUrl,
         ]);
+    }
+
+    /**
+     * Kompyuter qaysi bosqichda ekanini yozadi (o'qituvchining "Kompyuterlar"
+     * oynasi uchun) va o'qituvchi buyrug'ini bajaradi. "Qayta boshlash"
+     * buyrug'ida urinish shu brauzer sessiyasiga bog'lanadi va test sahifasi
+     * manzili qaytariladi — talaba ID va yuz tekshiruvini qayta o'tmaydi.
+     */
+    private function recordStage(Request $request, TestKioskDevice $device): ?string
+    {
+        $stage = in_array($request->query('mode'), self::STAGES, true) ? $request->query('mode') : 'wait';
+        $attemptId = in_array($stage, ['take', 'result'], true)
+            ? ((int) $request->session()->get(FanTestiKioskController::SESSION_KEY) ?: null)
+            : null;
+        $answered = $stage === 'take' && is_numeric($request->query('answered'))
+            ? min(65535, max(0, (int) $request->query('answered')))
+            : null;
+
+        $changes = [];
+        if ($device->kiosk_stage !== $stage || (int) $device->current_attempt_id !== (int) $attemptId) {
+            $changes += ['kiosk_stage' => $stage, 'kiosk_stage_at' => now(), 'current_attempt_id' => $attemptId];
+        }
+        if ($device->kiosk_answered !== $answered) {
+            $changes['kiosk_answered'] = $answered;
+        }
+
+        $goUrl = null;
+        if ($device->pending_command === 'restart') {
+            $attempt = FanTestiAttempt::find($device->pending_attempt_id);
+            if ($attempt && (int) $attempt->fan_testi_id === (int) $device->assigned_fan_testi_id && !$attempt->isFinished()) {
+                $request->session()->put(FanTestiKioskController::SESSION_KEY, (int) $attempt->id);
+                $goUrl = route('kiosk.fan-testi.take', [$attempt->fan_testi_id, $attempt->id]);
+            }
+            $changes += ['pending_command' => null, 'pending_attempt_id' => null];
+        }
+
+        if ($changes || !$device->last_seen_at || $device->last_seen_at->lt(now()->subSeconds(10))) {
+            $device->forceFill($changes + ['last_seen_at' => now()])->save();
+        }
+
+        return $goUrl;
     }
 
     private function label(TestKioskDevice $device): string

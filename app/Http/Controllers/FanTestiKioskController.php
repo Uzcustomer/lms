@@ -7,6 +7,7 @@ use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
 use App\Models\Student;
 use App\Services\FaceIdService;
+use App\Services\FanTestiAttempts;
 use App\Services\FanTestiGroups;
 use App\Services\TestDeviceToken;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class FanTestiKioskController extends Controller
     private const TZ = 'Asia/Tashkent';
 
     /** Yuz tekshiruvidan o'tgan urinish id si — test va natija faqat shu sessiyaga ochiq. */
-    private const SESSION_KEY = 'fan_testi_attempt_id';
+    public const SESSION_KEY = 'fan_testi_attempt_id';
 
     public function show(FanTesti $fanTesti)
     {
@@ -181,6 +182,13 @@ class FanTestiKioskController extends Controller
 
         if ($attempt->isFinished()) {
             return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
+        }
+
+        // O'qituvchi testni shu kompyuterda qayta boshlagan: eski sahifadan
+        // kelgan javoblar yangi urinishga yozilmasin.
+        if ($request->filled('attempt_started')
+            && $request->input('attempt_started') !== (string) $attempt->started_at?->timestamp) {
+            return redirect()->route('kiosk.fan-testi.take', [$fanTesti, $attempt]);
         }
 
         $data = $request->validate([
@@ -381,12 +389,7 @@ class FanTestiKioskController extends Controller
             ->first();
 
         if (!$attempt) {
-            $snapshot = $this->activeQuestions($fanTesti)->values();
-            if ($fanTesti->shuffle_questions) {
-                $snapshot = $snapshot->shuffle()->values();
-            }
-
-            $attempt = FanTestiAttempt::create([
+            $attempt = FanTestiAttempt::create(FanTestiAttempts::freshFields($fanTesti, FanTestiAttempts::questionSnapshot($fanTesti)) + [
                 'fan_testi_id' => $fanTesti->id,
                 'student_id' => $student->id,
                 'student_hemis_id' => $student->hemis_id,
@@ -396,12 +399,6 @@ class FanTestiKioskController extends Controller
                 'group_name' => $student->group_name,
                 'faculty_name' => $student->department_name,
                 'specialty_name' => $student->specialty_name,
-                'status' => 'in_progress',
-                'started_at' => now(self::TZ),
-                'expires_at' => now(self::TZ)->addMinutes(max(1, (int) $fanTesti->duration_minutes)),
-                'questions_count' => $snapshot->count(),
-                'total_points' => $snapshot->sum(fn ($question) => max(1, (int) ($question['points'] ?? 1))),
-                'questions_snapshot' => $snapshot->all(),
                 'ip_address' => $request->ip(),
             ]);
         }

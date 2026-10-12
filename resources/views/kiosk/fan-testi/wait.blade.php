@@ -62,15 +62,16 @@
 
     async function check() {
         try {
-            const r = await fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+            const r = await fetch(statusUrl + '?mode=wait', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
             if (!r.ok) throw new Error();
             const d = await r.json();
             if (!d.registered) { window.location.reload(); return; }
             state.className = 'w-state ok';
             state.textContent = 'Server bilan aloqa bor · ' + new Date().toLocaleTimeString().slice(0, 5);
-            if (d.test_url) {
+            // O'qituvchi testni shu kompyuterda talabaga qayta boshlagan bo'lsa — to'g'ridan test sahifasi
+            if (d.go_url || d.test_url) {
                 state.textContent = 'Test ochilmoqda...';
-                window.location.href = d.test_url;
+                window.location.href = d.go_url || d.test_url;
             }
         } catch (e) {
             state.className = 'w-state bad';

@@ -175,16 +175,33 @@
 
         async function tick() {
             if (leaving) return;
-            // Talaba yuz tekshiruvida bo'lsa uni to'xtatmaymiz
+            // Bosqich o'qituvchining "Kompyuterlar" oynasi uchun yuboriladi
             const face = document.getElementById('stepFace');
-            if (mode === 'start' && face && face.style.display !== 'none') return;
+            const inFace = mode === 'start' && face && face.style.display !== 'none';
+            const params = new URLSearchParams({ mode: inFace ? 'face' : mode });
+            if (mode === 'take' && typeof window.kioskAnswered === 'function') {
+                params.set('answered', String(window.kioskAnswered()));
+            }
             let d;
             try {
-                const r = await fetch(statusUrl, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                const r = await fetch(statusUrl + '?' + params.toString(), { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
                 if (!r.ok) return;
                 d = await r.json();
             } catch (e) { return; }
-            if (!d.registered || d.test_url === here) return;
+            if (!d.registered) return;
+
+            // O'qituvchi testni shu kompyuterda qayta boshladi — yangi urinish ochiladi
+            if (d.go_url) {
+                leaving = true;
+                if (mode === 'take') {
+                    window.dispatchEvent(new CustomEvent('kiosk-goto', { detail: d.go_url }));
+                } else {
+                    window.location.href = d.go_url;
+                }
+                return;
+            }
+            // Talaba yuz tekshiruvida bo'lsa uni to'xtatmaymiz
+            if (inFace || d.test_url === here) return;
 
             leaving = true;
             const target = d.test_url || d.wait_url;
@@ -196,7 +213,7 @@
             setTimeout(() => { window.location.href = target; }, mode === 'result' ? 8000 : 0);
         }
 
-        setInterval(tick, 5000);
+        setInterval(tick, 4000);
     })();
     </script>
     @endif

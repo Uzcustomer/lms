@@ -640,6 +640,49 @@
     .lm-dot.on { background: #16a34a; }
     .lm-count { margin-right: auto; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
     .lm-empty { padding: 26px 10px; color: var(--muted); font-size: 13.5px; text-align: center; }
+
+    /* ---- Kompyuterlar (jonli kuzatuv) oynasi ---- */
+    .bl-btn-monitor { background: #0f766e; color: #fff; box-shadow: 0 4px 12px rgba(15, 118, 110, .22); }
+    .bl-btn-monitor:hover { background: #115e59; }
+    .mn-box { width: min(1240px, 100%); display: flex; flex-direction: column; max-height: calc(100vh - 40px); overflow: hidden; }
+    .mn-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+    .mn-sum { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 22px; border-bottom: 1px solid var(--line-soft); background: #fafcfe; }
+    .mn-chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 11px; border-radius: 999px; background: #eef3f9; color: var(--ink-soft); font-size: 12px; }
+    .mn-chip b { color: var(--navy); font-size: 14px; font-variant-numeric: tabular-nums; }
+    .mn-chip.take b { color: #1d4ed8; } .mn-chip.done b { color: #0f7a52; } .mn-chip.off b { color: #94a3b8; }
+    .mn-live { margin-left: auto; align-self: center; color: var(--muted); font-size: 11.5px; }
+    .mn-live::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #16a34a; animation: mnPulse 1.6s ease-in-out infinite; vertical-align: 1px; }
+    @keyframes mnPulse { 50% { opacity: .3; } }
+    @media (prefers-reduced-motion: reduce) { .mn-live::before { animation: none; } }
+    .mn-body { flex: 1; overflow-y: auto; padding: 16px 22px; display: grid; gap: 16px; }
+    .mn-room-title { margin: 0 0 8px; color: var(--navy); font-size: 13.5px; font-weight: 700; }
+    .mn-room-title small { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 500; }
+    .mn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+    .mn-card { display: flex; flex-direction: column; gap: 9px; padding: 12px 13px; border: 1px solid var(--line); border-left: 4px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .mn-card.take { border-left-color: #2563eb; } .mn-card.face, .mn-card.start, .mn-card.wait, .mn-card.restarting { border-left-color: #d97706; }
+    .mn-card.result { border-left-color: #0f7a52; } .mn-card.offline, .mn-card.closed { border-left-color: #94a3b8; background: #fbfcfd; }
+    .mn-card.stopped { border-left-color: #b3261e; background: #fffafa; }
+    .mn-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .mn-name { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 14px; font-weight: 700; }
+    .mn-stage { flex: none; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .mn-card.take .mn-stage { background: #dbeafe; color: #1e40af; }
+    .mn-card.face .mn-stage, .mn-card.start .mn-stage, .mn-card.wait .mn-stage, .mn-card.restarting .mn-stage { background: #fef3c7; color: #92400e; }
+    .mn-card.result .mn-stage { background: #dcfce7; color: #166534; }
+    .mn-card.stopped .mn-stage { background: #fee2e2; color: #991b1b; }
+    .mn-student b { display: block; color: var(--navy); font-size: 13.5px; font-weight: 700; line-height: 1.3; }
+    .mn-student span { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+    .mn-student.none { color: var(--muted); font-size: 12.5px; font-style: italic; }
+    .mn-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--ink-soft); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .mn-meta b { color: var(--navy); }
+    .mn-meta .warn { color: #a35a06; font-weight: 700; } .mn-meta .bad { color: #b3261e; font-weight: 700; }
+    .mn-meta .ok { color: #0f7a52; font-weight: 700; }
+    .mn-bar { height: 5px; border-radius: 999px; background: #edf1f7; overflow: hidden; }
+    .mn-bar i { display: block; height: 100%; border-radius: inherit; background: #2563eb; }
+    .mn-acts { display: flex; gap: 6px; margin-top: auto; }
+    .mn-acts .bl-btn { flex: 1; justify-content: center; }
+    .mn-acts .bl-btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .mn-toast { margin-right: auto; color: var(--ink-soft); font-size: 12.5px; }
+    .mn-toast.bad { color: #b3261e; }
 </style>
 
 @php
@@ -980,6 +1023,13 @@
                                                     data-attach-id="{{ $item->id }}"
                                                     data-attach-name="{{ $item->name }}"
                                                     data-attach-url="{{ route('teacher.fan-testlari.attach-subject', $item) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Biriktirish</button>
+                                        @elseif($runningHere > 0)
+                                            <button type="button" class="bl-btn bl-btn-monitor bl-btn-sm mn-open"
+                                                    data-test-id="{{ $item->id }}"
+                                                    data-test-name="{{ $item->name }}"
+                                                    data-devices-url="{{ route('teacher.fan-testlari.devices', $item) }}"
+                                                    data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
+                                                    title="Har bir kompyuterda test qanday ketayotganini ko'rish va boshqarish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="7" rx="1.5"/><rect x="13" y="3" width="9" height="7" rx="1.5"/><rect x="2" y="14" width="9" height="7" rx="1.5"/><rect x="13" y="14" width="9" height="7" rx="1.5"/></svg>Kompyuterlar ({{ $runningHere }})</button>
                                         @elseif($item->questionCount() > 0)
                                             <button type="button" class="bl-btn bl-btn-launch bl-btn-sm lm-open"
                                                     data-test-id="{{ $item->id }}"
@@ -1191,6 +1241,167 @@
 
         document.addEventListener('keydown', (ev) => {
             if (ev.key === 'Escape') modal.classList.remove('is-open');
+        });
+    })();
+    </script>
+
+    {{-- Kompyuterlar: har bir kompyuterdagi jonli holat va boshqaruv --}}
+    <div class="bl bl-modal" id="monitorModal" role="dialog" aria-modal="true" aria-labelledby="monitorTitle">
+        <div class="bl-modal-box mn-box">
+            <div class="bl-modal-head">
+                <span class="bl-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="7" rx="1.5"/><rect x="13" y="3" width="9" height="7" rx="1.5"/><rect x="2" y="14" width="9" height="7" rx="1.5"/><rect x="13" y="14" width="9" height="7" rx="1.5"/></svg></span>
+                <div>
+                    <h3 id="monitorTitle">Kompyuterlar</h3>
+                    <p id="monitorTestName"></p>
+                </div>
+            </div>
+            <div class="mn-sum" id="monitorSum"></div>
+            <div class="mn-body" id="monitorBody"><div class="lm-empty">Yuklanmoqda...</div></div>
+            <div class="bl-modal-foot">
+                <span class="mn-toast" id="monitorToast" aria-live="polite"></span>
+                <button type="button" class="bl-btn bl-btn-launch lm-open" id="monitorAdd">Kompyuter qo'shish</button>
+                <button type="button" class="bl-btn bl-btn-ghost" id="monitorClose">Yopish</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (() => {
+        const modal = document.getElementById('monitorModal');
+        if (!modal) return;
+        const body = document.getElementById('monitorBody');
+        const sum = document.getElementById('monitorSum');
+        const toast = document.getElementById('monitorToast');
+        const addBtn = document.getElementById('monitorAdd');
+        const CSRF = @json(csrf_token());
+        let url = null, timer = null, busy = false, changed = false;
+
+        const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const clock = (sec) => { sec = Math.max(0, sec | 0); return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); };
+
+        function card(d) {
+            const a = d.attempt;
+            const student = a
+                ? '<div class="mn-student"><b>' + esc(a.student) + '</b><span>' + esc(a.student_id) + (a.group ? ' · ' + esc(a.group) : '') + '</span></div>'
+                : '<div class="mn-student none">Talaba hali kirmagan</div>';
+            let meta = '';
+            if (a && d.stage === 'take' && !a.finished) {
+                const answered = d.answered ?? 0;
+                const pct = a.questions ? Math.round(answered * 100 / a.questions) : 0;
+                meta += '<div class="mn-meta"><span>Javob: <b>' + answered + ' / ' + a.questions + '</b></span><span>Qoldi: <b>' + clock(a.seconds_left) + '</b></span></div>'
+                    + '<div class="mn-bar" role="img" aria-label="' + pct + '% javob berilgan"><i style="width:' + pct + '%"></i></div>';
+            } else if (a && a.finished && a.percent !== null) {
+                meta += '<div class="mn-meta"><span>Natija: <b class="' + (a.passed ? 'ok' : 'bad') + '">' + a.percent + '%</b></span><span class="' + (a.passed ? 'ok' : 'bad') + '">' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
+            }
+            const flags = [];
+            if (a && a.away > 0) flags.push('<span class="warn">Chalg\'idi: ' + a.away + '</span>');
+            if (a && a.face_mismatches > 0) flags.push('<span class="bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
+            if (d.stage_since && d.stage !== 'offline') flags.push('<span>' + esc(d.stage_since) + '</span>');
+            if (flags.length) meta += '<div class="mn-meta">' + flags.join('') + '</div>';
+
+            const stopBtn = '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="stop" data-url="' + esc(d.stop_url || '') + '" data-name="' + esc(d.name) + '"' + (d.stop_url ? '' : ' disabled') + ">To'xtatish</button>";
+            const restartBtn = '<button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" data-act="restart" data-url="' + esc(d.restart_url || '') + '" data-name="' + esc(d.name) + '" data-student="' + esc(a ? a.student : '') + '"'
+                + (d.restart_url ? '' : ' disabled title="Qayta boshlash uchun kompyuterda talaba bo\'lishi kerak"') + '>Qayta boshlash</button>';
+
+            return '<div class="mn-card ' + esc(d.stage) + '">'
+                + '<div class="mn-top"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + esc(d.name) + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
+                + student + meta
+                + '<div class="mn-acts">' + stopBtn + restartBtn + '</div></div>';
+        }
+
+        function render(list) {
+            const count = (fn) => list.filter(fn).length;
+            sum.innerHTML = '<span class="mn-chip"><b>' + count((d) => d.running) + '</b> kompyuterda</span>'
+                + '<span class="mn-chip take"><b>' + count((d) => d.stage === 'take') + '</b> ishlamoqda</span>'
+                + '<span class="mn-chip done"><b>' + count((d) => d.stage === 'result') + '</b> topshirdi</span>'
+                + '<span class="mn-chip"><b>' + count((d) => ['start', 'face', 'wait'].includes(d.stage)) + '</b> kutmoqda</span>'
+                + '<span class="mn-chip off"><b>' + count((d) => d.stage === 'offline' || d.stage === 'stopped') + '</b> oflayn / to\'xtatilgan</span>'
+                + '<span class="mn-live">Har 3 soniyada yangilanadi</span>';
+            if (!list.length) {
+                body.innerHTML = '<div class="lm-empty">Bu test hozir hech bir kompyuterda ochiq emas. "Kompyuter qo\'shish" tugmasi orqali boshlang.</div>';
+                return;
+            }
+            const rooms = {};
+            list.forEach((d) => { (rooms[d.room] = rooms[d.room] || []).push(d); });
+            body.innerHTML = Object.keys(rooms).map((room) => {
+                const title = room === 'Xonasiz' ? 'Xona belgilanmagan' : esc(room) + '-xona';
+                return '<section><h4 class="mn-room-title">' + title + '<small>' + rooms[room].length + ' ta kompyuter</small></h4>'
+                    + '<div class="mn-grid">' + rooms[room].map(card).join('') + '</div></section>';
+            }).join('');
+        }
+
+        async function load() {
+            if (!url || busy) return;
+            try {
+                const r = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+                if (!r.ok) throw new Error();
+                const j = await r.json();
+                if (j.migrate) { body.innerHTML = '<div class="lm-empty">Server yangilanmagan: php artisan migrate ni ishga tushiring.</div>'; return; }
+                render(j.devices || []);
+            } catch (e) {
+                toast.className = 'mn-toast bad';
+                toast.textContent = "Server bilan aloqa yo'q — qayta urinilmoqda";
+            }
+        }
+
+        function open(btn) {
+            url = btn.dataset.devicesUrl;
+            document.getElementById('monitorTestName').textContent = btn.dataset.testName || '';
+            // "Kompyuter qo'shish" — shu test uchun boshlash oynasi
+            addBtn.dataset.testId = btn.dataset.testId;
+            addBtn.dataset.testName = btn.dataset.testName;
+            addBtn.dataset.launchUrl = btn.dataset.launchUrl;
+            toast.textContent = '';
+            changed = false;
+            body.innerHTML = '<div class="lm-empty">Yuklanmoqda...</div>';
+            modal.classList.add('is-open');
+            load();
+            clearInterval(timer);
+            timer = setInterval(load, 3000);
+        }
+
+        function close() {
+            modal.classList.remove('is-open');
+            clearInterval(timer);
+            timer = null;
+            // To'xtatilgan/qayta boshlangan bo'lsa jadvaldagi holat yangilansin
+            if (changed) window.location.reload();
+        }
+
+        document.addEventListener('click', (ev) => {
+            const btn = ev.target.closest ? ev.target.closest('.mn-open') : null;
+            if (btn) { open(btn); return; }
+            if (ev.target === modal || ev.target.id === 'monitorClose') close();
+            if (ev.target.id === 'monitorAdd') { modal.classList.remove('is-open'); clearInterval(timer); }
+        });
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape' && modal.classList.contains('is-open')) close();
+        });
+
+        body.addEventListener('click', async (ev) => {
+            const btn = ev.target.closest('button[data-act]');
+            if (!btn || btn.disabled || !btn.dataset.url) return;
+            const question = btn.dataset.act === 'stop'
+                ? btn.dataset.name + " kompyuterida test to'xtatilsinmi? Talabaning belgilangan javoblari topshiriladi."
+                : btn.dataset.name + ' kompyuterida test ' + btn.dataset.student + " uchun boshidan boshlansinmi? Hozirgi javoblari o'chiriladi.";
+            if (!confirm(question)) return;
+            btn.disabled = true;
+            busy = true;
+            try {
+                const r = await fetch(btn.dataset.url, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+                });
+                const j = await r.json().catch(() => ({}));
+                toast.className = 'mn-toast' + (r.ok ? '' : ' bad');
+                toast.textContent = j.message || (r.ok ? 'Bajarildi.' : 'Xatolik yuz berdi.');
+                if (r.ok) changed = true;
+            } catch (e) {
+                toast.className = 'mn-toast bad';
+                toast.textContent = 'Xatolik: server bilan aloqa yo\'q.';
+            }
+            busy = false;
+            load();
         });
     })();
     </script>

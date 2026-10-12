@@ -224,6 +224,10 @@
     @php $isPreview = $preview ?? false; @endphp
     <form method="POST" action="{{ $isPreview ? route('teacher.fan-testlari.preview.submit', $test) : route('kiosk.fan-testi.submit', [$test, $attempt]) }}" id="testForm">
         @csrf
+        @unless($isPreview)
+            {{-- Urinish qayta boshlangan bo'lsa eski sahifa javoblari qabul qilinmaydi --}}
+            <input type="hidden" name="attempt_started" value="{{ $attempt->started_at?->timestamp }}">
+        @endunless
 
         <div class="t-bar">
             <div class="t-who">
@@ -412,6 +416,25 @@
 
     // O'qituvchi testni to'xtatdi — belgilangan javoblar bilan topshiriladi
     window.addEventListener('kiosk-stop', () => submitOnce());
+
+    // O'qituvchi testni shu talabaga qayta boshladi — javoblar topshirilmaydi
+    window.addEventListener('kiosk-goto', (event) => {
+        submitted = true;
+        window.location.href = event.detail;
+    });
+
+    // Nechta savolga javob berilgan (o'qituvchining "Kompyuterlar" oynasi uchun)
+    window.kioskAnswered = () => {
+        const answered = new Set();
+        Array.from(form.elements).forEach((el) => {
+            if (!el.name || !el.name.startsWith('answers[')) return;
+            const filled = (el.type === 'radio' || el.type === 'checkbox')
+                ? el.checked
+                : String(el.value || '').trim() !== '';
+            if (filled) answered.add(el.name.slice(0, el.name.indexOf(']') + 1));
+        });
+        return answered.size;
+    };
 
     renderClock();
     const ticker = setInterval(() => {

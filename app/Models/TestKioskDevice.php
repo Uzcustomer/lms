@@ -26,6 +26,14 @@ class TestKioskDevice extends Model
         'assigned_fan_testi_id',
         'assigned_at',
         'assigned_by_name',
+        'kiosk_stage',
+        'kiosk_stage_at',
+        'current_attempt_id',
+        'kiosk_answered',
+        'pending_command',
+        'pending_attempt_id',
+        'released_fan_testi_id',
+        'released_attempt_id',
     ];
 
     protected $hidden = ['token_hash', 'previous_token_hash'];
@@ -36,6 +44,7 @@ class TestKioskDevice extends Model
         'last_seen_at' => 'datetime',
         'revoked_at' => 'datetime',
         'assigned_at' => 'datetime',
+        'kiosk_stage_at' => 'datetime',
     ];
 
     public function isActive(): bool

@@ -3088,6 +3088,13 @@ class JournalController extends Controller
                     || ($student->level_code != 16 && $gradeValue < $markingScore->minimum_limit);
 
                 if ($existingGrade) {
+                    // NB ustun: HEMIS davomatida NB bo'lgan juftlikka HEMIS bahosi
+                    // yozilmaydi (davomat qadami oldinroq NB qilgan) — o'qituvchi
+                    // sababli ariza / otrabotka orqali qayta baho qo'yadi.
+                    if ($existingGrade->reason === 'absent') {
+                        return;
+                    }
+
                     $updateData = [
                         'grade' => $gradeValue,
                         'employee_id' => $item['employee']['id'],

@@ -120,7 +120,7 @@ class JnMtCalculator
         $jbGrades = [];
         $mtGrades = [];
         foreach ($gradesRaw as $g) {
-            $effective = $this->effectiveGrade($g);
+            $effective = self::effectiveGrade($g);
             if ($effective === null) continue;
             $date = Carbon::parse($g->lesson_date)->format('Y-m-d');
             $key = $date . '_' . $g->lesson_pair_code;
@@ -152,7 +152,7 @@ class JnMtCalculator
      * Bitta student_grades qatori uchun samarali baho (jurnal mantig'iga mos).
      * Bahosi yo'q yoki "pending" bo'lsa — null qaytaradi.
      */
-    private function effectiveGrade($row): ?float
+    public static function effectiveGrade($row): ?float
     {
         // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
         // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.

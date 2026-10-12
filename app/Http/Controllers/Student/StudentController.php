@@ -724,9 +724,9 @@ class StudentController extends Controller
                 })
                 ->values();
 
-            // JB kunlik o'rtachalar (jurnal mantiqidek)
+            // JB kunlik o'rtachalar — jurnal bilan bir xil (JnMtCalculator):
+            // ustunlar faqat dars jadvalidan, baho faqat jadvaldagi juftlikdan olinadi
             $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-                ->merge($jbGradesRaw->map(fn($g) => ['date' => $g->lesson_date, 'pair' => $g->lesson_pair_code]))
                 ->unique(fn($item) => $item['date'] . '_' . $item['pair'])
                 ->sortBy('date')
                 ->values();
@@ -743,14 +743,21 @@ class StudentController extends Controller
             $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
             $totalJbDaysForAverage = count($jbLessonDatesForAverage);
 
+            $jbPairSet = $jbColumns->mapWithKeys(fn($c) => [$c['date'] . '_' . $c['pair'] => true])->all();
             $jbGradesByDatePair = [];
             foreach ($jbGradesRaw as $g) {
-                $effectiveGrade = $getEffectiveGrade($g);
+                if (!isset($jbPairSet[$g->lesson_date . '_' . $g->lesson_pair_code])) {
+                    continue; // jadvalda yo'q juftlik — jurnal ham hisoblamaydi
+                }
+                // Jurnal qoidasi: "pending" (NB) qator baho hisoblanmaydi
+                $effectiveGrade = \App\Services\JnMtCalculator::effectiveGrade($g);
                 if ($effectiveGrade !== null) {
                     $jbGradesByDatePair[$g->lesson_date][$g->lesson_pair_code] = $effectiveGrade;
                 }
             }
 
+            // Kunlik baho = juftliklar yig'indisi / shu kundagi juftliklar soni
+            // (bahosiz juftlik 0 hisoblanadi) — jurnaldagidek
             $dailySum = 0;
             foreach ($jbLessonDates as $date) {
                 if (!isset($jbLessonDatesForAverageLookup[$date])) continue;
@@ -758,9 +765,7 @@ class StudentController extends Controller
                 $dayGrades = $jbGradesByDatePair[$date] ?? [];
                 if (empty($dayGrades)) continue;
 
-                $gradeSum = array_sum($dayGrades);
-                $dailyAvg = round($gradeSum / count($dayGrades), 0, PHP_ROUND_HALF_UP);
-                $dailySum += $dailyAvg;
+                $dailySum += round(array_sum($dayGrades) / ($jbPairsPerDay[$date] ?? 1), 0, PHP_ROUND_HALF_UP);
             }
             $jnAverage = $totalJbDaysForAverage > 0
                 ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
@@ -795,7 +800,7 @@ class StudentController extends Controller
                 $dayGradesH = $jbGradesByDatePair[$date] ?? [];
                 $hasGradesH = !empty($dayGradesH);
                 $gradeSumH = array_sum($dayGradesH);
-                $dayAvgH = $hasGradesH ? round($gradeSumH / count($dayGradesH), 0, PHP_ROUND_HALF_UP) : 0;
+                $dayAvgH = $hasGradesH ? round($gradeSumH / ($jbPairsPerDay[$date] ?? 1), 0, PHP_ROUND_HALF_UP) : 0;
                 $retake = $jbRetakeInfo[$date] ?? null;
                 $jbDailyData[] = [
                     'date' => $date,

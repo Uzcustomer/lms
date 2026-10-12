@@ -167,7 +167,8 @@ class TeacherMissedLessons
                 'semester_code' => $slot->semester_code,
                 'dates' => [],
                 'regular' => [],
-                'late_join' => [],
+                'late_join' => [],        // superkontrakt bo'lmaganlar (oddiy, qo'shimcha)
+                'late_join_sk' => [],     // superkontrakt
                 'rejected' => false,
             ];
             $groups[$groupKey]['dates'][$slot->lesson_day] = true;
@@ -178,8 +179,13 @@ class TeacherMissedLessons
                 $groups[$groupKey]['rejected'] = $groups[$groupKey]['rejected'] || $status === LessonOpening::STATUS_REJECTED;
             }
             foreach ($skHere as $hemis) {
-                $type = trim((string) $lateJoin[$hemis]->student_type_name);
-                $groups[$groupKey]['late_join'][$hemis] = (string) $lateJoin[$hemis]->full_name . ($type !== '' ? " ({$type})" : '');
+                $student = $lateJoin[$hemis];
+                if ((string) $student->student_type_code === LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE) {
+                    $groups[$groupKey]['late_join_sk'][$hemis] = (string) $student->full_name;
+                } else {
+                    $type = trim((string) $student->student_type_name);
+                    $groups[$groupKey]['late_join'][$hemis] = (string) $student->full_name . ($type !== '' ? " ({$type})" : '');
+                }
             }
         }
 
@@ -197,6 +203,8 @@ class TeacherMissedLessons
                     'regular_students' => count($g['regular']),
                     'late_join_students' => count($g['late_join']),
                     'late_join_names' => array_values($g['late_join']),
+                    'superkontrakt_students' => count($g['late_join_sk']),
+                    'superkontrakt_names' => array_values($g['late_join_sk']),
                     // Jurnal eng oxirgi kunga o'tib ochiladi. So'rov oynasi O'ZI
                     // ochilmaydi: o'qituvchi kunning ustunidagi "!" ni bosadi.
                     'url' => route('admin.journal.show', [$g['group_db_id'], $g['subject_id'], $g['semester_code']])

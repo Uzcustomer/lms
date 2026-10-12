@@ -348,7 +348,9 @@
                         @php
                             $mlpDates = $lesson['dates'] ?? [$lesson['lesson_date']];
                             $mlpShown = array_slice($mlpDates, 0, 6);
-                            $mlpSk = (int) ($lesson['late_join_students'] ?? 0);
+                            $mlpLate = (int) ($lesson['late_join_students'] ?? 0);
+                            $mlpSuper = (int) ($lesson['superkontrakt_students'] ?? 0);
+                            $mlpSk = $mlpLate + $mlpSuper;
                             $mlpRegular = (int) ($lesson['regular_students'] ?? 0);
                         @endphp
                         <div class="mlp-row {{ $mlpSk > 0 ? 'is-sk' : '' }}">
@@ -361,14 +363,24 @@
                                         <span class="mlp-count">{{ $mlpRegular }} talabada baho yo'q</span>
                                     @endif
                                     @if($mlpSk > 0)
-                                        <span class="mlp-sk-tag">{{ $mlpSk }} kech kiritilgan</span>
+                                        @if($mlpSuper > 0)
+                                            <span class="mlp-sk-tag" style="background:#fcd34d">{{ $mlpSuper }} superkontrakt</span>
+                                        @endif
+                                        @if($mlpLate > 0)
+                                            <span class="mlp-sk-tag">{{ $mlpLate }} kech kiritilgan</span>
+                                        @endif
                                     @endif
                                     @if($lesson['rejected'])
                                         <span class="mlp-tag">so'rov rad etilgan</span>
                                     @endif
                                 </div>
                                 @if($mlpSk > 0)
-                                    <div class="mlp-sk-names">HEMISga kech kiritilgan: {{ implode(', ', $lesson['late_join_names'] ?? []) }}</div>
+                                    @if($mlpSuper > 0)
+                                        <div class="mlp-sk-names"><b>Superkontrakt:</b> {{ implode(', ', $lesson['superkontrakt_names'] ?? []) }}</div>
+                                    @endif
+                                    @if($mlpLate > 0)
+                                        <div class="mlp-sk-names"><b>Kech kiritilgan:</b> {{ implode(', ', $lesson['late_join_names'] ?? []) }}</div>
+                                    @endif
                                 @endif
                             </div>
                             <a class="mlp-btn" href="{{ $lesson['url'] }}">

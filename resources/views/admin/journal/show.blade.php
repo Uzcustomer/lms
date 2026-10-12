@@ -938,6 +938,12 @@
         // superadminEditGrade) ham shu rol ro'yxatini tekshiradi.
         $isSuperAdmin = (auth()->user()?->hasAnyRole(['superadmin', 'admin']) ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
         $canAdminEditExam = false;
+        // Ixcham ko'rinish: superadmin kunga bitta baho qo'ysa — shu kunning
+        // barcha JN juftliklariga yoziladi. Sana => [juftlik kodlari]
+        $jbPairsByDate = [];
+        foreach (($jbColumns ?? []) as $c) {
+            $jbPairsByDate[$c['date']][] = $c['pair'];
+        }
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -1400,8 +1406,33 @@
                                                         }
                                                     }
                                                     $dayTitle = implode(' | ', $dayGraderLines);
+
+                                                    // Superadmin: kunga bitta baho — har juftlik o'z yo'li bilan
+                                                    // (batafsil ko'rinishdagidek): baho bor → tahrir, NB → otrabotka,
+                                                    // bo'sh → yangi baho. LMS sababli ariza NB lari modal orqali
+                                                    // kiritiladi — bu yerda o'tkazib yuboriladi.
+                                                    $superDayOps = [];
+                                                    if ($isSuperAdmin && !$isDekan) {
+                                                        $dayExcuse = $approvedExcuses[$student->hemis_id] ?? null;
+                                                        $dayLmsSababli = $dayExcuse && $dayExcuse->start_date <= $date && $dayExcuse->end_date >= $date;
+                                                        foreach (($jbPairsByDate[$date] ?? []) as $dPair) {
+                                                            if (isset($dayGrades[$dPair])) {
+                                                                $superDayOps[] = ['op' => 'edit', 'id' => $dayGrades[$dPair]['id']];
+                                                            } elseif (isset($dayAbsences[$dPair])) {
+                                                                if (!$dayLmsSababli) {
+                                                                    $superDayOps[] = ['op' => 'retake', 'id' => $dayAbsences[$dPair]['id']];
+                                                                }
+                                                            } else {
+                                                                $superDayOps[] = ['op' => 'create', 'pair' => (string) $dPair];
+                                                            }
+                                                        }
+                                                    }
+                                                    if ($superDayOps) {
+                                                        $dayTitle = 'Superadmin: kunga bitta baho — barcha juftliklarga (' . count($superDayOps) . ' ta) yoziladi' . ($dayTitle ? ' | ' . $dayTitle : '');
+                                                    }
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif>
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }} {{ $superDayOps ? 'cursor-pointer hover:bg-purple-50' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif
+                                                    @if($superDayOps) onclick="superadminDayGrade(this)" data-ops="{{ json_encode($superDayOps) }}" data-student="{{ $student->hemis_id }}" data-date="{{ $date }}" data-subject="{{ $subjectId }}" data-semester="{{ $semesterCode }}" @endif>
                                                     @if($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
@@ -5086,6 +5117,87 @@
 
         // Retake grade functionality - Excel-like inline editing
         let currentEditingCell = null;
+
+        // Superadmin (ixcham): kunga bitta baho — shu kunning barcha JN
+        // juftliklariga batafsil ko'rinishdagi endpointlar orqali yoziladi.
+        function superadminDayGrade(td) {
+            if (isDekan || currentEditingCell) return;
+            let ops;
+            try { ops = JSON.parse(td.dataset.ops || '[]'); } catch (e) { ops = []; }
+            if (!ops.length) return;
+
+            currentEditingCell = td;
+            const originalContent = td.innerHTML;
+            let done = false;
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = '100';
+            input.className = 'w-full text-center border border-purple-500 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-purple-300';
+            input.style.cssText = 'width:50px;height:28px;';
+            input.title = ops.length + ' ta juftlikka yoziladi';
+            td.innerHTML = '';
+            td.appendChild(input);
+            input.focus();
+
+            function cancel() {
+                done = true;
+                td.innerHTML = originalContent;
+                currentEditingCell = null;
+            }
+
+            async function save() {
+                if (done) return;
+                if (input.value.trim() === '') { cancel(); return; }
+                const val = parseFloat(input.value);
+                if (isNaN(val) || val < 0 || val > 100) {
+                    alert('Iltimos, 0 dan 100 gacha baho kiriting');
+                    cancel();
+                    return;
+                }
+                done = true;
+                td.innerHTML = '<span class="text-gray-500">...</span>';
+
+                const headers = {'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json'};
+                const urls = {
+                    edit: '{{ route("admin.journal.superadmin-edit-grade") }}',
+                    retake: '{{ route("admin.journal.save-retake-grade") }}',
+                    create: '{{ route("admin.journal.create-retake-grade") }}'
+                };
+                const errors = [];
+                for (const op of ops) {
+                    const body = op.op === 'create'
+                        ? {
+                            student_hemis_id: td.dataset.student,
+                            lesson_date: td.dataset.date,
+                            lesson_pair_code: op.pair,
+                            subject_id: td.dataset.subject,
+                            semester_code: td.dataset.semester,
+                            grade: val
+                        }
+                        : { grade_id: op.id, grade: val };
+                    try {
+                        const r = await fetch(urls[op.op], { method: 'POST', headers, body: JSON.stringify(body) });
+                        const d = await r.json();
+                        if (!d.success) errors.push(d.message || 'Xatolik');
+                    } catch (e) {
+                        errors.push('Tarmoq xatosi');
+                    }
+                }
+
+                if (errors.length) {
+                    alert((ops.length - errors.length) + ' / ' + ops.length + ' ta juftlik saqlandi.\n' + errors.join('\n'));
+                }
+                location.reload();
+            }
+
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); save(); }
+                else if (e.key === 'Escape') { cancel(); }
+            });
+            input.addEventListener('blur', function () { if (!done) save(); });
+        }
 
         function makeEditable(cellDiv, gradeId) {
             if (isDekan) return;

@@ -369,7 +369,7 @@
                                             <span class="mlp-sk-tag" style="background:#fcd34d">{{ $mlpSuper }} superkontrakt</span>
                                         @endif
                                         @if($mlpLate > 0)
-                                            <span class="mlp-sk-tag">{{ $mlpLate }} kech kiritilgan</span>
+                                            <span class="mlp-sk-tag">{{ $mlpLate }} HEMISga kech kiritilgan</span>
                                         @endif
                                     @endif
                                     @if($lesson['rejected'])
@@ -381,7 +381,7 @@
                                         <div class="mlp-sk-names"><b>Superkontrakt:</b> {{ implode(', ', $lesson['superkontrakt_names'] ?? []) }}</div>
                                     @endif
                                     @if($mlpLate > 0)
-                                        <div class="mlp-sk-names"><b>Kech kiritilgan:</b> {{ implode(', ', $lesson['late_join_names'] ?? []) }}</div>
+                                        <div class="mlp-sk-names"><b>HEMISga kech kiritilgan:</b> {{ implode(', ', $lesson['late_join_names'] ?? []) }}</div>
                                     @endif
                                 @endif
                             </div>

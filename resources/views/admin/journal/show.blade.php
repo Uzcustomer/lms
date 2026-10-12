@@ -84,8 +84,9 @@
         tr.sk-row > td.student-name-cell { background-color: #fef3c7 !important; box-shadow: inset 4px 0 0 #f59e0b; }
         .sk-cell { background: #fde68a; border-radius: 3px; }
         .sk-cell .sk-dash { color: #b45309; font-weight: 700; }
-        tr.sk-row:not(.sk-open) .sk-cell { pointer-events: none; }
-        tr.sk-row.sk-open .sk-cell { cursor: pointer; outline: 1px dashed #d97706; }
+        /* Batafsil ko'rinishda tugmasiz ham bosib baho qo'yiladi; tugma bosilgach ajratib ko'rsatiladi */
+        .sk-cell { cursor: pointer; }
+        tr.sk-row.sk-open .sk-cell { outline: 1px dashed #d97706; }
         .sk-btn { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 8px; border: 0; border-radius: 999px;
             background: #f59e0b; color: #fff; font-size: 10.5px; font-weight: 800; text-transform: none; cursor: pointer; vertical-align: 1px; }
         .sk-btn:hover { background: #d97706; }

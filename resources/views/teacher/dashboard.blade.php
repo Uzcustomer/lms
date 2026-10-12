@@ -338,50 +338,42 @@
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                     </span>
                     <div>
-                        <h3 id="mlpTitle">Baho qo'yilmagan darslar: {{ $missedLessons->count() }} ta</h3>
-                        <p>Quyidagi fanlardan shu guruhlarga ko'rsatilgan sanada baho qo'yilmagan. Muddati o'tgani uchun baho qo'yish yopilgan — dars ochishga ruxsat so'rang.</p>
+                        <h3 id="mlpTitle">Baho qo'yilmagan darslar: {{ $missedLessons->sum(fn ($l) => count($l['dates'] ?? [1])) }} ta · {{ $missedLessons->count() }} ta guruh</h3>
+                        <p>Quyidagi guruhlarda baho qo'yilmagan darslar bor. Jurnalga kiring: oddiy talabalar uchun kun ustunidagi "!" orqali dars ochishga ruxsat so'rang, superkontrakt talabalarga batafsil ko'rinishda baho qo'yasiz.</p>
                     </div>
                 </div>
 
                 <div class="mlp-body">
                     @foreach($missedLessons as $lesson)
-                        @php $mlpDate = \Carbon\Carbon::parse($lesson['lesson_date']); @endphp
-                        @if(!empty($lesson['superkontrakt']))
-                            {{-- Superkontrakt talaba o'sha kuni hali HEMISda yo'q edi — o'qituvchi arizasiz baho qo'yadi --}}
-                            <div class="mlp-row is-sk">
-                                <div class="mlp-cal"><i>{{ $mlpMonths[(int) $mlpDate->format('n')] }}</i><b>{{ $mlpDate->format('d') }}</b></div>
-                                <div class="mlp-info">
-                                    <div class="mlp-subject">{{ $lesson['subject_name'] }}</div>
-                                    <div class="mlp-meta">
-                                        {{ $lesson['group_name'] }} guruhi · {{ $mlpDate->format('d.m.Y') }}
-                                        <span class="mlp-sk-tag">{{ $lesson['ungraded_students'] }} superkontrakt talaba</span>
-                                    </div>
-                                    <div class="mlp-sk-names">{{ implode(', ', $lesson['students'] ?? []) }} — HEMISga keyin kiritilgan, ruxsatsiz baho qo'ying</div>
-                                </div>
-                                <a class="mlp-btn is-sk" href="{{ $lesson['url'] }}">
-                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.5H9V13z"/></svg>
-                                    Baho qo'yish
-                                </a>
-                            </div>
-                            @continue
-                        @endif
-                        <div class="mlp-row">
-                            <div class="mlp-cal"><i>{{ $mlpMonths[(int) $mlpDate->format('n')] }}</i><b>{{ $mlpDate->format('d') }}</b></div>
+                        @php
+                            $mlpDates = $lesson['dates'] ?? [$lesson['lesson_date']];
+                            $mlpShown = array_slice($mlpDates, 0, 6);
+                            $mlpSk = (int) ($lesson['superkontrakt_students'] ?? 0);
+                            $mlpRegular = (int) ($lesson['regular_students'] ?? 0);
+                        @endphp
+                        <div class="mlp-row {{ $mlpSk > 0 ? 'is-sk' : '' }}">
+                            <div class="mlp-cal"><i>kun</i><b>{{ count($mlpDates) }}</b></div>
                             <div class="mlp-info">
-                                <div class="mlp-subject">{{ $lesson['subject_name'] }}</div>
+                                <div class="mlp-subject">{{ $lesson['group_name'] }} <span style="font-weight:600;color:#64748b">· {{ $lesson['subject_name'] }}</span></div>
                                 <div class="mlp-meta">
-                                    {{ $lesson['group_name'] }} guruhi · {{ $mlpDate->format('d.m.Y') }}
-                                    @if(($lesson['ungraded_students'] ?? 0) > 0)
-                                        <span class="mlp-count">{{ $lesson['ungraded_students'] }} talabada baho yo'q</span>
+                                    {{ implode(', ', array_map(fn ($d) => \Carbon\Carbon::parse($d)->format('d.m'), $mlpShown)) }}{{ count($mlpDates) > count($mlpShown) ? ' …' : '' }}
+                                    @if($mlpRegular > 0)
+                                        <span class="mlp-count">{{ $mlpRegular }} oddiy talaba</span>
+                                    @endif
+                                    @if($mlpSk > 0)
+                                        <span class="mlp-sk-tag">{{ $mlpSk }} superkontrakt</span>
                                     @endif
                                     @if($lesson['rejected'])
                                         <span class="mlp-tag">so'rov rad etilgan</span>
                                     @endif
                                 </div>
+                                @if($mlpSk > 0)
+                                    <div class="mlp-sk-names">Superkontrakt: {{ implode(', ', $lesson['superkontrakt_names'] ?? []) }} — HEMISga keyin kiritilgan</div>
+                                @endif
                             </div>
                             <a class="mlp-btn" href="{{ $lesson['url'] }}">
-                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
-                                {{ $lesson['rejected'] ? 'Qayta so\'rash' : 'Ruxsat so\'rash' }}
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" transform="rotate(180 12 12)"/></svg>
+                                Kirish
                             </a>
                         </div>
                     @endforeach

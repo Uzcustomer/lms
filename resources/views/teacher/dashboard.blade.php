@@ -359,10 +359,12 @@
                                 <div class="mlp-subject">{{ $lesson['group_name'] }} <span style="font-weight:600;color:#64748b">· {{ $lesson['subject_name'] }}</span></div>
                                 <div class="mlp-meta">
                                     {{ implode(', ', array_map(fn ($d) => \Carbon\Carbon::parse($d)->format('d.m'), $mlpShown)) }}{{ count($mlpDates) > count($mlpShown) ? ' …' : '' }}
-                                    @if($mlpRegular > 0)
-                                        <span class="mlp-count">{{ $mlpRegular }} talabada baho yo'q</span>
+                                    @php $mlpTotal = (int) ($lesson['total_students'] ?? ($mlpRegular + $mlpSk)); @endphp
+                                    @if($mlpTotal > 0)
+                                        <span class="mlp-count">{{ $mlpTotal }} talabada baho yo'q</span>
                                     @endif
                                     @if($mlpSk > 0)
+                                        <span style="margin-left:6px;font-size:12px;color:#92400e">shundan:</span>
                                         @if($mlpSuper > 0)
                                             <span class="mlp-sk-tag" style="background:#fcd34d">{{ $mlpSuper }} superkontrakt</span>
                                         @endif

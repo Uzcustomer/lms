@@ -29,6 +29,7 @@ class SettingsController extends Controller
 
         // Baho qo'yilmay qolganlarga baho qo'yish oynasi
         $data['missedGradeDays'] = MissedGradeAccess::days();
+        $data['lateJoinGradeUntil'] = \App\Services\LateJoinGradeAccess::until();
         $data['missedGradeRoles'] = MissedGradeAccess::roles();
 
         // Marking system scores
@@ -113,6 +114,12 @@ class SettingsController extends Controller
             Setting::set('missed_grade_days', (int) $request->input('missed_grade_days', 0));
             Setting::set('missed_grade_by_registrator', $request->boolean('missed_grade_by_registrator') ? '1' : '0');
             Setting::set('missed_grade_by_oqituvchi', $request->boolean('missed_grade_by_oqituvchi') ? '1' : '0');
+        }
+
+        // HEMISga kech kiritilgan talabalarga arizasiz baho qo'yish: oxirgi sana (bo'sh — muddatsiz)
+        if ($request->has('late_join_grade_until')) {
+            $request->validate(['late_join_grade_until' => 'nullable|date_format:Y-m-d']);
+            Setting::set(\App\Services\LateJoinGradeAccess::SETTING, (string) $request->input('late_join_grade_until', ''));
         }
 
         $deadlines = $request->input('deadlines', []);

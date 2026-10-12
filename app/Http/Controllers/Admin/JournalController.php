@@ -1562,7 +1562,7 @@ class JournalController extends Controller
         // bahosi yo'qligi kunni "baho qo'yilmagan" qilmaydi ("!" chiqmaydi) — bu
         // baholarni o'qituvchi arizasiz qo'yadi. Kunda oddiy talabada ham baho
         // bo'lmasa, "!" avvalgidek chiqadi.
-        $jbLateJoin = $students
+        $jbLateJoin = !\App\Services\LateJoinGradeAccess::isOpen() ? [] : $students
             ->filter(fn ($s) => !empty($s->hemis_created_at) && isset($jbActiveHemis[(string) $s->hemis_id]))
             ->mapWithKeys(fn ($s) => [(string) $s->hemis_id => substr((string) $s->hemis_created_at, 0, 10)])
             ->all();
@@ -2410,7 +2410,8 @@ class JournalController extends Controller
         // Talaba HEMISga semestr o'rtasida kiritilgan bo'lishi mumkin (superkontrakt,
         // qo'shimcha, oddiy): kiritilishidan oldingi darslarga o'qituvchi dars
         // ochish arizasisiz baho qo'yadi.
-        $lateJoinDates = $students
+        // Sozlamadagi muddat o'tgach (LateJoinGradeAccess) — oddiy tartib: dars ochish arizasi
+        $lateJoinDates = !\App\Services\LateJoinGradeAccess::isOpen() ? [] : $students
             ->filter(fn ($st) => !empty($st->hemis_created_at) && (string) ($st->student_status_code ?? '') !== '60')
             ->mapWithKeys(fn ($st) => [(string) $st->hemis_id => substr((string) $st->hemis_created_at, 0, 10)])
             ->all();
@@ -11306,7 +11307,8 @@ class JournalController extends Controller
      */
     private function isLateJoinGap(string $studentHemisId, string $lessonDate): bool
     {
-        if ($lessonDate > now('Asia/Tashkent')->toDateString()) {
+        // Sozlamadagi oxirgi sana o'tgan bo'lsa — faqat dars ochish arizasi orqali
+        if (!\App\Services\LateJoinGradeAccess::isOpen() || $lessonDate > now('Asia/Tashkent')->toDateString()) {
             return false;
         }
         $student = DB::table('students')

@@ -216,6 +216,32 @@
                             </div>
                         </div>
 
+                        {{-- HEMISga kech kiritilgan talabalarga arizasiz baho qo'yish muddati --}}
+                        @php
+                            $lateUntil = old('late_join_grade_until', $lateJoinGradeUntil ?? '');
+                            $lateOpen = $lateUntil === '' || $lateUntil === null || now('Asia/Tashkent')->toDateString() <= $lateUntil;
+                        @endphp
+                        <div style="background: #fffbeb; border-radius: 14px; padding: 20px; margin-bottom: 20px; border: 1px solid #fde68a;">
+                            <div style="font-size: 14px; font-weight: 700; color: #78350f; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; color: #d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                HEMISga kech kiritilgan va superkontrakt talabalarga baho qo'yish muddati
+                            </div>
+                            <div style="font-size: 11.5px; color: #92400e; margin-bottom: 14px;">
+                                Talaba HEMISga kiritilgan kungacha bo'lgan darslarga o'qituvchi shu sanagacha dars ochish arizasisiz baho qo'yadi (jurnalda sariq kataklar).
+                                Sana o'tgach bu baholar ham faqat dars ochish arizasi tasdiqlangandan keyin qo'yiladi. Bo'sh qoldirilsa — muddatsiz.
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; background: #fff; border-radius: 10px; border: 1px solid #fde68a;">
+                                <label for="late_join_grade_until" style="font-size: 12px; color: #78350f; font-weight: 600;">Oxirgi sana</label>
+                                <input type="date" id="late_join_grade_until" name="late_join_grade_until" value="{{ $lateUntil }}"
+                                       style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-weight: 600; color: #111827; outline: none;">
+                                <button type="button" onclick="document.getElementById('late_join_grade_until').value = ''"
+                                        style="padding: 7px 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; color: #64748b; font-size: 12px; cursor: pointer;">Muddatsiz</button>
+                                <span style="font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; {{ $lateOpen ? 'background:#dcfce7;color:#166534' : 'background:#fee2e2;color:#991b1b' }}">
+                                    {{ $lateOpen ? ($lateUntil ? 'Ochiq — ' . \Carbon\Carbon::parse($lateUntil)->format('d.m.Y') . ' gacha' : 'Ochiq — muddatsiz') : 'Muddat tugagan — faqat ariza orqali' }}
+                                </span>
+                            </div>
+                        </div>
+
                         <div style="display: flex; justify-content: flex-end;">
                             <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">
                                 <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>

@@ -125,6 +125,7 @@ class TeacherMissedLessons
         foreach ($missingByDay as $set) {
             $missingHemis += $set;
         }
+        $lateJoinOpen = LateJoinGradeAccess::isOpen();
         $lateJoin = $missingHemis
             ? DB::table('students')
                 ->whereIn('hemis_id', array_keys($missingHemis))
@@ -149,7 +150,8 @@ class TeacherMissedLessons
 
             $status = $openings[$key] ?? null;
             $missingHere = array_map('strval', array_keys($missingByDay[$key] ?? []));
-            $skHere = array_values(array_filter($missingHere, fn ($hemis) => isset($lateJoin[$hemis])
+            // Sozlamadagi muddat o'tgach kech kiritilganlar ham oddiy (ariza orqali)
+            $skHere = ! $lateJoinOpen ? [] : array_values(array_filter($missingHere, fn ($hemis) => isset($lateJoin[$hemis])
                 && LessonOpeningTeacherReport::isLateJoinLesson($lateJoin[$hemis], $slot->lesson_day)));
             $regularHere = array_values(array_diff($missingHere, $skHere));
             $requestable = in_array($status, [null, LessonOpening::STATUS_REJECTED, LessonOpening::STATUS_EXPIRED], true);

@@ -1,7 +1,7 @@
 <x-app-layout>
 <style>
     .td { padding: 24px 16px 48px; color: #1e293b; }
-    .td-in { max-width: 1200px; margin: 0 auto; }
+    .td-in { width: 100%; }
     .td h1 { margin: 0 0 4px; font-size: 22px; font-weight: 700; color: #0f2748; }
     .td-lead { margin: 0 0 18px; color: #64748b; font-size: 14px; }
     .td-alert { margin-bottom: 14px; padding: 10px 14px; border-radius: 8px; font-size: 14px; }

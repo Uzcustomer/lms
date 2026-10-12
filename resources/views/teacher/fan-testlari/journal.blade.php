@@ -455,13 +455,6 @@
                                     <span class="jr-tag"><b>{{ $group['submitted_count'] }}</b> topshirgan</span>
                                     <span class="jr-tag is-ok"><b>{{ $group['passed_count'] }}</b> o'tgan</span>
                                     <span class="jr-tag">o'rtacha <b>{{ $group['average_percent'] }}%</b></span>
-                                    <form method="POST" action="{{ route('teacher.fan-testlari.attempts.clear', $selected) }}"
-                                          onsubmit="return confirm('Bu guruhning barcha natijalari o\'chirilsinmi?')" class="jr-group-clear">
-                                        @csrf
-                                        @method('DELETE')
-                                        <input type="hidden" name="group" value="{{ $group['name'] }}">
-                                        <button type="submit">Natijalarni tozalash</button>
-                                    </form>
                                 </div>
                             </summary>
 
@@ -475,7 +468,6 @@
                                     <th style="width:8%">Foiz</th>
                                     <th style="width:14%">Topshirgan vaqti</th>
                                     <th>Javoblari</th>
-                                    <th style="width:60px"></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -551,14 +543,6 @@
                                                     </div>
                                                 </details>
                                             @endif
-                                        </td>
-                                        <td style="text-align:right">
-                                            <form method="POST" action="{{ route('teacher.fan-testlari.attempts.destroy', $attempt) }}"
-                                                  onsubmit="return confirm('Bu talabaning natijasi o\'chirilsinmi? U testni qaytadan topshira oladi.')" class="jr-del-form">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="jr-del" title="Natijani o'chirish" aria-label="Natijani o'chirish">&times;</button>
-                                            </form>
                                         </td>
                                     </tr>
                                 @endforeach

@@ -329,7 +329,7 @@ class FanTestiController extends Controller
                 ] : null,
                 'stop_url' => $running ? route('teacher.fan-testlari.devices.stop', [$fanTesti, $d]) : null,
                 // Qulflangan yoki chalg'ib yakunlangan testni qayta boshlab bo'lmaydi — aks holda cheklov ma'nosiz
-                'restart_url' => $attempt && $lockCount === 0 ? route('teacher.fan-testlari.devices.restart', [$fanTesti, $d]) : null,
+                'restart_url' => $attempt && $lockCount === 0 && !$attempt->isFinished() ? route('teacher.fan-testlari.devices.restart', [$fanTesti, $d]) : null,
                 'unlock_url' => $attempt && $attempt->canUnlock() ? route('teacher.fan-testlari.attempts.unlock', [$fanTesti, $attempt]) : null,
             ];
         })
@@ -397,6 +397,9 @@ class FanTestiController extends Controller
             : null;
         if (!$attempt) {
             return response()->json(['message' => "Bu kompyuterda hali talaba kirmagan — qayta boshlash uchun talaba kerak."], 422);
+        }
+        if ($attempt->isFinished()) {
+            return response()->json(['message' => "Talaba testni topshirib bo'lgan — natijani o'chirib, qayta boshlab bo'lmaydi."], 422);
         }
         if ((int) ($attempt->lock_count ?? 0) > 0) {
             return response()->json(['message' => $attempt->ended_reason === 'away'
@@ -656,6 +659,11 @@ class FanTestiController extends Controller
     {
         $this->authorizeCollection($fanTesti);
 
+        // Talabalar natijalari to'plam bilan birga o'chib ketmasin
+        if (Schema::hasTable('fan_testi_attempts') && FanTestiAttempt::where('fan_testi_id', $fanTesti->id)->exists()) {
+            return back()->with('error', "Bu testni talabalar topshirgan — natijalar saqlanishi uchun uni o'chirib bo'lmaydi. Kerak bo'lsa testni to'xtating.");
+        }
+
         foreach ($fanTesti->questions ?? [] as $question) {
             $this->deleteQuestionImage($question['image_path'] ?? null);
         }
@@ -775,36 +783,6 @@ class FanTestiController extends Controller
             ],
             'migrationPending' => false,
         ]);
-    }
-
-    /**
-     * Jurnaldan bitta urinishni o'chiradi — talaba testni qaytadan
-     * topshira oladi (kiosk bir talabaga bitta urinish beradi).
-     */
-    public function destroyAttempt(FanTestiAttempt $attempt)
-    {
-        $collection = FanTesti::find($attempt->fan_testi_id);
-        abort_unless($collection, 404);
-        $this->authorizeCollection($collection);
-
-        $attempt->delete();
-
-        return back()->with('success', 'Talaba urinishi o\'chirildi — u testni qaytadan topshira oladi.');
-    }
-
-    /** Tanlangan test bo'yicha barcha urinishlarni tozalaydi. */
-    public function clearAttempts(Request $request, FanTesti $fanTesti)
-    {
-        $this->authorizeCollection($fanTesti);
-
-        $query = FanTestiAttempt::query()->where('fan_testi_id', $fanTesti->id);
-        if ($request->filled('group')) {
-            $query->where('group_name', $request->string('group'));
-        }
-        $removed = $query->count();
-        $query->delete();
-
-        return back()->with('success', $removed . ' ta urinish o\'chirildi.');
     }
 
     private function teacher()

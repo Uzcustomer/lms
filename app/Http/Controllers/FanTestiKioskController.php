@@ -401,6 +401,17 @@ class FanTestiKioskController extends Controller
             $fail('Bu test sizning guruhingiz uchun mo\'ljallanmagan.');
         }
 
+        // Har bir talaba testni bir marta topshiradi. Yarim qolgan urinish
+        // (kompyuter o'chib qolgan) esa yuz tekshiruvidan keyin davom etadi.
+        $finished = FanTestiAttempt::query()
+            ->where('fan_testi_id', $fanTesti->id)
+            ->where('student_id', $student->id)
+            ->where('status', '!=', 'in_progress')
+            ->exists();
+        if ($finished) {
+            $fail("Bu talaba testni allaqachon topshirgan. Har bir talaba testni faqat bir marta topshiradi.");
+        }
+
         if ($this->activeQuestions($fanTesti)->isEmpty()) {
             $fail('Bu test to\'plamida hali savol yo\'q.');
         }

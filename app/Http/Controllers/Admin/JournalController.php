@@ -1558,10 +1558,34 @@ class JournalController extends Controller
             }
         }
 
+        // HEMISga kech kiritilgan talabalar: kiritilishidan oldingi darsda ularning
+        // bahosi yo'qligi kunni "baho qo'yilmagan" qilmaydi ("!" chiqmaydi) — bu
+        // baholarni o'qituvchi arizasiz qo'yadi. Kunda oddiy talabada ham baho
+        // bo'lmasa, "!" avvalgidek chiqadi.
+        $jbLateJoin = $students
+            ->filter(fn ($s) => !empty($s->hemis_created_at) && isset($jbActiveHemis[(string) $s->hemis_id]))
+            ->mapWithKeys(fn ($s) => [(string) $s->hemis_id => substr((string) $s->hemis_created_at, 0, 10)])
+            ->all();
+
         // Juftlik "hisobga olingan" — BARCHA faol talaba baho/NB olgan bo'lsa
+        // (kiritilishidan oldingi kunda kech kiritilgan talaba talab qilinmaydi)
         $jbMarkedPairs = [];
-        foreach ($jbProcessedByPair as $pk => $set) {
-            if ($jbActiveCount > 0 && count($set) >= $jbActiveCount) {
+        foreach ($jbColumns as $col) {
+            $dateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+            $pk = $dateStr . '_' . $col['pair'];
+            if ($jbActiveCount === 0 || isset($jbMarkedPairs[$pk])) {
+                continue;
+            }
+            $set = $jbProcessedByPair[$pk] ?? [];
+            $complete = true;
+            foreach ($jbActiveHemis as $hemis => $_) {
+                if (isset($set[$hemis]) || (isset($jbLateJoin[$hemis]) && $dateStr < $jbLateJoin[$hemis])) {
+                    continue;
+                }
+                $complete = false;
+                break;
+            }
+            if ($complete) {
                 $jbMarkedPairs[$pk] = true;
             }
         }

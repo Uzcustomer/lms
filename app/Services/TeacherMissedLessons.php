@@ -201,10 +201,6 @@ class TeacherMissedLessons
                     'dates' => $dates,
                     'rejected' => $g['rejected'],
                     'regular_students' => count($g['regular']),
-                    // Noyob talabalar jami: kech kiritilgan talabaning kiritilgan kunidan
-                    // keyingi darsi ham baholanmagan bo'lsa, u ikki ro'yxatda turadi —
-                    // umumiy son uni bir marta sanaydi.
-                    'total_students' => count($g['regular'] + $g['late_join'] + $g['late_join_sk']),
                     'late_join_students' => count($g['late_join']),
                     'late_join_names' => array_values($g['late_join']),
                     'superkontrakt_students' => count($g['late_join_sk']),

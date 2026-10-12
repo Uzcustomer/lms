@@ -159,7 +159,17 @@ class FanTestiKioskController extends Controller
             return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
         }
 
-        if ($attempt->secondsLeft() <= 0) {
+        // Ikkinchi marta chalg'ib yakunlangan, lekin javoblar yetib kelmagan
+        // (sahifa yangilangan) — saqlangan holicha topshiriladi.
+        if ($this->hasLockColumns() && (int) $attempt->lock_count >= 2) {
+            $this->finalize($attempt, 'submitted');
+
+            return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
+        }
+
+        // Qulflangan test uchun vaqt o'qituvchi ochib bergach uzaytiriladi —
+        // qulf paytida muddat o'tib ketgani testni yakunlamaydi.
+        if (!$attempt->isLocked() && $attempt->secondsLeft() <= 0) {
             $this->finalize($attempt, 'expired');
 
             return redirect()->route('kiosk.fan-testi.result', [$fanTesti, $attempt]);
@@ -170,6 +180,8 @@ class FanTestiKioskController extends Controller
             'attempt' => $attempt,
             'questions' => collect($attempt->questions_snapshot ?? []),
             'secondsLeft' => $attempt->secondsLeft(),
+            'locked' => $this->hasLockColumns() && $attempt->isLocked(),
+            'awayLimit' => FanTestiAttempt::AWAY_LIMIT,
         ] + $this->follow('take'));
     }
 
@@ -254,20 +266,39 @@ class FanTestiKioskController extends Controller
             return response()->json(['finished' => true]);
         }
 
-        $key = 'fan_testi_face:' . $attempt->id;
-        if (RateLimiter::tooManyAttempts($key, 12)) {
-            return response()->json(['match' => null]);
-        }
-        RateLimiter::hit($key, 60);
-
         $data = $request->validate([
             'snapshot' => ['nullable', 'string', 'max:500000'],
             'away' => ['nullable', 'integer', 'min:0', 'max:50'],
+            'ping' => ['nullable', 'boolean'],
         ]);
+
+        // Cheklov faqat surat solishtirishga (og'ir so'rov); chalg'ish xabari va
+        // qulf holatini so'rash yengil — qulf paytida sahifa har 4 soniyada so'raydi.
+        if (!empty($data['snapshot'])) {
+            $key = 'fan_testi_face:' . $attempt->id;
+            if (RateLimiter::tooManyAttempts($key, 12)) {
+                return response()->json(['match' => null] + $this->lockState($attempt));
+            }
+            RateLimiter::hit($key, 60);
+        }
 
         $updates = [];
         if (!empty($data['away']) && $this->hasMonitorColumns()) {
             $updates['away_count'] = (int) $attempt->away_count + (int) $data['away'];
+
+            // Qulflangan paytda chalg'ish qayta sanalmaydi
+            if ($this->hasLockColumns() && !$attempt->isLocked()) {
+                $streak = (int) $attempt->away_streak + (int) $data['away'];
+                $updates['away_streak'] = $streak;
+                if ($streak >= FanTestiAttempt::AWAY_LIMIT) {
+                    $lockCount = (int) $attempt->lock_count + 1;
+                    $updates['lock_count'] = min(2, $lockCount);
+                    $updates['locked_at'] = now(self::TZ);
+                    if ($lockCount >= 2) {
+                        $updates['ended_reason'] = 'away';
+                    }
+                }
+            }
         }
 
         $match = null;
@@ -313,7 +344,33 @@ class FanTestiKioskController extends Controller
         return response()->json([
             'match' => $match,
             'similarity' => $similarity !== null ? round($similarity, 1) : null,
-        ]);
+        ] + $this->lockState($attempt));
+    }
+
+    /**
+     * Sahifa uchun qulf holati: locked — o'qituvchi ochib berishini kutadi;
+     * final — ikkinchi marta chalg'idi, javoblar topshirilishi kerak.
+     */
+    private function lockState(FanTestiAttempt $attempt): array
+    {
+        if (!$this->hasLockColumns()) {
+            return [];
+        }
+
+        return [
+            'locked' => $attempt->locked_at !== null,
+            'final' => (int) $attempt->lock_count >= 2,
+            'away_streak' => (int) $attempt->away_streak,
+            'away_limit' => FanTestiAttempt::AWAY_LIMIT,
+            'seconds_left' => $attempt->secondsLeft(),
+        ];
+    }
+
+    private function hasLockColumns(): bool
+    {
+        static $has = null;
+
+        return $has ??= Schema::hasColumn('fan_testi_attempts', 'lock_count');
     }
 
     private function hasMonitorColumns(): bool

@@ -64,6 +64,9 @@ class FanTestiAttempts
         if (Schema::hasColumn('fan_testi_attempts', 'away_count')) {
             $fields += ['face_checks' => 0, 'face_mismatches' => 0, 'away_count' => 0];
         }
+        if (Schema::hasColumn('fan_testi_attempts', 'lock_count')) {
+            $fields += ['away_streak' => 0, 'lock_count' => 0, 'locked_at' => null, 'ended_reason' => null];
+        }
 
         DB::transaction(function () use ($attempt, $fields) {
             $attempt->answers()->delete();

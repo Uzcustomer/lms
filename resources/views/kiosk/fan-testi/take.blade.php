@@ -375,8 +375,10 @@
                 <div class="m-icon" aria-hidden="true">!</div>
                 <h2 id="monTitle">Iltimos, boshqa tomonga burilmang</h2>
                 <p id="monText"></p>
-                <small>Test vaqti to'xtamaydi.</small>
+                <p id="monCount" hidden style="margin:10px 0 0;color:#b3261e;font-weight:700"></p>
+                <small id="monNote">Test vaqti to'xtamaydi.</small>
                 <button type="button" class="k-btn" id="monRetry" hidden>Kamerani qayta yoqish</button>
+                <button type="button" class="k-btn" id="monOk" hidden>Davom etish</button>
             </div>
         </div>
     @endunless
@@ -395,6 +397,8 @@
     const total = {{ $questions->count() }};
 
     // Qolgan vaqt serverdan olinadi — sahifa yangilansa ham to'g'ri qoladi.
+    // Qulflangan holda ochilsa vaqt darhol to'xtab tursin (yuz kuzatuvi skripti keyinroq yuklanadi)
+    window.kioskLocked = @json($locked ?? false);
     let left = {{ (int) $secondsLeft }};
     let submitted = false;
 
@@ -423,6 +427,11 @@
         window.location.href = event.detail;
     });
 
+    // Yuz kuzatuvi skripti uchun: javoblarni topshirish va serverdagi qolgan vaqtni qo'yish
+    window.kioskSubmit = () => submitOnce();
+    window.kioskSetLeft = (seconds) => { left = Math.max(0, seconds | 0); renderClock(); };
+    window.kioskReload = () => { submitted = true; window.location.reload(); };
+
     // Nechta savolga javob berilgan (o'qituvchining "Kompyuterlar" oynasi uchun)
     window.kioskAnswered = () => {
         const answered = new Set();
@@ -438,6 +447,8 @@
 
     renderClock();
     const ticker = setInterval(() => {
+        // Chalg'igani uchun qulflangan — vaqt o'qituvchi ochib berguncha to'xtab turadi
+        if (window.kioskLocked) return;
         left -= 1;
         if (left <= 0) {
             left = 0;
@@ -548,6 +559,9 @@
         checkMinMs: 45000,    // keyingi tekshiruvlar oralig'i (tasodifiy)
         checkMaxMs: 90000,
         recheckMs: 6000,      // yuz mos kelmaganda qayta tekshirish
+        pollMs: 4000,         // qulf paytida o'qituvchi ochib berganini tekshirish
+        locked: @json($locked ?? false),
+        awayLimit: @json($awayLimit ?? 3),
     };
 
     const form = document.getElementById('testForm');
@@ -559,6 +573,7 @@
         paused: null,          // null | 'away' | 'face' | 'camera'
         badSince: null, goodSince: null,
         checking: false, nextCheckAt: Date.now() + CFG.firstCheckMs,
+        locked: false, poll: null,
     };
 
     const TEXT = {
@@ -567,31 +582,98 @@
         many: ["Kamerada faqat siz bo'lishingiz kerak", "Test to'xtatildi. Yoningizdagi odam kamera ko'rinishidan chiqsin."],
         face: ['Yuzingiz tasdiqlanmadi', "Test to'xtatildi. Testni boshlagan talaba monitorga to'g'ri qarasin — yuz tasdiqlangach test davom etadi."],
         camera: ['Kamera kerak', "Test davom etishi uchun kamerani ulang va unga ruxsat bering."],
+        locked: ["Test to'xtatildi", "Siz monitordan " + CFG.awayLimit + " marta chalg'idingiz. Javoblaringiz shu yerda saqlanib turibdi va topshirilmagan. O'qituvchi testni qayta ochib bermaguncha davom eta olmaysiz."],
+        final: ['Test yakunlandi', "Siz yana " + CFG.awayLimit + " marta chalg'idingiz. Test yakunlandi — belgilagan javoblaringiz topshirilmoqda..."],
+        reopened: ['Test qayta ochildi', "O'qituvchi testni ochib berdi. Diqqat: yana " + CFG.awayLimit + " marta chalg'isangiz, test yakunlanadi va javoblaringiz topshiriladi."],
     };
+    const AWAY_KINDS = ['turn', 'none', 'many'];
 
     function showVeil(kind) {
         const [title, text] = TEXT[kind];
         document.getElementById('monTitle').textContent = title;
         document.getElementById('monText').textContent = text;
         document.getElementById('monRetry').hidden = kind !== 'camera';
+        document.getElementById('monOk').hidden = kind !== 'reopened';
+        // Qulf paytida vaqt to'xtaydi — "vaqt to'xtamaydi" degan yozuv chiqmaydi
+        document.getElementById('monNote').hidden = ['locked', 'final', 'reopened'].includes(kind);
+        if (!AWAY_KINDS.includes(kind)) document.getElementById('monCount').hidden = true;
         veil.hidden = false;
         form.inert = true;
     }
 
     function pause(reason, kind) {
+        if (state.locked) return;
         // Yuz mos kelmasligi chalg'ishdan ustun turadi.
         if (state.paused === 'face' && reason === 'away') return;
         const wasPaused = state.paused;
         state.paused = reason;
         showVeil(kind || reason);
-        if (reason === 'away' && wasPaused !== 'away') report({ away: 1 });
+        if (reason === 'away' && wasPaused !== 'away') report({ away: 1 }).then(applyLock);
     }
 
     function resume() {
+        if (state.locked) return;
         state.paused = null;
         veil.hidden = true;
         form.inert = false;
     }
+
+    // Server javobi: nechanchi chalg'ish, qulflandimi yoki test yakunlandimi
+    function applyLock(data) {
+        if (!data || state.locked) return;
+        if (data.final) { finish(); return; }
+        if (data.locked) { lock(); return; }
+        if (data.away_streak && state.paused === 'away') {
+            const count = document.getElementById('monCount');
+            count.textContent = 'Ogohlantirish: ' + data.away_streak + ' / ' + (data.away_limit || CFG.awayLimit)
+                + " — " + (data.away_limit || CFG.awayLimit) + "-marta chalg'isangiz test to'xtatiladi.";
+            count.hidden = false;
+        }
+    }
+
+    // 1-qulf: test to'xtaydi, javoblar sahifada qoladi, o'qituvchi ochib berishini kutamiz
+    function lock() {
+        state.locked = true;
+        state.paused = 'locked';
+        window.kioskLocked = true;
+        showVeil('locked');
+        clearInterval(state.poll);
+        state.poll = setInterval(async () => {
+            const data = await report({ ping: 1 });
+            if (!data) return;
+            if (data.finished) { window.kioskReload && window.kioskReload(); return; }
+            if (data.final) { finish(); return; }
+            if (data.locked === false) unlock(data);
+        }, CFG.pollMs);
+    }
+
+    function unlock(data) {
+        clearInterval(state.poll);
+        state.locked = false;
+        window.kioskLocked = false;
+        if (typeof data.seconds_left === 'number' && window.kioskSetLeft) window.kioskSetLeft(data.seconds_left);
+        state.paused = 'notice';
+        state.badSince = null;
+        state.goodSince = null;
+        showVeil('reopened');
+    }
+
+    // 2-qulf: test yakunlanadi, belgilangan javoblar topshiriladi
+    function finish() {
+        clearInterval(state.poll);
+        state.locked = true;
+        state.paused = 'locked';
+        window.kioskLocked = true;
+        showVeil('final');
+        setTimeout(() => { if (window.kioskSubmit) window.kioskSubmit(); }, 2500);
+    }
+
+    document.getElementById('monOk').addEventListener('click', () => {
+        if (state.paused !== 'notice') return;
+        state.paused = null;
+        veil.hidden = true;
+        form.inert = false;
+    });
 
     async function report(body) {
         try {
@@ -626,6 +708,7 @@
     const nextDelay = () => CFG.checkMinMs + Math.random() * (CFG.checkMaxMs - CFG.checkMinMs);
 
     async function identityCheck() {
+        if (state.locked) return;
         state.checking = true;
         const data = await report({ snapshot: snapshot() });
         state.checking = false;
@@ -642,7 +725,7 @@
     }
 
     async function tick() {
-        if (state.busy || !state.stream) return;
+        if (state.busy || !state.stream || state.locked) return;
         state.busy = true;
         let faces = [];
         try {
@@ -713,6 +796,7 @@
     window.addEventListener('pagehide', () => {
         if (state.stream) state.stream.getTracks().forEach((t) => t.stop());
     });
+    if (CFG.locked) lock();
     start();
 })();
 </script>

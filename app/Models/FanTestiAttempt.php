@@ -16,6 +16,7 @@ class FanTestiAttempt extends Model
         'questions_count', 'answers_count', 'correct_count',
         'total_points', 'score', 'percent', 'is_passed',
         'face_checks', 'face_mismatches', 'away_count',
+        'away_streak', 'lock_count', 'locked_at', 'ended_reason',
         'questions_snapshot', 'ip_address',
     ];
 
@@ -35,8 +36,14 @@ class FanTestiAttempt extends Model
         'face_checks' => 'integer',
         'face_mismatches' => 'integer',
         'away_count' => 'integer',
+        'away_streak' => 'integer',
+        'lock_count' => 'integer',
+        'locked_at' => 'datetime',
         'questions_snapshot' => 'array',
     ];
+
+    /** Shuncha marta chalg'isa test qulflanadi (ikkinchi marta — yakunlanadi). */
+    public const AWAY_LIMIT = 3;
 
     public function test()
     {
@@ -51,6 +58,18 @@ class FanTestiAttempt extends Model
     public function answers()
     {
         return $this->hasMany(FanTestiAttemptAnswer::class, 'attempt_id')->orderBy('question_index');
+    }
+
+    /** Chalg'igani uchun qulflangan va o'qituvchi ochib berishini kutmoqda. */
+    public function isLocked(): bool
+    {
+        return $this->locked_at !== null && !$this->isFinished();
+    }
+
+    /** O'qituvchi faqat birinchi qulfni ochib bera oladi. */
+    public function canUnlock(): bool
+    {
+        return $this->isLocked() && (int) $this->lock_count === 1;
     }
 
     public function isFinished(): bool

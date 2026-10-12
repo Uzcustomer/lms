@@ -295,6 +295,13 @@ class FanTestiController extends Controller
             if ($running && $d->pending_command === 'restart') {
                 $stage = 'restarting';
             }
+            // Chalg'igani uchun qulflangan / yakunlangan — kartochka qizil
+            $lockCount = (int) ($attempt->lock_count ?? 0);
+            if ($attempt && $attempt->isLocked()) {
+                $stage = 'locked';
+            } elseif ($attempt && $attempt->ended_reason === 'away') {
+                $stage = 'ended_away';
+            }
 
             return [
                 'id' => $d->id,
@@ -317,9 +324,13 @@ class FanTestiController extends Controller
                     'passed' => (bool) $attempt->is_passed,
                     'away' => (int) $attempt->away_count,
                     'face_mismatches' => (int) $attempt->face_mismatches,
+                    'lock_count' => $lockCount,
+                    'away_limit' => FanTestiAttempt::AWAY_LIMIT,
                 ] : null,
                 'stop_url' => $running ? route('teacher.fan-testlari.devices.stop', [$fanTesti, $d]) : null,
-                'restart_url' => $attempt ? route('teacher.fan-testlari.devices.restart', [$fanTesti, $d]) : null,
+                // Qulflangan yoki chalg'ib yakunlangan testni qayta boshlab bo'lmaydi — aks holda cheklov ma'nosiz
+                'restart_url' => $attempt && $lockCount === 0 ? route('teacher.fan-testlari.devices.restart', [$fanTesti, $d]) : null,
+                'unlock_url' => $attempt && $attempt->canUnlock() ? route('teacher.fan-testlari.attempts.unlock', [$fanTesti, $attempt]) : null,
             ];
         })
             // To'xtatilgan, lekin talaba kirmagan kompyuter qayta boshlanmaydi — ko'rsatilmaydi
@@ -387,6 +398,11 @@ class FanTestiController extends Controller
         if (!$attempt) {
             return response()->json(['message' => "Bu kompyuterda hali talaba kirmagan — qayta boshlash uchun talaba kerak."], 422);
         }
+        if ((int) ($attempt->lock_count ?? 0) > 0) {
+            return response()->json(['message' => $attempt->ended_reason === 'away'
+                ? "Talaba ikkinchi marta chalg'igani uchun test yakunlangan — qayta ochib bo'lmaydi."
+                : "Test chalg'ish sababli qulflangan — qayta boshlash o'rniga \"Ochib berish\" tugmasidan foydalaning."], 422);
+        }
 
         FanTestiAttempts::restart($attempt);
 
@@ -407,6 +423,33 @@ class FanTestiController extends Controller
         return response()->json(['message' => $this->deviceLabel($device) . ': test ' . $attempt->student_name . ' uchun qaytadan boshlanadi.']);
     }
 
+    /**
+     * Chalg'igani uchun qulflangan testni ochib beradi (faqat bir marta).
+     * Qulf kutgan vaqt test muddatiga qo'shiladi; ikkinchi marta yana
+     * cheklovdan oshsa test yakunlanadi va qayta ochilmaydi.
+     */
+    public function unlockAttempt(FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $attempt->fan_testi_id === (int) $fanTesti->id, 404);
+
+        if (!$attempt->canUnlock()) {
+            return response()->json(['message' => $attempt->ended_reason === 'away'
+                ? "Test ikkinchi marta chalg'igani uchun yakunlangan — qayta ochib bo'lmaydi."
+                : "Bu test qulflanmagan yoki allaqachon ochib berilgan."], 422);
+        }
+
+        $pausedSeconds = (int) $attempt->locked_at->diffInSeconds(now());
+        $attempt->update([
+            'locked_at' => null,
+            'away_streak' => 0,
+            'expires_at' => ($attempt->expires_at ?? now())->copy()->addSeconds($pausedSeconds),
+        ]);
+
+        return response()->json(['message' => $attempt->student_name . ": test qayta ochildi. Yana "
+            . FanTestiAttempt::AWAY_LIMIT . " marta chalg'isa, test yakunlanadi."]);
+    }
+
     private const STAGE_LABELS = [
         'wait' => 'Test ochilmoqda',
         'start' => 'Talaba ID kutilmoqda',
@@ -417,6 +460,8 @@ class FanTestiController extends Controller
         'offline' => 'Oflayn',
         'stopped' => "To'xtatilgan",
         'restarting' => 'Qayta boshlanmoqda',
+        'locked' => "Qulflandi — chalg'idi",
+        'ended_away' => "Yakunlandi — chalg'idi",
     ];
 
     private function hasLiveColumns(): bool

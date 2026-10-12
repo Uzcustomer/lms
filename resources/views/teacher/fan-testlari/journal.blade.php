@@ -504,6 +504,13 @@
                                             @if((int) $attempt->away_count > 0)
                                                 <span class="jr-flag is-warn" title="Monitordan chalg'igani uchun test to'xtatilgan holatlar">Chalg'idi: {{ $attempt->away_count }} marta</span>
                                             @endif
+                                            @if(($attempt->ended_reason ?? null) === 'away')
+                                                <span class="jr-flag is-bad" title="Ochib berilgandan keyin yana chalg'igani uchun test avtomatik yakunlangan">Chalg'igani uchun yakunlandi</span>
+                                            @elseif($attempt->locked_at && $attempt->status === 'in_progress')
+                                                <span class="jr-flag is-bad" title="O'qituvchi ochib berishini kutmoqda">Qulflangan</span>
+                                            @elseif((int) ($attempt->lock_count ?? 0) === 1)
+                                                <span class="jr-flag is-warn" title="Chalg'igani uchun bir marta qulflangan va o'qituvchi ochib bergan">1 marta qulflangan</span>
+                                            @endif
                                         </td>
                                         <td><span class="jr-num">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</span></td>
                                         <td>

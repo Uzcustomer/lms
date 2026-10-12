@@ -662,6 +662,11 @@
     .mn-card.take { border-left-color: #2563eb; } .mn-card.face, .mn-card.start, .mn-card.wait, .mn-card.restarting { border-left-color: #d97706; }
     .mn-card.result { border-left-color: #0f7a52; } .mn-card.offline, .mn-card.closed { border-left-color: #94a3b8; background: #fbfcfd; }
     .mn-card.stopped { border-left-color: #b3261e; background: #fffafa; }
+    .mn-card.locked, .mn-card.ended_away { border-color: #fca5a5; border-left-color: #dc2626; background: #fef2f2; box-shadow: 0 0 0 1px #fecaca; }
+    .mn-card.locked .mn-stage, .mn-card.ended_away .mn-stage { background: #dc2626; color: #fff; }
+    .mn-lock { padding: 7px 9px; border-radius: 7px; background: #fee2e2; color: #991b1b; font-size: 12px; font-weight: 600; line-height: 1.4; }
+    .bl-btn-unlock { border-color: #15803d; background: #16a34a; color: #fff; }
+    .bl-btn-unlock:hover { background: #15803d; }
     .mn-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .mn-name { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 14px; font-weight: 700; }
     .mn-stage { flex: none; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -1293,6 +1298,11 @@
             } else if (a && a.finished && a.percent !== null) {
                 meta += '<div class="mn-meta"><span>Natija: <b class="' + (a.passed ? 'ok' : 'bad') + '">' + a.percent + '%</b></span><span class="' + (a.passed ? 'ok' : 'bad') + '">' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
             }
+            if (d.stage === 'locked') {
+                meta += '<div class="mn-lock">' + a.away_limit + " marta chalg'igani uchun test to'xtatildi. Javoblari topshirilmagan — ochib berish faqat bir marta mumkin.</div>";
+            } else if (d.stage === 'ended_away') {
+                meta += '<div class="mn-lock">' + "Ikkinchi marta chalg'idi — test yakunlandi, javoblari saqlandi. Qayta ochib bo'lmaydi.</div>";
+            }
             const flags = [];
             if (a && a.away > 0) flags.push('<span class="warn">Chalg\'idi: ' + a.away + '</span>');
             if (a && a.face_mismatches > 0) flags.push('<span class="bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
@@ -1300,8 +1310,11 @@
             if (flags.length) meta += '<div class="mn-meta">' + flags.join('') + '</div>';
 
             const stopBtn = '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="stop" data-url="' + esc(d.stop_url || '') + '" data-name="' + esc(d.name) + '"' + (d.stop_url ? '' : ' disabled') + ">To'xtatish</button>";
-            const restartBtn = '<button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" data-act="restart" data-url="' + esc(d.restart_url || '') + '" data-name="' + esc(d.name) + '" data-student="' + esc(a ? a.student : '') + '"'
-                + (d.restart_url ? '' : ' disabled title="Qayta boshlash uchun kompyuterda talaba bo\'lishi kerak"') + '>Qayta boshlash</button>';
+            const restartTitle = a && a.lock_count > 0 ? "Chalg'ish sababli qulflangan testni qayta boshlab bo'lmaydi" : "Qayta boshlash uchun kompyuterda talaba bo'lishi kerak";
+            const restartBtn = d.unlock_url
+                ? '<button type="button" class="bl-btn bl-btn-unlock bl-btn-sm" data-act="unlock" data-url="' + esc(d.unlock_url) + '" data-name="' + esc(d.name) + '" data-student="' + esc(a ? a.student : '') + '">Ochib berish</button>'
+                : '<button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" data-act="restart" data-url="' + esc(d.restart_url || '') + '" data-name="' + esc(d.name) + '" data-student="' + esc(a ? a.student : '') + '"'
+                    + (d.restart_url ? '' : ' disabled title="' + esc(restartTitle) + '"') + '>Qayta boshlash</button>';
 
             return '<div class="mn-card ' + esc(d.stage) + '">'
                 + '<div class="mn-top"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + esc(d.name) + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
@@ -1314,6 +1327,7 @@
             sum.innerHTML = '<span class="mn-chip"><b>' + count((d) => d.running) + '</b> kompyuterda</span>'
                 + '<span class="mn-chip take"><b>' + count((d) => d.stage === 'take') + '</b> ishlamoqda</span>'
                 + '<span class="mn-chip done"><b>' + count((d) => d.stage === 'result') + '</b> topshirdi</span>'
+                + (count((d) => d.stage === 'locked') ? '<span class="mn-chip" style="background:#fee2e2;color:#991b1b"><b style="color:#dc2626">' + count((d) => d.stage === 'locked') + '</b> qulflangan</span>' : '')
                 + '<span class="mn-chip"><b>' + count((d) => ['start', 'face', 'wait'].includes(d.stage)) + '</b> kutmoqda</span>'
                 + '<span class="mn-chip off"><b>' + count((d) => d.stage === 'offline' || d.stage === 'stopped') + '</b> oflayn / to\'xtatilgan</span>'
                 + '<span class="mn-live">Har 3 soniyada yangilanadi</span>';
@@ -1383,7 +1397,9 @@
             if (!btn || btn.disabled || !btn.dataset.url) return;
             const question = btn.dataset.act === 'stop'
                 ? btn.dataset.name + " kompyuterida test to'xtatilsinmi? Talabaning belgilangan javoblari topshiriladi."
-                : btn.dataset.name + ' kompyuterida test ' + btn.dataset.student + " uchun boshidan boshlansinmi? Hozirgi javoblari o'chiriladi.";
+                : btn.dataset.act === 'unlock'
+                    ? btn.dataset.student + " uchun test qayta ochilsinmi? Bu faqat bir marta mumkin — yana chalg'isa test yakunlanadi."
+                    : btn.dataset.name + ' kompyuterida test ' + btn.dataset.student + " uchun boshidan boshlansinmi? Hozirgi javoblari o'chiriladi.";
             if (!confirm(question)) return;
             btn.disabled = true;
             busy = true;

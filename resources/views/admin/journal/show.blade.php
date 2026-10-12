@@ -123,6 +123,12 @@
             padding: 0 !important;
             vertical-align: middle;
         }
+        /* Sarlavhada "!" / holat belgisi bo'lsa, u sana ustiga tushmasin:
+           qator tagida belgi uchun joy qoldiriladi (belgi absolute, bottom: 2px) */
+        .journal-table tr:has(.date-header-cell button) > .date-header-cell {
+            padding-bottom: 24px !important;
+            vertical-align: top;
+        }
         .journal-table .date-header-cell .date-text-wrapper {
             writing-mode: vertical-rl;
             transform: rotate(180deg);

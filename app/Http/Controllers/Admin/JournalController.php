@@ -2411,7 +2411,7 @@ class JournalController extends Controller
         // qo'shimcha, oddiy): kiritilishidan oldingi darslarga o'qituvchi dars
         // ochish arizasisiz baho qo'yadi.
         $lateJoinDates = $students
-            ->filter(fn ($st) => !empty($st->hemis_created_at))
+            ->filter(fn ($st) => !empty($st->hemis_created_at) && (string) ($st->student_status_code ?? '') !== '60')
             ->mapWithKeys(fn ($st) => [(string) $st->hemis_id => substr((string) $st->hemis_created_at, 0, 10)])
             ->all();
 

@@ -451,20 +451,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('journal')->name('journal.')->group(function () {
             Route::get('', [JournalController::class, 'index'])->name('index');
             Route::get('/show/{groupId}/{subjectId}/{semesterCode}', [JournalController::class, 'show'])->name('show');
-            Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade');
-            Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
-            Route::post('/superadmin-edit-grade', [JournalController::class, 'superadminEditGrade'])->name('superadmin-edit-grade');
-            Route::post('/superadmin-edit-exam-grade', [JournalController::class, 'superadminEditExamGrade'])->name('superadmin-edit-exam-grade');
+            Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
+            Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
+            Route::post('/superadmin-edit-grade', [JournalController::class, 'superadminEditGrade'])->name('superadmin-edit-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
+            Route::post('/superadmin-edit-exam-grade', [JournalController::class, 'superadminEditExamGrade'])->name('superadmin-edit-exam-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
             Route::post('/superadmin-delete-exam-grade', [JournalController::class, 'superadminDeleteExamGrade'])->name('superadmin-delete-exam-grade');
-            Route::post('/superadmin-upload-mt', [JournalController::class, 'superadminUploadMt'])->name('superadmin-upload-mt');
+            Route::post('/superadmin-upload-mt', [JournalController::class, 'superadminUploadMt'])->name('superadmin-upload-mt')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
-            Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
-            Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade');
+            Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
+            Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
             Route::get('/download-lesson-file/{lessonOpening}', [JournalController::class, 'downloadLessonFile'])->name('download-lesson-file');
             Route::get('/download-lesson-explanation/{lessonOpening}', [JournalController::class, 'downloadLessonExplanation'])->name('download-lesson-explanation');
-            Route::post('/save-opened-lesson-grade', [JournalController::class, 'saveOpenedLessonGrade'])->name('save-opened-lesson-grade');
+            Route::post('/save-opened-lesson-grade', [JournalController::class, 'saveOpenedLessonGrade'])->name('save-opened-lesson-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
             Route::get('/get-specialties', [JournalController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [JournalController::class, 'getLevelCodes'])->name('get-level-codes');
             Route::get('/get-semesters', [JournalController::class, 'getSemesters'])->name('get-semesters');
@@ -491,7 +491,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/delete-mt-submission', [JournalController::class, 'deleteMtSubmission'])->name('delete-mt-submission');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
-            Route::post('/save-sinov-override', [JournalController::class, 'saveSinovOverride'])->name('save-sinov-override');
+            Route::post('/save-sinov-override', [JournalController::class, 'saveSinovOverride'])->name('save-sinov-override')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
             Route::post('/bulk-copy-sinov-from-jn', [JournalController::class, 'bulkCopySinovFromJn'])->name('bulk-copy-sinov-from-jn');
             Route::post('/copy-sinov-to-journal', [JournalController::class, 'copySinovToJournal'])->name('copy-sinov-to-journal');
             Route::post('/transfer-to-next-attempt', [JournalController::class, 'transferToNextAttempt'])->name('transfer-to-next-attempt');
@@ -499,7 +499,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/unfinalize-attempt', [JournalController::class, 'unfinalizeAttempt'])->name('unfinalize-attempt');
             Route::get('/finalization-warning-data', [JournalController::class, 'finalizationWarningData'])->name('finalization-warning-data');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
-            Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade');
+            Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade')->middleware(\App\Http\Middleware\BlockExpelledStudentGrade::class);
             Route::post('/submit-excuse-to-yn', [JournalController::class, 'submitExcuseToYn'])->name('submit-excuse-to-yn');
             Route::post('/fetch-yn-results', [JournalController::class, 'fetchYnResults'])->name('fetch-yn-results');
             Route::post('/generate-yakuniy-qaydnoma', [JournalController::class, 'generateYakuniyQaydnoma'])->name('generate-yakuniy-qaydnoma');

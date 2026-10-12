@@ -336,6 +336,10 @@ class OraliqNazoratController extends Controller
             $oraliqnazorat->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $oraliqnazorat->save();
             foreach ($request->baho as $key => $baho) {
+                // Chetlashgan talabaga (HEMIS holati 60) baho qo'yilmaydi
+                if ((string) Student::whereKey($key)->value('student_status_code') === '60') {
+                    continue;
+                }
                 $student = Student::find($key);
                 StudentGrade::updateOrCreate([
                     'student_id' => $student->id,

@@ -393,6 +393,10 @@ class IndependentController extends Controller
             $independent->save();
             $comments = $request->izoh ?? [];
             foreach ($request->baho as $key => $baho) {
+                // Chetlashgan talabaga (HEMIS holati 60) baho qo'yilmaydi
+                if ((string) Student::whereKey($key)->value('student_status_code') === '60') {
+                    continue;
+                }
                 $student = Student::find($key);
 
                 // Skip if student already has grade >= minimum_limit (locked)

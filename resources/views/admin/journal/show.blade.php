@@ -1986,20 +1986,22 @@
                                                         // toggle'iga bog'liq (feature-toggles sahifasi). Toggle
                                                         // o'chiq bo'lsa ular ham baho qo'ya/tahrirlay olmaydi —
                                                         // $isSuperAdmin allaqachon shu toggle'ni tekshiradi.
-                                                        $isAdminRole = $isSuperAdmin;
+                                                        // Chetlashgan talabaga (HEMIS holati 60) hech kim baho qo'ya olmaydi
+                                                        $cellEditable = (string) ($student->student_status_code ?? '') !== '60';
+                                                        $isAdminRole = $isSuperAdmin && $cellEditable;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
                                                         // Superadmin override: feature_superadmin_grade_edit toggle yoqilgan bo'lsa,
                                                         // YN locked holatida ham bahoni o'zgartira oladi.
                                                         $superOverride = $isSuperAdmin; // declared above at line ~885
                                                         $canRateAdmin = !$isDekan && $isAdminRole && (!$isYnSubmitted || $superOverride);
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && (!$isYnSubmitted || $superOverride);
+                                                        $canRate = !$isDekan && ($isAdminRole || ($isTeacherEditable && $cellEditable)) && (!$isYnSubmitted || $superOverride);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         // Bo'sh baho: dars ochilgan bo'lsa o'qituvchi, yoki sozlamadagi
                                                         // muddat ichida tanlangan rollar (registrator ofisi / o'qituvchi)
                                                         $isMissedGradeDate = ($missedGradeAllowed ?? false) && isset($missedGradeDatesLookup[$colDateStr]);
-                                                        $canEditOpened = $grade === null && !$isAbsent && !$isYnSubmitted
+                                                        $canEditOpened = $cellEditable && $grade === null && !$isAbsent && !$isYnSubmitted
                                                             && (($isOpenedDate && $isOqituvchi) || $isMissedGradeDate);
                                                         $canEditExcuseExisting = false;
                                                         $showRatingInput = false;
@@ -2037,7 +2039,7 @@
                                                         }
                                                     @endphp
                                                     @if($grade !== null)
-                                                        @if($isSuperAdmin && $gradeData)
+                                                        @if($isSuperAdmin && $cellEditable && $gradeData)
                                                             {{-- Superadmin: istalgan bahoni edit qilish --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-purple-50" onclick="superadminEdit(this, {{ $gradeData['id'] }})" title="Superadmin: bahoni o'zgartirish">
                                                                 @if($hasRetake && $retakeType === 'low_grade')
@@ -2233,7 +2235,7 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if($skCanGrade && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr < $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
+                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr < $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
                                                             {{-- Talaba HEMISga kiritilishidan oldingi dars — arizasiz baho --}}
                                                             <div class="editable-cell grade-cell-opened sk-cell"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"
@@ -2261,7 +2263,7 @@
                                                                  title="Bosib baho kiriting">
                                                                 <span class="text-gray-400">-</span>
                                                             </div>
-                                                        @elseif($isSuperAdmin && $isEmpty)
+                                                        @elseif($isSuperAdmin && $cellEditable && $isEmpty)
                                                             {{-- Superadmin: bo'sh katakka ham baho qo'yish (YN cheklovlaridan tashqari) --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-purple-50"
                                                                  onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"

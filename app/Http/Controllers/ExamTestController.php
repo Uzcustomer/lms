@@ -469,6 +469,10 @@ class ExamTestController extends Controller
             $exam_test->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $exam_test->save();
             foreach ($request->baho as $key => $baho) {
+                // Chetlashgan talabaga (HEMIS holati 60) baho qo'yilmaydi
+                if ((string) Student::whereKey($key)->value('student_status_code') === '60') {
+                    continue;
+                }
                 if (isset($baho)) {
                     $student = Student::find($key);
                     StudentGrade::updateOrCreate([

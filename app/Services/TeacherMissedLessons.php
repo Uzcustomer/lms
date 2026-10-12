@@ -150,7 +150,7 @@ class TeacherMissedLessons
             $status = $openings[$key] ?? null;
             $missingHere = array_map('strval', array_keys($missingByDay[$key] ?? []));
             $skHere = array_values(array_filter($missingHere, fn ($hemis) => isset($lateJoin[$hemis])
-                && LessonOpeningTeacherReport::isBeforeHemisJoin($lateJoin[$hemis], $slot->lesson_day)));
+                && LessonOpeningTeacherReport::isLateJoinLesson($lateJoin[$hemis], $slot->lesson_day)));
             $regularHere = array_values(array_diff($missingHere, $skHere));
             $requestable = in_array($status, [null, LessonOpening::STATUS_REJECTED, LessonOpening::STATUS_EXPIRED], true);
             $regularDay = $requestable && ($regularHere !== [] || $missingHere === []);

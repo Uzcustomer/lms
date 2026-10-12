@@ -1213,7 +1213,7 @@
                                 $skCount = 0;
                                 foreach ($jbColumns as $skCol) {
                                     $skDay = \Carbon\Carbon::parse($skCol['date'])->format('Y-m-d');
-                                    if ($skDay >= $skDate || $skDay > $todayStr) continue;
+                                    if ($skDay > $skDate || $skDay > $todayStr) continue;
                                     if ((($jbGrades[$skHemis][$skCol['date']][$skCol['pair']] ?? null)['grade'] ?? null) !== null) continue;
                                     if (isset($jbAbsences[$skHemis][$skCol['date']][$skCol['pair']])) continue;
                                     $skCount++;
@@ -2235,7 +2235,7 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr < $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
+                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
                                                             {{-- Talaba HEMISga kiritilishidan oldingi dars — arizasiz baho --}}
                                                             <div class="editable-cell grade-cell-opened sk-cell"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"

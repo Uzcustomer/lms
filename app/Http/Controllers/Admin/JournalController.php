@@ -1579,7 +1579,7 @@ class JournalController extends Controller
             $set = $jbProcessedByPair[$pk] ?? [];
             $complete = true;
             foreach ($jbActiveHemis as $hemis => $_) {
-                if (isset($set[$hemis]) || (isset($jbLateJoin[$hemis]) && $dateStr < $jbLateJoin[$hemis])) {
+                if (isset($set[$hemis]) || (isset($jbLateJoin[$hemis]) && $dateStr <= $jbLateJoin[$hemis])) {
                     continue;
                 }
                 $complete = false;
@@ -11300,9 +11300,9 @@ class JournalController extends Controller
      * Return: true (ruxsat) yoki xato xabari (string)
      */
     /**
-     * Dars talaba HEMISga kiritilgan kundan oldin bo'lganmi (bugungi va
-     * kelajak sanalar emas). Qoida hisobot bilan bir xil:
-     * LessonOpeningTeacherReport::isBeforeHemisJoin.
+     * Dars talaba HEMISga kiritilgan kuni yoki undan oldin bo'lganmi (kelajak
+     * sanalar emas). Qoida hisobot bilan bir xil:
+     * LessonOpeningTeacherReport::isLateJoinLesson.
      */
     private function isLateJoinGap(string $studentHemisId, string $lessonDate): bool
     {
@@ -11313,7 +11313,7 @@ class JournalController extends Controller
             ->where('hemis_id', $studentHemisId)
             ->first(['student_type_code', 'hemis_created_at']);
 
-        return \App\Services\LessonOpeningTeacherReport::isBeforeHemisJoin($student, $lessonDate);
+        return \App\Services\LessonOpeningTeacherReport::isLateJoinLesson($student, $lessonDate);
     }
 
     private function checkExcuseGradeRole(?string $semesterCode, bool $isTeacher)

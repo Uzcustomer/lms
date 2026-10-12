@@ -460,18 +460,19 @@ class LessonOpeningTeacherReport
     public const SUPERKONTRAKT_TYPE = '13';
 
     /**
-     * Dars talaba HEMISga kiritilgan kundan oldin bo'lganmi (turi qanday
-     * bo'lishidan qat'i nazar: superkontrakt, qo'shimcha, oddiy). Bunday talaba
-     * semestr o'rtasida qo'shiladi — o'tgan darslar baholari o'qituvchi
-     * tomonidan keyin (dars ochish arizasisiz) qo'yiladi.
+     * Dars talaba HEMISga kiritilgan kuni yoki undan oldin bo'lganmi (turi
+     * qanday bo'lishidan qat'i nazar: superkontrakt, qo'shimcha, oddiy). Bunday
+     * talaba semestr o'rtasida qo'shiladi — o'sha darslar baholari o'qituvchi
+     * tomonidan keyin (dars ochish arizasisiz) qo'yiladi. Kiritilgan kun ham
+     * kiradi: talaba kun o'rtasida kiritilgan bo'lishi mumkin.
      */
-    public static function isBeforeHemisJoin(?object $student, ?string $lessonDate): bool
+    public static function isLateJoinLesson(?object $student, ?string $lessonDate): bool
     {
         if (!$student || !$lessonDate || empty($student->hemis_created_at)) {
             return false;
         }
 
-        return substr($lessonDate, 0, 10) < substr((string) $student->hemis_created_at, 0, 10);
+        return substr($lessonDate, 0, 10) <= substr((string) $student->hemis_created_at, 0, 10);
     }
 
     /**
@@ -670,7 +671,7 @@ class LessonOpeningTeacherReport
                     'joined_at' => $student?->hemis_created_at ? substr((string) $student->hemis_created_at, 0, 10) : null,
                     'student_type' => (string) ($student->student_type_name ?? ''),
                     'student_type_code' => (string) ($student->student_type_code ?? ''),
-                    'late_join' => self::isBeforeHemisJoin($student, $record['date']),
+                    'late_join' => self::isLateJoinLesson($student, $record['date']),
                 ];
             }
         }

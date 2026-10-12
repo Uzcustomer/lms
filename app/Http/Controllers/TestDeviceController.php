@@ -31,8 +31,9 @@ class TestDeviceController extends Controller
 
         $devices = $tableReady
             ? TestKioskDevice::query()
+                // Bekor qilinganlar ro'yxatda ko'rsatilmaydi
+                ->whereNull('revoked_at')
                 ->when($hasRooms, fn ($q) => $q->with('assignedTest:id,name'))
-                ->orderByRaw('revoked_at IS NOT NULL')
                 ->when($hasRooms, fn ($q) => $q->orderByRaw("COALESCE(room, '') = ''")->orderBy('room'))
                 ->orderBy('name')
                 ->get()
@@ -43,8 +44,7 @@ class TestDeviceController extends Controller
             'hasRooms' => $hasRooms,
             'current' => $current && $current->isActive() ? $current : null,
             'devices' => $devices,
-            'rooms' => $devices->whereNull('revoked_at')->groupBy(fn (TestKioskDevice $d) => $d->roomLabel()),
-            'revoked' => $devices->whereNotNull('revoked_at'),
+            'rooms' => $devices->groupBy(fn (TestKioskDevice $d) => $d->roomLabel()),
             'enforced' => (bool) config('services.fan_test.require_device'),
         ]);
     }
@@ -63,7 +63,9 @@ class TestDeviceController extends Controller
         $user = $this->currentUser();
         $token = TestDeviceToken::fromRequest($request);
         $device = TestDeviceToken::deviceFor($token);
-        $fields = ['name' => trim($data['name'])] + ($hasRooms ? ['room' => trim((string) $data['room'])] : []);
+        // Xona raqami saqlanadi: "206-xona" yozilsa ham "206" ("-xona" ko'rsatishda qo'shiladi)
+        $room = trim((string) preg_replace('/[\s\-]*xona$/iu', '', trim((string) ($data['room'] ?? ''))));
+        $fields = ['name' => trim($data['name'])] + ($hasRooms ? ['room' => $room !== '' ? $room : trim((string) $data['room'])] : []);
 
         if ($device && $device->isActive()) {
             $device->update($fields);

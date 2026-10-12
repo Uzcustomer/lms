@@ -166,25 +166,6 @@
             @endforelse
         </div>
 
-        @if($revoked->isNotEmpty())
-            <div class="td-panel">
-                <h2>Bekor qilinganlar ({{ $revoked->count() }})</h2>
-                <div class="td-table-wrap">
-                    <table class="td-table">
-                        <thead><tr><th>Kompyuter</th><th>Sabab</th><th>Sana</th></tr></thead>
-                        <tbody>
-                        @foreach($revoked as $device)
-                            <tr>
-                                <td>{{ $device->room ? $device->room . '-xona · ' : '' }}{{ $device->name }}</td>
-                                <td><span class="td-badge bad">{{ $device->revoked_reason }}</span></td>
-                                <td class="td-num">{{ $device->revoked_at?->format('d.m.Y H:i') }}</td>
-                            </tr>
-                        @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        @endif
     @endif
 </div></div>
 </x-app-layout>

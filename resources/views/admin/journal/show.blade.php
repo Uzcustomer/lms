@@ -79,7 +79,7 @@
            Katak ranglari (sariq fon, NB) ustidan bosmasligi uchun och tus. */
         tr.jr-row-ungraded > td { background-color: #fff1f2; }
         tr.jr-row-ungraded:hover > td { background-color: #ffe4e6; }
-        /* Superkontrakt: HEMISga kiritilishidan oldingi baholanmagan darslar — sariq */
+        /* HEMISga kech kiritilgan talaba: kiritilishidan oldingi baholanmagan darslar — sariq */
         tr.sk-row > td { background-color: #fffbeb; }
         tr.sk-row > td.student-name-cell { background-color: #fef3c7 !important; box-shadow: inset 4px 0 0 #f59e0b; }
         .sk-cell { background: #fde68a; border-radius: 3px; }
@@ -1198,9 +1198,9 @@
                             $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
                             $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
                             $teacherEditableDatesLookup = array_flip($teacherEditableDates);
-                            // Superkontrakt: HEMISga kiritilishidan oldingi bo'sh kataklar soni (talaba bo'yicha).
+                            // HEMISga kech kiritilgan talaba: kiritilishidan oldingi bo'sh kataklar soni.
                             // O'qituvchi ularga dars ochish arizasisiz baho qo'yadi.
-                            $skJoin = $superkontraktJoin ?? [];
+                            $skJoin = $lateJoinDates ?? [];
                             $skCanGrade = $isOqituvchi && !(isset($ynSubmission) && $ynSubmission);
                             $skPending = [];
                             foreach ($skJoin as $skHemis => $skDate) {
@@ -2203,14 +2203,14 @@
                                                         @endif
                                                     @else
                                                         @if($skCanGrade && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr < $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
-                                                            {{-- Superkontrakt: HEMISga kiritilishidan oldingi dars — "Baho qo'yish" bosilgach arizasiz baho --}}
+                                                            {{-- Talaba HEMISga kiritilishidan oldingi dars — arizasiz baho --}}
                                                             <div class="editable-cell grade-cell-opened sk-cell"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"
                                                                  data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
                                                                  data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
                                                                  data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
                                                                  onclick="startEditOpened(this)"
-                                                                 title="Superkontrakt talaba {{ \Carbon\Carbon::parse($skJoin[(string) $student->hemis_id])->format('d.m.Y') }} da kiritilgan — bu darsga arizasiz baho qo'ying">
+                                                                 title="Talaba HEMISga {{ \Carbon\Carbon::parse($skJoin[(string) $student->hemis_id])->format('d.m.Y') }} da kiritilgan — bu darsga arizasiz baho qo'ying">
                                                                 <span class="sk-dash">-</span>
                                                             </div>
                                                         @elseif($canEditOpened && $isEmpty)

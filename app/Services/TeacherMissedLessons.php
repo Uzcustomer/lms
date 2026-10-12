@@ -119,18 +119,17 @@ class TeacherMissedLessons
                 $this->key($o->group_hemis_id, $o->subject_id, $o->semester_code, $o->lesson_date?->format('Y-m-d')) => $o->status,
             ]);
 
-        // Superkontrakt talabalar: HEMISga kiritilishidan oldingi darslar alohida
-        // (sariq) qatorga chiqadi — ularga o'qituvchi arizasiz baho qo'yadi.
+        // HEMISga kech kiritilgan talabalar (har qanday turdagi): kiritilishidan
+        // oldingi darslari alohida (sariq) sanaladi — ularga o'qituvchi arizasiz baho qo'yadi.
         $missingHemis = [];
         foreach ($missingByDay as $set) {
             $missingHemis += $set;
         }
-        $superkontrakt = $missingHemis
+        $lateJoin = $missingHemis
             ? DB::table('students')
                 ->whereIn('hemis_id', array_keys($missingHemis))
-                ->where('student_type_code', LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE)
                 ->whereNotNull('hemis_created_at')
-                ->get(['hemis_id', 'full_name', 'student_type_code', 'hemis_created_at'])
+                ->get(['hemis_id', 'full_name', 'student_type_code', 'student_type_name', 'hemis_created_at'])
                 ->keyBy(fn ($st) => (string) $st->hemis_id)
             : collect();
 
@@ -150,8 +149,8 @@ class TeacherMissedLessons
 
             $status = $openings[$key] ?? null;
             $missingHere = array_map('strval', array_keys($missingByDay[$key] ?? []));
-            $skHere = array_values(array_filter($missingHere, fn ($hemis) => isset($superkontrakt[$hemis])
-                && LessonOpeningTeacherReport::isSuperkontraktPrejoin($superkontrakt[$hemis], $slot->lesson_day)));
+            $skHere = array_values(array_filter($missingHere, fn ($hemis) => isset($lateJoin[$hemis])
+                && LessonOpeningTeacherReport::isBeforeHemisJoin($lateJoin[$hemis], $slot->lesson_day)));
             $regularHere = array_values(array_diff($missingHere, $skHere));
             $requestable = in_array($status, [null, LessonOpening::STATUS_REJECTED, LessonOpening::STATUS_EXPIRED], true);
             $regularDay = $requestable && ($regularHere !== [] || $missingHere === []);
@@ -168,7 +167,7 @@ class TeacherMissedLessons
                 'semester_code' => $slot->semester_code,
                 'dates' => [],
                 'regular' => [],
-                'superkontrakt' => [],
+                'late_join' => [],
                 'rejected' => false,
             ];
             $groups[$groupKey]['dates'][$slot->lesson_day] = true;
@@ -179,7 +178,8 @@ class TeacherMissedLessons
                 $groups[$groupKey]['rejected'] = $groups[$groupKey]['rejected'] || $status === LessonOpening::STATUS_REJECTED;
             }
             foreach ($skHere as $hemis) {
-                $groups[$groupKey]['superkontrakt'][$hemis] = (string) $superkontrakt[$hemis]->full_name;
+                $type = trim((string) $lateJoin[$hemis]->student_type_name);
+                $groups[$groupKey]['late_join'][$hemis] = (string) $lateJoin[$hemis]->full_name . ($type !== '' ? " ({$type})" : '');
             }
         }
 
@@ -195,8 +195,8 @@ class TeacherMissedLessons
                     'dates' => $dates,
                     'rejected' => $g['rejected'],
                     'regular_students' => count($g['regular']),
-                    'superkontrakt_students' => count($g['superkontrakt']),
-                    'superkontrakt_names' => array_values($g['superkontrakt']),
+                    'late_join_students' => count($g['late_join']),
+                    'late_join_names' => array_values($g['late_join']),
                     // Jurnal eng oxirgi kunga o'tib ochiladi. So'rov oynasi O'ZI
                     // ochilmaydi: o'qituvchi kunning ustunidagi "!" ni bosadi.
                     'url' => route('admin.journal.show', [$g['group_db_id'], $g['subject_id'], $g['semester_code']])

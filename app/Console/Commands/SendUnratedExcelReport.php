@@ -68,7 +68,7 @@ class SendUnratedExcelReport extends Command
             . "👨‍🏫 O'qituvchilar: " . count($data['teachers'] ?? []) . "\n"
             . "📆 Baholanmagan dars kunlari: " . count($data['days'] ?? []) . "\n"
             . "👤 Baho qo'yilmagan talabalar: " . ($data['ungraded_students'] ?? 0)
-            . $this->superkontraktLine($data['superkontrakt'] ?? []);
+            . $this->lateJoinLine($data['late_join'] ?? []);
 
         // Mas'ul back ofis xodimlari kesimida — nechta talabaga baho qo'yilmagan
         $managers = $this->managerSummary($data['managers'] ?? []);
@@ -137,15 +137,18 @@ class SendUnratedExcelReport extends Command
         return implode("\n", $lines);
     }
 
-    /** Superkontrakt talabalarning HEMISga kiritilishidan oldingi baholanmagan darslari (alohida varaqda). */
-    private function superkontraktLine(array $rows): string
+    /** HEMISga kech kiritilgan talabalarning kiritilishidan oldingi baholanmagan darslari (alohida varaqda). */
+    private function lateJoinLine(array $rows): string
     {
         if ($rows === []) {
             return '';
         }
+        $sk = count(array_unique(array_column(array_filter($rows,
+            fn ($row) => ($row['student_type_code'] ?? '') === LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE), 'student_hemis_id')));
 
-        return "\n🟡 Superkontrakt (HEMISga kiritilishidan oldin): "
-            . count(array_unique(array_column($rows, 'student_hemis_id'))) . ' ta talaba · ' . count($rows) . ' ta dars';
+        return "\n🟡 HEMISga kech kiritilganlar (kiritilishidan oldingi darslar): "
+            . count(array_unique(array_column($rows, 'student_hemis_id'))) . ' ta talaba · ' . count($rows) . ' ta dars'
+            . ($sk > 0 ? " (superkontrakt: {$sk})" : '');
     }
 
     /** Ertalabki baho qo'yilmaganlar hisoboti boradigan manzillar bilan bir xil. */

@@ -309,7 +309,7 @@ class LessonOpeningTeacherReport
         $data = $this->assemble($records, $people, Carbon::parse($from), Carbon::parse($to));
         $data['managers'] = $this->managerTotals($data['students']);
         $data['ungraded_students'] = count(array_unique(array_column($data['students'], 'student_hemis_id')));
-        $data['superkontrakt'] = array_values(array_filter($data['students'], fn ($row) => $row['superkontrakt_prejoin']));
+        $data['late_join'] = array_values(array_filter($data['students'], fn ($row) => $row['late_join']));
         $data['timings'] = $timings + ['assemble' => round(microtime(true) - $assembleStarted, 2)];
 
         return $data;
@@ -460,14 +460,14 @@ class LessonOpeningTeacherReport
     public const SUPERKONTRAKT_TYPE = '13';
 
     /**
-     * Superkontrakt talaba va dars u HEMISga kiritilgan kundan oldin bo'lganmi.
-     * Bunday talaba semestr o'rtasida qo'shiladi — o'tgan darslar baholari
-     * o'qituvchi tomonidan keyin (arizasiz) qo'yiladi.
+     * Dars talaba HEMISga kiritilgan kundan oldin bo'lganmi (turi qanday
+     * bo'lishidan qat'i nazar: superkontrakt, qo'shimcha, oddiy). Bunday talaba
+     * semestr o'rtasida qo'shiladi — o'tgan darslar baholari o'qituvchi
+     * tomonidan keyin (dars ochish arizasisiz) qo'yiladi.
      */
-    public static function isSuperkontraktPrejoin(?object $student, ?string $lessonDate): bool
+    public static function isBeforeHemisJoin(?object $student, ?string $lessonDate): bool
     {
-        if (!$student || !$lessonDate || (string) ($student->student_type_code ?? '') !== self::SUPERKONTRAKT_TYPE
-            || empty($student->hemis_created_at)) {
+        if (!$student || !$lessonDate || empty($student->hemis_created_at)) {
             return false;
         }
 
@@ -665,10 +665,12 @@ class LessonOpeningTeacherReport
                     'status' => $record['status'],
                     'manager_id' => $manager['id'] ?? 0,
                     'manager' => $manager['name'] ?? '',
-                    // Superkontrakt talaba HEMISga kiritilishidan oldingi dars —
-                    // o'qituvchi jurnalda arizasiz baho qo'ya oladi; Excelda alohida varaq
+                    // Talaba HEMISga kiritilishidan oldingi dars — o'qituvchi
+                    // jurnalda arizasiz baho qo'ya oladi; Excelda alohida varaq
                     'joined_at' => $student?->hemis_created_at ? substr((string) $student->hemis_created_at, 0, 10) : null,
-                    'superkontrakt_prejoin' => self::isSuperkontraktPrejoin($student, $record['date']),
+                    'student_type' => (string) ($student->student_type_name ?? ''),
+                    'student_type_code' => (string) ($student->student_type_code ?? ''),
+                    'late_join' => self::isBeforeHemisJoin($student, $record['date']),
                 ];
             }
         }

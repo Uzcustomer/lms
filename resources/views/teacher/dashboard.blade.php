@@ -339,7 +339,7 @@
                     </span>
                     <div>
                         <h3 id="mlpTitle">Baho qo'yilmagan darslar: {{ $missedLessons->sum(fn ($l) => count($l['dates'] ?? [1])) }} ta · {{ $missedLessons->count() }} ta guruh</h3>
-                        <p>Quyidagi guruhlarda baho qo'yilmagan darslar bor. Jurnalga kiring: oddiy talabalar uchun kun ustunidagi "!" orqali dars ochishga ruxsat so'rang, superkontrakt talabalarga batafsil ko'rinishda baho qo'yasiz.</p>
+                        <p>Quyidagi guruhlarda baho qo'yilmagan darslar bor. Jurnalga kiring: kun ustunidagi "!" orqali dars ochishga ruxsat so'rang. HEMISga kech kiritilgan talabalarning undan oldingi darslariga batafsil ko'rinishda baho qo'yasiz.</p>
                     </div>
                 </div>
 
@@ -348,7 +348,7 @@
                         @php
                             $mlpDates = $lesson['dates'] ?? [$lesson['lesson_date']];
                             $mlpShown = array_slice($mlpDates, 0, 6);
-                            $mlpSk = (int) ($lesson['superkontrakt_students'] ?? 0);
+                            $mlpSk = (int) ($lesson['late_join_students'] ?? 0);
                             $mlpRegular = (int) ($lesson['regular_students'] ?? 0);
                         @endphp
                         <div class="mlp-row {{ $mlpSk > 0 ? 'is-sk' : '' }}">
@@ -358,17 +358,17 @@
                                 <div class="mlp-meta">
                                     {{ implode(', ', array_map(fn ($d) => \Carbon\Carbon::parse($d)->format('d.m'), $mlpShown)) }}{{ count($mlpDates) > count($mlpShown) ? ' …' : '' }}
                                     @if($mlpRegular > 0)
-                                        <span class="mlp-count">{{ $mlpRegular }} oddiy talaba</span>
+                                        <span class="mlp-count">{{ $mlpRegular }} talabada baho yo'q</span>
                                     @endif
                                     @if($mlpSk > 0)
-                                        <span class="mlp-sk-tag">{{ $mlpSk }} superkontrakt</span>
+                                        <span class="mlp-sk-tag">{{ $mlpSk }} kech kiritilgan</span>
                                     @endif
                                     @if($lesson['rejected'])
                                         <span class="mlp-tag">so'rov rad etilgan</span>
                                     @endif
                                 </div>
                                 @if($mlpSk > 0)
-                                    <div class="mlp-sk-names">Superkontrakt: {{ implode(', ', $lesson['superkontrakt_names'] ?? []) }} — HEMISga keyin kiritilgan</div>
+                                    <div class="mlp-sk-names">HEMISga kech kiritilgan: {{ implode(', ', $lesson['late_join_names'] ?? []) }}</div>
                                 @endif
                             </div>
                             <a class="mlp-btn" href="{{ $lesson['url'] }}">

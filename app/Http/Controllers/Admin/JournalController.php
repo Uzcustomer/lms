@@ -2383,16 +2383,16 @@ class JournalController extends Controller
             ? $this->ungradedMtStudents((string) $group->group_hemis_id, (string) $subjectId, (string) $semesterCode)
             : [];
 
-        // Superkontrakt talaba semestr o'rtasida qo'shiladi: HEMISga kiritilishidan
-        // oldingi darslarga o'qituvchi dars ochish arizasisiz baho qo'yadi.
-        $superkontraktJoin = $students
-            ->filter(fn ($st) => (string) ($st->student_type_code ?? '') === \App\Services\LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE
-                && !empty($st->hemis_created_at))
+        // Talaba HEMISga semestr o'rtasida kiritilgan bo'lishi mumkin (superkontrakt,
+        // qo'shimcha, oddiy): kiritilishidan oldingi darslarga o'qituvchi dars
+        // ochish arizasisiz baho qo'yadi.
+        $lateJoinDates = $students
+            ->filter(fn ($st) => !empty($st->hemis_created_at))
             ->mapWithKeys(fn ($st) => [(string) $st->hemis_id => substr((string) $st->hemis_created_at, 0, 10)])
             ->all();
 
         return view('admin.journal.show', compact(
-            'superkontraktJoin',
+            'lateJoinDates',
             'group',
             'subject',
             'curriculum',
@@ -6359,12 +6359,12 @@ class JournalController extends Controller
                 $lessonDate
             );
 
-            // Superkontrakt talabaning HEMISga kiritilishidan oldingi darsi —
-            // o'qituvchi arizasiz baho qo'yadi (talaba o'shanda hali ro'yxatda yo'q edi)
-            $isSuperkontraktGap = !$isExcuseOpening
-                && $this->isSuperkontraktGap((string) $request->student_hemis_id, $lessonDate);
+            // Talabaning HEMISga kiritilishidan oldingi darsi — o'qituvchi
+            // arizasiz baho qo'yadi (talaba o'shanda hali ro'yxatda yo'q edi)
+            $isLateJoinGap = !$isExcuseOpening
+                && $this->isLateJoinGap((string) $request->student_hemis_id, $lessonDate);
 
-            if (!$isExcuseOpening && !$isSuperkontraktGap) {
+            if (!$isExcuseOpening && !$isLateJoinGap) {
                 // Sozlamadagi "baho qo'yilmay qolganlar" oynasi ochiq bo'lsa,
                 // tanlangan rollar dars ochishsiz ham baho qo'ya oladi
                 $missedGradeOpen = MissedGradeAccess::allowsCurrentUser()
@@ -11276,11 +11276,11 @@ class JournalController extends Controller
      * Return: true (ruxsat) yoki xato xabari (string)
      */
     /**
-     * Talaba superkontrakt va dars u HEMISga kiritilgan kundan oldin bo'lganmi
-     * (bugungi va kelajak sanalar emas). Qoida hisobot bilan bir xil:
-     * LessonOpeningTeacherReport::isSuperkontraktPrejoin.
+     * Dars talaba HEMISga kiritilgan kundan oldin bo'lganmi (bugungi va
+     * kelajak sanalar emas). Qoida hisobot bilan bir xil:
+     * LessonOpeningTeacherReport::isBeforeHemisJoin.
      */
-    private function isSuperkontraktGap(string $studentHemisId, string $lessonDate): bool
+    private function isLateJoinGap(string $studentHemisId, string $lessonDate): bool
     {
         if ($lessonDate > now('Asia/Tashkent')->toDateString()) {
             return false;
@@ -11289,7 +11289,7 @@ class JournalController extends Controller
             ->where('hemis_id', $studentHemisId)
             ->first(['student_type_code', 'hemis_created_at']);
 
-        return \App\Services\LessonOpeningTeacherReport::isSuperkontraktPrejoin($student, $lessonDate);
+        return \App\Services\LessonOpeningTeacherReport::isBeforeHemisJoin($student, $lessonDate);
     }
 
     private function checkExcuseGradeRole(?string $semesterCode, bool $isTeacher)

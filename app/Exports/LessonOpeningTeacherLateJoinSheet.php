@@ -12,16 +12,17 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
- * "Superkontrakt" varag'i: superkontrakt talabalarning HEMISga kiritilishidan
- * OLDINGI darslarda baho qo'yilmagan holatlari. Ular "Talabalar kesimida"
- * varag'ida ham bor (baho qo'yilmagan hisoblanadi), bu yerda alohida
- * ko'rsatiladi: o'qituvchi bu baholarni jurnalda arizasiz qo'yadi.
+ * "Kech kiritilganlar" varag'i: HEMISga semestr o'rtasida kiritilgan
+ * talabalarning (superkontrakt, qo'shimcha, oddiy) kiritilishidan OLDINGI
+ * darslarda baho qo'yilmagan holatlari. Ular "Talabalar kesimida" varag'ida
+ * ham bor (baho qo'yilmagan hisoblanadi), bu yerda alohida ko'rsatiladi:
+ * o'qituvchi bu baholarni jurnalda arizasiz qo'yadi.
  *
  * 1-qator — jami, 2-qator — sarlavha, ma'lumot 3-qatordan.
  */
-class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
+class LessonOpeningTeacherLateJoinSheet implements FromArray, WithColumnWidths, WithEvents, WithTitle
 {
-    private const LAST_COL = 'L';
+    private const LAST_COL = 'M';
 
     private const HEADER_ROW = 2;
 
@@ -31,20 +32,22 @@ class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWid
 
     public function title(): string
     {
-        return 'Superkontrakt';
+        return 'Kech kiritilganlar';
     }
 
     public function array(): array
     {
-        $rows = $this->report['superkontrakt'] ?? [];
+        $rows = $this->report['late_join'] ?? [];
         $distinct = count(array_unique(array_column($rows, 'student_hemis_id')));
+        $sk = count(array_unique(array_column(array_filter($rows,
+            fn ($row) => ($row['student_type_code'] ?? '') === \App\Services\LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE), 'student_hemis_id')));
 
         // A1 bo'sh bo'lmasin: Laravel Excel qatorlarni 1000 talab yozadi va A1
         // bo'sh bo'lsa keyingi bo'lakni yana 1-qatordan yozib, ma'lumotni bosadi.
         $out = [
-            array_pad(['Jami:', "{$distinct} ta superkontrakt talaba · " . count($rows) . " ta dars (HEMISga kiritilishidan oldin)"], 12, ''),
+            array_pad(['Jami:', "{$distinct} ta talaba (shundan superkontrakt: {$sk}) · " . count($rows) . " ta dars (HEMISga kiritilishidan oldin)"], 13, ''),
             [
-                '№', 'Talaba', 'Talaba ID', 'Guruh', 'Kurs', 'Fan', 'Dars sanasi', 'Juftlik',
+                '№', 'Talaba', 'Talaba ID', 'Talaba turi', 'Guruh', 'Kurs', 'Fan', 'Dars sanasi', 'Juftlik',
                 "O'qituvchi", 'Kafedra', 'HEMISga kiritilgan', "Mas'ul xodim",
             ],
         ];
@@ -54,6 +57,7 @@ class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWid
                 $index + 1,
                 $row['student'] !== '' ? $row['student'] : '(nomi topilmadi)',
                 $row['student_id_number'] !== '' ? $row['student_id_number'] : $row['student_hemis_id'],
+                $row['student_type'] ?? '',
                 $row['group'],
                 $row['course'] ?? '',
                 $row['subject'],
@@ -67,7 +71,7 @@ class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWid
         }
 
         if ($rows === []) {
-            $out[] = array_pad(["Bu davrda superkontrakt talabalarda HEMISga kiritilishidan oldingi baho qo'yilmagan dars yo'q."], 12, '');
+            $out[] = array_pad(["Bu davrda HEMISga kech kiritilgan talabalarda kiritilishidan oldingi baho qo'yilmagan dars yo'q."], 13, '');
         }
 
         $this->lastRow = count($out);
@@ -77,8 +81,8 @@ class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWid
 
     public function columnWidths(): array
     {
-        return ['A' => 6, 'B' => 38, 'C' => 16, 'D' => 16, 'E' => 9, 'F' => 40,
-            'G' => 13, 'H' => 14, 'I' => 34, 'J' => 32, 'K' => 15, 'L' => 34];
+        return ['A' => 6, 'B' => 38, 'C' => 16, 'D' => 15, 'E' => 16, 'F' => 9, 'G' => 40,
+            'H' => 13, 'I' => 14, 'J' => 34, 'K' => 32, 'L' => 15, 'M' => 34];
     }
 
     public function registerEvents(): array
@@ -91,7 +95,7 @@ class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWid
                 $h = self::HEADER_ROW;
                 $first = $h + 1;
 
-                // Jami qatori — sariq (jurnaldagi superkontrakt kataklari bilan bir xil)
+                // Jami qatori — sariq (jurnaldagi kataklar bilan bir xil)
                 $sheet->getStyle("A1:{$lc}1")->getFont()->setBold(true)->getColor()->setRGB('7A4B00');
                 $sheet->getStyle("A1:{$lc}1")->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF3C7');
@@ -108,7 +112,7 @@ class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWid
                 if ($last < $first) {
                     return;
                 }
-                if (($this->report['superkontrakt'] ?? []) === []) {
+                if (($this->report['late_join'] ?? []) === []) {
                     $sheet->mergeCells("A{$last}:{$lc}{$last}");
 
                     return;
@@ -119,10 +123,10 @@ class LessonOpeningTeacherSuperkontraktSheet implements FromArray, WithColumnWid
                     ->setBorderStyle(Border::BORDER_HAIR)->getColor()->setRGB('CBD5E1');
                 $sheet->getStyle("A{$first}:A{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("B{$first}:B{$last}")->getFont()->setBold(true);
-                $sheet->getStyle("C{$first}:E{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("G{$first}:H{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("K{$first}:K{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("K{$first}:K{$last}")->getFont()->setBold(true)->getColor()->setRGB('92400E');
+                $sheet->getStyle("C{$first}:F{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("H{$first}:I{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("L{$first}:L{$last}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("L{$first}:L{$last}")->getFont()->setBold(true)->getColor()->setRGB('92400E');
                 $sheet->getStyle("A{$h}:{$lc}{$last}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
             },
         ];

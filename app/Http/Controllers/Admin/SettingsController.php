@@ -30,6 +30,8 @@ class SettingsController extends Controller
         // Baho qo'yilmay qolganlarga baho qo'yish oynasi
         $data['missedGradeDays'] = MissedGradeAccess::days();
         $data['lateJoinGradeUntil'] = \App\Services\LateJoinGradeAccess::until();
+        $data['lateJoinAutoFrom'] = \App\Services\LateJoinGradeAccess::autoFrom();
+        $data['lateJoinAutoDays'] = \App\Services\LateJoinGradeAccess::autoDays();
         $data['missedGradeRoles'] = MissedGradeAccess::roles();
 
         // Marking system scores
@@ -120,6 +122,15 @@ class SettingsController extends Controller
         if ($request->has('late_join_grade_until')) {
             $request->validate(['late_join_grade_until' => 'nullable|date_format:Y-m-d']);
             Setting::set(\App\Services\LateJoinGradeAccess::SETTING, (string) $request->input('late_join_grade_until', ''));
+        }
+        // Shu sanadan keyin kiritilganlarga avtomatik muddat: kiritilgan kundan N kun
+        if ($request->has('late_join_auto_from')) {
+            $request->validate([
+                'late_join_auto_from' => 'nullable|date_format:Y-m-d',
+                'late_join_auto_days' => 'nullable|integer|min:1|max:365',
+            ]);
+            Setting::set(\App\Services\LateJoinGradeAccess::AUTO_FROM_SETTING, (string) $request->input('late_join_auto_from', ''));
+            Setting::set(\App\Services\LateJoinGradeAccess::AUTO_DAYS_SETTING, (int) ($request->input('late_join_auto_days') ?: \App\Services\LateJoinGradeAccess::DEFAULT_AUTO_DAYS));
         }
 
         $deadlines = $request->input('deadlines', []);

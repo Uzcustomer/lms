@@ -240,6 +240,30 @@
                                     {{ $lateOpen ? ($lateUntil ? 'Ochiq — ' . \Carbon\Carbon::parse($lateUntil)->format('d.m.Y') . ' gacha' : 'Ochiq — muddatsiz') : 'Muddat tugagan — faqat ariza orqali' }}
                                 </span>
                             </div>
+
+                            {{-- Avtomatik muddat: shu sanadan keyin kiritilganlarga kiritilgan kundan N kun --}}
+                            @php
+                                $autoFrom = old('late_join_auto_from', $lateJoinAutoFrom ?? '');
+                                $autoDays = old('late_join_auto_days', $lateJoinAutoDays ?? 14);
+                            @endphp
+                            <div style="margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; background: #fff; border-radius: 10px; border: 1px solid #fde68a;">
+                                <label for="late_join_auto_from" style="font-size: 12px; color: #78350f; font-weight: 600;">Avtomatik muddat — shu sanadan keyin kiritilganlarga</label>
+                                <input type="date" id="late_join_auto_from" name="late_join_auto_from" value="{{ $autoFrom }}"
+                                       style="padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-weight: 600; color: #111827; outline: none;">
+                                <span style="font-size: 12px; color: #78350f;">kiritilgan kundan</span>
+                                <input type="number" id="late_join_auto_days" name="late_join_auto_days" min="1" max="365" value="{{ $autoDays }}"
+                                       style="width: 70px; padding: 7px 8px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-weight: 700; color: #111827; text-align: center; outline: none;">
+                                <span style="font-size: 12px; color: #78350f;">kun</span>
+                                <button type="button" onclick="document.getElementById('late_join_auto_from').value = ''"
+                                        style="padding: 7px 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; color: #64748b; font-size: 12px; cursor: pointer;">O'chirish</button>
+                                <span style="font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; {{ $autoFrom ? 'background:#dcfce7;color:#166534' : 'background:#f1f5f9;color:#64748b' }}">
+                                    {{ $autoFrom ? \Carbon\Carbon::parse($autoFrom)->format('d.m.Y') . ' dan keyin kiritilganlarga ' . (int) $autoDays . ' kun' : "O'chiq" }}
+                                </span>
+                                <div style="flex-basis: 100%; font-size: 11px; color: #92400e;">
+                                    Masalan, 14 kun: talaba 20.10 da HEMISga kiritilsa, o'qituvchi uning shu kungacha bo'lgan darslariga 03.11 gacha arizasiz baho qo'yadi, keyin faqat ariza orqali.
+                                    Bu sanadan oldin kiritilganlarga yuqoridagi umumiy oxirgi sana qo'llanadi.
+                                </div>
+                            </div>
                         </div>
 
                         <div style="display: flex; justify-content: flex-end;">

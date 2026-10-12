@@ -97,23 +97,42 @@
     }
     .jr-stat.is-ok b { color: var(--ok); }
 
-    /* ---- Havola ---- */
-    .jr-link {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-        padding: 13px 20px;
-        border: 1px solid var(--line); border-left: 3px solid var(--navy); border-radius: 6px;
-        background: #f8fafd; font-size: 13px; color: var(--ink-soft);
+    /* ---- Guruhlar sharhi (kartochkalar) ---- */
+    .jr-section-title {
+        display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+        margin: 4px 2px -4px; color: var(--navy); font-size: 13px; font-weight: 700;
+        letter-spacing: .06em; text-transform: uppercase;
     }
-    .jr-link code {
-        padding: 4px 10px; border: 1px solid var(--line); border-radius: 4px;
-        background: #fff; color: var(--navy); font-size: 12.5px;
+    .jr-section-title span { color: var(--muted); font-size: 11.5px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+    .jr-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+    .jr-gcard {
+        display: flex; flex-direction: column; gap: 10px;
+        padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
+        background: #fff; color: inherit; text-decoration: none;
+        transition: border-color .16s, box-shadow .16s, transform .16s;
     }
-    .jr-copy {
-        padding: 6px 13px; border: 1px solid #c4d0e0; border-radius: 4px;
-        background: #fff; color: var(--navy);
-        font-family: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer;
-    }
-    .jr-copy:hover { background: #f1f5fa; }
+    .jr-gcard:hover { border-color: #b7c7dc; box-shadow: 0 6px 18px rgba(14, 35, 66, .08); transform: translateY(-1px); }
+    .jr-gcard:focus-visible { outline: 2px solid var(--navy-soft); outline-offset: 2px; }
+    .jr-gcard-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .jr-gcard-name { color: var(--navy); font-size: 15px; font-weight: 700; line-height: 1.25; word-break: break-word; }
+    .jr-gcard-avg { flex: none; color: var(--navy); font-size: 20px; font-weight: 700; line-height: 1; }
+    .jr-gcard-avg small { display: block; margin-top: 3px; color: var(--muted); font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-align: right; text-transform: uppercase; }
+    .jr-gcard-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--ink-soft); font-size: 12px; }
+    .jr-gcard-meta b { color: var(--navy); font-weight: 700; }
+    .jr-gcard-meta .ok b { color: var(--ok); }
+    .jr-gcard-meta .wait b { color: var(--warn); }
+
+    /* O'tish ulushi chizig'i */
+    .jr-bar { position: relative; height: 6px; border-radius: 999px; background: #edf1f7; overflow: hidden; }
+    .jr-bar > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, #12925f, var(--ok)); }
+    .jr-bar.is-low > i { background: linear-gradient(90deg, #d9534a, var(--bad)); }
+    .jr-bar.is-mid > i { background: linear-gradient(90deg, #e3a336, var(--warn)); }
+    .jr-bar-label { display: flex; justify-content: space-between; margin-top: -4px; color: var(--muted); font-size: 10.5px; }
+
+    /* Jadvaldagi foiz chizig'i */
+    .jr-pct { display: flex; flex-direction: column; gap: 5px; min-width: 70px; }
+    .jr-pct .jr-bar { height: 4px; }
+    .jr-idx { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
     /* ---- Guruh bloki ---- */
     .jr-group {
@@ -123,7 +142,17 @@
         display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
         padding: 13px 20px; border-bottom: 1px solid var(--line-soft);
         background: linear-gradient(180deg, #fbfcfe, #f5f8fc);
+        cursor: pointer; list-style: none;
     }
+    .jr-group-head::-webkit-details-marker { display: none; }
+    .jr-group:not([open]) > .jr-group-head { border-bottom: 0; }
+    .jr-group-title { display: flex; align-items: center; gap: 10px; }
+    .jr-group-title::before { content: '▾'; color: var(--muted); font-size: 11px; transition: transform .16s; }
+    .jr-group:not([open]) .jr-group-title::before { transform: rotate(-90deg); }
+    .jr-group-count { padding: 2px 9px; border-radius: 999px; background: #e8eef7; color: var(--navy-soft); font-size: 11px; font-weight: 700; }
+    .jr-group-rate { display: flex; align-items: center; gap: 8px; min-width: 150px; color: var(--muted); font-size: 11px; }
+    .jr-group-rate .jr-bar { flex: 1; }
+    .jr-group { scroll-margin-top: 16px; }
     .jr-group-head b {
         color: var(--navy); font-family: inherit; font-size: 16px; font-weight: 600;
     }
@@ -385,19 +414,44 @@
                         <div class="jr-stat"><b>{{ $summary['average_percent'] }}%</b><span>O'rtacha natija</span></div>
                     </div>
 
-                    @php $kioskUrl = route('kiosk.fan-testi.show', $selected); @endphp
-                    <div class="jr-link">
-                        <span>Talaba havolasi:</span>
-                        <code id="kioskUrl">{{ $kioskUrl }}</code>
-                        <button type="button" class="jr-copy" id="copyUrl" data-url="{{ $kioskUrl }}">Nusxalash</button>
-                        <span style="color:var(--muted)">— shu havolani sinf kompyuterlarida oching.</span>
-                    </div>
+                    @if($groups->isNotEmpty())
+                        <div class="jr-section-title">Guruhlar <span>{{ $groups->count() }} ta guruh · bosib, guruh natijalariga o'ting</span></div>
+                        <div class="jr-groups">
+                            @foreach($groups as $group)
+                                @php $rateClass = $group['pass_rate'] < 50 ? 'is-low' : ($group['pass_rate'] < 75 ? 'is-mid' : ''); @endphp
+                                <a class="jr-gcard" href="#grp-{{ $loop->index }}">
+                                    <div class="jr-gcard-top">
+                                        <span class="jr-gcard-name">{{ $group['name'] }}</span>
+                                        <span class="jr-gcard-avg">{{ $group['average_percent'] }}%<small>o'rtacha</small></span>
+                                    </div>
+                                    <div class="jr-gcard-meta">
+                                        <span><b>{{ $group['submitted_count'] }}</b> topshirgan</span>
+                                        <span class="ok"><b>{{ $group['passed_count'] }}</b> o'tgan</span>
+                                        @if($group['in_progress_count'] > 0)
+                                            <span class="wait"><b>{{ $group['in_progress_count'] }}</b> ishlamoqda</span>
+                                        @endif
+                                    </div>
+                                    <div class="jr-bar {{ $rateClass }}" role="img" aria-label="O'tish ulushi {{ $group['pass_rate'] }}%"><i style="width: {{ $group['pass_rate'] }}%"></i></div>
+                                    <div class="jr-bar-label"><span>O'tish ulushi</span><span>{{ $group['pass_rate'] }}%</span></div>
+                                </a>
+                            @endforeach
+                        </div>
+                        <div class="jr-section-title">Talabalar natijalari <span>guruhlar bo'yicha</span></div>
+                    @endif
 
                     @forelse($groups as $group)
-                        <div class="jr-group">
-                            <div class="jr-group-head">
-                                <b>{{ $group['name'] }}</b>
+                        @php $rateClass = $group['pass_rate'] < 50 ? 'is-low' : ($group['pass_rate'] < 75 ? 'is-mid' : ''); @endphp
+                        <details class="jr-group" id="grp-{{ $loop->index }}" open>
+                            <summary class="jr-group-head">
+                                <span class="jr-group-title">
+                                    <b>{{ $group['name'] }}</b>
+                                    <span class="jr-group-count">{{ $group['attempts']->count() }} talaba</span>
+                                </span>
                                 <div class="jr-tags">
+                                    <span class="jr-group-rate">
+                                        <span class="jr-bar {{ $rateClass }}"><i style="width: {{ $group['pass_rate'] }}%"></i></span>
+                                        {{ $group['pass_rate'] }}% o'tdi
+                                    </span>
                                     <span class="jr-tag"><b>{{ $group['submitted_count'] }}</b> topshirgan</span>
                                     <span class="jr-tag is-ok"><b>{{ $group['passed_count'] }}</b> o'tgan</span>
                                     <span class="jr-tag">o'rtacha <b>{{ $group['average_percent'] }}%</b></span>
@@ -409,11 +463,12 @@
                                         <button type="submit">Natijalarni tozalash</button>
                                     </form>
                                 </div>
-                            </div>
+                            </summary>
 
                             <table class="jr-table">
                                 <thead>
                                 <tr>
+                                    <th style="width:44px">№</th>
                                     <th style="width:26%">Talaba</th>
                                     <th style="width:11%">Holat</th>
                                     <th style="width:9%">Ball</th>
@@ -426,6 +481,7 @@
                                 <tbody>
                                 @foreach($group['attempts'] as $attempt)
                                     <tr>
+                                        <td><span class="jr-idx">{{ $loop->iteration }}</span></td>
                                         <td>
                                             <span class="jr-student">{{ $attempt->student_name }}</span>
                                             <span class="jr-sid">{{ $attempt->student_id_number }}</span>
@@ -451,9 +507,14 @@
                                         </td>
                                         <td><span class="jr-num">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</span></td>
                                         <td>
-                                            <span class="jr-num {{ !$attempt->is_passed && $attempt->status !== 'in_progress' ? 'is-bad' : '' }}">
-                                                {{ $attempt->percent !== null ? rtrim(rtrim(number_format((float) $attempt->percent, 1, '.', ''), '0'), '.') . '%' : '—' }}
-                                            </span>
+                                            <div class="jr-pct">
+                                                <span class="jr-num {{ !$attempt->is_passed && $attempt->status !== 'in_progress' ? 'is-bad' : '' }}">
+                                                    {{ $attempt->percent !== null ? rtrim(rtrim(number_format((float) $attempt->percent, 1, '.', ''), '0'), '.') . '%' : '—' }}
+                                                </span>
+                                                @if($attempt->percent !== null && $attempt->status !== 'in_progress')
+                                                    <span class="jr-bar {{ $attempt->is_passed ? '' : 'is-low' }}"><i style="width: {{ min(100, max(0, (float) $attempt->percent)) }}%"></i></span>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td><span class="jr-when">{{ $attempt->submitted_at?->format('d.m.Y H:i') ?? '—' }}</span></td>
                                         <td>
@@ -496,11 +557,11 @@
                                 @endforeach
                                 </tbody>
                             </table>
-                        </div>
+                        </details>
                     @empty
                         <div class="jr-empty">
                             <b>Hali hech kim topshirmagan</b>
-                            <span>Talabalar havola orqali testni topshirgach, natijalar shu yerda guruhlar bo'yicha chiqadi.</span>
+                            <span>Test boshlangach, topshirgan talabalar shu yerda o'z guruhlari bo'yicha chiqadi.</span>
                         </div>
                     @endforelse
                 @endif
@@ -508,25 +569,4 @@
         </div>
     </div>
 
-    <script>
-    (() => {
-        const button = document.getElementById('copyUrl');
-        if (!button) return;
-        button.addEventListener('click', async () => {
-            const url = button.dataset.url;
-            try {
-                await navigator.clipboard.writeText(url);
-            } catch (error) {
-                const field = document.createElement('textarea');
-                field.value = url;
-                document.body.appendChild(field);
-                field.select();
-                document.execCommand('copy');
-                field.remove();
-            }
-            button.textContent = 'Nusxalandi';
-            setTimeout(() => { button.textContent = 'Nusxalash'; }, 1600);
-        });
-    })();
-    </script>
 </x-app-layout>

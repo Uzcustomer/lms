@@ -505,13 +505,21 @@ class FanTestiController extends Controller
 
         $groups = $attempts
             ->groupBy(fn (FanTestiAttempt $attempt) => $attempt->group_name ?: 'Guruhsiz')
-            ->map(fn ($rows, $name) => [
-                'name' => $name,
-                'attempts' => $rows,
-                'submitted_count' => $rows->where('status', '!=', 'in_progress')->count(),
-                'passed_count' => $rows->where('is_passed', true)->count(),
-                'average_percent' => round((float) $rows->where('status', '!=', 'in_progress')->avg('percent'), 1),
-            ])
+            ->map(function ($rows, $name) {
+                $submitted = $rows->where('status', '!=', 'in_progress')->count();
+                $passed = $rows->where('is_passed', true)->count();
+
+                return [
+                    'name' => $name,
+                    'attempts' => $rows,
+                    'submitted_count' => $submitted,
+                    'in_progress_count' => $rows->where('status', 'in_progress')->count(),
+                    'passed_count' => $passed,
+                    // O'tganlar ulushi — topshirib bo'lganlar ichida
+                    'pass_rate' => $submitted > 0 ? (int) round($passed * 100 / $submitted) : 0,
+                    'average_percent' => round((float) $rows->where('status', '!=', 'in_progress')->avg('percent'), 1),
+                ];
+            })
             ->sortKeys()
             ->values();
 

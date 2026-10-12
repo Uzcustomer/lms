@@ -1004,14 +1004,14 @@ class JournalController extends Controller
         }
 
         $students = $studentsQuery
-            ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code', 'student_status_name')
+            ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code', 'student_status_name', 'student_type_code', 'hemis_created_at')
             ->orderBy('full_name')
             ->get();
 
         if ($students->isEmpty()) {
             $students = DB::table('students')
                 ->where('group_id', $group->group_hemis_id)
-                ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code', 'student_status_name')
+                ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code', 'student_status_name', 'student_type_code', 'hemis_created_at')
                 ->orderBy('full_name')
                 ->get();
         }
@@ -2383,7 +2383,16 @@ class JournalController extends Controller
             ? $this->ungradedMtStudents((string) $group->group_hemis_id, (string) $subjectId, (string) $semesterCode)
             : [];
 
+        // Superkontrakt talaba semestr o'rtasida qo'shiladi: HEMISga kiritilishidan
+        // oldingi darslarga o'qituvchi dars ochish arizasisiz baho qo'yadi.
+        $superkontraktJoin = $students
+            ->filter(fn ($st) => (string) ($st->student_type_code ?? '') === \App\Services\LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE
+                && !empty($st->hemis_created_at))
+            ->mapWithKeys(fn ($st) => [(string) $st->hemis_id => substr((string) $st->hemis_created_at, 0, 10)])
+            ->all();
+
         return view('admin.journal.show', compact(
+            'superkontraktJoin',
             'group',
             'subject',
             'curriculum',
@@ -6350,7 +6359,12 @@ class JournalController extends Controller
                 $lessonDate
             );
 
-            if (!$isExcuseOpening) {
+            // Superkontrakt talabaning HEMISga kiritilishidan oldingi darsi —
+            // o'qituvchi arizasiz baho qo'yadi (talaba o'shanda hali ro'yxatda yo'q edi)
+            $isSuperkontraktGap = !$isExcuseOpening
+                && $this->isSuperkontraktGap((string) $request->student_hemis_id, $lessonDate);
+
+            if (!$isExcuseOpening && !$isSuperkontraktGap) {
                 // Sozlamadagi "baho qo'yilmay qolganlar" oynasi ochiq bo'lsa,
                 // tanlangan rollar dars ochishsiz ham baho qo'ya oladi
                 $missedGradeOpen = MissedGradeAccess::allowsCurrentUser()
@@ -11261,6 +11275,23 @@ class JournalController extends Controller
      * Deadline.retake_by_test_markazi=true → faqat test markazi upload orqali — jurnaldan 403
      * Return: true (ruxsat) yoki xato xabari (string)
      */
+    /**
+     * Talaba superkontrakt va dars u HEMISga kiritilgan kundan oldin bo'lganmi
+     * (bugungi va kelajak sanalar emas). Qoida hisobot bilan bir xil:
+     * LessonOpeningTeacherReport::isSuperkontraktPrejoin.
+     */
+    private function isSuperkontraktGap(string $studentHemisId, string $lessonDate): bool
+    {
+        if ($lessonDate > now('Asia/Tashkent')->toDateString()) {
+            return false;
+        }
+        $student = DB::table('students')
+            ->where('hemis_id', $studentHemisId)
+            ->first(['student_type_code', 'hemis_created_at']);
+
+        return \App\Services\LessonOpeningTeacherReport::isSuperkontraktPrejoin($student, $lessonDate);
+    }
+
     private function checkExcuseGradeRole(?string $semesterCode, bool $isTeacher)
     {
         if (!$semesterCode) {

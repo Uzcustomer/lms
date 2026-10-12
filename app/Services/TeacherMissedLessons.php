@@ -119,36 +119,74 @@ class TeacherMissedLessons
                 $this->key($o->group_hemis_id, $o->subject_id, $o->semester_code, $o->lesson_date?->format('Y-m-d')) => $o->status,
             ]);
 
+        // Superkontrakt talabalar: HEMISga kiritilishidan oldingi darslar alohida
+        // (sariq) qatorga chiqadi — ularga o'qituvchi arizasiz baho qo'yadi.
+        $missingHemis = [];
+        foreach ($missingByDay as $set) {
+            $missingHemis += $set;
+        }
+        $superkontrakt = $missingHemis
+            ? DB::table('students')
+                ->whereIn('hemis_id', array_keys($missingHemis))
+                ->where('student_type_code', LessonOpeningTeacherReport::SUPERKONTRAKT_TYPE)
+                ->whereNotNull('hemis_created_at')
+                ->get(['hemis_id', 'full_name', 'student_type_code', 'hemis_created_at'])
+                ->keyBy(fn ($st) => (string) $st->hemis_id)
+            : collect();
+
         // Juftlik hisobga olinmagan bo'lsa kun ro'yxatga tushadi; so'rov esa
         // kunga yuboriladi, shuning uchun bir kun bir marta ko'rinadi
-        return $slots
-            ->filter(function ($slot) use ($marked, $openings, $groupsWithStudents) {
-                $key = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
-                $pairKey = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
-                $status = $openings[$key] ?? null;
+        $rows = [];
+        $seen = [];
+        foreach ($slots as $slot) {
+            $key = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
+            $pairKey = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
+            if (isset($marked[$pairKey]) || ! isset($groupsWithStudents[(string) $slot->group_id]) || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
 
-                return ! isset($marked[$pairKey])
-                    && isset($groupsWithStudents[(string) $slot->group_id])
-                    && in_array($status, [null, LessonOpening::STATUS_REJECTED, LessonOpening::STATUS_EXPIRED], true);
-            })
-            ->unique(fn ($slot) => $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day))
-            ->map(function ($slot) use ($openings, $missingByDay) {
-                $key = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
+            $status = $openings[$key] ?? null;
+            $missingHere = array_keys($missingByDay[$key] ?? []);
+            $skHere = array_values(array_filter($missingHere, fn ($hemis) => isset($superkontrakt[(string) $hemis])
+                && LessonOpeningTeacherReport::isSuperkontraktPrejoin($superkontrakt[(string) $hemis], $slot->lesson_day)));
+            $regular = count($missingHere) - count($skHere);
+            // Jurnal shu kunga o'tib ochiladi. So'rov oynasi O'ZI
+            // ochilmaydi: o'qituvchi avval jurnalni ko'rsin, so'ng
+            // kerak bo'lsa ustundagi "!" ni bossin.
+            $url = route('admin.journal.show', [$slot->group_db_id, $slot->subject_id, $slot->semester_code])
+                .'?focus_lesson='.$slot->lesson_day;
 
-                return [
+            $requestable = in_array($status, [null, LessonOpening::STATUS_REJECTED, LessonOpening::STATUS_EXPIRED], true);
+            if ($requestable && ($regular > 0 || $missingHere === [])) {
+                $rows[] = [
                     'group_name' => $slot->group_name,
                     'subject_name' => $slot->subject_name,
                     'lesson_date' => $slot->lesson_day,
-                    'rejected' => ($openings[$key] ?? null) === LessonOpening::STATUS_REJECTED,
+                    'rejected' => $status === LessonOpening::STATUS_REJECTED,
                     // Shu kunda nechta talabada baho yo'q (popupda ko'rsatiladi)
-                    'ungraded_students' => count($missingByDay[$key] ?? []),
-                    // Jurnal shu kunga o'tib ochiladi. So'rov oynasi O'ZI
-                    // ochilmaydi: o'qituvchi avval jurnalni ko'rsin, so'ng
-                    // kerak bo'lsa ustundagi "!" ni bossin.
-                    'url' => route('admin.journal.show', [$slot->group_db_id, $slot->subject_id, $slot->semester_code])
-                        .'?focus_lesson='.$slot->lesson_day,
+                    'ungraded_students' => $regular,
+                    'superkontrakt' => false,
+                    'url' => $url,
                 ];
-            })
+            }
+
+            if ($skHere !== []) {
+                $rows[] = [
+                    'group_name' => $slot->group_name,
+                    'subject_name' => $slot->subject_name,
+                    'lesson_date' => $slot->lesson_day,
+                    'rejected' => false,
+                    'ungraded_students' => count($skHere),
+                    'superkontrakt' => true,
+                    'students' => array_map(fn ($hemis) => (string) $superkontrakt[(string) $hemis]->full_name, $skHere),
+                    // Jurnalda shu talabaning sariq kataklari ochiladi
+                    'url' => $url.'&sk_student='.$skHere[0].'&highlight_student='.$skHere[0],
+                ];
+            }
+        }
+
+        return collect($rows)
             ->sortByDesc('lesson_date')
             ->values();
     }

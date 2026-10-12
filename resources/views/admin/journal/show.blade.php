@@ -79,6 +79,16 @@
            Katak ranglari (sariq fon, NB) ustidan bosmasligi uchun och tus. */
         tr.jr-row-ungraded > td { background-color: #fff1f2; }
         tr.jr-row-ungraded:hover > td { background-color: #ffe4e6; }
+        /* Superkontrakt: HEMISga kiritilishidan oldingi baholanmagan darslar — sariq */
+        tr.sk-row > td { background-color: #fffbeb; }
+        tr.sk-row > td.student-name-cell { background-color: #fef3c7 !important; box-shadow: inset 4px 0 0 #f59e0b; }
+        .sk-cell { background: #fde68a; border-radius: 3px; }
+        .sk-cell .sk-dash { color: #b45309; font-weight: 700; }
+        tr.sk-row:not(.sk-open) .sk-cell { pointer-events: none; }
+        tr.sk-row.sk-open .sk-cell { cursor: pointer; outline: 1px dashed #d97706; }
+        .sk-btn { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 8px; border: 0; border-radius: 999px;
+            background: #f59e0b; color: #fff; font-size: 10.5px; font-weight: 800; text-transform: none; cursor: pointer; vertical-align: 1px; }
+        .sk-btn:hover { background: #d97706; }
         /* Dashboard popupidan kelinganda shu kun ustuni ajratiladi */
         .jr-focus-day { outline: 2px solid #f59e0b; outline-offset: -2px; }
         .jr-focus-btn { box-shadow: 0 0 0 3px rgba(245, 158, 11, .55); }
@@ -1184,6 +1194,22 @@
                             $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
                             $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
                             $teacherEditableDatesLookup = array_flip($teacherEditableDates);
+                            // Superkontrakt: HEMISga kiritilishidan oldingi bo'sh kataklar soni (talaba bo'yicha).
+                            // O'qituvchi ularga dars ochish arizasisiz baho qo'yadi.
+                            $skJoin = $superkontraktJoin ?? [];
+                            $skCanGrade = $isOqituvchi && !(isset($ynSubmission) && $ynSubmission);
+                            $skPending = [];
+                            foreach ($skJoin as $skHemis => $skDate) {
+                                $skCount = 0;
+                                foreach ($jbColumns as $skCol) {
+                                    $skDay = \Carbon\Carbon::parse($skCol['date'])->format('Y-m-d');
+                                    if ($skDay >= $skDate || $skDay > $todayStr) continue;
+                                    if ((($jbGrades[$skHemis][$skCol['date']][$skCol['pair']] ?? null)['grade'] ?? null) !== null) continue;
+                                    if (isset($jbAbsences[$skHemis][$skCol['date']][$skCol['pair']])) continue;
+                                    $skCount++;
+                                }
+                                if ($skCount > 0) $skPending[$skHemis] = $skCount;
+                            }
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
                             }));
@@ -1335,9 +1361,9 @@
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
-                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }}">
+                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }} {{ $skCanGrade && isset($skPending[(string) $student->hemis_id]) ? 'sk-row' : '' }}" data-sk-row="{{ $student->hemis_id }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif @if($skCanGrade && isset($skPending[(string) $student->hemis_id]))<button type="button" class="sk-btn" onclick="skOpen('{{ $student->hemis_id }}')" title="Superkontrakt: {{ \Carbon\Carbon::parse($skJoin[(string) $student->hemis_id])->format('d.m.Y') }} da HEMISga kiritilgan — undan oldingi darslarga arizasiz baho qo'ying">Baho qo'yish ({{ $skPending[(string) $student->hemis_id] }})</button>@endif</td>
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
@@ -1881,9 +1907,9 @@
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
-                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }}">
+                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }} {{ $skCanGrade && isset($skPending[(string) $student->hemis_id]) ? 'sk-row' : '' }}" data-sk-row="{{ $student->hemis_id }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif @if($skCanGrade && isset($skPending[(string) $student->hemis_id]))<button type="button" class="sk-btn" onclick="skOpen('{{ $student->hemis_id }}')" title="Superkontrakt: {{ \Carbon\Carbon::parse($skJoin[(string) $student->hemis_id])->format('d.m.Y') }} da HEMISga kiritilgan — undan oldingi darslarga arizasiz baho qo'ying">Baho qo'yish ({{ $skPending[(string) $student->hemis_id] }})</button>@endif</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($jbColumns as $colIndex => $col)
                                                 @php
@@ -2172,7 +2198,18 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if($canEditOpened && $isEmpty)
+                                                        @if($skCanGrade && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr < $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
+                                                            {{-- Superkontrakt: HEMISga kiritilishidan oldingi dars — "Baho qo'yish" bosilgach arizasiz baho --}}
+                                                            <div class="editable-cell grade-cell-opened sk-cell"
+                                                                 data-row="{{ $index }}" data-col="{{ $colIndex }}"
+                                                                 data-student="{{ $student->hemis_id }}" data-date="{{ $col['date'] }}"
+                                                                 data-pair="{{ $col['pair'] }}" data-subject="{{ $subjectId }}"
+                                                                 data-semester="{{ $semesterCode }}" data-group="{{ $group->group_hemis_id }}"
+                                                                 onclick="startEditOpened(this)"
+                                                                 title="Superkontrakt talaba {{ \Carbon\Carbon::parse($skJoin[(string) $student->hemis_id])->format('d.m.Y') }} da kiritilgan — bu darsga arizasiz baho qo'ying">
+                                                                <span class="sk-dash">-</span>
+                                                            </div>
+                                                        @elseif($canEditOpened && $isEmpty)
                                                             {{-- O'qituvchi uchun: ochilgan darsga baho qo'yish --}}
                                                             <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-green-50"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"
@@ -5822,6 +5859,22 @@
         function getGradeKey(cellDiv) {
             return `${cellDiv.dataset.student}_${cellDiv.dataset.date}_${cellDiv.dataset.pair}`;
         }
+
+        // Superkontrakt talaba: "Baho qo'yish" — batafsil ko'rinishda uning
+        // HEMISga kiritilishidan oldingi sariq kataklari ochiladi
+        function skOpen(hemisId) {
+            if (typeof switchView === 'function') switchView('detailed');
+            const row = document.querySelector('#jb-detailed-view tr[data-sk-row="' + hemisId + '"]');
+            if (!row) return;
+            row.classList.add('sk-open');
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const first = row.querySelector('.sk-cell');
+            if (first) setTimeout(() => startEditOpened(first), 350);
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const skStudent = new URLSearchParams(window.location.search).get('sk_student');
+            if (skStudent) skOpen(skStudent);
+        });
 
         function startEditOpened(cellDiv) {
             // Agar allaqachon input bo'lsa, qayta yaratmaslik

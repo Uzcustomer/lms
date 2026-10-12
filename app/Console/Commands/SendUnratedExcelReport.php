@@ -67,7 +67,8 @@ class SendUnratedExcelReport extends Command
             . '📅 ' . Carbon::parse($from)->format('d.m.Y') . ' — ' . Carbon::parse($to)->format('d.m.Y') . "\n"
             . "👨‍🏫 O'qituvchilar: " . count($data['teachers'] ?? []) . "\n"
             . "📆 Baholanmagan dars kunlari: " . count($data['days'] ?? []) . "\n"
-            . "👤 Baho qo'yilmagan talabalar: " . ($data['ungraded_students'] ?? 0);
+            . "👤 Baho qo'yilmagan talabalar: " . ($data['ungraded_students'] ?? 0)
+            . $this->superkontraktLine($data['superkontrakt'] ?? []);
 
         // Mas'ul back ofis xodimlari kesimida — nechta talabaga baho qo'yilmagan
         $managers = $this->managerSummary($data['managers'] ?? []);
@@ -134,6 +135,17 @@ class SendUnratedExcelReport extends Command
         }
 
         return implode("\n", $lines);
+    }
+
+    /** Superkontrakt talabalarning HEMISga kiritilishidan oldingi baholanmagan darslari (alohida varaqda). */
+    private function superkontraktLine(array $rows): string
+    {
+        if ($rows === []) {
+            return '';
+        }
+
+        return "\n🟡 Superkontrakt (HEMISga kiritilishidan oldin): "
+            . count(array_unique(array_column($rows, 'student_hemis_id'))) . ' ta talaba · ' . count($rows) . ' ta dars';
     }
 
     /** Ertalabki baho qo'yilmaganlar hisoboti boradigan manzillar bilan bir xil. */

@@ -310,6 +310,15 @@
             .mlp-btn:hover { background: #15803d; }
             .mlp-btn.is-muted { background: #e2e8f0; color: #334155 !important; }
             .mlp-btn svg { width: 16px; height: 16px; }
+            /* Superkontrakt: HEMISga kiritilishidan oldingi darslar — arizasiz baho */
+            .mlp-row.is-sk { margin: 6px -12px; padding: 13px 12px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a; }
+            .mlp-row.is-sk .mlp-cal { border-color: #fcd34d; }
+            .mlp-row.is-sk .mlp-cal i { background: #f59e0b; }
+            .mlp-row.is-sk .mlp-cal b { color: #78350f; }
+            .mlp-sk-tag { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #fde68a; color: #78350f; }
+            .mlp-sk-names { margin-top: 4px; font-size: 12.5px; color: #92400e; }
+            .mlp-btn.is-sk { background: #f59e0b; }
+            .mlp-btn.is-sk:hover { background: #d97706; }
             .mlp-note { margin: 0 26px 14px; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
             .mlp-note.is-danger { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
             .mlp-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 26px; border-top: 1px solid #f1f5f9; background: #f8fafc; }
@@ -337,6 +346,25 @@
                 <div class="mlp-body">
                     @foreach($missedLessons as $lesson)
                         @php $mlpDate = \Carbon\Carbon::parse($lesson['lesson_date']); @endphp
+                        @if(!empty($lesson['superkontrakt']))
+                            {{-- Superkontrakt talaba o'sha kuni hali HEMISda yo'q edi — o'qituvchi arizasiz baho qo'yadi --}}
+                            <div class="mlp-row is-sk">
+                                <div class="mlp-cal"><i>{{ $mlpMonths[(int) $mlpDate->format('n')] }}</i><b>{{ $mlpDate->format('d') }}</b></div>
+                                <div class="mlp-info">
+                                    <div class="mlp-subject">{{ $lesson['subject_name'] }}</div>
+                                    <div class="mlp-meta">
+                                        {{ $lesson['group_name'] }} guruhi · {{ $mlpDate->format('d.m.Y') }}
+                                        <span class="mlp-sk-tag">{{ $lesson['ungraded_students'] }} superkontrakt talaba</span>
+                                    </div>
+                                    <div class="mlp-sk-names">{{ implode(', ', $lesson['students'] ?? []) }} — HEMISga keyin kiritilgan, ruxsatsiz baho qo'ying</div>
+                                </div>
+                                <a class="mlp-btn is-sk" href="{{ $lesson['url'] }}">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.5H9V13z"/></svg>
+                                    Baho qo'yish
+                                </a>
+                            </div>
+                            @continue
+                        @endif
                         <div class="mlp-row">
                             <div class="mlp-cal"><i>{{ $mlpMonths[(int) $mlpDate->format('n')] }}</i><b>{{ $mlpDate->format('d') }}</b></div>
                             <div class="mlp-info">

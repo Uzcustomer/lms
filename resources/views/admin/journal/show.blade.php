@@ -3459,13 +3459,16 @@
                                             $mtSababliCanGrade = $hasMtSababli && !$isDekan && !$isRegistrator
                                                 && (!$mtSababliDeadlinePassed || $isAdminMt);
 
-                                            $inputDisabled = $isYnSubmittedMt
+                                            // "Superadmin/Admin baho tahrirlash" toggle'i YN qulfidan o'tkazadi —
+                                            // MT YN yuborilmagan holatdagidek baholanadi.
+                                            $mtYnLocked = $isYnSubmittedMt && !$isSuperAdmin;
+                                            $inputDisabled = $mtYnLocked
                                                 ? ($isAdminMt ? false : !$mtSababliCanGrade)
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
                                             // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
-                                            if ($isYnSubmittedMt && !$mtSababliCanGrade && !$isAdminMt) {
+                                            if ($mtYnLocked && !$mtSababliCanGrade && !$isAdminMt) {
                                                 $canRegrade = false;
                                             }
 

@@ -3461,7 +3461,11 @@ class JournalController extends Controller
 
         if ($ynLocked) {
             // Admin/superadmin uchun toggle ON bo'lsa — YN lock'dan o'tkazish
-            $adminMtToggle = $isAdminRole && Setting::get('feature_admin_mt_grade', '0') === '1';
+            // ("Admin MT baho" yoki umumiy "Superadmin/Admin baho tahrirlash")
+            $adminMtToggle = $isAdminRole && (
+                Setting::get('feature_admin_mt_grade', '0') === '1'
+                || Setting::get('feature_superadmin_grade_edit', '0') === '1'
+            );
             if ($adminMtToggle) {
                 // Ruxsat — davom etadi
             } else {

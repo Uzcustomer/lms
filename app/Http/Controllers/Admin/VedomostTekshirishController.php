@@ -885,20 +885,19 @@ class VedomostTekshirishController extends Controller
                 //  1 kasrni ko'rsatadi);
                 //  OSKI/Test ball — ikkalasi ham vaznga ega bo'lsa raw qiymat,
                 //  faqat bittasi vaznga ega bo'lsa butun songacha yaxlitlanadi.
-                //  Istisno: 4 yoki 5 kurs talabalari uchun JN/MT ball ham
-                //  butun songacha half-up yaxlitlanadi. Semestrda level_code
+                //  Istisno: 4 yoki 5 kurs talabalari uchun ON ball butun
+                //  songacha half-up yaxlitlanadi; JN/MT ball esa barcha
+                //  kurslarda yaxlitlanmaydi (15.6 → 15.6). Semestrda level_code
                 //  qiymatlari: 11=1-kurs, 12=2-kurs, 13=3-kurs, 14=4-kurs,
                 //  15=5-kurs, 16=6-kurs.
                 $levelCode = (string) ($semester?->level_code ?? '');
                 $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
 
+                $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
+                $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
                 if ($roundJnMtToInt) {
-                    $jnBall = $jn >= 60 ? (int) floor($jn * $wJn / 100 + 0.5) : 0;
-                    $mtBall = $mt >= 60 ? (int) floor($mt * $wMt / 100 + 0.5) : 0;
                     $onBall = $on >= 60 ? (int) floor($on * $wOn / 100 + 0.5) : 0;
                 } else {
-                    $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
-                    $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
                     $onBall = $on >= 60 ? $on * $wOn / 100 : 0;
                 }
 
@@ -962,14 +961,10 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
                 $sheet->setCellValue("D{$r}", $jn);
                 $sheet->setCellValue("E{$r}", $jnBall);
-                if (!$roundJnMtToInt) {
-                    $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
-                }
+                $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
                 $sheet->setCellValue("G{$r}", $mt);
                 $sheet->setCellValue("H{$r}", $mtBall);
-                if (!$roundJnMtToInt) {
-                    $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
-                }
+                $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
                 $sheet->setCellValue("J{$r}", $on);
                 $sheet->setCellValue("K{$r}", $onBall);
                 if ($wOn > 0 && !$roundJnMtToInt) {
@@ -1130,7 +1125,7 @@ class VedomostTekshirishController extends Controller
 
         // Yakuniy ball — har GURUH alohida butun songacha (half-up) yaxlitlanadi,
         // keyin qo'shiladi: round(JN+MT+ON) + round(OSKI+Test). (4-5 kurs uchun
-        // JN/MT/ON allaqachon alohida butun songa yaxlitlangan — yuqoriga qarang.)
+        // ON allaqachon alohida butun songa yaxlitlangan — yuqoriga qarang.)
         $jbMtOnSum = (int) floor($jnBall + $mtBall + $onBall + 0.5);
 
         if ($wOski > 0 && $wTest > 0) {

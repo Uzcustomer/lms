@@ -1729,7 +1729,8 @@ class KtrController extends Controller
                 $weeks = CurriculumWeek::where('semester_hemis_id', $semester->semester_hemis_id)
                     ->orderBy('start_date')
                     ->get();
-                foreach ($weeks as $i => $week) {
+                // KTR 1-haftasi = birinchi dars haftasi (kuzda 14-sentabrdan oldingi haftalar tashlanadi)
+                foreach (\App\Services\KtrWeeks::teachingWeeks($weeks) as $i => $week) {
                     $weekNum = $i + 1;
                     $start = $week->start_date ? $week->start_date->format('d.m') : '';
                     $end = $week->end_date ? $week->end_date->format('d.m') : '';

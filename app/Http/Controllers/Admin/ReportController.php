@@ -2307,7 +2307,8 @@ class ReportController extends Controller
                     ->orderBy('start_date')
                     ->select('curriculum_week_hemis_id', 'start_date', 'end_date')
                     ->get();
-                foreach ($weeks->values() as $i => $w) {
+                // KTR 1-haftasi = birinchi dars haftasi (kuzda 14-sentabrdan oldingi haftalar tashlanadi)
+                foreach (\App\Services\KtrWeeks::teachingWeeks($weeks) as $i => $w) {
                     $idx = $i + 1;
                     $weekIndexMap[(string) $w->curriculum_week_hemis_id] = $idx;
                     $weekStartByIdx[$idx] = substr((string) $w->start_date, 0, 10);
@@ -2796,7 +2797,8 @@ class ReportController extends Controller
                 ->get()
                 ->groupBy('semester_hemis_id');
             foreach ($weeks as $sId => $rows) {
-                foreach ($rows->values() as $i => $w) {
+                // KTR 1-haftasi = birinchi dars haftasi (kuzda 14-sentabrdan oldingi haftalar tashlanadi)
+                foreach (\App\Services\KtrWeeks::teachingWeeks($rows) as $i => $w) {
                     $idx = $i + 1;
                     $weekIndexMap[(string) $sId][(string) $w->curriculum_week_hemis_id] = $idx;
                     $weekStartMap[(string) $sId][$idx] = substr((string) $w->start_date, 0, 10);

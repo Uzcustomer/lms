@@ -106,7 +106,8 @@ class KtrTopics
         }
 
         $dates = [];
-        foreach (CurriculumWeek::where('semester_hemis_id', $semesterHemisId)->orderBy('start_date')->get() as $i => $week) {
+        // KTR 1-haftasi = birinchi dars haftasi (kuzda 14-sentabrdan oldingi haftalar tashlanadi)
+        foreach (KtrWeeks::teachingWeeks(CurriculumWeek::where('semester_hemis_id', $semesterHemisId)->orderBy('start_date')->get()) as $i => $week) {
             $start = $week->start_date ? $week->start_date->format('d.m') : '';
             $end = $week->end_date ? $week->end_date->format('d.m') : '';
             $dates[$i + 1] = $start && $end ? "{$start}–{$end}" : '';

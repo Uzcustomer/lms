@@ -267,6 +267,34 @@
                                     </div>
                                 </div>
                             </div>
+
+                            {{-- Tasdiqlash kodi: xodim botni ochib shu kodni yuborsa, Telegram hisobi bog'lanadi --}}
+                            @if(!$teacher->telegram_verified_at && $teacher->telegram_username && auth()->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
+                                @php
+                                    $tgBot = ltrim((string) config('services.telegram.bot_username'), '@');
+                                    $tgCode = $teacher->telegram_verification_code;
+                                @endphp
+                                <div style="margin-top: 10px; padding: 14px 16px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a;">
+                                    @if($tgCode)
+                                        <div style="font-size: 12px; font-weight: 700; color: #92400e; margin-bottom: 8px;">Telegram tasdiqlash kodi</div>
+                                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+                                            <span id="tg-code" style="font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 24px; font-weight: 800; letter-spacing: 4px; color: #78350f; background: #fff; border: 1px dashed #f59e0b; border-radius: 10px; padding: 6px 14px;">{{ $tgCode }}</span>
+                                            <button type="button" onclick="navigator.clipboard && navigator.clipboard.writeText('{{ $tgCode }}'); this.textContent = 'Nusxalandi';"
+                                                    style="padding: 7px 12px; border: 1px solid #f59e0b; border-radius: 8px; background: #fff; color: #92400e; font-size: 12px; font-weight: 700; cursor: pointer;">Nusxalash</button>
+                                            @if($tgBot)
+                                                <a href="https://t.me/{{ $tgBot }}?start={{ $tgCode }}" target="_blank" rel="noopener"
+                                                   style="padding: 7px 12px; border-radius: 8px; background: #229ed9; color: #fff; font-size: 12px; font-weight: 700; text-decoration: none;">Botni kod bilan ochish</a>
+                                            @endif
+                                        </div>
+                                        <div style="margin-top: 8px; font-size: 12px; color: #92400e; line-height: 1.5;">
+                                            Xodim o'z Telegram akkauntidan ({{ $teacher->telegram_username }}) {{ $tgBot ? '@' . $tgBot : 'LMS botini' }} ni ochib <b>Start</b> bosadi va shu kodni yuboradi
+                                            (yoki yuqoridagi havolani xodimga yuboring). Shundan keyin Telegram hisobi bog'lanadi va "tasdiqlangan" belgisi chiqadi.
+                                        </div>
+                                    @else
+                                        <div style="font-size: 12px; color: #92400e;">Tasdiqlash kodi yo'q. Kod olish uchun Telegram username'ni qayta saqlang.</div>
+                                    @endif
+                                </div>
+                            @endif
                         </div>
 
                         {{-- Tahrirlash rejimi (faqat admin rollar uchun) --}}

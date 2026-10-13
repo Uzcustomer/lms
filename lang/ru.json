@@ -417,5 +417,17 @@
     "Muammoni yozing.": "Опишите проблему.",
     "Muammoni batafsilroq yozing (kamida 10 ta belgi).": "Опишите проблему подробнее (не менее 10 символов).",
     "Faqat rasm (jpg, png, webp) yuklash mumkin.": "Можно загружать только изображения (jpg, png, webp).",
-    "Yuborish": "Отправить"
+    "Yuborish": "Отправить",
+    "Fan mavzulari": "Темы предметов",
+    "Joriy semestr": "Текущий семестр",
+    "Fanni tanlang — ma'ruza va amaliy mashg'ulotlar mavzularini haftalar bo'yicha ko'rasiz va PDF qilib yuklab olasiz.": "Выберите предмет, чтобы увидеть темы лекций и практических занятий по неделям и скачать их в PDF.",
+    "ta mavzu": "тем",
+    "Mavzular hali kiritilmagan": "Темы ещё не добавлены",
+    "Kafedra bu fan uchun KTR ni hali kiritmagan": "Кафедра ещё не добавила календарно-тематический план по этому предмету",
+    "Joriy semestrda fanlar topilmadi.": "В текущем семестре предметы не найдены.",
+    "PDF yuklab olish": "Скачать PDF",
+    "Bu fan uchun mavzular hali kiritilmagan.": "Темы по этому предмету ещё не добавлены.",
+    "Hammasi": "Все",
+    "hafta": "неделя",
+    "Mavzu kiritilmagan": "Тема не указана"
 }

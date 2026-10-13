@@ -608,5 +608,17 @@
     "Muammoni yozing.": "Describe the problem.",
     "Muammoni batafsilroq yozing (kamida 10 ta belgi).": "Please describe the problem in more detail (at least 10 characters).",
     "Faqat rasm (jpg, png, webp) yuklash mumkin.": "Only images (jpg, png, webp) can be uploaded.",
-    "Yuborish": "Submit"
+    "Yuborish": "Submit",
+    "Fan mavzulari": "Course topics",
+    "Joriy semestr": "Current semester",
+    "Fanni tanlang — ma'ruza va amaliy mashg'ulotlar mavzularini haftalar bo'yicha ko'rasiz va PDF qilib yuklab olasiz.": "Choose a course to see its lecture and practical class topics week by week and download them as PDF.",
+    "ta mavzu": "topics",
+    "Mavzular hali kiritilmagan": "Topics not added yet",
+    "Kafedra bu fan uchun KTR ni hali kiritmagan": "The department has not added the calendar plan for this course yet",
+    "Joriy semestrda fanlar topilmadi.": "No courses found for the current semester.",
+    "PDF yuklab olish": "Download PDF",
+    "Bu fan uchun mavzular hali kiritilmagan.": "Topics for this course have not been added yet.",
+    "Hammasi": "All",
+    "hafta": "week",
+    "Mavzu kiritilmagan": "No topic entered"
 }

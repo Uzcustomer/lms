@@ -663,6 +663,15 @@
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __("Guruh ma'lumotlarim") }}</span>
                 </a>
+                <a href="{{ route('student.topics.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.topics.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                    {{-- Fan mavzulari: KTR bo'yicha ma'ruza/amaliy mavzular (rang inline — yig'ilgan CSS'ga bog'liq emas) --}}
+                    <div class="rounded-xl flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;background:#e0e7ff;">
+                        <svg class="w-6 h-6" style="color:#4338ca;" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Fan mavzulari') }}</span>
+                </a>
                 @php $mobileStudent = auth()->guard('student')->user(); @endphp
                 @if($mobileStudent && (str_starts_with(strtolower($mobileStudent->group_name ?? ''), 'xd') || str_contains(strtolower($mobileStudent->citizenship_name ?? ''), 'orijiy')))
                 <a href="{{ route('student.visa-info.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.visa-info.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">

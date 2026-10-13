@@ -418,7 +418,7 @@ class StudentController extends Controller
      * boshida jadval hali kiritilmagan) — hammasi qoladi, aks holda fan
      * butunlay yo'qolib qolardi.
      */
-    private function keepStudentCycleVariants($curriculumSubjects, $student, $semesterCode)
+    public function keepStudentCycleVariants($curriculumSubjects, $student, $semesterCode)
     {
         // Faqat qisqa qo'shimcha olib tashlanadi — "(a)", "(b)", "(1)". Uzun
         // qavs fan nomining o'zi bo'lishi mumkin: "Ichki kasalliklar (propedevtika)".

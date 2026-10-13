@@ -1563,10 +1563,13 @@ class JournalController extends Controller
         // baholarni o'qituvchi arizasiz qo'yadi. Kunda oddiy talabada ham baho
         // bo'lmasa, "!" avvalgidek chiqadi.
         // Sozlamadagi muddat (talaba bo'yicha) o'tgan bo'lsa — oddiy tartib
+        // Kiritilgan sana = HEMISda yaratilgan va birinchi fani biriktirilgan sananing kechrog'i
+        $jbSubjectsAssigned = \App\Services\LessonOpeningTeacherReport::subjectsAssignedAt($students->pluck('hemis_id')->all());
+        $jbJoinDateOf = fn ($s) => \App\Services\LessonOpeningTeacherReport::lateJoinDate($s, $jbSubjectsAssigned[(string) $s->hemis_id][(string) $semesterCode] ?? null);
         $jbLateJoin = $students
-            ->filter(fn ($s) => !empty($s->hemis_created_at) && isset($jbActiveHemis[(string) $s->hemis_id])
-                && \App\Services\LateJoinGradeAccess::isOpenFor((string) $s->hemis_created_at))
-            ->mapWithKeys(fn ($s) => [(string) $s->hemis_id => substr((string) $s->hemis_created_at, 0, 10)])
+            ->filter(fn ($s) => $jbJoinDateOf($s) !== null && isset($jbActiveHemis[(string) $s->hemis_id])
+                && \App\Services\LateJoinGradeAccess::isOpenFor($jbJoinDateOf($s)))
+            ->mapWithKeys(fn ($s) => [(string) $s->hemis_id => $jbJoinDateOf($s)])
             ->all();
 
         // Juftlik "hisobga olingan" — BARCHA faol talaba baho/NB olgan bo'lsa
@@ -2414,9 +2417,9 @@ class JournalController extends Controller
         // ochish arizasisiz baho qo'yadi.
         // Sozlamadagi muddat o'tgach (LateJoinGradeAccess) — oddiy tartib: dars ochish arizasi
         $lateJoinDates = $students
-            ->filter(fn ($st) => !empty($st->hemis_created_at) && (string) ($st->student_status_code ?? '') !== '60'
-                && \App\Services\LateJoinGradeAccess::isOpenFor((string) $st->hemis_created_at))
-            ->mapWithKeys(fn ($st) => [(string) $st->hemis_id => substr((string) $st->hemis_created_at, 0, 10)])
+            ->filter(fn ($st) => $jbJoinDateOf($st) !== null && (string) ($st->student_status_code ?? '') !== '60'
+                && \App\Services\LateJoinGradeAccess::isOpenFor($jbJoinDateOf($st)))
+            ->mapWithKeys(fn ($st) => [(string) $st->hemis_id => $jbJoinDateOf($st)])
             ->all();
 
         return view('admin.journal.show', compact(
@@ -6394,7 +6397,7 @@ class JournalController extends Controller
             // Talabaning HEMISga kiritilishidan oldingi darsi — o'qituvchi
             // arizasiz baho qo'yadi (talaba o'shanda hali ro'yxatda yo'q edi)
             $isLateJoinGap = !$isExcuseOpening
-                && $this->isLateJoinGap((string) $request->student_hemis_id, $lessonDate);
+                && $this->isLateJoinGap((string) $request->student_hemis_id, $lessonDate, (string) $request->semester_code);
 
             if (!$isExcuseOpening && !$isLateJoinGap) {
                 // Sozlamadagi "baho qo'yilmay qolganlar" oynasi ochiq bo'lsa,
@@ -11312,7 +11315,7 @@ class JournalController extends Controller
      * sanalar emas). Qoida hisobot bilan bir xil:
      * LessonOpeningTeacherReport::isLateJoinLesson.
      */
-    private function isLateJoinGap(string $studentHemisId, string $lessonDate): bool
+    private function isLateJoinGap(string $studentHemisId, string $lessonDate, string $semesterCode = ''): bool
     {
         if ($lessonDate > now('Asia/Tashkent')->toDateString()) {
             return false;
@@ -11320,10 +11323,11 @@ class JournalController extends Controller
         $student = DB::table('students')
             ->where('hemis_id', $studentHemisId)
             ->first(['student_type_code', 'hemis_created_at']);
+        $assigned = \App\Services\LessonOpeningTeacherReport::subjectsAssignedAt([$studentHemisId])[$studentHemisId][$semesterCode] ?? null;
 
         // Sozlamadagi muddat (talaba bo'yicha) o'tgan bo'lsa — faqat dars ochish arizasi orqali
-        return \App\Services\LessonOpeningTeacherReport::isLateJoinLesson($student, $lessonDate)
-            && \App\Services\LateJoinGradeAccess::isOpenFor((string) $student->hemis_created_at);
+        return \App\Services\LessonOpeningTeacherReport::isLateJoinLesson($student, $lessonDate, $assigned)
+            && \App\Services\LateJoinGradeAccess::isOpenFor(\App\Services\LessonOpeningTeacherReport::lateJoinDate($student, $assigned));
     }
 
     private function checkExcuseGradeRole(?string $semesterCode, bool $isTeacher)

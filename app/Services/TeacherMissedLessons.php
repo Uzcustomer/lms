@@ -132,6 +132,7 @@ class TeacherMissedLessons
                 ->get(['hemis_id', 'full_name', 'student_type_code', 'student_type_name', 'hemis_created_at'])
                 ->keyBy(fn ($st) => (string) $st->hemis_id)
             : collect();
+        $lateJoinSubjects = LessonOpeningTeacherReport::subjectsAssignedAt($lateJoin->keys()->all());
 
         // Popupda har bir guruh (fan bilan) bir marta: nechta kunda, nechta oddiy
         // va nechta superkontrakt talabada baho yo'q. Oddiy talabalar kunlari
@@ -150,9 +151,15 @@ class TeacherMissedLessons
             $status = $openings[$key] ?? null;
             $missingHere = array_map('strval', array_keys($missingByDay[$key] ?? []));
             // Sozlamadagi muddat (talaba bo'yicha) o'tgach kech kiritilganlar ham oddiy (ariza orqali)
-            $skHere = array_values(array_filter($missingHere, fn ($hemis) => isset($lateJoin[$hemis])
-                && LessonOpeningTeacherReport::isLateJoinLesson($lateJoin[$hemis], $slot->lesson_day)
-                && LateJoinGradeAccess::isOpenFor((string) $lateJoin[$hemis]->hemis_created_at)));
+            $skHere = array_values(array_filter($missingHere, function ($hemis) use ($lateJoin, $lateJoinSubjects, $slot) {
+                if (! isset($lateJoin[$hemis])) {
+                    return false;
+                }
+                $assigned = $lateJoinSubjects[$hemis][(string) $slot->semester_code] ?? null;
+
+                return LessonOpeningTeacherReport::isLateJoinLesson($lateJoin[$hemis], $slot->lesson_day, $assigned)
+                    && LateJoinGradeAccess::isOpenFor(LessonOpeningTeacherReport::lateJoinDate($lateJoin[$hemis], $assigned));
+            }));
             $regularHere = array_values(array_diff($missingHere, $skHere));
             $requestable = in_array($status, [null, LessonOpening::STATUS_REJECTED, LessonOpening::STATUS_EXPIRED], true);
             $regularDay = $requestable && ($regularHere !== [] || $missingHere === []);

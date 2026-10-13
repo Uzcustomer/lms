@@ -466,13 +466,55 @@ class LessonOpeningTeacherReport
      * tomonidan keyin (dars ochish arizasisiz) qo'yiladi. Kiritilgan kun ham
      * kiradi: talaba kun o'rtasida kiritilgan bo'lishi mumkin.
      */
-    public static function isLateJoinLesson(?object $student, ?string $lessonDate): bool
+    public static function isLateJoinLesson(?object $student, ?string $lessonDate, ?string $subjectsAssignedAt = null): bool
     {
-        if (!$student || !$lessonDate || empty($student->hemis_created_at)) {
-            return false;
+        $joinDate = self::lateJoinDate($student, $subjectsAssignedAt);
+
+        return $joinDate !== null && $lessonDate && substr($lessonDate, 0, 10) <= $joinDate;
+    }
+
+    /**
+     * Talaba amalda qachondan o'qiy boshlagan (Y-m-d): HEMISda yaratilgan sana
+     * va unga shu semestr fanlaridan BIRINCHISI biriktirilgan sananing kechrog'i.
+     * Talaba yaratilib, fanlari keyinroq biriktirilishi mumkin (17.09 / 18.09).
+     * Eng erta fan olinadi: variant fanlar (a/b) keyin qayta biriktirilsa ham
+     * vaqtida kelgan talaba "kech" bo'lib qolmasin.
+     */
+    public static function lateJoinDate(?object $student, ?string $subjectsAssignedAt = null): ?string
+    {
+        $dates = array_filter([
+            !empty($student?->hemis_created_at) ? substr((string) $student->hemis_created_at, 0, 10) : null,
+            $subjectsAssignedAt ? substr($subjectsAssignedAt, 0, 10) : null,
+        ]);
+
+        return $dates ? max($dates) : null;
+    }
+
+    /**
+     * Fanlar HEMISda qachon biriktirilgani (student_subjects.hemis_created_at):
+     * [talaba hemis_id][semestr kodi] => shu semestrdagi eng erta biriktirilgan sana.
+     */
+    public static function subjectsAssignedAt(array $hemisIds): array
+    {
+        $hemisIds = array_values(array_unique(array_filter(array_map('strval', $hemisIds))));
+        if ($hemisIds === [] || !\Illuminate\Support\Facades\Schema::hasColumn('student_subjects', 'hemis_created_at')) {
+            return [];
         }
 
-        return substr($lessonDate, 0, 10) <= substr((string) $student->hemis_created_at, 0, 10);
+        $map = [];
+        foreach (array_chunk($hemisIds, 1000) as $chunk) {
+            DB::table('student_subjects')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereNotNull('hemis_created_at')
+                ->groupBy('student_hemis_id', 'semester_id')
+                ->selectRaw('student_hemis_id, semester_id, MIN(hemis_created_at) as assigned_at')
+                ->get()
+                ->each(function ($row) use (&$map) {
+                    $map[(string) $row->student_hemis_id][(string) $row->semester_id] = substr((string) $row->assigned_at, 0, 10);
+                });
+        }
+
+        return $map;
     }
 
     /**
@@ -634,6 +676,8 @@ class LessonOpeningTeacherReport
             ->get(['hemis_id', 'full_name', 'student_id_number', 'student_type_code', 'student_type_name', 'hemis_created_at'])
             ->keyBy(fn ($row) => (string) $row->hemis_id);
 
+        $assignedAt = self::subjectsAssignedAt(array_keys($hemisIds));
+
         $rows = [];
         foreach ($records as $record) {
             $missing = $record['missing_students'] ?? [];
@@ -668,10 +712,10 @@ class LessonOpeningTeacherReport
                     'manager' => $manager['name'] ?? '',
                     // Talaba HEMISga kiritilishidan oldingi dars — o'qituvchi
                     // jurnalda arizasiz baho qo'ya oladi; Excelda alohida varaq
-                    'joined_at' => $student?->hemis_created_at ? substr((string) $student->hemis_created_at, 0, 10) : null,
+                    'joined_at' => self::lateJoinDate($student, $assignedAt[(string) $hemisId][(string) ($record['semester_code'] ?? '')] ?? null),
                     'student_type' => (string) ($student->student_type_name ?? ''),
                     'student_type_code' => (string) ($student->student_type_code ?? ''),
-                    'late_join' => self::isLateJoinLesson($student, $record['date']),
+                    'late_join' => self::isLateJoinLesson($student, $record['date'], $assignedAt[(string) $hemisId][(string) ($record['semester_code'] ?? '')] ?? null),
                 ];
             }
         }

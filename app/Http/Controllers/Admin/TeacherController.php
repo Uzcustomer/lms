@@ -342,11 +342,27 @@ class TeacherController extends Controller
             'phone.regex' => 'Telefon raqami noto\'g\'ri formatda. Masalan: +998901234567',
         ]);
 
+        $normalize = fn ($value) => ltrim(mb_strtolower(trim((string) $value)), '@');
+        $telegramChanged = $normalize($teacher->telegram_username) !== $normalize($request->telegram_username);
+
         $teacher->phone = $request->phone;
         $teacher->telegram_username = $request->telegram_username;
+
+        // Xabarlar username bo'yicha emas, telegram_chat_id bo'yicha yuboriladi. Username
+        // o'zgarsa eski chat ID boshqa odamniki bo'lib qoladi — u tozalanadi va xodim
+        // botda qayta tasdiqlaydi (o'qituvchining o'zi o'zgartirgandagi kabi).
+        if ($telegramChanged) {
+            $teacher->telegram_chat_id = null;
+            $teacher->telegram_verified_at = null;
+            $teacher->telegram_verification_code = $request->filled('telegram_username')
+                ? \App\Http\Controllers\TelegramWebhookController::generateVerificationCode()
+                : null;
+        }
         $teacher->save();
 
-        return redirect()->route('admin.teachers.show', $teacher)->with('success', 'Aloqa ma\'lumotlari yangilandi');
+        return redirect()->route('admin.teachers.show', $teacher)->with('success', $telegramChanged
+            ? "Aloqa ma'lumotlari yangilandi. Telegram o'zgargani uchun eski bog'lanish o'chirildi — xodim botda qayta tasdiqlashi kerak."
+            : "Aloqa ma'lumotlari yangilandi");
     }
 
     public function searchSubjects(Request $request)

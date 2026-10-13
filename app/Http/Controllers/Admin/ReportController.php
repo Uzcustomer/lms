@@ -70,7 +70,9 @@ class ReportController extends Controller
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
-        $kafedraQuery->where('s.current', true);
+        // HEMIS dagi semesters.current ishonchsiz (ba'zi kurslarda qo'yilmaydi) — joriy
+        // o'quv yili va semestr juft/toqligi bo'yicha (KTR hisoboti bilan bir xil)
+        $this->whereScheduleReportCurrentSemester($kafedraQuery, 's');
 
         $kafedras = $kafedraQuery
             ->select('cs.department_id', 'cs.department_name')
@@ -134,7 +136,8 @@ class ReportController extends Controller
                         ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
                 });
             if ($request->get('current_semester', '1') == '1') {
-                $scheduleQuery->where('sem.current', true);
+                // semesters.current ba'zi kurslarda (mas. 2-kurs) qo'yilmagan — ishonchli oyna bo'yicha
+                $this->whereScheduleReportCurrentSemester($scheduleQuery, 'sem');
                 $scheduleQuery->where('sch.education_year_current', true);
             }
             if ($request->filled('level_code')) {

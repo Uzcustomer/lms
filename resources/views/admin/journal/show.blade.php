@@ -1207,7 +1207,6 @@
                             // HEMISga kech kiritilgan talaba: kiritilishidan oldingi bo'sh kataklar soni.
                             // O'qituvchi ularga dars ochish arizasisiz baho qo'yadi.
                             $skJoin = $lateJoinDates ?? [];
-                            // Sariq kataklarni hamma ko'radi; arizasiz baho faqat o'qituvchiga (YN ga yuborilmaguncha)
                             $skCanGrade = $isOqituvchi && !(isset($ynSubmission) && $ynSubmission);
                             $skPending = [];
                             foreach ($skJoin as $skHemis => $skDate) {
@@ -1372,7 +1371,7 @@
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
-                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }} {{ isset($skPending[(string) $student->hemis_id]) ? 'sk-row' : '' }}" data-sk-row="{{ $student->hemis_id }}">
+                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }} {{ $skCanGrade && isset($skPending[(string) $student->hemis_id]) ? 'sk-row' : '' }}" data-sk-row="{{ $student->hemis_id }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($jbLessonDates as $idx => $date)
@@ -1943,7 +1942,7 @@
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
                                         @endphp
-                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }} {{ isset($skPending[(string) $student->hemis_id]) ? 'sk-row' : '' }}" data-sk-row="{{ $student->hemis_id }}">
+                                        <tr class="{{ in_array((string) $student->hemis_id, $ungradedHemisIds ?? [], true) ? 'jr-row-ungraded' : '' }} {{ $skCanGrade && isset($skPending[(string) $student->hemis_id]) ? 'sk-row' : '' }}" data-sk-row="{{ $student->hemis_id }}">
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
                                             <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(($student->student_status_code ?? '') == '60')<span class="stage-badge stage-expelled" title="{{ $student->student_status_name ?? 'Chetlashgan' }} - baho qo'yish talab qilinmaydi">CHETLASHGAN</span>@endif @if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @php $prevDate = null; @endphp
@@ -2236,11 +2235,7 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if($cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr && !$skCanGrade)
-                                                            {{-- Kech kiritilgan talaba katagi: hamma ko'radi (sariq), baho faqat o'qituvchi qo'yadi --}}
-                                                            <span class="sk-cell sk-cell-view" style="display:inline-block; min-width:24px; cursor:default;"
-                                                                  title="Talaba HEMISga {{ \Carbon\Carbon::parse($skJoin[(string) $student->hemis_id])->format('d.m.Y') }} da kiritilgan — bu darsga o'qituvchi arizasiz baho qo'yadi{{ (isset($ynSubmission) && $ynSubmission) ? ' (fan YN ga yuborilgan — yopiq)' : '' }}"><span class="sk-dash">-</span></span>
-                                                        @elseif($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
+                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
                                                             {{-- Talaba HEMISga kiritilishidan oldingi dars — arizasiz baho --}}
                                                             <div class="editable-cell grade-cell-opened sk-cell"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"

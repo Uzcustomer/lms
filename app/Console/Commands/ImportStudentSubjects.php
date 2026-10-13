@@ -12,7 +12,8 @@ class ImportStudentSubjects extends Command
 {
     protected $signature = 'import:student-subjects
         {--group= : Faqat shu guruh (group_hemis_id yoki guruh nomi, masalan p/p23-03a)}
-        {--student= : Faqat shu talaba (hemis_id yoki talaba ID raqami)}';
+        {--student= : Faqat shu talaba (hemis_id yoki talaba ID raqami)}
+        {--level= : Faqat shu kursdagi faol talabalar (1..6 yoki HEMIS kodi, masalan 11 = 1-kurs)}';
 
     protected $description = "Har bir talabaga HEMIS da biriktirilgan fanlarni import qilish (student-subject-list)";
 
@@ -59,11 +60,18 @@ class ImportStudentSubjects extends Command
     {
         $group = trim((string) $this->option('group'));
         $student = trim((string) $this->option('student'));
-        if ($group === '' && $student === '') {
+        $level = trim((string) $this->option('level'));
+        if ($group === '' && $student === '' && $level === '') {
             return null;
         }
 
         $query = Student::query()->whereNotNull('hemis_id');
+
+        // Kurs: "1" -> HEMIS kodi "11" (1-kurs), "2" -> "12", ...; to'liq kod ham qabul qilinadi
+        if ($level !== '') {
+            $levelCode = ctype_digit($level) && (int) $level < 10 ? (string) (10 + (int) $level) : $level;
+            $query->where('level_code', $levelCode)->where('student_status_code', 11);
+        }
 
         if ($group !== '') {
             $groupHemisId = ctype_digit($group)

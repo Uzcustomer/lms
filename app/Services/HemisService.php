@@ -1273,6 +1273,8 @@ class HemisService
             ->pluck('hemis_id');
         $total = $students->count();
 
+        $hasSubjectHemisDate = Schema::hasColumn('student_subjects', 'hemis_created_at');
+
         foreach ($students as $index => $studentHemisId) {
             $page = 1;
             $hasMore = true;
@@ -1324,13 +1326,20 @@ class HemisService
                             'created_at'                  => now(),
                             'updated_at'                  => now(),
                         ];
+                        // Fan HEMISda qachon biriktirilgani (kech qo'shilgan talabalar uchun)
+                        if ($hasSubjectHemisDate) {
+                            $records[array_key_last($records)]['hemis_created_at'] = !empty($item['created_at'])
+                                ? date('Y-m-d H:i:s', (int) $item['created_at'])
+                                : null;
+                        }
                     }
 
                     if (!empty($records)) {
                         StudentSubject::upsert(
                             $records,
                             ['student_hemis_id', 'curriculum_subject_hemis_id'],
-                            ['subject_id', 'semester_id', 'subject_name', 'education_year', 'updated_at']
+                            array_merge(['subject_id', 'semester_id', 'subject_name', 'education_year', 'updated_at'],
+                                $hasSubjectHemisDate ? ['hemis_created_at'] : [])
                         );
                         $totalImported += count($records);
                     }

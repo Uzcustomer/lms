@@ -9,6 +9,10 @@
             background: #fdfaf0; color: var(--ink-soft); font-size: 13.5px; line-height: 1.65;
         }
         /* Qoidalar: yashil, qalin — talaba o'qimay o'tib ketmasligi uchun */
+        /* Yuz tekshiruvi bosqichida test ma'lumoti va qoidalar yashiriladi — kamera tepada turadi */
+        body.s-face-mode .k-meta,
+        body.s-face-mode .s-desc,
+        body.s-face-mode .s-rules { display: none; }
         .s-rules {
             margin: 0 0 24px; padding: 4px 18px; list-style: none;
             border: 1px solid #bbf7d0; border-radius: 6px; background: #f0fdf4;
@@ -262,6 +266,8 @@
             $('whoId').textContent = 'ID: ' + idNumber + ' · yuzingiz shu rasm bilan solishtiriladi';
             $('stepId').style.display = 'none';
             $('stepFace').style.display = '';
+            document.body.classList.add('s-face-mode');
+            window.scrollTo(0, 0);
             await startCamera();
         } catch (e) {
             showError('idError', "Server bilan aloqa yo'q. Qayta urinib ko'ring.");
@@ -468,6 +474,7 @@
         stopCamera();
         $('stepFace').style.display = 'none';
         $('stepId').style.display = '';
+        document.body.classList.remove('s-face-mode');
         $('student_id_number').focus();
     });
     window.addEventListener('beforeunload', stopCamera);

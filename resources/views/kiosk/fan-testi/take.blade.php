@@ -551,7 +551,8 @@
         models: @json(asset('face-models')),
         faceUrl: @json(route('kiosk.fan-testi.face', [$test, $attempt])),
         csrf: document.querySelector('meta[name="csrf-token"]').content,
-        tickMs: 1000,         // kadr tekshirish oralig'i
+        tickMs: 10000,        // kadr tekshirish oralig'i (oddiy holatda)
+        pausedTickMs: 1000,   // test to'xtab turganda — talaba qayta qarashi bilan tez davom etsin
         yawLimit: 0.35,       // shundan ko'p burilsa — "boshqa tomonga qaradi" (yozish, o'ylash uchun burilish mumkin)
         awayMs: 5000,         // shuncha vaqt uzluksiz qaramasa test to'xtaydi (qisqa burilishlar hisobga olinmaydi)
         backMs: 1000,         // shuncha vaqt to'g'ri qarasa test davom etadi
@@ -776,6 +777,16 @@
         }
     }
 
+    // Kadr tekshiruvi tsikli: oddiy holatda kamdan-kam (tickMs), test to'xtab
+    // turganda (chalg'ish, kamera) tez-tez — talaba qayta to'g'ri qarashi bilan davom etadi
+    function loop() {
+        const delay = state.paused === 'away' ? CFG.pausedTickMs : CFG.tickMs;
+        state.timer = setTimeout(async () => {
+            await tick();
+            if (state.stream) loop();
+        }, delay);
+    }
+
     async function start() {
         try {
             await Promise.all([
@@ -801,11 +812,11 @@
             camChip.hidden = true;
             pause('camera');
         }));
-        state.timer = setInterval(tick, CFG.tickMs);
+        loop();
     }
 
     document.getElementById('monRetry').addEventListener('click', () => {
-        if (state.timer) { clearInterval(state.timer); state.timer = null; }
+        if (state.timer) { clearTimeout(state.timer); state.timer = null; }
         start();
     });
     window.addEventListener('pagehide', () => {

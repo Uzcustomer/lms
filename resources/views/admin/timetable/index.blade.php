@@ -737,6 +737,28 @@
                 </div>
             </div>
 
+            <div id="asgRoomModal" class="hidden tt-modal tt-modal-top" role="dialog" aria-modal="true" aria-labelledby="asgRoomTitle">
+                <div class="tt-modal-body">
+                    <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl flex flex-col" style="max-width: 640px;">
+                        <div class="asc-titlebar asc-modal-header flex items-center justify-between px-5 py-3 rounded-t">
+                            <div class="asc-header-main flex items-center gap-3 text-base font-semibold text-white">
+                                <span class="asc-header-icon" aria-hidden="true"><i class="bi bi-door-open"></i></span>
+                                <span id="asgRoomTitle">Xona tanlash</span>
+                            </div>
+                            <button type="button" id="asgRoomModalClose" class="asc-close-btn" aria-label="Yopish" title="Yopish"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                        <div class="p-4 space-y-3 bg-white">
+                            <div id="asgRoomFor" class="text-xs text-slate-500"></div>
+                            <input id="asgRoomSearch" placeholder="Xona qidirish (raqam, nom yoki bino)..." class="w-full rounded-md border-slate-300 text-sm">
+                            <div id="asgRoomList" class="rm-list"></div>
+                            <div class="flex justify-end">
+                                <button type="button" id="asgRoomCancel" class="asc-btn px-5 py-2">Bekor qilish</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="assignModal" class="hidden tt-modal">
                 <div class="tt-modal-body">
                     <div class="asc-win tt-modal-win bg-[#f0f0f0] rounded shadow-2xl w-full max-w-none flex flex-col" style="width: calc(100vw - 200px); max-width: none; height: calc(100vh - 100px); max-height: calc(100vh - 100px);">
@@ -792,13 +814,12 @@
                                         <button type="button" id="asgApply" class="asc-btn primary flex-1" disabled>Biriktirish</button>
                                         <button type="button" id="asgClear" class="asc-btn" disabled title="Biriktirishni olib tashlash"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                                     </div>
-                                    {{-- Xona: dars birligining barcha kartalariga --}}
+                                    {{-- Xona: dars birligining barcha kartalariga (ro'yxat alohida oynada) --}}
                                     <div class="pt-3 mt-1 border-t border-slate-200 space-y-2">
                                         <div class="text-xs font-semibold text-slate-600">Xona (auditoriya)</div>
-                                        <input id="asgRoomSearch" placeholder="Xona qidirish..." class="w-full rounded-md border-slate-300 text-sm" disabled>
-                                        <select id="asgRoom" size="5" class="w-full rounded-md border-slate-300 text-sm" disabled></select>
+                                        <div id="asgRoomCurrent" class="text-sm text-slate-500">—</div>
                                         <div class="flex gap-2">
-                                            <button type="button" id="asgRoomApply" class="asc-btn primary flex-1" disabled>Xonani biriktirish</button>
+                                            <button type="button" id="asgRoomOpen" class="asc-btn primary flex-1" disabled><i class="bi bi-door-open" aria-hidden="true"></i> Xonani biriktirish</button>
                                             <button type="button" id="asgRoomClear" class="asc-btn" disabled title="Xonani olib tashlash"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                                         </div>
                                     </div>
@@ -1271,6 +1292,17 @@
         .tt-modal { position: fixed; inset: 0; z-index: 60; background: rgba(15,23,42,.55); overflow-y: auto; }
         .tt-modal.hidden { display: none; }
         .tt-modal.tt-modal-top { z-index: 70; }   /* boshqa modal ustidagi ichki dialog */
+        /* O'qituvchi biriktirish jadvali: kafedra ustuni tor (gorizontal scroll bo'lmasin) */
+        #asgTable td.asg-kaf { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Xona tanlash oynasi */
+        #asgRoomModal .rm-list { max-height: 55vh; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }
+        #asgRoomModal .rm-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid #f1f5f9;
+            background: #fff; text-align: left; cursor: pointer; font-size: 13px; color: #1e293b; }
+        #asgRoomModal .rm-row:hover { background: #eff6ff; }
+        #asgRoomModal .rm-row.is-current { background: #ecfdf5; }
+        #asgRoomModal .rm-row b { min-width: 120px; }
+        #asgRoomModal .rm-row span { color: #64748b; font-size: 12px; }
+        #asgRoomModal .rm-row .rm-vol { margin-left: auto; font-variant-numeric: tabular-nums; }
         .tt-modal-body { min-height: 100%; display: flex; align-items: center; justify-content: center;
             padding: 2.5vh 16px; box-sizing: border-box; }
         .tt-modal-win { width: 100%; max-width: min(1200px, 96vw); background: #eef2f7;
@@ -6588,7 +6620,7 @@
                         : (u.teacher_name ? esc(u.teacher_name) : '<span class="text-gray-400">— biriktirilmagan —</span>');
                     h += '<tr data-i="' + i + '"' + (asgSel === rows[i] ? ' class="sel"' : '') + '>' +
                         '<td>' + esc(u.subject_name) + '</td><td>' + asgSpecHtml(u) + '</td><td class="text-center">' + ttLabel + '</td>' +
-                        '<td>' + esc(scopeLabel) + '</td><td>' + esc(u.kafedra_name || '—') + '</td>' +
+                        '<td>' + esc(scopeLabel) + '</td><td class="asg-kaf" title="' + esc(u.kafedra_name || '') + '">' + esc(u.kafedra_name || '—') + '</td>' +
                         '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '✓)</span>' : '') + '</td>' +
                         '<td>' + teacherLabel + '</td>' +
                         '<td>' + (u.room_mixed ? '<span class="text-amber-600">⚠ turlicha</span>'
@@ -6629,40 +6661,64 @@
                     '<span class="text-slate-600">' + asgSpecHtml(u) + '</span><br>' +
                     (u.training_type === 'lecture' ? "Ma'ruza · " + esc(u.oqim_label || '') : 'Amaliy · ' + esc(u.group_name || '')) +
                     ' · ' + u.cards + ' karta' + (u.kafedra_name ? '<br><span class="text-gray-400">' + esc(u.kafedra_name) + '</span>' : '');
-                $('asgRoomSearch').value = '';
-                await Promise.all([loadAsgTeachers(''), loadAsgRooms()]);
+                renderAsgRoomCurrent();
+                await loadAsgTeachers('');
             }
 
-            // ----- Xona (auditoriya): ro'yxat bir marta yuklanadi -----
+            // ----- Xona (auditoriya): ro'yxat alohida oynada, bir marta yuklanadi -----
             let asgRoomsList = null;
-            async function loadAsgRooms() {
+            function renderAsgRoomCurrent() {
+                if (!asgSel) { $('asgRoomCurrent').textContent = '—'; return; }
+                $('asgRoomCurrent').innerHTML = asgSel.room_mixed
+                    ? '<span class="text-amber-600">⚠ kartalarda turlicha</span>'
+                    : (asgSel.auditorium_name ? '<b class="text-slate-700">' + esc(asgSel.auditorium_name) + '</b>' : '<span class="text-slate-400">biriktirilmagan</span>');
+            }
+            async function openAsgRoomModal() {
                 if (!asgSel) return;
+                $('asgRoomFor').textContent = asgSel.subject_name + ' · ' +
+                    (asgSel.training_type === 'lecture' ? "Ma'ruza · " + (asgSel.oqim_label || '') : 'Amaliy · ' + (asgSel.group_name || ''));
+                $('asgRoomSearch').value = '';
+                $('asgRoomList').innerHTML = '<div class="p-3 text-sm text-slate-400">Yuklanmoqda...</div>';
+                $('asgRoomModal').classList.remove('hidden');
                 if (!asgRoomsList) {
                     try {
                         asgRoomsList = (await api(AUDS_URL) || [])
                             .filter(room => room.active !== false)
-                            .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true }));
-                    } catch (e) { $('asgRoom').innerHTML = '<option disabled>xato</option>'; return; }
+                            .sort((a, b) => String(a.name || a.code || '').localeCompare(String(b.name || b.code || ''), undefined, { numeric: true }));
+                    } catch (e) {
+                        $('asgRoomList').innerHTML = '<div class="p-3 text-sm text-red-500">' + esc(e.message) + '</div>';
+                        return;
+                    }
                 }
                 renderAsgRooms();
+                $('asgRoomSearch').focus();
             }
+            function closeAsgRoomModal() { $('asgRoomModal').classList.add('hidden'); }
             function renderAsgRooms() {
                 if (!asgSel || !asgRoomsList) return;
                 const q = ($('asgRoomSearch').value || '').toLowerCase().trim();
-                const list = asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name]
+                const list = asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name, room.auditorium_type_name]
                     .some(v => String(v || '').toLowerCase().includes(q)));
-                $('asgRoom').innerHTML = (q ? '' : '<option value=""' + (!asgSel.auditorium_code ? ' selected' : '') + '>— xonasiz —</option>') +
-                    list.map(room => '<option value="' + esc(room.code) + '"' + (asgSel.auditorium_code === room.code ? ' selected' : '') + '>' +
-                        esc(room.name || room.code) + (room.volume ? ' (' + room.volume + ')' : '') + '</option>').join('')
-                    + (!list.length ? '<option disabled>topilmadi</option>' : '');
+                $('asgRoomList').innerHTML = list.map(room =>
+                    '<button type="button" class="rm-row' + (asgSel.auditorium_code === room.code ? ' is-current' : '') + '" data-code="' + esc(room.code) + '">' +
+                    '<b>' + esc(room.name || room.code) + '</b>' +
+                    '<span>' + esc([room.building_name, room.auditorium_type_name].filter(Boolean).join(' · ')) + '</span>' +
+                    '<span class="rm-vol">' + (room.volume ? room.volume + ' o\'rin' : '') + '</span></button>').join('')
+                    || '<div class="p-3 text-sm text-slate-400">Xona topilmadi</div>';
             }
-            $('asgRoomSearch').oninput = () => renderAsgRooms();
-            $('asgRoomApply').onclick = () => applyAsgRoom($('asgRoom').value || null);
+            $('asgRoomOpen').onclick = () => openAsgRoomModal();
             $('asgRoomClear').onclick = () => applyAsgRoom(null);
+            $('asgRoomSearch').oninput = () => renderAsgRooms();
+            $('asgRoomModalClose').onclick = $('asgRoomCancel').onclick = () => closeAsgRoomModal();
+            $('asgRoomModal').addEventListener('click', (ev) => {
+                if (ev.target === ev.currentTarget || ev.target.classList.contains('tt-modal-body')) { closeAsgRoomModal(); return; }
+                const row = ev.target.closest('.rm-row');
+                if (row) applyAsgRoom(row.dataset.code);
+            });
 
             async function applyAsgRoom(code) {
                 if (!asgSel) return;
-                $('asgRoomApply').disabled = $('asgRoomClear').disabled = true;
+                $('asgRoomOpen').disabled = $('asgRoomClear').disabled = true;
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/assign-room', 'POST', {
                         faculty_name: asgSel.faculty_name || '', specialty_name: asgSel.specialty_name, course: asgSel.course,
@@ -6684,19 +6740,26 @@
                     $('asgMsg').textContent = (j.auditorium_name ? '«' + j.auditorium_name + '» xonasi biriktirildi' : 'Xona olib tashlandi') +
                         ' · ' + j.affected + ' karta';
                     renderAsgTable();
-                    renderAsgRooms();
-                } catch (e) { $('asgMsg').textContent = 'Xatolik: ' + e.message; }
-                $('asgRoomApply').disabled = $('asgRoomClear').disabled = false;
+                    renderAsgRoomCurrent();
+                    closeAsgRoomModal();
+                } catch (e) {
+                    $('asgMsg').textContent = 'Xatolik: ' + e.message;
+                    // Oyna ochiq bo'lsa xatoni shu yerda ham ko'rsatamiz
+                    if (!$('asgRoomModal').classList.contains('hidden')) {
+                        $('asgRoomFor').innerHTML = '<span class="text-red-600">Xatolik: ' + esc(e.message) + '</span>';
+                    }
+                }
+                $('asgRoomOpen').disabled = $('asgRoomClear').disabled = false;
             }
 
             function setAsgTeacherPanel(u) {
                 const on = !!u;
                 ['asgTeacherSearch', 'asgTeacher', 'asgApply', 'asgClear', 'asgKafedraOnly',
-                    'asgRoomSearch', 'asgRoom', 'asgRoomApply', 'asgRoomClear'].forEach(id => $(id).disabled = !on);
+                    'asgRoomOpen', 'asgRoomClear'].forEach(id => $(id).disabled = !on);
                 if (!on) {
                     $('asgUnitInfo').textContent = '← Chapdan dars birligini tanlang';
                     $('asgTeacher').innerHTML = ''; $('asgTeacherSearch').value = '';
-                    $('asgRoom').innerHTML = ''; $('asgRoomSearch').value = '';
+                    $('asgRoomCurrent').textContent = '—';
                 }
             }
 

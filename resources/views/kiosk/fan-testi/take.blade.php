@@ -551,10 +551,13 @@
         models: @json(asset('face-models')),
         faceUrl: @json(route('kiosk.fan-testi.face', [$test, $attempt])),
         csrf: document.querySelector('meta[name="csrf-token"]').content,
-        tickMs: 700,          // kadr tekshirish oralig'i
-        yawLimit: 0.25,       // shundan ko'p burilsa — "boshqa tomonga qaradi"
-        awayMs: 2000,         // shuncha vaqt qaramasa test to'xtaydi
+        tickMs: 1000,         // kadr tekshirish oralig'i
+        yawLimit: 0.35,       // shundan ko'p burilsa — "boshqa tomonga qaradi" (yozish, o'ylash uchun burilish mumkin)
+        awayMs: 5000,         // shuncha vaqt uzluksiz qaramasa test to'xtaydi (qisqa burilishlar hisobga olinmaydi)
         backMs: 1000,         // shuncha vaqt to'g'ri qarasa test davom etadi
+        otherFaceRatio: 0.45, // ikkinchi yuz asosiy yuzning shuncha ulushidan katta bo'lsagina hisoblanadi
+                              // (orqadan o'tgan odam kichik ko'rinadi — test to'xtamaydi)
+        mismatchesToPause: 2, // jim yuz tekshiruvi ketma-ket shuncha marta mos kelmasa to'xtaydi
         firstCheckMs: 15000,  // birinchi jim tekshiruv
         checkMinMs: 45000,    // keyingi tekshiruvlar oralig'i (tasodifiy)
         checkMaxMs: 90000,
@@ -573,7 +576,7 @@
         paused: null,          // null | 'away' | 'face' | 'camera'
         badSince: null, goodSince: null,
         checking: false, nextCheckAt: Date.now() + CFG.firstCheckMs,
-        locked: false, poll: null,
+        locked: false, poll: null, mismatches: 0,
     };
 
     const TEXT = {
@@ -713,12 +716,17 @@
         const data = await report({ snapshot: snapshot() });
         state.checking = false;
         if (data && data.match === false) {
-            pause('face');
+            // Bitta mos kelmaslik (yorug'lik, burchak) testni to'xtatmaydi — tez qayta tekshiriladi
+            state.mismatches++;
+            if (state.mismatches >= CFG.mismatchesToPause) {
+                pause('face');
+            }
             state.nextCheckAt = Date.now() + CFG.recheckMs;
             return;
         }
-        if (data && data.match === true && state.paused === 'face') {
-            resume();
+        if (data && data.match === true) {
+            state.mismatches = 0;
+            if (state.paused === 'face') resume();
         }
         // Xizmat javob bermasa (match = null) test to'xtatilmaydi.
         state.nextCheckAt = Date.now() + (state.paused === 'face' ? CFG.recheckMs : nextDelay());
@@ -738,9 +746,16 @@
 
         const now = Date.now();
         let kind = null;
-        if (faces.length === 0) kind = 'none';
-        else if (faces.length > 1) kind = 'many';
-        else if (Math.abs(yawOf(faces[0].landmarks)) > CFG.yawLimit) kind = 'turn';
+        // Eng katta yuz — kompyuter oldidagi talaba. Orqa fondagi kichik yuzlar
+        // (o'tib ketayotgan odam) hisobga olinmaydi; yonida o'tirgan odam kabi
+        // yaqin yuz bo'lsagina "kamerada bir nechta odam" deyiladi.
+        const area = (f) => f.detection.box.width * f.detection.box.height;
+        const sorted = faces.slice().sort((a, b) => area(b) - area(a));
+        const main = sorted[0];
+        const close = sorted.filter((f) => main && area(f) >= area(main) * CFG.otherFaceRatio);
+        if (!main) kind = 'none';
+        else if (close.length > 1) kind = 'many';
+        else if (Math.abs(yawOf(main.landmarks)) > CFG.yawLimit) kind = 'turn';
 
         if (kind) {
             state.goodSince = null;

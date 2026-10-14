@@ -152,6 +152,23 @@
                 </div>
             </div>
 
+            {{-- O'qituvchi ruxsati: yuzi tanilmayotgan talaba faqat ID bilan kiradi (bir marta) --}}
+            <div id="stepBypass" style="display:none">
+                <div class="f-who">
+                    <span class="f-who-mark" aria-hidden="true">&#10003;</span>
+                    <div><b>O'qituvchi ruxsati berilgan</b><span id="whoIdBypass"></span></div>
+                    <button type="button" id="btnBackBypass">Boshqa ID</button>
+                </div>
+                <p style="margin:14px 0 0;font-size:14px;line-height:1.55;color:#334155">
+                    O'qituvchi bu kompyuterda yuz tekshiruvisiz kirishga bir martalik ruxsat bergan.
+                    Testni boshlash uchun pastdagi tugmani bosing.
+                </p>
+                <div class="k-error" id="bypassError" style="display:none;margin-top:14px"><span>&#9888;</span><span></span></div>
+                <div style="margin-top:18px">
+                    <button class="k-btn k-btn-lg" type="button" id="btnBypassStart">Testni boshlash</button>
+                </div>
+            </div>
+
             {{-- 2-bosqich: yuz tekshiruvi (liveness + tasdiqlangan rasm bilan solishtirish) --}}
             <div id="stepFace" style="display:none">
                 <div class="f-who">
@@ -263,6 +280,18 @@
 
             // Ism va rasm ko'rsatilmaydi — faqat rasm borligi aytiladi, solishtirish serverda.
             state.idNumber = idNumber;
+
+            // O'qituvchi ruxsati bo'lsa — kamera ochilmaydi, faqat ID bilan kiriladi
+            if (r.data.face_bypass) {
+                $('whoIdBypass').textContent = 'ID: ' + idNumber;
+                showError('bypassError', '');
+                $('stepId').style.display = 'none';
+                $('stepBypass').style.display = '';
+                document.body.classList.add('s-face-mode');
+                window.scrollTo(0, 0);
+                return;
+            }
+
             $('whoId').textContent = 'ID: ' + idNumber + ' · yuzingiz shu rasm bilan solishtiriladi';
             $('stepId').style.display = 'none';
             $('stepFace').style.display = '';
@@ -470,6 +499,32 @@
         if (e.key === 'Enter') { e.preventDefault(); checkId(); }
     });
     $('btnRetry').addEventListener('click', () => { showError('faceError', ''); startCamera(); });
+
+    // Ruxsat bilan boshlash (bir marta — server ruxsatni shu so'rovda o'chiradi)
+    $('btnBypassStart').addEventListener('click', async () => {
+        const btn = $('btnBypassStart');
+        btn.disabled = true;
+        btn.textContent = 'Boshlanmoqda...';
+        showError('bypassError', '');
+        try {
+            const r = await postJson(CFG.startUrl, { student_id_number: state.idNumber, face_bypass: true });
+            if (r.ok && r.data.redirect) {
+                window.location.href = r.data.redirect;
+                return;
+            }
+            showError('bypassError', messageFrom(r.data, 'Testni boshlab bo\'lmadi.'));
+        } catch (e) {
+            showError('bypassError', "Server bilan aloqa yo'q. Qayta urinib ko'ring.");
+        }
+        btn.disabled = false;
+        btn.textContent = 'Testni boshlash';
+    });
+    $('btnBackBypass').addEventListener('click', () => {
+        $('stepBypass').style.display = 'none';
+        $('stepId').style.display = '';
+        document.body.classList.remove('s-face-mode');
+        $('student_id_number').focus();
+    });
     $('btnBack').addEventListener('click', () => {
         stopCamera();
         $('stepFace').style.display = 'none';

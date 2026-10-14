@@ -326,7 +326,12 @@ class FanTestiController extends Controller
                     'face_mismatches' => (int) $attempt->face_mismatches,
                     'lock_count' => $lockCount,
                     'away_limit' => FanTestiAttempt::AWAY_LIMIT,
+                    'face_bypassed' => !empty($attempt->face_bypass_by),
                 ] : null,
+                // O'qituvchi ruxsati: keyingi talaba faqat ID bilan kiradi (bir marta)
+                'face_bypass' => $running && $d->hasFaceBypass(),
+                'face_bypass_url' => $running && Schema::hasColumn('test_kiosk_devices', 'face_bypass_at')
+                    ? route('teacher.fan-testlari.devices.face-bypass', [$fanTesti, $d]) : null,
                 'stop_url' => $running ? route('teacher.fan-testlari.devices.stop', [$fanTesti, $d]) : null,
                 // Qulflangan yoki chalg'ib yakunlangan testni qayta boshlab bo'lmaydi — aks holda cheklov ma'nosiz
                 'restart_url' => $attempt && $lockCount === 0 && !$attempt->isFinished() ? route('teacher.fan-testlari.devices.restart', [$fanTesti, $d]) : null,
@@ -451,6 +456,36 @@ class FanTestiController extends Controller
 
         return response()->json(['message' => $attempt->student_name . ": test qayta ochildi. Yana "
             . FanTestiAttempt::AWAY_LIMIT . " marta chalg'isa, test yakunlanadi."]);
+    }
+
+    /**
+     * Yuzi tanilmayotgan talaba uchun: shu kompyuterda keyingi talaba faqat ID
+     * bilan (yuz tekshiruvisiz) kiradi. Ruxsat bir marta ishlatiladi va
+     * TestKioskDevice::FACE_BYPASS_MINUTES daqiqada o'zi tugaydi. Qayta bosilsa bekor qilinadi.
+     */
+    public function toggleFaceBypass(FanTesti $fanTesti, TestKioskDevice $device)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless(Schema::hasColumn('test_kiosk_devices', 'face_bypass_at'), 409, 'php artisan migrate ni ishga tushiring.');
+
+        if ((int) $device->assigned_fan_testi_id !== (int) $fanTesti->id) {
+            return response()->json(['message' => 'Bu kompyuterda shu test ochiq emas.'], 422);
+        }
+
+        if ($device->hasFaceBypass()) {
+            $device->update(['face_bypass_at' => null, 'face_bypass_by' => null]);
+
+            return response()->json(['message' => $this->deviceLabel($device) . ': yuz tekshiruvisiz kirish ruxsati bekor qilindi.']);
+        }
+
+        $teacher = $this->teacher();
+        $device->update([
+            'face_bypass_at' => now(),
+            'face_bypass_by' => mb_substr((string) ($teacher->short_name ?: $teacher->full_name), 0, 120),
+        ]);
+
+        return response()->json(['message' => $this->deviceLabel($device) . ': keyingi talaba faqat ID bilan kiradi (bir marta, '
+            . TestKioskDevice::FACE_BYPASS_MINUTES . ' daqiqa ichida).']);
     }
 
     private const STAGE_LABELS = [

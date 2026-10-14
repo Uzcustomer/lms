@@ -1303,7 +1303,11 @@
             } else if (d.stage === 'ended_away') {
                 meta += '<div class="mn-lock">' + "Ikkinchi marta chalg'idi — test yakunlandi, javoblari saqlandi. Qayta ochib bo'lmaydi.</div>";
             }
+            if (d.face_bypass) {
+                meta += '<div class="mn-lock" style="background:#e0f2fe;color:#075985">' + "Yuz tekshiruvisiz kirish ruxsati berilgan — keyingi talaba faqat ID bilan kiradi (bir marta).</div>";
+            }
             const flags = [];
+            if (a && a.face_bypassed) flags.push('<span class="warn">Yuz tekshiruvisiz kirgan</span>');
             if (a && a.away > 0) flags.push('<span class="warn">Chalg\'idi: ' + a.away + '</span>');
             if (a && a.face_mismatches > 0) flags.push('<span class="bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
             if (d.stage_since && d.stage !== 'offline') flags.push('<span>' + esc(d.stage_since) + '</span>');
@@ -1316,10 +1320,17 @@
                 : '<button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" data-act="restart" data-url="' + esc(d.restart_url || '') + '" data-name="' + esc(d.name) + '" data-student="' + esc(a ? a.student : '') + '"'
                     + (d.restart_url ? '' : ' disabled title="' + esc(restartTitle) + '"') + '>Qayta boshlash</button>';
 
+            const bypassBtn = d.face_bypass_url
+                ? '<button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" data-act="bypass" data-on="' + (d.face_bypass ? '1' : '') + '" data-url="' + esc(d.face_bypass_url) + '" data-name="' + esc(d.name) + '">'
+                    + (d.face_bypass ? 'Ruxsatni bekor qilish' : 'Yuz tekshiruvisiz kirish') + '</button>'
+                : '';
+
             return '<div class="mn-card ' + esc(d.stage) + '">'
                 + '<div class="mn-top"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + esc(d.name) + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
                 + student + meta
-                + '<div class="mn-acts">' + stopBtn + restartBtn + '</div></div>';
+                + '<div class="mn-acts">' + stopBtn + restartBtn + '</div>'
+                + (bypassBtn ? '<div class="mn-acts">' + bypassBtn + '</div>' : '')
+                + '</div>';
         }
 
         function render(list) {
@@ -1395,7 +1406,11 @@
         body.addEventListener('click', async (ev) => {
             const btn = ev.target.closest('button[data-act]');
             if (!btn || btn.disabled || !btn.dataset.url) return;
-            const question = btn.dataset.act === 'stop'
+            const question = btn.dataset.act === 'bypass'
+                ? (btn.dataset.on
+                    ? btn.dataset.name + ' kompyuteridagi yuz tekshiruvisiz kirish ruxsati bekor qilinsinmi?'
+                    : btn.dataset.name + " kompyuterida keyingi talaba yuz tekshiruvisiz, faqat ID bilan kirsinmi? Ruxsat bir marta ishlaydi — yuzi tanilmayotgan talaba o'tirganiga ishonch hosil qiling.")
+                : btn.dataset.act === 'stop'
                 ? btn.dataset.name + " kompyuterida test to'xtatilsinmi? Talabaning belgilangan javoblari topshiriladi."
                 : btn.dataset.act === 'unlock'
                     ? btn.dataset.student + " uchun test qayta ochilsinmi? Bu faqat bir marta mumkin — yana chalg'isa test yakunlanadi."

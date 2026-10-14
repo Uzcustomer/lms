@@ -16,7 +16,7 @@ class FanTestiAttempt extends Model
         'questions_count', 'answers_count', 'correct_count',
         'total_points', 'score', 'percent', 'is_passed',
         'face_checks', 'face_mismatches', 'away_count',
-        'away_streak', 'lock_count', 'locked_at', 'ended_reason',
+        'away_streak', 'lock_count', 'locked_at', 'ended_reason', 'face_bypass_by',
         'questions_snapshot', 'ip_address',
     ];
 

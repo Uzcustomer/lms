@@ -34,7 +34,12 @@ class TestKioskDevice extends Model
         'pending_attempt_id',
         'released_fan_testi_id',
         'released_attempt_id',
+        'face_bypass_at',
+        'face_bypass_by',
     ];
+
+    /** O'qituvchining yuz tekshiruvisiz kirish ruxsati shuncha daqiqa amal qiladi (ishlatilmasa). */
+    public const FACE_BYPASS_MINUTES = 30;
 
     protected $hidden = ['token_hash', 'previous_token_hash'];
 
@@ -45,11 +50,19 @@ class TestKioskDevice extends Model
         'revoked_at' => 'datetime',
         'assigned_at' => 'datetime',
         'kiosk_stage_at' => 'datetime',
+        'face_bypass_at' => 'datetime',
     ];
 
     public function isActive(): bool
     {
         return $this->revoked_at === null;
+    }
+
+    /** Shu kompyuterda bir martalik yuz tekshiruvisiz kirish ruxsati hozir faolmi */
+    public function hasFaceBypass(): bool
+    {
+        return $this->face_bypass_at !== null
+            && $this->face_bypass_at->gt(now()->subMinutes(self::FACE_BYPASS_MINUTES));
     }
 
     public function isOnline(): bool

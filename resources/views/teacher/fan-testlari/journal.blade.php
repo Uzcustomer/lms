@@ -496,6 +496,9 @@
                                             @if((int) $attempt->away_count > 0)
                                                 <span class="jr-flag is-warn" title="Monitordan chalg'igani uchun test to'xtatilgan holatlar">Chalg'idi: {{ $attempt->away_count }} marta</span>
                                             @endif
+                                            @if(!empty($attempt->face_bypass_by))
+                                                <span class="jr-flag is-warn" title="O'qituvchi bir martalik ruxsati bilan yuz tekshiruvisiz kirgan">Yuz tekshiruvisiz: {{ $attempt->face_bypass_by }}</span>
+                                            @endif
                                             @if(($attempt->ended_reason ?? null) === 'away')
                                                 <span class="jr-flag is-bad" title="Ochib berilgandan keyin yana chalg'igani uchun test avtomatik yakunlangan">Chalg'igani uchun yakunlandi</span>
                                             @elseif($attempt->locked_at && $attempt->status === 'in_progress')

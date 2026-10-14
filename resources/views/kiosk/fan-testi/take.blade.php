@@ -565,6 +565,8 @@
         recheckMs: 6000,      // yuz mos kelmaganda qayta tekshirish
         pollMs: 4000,         // qulf paytida o'qituvchi ochib berganini tekshirish
         locked: @json($locked ?? false),
+        // O'qituvchi ruxsati bilan (yuz tekshiruvisiz) kirgan — tasdiqlangan rasm bilan solishtirilmaydi
+        identityChecks: @json(!($faceBypass ?? false)),
         awayLimit: @json($awayLimit ?? 3),
     };
 
@@ -712,7 +714,7 @@
     const nextDelay = () => CFG.checkMinMs + Math.random() * (CFG.checkMaxMs - CFG.checkMinMs);
 
     async function identityCheck() {
-        if (state.locked) return;
+        if (state.locked || !CFG.identityChecks) return;
         state.checking = true;
         const data = await report({ snapshot: snapshot() });
         state.checking = false;

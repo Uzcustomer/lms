@@ -1872,6 +1872,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::post('/{fanTesti}/devices/{device}/stop', [FanTestiController::class, 'stopDevice'])->name('devices.stop');
                 Route::post('/{fanTesti}/devices/{device}/restart', [FanTestiController::class, 'restartDevice'])->name('devices.restart');
                 Route::post('/{fanTesti}/attempts/{attempt}/unlock', [FanTestiController::class, 'unlockAttempt'])->name('attempts.unlock');
+                Route::post('/{fanTesti}/devices/{device}/face-bypass', [FanTestiController::class, 'toggleFaceBypass'])->name('devices.face-bypass');
                 Route::post('/{fanTesti}/attach-subject', [FanTestiController::class, 'attachSubject'])->name('attach-subject');
                 Route::get('/{fanTesti}/preview', [FanTestiController::class, 'preview'])->name('preview');
                 Route::post('/{fanTesti}/preview', [FanTestiController::class, 'previewSubmit'])->name('preview.submit');

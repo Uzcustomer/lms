@@ -69,9 +69,11 @@ class FanTestiKioskController extends Controller
             'student_id_number' => ['required', 'string', 'max:64'],
         ], [], ['student_id_number' => 'Talaba ID']);
 
-        $this->eligibleStudent($fanTesti, $data['student_id_number']);
+        // O'qituvchi shu kompyuterga yuz tekshiruvisiz kirish ruxsatini bergan bo'lsa
+        $bypass = $this->faceBypassDevice($fanTesti) !== null;
+        $this->eligibleStudent($fanTesti, $data['student_id_number'], $bypass);
 
-        return response()->json(['photo_found' => true]);
+        return response()->json(['photo_found' => true, 'face_bypass' => $bypass]);
     }
 
     /**
@@ -84,6 +86,10 @@ class FanTestiKioskController extends Controller
     {
         $this->assertTableReady();
         $this->throttle($request, 'fan_testi_start', 10, 300);
+
+        if ($request->boolean('face_bypass')) {
+            return $this->startWithFaceBypass($request, $fanTesti);
+        }
 
         $data = $request->validate([
             'student_id_number' => ['required', 'string', 'max:64'],
@@ -182,6 +188,8 @@ class FanTestiKioskController extends Controller
             'secondsLeft' => $attempt->secondsLeft(),
             'locked' => $this->hasLockColumns() && $attempt->isLocked(),
             'awayLimit' => FanTestiAttempt::AWAY_LIMIT,
+            // Yuz tekshiruvisiz (o'qituvchi ruxsati) — test davomida jim yuz solishtirilmaydi
+            'faceBypass' => !empty($attempt->face_bypass_by),
         ] + $this->follow('take'));
     }
 
@@ -238,6 +246,73 @@ class FanTestiKioskController extends Controller
      * kutib kutish ekraniga o'tadi; test ishlanayotgan bo'lsa javoblar avval
      * avtomatik topshiriladi.
      */
+    /**
+     * Shu kompyuterda o'qituvchi bergan bir martalik "yuz tekshiruvisiz kirish"
+     * ruxsati (yuzi tanilmayotgan talaba uchun). Kompyuter shu testga berilgan
+     * va ruxsat muddati o'tmagan bo'lishi kerak.
+     */
+    private function faceBypassDevice(FanTesti $fanTesti): ?\App\Models\TestKioskDevice
+    {
+        if (!Schema::hasColumn('test_kiosk_devices', 'face_bypass_at')) {
+            return null;
+        }
+        $device = TestDeviceToken::resolve(request());
+
+        return $device
+            && (int) $device->assigned_fan_testi_id === (int) $fanTesti->id
+            && $device->hasFaceBypass()
+            ? $device
+            : null;
+    }
+
+    /**
+     * O'qituvchi ruxsati bilan faqat ID orqali kirish. Ruxsat bir marta
+     * ishlatiladi: shu so'rovda atomar o'chiriladi — keyingi talaba yana yuz
+     * tekshiruvidan o'tadi. Kim ruxsat bergani urinishga va Face ID logiga yoziladi.
+     */
+    private function startWithFaceBypass(Request $request, FanTesti $fanTesti)
+    {
+        $data = $request->validate([
+            'student_id_number' => ['required', 'string', 'max:64'],
+        ], [], ['student_id_number' => 'Talaba ID']);
+
+        $device = $this->faceBypassDevice($fanTesti);
+        if (!$device) {
+            return response()->json(['message' => "Yuz tekshiruvisiz kirish ruxsati yo'q yoki muddati tugagan. O'qituvchiga murojaat qiling."], 422);
+        }
+        $grantedBy = (string) $device->face_bypass_by;
+
+        $student = $this->eligibleStudent($fanTesti, $data['student_id_number'], true);
+
+        // Bir marta: ikki kompyuter/so'rov bir vaqtda ishlata olmasin
+        $consumed = \App\Models\TestKioskDevice::whereKey($device->id)
+            ->whereNotNull('face_bypass_at')
+            ->update(['face_bypass_at' => null, 'face_bypass_by' => null]);
+        if (!$consumed) {
+            return response()->json(['message' => "Bu ruxsat allaqachon ishlatilgan. O'qituvchiga murojaat qiling."], 422);
+        }
+
+        FaceIdService::logAttempt([
+            'attempt_type' => 'fan_test',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'student_id' => $student->id,
+            'student_id_number' => $student->student_id_number,
+            'target_student_id' => $student->id,
+            'target_student_id_number' => $student->student_id_number,
+            'result' => 'success',
+            'failure_reason' => "Fan testi: o'qituvchi ruxsati bilan yuz tekshiruvisiz kirildi ({$grantedBy}, test #{$fanTesti->id}, kompyuter: {$device->name})",
+        ]);
+
+        $redirect = $this->enterAttempt($request, $fanTesti, $student);
+        $attemptId = (int) $request->session()->get(self::SESSION_KEY);
+        if ($attemptId && Schema::hasColumn('fan_testi_attempts', 'face_bypass_by')) {
+            FanTestiAttempt::whereKey($attemptId)->update(['face_bypass_by' => mb_substr($grantedBy ?: "O'qituvchi", 0, 120)]);
+        }
+
+        return response()->json(['redirect' => $redirect]);
+    }
+
     private function follow(string $mode): array
     {
         $device = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
@@ -303,7 +378,7 @@ class FanTestiKioskController extends Controller
 
         $match = null;
         $similarity = null;
-        if (!empty($data['snapshot'])) {
+        if (!empty($data['snapshot']) && empty($attempt->face_bypass_by)) {
             $student = Student::find($attempt->student_id);
             $similarity = $student ? $this->compareFace($student, $data['snapshot']) : null;
 
@@ -384,7 +459,7 @@ class FanTestiKioskController extends Controller
      * Testga kirish shartlari: test ochiq, talaba topildi, guruhi fanga
      * biriktirilgan, savol bor va yuz solishtirish uchun tasdiqlangan rasmi bor.
      */
-    private function eligibleStudent(FanTesti $fanTesti, string $identifier): Student
+    private function eligibleStudent(FanTesti $fanTesti, string $identifier, bool $skipFace = false): Student
     {
         $fail = fn (string $message) => throw ValidationException::withMessages(['student_id_number' => $message]);
 
@@ -416,11 +491,11 @@ class FanTestiKioskController extends Controller
             $fail('Bu test to\'plamida hali savol yo\'q.');
         }
 
-        if (!FaceIdService::isArcFaceEnabled()) {
+        if (!$skipFace && !FaceIdService::isArcFaceEnabled()) {
             $fail("Yuz tekshiruvi tizimda o'chirilgan. O'qituvchiga murojaat qiling.");
         }
 
-        if (!FaceIdService::hasApprovedPhoto($student)) {
+        if (!$skipFace && !FaceIdService::hasApprovedPhoto($student)) {
             $fail("Rasmingiz hali tasdiqlanmagan, shuning uchun yuzingizni tekshirib bo'lmaydi. Tutoringizga murojaat qiling.");
         }
 

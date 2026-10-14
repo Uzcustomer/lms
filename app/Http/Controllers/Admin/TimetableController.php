@@ -4332,7 +4332,12 @@ class TimetableController extends Controller
                     'placed'         => 0,
                     'teacher_id'     => $c->teacher_id, 'teacher_name' => $c->teacher_name,
                     'teacher_mixed'  => false,
+                    'auditorium_code' => $c->auditorium_code, 'auditorium_name' => $c->auditorium_name,
+                    'room_mixed'     => false,
                 ];
+            }
+            if ((string) $units[$k]['auditorium_code'] !== (string) $c->auditorium_code) {
+                $units[$k]['room_mixed'] = true;
             }
             $units[$k]['cards']++;
             if ($c->day && $c->pair) {
@@ -4347,6 +4352,91 @@ class TimetableController extends Controller
             <=> [(string) ($b['faculty_name'] ?? ''), $b['specialty_name'], $b['course'], $a['training_type'], $b['subject_name'], (string) $b['oqim_label'], (string) $b['group_name']]);
 
         return response()->json(['units' => $out]);
+    }
+
+    /**
+     * Dars birligining barcha kartalariga auditoriyani biriktirish (O'qituvchi
+     * biriktirish oynasidan). Kartochkada bitta-bitta tanlangandagi tekshiruvlar
+     * bilan bir xil: xona kartaning o'qituvchisiga ruxsat etilgan bo'lishi va
+     * joylashgan kartalarda vaqt to'qnashuvi bo'lmasligi kerak. Biror kartada
+     * muammo bo'lsa hech narsa o'zgarmaydi.
+     */
+    public function assignUnitRoom(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'faculty_name'    => 'nullable|string|max:255',
+            'specialty_name'  => 'required|string|max:255',
+            'course'          => 'required|integer|min:1|max:7',
+            'subject_name'    => 'required|string|max:255',
+            'training_type'   => 'required|in:lecture,practice',
+            'oqim_label'      => 'nullable|string|max:50',
+            'group_name'      => 'nullable|string|max:255',
+            'auditorium_code' => 'nullable|string|max:50',
+        ]);
+
+        $room = !empty($data['auditorium_code'])
+            ? Auditorium::where('code', $data['auditorium_code'])->first()
+            : null;
+        if (!empty($data['auditorium_code']) && !$room) {
+            return response()->json(['error' => 'Auditoriya topilmadi.'], 422);
+        }
+
+        $cards = $this->unitCardsQuery($board, $data)->get();
+        if ($cards->isEmpty()) {
+            return response()->json(['error' => 'Bu dars birligida karta topilmadi.'], 422);
+        }
+
+        $roomMap = $room ? $this->auditoriumTeacherMap() : [];
+        $problems = [];
+        foreach ($cards as $card) {
+            if ($room && !$this->auditoriumAllowedForCard($room, $card, $roomMap)) {
+                $problems[] = "Xona «{$room->name}» kartaning o'qituvchisiga biriktirilmagan";
+                break;
+            }
+            $card->auditorium_code = $room?->code;
+            $card->auditorium_name = $room?->name;
+            if ($room && $card->day && $card->pair) {
+                foreach ($this->findConflicts($card, $card->day, $card->pair, (int) ($card->start_half ?? 0)) as $conflict) {
+                    $problems[] = $conflict;
+                }
+            }
+        }
+        if ($problems) {
+            return response()->json(['error' => implode(' · ', array_slice(array_unique($problems), 0, 3))], 422);
+        }
+
+        DB::transaction(function () use ($cards) {
+            foreach ($cards as $card) {
+                $card->save();
+            }
+        });
+
+        return response()->json([
+            'ok' => true,
+            'auditorium_code' => $room?->code,
+            'auditorium_name' => $room?->name,
+            'affected' => $cards->count(),
+        ]);
+    }
+
+    /** Dars birligi kartalari: yo'nalish + kurs + fan + tur + oqim/guruh (+ fakultet). */
+    private function unitCardsQuery(TimetableBoard $board, array $data)
+    {
+        $q = TimetableCard::where('board_id', $board->id)
+            ->where('specialty_name', $data['specialty_name'])
+            ->where('course', $data['course'])
+            ->where('subject_name', $data['subject_name'])
+            ->where('training_type', $data['training_type']);
+        array_key_exists('faculty_name', $data) && $data['faculty_name'] !== null && $data['faculty_name'] !== ''
+            ? $q->where('faculty_name', $data['faculty_name'])
+            : $q->whereNull('faculty_name');
+        if ($data['training_type'] === 'lecture') {
+            isset($data['oqim_label']) ? $q->where('oqim_label', $data['oqim_label']) : $q->whereNull('oqim_label');
+        } else {
+            isset($data['group_name']) ? $q->where('group_name', $data['group_name']) : $q->whereNull('group_name');
+        }
+
+        return $q;
     }
 
     /** Dars birligiga o'qituvchini ommaviy biriktirish (barcha kartalariga). */

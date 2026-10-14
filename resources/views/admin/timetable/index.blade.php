@@ -787,10 +787,20 @@
                                     <div id="asgUnitInfo" class="assign-unit-info text-xs text-slate-500 min-h-[42px] rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2">Chapdan dars birligini tanlang</div>
                                     <input id="asgTeacherSearch" placeholder="Qidirish..." class="w-full rounded-md border-slate-300 text-sm" disabled>
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" id="asgKafedraOnly" class="rounded border-slate-300" checked> shu kafedra bo'yicha</label>
-                                    <select id="asgTeacher" size="10" class="w-full rounded-md border-slate-300 text-sm flex-1" disabled></select>
+                                    <select id="asgTeacher" size="8" class="w-full rounded-md border-slate-300 text-sm flex-1" disabled></select>
                                     <div class="flex gap-2 pt-1">
                                         <button type="button" id="asgApply" class="asc-btn primary flex-1" disabled>Biriktirish</button>
                                         <button type="button" id="asgClear" class="asc-btn" disabled title="Biriktirishni olib tashlash"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                                    </div>
+                                    {{-- Xona: dars birligining barcha kartalariga --}}
+                                    <div class="pt-3 mt-1 border-t border-slate-200 space-y-2">
+                                        <div class="text-xs font-semibold text-slate-600">Xona (auditoriya)</div>
+                                        <input id="asgRoomSearch" placeholder="Xona qidirish..." class="w-full rounded-md border-slate-300 text-sm" disabled>
+                                        <select id="asgRoom" size="5" class="w-full rounded-md border-slate-300 text-sm" disabled></select>
+                                        <div class="flex gap-2">
+                                            <button type="button" id="asgRoomApply" class="asc-btn primary flex-1" disabled>Xonani biriktirish</button>
+                                            <button type="button" id="asgRoomClear" class="asc-btn" disabled title="Xonani olib tashlash"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -6566,8 +6576,8 @@
                     setAsgTeacherPanel(null);
                 }
                 $('asgCount').textContent = rows.length + ' ta';
-                let h = '<thead><tr><th>Fan</th><th>Fakultet / yo\'nalish</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th></tr></thead><tbody>';
-                if (!rows.length) h += '<tr><td colspan="7" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
+                let h = '<thead><tr><th>Fan</th><th>Fakultet / yo\'nalish</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th><th>Xona</th></tr></thead><tbody>';
+                if (!rows.length) h += '<tr><td colspan="8" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
                 rows.forEach((u, i) => {
                     const scopeLabel = asgScopeLabel(u);
                     const ttLabel = u.training_type === 'lecture'
@@ -6580,7 +6590,9 @@
                         '<td>' + esc(u.subject_name) + '</td><td>' + asgSpecHtml(u) + '</td><td class="text-center">' + ttLabel + '</td>' +
                         '<td>' + esc(scopeLabel) + '</td><td>' + esc(u.kafedra_name || '—') + '</td>' +
                         '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '✓)</span>' : '') + '</td>' +
-                        '<td>' + teacherLabel + '</td></tr>';
+                        '<td>' + teacherLabel + '</td>' +
+                        '<td>' + (u.room_mixed ? '<span class="text-amber-600">⚠ turlicha</span>'
+                            : (u.auditorium_name ? esc(u.auditorium_name) : '<span class="text-gray-400">—</span>')) + '</td></tr>';
                     return;
                     const sk = u.specialty_name + '·' + u.course;
                     if (sk !== lastSpec) {
@@ -6617,13 +6629,75 @@
                     '<span class="text-slate-600">' + asgSpecHtml(u) + '</span><br>' +
                     (u.training_type === 'lecture' ? "Ma'ruza · " + esc(u.oqim_label || '') : 'Amaliy · ' + esc(u.group_name || '')) +
                     ' · ' + u.cards + ' karta' + (u.kafedra_name ? '<br><span class="text-gray-400">' + esc(u.kafedra_name) + '</span>' : '');
-                await loadAsgTeachers('');
+                $('asgRoomSearch').value = '';
+                await Promise.all([loadAsgTeachers(''), loadAsgRooms()]);
+            }
+
+            // ----- Xona (auditoriya): ro'yxat bir marta yuklanadi -----
+            let asgRoomsList = null;
+            async function loadAsgRooms() {
+                if (!asgSel) return;
+                if (!asgRoomsList) {
+                    try {
+                        asgRoomsList = (await api(AUDS_URL) || [])
+                            .filter(room => room.active !== false)
+                            .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true }));
+                    } catch (e) { $('asgRoom').innerHTML = '<option disabled>xato</option>'; return; }
+                }
+                renderAsgRooms();
+            }
+            function renderAsgRooms() {
+                if (!asgSel || !asgRoomsList) return;
+                const q = ($('asgRoomSearch').value || '').toLowerCase().trim();
+                const list = asgRoomsList.filter(room => !q || [room.code, room.name, room.building_name]
+                    .some(v => String(v || '').toLowerCase().includes(q)));
+                $('asgRoom').innerHTML = (q ? '' : '<option value=""' + (!asgSel.auditorium_code ? ' selected' : '') + '>— xonasiz —</option>') +
+                    list.map(room => '<option value="' + esc(room.code) + '"' + (asgSel.auditorium_code === room.code ? ' selected' : '') + '>' +
+                        esc(room.name || room.code) + (room.volume ? ' (' + room.volume + ')' : '') + '</option>').join('')
+                    + (!list.length ? '<option disabled>topilmadi</option>' : '');
+            }
+            $('asgRoomSearch').oninput = () => renderAsgRooms();
+            $('asgRoomApply').onclick = () => applyAsgRoom($('asgRoom').value || null);
+            $('asgRoomClear').onclick = () => applyAsgRoom(null);
+
+            async function applyAsgRoom(code) {
+                if (!asgSel) return;
+                $('asgRoomApply').disabled = $('asgRoomClear').disabled = true;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/assign-room', 'POST', {
+                        faculty_name: asgSel.faculty_name || '', specialty_name: asgSel.specialty_name, course: asgSel.course,
+                        subject_name: asgSel.subject_name, training_type: asgSel.training_type,
+                        oqim_label: asgSel.oqim_label || '', group_name: asgSel.group_name || '',
+                        auditorium_code: code || '',
+                    });
+                    asgSel.auditorium_code = j.auditorium_code || null;
+                    asgSel.auditorium_name = j.auditorium_name || null;
+                    asgSel.room_mixed = false;
+                    cards.forEach(c => {
+                        const sameScope = asgSel.training_type === 'lecture'
+                            ? (c.oqim_label === asgSel.oqim_label) : (c.group_name === asgSel.group_name);
+                        if ((c.faculty_name || '') === (asgSel.faculty_name || '') && c.specialty_name === asgSel.specialty_name && c.course === asgSel.course &&
+                            c.subject_name === asgSel.subject_name && c.training_type === asgSel.training_type && sameScope) {
+                            c.auditorium_code = asgSel.auditorium_code; c.auditorium_name = asgSel.auditorium_name;
+                        }
+                    });
+                    $('asgMsg').textContent = (j.auditorium_name ? '«' + j.auditorium_name + '» xonasi biriktirildi' : 'Xona olib tashlandi') +
+                        ' · ' + j.affected + ' karta';
+                    renderAsgTable();
+                    renderAsgRooms();
+                } catch (e) { $('asgMsg').textContent = 'Xatolik: ' + e.message; }
+                $('asgRoomApply').disabled = $('asgRoomClear').disabled = false;
             }
 
             function setAsgTeacherPanel(u) {
                 const on = !!u;
-                ['asgTeacherSearch', 'asgTeacher', 'asgApply', 'asgClear', 'asgKafedraOnly'].forEach(id => $(id).disabled = !on);
-                if (!on) { $('asgUnitInfo').textContent = '← Chapdan dars birligini tanlang'; $('asgTeacher').innerHTML = ''; $('asgTeacherSearch').value = ''; }
+                ['asgTeacherSearch', 'asgTeacher', 'asgApply', 'asgClear', 'asgKafedraOnly',
+                    'asgRoomSearch', 'asgRoom', 'asgRoomApply', 'asgRoomClear'].forEach(id => $(id).disabled = !on);
+                if (!on) {
+                    $('asgUnitInfo').textContent = '← Chapdan dars birligini tanlang';
+                    $('asgTeacher').innerHTML = ''; $('asgTeacherSearch').value = '';
+                    $('asgRoom').innerHTML = ''; $('asgRoomSearch').value = '';
+                }
             }
 
             async function loadAsgTeachers(search) {

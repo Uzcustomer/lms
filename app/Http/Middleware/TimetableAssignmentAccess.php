@@ -63,6 +63,8 @@ class TimetableAssignmentAccess
                 $allowed = array_merge($allowed, [
                     'admin.timetable.teacher-units',
                     'admin.timetable.assign-teacher',
+                    // O'qituvchi biriktirish oynasidan dars birligiga xona
+                    'admin.timetable.assign-room',
                 ]);
             }
 

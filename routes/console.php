@@ -9,6 +9,31 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
+// Jadvalda boshqa juftlik/kunga ko'chirilgan darslarning baholarini bog'langan jadval
+// yozuviga moslash (baho importidan keyin avtomatik ham ishlaydi). --dry-run — faqat sanash.
+Artisan::command('grades:align-schedule {--since= : Shu sanadan (Y-m-d), sukut — 60 kun oldin} {--dry-run : Hech narsani yozmasdan faqat sanash}', function () {
+    $since = $this->option('since') ?: now('Asia/Tashkent')->subDays(60)->toDateString();
+    if ($this->option('dry-run')) {
+        $count = \Illuminate\Support\Facades\DB::table('student_grades as sg')
+            ->join('schedules as sch', function ($j) {
+                $j->on('sch.schedule_hemis_id', '=', 'sg.subject_schedule_id')->whereNull('sch.deleted_at');
+            })
+            ->whereNull('sg.deleted_at')
+            ->where('sg.subject_schedule_id', '>', 0)
+            ->where('sg.lesson_date', '>=', $since . ' 00:00:00')
+            ->whereNotNull('sch.lesson_date')
+            ->where(function ($q) {
+                $q->whereColumn('sg.lesson_pair_code', '<>', 'sch.lesson_pair_code')
+                    ->orWhereRaw('DATE(sg.lesson_date) <> DATE(sch.lesson_date)');
+            })
+            ->count();
+        $this->info("Moslanadigan baholar ({$since} dan): {$count}");
+        return;
+    }
+    $updated = \App\Services\GradeScheduleAlign::run($since);
+    $this->info("Jadval yozuviga moslangan baholar: {$updated}");
+})->purpose("Baholarni bog'langan jadval yozuviga (juftlik/sana) moslash");
+
 // Kechki import — bitta command ichida ketma-ket ishlatiladi (bitta Telegram xabar):
 // 1. Jadval import (import:schedules)
 // 2. Final import — baholar (student:import-data --mode=final)

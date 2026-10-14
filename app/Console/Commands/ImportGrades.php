@@ -43,6 +43,25 @@ class ImportGrades extends Command
 
     public function handle()
     {
+        $result = $this->runImport();
+
+        // Jadvalda boshqa juftlik/kunga ko'chirilgan darslarning baholari eski
+        // juftlikda qoladi — ularni bog'langan jadval yozuviga moslaymiz
+        // (aks holda jurnalda ko'rinmaydi va kun "baho qo'yilmagan" bo'ladi).
+        try {
+            $aligned = \App\Services\GradeScheduleAlign::run();
+            if ($aligned > 0) {
+                $this->info("Jadval yozuviga moslangan baholar: {$aligned}");
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[GradeScheduleAlign] xato: ' . $e->getMessage());
+        }
+
+        return $result;
+    }
+
+    private function runImport()
+    {
         if ($this->option('date')) {
             return $this->handleSingleDayImport();
         }

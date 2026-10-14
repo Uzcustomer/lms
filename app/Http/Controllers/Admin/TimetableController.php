@@ -4315,11 +4315,16 @@ class TimetableController extends Controller
     }
 
     /** Doskadagi dars birliklari + joriy o'qituvchi (biriktirish matritsasi uchun). */
-    public function teacherUnits(TimetableBoard $board)
+    public function teacherUnits(Request $request, TimetableBoard $board)
     {
         $cards = TimetableCard::where('board_id', $board->id)->get();
+        // Kafedra mudiri faqat o'z kafedrasiga tegishli dars birliklarini ko'radi
+        $ownKafedra = $this->departmentHeadKafedra($request);
         $units = [];
         foreach ($cards as $c) {
+            if ($ownKafedra !== null && !$this->sameKafedra($c->kafedra_name, $ownKafedra)) {
+                continue;
+            }
             $k = $this->unitKey($c);
             if (!isset($units[$k])) {
                 $units[$k] = [
@@ -4385,6 +4390,9 @@ class TimetableController extends Controller
         if ($cards->isEmpty()) {
             return response()->json(['error' => 'Bu dars birligida karta topilmadi.'], 422);
         }
+        if ($denied = $this->denyForeignKafedra($request, $cards)) {
+            return $denied;
+        }
 
         $roomMap = $room ? $this->auditoriumTeacherMap() : [];
         $problems = [];
@@ -4417,6 +4425,45 @@ class TimetableController extends Controller
             'auditorium_name' => $room?->name,
             'affected' => $cards->count(),
         ]);
+    }
+
+    /** Kafedra mudiri bo'lsa — uning kafedrasi nomi, aks holda null (cheklov yo'q). */
+    private function departmentHeadKafedra(Request $request): ?string
+    {
+        if ($this->timetableActiveRole($request) !== 'kafedra_mudiri') {
+            return null;
+        }
+
+        return (string) $this->departmentHeadContext($request)['department_name'];
+    }
+
+    /** Ikki kafedra nomi bir xilmi (katta-kichik harf, bo'shliq, "kafedrasi" so'zi hisobga olinmaydi). */
+    private function sameKafedra(?string $a, ?string $b): bool
+    {
+        $norm = function (?string $value) {
+            $value = mb_strtolower(trim((string) $value));
+            $value = preg_replace('/\s*kafedra(si)?\s*$/u', '', $value);
+
+            return preg_replace('/[^\p{L}\p{N}]+/u', '', $value);
+        };
+
+        return $norm($a) !== '' && $norm($a) === $norm($b);
+    }
+
+    /** Kafedra mudiri boshqa kafedraning darsiga biriktira olmasin. */
+    private function denyForeignKafedra(Request $request, $cards)
+    {
+        $ownKafedra = $this->departmentHeadKafedra($request);
+        if ($ownKafedra === null) {
+            return null;
+        }
+        foreach ($cards as $card) {
+            if (!$this->sameKafedra($card->kafedra_name, $ownKafedra)) {
+                return response()->json(['error' => "Bu dars sizning kafedrangizga tegishli emas."], 403);
+            }
+        }
+
+        return null;
     }
 
     /** Dars birligi kartalari: yo'nalish + kurs + fan + tur + oqim/guruh (+ fakultet). */
@@ -4465,6 +4512,10 @@ class TimetableController extends Controller
             isset($data['oqim_label']) ? $q->where('oqim_label', $data['oqim_label']) : $q->whereNull('oqim_label');
         } else {
             isset($data['group_name']) ? $q->where('group_name', $data['group_name']) : $q->whereNull('group_name');
+        }
+
+        if ($denied = $this->denyForeignKafedra($request, (clone $q)->get(['id', 'kafedra_name']))) {
+            return $denied;
         }
 
         $teacherName = null;

@@ -4496,19 +4496,41 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Kafedra mudiri bo'lsa — uning kafedrasi nomi, aks holda null (cheklov yo'q). */
-    private function departmentHeadKafedra(Request $request): ?string
+    /**
+     * Kafedra mudiri bo'lsa — uning kafedrasi nomlari, aks holda null (cheklov yo'q).
+     * Kartalardagi kafedra nomi o'quv rejadan olinadi va HEMIS da kafedra qayta
+     * nomlangan bo'lsa eski nomda qoladi, shuning uchun o'quv rejada shu kafedra
+     * ID siga bog'langan barcha nomlar ham qo'shiladi.
+     */
+    private function departmentHeadKafedra(Request $request): ?array
     {
         if ($this->timetableActiveRole($request) !== 'kafedra_mudiri') {
             return null;
         }
 
-        return (string) $this->departmentHeadContext($request)['department_name'];
+        $context = $this->departmentHeadContext($request);
+        $names = DB::table('curriculum_subjects')
+            ->where('department_id', $context['department_hemis_id'])
+            ->whereNotNull('department_name')->where('department_name', '!=', '')
+            ->distinct()->pluck('department_name')->all();
+        $names[] = (string) $context['department_name'];
+
+        return array_values(array_unique($names));
     }
 
-    /** Ikki kafedra nomi bir xilmi (katta-kichik harf, bo'shliq, "kafedrasi" so'zi hisobga olinmaydi). */
-    private function sameKafedra(?string $a, ?string $b): bool
+    /** Kafedra nomi berilgan nom(lar)dan biriga mosmi (katta-kichik harf, bo'shliq, "kafedrasi" so'zi hisobga olinmaydi). */
+    private function sameKafedra(?string $a, string|array|null $b): bool
     {
+        if (is_array($b)) {
+            foreach ($b as $name) {
+                if ($this->sameKafedra($a, $name)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         $norm = function (?string $value) {
             $value = mb_strtolower(trim((string) $value));
             $value = preg_replace('/\s*kafedra(si)?\s*$/u', '', $value);

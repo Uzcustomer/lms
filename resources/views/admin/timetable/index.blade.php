@@ -219,9 +219,10 @@
                                 class="hidden text-[11px] rounded px-1.5 py-0.5 border border-gray-200 text-gray-500 hover:bg-gray-50"></button>
                             {{-- Paneldagi kartalarni fan, guruh va dars turi bo'yicha saralash --}}
                             <span id="pnFilters" class="flex items-center gap-1.5">
-                                <select id="pnSubject" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" style="max-width: 220px;" aria-label="Fan bo'yicha filtr"><option value="">Barcha fanlar</option></select>
+                                <select id="pnSubject" class="pn-f" aria-label="Fan bo'yicha filtr"><option value="">Barcha fanlar</option></select>
+                                <select id="pnOqim" class="pn-f" aria-label="Oqim bo'yicha filtr"><option value="">Barcha oqimlar</option></select>
                                 <div class="tt-dd tt-dd-up"><button type="button" class="tt-dd-btn pn-dd-btn" id="pnGroupBtn" aria-label="Guruh bo'yicha filtr"></button><div class="tt-dd-menu" id="pnGroupMenu"></div></div>
-                                <select id="pnType" class="text-[11px] rounded border-gray-300 py-0.5 pl-2 pr-7 text-gray-600" aria-label="Dars turi bo'yicha filtr">
+                                <select id="pnType" class="pn-f" aria-label="Dars turi bo'yicha filtr">
                                     <option value="">Barcha turlar</option>
                                     <option value="lecture">Ma'ruza</option>
                                     <option value="practice">Amaliy</option>
@@ -1073,6 +1074,15 @@
         .tt-dd-empty { padding: 6px 8px; font-size: 12px; color: #94a3b8; }
         .tt-dd-up .tt-dd-menu { top: auto; bottom: calc(100% + 4px); }
         .pn-dd-btn { padding: 4px 8px; font-size: 11px; max-width: 200px; color: #4b5563; }
+        /* Joylashmagan kartalar filtrlari — bir xil o'lcham */
+        #pnFilters .pn-f, #pnFilters .pn-dd-btn {
+            height: 28px; width: 180px; max-width: 180px; box-sizing: border-box;
+            font-size: 11px; line-height: 1; color: #4b5563; background-color: #fff;
+            border: 1px solid #d1d5db; border-radius: 6px;
+        }
+        #pnFilters select.pn-f { padding: 0 26px 0 8px; }
+        #pnFilters .pn-dd-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px; }
+        #pnFilters .pn-dd-btn .tt-dd-sum { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
         /* Sana qatori doim ko'rinib tursin: vertikal scroll wrap ichida
            bo'ladi (sticky top overflow konteynerga nisbatan ishlaydi). */
@@ -2831,14 +2841,16 @@
                 showSkipped = !showSkipped;
                 renderPanel();
             };
-            // Joylashmagan kartalar paneli filtrlari: fan, guruh, dars turi
-            const pnFilter = { subject: '', groups: new Set(), type: '' };
+            // Joylashmagan kartalar paneli filtrlari: fan, oqim, guruh, dars turi
+            const pnFilter = { subject: '', oqim: '', groups: new Set(), type: '' };
             const pnMatch = c =>
                 (!pnFilter.subject || c.subject_name === pnFilter.subject) &&
+                (!pnFilter.oqim || (c.oqim_label || '') === pnFilter.oqim) &&
                 (!pnFilter.groups.size || cardGroups(c).some(g => pnFilter.groups.has(g))) &&
                 (!pnFilter.type || c.training_type === pnFilter.type);
             $('pnSubject').onchange = function () { pnFilter.subject = this.value; renderPanel(); };
             $('pnType').onchange = function () { pnFilter.type = this.value; renderPanel(); };
+            $('pnOqim').onchange = function () { pnFilter.oqim = this.value; renderPanel(); };
             // Guruhlar — bir nechtasini belgilash mumkin
             $('pnGroupMenu').addEventListener('change', ev => {
                 if (!ev.target.matches('input[type=checkbox]')) return;
@@ -2852,7 +2864,7 @@
                 renderPanel();
             });
             $('pnReset').onclick = function () {
-                pnFilter.subject = pnFilter.type = '';
+                pnFilter.subject = pnFilter.type = pnFilter.oqim = '';
                 pnFilter.groups.clear();
                 renderPanel();
             };
@@ -4651,9 +4663,10 @@
                 const pool = showSkipped ? un.concat(skipped) : un;
                 const uzSort = (a, b) => a.localeCompare(b, 'uz', { numeric: true });
                 fillPnSelect('pnSubject', 'Barcha fanlar', [...new Set(pool.map(c => c.subject_name))].sort(uzSort), 'subject');
+                fillPnSelect('pnOqim', 'Barcha oqimlar', [...new Set(pool.map(c => c.oqim_label || '').filter(Boolean))].sort(uzSort), 'oqim');
                 fillPnGroups([...new Set(pool.flatMap(cardGroups))].sort(uzSort));
                 $('pnType').value = pnFilter.type;
-                const filtering = !!(pnFilter.subject || pnFilter.groups.size || pnFilter.type);
+                const filtering = !!(pnFilter.subject || pnFilter.oqim || pnFilter.groups.size || pnFilter.type);
                 const unShown = un.filter(pnMatch);
                 const skippedShown = skipped.filter(pnMatch);
                 $('pnReset').classList.toggle('hidden', !filtering);

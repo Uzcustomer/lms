@@ -4335,7 +4335,16 @@ class TimetableController extends Controller
             $context = $this->departmentHeadContext($request);
             $this->whereDepartmentTeacher($q, $context);
         } elseif ($request->filled('kafedra')) {
-            $q->where('department', 'like', '%' . $request->kafedra . '%');
+            // HEMIS dagi kafedrasi + shu kafedraga mudir qilib tayinlanganlar (HEMIS da boshqa bo'limda bo'lsa ham)
+            $headDeptIds = Schema::hasColumn('teachers', 'head_department_hemis_id')
+                ? Department::where('name', 'like', '%' . $request->kafedra . '%')->pluck('department_hemis_id')->all()
+                : [];
+            $q->where(function ($w) use ($request, $headDeptIds) {
+                $w->where('department', 'like', '%' . $request->kafedra . '%');
+                if ($headDeptIds) {
+                    $w->orWhereIn('head_department_hemis_id', $headDeptIds);
+                }
+            });
         }
 
         if ($request->filled('search')) {

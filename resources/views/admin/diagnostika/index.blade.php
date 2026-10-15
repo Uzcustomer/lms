@@ -660,16 +660,54 @@
             loadTartibgaSol();
         }
 
-        function loadTartibgaSol() {
-            var nameQ = ($('#search_student_name').val() || '').trim();
-            var shaklQ = ($('#search_shakl').val() || '').trim();
-            var params = {
+        function tartibgaParams() {
+            return {
                 date_from: $('#date_from').val() || '',
                 date_to:   $('#date_to').val()   || '',
-                student_name: nameQ,
-                shakl_search: shaklQ,
+                student_name: ($('#search_student_name').val() || '').trim(),
+                shakl_search: ($('#search_shakl').val() || '').trim(),
                 show_duplicates: $('#show_duplicates').is(':checked') ? '1' : '0',
             };
+        }
+
+        // Yuklashdan keyin faqat yuklangan natijalar egalarini qayta hisoblash —
+        // butun jadvalni (yuzlab natija) qaytadan hisoblamaslik uchun. Talabaning
+        // barcha qatorlari yangilanadi (yuklangan, dublikat, "bahosi bor").
+        function refreshStudentsAfterUpload(resultIds) {
+            var idSet = {};
+            (resultIds || []).forEach(function(id) { idSet[id] = true; });
+            var studentIds = [], seen = {};
+            allData.forEach(function(r) {
+                if (idSet[r.id] && r.student_id && !seen[r.student_id]) {
+                    seen[r.student_id] = true;
+                    studentIds.push(r.student_id);
+                }
+            });
+            if (studentIds.length === 0) { loadTartibgaSol(); return; }
+
+            var params = tartibgaParams();
+            params.student_ids = studentIds;
+            $.ajax({
+                url: tartibgaSolUrl, type: 'GET', data: params, timeout: 300000,
+                success: function(res) {
+                    var fresh = {};
+                    (res.data || []).forEach(function(r) { fresh[r.id] = r; });
+                    var next = [];
+                    allData.forEach(function(r) {
+                        if (!seen[r.student_id]) { next.push(r); return; }
+                        if (fresh[r.id]) { next.push(fresh[r.id]); delete fresh[r.id]; }
+                    });
+                    Object.keys(fresh).forEach(function(k) { next.push(fresh[k]); });
+                    allData = next;
+                    msPopulate();
+                    applyColumnFilters();
+                },
+                error: function() { loadTartibgaSol(); }
+            });
+        }
+
+        function loadTartibgaSol() {
+            var params = tartibgaParams();
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
             $('#btn-tartibga').prop('disabled', true).css('opacity', '0.6');
@@ -1521,9 +1559,9 @@
                         $('#upload-result').html(html).show();
 
                         if (data.success_count > 0) {
-                            // Server bilan to'liq qayta sinxronlash — xulosa kodlari, baholar, holatlar
-                            // (mavzu_uploaded, uploaded, has_other_grade va h.k. server tomonida hisoblanadi)
-                            loadTartibgaSol();
+                            // Xulosa kodlari server tomonida hisoblanadi (uploaded, has_other_grade ...) —
+                            // faqat shu talabalar qayta olinadi, natija xabari ko'rinib qoladi
+                            refreshStudentsAfterUpload(okIds);
                         }
                     },
                     error: function(xhr) {
@@ -1778,8 +1816,8 @@
                             $('#upload-result').html(html).show();
 
                             if (data.success_count > 0) {
-                                // Server bilan to'liq qayta sinxronlash
-                                loadTartibgaSol();
+                                // Faqat shu talabalar qayta olinadi (butun jadval emas)
+                                refreshStudentsAfterUpload(ids);
                             }
                         },
                         error: function(xhr) {

@@ -860,6 +860,12 @@ class QuizResultController extends Controller
             if ($request->filled('date_to')) {
                 $query->whereDate('date_finish', '<=', $request->date_to);
             }
+            // Yuklashdan keyin faqat shu talabalar qayta hisoblanadi — xulosa
+            // (yuklangan / dublikat / bahosi bor) faqat talabaning o'z natijalariga
+            // bog'liq, butun jadvalni qayta hisoblash shart emas.
+            if ($request->filled('student_ids')) {
+                $query->whereIn('student_id', array_values(array_filter((array) $request->input('student_ids'))));
+            }
 
             $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
 
@@ -2636,12 +2642,10 @@ class QuizResultController extends Controller
         // Variant (a/b/c) fanlar uchun jurnal roster keshi: "subjectId|semester" => [hemis_id => true]
         $variantRosterCache = [];
 
-        // 4+ qarz (kursdan qoldirilgan) talabalarni aniqlab olamiz — bunday
-        // talabalarga OSKI/Test bahosi yuklanmaydi (YN kunini belgilash
-        // sahifasidagi qizil "4 tadan ortiq qarz" mantig'i bilan bir xil).
-        $heldBackMap = $this->computeHeldBackDebts(
-            $results->pluck('student_id')->filter()->unique()->values()->all()
-        );
+        // 4+ qarz qoidasi (computeHeldBackDebts) hozir qo'llanmaydi — natijasi
+        // hech qayerda tekshirilmasdi, faqat har yuklashni sekinlashtirardi.
+        // Qoida qayta kerak bo'lsa, hisob shu yerda chaqirilib, talaba bo'yicha
+        // tekshiruv qo'shiladi.
 
         foreach ($results as $result) {
             $rowInfo = [

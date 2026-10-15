@@ -18,6 +18,7 @@ use App\Models\TimetableSubjectSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use App\Services\IshchiPlanYear;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -293,9 +294,9 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
-            ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
-            ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name, MAX(s.lecture) as lecture')
+            ->tap(fn ($q) => IshchiPlanYear::apply($q, $start))
+            ->groupBy('mc.specialty_name', DB::raw(IshchiPlanYear::levelSql()), 's.subject_name')
+            ->selectRaw('mc.specialty_name, ' . IshchiPlanYear::levelSql() . ' as level_code, s.subject_name, MAX(s.lecture) as lecture')
             ->get();
         $map = [];
         foreach ($rows as $r) {
@@ -338,9 +339,9 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
-            ->groupBy('mc.specialty_name', 'mc.level_code')
-            ->selectRaw('mc.specialty_name, mc.level_code')
+            ->tap(fn ($q) => IshchiPlanYear::apply($q, $start))
+            ->groupBy('mc.specialty_name', DB::raw(IshchiPlanYear::levelSql()))
+            ->selectRaw('mc.specialty_name, ' . IshchiPlanYear::levelSql() . ' as level_code')
             ->get();
         $currSet = [];   // "specKey|course" => ko'rinadigan yo'nalish nomi
         foreach ($curr as $r) {
@@ -409,9 +410,9 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
-            ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
-            ->selectRaw("mc.specialty_name, mc.level_code, s.subject_name,
+            ->tap(fn ($q) => IshchiPlanYear::apply($q, $start))
+            ->groupBy('mc.specialty_name', DB::raw(IshchiPlanYear::levelSql()), 's.subject_name')
+            ->selectRaw("mc.specialty_name, " . IshchiPlanYear::levelSql() . " as level_code, s.subject_name,
                 MAX(s.lecture) as lecture,
                 MAX(s.practice) as practice, MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar")
             ->get();
@@ -772,10 +773,10 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
+            ->tap(fn ($q) => IshchiPlanYear::apply($q, $start))
             ->orderByDesc('s.updated_at')
             ->orderByDesc('s.id')
-            ->get(['mc.specialty_name', 'mc.level_code', 's.subject_name']);
+            ->get(['mc.specialty_name', DB::raw(IshchiPlanYear::levelSql() . ' as level_code'), 's.subject_name']);
 
         // Kalit: specKey|kurs|normFan => joriy ko'rinadigan nom (birinchi = eng yangi)
         $map = [];
@@ -2450,9 +2451,9 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
-            ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
-            ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name,
+            ->tap(fn ($q) => IshchiPlanYear::apply($q, $start))
+            ->groupBy('mc.specialty_name', DB::raw(IshchiPlanYear::levelSql()), 's.subject_name')
+            ->selectRaw('mc.specialty_name, ' . IshchiPlanYear::levelSql() . ' as level_code, s.subject_name,
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice,
                 MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar')
             ->get();
@@ -3892,13 +3893,13 @@ class TimetableController extends Controller
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
             ->whereRaw('MOD(s.semester, 2) = ?', [$parityRem])
-            ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
-            ->groupBy('mc.specialty_name', 'mc.level_code', 's.semester', 's.subject_name')
-            ->selectRaw("mc.specialty_name, mc.level_code, s.semester, s.subject_name,
+            ->tap(fn ($q) => IshchiPlanYear::apply($q, $start))
+            ->groupBy('mc.specialty_name', DB::raw(IshchiPlanYear::levelSql()), 's.semester', 's.subject_name')
+            ->selectRaw("mc.specialty_name, " . IshchiPlanYear::levelSql() . " as level_code, s.semester, s.subject_name,
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice,
                 MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar,
                 GROUP_CONCAT(DISTINCT mc.name SEPARATOR '|||') as plan_names")
-            ->orderBy('mc.specialty_name')->orderBy('mc.level_code')->orderBy('s.subject_name')
+            ->orderBy('mc.specialty_name')->orderByRaw(IshchiPlanYear::levelSql())->orderBy('s.subject_name')
             ->get();
 
         [$kafMap, $overrides] = $this->buildKafedraMap();

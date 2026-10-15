@@ -1147,6 +1147,110 @@ class TimetableController extends Controller
         return ['restored_units' => count($byKey), 'restored_cards' => $cardsUpdated, 'lost_units' => count($kept) - count($byKey)];
     }
 
+    /**
+     * Bir doskadagi o'qituvchi/xona biriktirishlarini boshqa doskaga ko'chirish
+     * (artisan timetable:copy-assignments). Dars birligi bo'yicha moslanadi:
+     * fakultet + yo'nalish + kurs + fan (normallashtirilgan) + tur + oqim/guruh.
+     * Topilmasa — variant harfisiz fan nomi bo'yicha ("Umumiy xirurgiya (a)" ← "Umumiy xirurgiya").
+     * Manba: doska kartalari + timetable_unit_assignments jadvali.
+     * $overwrite = false — maqsad doskada allaqachon bor biriktirish o'zgartirilmaydi.
+     */
+    public function copyUnitAssignments(TimetableBoard $from, TimetableBoard $to, bool $overwrite = false, bool $dryRun = false): array
+    {
+        $baseName = fn (string $name) => $this->normSubject((string) preg_replace('/\s*\(\s*[a-zа-яё]\s*\)\s*$/iu', '', $name));
+        $keyOf = function (TimetableCard $c, ?string $subjectNorm = null) {
+            $scope = $c->training_type === 'lecture' ? ('L|' . $c->oqim_label) : ('P|' . $c->group_name);
+
+            return implode('¦', [
+                $c->faculty_name ?? '', $this->specKey((string) $c->specialty_name), (int) $c->course,
+                $subjectNorm ?? $this->normSubject((string) $c->subject_name), $c->training_type, $scope,
+            ]);
+        };
+
+        // Manba biriktirishlari: to'liq kalit va variant harfisiz kalit bo'yicha
+        $src = [];
+        $srcBase = [];
+        $merge = function (array &$map, string $k, $teacherId, $teacherName, $roomCode, $roomName): void {
+            $map[$k] ??= ['teacher_id' => null, 'teacher_name' => null, 'auditorium_code' => null, 'auditorium_name' => null];
+            if ($teacherId && !$map[$k]['teacher_id']) {
+                $map[$k]['teacher_id'] = $teacherId;
+                $map[$k]['teacher_name'] = $teacherName;
+            }
+            if ($roomCode && !$map[$k]['auditorium_code']) {
+                $map[$k]['auditorium_code'] = $roomCode;
+                $map[$k]['auditorium_name'] = $roomName;
+            }
+        };
+        $put = function (TimetableCard $c, $teacherId, $teacherName, $roomCode, $roomName) use (&$src, &$srcBase, $keyOf, $baseName, $merge) {
+            $merge($src, $keyOf($c), $teacherId, $teacherName, $roomCode, $roomName);
+            $merge($srcBase, $keyOf($c, $baseName((string) $c->subject_name)), $teacherId, $teacherName, $roomCode, $roomName);
+        };
+        foreach (TimetableCard::where('board_id', $from->id)
+            ->where(fn ($q) => $q->whereNotNull('teacher_id')->orWhere(fn ($q) => $q->whereNotNull('auditorium_code')->where('auditorium_code', '!=', '')))
+            ->get() as $c) {
+            $put($c, $c->teacher_id, $c->teacher_name, $c->auditorium_code, $c->auditorium_name);
+        }
+        if ($this->unitAssignmentsEnabled()) {
+            foreach (TimetableUnitAssignment::where('board_id', $from->id)->get() as $a) {
+                $c = new TimetableCard([
+                    'faculty_name' => $a->faculty_name, 'specialty_name' => $a->specialty_name, 'course' => $a->course,
+                    'subject_name' => $a->subject_name, 'training_type' => $a->training_type,
+                    'oqim_label' => $a->training_type === 'lecture' ? $a->scope_label : null,
+                    'group_name' => $a->training_type === 'lecture' ? null : $a->scope_label,
+                ]);
+                $put($c, $a->teacher_id, $a->teacher_name, $a->auditorium_code, $a->auditorium_name);
+            }
+        }
+
+        // Maqsad doska kartalari birlik bo'yicha
+        $units = [];
+        foreach (TimetableCard::where('board_id', $to->id)->get() as $c) {
+            $units[$keyOf($c)][] = $c;
+        }
+
+        $stats = ['source_units' => count($src), 'target_units' => count($units), 'matched' => 0, 'by_variant' => 0,
+            'teacher_set' => 0, 'room_set' => 0, 'skipped_existing' => 0, 'cards_updated' => 0];
+        DB::transaction(function () use ($units, $src, $srcBase, $keyOf, $baseName, $overwrite, $dryRun, &$stats) {
+            foreach ($units as $k => $cards) {
+                $first = $cards[0];
+                $a = $src[$k] ?? null;
+                if (!$a) {
+                    $a = $srcBase[$keyOf($first, $baseName((string) $first->subject_name))] ?? null;
+                    if ($a) {
+                        $stats['by_variant']++;
+                    }
+                }
+                if (!$a) {
+                    continue;
+                }
+                $stats['matched']++;
+                $hasTeacher = collect($cards)->contains(fn ($c) => $c->teacher_id);
+                $hasRoom = collect($cards)->contains(fn ($c) => $c->auditorium_code);
+                $set = [];
+                if ($a['teacher_id'] && ($overwrite || !$hasTeacher)) {
+                    $set['teacher_id'] = $a['teacher_id'];
+                    $set['teacher_name'] = $a['teacher_name'];
+                    $stats['teacher_set']++;
+                }
+                if ($a['auditorium_code'] && ($overwrite || !$hasRoom)) {
+                    $set['auditorium_code'] = $a['auditorium_code'];
+                    $set['auditorium_name'] = $a['auditorium_name'];
+                    $stats['room_set']++;
+                }
+                if (!$set) {
+                    $stats['skipped_existing']++;
+                    continue;
+                }
+                if (!$dryRun) {
+                    $stats['cards_updated'] += TimetableCard::whereIn('id', collect($cards)->pluck('id'))->update($set);
+                    $this->recordUnitAssignment($first->fresh());
+                }
+            }
+        });
+
+        return $stats;
+    }
+
     /** Doskadagi joriy biriktirishlarni jadvalga zaxiralash (artisan timetable:backup-assignments). */
     public function backupUnitAssignments(TimetableBoard $board): int
     {

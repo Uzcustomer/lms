@@ -19,6 +19,26 @@ Artisan::command('timetable:backup-assignments {--board= : Faqat shu doska (id)}
     }
 })->purpose("Dars jadvali o'qituvchi/xona biriktirishlarini alohida jadvalga zaxiralash");
 
+// Dars jadvali: bir doskadagi o'qituvchi/xona biriktirishlarini boshqa doskaga ko'chirish
+// (dars birligi bo'yicha). --dry-run — faqat sanaydi; --overwrite — bor biriktirishni ham almashtiradi.
+Artisan::command('timetable:copy-assignments {from : Manba doska id} {to : Maqsad doska id} {--overwrite} {--dry-run}', function () {
+    $from = \App\Models\TimetableBoard::findOrFail($this->argument('from'));
+    $to = \App\Models\TimetableBoard::findOrFail($this->argument('to'));
+    $stats = app(\App\Http\Controllers\Admin\TimetableController::class)
+        ->copyUnitAssignments($from, $to, (bool) $this->option('overwrite'), (bool) $this->option('dry-run'));
+    $this->info(($this->option('dry-run') ? '[SINOV — hech narsa yozilmadi] ' : '') . "#{$from->id} → #{$to->id}");
+    $this->table(['Ko\'rsatkich', 'Soni'], [
+        ['Manbadagi biriktirilgan birliklar', $stats['source_units']],
+        ['Maqsad doskadagi birliklar', $stats['target_units']],
+        ['Mos kelgan birliklar', $stats['matched']],
+        ['  shundan variant harfisiz nom bo\'yicha', $stats['by_variant']],
+        ['O\'qituvchi qo\'yildi', $stats['teacher_set']],
+        ['Xona qo\'yildi', $stats['room_set']],
+        ['O\'zgartirilmadi (allaqachon biriktirilgan)', $stats['skipped_existing']],
+        ['Yangilangan kartalar', $stats['cards_updated']],
+    ]);
+})->purpose("Dars jadvali o'qituvchi/xona biriktirishlarini boshqa doskaga ko'chirish");
+
 // Jadvalda boshqa juftlik/kunga ko'chirilgan darslarning baholarini bog'langan jadval
 // yozuviga moslash (baho importidan keyin avtomatik ham ishlaydi). --dry-run — faqat sanash.
 Artisan::command('grades:align-schedule {--since= : Shu sanadan (Y-m-d), sukut — 60 kun oldin} {--dry-run : Hech narsani yozmasdan faqat sanash}', function () {

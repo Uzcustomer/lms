@@ -28,8 +28,11 @@ class ScheduleImportService
     {
         if (empty($items)) return;
 
+        // HEMIS sahifalari import davomida siljishi mumkin (yangi dars qo'shilsa,
+        // keyingi sahifa oldingi sahifadagi yozuvlarni qaytaradi) — takror ID
+        // e'tiborsiz qoldiriladi, import to'xtamaydi.
         $rows = array_map(fn($item) => ['hemis_id' => $item['id']], $items);
-        DB::table('_temp_schedule_ids')->insert($rows);
+        DB::table('_temp_schedule_ids')->insertOrIgnore($rows);
     }
 
     public static function fishName(string $name): string

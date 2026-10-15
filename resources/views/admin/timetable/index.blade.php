@@ -4664,7 +4664,9 @@
                 const uzSort = (a, b) => a.localeCompare(b, 'uz', { numeric: true });
                 fillPnSelect('pnSubject', 'Barcha fanlar', [...new Set(pool.map(c => c.subject_name))].sort(uzSort), 'subject');
                 fillPnSelect('pnOqim', 'Barcha oqimlar', [...new Set(pool.map(c => c.oqim_label || '').filter(Boolean))].sort(uzSort), 'oqim');
-                fillPnGroups([...new Set(pool.flatMap(cardGroups))].sort(uzSort));
+                // Oqim tanlangan bo'lsa — guruh ro'yxatida faqat shu oqim guruhlari
+                const groupPool = pnFilter.oqim ? pool.filter(c => (c.oqim_label || '') === pnFilter.oqim) : pool;
+                fillPnGroups([...new Set(groupPool.flatMap(cardGroups))].sort(uzSort));
                 $('pnType').value = pnFilter.type;
                 const filtering = !!(pnFilter.subject || pnFilter.oqim || pnFilter.groups.size || pnFilter.type);
                 const unShown = un.filter(pnMatch);

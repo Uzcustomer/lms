@@ -1565,7 +1565,7 @@ class JournalController extends Controller
         // Sozlamadagi muddat (talaba bo'yicha) o'tgan bo'lsa — oddiy tartib
         // Kiritilgan sana = HEMISda yaratilgan va birinchi fani biriktirilgan sananing kechrog'i
         $jbSubjectsAssigned = \App\Services\LessonOpeningTeacherReport::subjectsAssignedAt($students->pluck('hemis_id')->all());
-        $jbJoinDateOf = fn ($s) => \App\Services\LessonOpeningTeacherReport::lateJoinDate($s, $jbSubjectsAssigned[(string) $s->hemis_id][(string) $semesterCode] ?? null);
+        $jbJoinDateOf = fn ($s) => \App\Services\LessonOpeningTeacherReport::lateJoinDate($s, \App\Services\LessonOpeningTeacherReport::assignedDateFor($jbSubjectsAssigned, (string) $s->hemis_id, (string) $semesterCode, (string) $subjectId));
         $jbLateJoin = $students
             ->filter(fn ($s) => $jbJoinDateOf($s) !== null && isset($jbActiveHemis[(string) $s->hemis_id])
                 && \App\Services\LateJoinGradeAccess::isOpenFor($jbJoinDateOf($s)))
@@ -6399,7 +6399,7 @@ class JournalController extends Controller
             // Talabaning HEMISga kiritilishidan oldingi darsi — o'qituvchi
             // arizasiz baho qo'yadi (talaba o'shanda hali ro'yxatda yo'q edi)
             $isLateJoinGap = !$isExcuseOpening
-                && $this->isLateJoinGap((string) $request->student_hemis_id, $lessonDate, (string) $request->semester_code);
+                && $this->isLateJoinGap((string) $request->student_hemis_id, $lessonDate, (string) $request->semester_code, (string) $request->subject_id);
 
             if (!$isExcuseOpening && !$isLateJoinGap) {
                 // Sozlamadagi "baho qo'yilmay qolganlar" oynasi ochiq bo'lsa,
@@ -11335,7 +11335,7 @@ class JournalController extends Controller
      * sanalar emas). Qoida hisobot bilan bir xil:
      * LessonOpeningTeacherReport::isLateJoinLesson.
      */
-    private function isLateJoinGap(string $studentHemisId, string $lessonDate, string $semesterCode = ''): bool
+    private function isLateJoinGap(string $studentHemisId, string $lessonDate, string $semesterCode = '', ?string $subjectId = null): bool
     {
         if ($lessonDate > now('Asia/Tashkent')->toDateString()) {
             return false;
@@ -11343,7 +11343,12 @@ class JournalController extends Controller
         $student = DB::table('students')
             ->where('hemis_id', $studentHemisId)
             ->first(['student_type_code', 'hemis_created_at']);
-        $assigned = \App\Services\LessonOpeningTeacherReport::subjectsAssignedAt([$studentHemisId])[$studentHemisId][$semesterCode] ?? null;
+        $assigned = \App\Services\LessonOpeningTeacherReport::assignedDateFor(
+            \App\Services\LessonOpeningTeacherReport::subjectsAssignedAt([$studentHemisId]),
+            $studentHemisId,
+            $semesterCode,
+            $subjectId
+        );
 
         // Sozlamadagi muddat (talaba bo'yicha) o'tgan bo'lsa — faqat dars ochish arizasi orqali
         return \App\Services\LessonOpeningTeacherReport::isLateJoinLesson($student, $lessonDate, $assigned)

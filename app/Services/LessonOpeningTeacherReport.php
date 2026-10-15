@@ -126,6 +126,7 @@ class LessonOpeningTeacherReport
                 'subject' => (string) $slot->subject_name,
                 'semester' => (string) ($slot->semester_name ?? ''),
                 'semester_code' => (string) $slot->semester_code,
+                'subject_id' => (string) $slot->subject_id,
                 'date' => $slot->lesson_day,
                 'unmarked' => false,
                 'missing_students' => [],   // kun bo'yicha noyob talabalar (juftliklar birlashmasi)
@@ -263,6 +264,7 @@ class LessonOpeningTeacherReport
                     'subject' => $first['subject'] ?? (string) ($subjectNames[$opening->subject_id] ?? ''),
                     'semester_name' => $first['semester'] ?? '',
                     'semester_code' => $first['semester_code'] ?? (string) $opening->semester_code,
+                    'subject_id' => (string) $opening->subject_id,
                     'date' => $opening->lesson_date?->format('Y-m-d'),
                     'request_number' => $opening->request_number,
                     'requested_at' => $opening->created_at,
@@ -294,6 +296,7 @@ class LessonOpeningTeacherReport
                     'subject' => $entry['subject'],
                     'semester_name' => $entry['semester'] ?? '',
                     'semester_code' => $entry['semester_code'] ?? '',
+                    'subject_id' => $entry['subject_id'] ?? '',
                     'date' => $entry['date'],
                     'request_number' => null,
                     'requested_at' => null,
@@ -474,11 +477,11 @@ class LessonOpeningTeacherReport
     }
 
     /**
-     * Talaba amalda qachondan o'qiy boshlagan (Y-m-d): HEMISda yaratilgan sana
-     * va unga shu semestr fanlaridan BIRINCHISI biriktirilgan sananing kechrog'i.
-     * Talaba yaratilib, fanlari keyinroq biriktirilishi mumkin (17.09 / 18.09).
-     * Eng erta fan olinadi: variant fanlar (a/b) keyin qayta biriktirilsa ham
-     * vaqtida kelgan talaba "kech" bo'lib qolmasin.
+     * Talaba shu fanni amalda qachondan o'qiy boshlagan (Y-m-d): HEMISda
+     * yaratilgan sana va unga SHU FAN biriktirilgan sananing kechrog'i
+     * (assignedDateFor). Talaba yaratilib, fanlari keyinroq biriktirilishi
+     * mumkin (17.09 / 18.09); variant fan (a/b) keyinroq biriktirilsa — faqat
+     * o'sha fanning oldingi darslari "kech" bo'ladi, boshqa fanlari emas.
      */
     public static function lateJoinDate(?object $student, ?string $subjectsAssignedAt = null): ?string
     {
@@ -492,7 +495,8 @@ class LessonOpeningTeacherReport
 
     /**
      * Fanlar HEMISda qachon biriktirilgani (student_subjects.hemis_created_at):
-     * [talaba hemis_id][semestr kodi] => shu semestrdagi eng erta biriktirilgan sana.
+     * [talaba hemis_id][semestr kodi][subject_id] => shu fan biriktirilgan sana.
+     * Bitta sanani olish — assignedDateFor().
      */
     public static function subjectsAssignedAt(array $hemisIds): array
     {
@@ -506,15 +510,29 @@ class LessonOpeningTeacherReport
             DB::table('student_subjects')
                 ->whereIn('student_hemis_id', $chunk)
                 ->whereNotNull('hemis_created_at')
-                ->groupBy('student_hemis_id', 'semester_id')
-                ->selectRaw('student_hemis_id, semester_id, MIN(hemis_created_at) as assigned_at')
+                ->groupBy('student_hemis_id', 'semester_id', 'subject_id')
+                ->selectRaw('student_hemis_id, semester_id, subject_id, MIN(hemis_created_at) as assigned_at')
                 ->get()
                 ->each(function ($row) use (&$map) {
-                    $map[(string) $row->student_hemis_id][(string) $row->semester_id] = substr((string) $row->assigned_at, 0, 10);
+                    $map[(string) $row->student_hemis_id][(string) $row->semester_id][(string) $row->subject_id] = substr((string) $row->assigned_at, 0, 10);
                 });
         }
 
         return $map;
+    }
+
+    /**
+     * subjectsAssignedAt() xaritasidan bitta fan biriktirilgan sana: shu fanning
+     * o'z sanasi; u bo'lmasa (fan aniqlanmagan) — semestrdagi eng erta sana.
+     */
+    public static function assignedDateFor(array $map, string $hemisId, string $semesterCode, ?string $subjectId): ?string
+    {
+        $bySubject = $map[$hemisId][$semesterCode] ?? [];
+        if ($subjectId !== null && $subjectId !== '' && isset($bySubject[$subjectId])) {
+            return $bySubject[$subjectId];
+        }
+
+        return $bySubject ? min($bySubject) : null;
     }
 
     /**
@@ -712,10 +730,10 @@ class LessonOpeningTeacherReport
                     'manager' => $manager['name'] ?? '',
                     // Talaba HEMISga kiritilishidan oldingi dars — o'qituvchi
                     // jurnalda arizasiz baho qo'ya oladi; Excelda alohida varaq
-                    'joined_at' => self::lateJoinDate($student, $assignedAt[(string) $hemisId][(string) ($record['semester_code'] ?? '')] ?? null),
+                    'joined_at' => self::lateJoinDate($student, self::assignedDateFor($assignedAt, (string) $hemisId, (string) ($record['semester_code'] ?? ''), $record['subject_id'] ?? null)),
                     'student_type' => (string) ($student->student_type_name ?? ''),
                     'student_type_code' => (string) ($student->student_type_code ?? ''),
-                    'late_join' => self::isLateJoinLesson($student, $record['date'], $assignedAt[(string) $hemisId][(string) ($record['semester_code'] ?? '')] ?? null),
+                    'late_join' => self::isLateJoinLesson($student, $record['date'], self::assignedDateFor($assignedAt, (string) $hemisId, (string) ($record['semester_code'] ?? ''), $record['subject_id'] ?? null)),
                 ];
             }
         }

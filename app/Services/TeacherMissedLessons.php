@@ -155,7 +155,7 @@ class TeacherMissedLessons
                 if (! isset($lateJoin[$hemis])) {
                     return false;
                 }
-                $assigned = $lateJoinSubjects[$hemis][(string) $slot->semester_code] ?? null;
+                $assigned = LessonOpeningTeacherReport::assignedDateFor($lateJoinSubjects, (string) $hemis, (string) $slot->semester_code, (string) $slot->subject_id);
 
                 return LessonOpeningTeacherReport::isLateJoinLesson($lateJoin[$hemis], $slot->lesson_day, $assigned)
                     && LateJoinGradeAccess::isOpenFor(LessonOpeningTeacherReport::lateJoinDate($lateJoin[$hemis], $assigned));

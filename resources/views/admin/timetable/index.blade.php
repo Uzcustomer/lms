@@ -2462,11 +2462,13 @@
             };
             $('genBtn').onclick = async function () {
                 if (!board) return;
-                if (cards.length && !confirm('Mavjud kartochkalar (joylashuvlari bilan) o\'chirilib QAYTA yaratiladi. Davom etamizmi?')) return;
+                if (cards.length && !confirm('Mavjud kartochkalar (joylashuvlari bilan) o\'chirilib QAYTA yaratiladi. O\'qituvchi va xona biriktirishlari saqlanib qoladi. Davom etamizmi?')) return;
                 this.disabled = true; $('boardMsg').textContent = 'Yaratilmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/generate', 'POST', {});
-                    $('boardMsg').textContent = j.created + ' ta kartochka yaratildi';
+                    $('boardMsg').textContent = j.created + ' ta kartochka yaratildi'
+                        + (j.restored_units ? ' · ' + j.restored_units + ' ta dars birligining o\'qituvchi/xona biriktirishi tiklandi' : '')
+                        + (j.lost_units ? ' · ' + j.lost_units + ' ta birlik endi rejada yo\'q' : '');
                     await loadBoard(board.id);
                 } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
                 this.disabled = false;

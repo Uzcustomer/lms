@@ -732,6 +732,10 @@ class TimetableController extends Controller
         }
         $rows = $this->stripUnsupportedColumns($rows);
 
+        // O'qituvchi/xona biriktirishlari dars birligi bo'yicha saqlab qolinadi
+        // (kafedra mudirlari biriktirgani qayta yaratishda yo'qolmasin).
+        $kept = $this->assignmentsByUnit($board);
+
         DB::transaction(function () use ($board, $rows, $specsFound) {
             TimetableCard::where('board_id', $board->id)->delete();
             foreach (array_chunk($rows, 500) as $chunk) {
@@ -750,7 +754,73 @@ class TimetableController extends Controller
         // eski/qo'lda holatlar uchun himoya (faqat NULL qatorlar).
         $this->backfillFacultyNames($board);
 
-        return response()->json(['ok' => true, 'created' => count($rows)]);
+        // Fakultet nomi to'ldirilgandan keyin — birlik kaliti unga bog'liq
+        $restored = $this->restoreAssignments($board, $kept);
+
+        return response()->json(['ok' => true, 'created' => count($rows)] + $restored);
+    }
+
+    /** Biriktirishni saqlash kaliti: fakultet + yo'nalish + kurs + fan (normallashtirilgan) + tur + oqim/guruh. */
+    private function assignmentKey(TimetableCard $c): string
+    {
+        $scope = $c->training_type === 'lecture' ? ('L|' . $c->oqim_label) : ('P|' . $c->group_name);
+
+        return implode('¦', [
+            $c->faculty_name ?? '', $this->specKey((string) $c->specialty_name), (int) $c->course,
+            $this->normSubject((string) $c->subject_name), $c->training_type, $scope,
+        ]);
+    }
+
+    /** Doskadagi joriy o'qituvchi/xona biriktirishlari: kalit => [teacher_id, teacher_name, auditorium_code, auditorium_name]. */
+    private function assignmentsByUnit(TimetableBoard $board): array
+    {
+        $kept = [];
+        $cards = TimetableCard::where('board_id', $board->id)
+            ->where(fn ($q) => $q->whereNotNull('teacher_id')->orWhere(fn ($q) => $q->whereNotNull('auditorium_code')->where('auditorium_code', '!=', '')))
+            ->get();
+        foreach ($cards as $c) {
+            $k = $this->assignmentKey($c);
+            $kept[$k] ??= ['teacher_id' => null, 'teacher_name' => null, 'auditorium_code' => null, 'auditorium_name' => null];
+            if ($c->teacher_id && !$kept[$k]['teacher_id']) {
+                $kept[$k]['teacher_id'] = $c->teacher_id;
+                $kept[$k]['teacher_name'] = $c->teacher_name;
+            }
+            if ($c->auditorium_code && !$kept[$k]['auditorium_code']) {
+                $kept[$k]['auditorium_code'] = $c->auditorium_code;
+                $kept[$k]['auditorium_name'] = $c->auditorium_name;
+            }
+        }
+
+        return $kept;
+    }
+
+    /** Saqlangan biriktirishlarni yangi kartalarga qaytaradi. */
+    private function restoreAssignments(TimetableBoard $board, array $kept): array
+    {
+        if ($kept === []) {
+            return ['restored_units' => 0, 'restored_cards' => 0];
+        }
+        $byKey = [];
+        foreach (TimetableCard::where('board_id', $board->id)->get(['id', 'faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'oqim_label', 'group_name']) as $c) {
+            $k = $this->assignmentKey($c);
+            if (isset($kept[$k])) {
+                $byKey[$k][] = $c->id;
+            }
+        }
+        $cardsUpdated = 0;
+        DB::transaction(function () use ($byKey, $kept, &$cardsUpdated) {
+            foreach ($byKey as $k => $ids) {
+                $set = array_filter([
+                    'teacher_id' => $kept[$k]['teacher_id'], 'teacher_name' => $kept[$k]['teacher_name'],
+                    'auditorium_code' => $kept[$k]['auditorium_code'], 'auditorium_name' => $kept[$k]['auditorium_name'],
+                ], fn ($v) => $v !== null && $v !== '');
+                if ($set) {
+                    $cardsUpdated += TimetableCard::whereIn('id', $ids)->update($set);
+                }
+            }
+        });
+
+        return ['restored_units' => count($byKey), 'restored_cards' => $cardsUpdated, 'lost_units' => count($kept) - count($byKey)];
     }
 
     /**

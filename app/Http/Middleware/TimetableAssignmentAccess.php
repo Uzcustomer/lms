@@ -20,6 +20,20 @@ class TimetableAssignmentAccess
             $activeRole = $userRoles[0];
         }
 
+        // Sinov (faqat admin) doskasi — boshqa rollarga yopiq
+        if (!in_array($activeRole, ['superadmin', 'admin'], true)) {
+            $board = $request->route('board');
+            if (!$board && ($card = $request->route('card'))) {
+                $board = is_object($card) ? \App\Models\TimetableBoard::find($card->board_id) : null;
+            }
+            if ($board && !is_object($board)) {
+                $board = \App\Models\TimetableBoard::find($board);
+            }
+            if ($board && !empty($board->admin_only)) {
+                abort(403, 'Bu sinov doskasi faqat admin uchun.');
+            }
+        }
+
         // Kafedra mudiri va o'quv bo'limi ruxsatlari bir xil: joylashtirish
         // (haftalik + sikl) hamda o'qituvchi/auditoriya biriktirish hammasiga.
         $auditoriumAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];

@@ -34,9 +34,12 @@ use Illuminate\Support\Facades\Schema;
  */
 class TimetableController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $boards = TimetableBoard::withCount('cards')->orderByDesc('id')->get();
+        $isBoardAdmin = $this->isBoardAdmin($request);
+        $boards = TimetableBoard::withCount('cards')
+            ->when(!$isBoardAdmin && Schema::hasColumn('timetable_boards', 'admin_only'), fn ($q) => $q->where('admin_only', false))
+            ->orderByDesc('id')->get();
 
         // O'quv yillari — ishchi rejalardan (plan_year boshi + kurs - 1)
         $years = DB::table('manual_curricula')
@@ -55,7 +58,13 @@ class TimetableController extends Controller
         $faculties = \App\Models\Department::where('structure_type_code', 11)
             ->where('active', true)->orderBy('name')->get(['id', 'name']);
 
-        return view('admin.timetable.index', compact('boards', 'years', 'faculties'));
+        return view('admin.timetable.index', compact('boards', 'years', 'faculties', 'isBoardAdmin'));
+    }
+
+    /** Sinov (faqat admin) doskalarini ko'ra oladigan rollar. */
+    private function isBoardAdmin(Request $request): bool
+    {
+        return in_array($this->timetableActiveRole($request), ['superadmin', 'admin'], true);
     }
 
     public function storeBoard(Request $request)
@@ -68,7 +77,13 @@ class TimetableController extends Controller
             'days'            => 'required|integer|min:1|max:7',
             'pairs_per_day'   => 'required|integer|min:1|max:10',
             'weeks'           => 'required|integer|min:1|max:30',
+            'subject_source'  => 'nullable|in:ishchi,hemis',
+            'admin_only'      => 'nullable|boolean',
         ]);
+        // Sinov doskasi va HEMIS manbai — faqat admin
+        $isBoardAdmin = $this->isBoardAdmin($request);
+        $source = $isBoardAdmin && ($data['subject_source'] ?? '') === 'hemis' && $data['kind'] === 'real' ? 'hemis' : 'ishchi';
+        $adminOnly = $isBoardAdmin && !empty($data['admin_only']);
 
         $facName = $data['faculty_id']
             ? optional(\App\Models\Department::find($data['faculty_id']))->name
@@ -77,10 +92,14 @@ class TimetableController extends Controller
         $board = TimetableBoard::create([
             'name'            => $data['academic_year'] . ' · ' . ($data['semester_parity'] === 'kuzgi' ? 'Kuzgi' : 'Bahorgi')
                                  . ' · ' . ($data['kind'] === 'plan' ? 'Reja' : 'Real')
-                                 . ($facName ? ' · ' . $facName : ' · Barcha fakultetlar'),
+                                 . ($facName ? ' · ' . $facName : ' · Barcha fakultetlar')
+                                 . ($source === 'hemis' ? ' · HEMIS (KTR)' : '')
+                                 . ($adminOnly ? ' · sinov' : ''),
             'academic_year'   => $data['academic_year'],
             'semester_parity' => $data['semester_parity'],
             'kind'            => $data['kind'],
+            'subject_source'  => $source,
+            'admin_only'      => $adminOnly,
             'faculty_id'      => $data['faculty_id'] ?? null,
             'faculty_name'    => $facName,
             'days'            => $data['days'],
@@ -308,6 +327,121 @@ class TimetableController extends Controller
         return [null, $name];
     }
 
+    private function isHemisBoard(TimetableBoard $board): bool
+    {
+        return method_exists($board, 'usesHemisSubjects') && $board->usesHemisSubjects();
+    }
+
+    /**
+     * HEMIS o'quv rejasi fanlari (KTR sahifasidagi bilan bir xil manba) — ishchi reja
+     * so'rovi bilan bir xil ko'rinishdagi qatorlar: specialty_name, level_code,
+     * subject_name, lecture, practice, laboratory, seminar, semester, plan_names,
+     * hemis_kafedra. Doska o'quv yili va semestri (kuzgi = toq) bo'yicha, faqat faol fanlar.
+     *   - soatlar subject_details dan: ma'ruza (11), amaliy (12), laboratoriya (13), seminar (14);
+     *     boshqa turlar (amaliyot, mustaqil ta'lim...) olinmaydi — soati yo'q fan chiqmaydi;
+     *   - (a)/(b)/(c) variantlari bo'lsa — asosiy (harfsiz) nom olinmaydi, har variant alohida;
+     *   - "1-son"/"2-son" fakultet davolash ishi — "N-son Davolash ishi" (ishchi reja kabi).
+     */
+    private function hemisSubjectRows(TimetableBoard $board)
+    {
+        static $cache = [];
+        if (isset($cache[$board->id])) {
+            return $cache[$board->id];
+        }
+
+        $start = (int) substr((string) $board->academic_year, 0, 4);
+        $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
+        $rows = DB::table('curriculum_subjects as cs')
+            ->join('semesters as s', function ($j) {
+                $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')->on('s.code', '=', 'cs.semester_code');
+            })
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('cs.is_active', true)
+            ->where('s.education_year', (string) $start)
+            ->whereRaw('MOD(CAST(cs.semester_code AS UNSIGNED) - 10, 2) = ?', [$parityRem])
+            ->get(['cs.subject_name', 'cs.subject_details', 'cs.department_name', 'cs.semester_code', 'cs.updated_at',
+                'c.name as plan_name', 'sp.name as specialty_name', 'f.name as faculty_name', 's.level_code']);
+
+        $typeOf = function (array $d): ?string {
+            $code = (string) ($d['trainingType']['code'] ?? '');
+            $name = mb_strtolower((string) ($d['trainingType']['name'] ?? ''));
+            if ($code === '11' || str_contains($name, "ma'ruza") || str_contains($name, 'ma’ruza') || str_contains($name, 'maruza')) return 'lecture';
+            if ($code === '13' || str_contains($name, 'laborator')) return 'laboratory';
+            if ($code === '14' || str_contains($name, 'seminar')) return 'seminar';
+            if ($code === '12' || (str_starts_with($name, 'amaliy') && !str_contains($name, 'amaliyot'))) return 'practice';
+            return null;
+        };
+
+        $acc = [];
+        foreach ($rows as $r) {
+            $details = is_string($r->subject_details) ? json_decode($r->subject_details, true) : $r->subject_details;
+            $h = ['lecture' => 0.0, 'practice' => 0.0, 'laboratory' => 0.0, 'seminar' => 0.0];
+            foreach ((array) $details as $d) {
+                if (is_array($d) && ($t = $typeOf($d))) {
+                    $h[$t] += (float) ($d['academic_load'] ?? 0);
+                }
+            }
+            if (array_sum($h) <= 0) {
+                continue;
+            }
+            $spec = trim((string) preg_replace('/\(.*?\)/u', '', (string) $r->specialty_name));
+            if (preg_match('/(\d+)\s*-\s*son/u', (string) $r->faculty_name, $m) && preg_match('/^davolash\s+ishi$/iu', $spec)) {
+                $spec = $m[1] . '-son Davolash ishi';
+            }
+            $level = (int) $r->level_code;
+            $key = $spec . '|' . $level . '|' . $r->subject_name;
+            if (!isset($acc[$key])) {
+                $acc[$key] = (object) [
+                    'specialty_name' => $spec, 'level_code' => $level, 'subject_name' => (string) $r->subject_name,
+                    'lecture' => 0, 'practice' => 0, 'laboratory' => 0, 'seminar' => 0,
+                    'semester' => (int) $r->semester_code - 10, 'plans' => [], 'kafedras' => [], 'updated_at' => $r->updated_at,
+                ];
+            }
+            $o = $acc[$key];
+            foreach ($h as $t => $v) {
+                $o->$t = max((float) $o->$t, $v);
+            }
+            $o->plans[$r->plan_name] = true;
+            if ($r->department_name) {
+                $o->kafedras[$r->department_name] = ($o->kafedras[$r->department_name] ?? 0) + 1;
+            }
+        }
+
+        // (a)/(b)/(c) variantlari bo'lsa — asosiy nom olinmaydi
+        $variantBases = [];
+        foreach ($acc as $o) {
+            if (preg_match('/^(.*)\s*\([a-z]\)$/u', $o->subject_name, $m)) {
+                $variantBases[$o->specialty_name . '|' . $o->level_code . '|' . trim($m[1])] = true;
+            }
+        }
+        $out = [];
+        foreach ($acc as $o) {
+            if (isset($variantBases[$o->specialty_name . '|' . $o->level_code . '|' . $o->subject_name])) {
+                continue;
+            }
+            arsort($o->kafedras);
+            $o->hemis_kafedra = array_key_first($o->kafedras);
+            $o->plan_names = implode('|||', array_keys($o->plans));
+            unset($o->plans, $o->kafedras);
+            $out[] = $o;
+        }
+
+        return $cache[$board->id] = collect($out);
+    }
+
+    /** Kartaning kafedrasi: qo'lda belgilangan, so'ng HEMIS fanining o'z kafedrasi (HEMIS doska), so'ng xarita. */
+    private function rowKafedra(array $overrides, array $kafMap, $row, ?string $specialty = null, ?int $course = null): ?string
+    {
+        $k = $this->normSubject((string) $row->subject_name);
+        if (empty($overrides[$k]) && !empty($row->hemis_kafedra)) {
+            return $row->hemis_kafedra;
+        }
+
+        return $this->kafedraFor($overrides, $kafMap, (string) $row->subject_name, $specialty, $course);
+    }
+
     /** Tasdiqlangan oqim snapshotlari (fakultet kontekstida dedup — eng so'nggisi). */
     private function boardSnapshots(TimetableBoard $board): array
     {
@@ -359,7 +493,7 @@ class TimetableController extends Controller
     {
         $start = (int) substr($board->academic_year, 0, 4);
         $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
-        $rows = DB::table('manual_curriculum_subjects as s')
+        $rows = ($this->isHemisBoard($board) ? $this->hemisSubjectRows($board) : DB::table('manual_curriculum_subjects as s')
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
@@ -367,7 +501,7 @@ class TimetableController extends Controller
             ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->groupBy('mc.specialty_name', 'mc.level_code', 's.subject_name')
             ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name, MAX(s.lecture) as lecture')
-            ->get();
+            ->get());
         $map = [];
         foreach ($rows as $r) {
             $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
@@ -404,7 +538,7 @@ class TimetableController extends Controller
         //    yo'nalish+kurslar (subjects() bilan bir xil filtr).
         $start = (int) substr($board->academic_year, 0, 4);
         $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
-        $curr = DB::table('manual_curriculum_subjects as s')
+        $curr = ($this->isHemisBoard($board) ? $this->hemisSubjectRows($board) : DB::table('manual_curriculum_subjects as s')
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
@@ -412,7 +546,7 @@ class TimetableController extends Controller
             ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->groupBy('mc.specialty_name', 'mc.level_code')
             ->selectRaw('mc.specialty_name, mc.level_code')
-            ->get();
+            ->get());
         $currSet = [];   // "specKey|course" => ko'rinadigan yo'nalish nomi
         foreach ($curr as $r) {
             $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
@@ -475,7 +609,7 @@ class TimetableController extends Controller
         // Fanlar: o'quv yili + semestr juft/toqligi bo'yicha
         $start = (int) substr($board->academic_year, 0, 4);
         $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
-        $subjects = DB::table('manual_curriculum_subjects as s')
+        $subjects = ($this->isHemisBoard($board) ? $this->hemisSubjectRows($board) : DB::table('manual_curriculum_subjects as s')
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
@@ -485,7 +619,7 @@ class TimetableController extends Controller
             ->selectRaw("mc.specialty_name, mc.level_code, s.subject_name,
                 MAX(s.lecture) as lecture,
                 MAX(s.practice) as practice, MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar")
-            ->get();
+            ->get());
 
         // Kafedra xaritasi
         [$kafMap, $overrides] = $this->buildKafedraMap();
@@ -587,7 +721,7 @@ class TimetableController extends Controller
                         }
                         $oqTotal = (int) ($oq['total'] ?? 0);
                         foreach ($subs as $s) {
-                            $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name, (string) $specName, (int) $course);
+                            $kaf = $this->rowKafedra($overrides, $kafMap, $s, (string) $specName, (int) $course);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
                             $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
                             $pairPracticeGroups = (float) $s->seminar > 0 || $practiceGroupSize >= 30;
@@ -1014,7 +1148,7 @@ class TimetableController extends Controller
         // Eng so'nggi tahrirlangan avval — bir xil normadagi (mas. "Biokimyo" va
         // "Biokimyo 1,2") dublikatlarda foydalanuvchining oxirgi tahriri (yangi
         // nom) ustuvor bo'lsin.
-        $subjects = DB::table('manual_curriculum_subjects as s')
+        $subjects = ($this->isHemisBoard($board) ? $this->hemisSubjectRows($board) : DB::table('manual_curriculum_subjects as s')
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
@@ -1022,7 +1156,7 @@ class TimetableController extends Controller
             ->whereRaw("(CAST(SUBSTRING(mc.plan_year, 1, 4) AS UNSIGNED) + (CASE WHEN CAST(mc.level_code AS UNSIGNED) >= 11 THEN CAST(mc.level_code AS UNSIGNED) - 10 ELSE CAST(mc.level_code AS UNSIGNED) END) - 1) = ?", [$start])
             ->orderByDesc('s.updated_at')
             ->orderByDesc('s.id')
-            ->get(['mc.specialty_name', 'mc.level_code', 's.subject_name']);
+            ->get(['mc.specialty_name', 'mc.level_code', 's.subject_name']));
 
         // Kalit: specKey|kurs|normFan => joriy ko'rinadigan nom (birinchi = eng yangi)
         $map = [];
@@ -2702,7 +2836,7 @@ class TimetableController extends Controller
         $start = (int) substr($board->academic_year, 0, 4);
         $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
 
-        $rows = DB::table('manual_curriculum_subjects as s')
+        $rows = ($this->isHemisBoard($board) ? $this->hemisSubjectRows($board) : DB::table('manual_curriculum_subjects as s')
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
@@ -2712,7 +2846,7 @@ class TimetableController extends Controller
             ->selectRaw('mc.specialty_name, mc.level_code, s.subject_name,
                 MAX(s.lecture) as lecture, MAX(s.practice) as practice,
                 MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar')
-            ->get();
+            ->get());
 
         $map = [];
         foreach ($rows as $r) {
@@ -4182,7 +4316,7 @@ class TimetableController extends Controller
         $start = (int) substr($board->academic_year, 0, 4);
         $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
 
-        $rows = DB::table('manual_curriculum_subjects as s')
+        $rows = ($this->isHemisBoard($board) ? $this->hemisSubjectRows($board) : DB::table('manual_curriculum_subjects as s')
             ->join('manual_curricula as mc', 'mc.id', '=', 's.manual_curriculum_id')
             ->where('mc.type', 'ishchi')
             ->whereNotNull('s.semester')
@@ -4194,7 +4328,7 @@ class TimetableController extends Controller
                 MAX(s.laboratory) as laboratory, MAX(s.seminar) as seminar,
                 GROUP_CONCAT(DISTINCT mc.name SEPARATOR '|||') as plan_names")
             ->orderBy('mc.specialty_name')->orderBy('mc.level_code')->orderBy('s.subject_name')
-            ->get();
+            ->get());
 
         [$kafMap, $overrides] = $this->buildKafedraMap();
         $weeks = max(1, (int) $board->weeks);
@@ -4238,7 +4372,7 @@ class TimetableController extends Controller
                 ),
                 'semester_label' => (int) $r->semester . '-semestr',
                 'subject_name'   => $r->subject_name,
-                'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name, (string) $r->specialty_name, (int) $course),
+                'kafedra_name'   => $this->rowKafedra($overrides, $kafMap, $r, (string) $r->specialty_name, (int) $course),
                 'lecture'        => $lec,
                 'practice'       => (float) $r->practice,
                 'laboratory'     => (float) $r->laboratory,

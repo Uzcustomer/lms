@@ -8,6 +8,7 @@ class TimetableBoard extends Model
 {
     protected $fillable = [
         'name', 'institution_name', 'academic_year', 'semester_parity', 'kind',
+        'subject_source', 'admin_only',
         'faculty_id', 'faculty_name', 'days', 'pairs_per_day', 'weeks',
         'bell_schedule', 'day_names', 'settings', 'status', 'created_by',
     ];
@@ -16,7 +17,14 @@ class TimetableBoard extends Model
         'bell_schedule' => 'array',
         'day_names'     => 'array',
         'settings'      => 'array',
+        'admin_only'    => 'boolean',
     ];
+
+    /** Fanlar HEMIS o'quv rejasidan (KTR sahifasidagi fanlar) olinadimi. */
+    public function usesHemisSubjects(): bool
+    {
+        return ($this->subject_source ?? 'ishchi') === 'hemis';
+    }
 
     public function cards()
     {

@@ -101,6 +101,19 @@
                         <label class="block text-xs font-medium text-gray-600 mb-1">Hafta soni (sukut)</label>
                         <input type="number" id="nbWeeks" value="15" min="1" max="30" class="w-full rounded-md border-gray-300 text-sm">
                     </div>
+                    @if($isBoardAdmin ?? false)
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Fanlar manbai</label>
+                            <select id="nbSource" class="w-full rounded-md border-gray-300 text-sm" title="HEMIS — KTR sahifasidagi o'quv reja fanlari va soatlari (faqat Real doska)">
+                                <option value="ishchi">Ishchi reja (O'quv reja to'g'riligi)</option>
+                                <option value="hemis">HEMIS o'quv rejasi (KTR)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2 pb-2">
+                            <input type="checkbox" id="nbAdminOnly" class="rounded border-gray-300">
+                            <label for="nbAdminOnly" class="text-xs font-medium text-gray-600">Sinov doskasi (faqat admin ko'radi)</label>
+                        </div>
+                    @endif
                     <div class="md:col-span-7">
                         <button type="button" id="createBoardBtn" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">Yaratish</button>
                         <span class="ml-2 text-xs text-gray-500">Bu sukut sozlamalar — har yo'nalish+kurs uchun keyin alohida o'zgartiriladi. Doska yaratilgach "Kartochkalarni yaratish" bosiladi.</span>
@@ -2446,6 +2459,8 @@
                         academic_year: $('nbYear').value, semester_parity: $('nbParity').value,
                         kind: $('nbKind').value, faculty_id: $('nbFaculty').value || '',
                         days: $('nbDays').value, pairs_per_day: $('nbPairs').value, weeks: $('nbWeeks').value,
+                        subject_source: $('nbSource') ? $('nbSource').value : 'ishchi',
+                        admin_only: $('nbAdminOnly') && $('nbAdminOnly').checked ? 1 : 0,
                     });
                     location.href = location.pathname + '?board=' + j.board_id;
                 } catch (e) { alert('Xatolik: ' + e.message); this.disabled = false; }

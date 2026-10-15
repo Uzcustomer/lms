@@ -10,6 +10,7 @@ use App\Models\OqimSnapshot;
 use App\Models\Teacher;
 use App\Models\TimetableBoard;
 use App\Models\TimetableCard;
+use App\Models\TimetableUnitAssignment;
 use App\Models\TimetableCardOverride;
 use App\Models\TimetableCyclePlacement;
 use App\Models\TimetableGridSetting;
@@ -803,8 +804,10 @@ class TimetableController extends Controller
         $rows = $this->stripUnsupportedColumns($rows);
 
         // O'qituvchi/xona biriktirishlari dars birligi bo'yicha saqlab qolinadi
-        // (kafedra mudirlari biriktirgani qayta yaratishda yo'qolmasin).
+        // (kafedra mudirlari biriktirgani qayta yaratishda yo'qolmasin): kartalardagi
+        // joriy holat avval timetable_unit_assignments jadvaliga yoziladi.
         $kept = $this->assignmentsByUnit($board);
+        $this->storeUnitAssignments($board, $kept);
 
         DB::transaction(function () use ($board, $rows, $specsFound) {
             TimetableCard::where('board_id', $board->id)->delete();
@@ -825,7 +828,7 @@ class TimetableController extends Controller
         $this->backfillFacultyNames($board);
 
         // Fakultet nomi to'ldirilgandan keyin — birlik kaliti unga bog'liq
-        $restored = $this->restoreAssignments($board, $kept);
+        $restored = $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $kept);
 
         return response()->json(['ok' => true, 'created' => count($rows)] + $restored);
     }
@@ -841,7 +844,26 @@ class TimetableController extends Controller
         ]);
     }
 
-    /** Doskadagi joriy o'qituvchi/xona biriktirishlari: kalit => [teacher_id, teacher_name, auditorium_code, auditorium_name]. */
+    /** Birlik kaliti jadval uchun (sha1). */
+    private function unitKeyHash(TimetableCard $c): string
+    {
+        return sha1($this->assignmentKey($c));
+    }
+
+    /** Birlikning o'qilishi uchun ma'lumotlari (jadvalga yoziladi). */
+    private function unitMeta(TimetableCard $c): array
+    {
+        return [
+            'faculty_name' => $c->faculty_name ?: null,
+            'specialty_name' => (string) $c->specialty_name,
+            'course' => (int) $c->course,
+            'subject_name' => (string) $c->subject_name,
+            'training_type' => (string) $c->training_type,
+            'scope_label' => $c->training_type === 'lecture' ? $c->oqim_label : $c->group_name,
+        ];
+    }
+
+    /** Doskadagi joriy o'qituvchi/xona biriktirishlari: sha1 kalit => [meta, teacher_id, teacher_name, auditorium_code, auditorium_name]. */
     private function assignmentsByUnit(TimetableBoard $board): array
     {
         $kept = [];
@@ -849,8 +871,8 @@ class TimetableController extends Controller
             ->where(fn ($q) => $q->whereNotNull('teacher_id')->orWhere(fn ($q) => $q->whereNotNull('auditorium_code')->where('auditorium_code', '!=', '')))
             ->get();
         foreach ($cards as $c) {
-            $k = $this->assignmentKey($c);
-            $kept[$k] ??= ['teacher_id' => null, 'teacher_name' => null, 'auditorium_code' => null, 'auditorium_name' => null];
+            $k = $this->unitKeyHash($c);
+            $kept[$k] ??= ['meta' => $this->unitMeta($c), 'teacher_id' => null, 'teacher_name' => null, 'auditorium_code' => null, 'auditorium_name' => null];
             if ($c->teacher_id && !$kept[$k]['teacher_id']) {
                 $kept[$k]['teacher_id'] = $c->teacher_id;
                 $kept[$k]['teacher_name'] = $c->teacher_name;
@@ -872,7 +894,7 @@ class TimetableController extends Controller
         }
         $byKey = [];
         foreach (TimetableCard::where('board_id', $board->id)->get(['id', 'faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'oqim_label', 'group_name']) as $c) {
-            $k = $this->assignmentKey($c);
+            $k = $this->unitKeyHash($c);
             if (isset($kept[$k])) {
                 $byKey[$k][] = $c->id;
             }
@@ -891,6 +913,91 @@ class TimetableController extends Controller
         });
 
         return ['restored_units' => count($byKey), 'restored_cards' => $cardsUpdated, 'lost_units' => count($kept) - count($byKey)];
+    }
+
+    /** Doskadagi joriy biriktirishlarni jadvalga zaxiralash (artisan timetable:backup-assignments). */
+    public function backupUnitAssignments(TimetableBoard $board): int
+    {
+        $kept = $this->assignmentsByUnit($board);
+        $this->storeUnitAssignments($board, $kept);
+
+        return count($kept);
+    }
+
+    private function unitAssignmentsEnabled(): bool
+    {
+        static $enabled = null;
+
+        return $enabled ??= Schema::hasTable('timetable_unit_assignments');
+    }
+
+    /** Kartalardan olingan biriktirishlarni jadvalga yozadi (mavjudini yangilaydi). */
+    private function storeUnitAssignments(TimetableBoard $board, array $kept): void
+    {
+        if (!$this->unitAssignmentsEnabled() || $kept === []) {
+            return;
+        }
+        $userId = auth()->id();
+        foreach ($kept as $k => $a) {
+            TimetableUnitAssignment::updateOrCreate(
+                ['board_id' => $board->id, 'unit_key' => $k],
+                ($a['meta'] ?? []) + [
+                    'teacher_id' => $a['teacher_id'], 'teacher_name' => $a['teacher_name'],
+                    'auditorium_code' => $a['auditorium_code'], 'auditorium_name' => $a['auditorium_name'],
+                    'updated_by' => $userId,
+                ]
+            );
+        }
+    }
+
+    /** Jadvaldagi biriktirishlar: sha1 kalit => [teacher_id, teacher_name, auditorium_code, auditorium_name]. */
+    private function storedUnitAssignments(TimetableBoard $board): array
+    {
+        if (!$this->unitAssignmentsEnabled()) {
+            return [];
+        }
+
+        return TimetableUnitAssignment::where('board_id', $board->id)->get()
+            ->mapWithKeys(fn ($a) => [$a->unit_key => [
+                'teacher_id' => $a->teacher_id, 'teacher_name' => $a->teacher_name,
+                'auditorium_code' => $a->auditorium_code, 'auditorium_name' => $a->auditorium_name,
+            ]])->all();
+    }
+
+    /**
+     * Dars birligining hozirgi o'qituvchi/xonasini jadvalga yozadi (biriktirish
+     * o'zgargan har safar). Ikkalasi ham bo'sh bo'lsa — yozuv o'chiriladi.
+     */
+    private function recordUnitAssignment(?TimetableCard $sample): void
+    {
+        if (!$sample || !$this->unitAssignmentsEnabled()) {
+            return;
+        }
+        $q = TimetableCard::where('board_id', $sample->board_id)
+            ->where('specialty_name', $sample->specialty_name)
+            ->where('course', $sample->course)
+            ->where('subject_name', $sample->subject_name)
+            ->where('training_type', $sample->training_type);
+        $sample->faculty_name ? $q->where('faculty_name', $sample->faculty_name) : $q->whereNull('faculty_name');
+        if ($sample->training_type === 'lecture') {
+            $sample->oqim_label !== null ? $q->where('oqim_label', $sample->oqim_label) : $q->whereNull('oqim_label');
+        } else {
+            $sample->group_name !== null ? $q->where('group_name', $sample->group_name) : $q->whereNull('group_name');
+        }
+        $cards = $q->get(['teacher_id', 'teacher_name', 'auditorium_code', 'auditorium_name']);
+        $teacher = $cards->first(fn ($c) => $c->teacher_id);
+        $room = $cards->first(fn ($c) => $c->auditorium_code);
+
+        $where = ['board_id' => $sample->board_id, 'unit_key' => $this->unitKeyHash($sample)];
+        if (!$teacher && !$room) {
+            TimetableUnitAssignment::where($where)->delete();
+            return;
+        }
+        TimetableUnitAssignment::updateOrCreate($where, $this->unitMeta($sample) + [
+            'teacher_id' => $teacher?->teacher_id, 'teacher_name' => $teacher?->teacher_name,
+            'auditorium_code' => $room?->auditorium_code, 'auditorium_name' => $room?->auditorium_name,
+            'updated_by' => auth()->id(),
+        ]);
     }
 
     /**
@@ -3958,6 +4065,9 @@ class TimetableController extends Controller
         }
 
         $card->save();
+        if (array_key_exists('teacher_id', $data) || array_key_exists('auditorium_code', $data)) {
+            $this->recordUnitAssignment($card);
+        }
         return response()->json([
             'ok' => true,
             'teacher_name' => $card->teacher_name,
@@ -4701,6 +4811,7 @@ class TimetableController extends Controller
                 $card->save();
             }
         });
+        $this->recordUnitAssignment($cards->first());
 
         return response()->json([
             'ok' => true,
@@ -4839,6 +4950,7 @@ class TimetableController extends Controller
         } else {
             $affected = $q->update(['teacher_id' => null, 'teacher_name' => null]);
         }
+        $this->recordUnitAssignment((clone $q)->first());
 
         return response()->json(['ok' => true, 'teacher_name' => $teacherName, 'affected' => $affected]);
     }

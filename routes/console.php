@@ -9,6 +9,16 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote')->hourly();
 
+// Dars jadvali: kartalardagi o'qituvchi/xona biriktirishlarini timetable_unit_assignments
+// jadvaliga zaxiralash (kartalar qayta yaratilganda shu jadvaldan tiklanadi).
+Artisan::command('timetable:backup-assignments {--board= : Faqat shu doska (id)}', function () {
+    $controller = app(\App\Http\Controllers\Admin\TimetableController::class);
+    $boards = \App\Models\TimetableBoard::when($this->option('board'), fn ($q, $id) => $q->where('id', $id))->get();
+    foreach ($boards as $board) {
+        $this->info("Doska #{$board->id} ({$board->name}): " . $controller->backupUnitAssignments($board) . ' ta dars birligi zaxiralandi');
+    }
+})->purpose("Dars jadvali o'qituvchi/xona biriktirishlarini alohida jadvalga zaxiralash");
+
 // Jadvalda boshqa juftlik/kunga ko'chirilgan darslarning baholarini bog'langan jadval
 // yozuviga moslash (baho importidan keyin avtomatik ham ishlaydi). --dry-run — faqat sanash.
 Artisan::command('grades:align-schedule {--since= : Shu sanadan (Y-m-d), sukut — 60 kun oldin} {--dry-run : Hech narsani yozmasdan faqat sanash}', function () {

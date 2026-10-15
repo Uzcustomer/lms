@@ -7607,10 +7607,29 @@ class JournalController extends Controller
             return [];
         }
 
+        // Jurnal ro'yxati bilan bir xil: fanga biriktirish (student_subjects, joriy
+        // o'quv yili) bo'lsa — faqat biriktirilgan talabalar. HEMIS fanni olib
+        // tashlagan talaba jurnalda yo'q, uning MT fayli YN ni to'smasin.
+        $hasAssignments = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->where('st.group_id', $groupHemisId)
+            ->where('ss.subject_id', $subjectId)
+            ->where('ss.semester_id', $semesterCode)
+            ->tap(fn ($q) => StudentSubjectScope::apply($q, 'ss'))
+            ->exists();
+
         $students = DB::table('students')
             ->whereIn('hemis_id', array_keys($latest))
             ->where('group_id', $groupHemisId)
             ->where('student_status_code', 11)
+            ->when($hasAssignments, fn ($q) => $q->whereExists(function ($sub) use ($subjectId, $semesterCode) {
+                $sub->select(DB::raw(1))
+                    ->from('student_subjects')
+                    ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
+                    ->where('student_subjects.subject_id', $subjectId)
+                    ->where('student_subjects.semester_id', $semesterCode);
+                StudentSubjectScope::apply($sub, 'student_subjects');
+            }))
             ->orderBy('full_name')
             ->get(['hemis_id', 'full_name']);
 

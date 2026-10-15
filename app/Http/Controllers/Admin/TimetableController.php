@@ -372,11 +372,14 @@ class TimetableController extends Controller
             foreach (['mustaqil', 'amaliyot', 'kurs ishi', 'самостоят', 'практика', 'курсов'] as $skip) {
                 if (str_contains($name, $skip)) return null;
             }
-            if ($code === '11' || preg_match("/ma['’ʻ`]?ruza|лекц/u", $name)) return 'lecture';
-            if ($code === '13' || str_contains($name, 'laborator') || str_contains($name, 'лаборатор')) return 'laboratory';
-            if ($code === '14' || str_contains($name, 'seminar') || str_contains($name, 'семинар')) return 'seminar';
-            if ($code === '12' || str_contains($name, 'amaliy') || str_contains($name, 'klinik')
+            if (preg_match("/ma['’ʻ`]?ruza|лекц/u", $name)) return 'lecture';
+            if (str_contains($name, 'laborator') || str_contains($name, 'лаборатор')) return 'laboratory';
+            if (str_contains($name, 'seminar') || str_contains($name, 'семинар')) return 'seminar';
+            if (str_contains($name, 'amaliy') || str_contains($name, 'klinik')
                 || str_contains($name, 'практическ') || str_contains($name, 'клиническ')) return 'practice';
+            if ($name === '') {
+                return ['11' => 'lecture', '12' => 'practice', '13' => 'practice', '14' => 'seminar'][$code] ?? null;
+            }
             return null;
         };
 
@@ -439,6 +442,15 @@ class TimetableController extends Controller
         return $cache[$board->id] = collect($out);
     }
 
+    /** Guruh nomi kaliti: apostrof turlari, katta-kichik harf va bo'shliqlar farqi hisobga olinmaydi. */
+    private function groupNameKey(string $name): string
+    {
+        $name = mb_strtolower(trim($name));
+        $name = str_replace(['‘', '’', 'ʻ', 'ʼ', '`', '´', '"'], "'", $name);
+
+        return preg_replace('/\s+/u', '', $name);
+    }
+
     /** Variant harfi: "... (a)" / "(А)" -> a, "(b)" / "(Б)" -> b, "(c)" / "(С)" -> c. */
     private function variantLetter(string $text, bool $groupName = false): ?string
     {
@@ -468,7 +480,7 @@ class TimetableController extends Controller
             if ($name === '') {
                 return false;
             }
-            $cur = $groupCurricula[$name] ?? null;
+            $cur = $groupCurricula[$this->groupNameKey($name)] ?? null;
             if ($curricula && $cur && !isset($curricula[(int) $cur])) {
                 return false;
             }
@@ -725,9 +737,12 @@ class TimetableController extends Controller
 
         // HEMIS doska: guruh nomi → o'quv reja (fanlar guruhning o'z rejasidan)
         $hemisBoard = $this->isHemisBoard($board);
-        $groupCurricula = $hemisBoard
-            ? DB::table('groups')->whereNotNull('curriculum_hemis_id')->pluck('curriculum_hemis_id', 'name')->all()
-            : [];
+        $groupCurricula = [];
+        if ($hemisBoard) {
+            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->get(['name', 'curriculum_hemis_id']) as $g) {
+                $groupCurricula[$this->groupNameKey((string) $g->name)] = (int) $g->curriculum_hemis_id;
+            }
+        }
 
         $now = now();
         $rows = [];

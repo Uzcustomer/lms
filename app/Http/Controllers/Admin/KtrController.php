@@ -860,6 +860,10 @@ class KtrController extends Controller
                 $typeCode = (string) ($item['_training_type'] ?? '');
                 if ($typeCode === '') continue;
 
+                // Nofaol va soati 0 bo'lgan mavzular chiqarilmaydi — o'rniga keyingisi tartib bilan keladi
+                if (array_key_exists('active', $item) && !$item['active']) continue;
+                if (array_key_exists('topic_load', $item) && (float) $item['topic_load'] <= 0) continue;
+
                 if (!isset($topicsByType[$typeCode])) {
                     $topicsByType[$typeCode] = [];
                 }

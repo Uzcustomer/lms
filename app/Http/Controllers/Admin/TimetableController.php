@@ -3894,7 +3894,7 @@ class TimetableController extends Controller
 
         if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
             $context = $this->departmentHeadContext($request);
-            $q->where('department_hemis_id', $context['department_hemis_id']);
+            $this->whereDepartmentTeacher($q, $context);
         } elseif ($request->filled('kafedra')) {
             $q->where('department', 'like', '%' . $request->kafedra . '%');
         }
@@ -3908,6 +3908,41 @@ class TimetableController extends Controller
                 ->limit(100)
                 ->get(['id', 'full_name', 'short_name', 'department', 'department_hemis_id', 'lavozim'])
         );
+    }
+
+    /**
+     * Kafedra mudiri biriktira oladigan o'qituvchilar:
+     *   - HEMIS dagi kafedrasi shu kafedra bo'lganlar;
+     *   - mudirning o'zi (HEMIS da boshqa bo'limda bo'lsa ham) va shu kafedraga
+     *     mudir qilib tayinlanganlar;
+     *   - joriy o'quv yilida shu kafedra fanlaridan dars beradiganlar (HEMIS
+     *     yuklamasi) — o'rindoshlar va kafedra bo'linganda eski kafedrada
+     *     qolgan o'qituvchilar ham chiqsin.
+     */
+    private function whereDepartmentTeacher($q, array $context): void
+    {
+        $deptId = (int) $context['department_hemis_id'];
+        $year = DB::table('semesters')->where('current', true)->max('education_year');
+        $load = DB::table('curriculum_subject_teachers')
+            ->where('department_id', $deptId)
+            ->where('active', true)
+            ->when($year, fn ($w) => $w->where('education_year_id', $year));
+
+        $q->where(function ($w) use ($deptId, $context, $load) {
+            $w->where('department_hemis_id', $deptId)
+                ->orWhere('head_department_hemis_id', $deptId)
+                ->orWhere('id', $context['actor_id'])
+                ->orWhereIn('hemis_id', (clone $load)->whereNotNull('employee_id')->select('employee_id'))
+                ->orWhereIn('full_name', (clone $load)->whereNotNull('employee_name')->select('employee_name'));
+        });
+    }
+
+    private function isDepartmentTeacher(Teacher $teacher, array $context): bool
+    {
+        $q = Teacher::where('id', $teacher->id);
+        $this->whereDepartmentTeacher($q, $context);
+
+        return $q->exists();
     }
 
     /** O'qituvchilar kafedralari (auditoriya biriktirish filtri uchun). */
@@ -4256,7 +4291,7 @@ class TimetableController extends Controller
 
         if (!$isGeneral && $this->timetableActiveRole($request) === 'kafedra_mudiri') {
             $context = $this->departmentHeadContext($request);
-            if ((int) $teacher->department_hemis_id !== (int) $context['department_hemis_id']) {
+            if (!$this->isDepartmentTeacher($teacher, $context)) {
                 return response()->json([
                     'error' => "Faqat o'z kafedrangizdagi o'qituvchini biriktira olasiz.",
                 ], 422);
@@ -4713,7 +4748,7 @@ class TimetableController extends Controller
             $t = Teacher::findOrFail($data['teacher_id']);
             if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
                 $context = $this->departmentHeadContext($request);
-                if ((int) $t->department_hemis_id !== (int) $context['department_hemis_id']) {
+                if (!$this->isDepartmentTeacher($t, $context)) {
                     return response()->json([
                         'error' => "Faqat o'z kafedrangizdagi o'qituvchini biriktira olasiz.",
                     ], 422);

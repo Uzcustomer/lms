@@ -1276,11 +1276,15 @@ class CurriculumCheckController extends Controller
             if ($ov->exists) {
                 $ov->delete();
             }
-            return response()->json(['ok' => true, 'cleared' => true]);
+            $cards = \App\Models\SubjectKafedraOverride::relabelTimetableCards($norm, null);
+
+            return response()->json(['ok' => true, 'cleared' => true, 'timetable_cards' => $cards]);
         }
         $ov->save();
+        // Dars jadvalidagi mavjud kartalar ham yangi kafedraga o'tadi (kafedra mudiri ko'rishi uchun)
+        $cards = \App\Models\SubjectKafedraOverride::relabelTimetableCards($norm, $kafedra);
 
-        return response()->json(['ok' => true, 'kafedra' => $kafedra]);
+        return response()->json(['ok' => true, 'kafedra' => $kafedra, 'timetable_cards' => $cards]);
     }
 
     /** Fan uchun amaliy guruh o'lchamini (nechta kishilik) qo'lda belgilash/tozalash. */

@@ -2479,8 +2479,7 @@
                 this.disabled = true; $('boardMsg').textContent = 'Fan nomlari yangilanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/refresh-names', 'POST', {});
-                    $('boardMsg').textContent = (j.updated || 0) + ' ta kartochka nomi yangilandi'
-                        + ' · ' + (j.kafedra_updated || 0) + ' ta kartochka kafedrasi yangilandi';
+                    $('boardMsg').textContent = (j.updated || 0) + ' ta kartochka nomi yangilandi';
                     await loadBoard(board.id);
                 } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
                 this.disabled = false;

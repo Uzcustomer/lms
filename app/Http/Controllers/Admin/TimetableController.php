@@ -114,48 +114,10 @@ class TimetableController extends Controller
         return trim($s);
     }
 
-    /** Yo'nalish+kurs+fan bo'yicha joriy yilgi HEMIS kafedrasi (buildKafedraMap to'ldiradi). */
-    private array $scopedKafMap = [];
-
-    /**
-     * Fan kafedrasi: 1) qo'lda belgilangan; 2) shu yo'nalish+kursning joriy yilgi
-     * HEMIS rejasidagi kafedrasi (bir xil fan turli yo'nalishda turli kafedraniki
-     * bo'lishi mumkin, masalan "Mutaxassislikka kirish"); 3) fan nomi bo'yicha umumiy.
-     */
-    private function kafedraFor(array $overrides, array $kafMap, string $subject, ?string $specialty = null, ?int $course = null): ?string
+    private function kafedraFor(array $overrides, array $kafMap, string $subject): ?string
     {
         $k = $this->normSubject($subject);
-        if (!empty($overrides[$k])) {
-            return $overrides[$k];
-        }
-        if ($specialty !== null && $course) {
-            $scoped = $this->scopedKafMap[$this->scopeSpecKey($specialty) . '|' . $course] ?? [];
-            if (isset($scoped[$k])) {
-                return $scoped[$k];
-            }
-            // Nomi qisqaroq/uzunroq yozilgan bo'lsa ("Hamshiralik ishi" ~ "Hamshiralik ishi asoslari") —
-            // faqat shu yo'nalish+kurs ichida va bitta mos fan bo'lsa
-            $hits = [];
-            foreach ($scoped as $name => $kaf) {
-                if ($k !== '' && (str_starts_with($name, $k . ' ') || str_starts_with($k, $name . ' '))) {
-                    $hits[$kaf] = true;
-                }
-            }
-            if (count($hits) === 1) {
-                return array_key_first($hits);
-            }
-        }
-
-        return $kafMap[$k] ?? null;
-    }
-
-    /** Yo'nalish kaliti (HEMIS va ishchi reja nomlarini juftlash): qavs ichi va "1-son" olib tashlanadi. */
-    private function scopeSpecKey(string $name): string
-    {
-        $name = preg_replace('/\(.*?\)/u', '', $name);
-        $name = preg_replace('/^\s*\d+\s*-?\s*son\s+/iu', '', (string) $name);
-
-        return $this->specKey($name);
+        return ($overrides[$k] ?? null) ?: ($kafMap[$k] ?? null);
     }
 
     /**
@@ -178,38 +140,6 @@ class TimetableController extends Controller
                 ->where('s.education_year', $year)
                 ->where('cs.is_active', true), 'cs.');
             $kafMap = $current + $kafMap;
-
-            // Yo'nalish+kurs bo'yicha (joriy yil)
-            $this->scopedKafMap = [];
-            $rows = DB::table('curriculum_subjects as cs')
-                ->join('semesters as s', function ($j) {
-                    $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
-                        ->on('s.code', '=', 'cs.semester_code');
-                })
-                ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
-                ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
-                ->where('s.education_year', $year)
-                ->where('cs.is_active', true)
-                ->whereNotNull('cs.department_name')->where('cs.department_name', '!=', '')
-                ->selectRaw('sp.name as specialty_name, s.level_code, cs.subject_name, cs.department_name, COUNT(*) as c')
-                ->groupBy('sp.name', 's.level_code', 'cs.subject_name', 'cs.department_name')
-                ->get();
-            $acc = [];
-            foreach ($rows as $r) {
-                $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
-                $k = $this->normSubject((string) $r->subject_name);
-                if ($course < 1 || $k === '') {
-                    continue;
-                }
-                $sc = $this->scopeSpecKey((string) $r->specialty_name) . '|' . $course;
-                $acc[$sc][$k][$r->department_name] = ($acc[$sc][$k][$r->department_name] ?? 0) + (int) $r->c;
-            }
-            foreach ($acc as $sc => $subjects) {
-                foreach ($subjects as $k => $deps) {
-                    arsort($deps);
-                    $this->scopedKafMap[$sc][$k] = array_key_first($deps);
-                }
-            }
         }
 
         $overrides = DB::table('subject_kafedra_overrides')
@@ -586,7 +516,7 @@ class TimetableController extends Controller
                         }
                         $oqTotal = (int) ($oq['total'] ?? 0);
                         foreach ($subs as $s) {
-                            $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name, (string) $specName, (int) $course);
+                            $kaf = $this->kafedraFor($overrides, $kafMap, $s->subject_name);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
                             $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
                             $pairPracticeGroups = (float) $s->seminar > 0 || $practiceGroupSize >= 30;
@@ -927,31 +857,21 @@ class TimetableController extends Controller
             }
         }
 
-        // Kafedra ham qayta hisoblanadi (barcha kartalarda — nom o'zgarmagan bo'lsa ham:
-        // HEMIS da kafedra o'zgargan / bo'lingan bo'lsa joylashuvlarni yo'qotmasdan to'g'rilansin)
+        // Kafedra xaritasi ham yangilanadi (nom o'zgarsa kafedra ham to'g'rilansin)
         [$kafMap, $overrides] = $this->buildKafedraMap();
 
         $updated = 0;
-        $kafUpdated = 0;
         $touched = [];
         foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
             $key = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
             $new = $map[$key] ?? null;
-            $changed = false;
-            if ($new !== null && $new !== $c->subject_name) {
-                $c->subject_name = $new;
-                $updated++;
-                $changed = true;
+            if ($new === null || $new === $c->subject_name) {
+                continue;
             }
-            $kaf = $this->kafedraFor($overrides, $kafMap, (string) $c->subject_name, (string) $c->specialty_name, (int) $c->course);
-            if ($kaf && $kaf !== $c->kafedra_name) {
-                $c->kafedra_name = $kaf;
-                $kafUpdated++;
-                $changed = true;
-            }
-            if ($changed) {
-                $touched[] = $c;
-            }
+            $c->subject_name = $new;
+            $c->kafedra_name = $this->kafedraFor($overrides, $kafMap, $new) ?: $c->kafedra_name;
+            $touched[] = $c;
+            $updated++;
         }
 
         DB::transaction(function () use ($touched) {
@@ -960,7 +880,7 @@ class TimetableController extends Controller
             }
         });
 
-        return response()->json(['ok' => true, 'updated' => $updated, 'kafedra_updated' => $kafUpdated]);
+        return response()->json(['ok' => true, 'updated' => $updated]);
     }
 
     /**
@@ -4128,7 +4048,7 @@ class TimetableController extends Controller
                 ),
                 'semester_label' => (int) $r->semester . '-semestr',
                 'subject_name'   => $r->subject_name,
-                'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name, (string) $r->specialty_name, (int) $course),
+                'kafedra_name'   => $this->kafedraFor($overrides, $kafMap, $r->subject_name),
                 'lecture'        => $lec,
                 'practice'       => (float) $r->practice,
                 'laboratory'     => (float) $r->laboratory,

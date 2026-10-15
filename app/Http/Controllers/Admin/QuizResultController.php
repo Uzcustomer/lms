@@ -2916,7 +2916,10 @@ class QuizResultController extends Controller
                     'created_at_api' => $result->created_at ?? now(),
                     'reason' => 'quiz_result',
                     'status' => 'recorded',
-                    'grade' => round($result->grade),
+                    // Xalqaro ta'lim fakulteti — 5 ballik tizim (2–5)
+                    'grade' => $student->isInternationalFaculty()
+                        ? self::toFivePointScale((float) $result->grade)
+                        : round($result->grade),
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
                     'is_final' => true,
@@ -3073,6 +3076,26 @@ class QuizResultController extends Controller
      *     Mavjud baho >= Moodle: skip
      *     YN qulflangan: skip
      */
+    /**
+     * 100 ballik natijani 5 ballik bahoga o'tkazish (Xalqaro ta'lim fakulteti):
+     * 90–100 → 5 (a'lo), 70–89.9 → 4 (yaxshi), 60–69.9 → 3 (qoniqarli),
+     * 0–59.9 → 2 (qoniqarsiz).
+     */
+    private static function toFivePointScale(float $grade): int
+    {
+        if ($grade >= 90) {
+            return 5;
+        }
+        if ($grade >= 70) {
+            return 4;
+        }
+        if ($grade >= 60) {
+            return 3;
+        }
+
+        return 2;
+    }
+
     private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors, array $subjectOverrides = [], int $mavzuNOverride = 0): void
     {
         // Mavzu raqamini aniqlash: foydalanuvchi modaldan tanlagan bo'lsa undan, aks holda shakl'dan
@@ -3179,6 +3202,12 @@ class QuizResultController extends Controller
         $updatedAnyPair = false;
         $skipReasons = [];
 
+        // Xalqaro ta'lim fakulteti — jurnal 5 ballik (2–5): koeffitsient 100 ballik
+        // natijaga qo'llanadi, keyin 5 ballikka o'tkaziladi; o'tish chegarasi 3.
+        $isFivePoint = $student->isInternationalFaculty();
+        $passMark = $isFivePoint ? 3 : 60;
+        $scaled = fn (float $v) => $isFivePoint ? self::toFivePointScale($v) : round($v, 2);
+
         foreach ($sgRecords as $sg) {
             $isNb = $sg->reason === 'absent' && $sg->grade === null;
             $updates = null;
@@ -3221,7 +3250,7 @@ class QuizResultController extends Controller
 
             if ($isNb) {
                 $multiplier = $isSababli ? 1.0 : 0.8;
-                $retakeValue = round($moodleGrade * $multiplier, 2);
+                $retakeValue = $scaled($moodleGrade * $multiplier);
 
                 // Agar mavjud retake baho yangisidan katta yoki teng bo'lsa — skip
                 if ($sg->retake_grade !== null && $sg->retake_grade >= $retakeValue) {
@@ -3253,13 +3282,13 @@ class QuizResultController extends Controller
                     continue;
                 }
 
-                if ($currentValue >= 60) {
-                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: baho ({$currentValue}) 60 dan yuqori — retake kerak emas";
+                if ($currentValue >= $passMark) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: baho ({$currentValue}) {$passMark} dan yuqori — retake kerak emas";
                     continue;
                 }
 
-                // Baho < 60 — retake × 0.8
-                $retakeValue = round($moodleGrade * 0.8, 2);
+                // Baho o'tish chegarasidan past — retake × 0.8
+                $retakeValue = $scaled($moodleGrade * 0.8);
 
                 // Yangi retake hozirgi asl bahodan past bo'lmasligi kerak (aks holda qabul qilinmaydi)
                 if ($sg->grade !== null && $retakeValue <= $sg->grade) {

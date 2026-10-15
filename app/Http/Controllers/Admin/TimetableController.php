@@ -480,7 +480,9 @@ class TimetableController extends Controller
             if ($name === '') {
                 return false;
             }
-            $cur = $groupCurricula[$this->groupNameKey($name)] ?? null;
+            $cur = $groupCurricula[$this->groupNameKey($name)]
+                ?? $groupCurricula['base:' . $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $name))]
+                ?? null;
             if ($curricula && $cur && !isset($curricula[(int) $cur])) {
                 return false;
             }
@@ -739,8 +741,16 @@ class TimetableController extends Controller
         $hemisBoard = $this->isHemisBoard($board);
         $groupCurricula = [];
         if ($hemisBoard) {
-            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->get(['name', 'curriculum_hemis_id']) as $g) {
+            // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi.
+            // Ikki kalit: to'liq nom va qavssiz nom (oqimda "d1/d26-01a (o'z)", bazada "d1/d26-01a").
+            $groups = DB::table('groups')->whereNotNull('curriculum_hemis_id')
+                ->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id']);
+            foreach ($groups as $g) {
                 $groupCurricula[$this->groupNameKey((string) $g->name)] = (int) $g->curriculum_hemis_id;
+            }
+            foreach ($groups as $g) {
+                $base = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));
+                $groupCurricula['base:' . $base] = (int) $g->curriculum_hemis_id;
             }
         }
 

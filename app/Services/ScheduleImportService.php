@@ -163,13 +163,53 @@ class ScheduleImportService
      * Joriy o'quv yili bo'yicha jadval import (cron uchun)
      */
     /**
-     * @param \Closure|null $onProgress fn(int $page, int $pages, int $totalImported) — har sahifadan keyin
+     * Joriy semestr: o'quv yili (current=1 semestrlar orasida eng ko'p uchragani —
+     * adashgan eski "current" qator oraliqni buzmasin) va shu semestrlar o'quv
+     * haftalarining eng erta boshlanishi .. eng kech tugashi.
+     *
+     * @return array{year:string, from:Carbon, to:Carbon}|null
      */
-    public function importByEducationYear(?\Closure $log = null, bool $silent = false, ?\Closure $onProgress = null): void
+    public function currentSemesterRange(): ?array
+    {
+        $years = DB::table('semesters')
+            ->where('current', true)
+            ->whereNotNull('education_year')
+            ->pluck('education_year')
+            ->countBy();
+        if ($years->isEmpty()) {
+            return null;
+        }
+        $max = $years->max();
+        $year = (string) $years->filter(fn ($c) => $c === $max)->keys()->sort()->last();
+
+        $range = DB::table('curriculum_weeks as cw')
+            ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
+            ->where('s.current', true)
+            ->where('s.education_year', $year)
+            ->selectRaw('MIN(cw.start_date) as d_from, MAX(cw.end_date) as d_to')
+            ->first();
+
+        if (!$range || !$range->d_from || !$range->d_to) {
+            return null;
+        }
+
+        return [
+            'year' => $year,
+            'from' => Carbon::parse($range->d_from)->startOfDay(),
+            'to' => Carbon::parse($range->d_to)->endOfDay(),
+        ];
+    }
+
+    /**
+     * @param \Closure|null $onProgress fn(int $page, int $pages, int $totalImported) — har sahifadan keyin
+     * @param array|null $semesterRange currentSemesterRange() — berilsa faqat shu sana
+     *        oralig'idagi darslar olinadi va eskirganlar ham faqat shu oraliqda o'chiriladi
+     */
+    public function importByEducationYear(?\Closure $log = null, bool $silent = false, ?\Closure $onProgress = null, ?array $semesterRange = null): void
     {
         $this->silent = $silent;
 
-        $educationYearCode = DB::table('semesters')
+        $educationYearCode = $semesterRange['year'] ?? DB::table('semesters')
             ->where('current', true)
             ->value('education_year');
 
@@ -179,9 +219,13 @@ class ScheduleImportService
             return;
         }
 
-        $cronPrefix = "Jadval (Cron) | {$educationYearCode}";
+        $cronPrefix = $semesterRange
+            ? "Jadval (joriy semestr) | {$educationYearCode} | " . $semesterRange['from']->format('d.m.Y') . '–' . $semesterRange['to']->format('d.m.Y')
+            : "Jadval (Cron) | {$educationYearCode}";
         $msgId = $this->notifyAndGetId("⏳ {$cronPrefix} | " . now()->format('H:i:s'));
-        if ($log) $log("O'quv yili: {$educationYearCode}");
+        if ($log) $log("O'quv yili: {$educationYearCode}" . ($semesterRange
+            ? ' (joriy semestr: ' . $semesterRange['from']->format('d.m.Y') . '–' . $semesterRange['to']->format('d.m.Y') . ')'
+            : ''));
 
         $token = config('services.hemis.token');
         $limit = 200;
@@ -194,11 +238,16 @@ class ScheduleImportService
         $this->createTempTable();
 
         do {
-            $response = $this->fetchPage($token, [
+            $params = [
                 '_education_year' => $educationYearCode,
                 'limit' => $limit,
                 'page' => $page,
-            ]);
+            ];
+            if ($semesterRange) {
+                $params['lesson_date_from'] = $semesterRange['from']->timestamp;
+                $params['lesson_date_to'] = $semesterRange['to']->timestamp;
+            }
+            $response = $this->fetchPage($token, $params);
 
             if (!$response || !$response->successful()) {
                 $status = $response ? $response->status() : 'timeout';
@@ -277,6 +326,7 @@ class ScheduleImportService
         // Faqat BARCHA sahifalar muvaffaqiyatli bo'lganda eski yozuvlarni o'chirish
         if ($failedCount === 0 && $totalImported > 0) {
             $deleted = Schedule::where('education_year_code', $educationYearCode)
+                ->when($semesterRange, fn ($q) => $q->whereBetween('lesson_date', [$semesterRange['from'], $semesterRange['to']]))
                 ->whereNotIn('schedule_hemis_id', function ($q) {
                     $q->select('hemis_id')->from('_temp_schedule_ids');
                 })

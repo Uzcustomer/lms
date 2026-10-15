@@ -364,10 +364,11 @@
             }
 
             var who = st.started_by ? (' (' + st.started_by + ')') : '';
+            var scope = st.scope ? (st.scope + ' · ') : '';
             if (active) {
-                msg.textContent = (st.message || '') + (st.started_at ? ' · boshlandi: ' + st.started_at + who : '');
+                msg.textContent = scope + (st.message || '') + (st.started_at ? ' · boshlandi: ' + st.started_at + who : '');
             } else {
-                msg.textContent = (st.message || '') + (st.finished_at ? ' · oxirgi yangilanish: ' + st.finished_at + who : '');
+                msg.textContent = scope + (st.message || '') + (st.finished_at ? ' · oxirgi yangilanish: ' + st.finished_at + who : '');
             }
 
             btn.disabled = active;

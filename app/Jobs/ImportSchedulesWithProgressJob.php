@@ -11,9 +11,9 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Joriy o'quv yili dars jadvalini HEMIS'dan import qilish (import:schedules bilan
- * bir xil) — "Dars jadval mosligi" sahifasidan ishga tushiriladi. Holat keshda
- * saqlanadi, sahifa uni progress bar sifatida ko'rsatadi.
+ * Joriy semestr dars jadvalini HEMIS'dan import qilish (import:schedules mantig'i,
+ * lekin faqat joriy semestr sanalari) — "Dars jadval mosligi" sahifasidan ishga
+ * tushiriladi. Holat keshda saqlanadi, sahifa uni progress bar sifatida ko'rsatadi.
  */
 class ImportSchedulesWithProgressJob implements ShouldQueue
 {
@@ -46,6 +46,13 @@ class ImportSchedulesWithProgressJob implements ShouldQueue
 
         $lastLine = '';
 
+        // Faqat joriy semestr (tezroq). Oraliq aniqlanmasa — butun o'quv yili.
+        $range = $service->currentSemesterRange();
+        $state['scope'] = $range
+            ? 'Joriy semestr: ' . $range['from']->format('d.m.Y') . ' – ' . $range['to']->format('d.m.Y')
+            : "Butun o'quv yili (joriy semestr sanalari topilmadi)";
+        Cache::put(self::PROGRESS_KEY, $state, now()->addDay());
+
         try {
             $service->importByEducationYear(
                 function ($msg) use (&$lastLine) {
@@ -58,7 +65,8 @@ class ImportSchedulesWithProgressJob implements ShouldQueue
                     $state['total'] = $total;
                     $state['updated_at'] = now()->toDateTimeString();
                     Cache::put(self::PROGRESS_KEY, $state, now()->addDay());
-                }
+                },
+                $range
             );
 
             $state['status'] = 'done';

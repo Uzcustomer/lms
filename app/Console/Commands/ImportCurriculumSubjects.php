@@ -46,6 +46,7 @@ class ImportCurriculumSubjects extends Command
         $pageSize = 40;
         $this->resetImportStats();
         $importedHemisIds = [];
+        $failed = false;
 
         do {
             $response = Http::withoutVerifying()->withToken($token)->get("https://student.ttatf.uz/rest/v1/data/curriculum-subject-list?limit=$pageSize&page=$page");
@@ -93,13 +94,15 @@ class ImportCurriculumSubjects extends Command
             } else {
                 $telegram->notify("❌ O'quv reja fanlari importida xatolik yuz berdi (API)");
                 $this->error('Failed to fetch data from the API for curriculum subjects.');
+                $failed = true;
                 break;
             }
         } while ($page <= $totalPages);
 
-        // API'dan qaytmagan fanlarni nofaol qilish (soft delete)
+        // API'dan qaytmagan fanlarni nofaol qilish (soft delete) — faqat barcha
+        // sahifalar olingan bo'lsa (yarmida uzilsa qolgan fanlar nofaol bo'lib qolmasin)
         $deactivated = 0;
-        if (!empty($importedHemisIds)) {
+        if (!$failed && !empty($importedHemisIds)) {
             $deactivated = CurriculumSubject::where('is_active', true)
                 ->whereNotIn('curriculum_subject_hemis_id', $importedHemisIds)
                 ->update(['is_active' => false]);

@@ -318,6 +318,8 @@ class KtrController extends Controller
             return $posA <=> $posB;
         });
 
+        $canSyncHemis = $this->canSyncHemis();
+
         return view('admin.ktr.index', compact(
             'subjects',
             'educationTypes',
@@ -326,8 +328,69 @@ class KtrController extends Controller
             'trainingTypes',
             'sortColumn',
             'sortDirection',
-            'isFanMasuli'
+            'isFanMasuli',
+            'canSyncHemis'
         ));
+    }
+
+    /** O'quv rejalarni HEMIS'dan sinxronlash huquqi (admin rollari). */
+    private function canSyncHemis(): bool
+    {
+        return in_array(session('active_role', ''), ['superadmin', 'admin', 'kichik_admin'], true);
+    }
+
+    /**
+     * O'quv rejalarni HEMIS'dan sinxronlashni boshlash (import:curricula +
+     * import:curriculum-subjects, navbat orqali). Bir vaqtda faqat bitta.
+     */
+    public function startHemisSync()
+    {
+        $this->checkKtrAccess();
+        abort_unless($this->canSyncHemis(), 403, "Sinxronlash faqat admin uchun.");
+
+        $key = \App\Jobs\ImportCurriculaWithProgressJob::PROGRESS_KEY;
+        $state = \Illuminate\Support\Facades\Cache::get($key);
+
+        // Ishlayotgan sinxronlash — 10 daqiqa ichida yangilangan bo'lsa haqiqiy
+        // (aks holda worker o'lgan, qotib qolgan holat)
+        if ($state && in_array($state['status'] ?? null, ['queued', 'running'], true)
+            && !empty($state['updated_at'])
+            && \Carbon\Carbon::parse($state['updated_at'])->gt(now()->subMinutes(10))) {
+            return response()->json(['success' => true, 'already_running' => true, 'state' => $state]);
+        }
+
+        $user = auth()->user() ?? auth()->guard('teacher')->user();
+        $name = (string) ($user->name ?? $user->full_name ?? '');
+
+        $state = [
+            'status' => 'queued',
+            'step' => 0,
+            'steps' => 2,
+            'step_label' => '',
+            'page' => 0,
+            'pages' => 0,
+            'percent' => 0,
+            'started_by' => $name,
+            'started_at' => now()->toDateTimeString(),
+            'updated_at' => now()->toDateTimeString(),
+            'message' => 'Navbatda — sinxronlash tez orada boshlanadi...',
+            'summary' => [],
+        ];
+        \Illuminate\Support\Facades\Cache::put($key, $state, now()->addDay());
+
+        \App\Jobs\ImportCurriculaWithProgressJob::dispatch($name);
+
+        return response()->json(['success' => true, 'already_running' => false, 'state' => $state]);
+    }
+
+    /** O'quv rejalar sinxronlash holati (progress bar uchun). */
+    public function hemisSyncStatus()
+    {
+        $this->checkKtrAccess();
+
+        return response()->json([
+            'state' => \Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportCurriculaWithProgressJob::PROGRESS_KEY),
+        ]);
     }
 
     /**

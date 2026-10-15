@@ -144,6 +144,14 @@
                                     </svg>
                                     Excel
                                 </a>
+                                @if($canSyncHemis)
+                                    <button type="button" id="btn-hemis-sync" class="ktr-sync-btn" onclick="startHemisSync()" title="O'quv rejalar va fanlarini HEMIS'dan yangilash">
+                                        <svg style="width: 16px; height: 16px; margin-right: 4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                        HEMIS dan sinxronlash
+                                    </button>
+                                @endif
                                 <div id="filter-loading" class="hidden" style="display: none; align-items: center; color: #2b5ea7;">
                                     <svg class="animate-spin" style="height: 16px; width: 16px; margin-right: 4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -154,6 +162,21 @@
                         </div>
                     </div>
                 </form>
+
+                @if($canSyncHemis)
+                    <!-- O'quv rejalar sinxronlash (HEMIS) — progress -->
+                    <div id="hemis-sync-panel" style="display:none;padding:12px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+                            <span id="hemis-sync-title" style="font-size:13px;font-weight:700;color:#1e293b;">O'quv rejalar HEMIS'dan yangilanmoqda</span>
+                            <span id="hemis-sync-meta" style="font-size:12px;color:#64748b;"></span>
+                        </div>
+                        <div style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
+                            <div id="hemis-sync-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:999px;transition:width .4s ease;"></div>
+                        </div>
+                        <div id="hemis-sync-msg" style="font-size:12px;color:#475569;margin-top:6px;"></div>
+                        <div id="hemis-sync-summary" style="font-size:12px;color:#334155;margin-top:4px;"></div>
+                    </div>
+                @endif
 
                 <!-- Table -->
                 <div style="max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">
@@ -443,6 +466,105 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    @if($canSyncHemis)
+    <script>
+        // ── O'quv rejalarni HEMIS'dan sinxronlash (import:curricula + import:curriculum-subjects) ──
+        var hemisSyncTimer = null;
+
+        function startHemisSync() {
+            if (!confirm("O'quv rejalar va ularning fanlari HEMIS'dan yangilanadi. Bu bir necha daqiqa davom etadi. Boshlaymizmi?")) return;
+            $.ajax({
+                url: '{{ route("admin.ktr.hemis-sync") }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                success: function(res) {
+                    renderHemisSync(res.state);
+                    pollHemisSync();
+                },
+                error: function(xhr) {
+                    var errMsg = 'Sinxronlashni boshlashda xatolik';
+                    try { errMsg = JSON.parse(xhr.responseText).message || errMsg; } catch(e) {}
+                    alert(errMsg);
+                }
+            });
+        }
+
+        function pollHemisSync() {
+            if (hemisSyncTimer) clearTimeout(hemisSyncTimer);
+            $.get('{{ route("admin.ktr.hemis-sync.status") }}', function(res) {
+                var st = res.state;
+                renderHemisSync(st);
+                if (st && (st.status === 'queued' || st.status === 'running')) {
+                    hemisSyncTimer = setTimeout(pollHemisSync, 2000);
+                }
+            }).fail(function() {
+                hemisSyncTimer = setTimeout(pollHemisSync, 5000);
+            });
+        }
+
+        function fmtSyncDuration(sec) {
+            sec = Math.max(0, Math.round(sec));
+            var m = Math.floor(sec / 60), s = sec % 60;
+            return m > 0 ? (m + ' daq ' + s + ' son') : (s + ' son');
+        }
+
+        function renderHemisSync(st) {
+            var panel = document.getElementById('hemis-sync-panel');
+            if (!panel) return;
+            if (!st) { panel.style.display = 'none'; return; }
+            panel.style.display = '';
+
+            var bar = document.getElementById('hemis-sync-bar');
+            var title = document.getElementById('hemis-sync-title');
+            var meta = document.getElementById('hemis-sync-meta');
+            var msg = document.getElementById('hemis-sync-msg');
+            var summary = document.getElementById('hemis-sync-summary');
+            var btn = document.getElementById('btn-hemis-sync');
+            var active = st.status === 'queued' || st.status === 'running';
+            var pct = st.status === 'done' ? 100 : (st.percent || 0);
+
+            bar.style.width = pct + '%';
+            bar.style.background = st.status === 'error'
+                ? '#dc2626'
+                : (st.status === 'done' ? '#16a34a' : 'linear-gradient(90deg,#6366f1,#818cf8)');
+
+            if (st.status === 'queued') {
+                title.textContent = "O'quv rejalar sinxronlash navbatda...";
+                meta.textContent = '';
+            } else if (st.status === 'running') {
+                title.textContent = "O'quv rejalar HEMIS'dan yangilanmoqda — " + pct + '%';
+                var parts = [];
+                if (st.step) parts.push(st.step + '/' + st.steps + ': ' + (st.step_label || ''));
+                if (st.pages > 0) parts.push(st.page + ' / ' + st.pages + ' sahifa');
+                if (pct > 0 && st.started_at) {
+                    var elapsed = (Date.now() - new Date(st.started_at.replace(' ', 'T')).getTime()) / 1000;
+                    var left = elapsed / pct * (100 - pct);
+                    if (left > 0 && isFinite(left)) parts.push('~' + fmtSyncDuration(left) + ' qoldi');
+                }
+                meta.textContent = parts.join(' · ');
+            } else if (st.status === 'done') {
+                title.textContent = "O'quv rejalar yangilandi — 100%";
+                meta.textContent = '';
+            } else {
+                title.textContent = "O'quv rejalar sinxronlash xato bilan tugadi";
+                meta.textContent = st.step ? (st.step + '/' + st.steps + ': ' + (st.step_label || '')) : '';
+            }
+
+            var who = st.started_by ? (' (' + st.started_by + ')') : '';
+            msg.textContent = (st.message || '') + (active
+                ? (st.started_at ? ' · boshlandi: ' + st.started_at + who : '')
+                : (st.finished_at ? ' · oxirgi yangilanish: ' + st.finished_at + who : ''));
+            summary.textContent = (st.summary || []).join('  |  ');
+
+            btn.disabled = active;
+            btn.title = active ? 'Sinxronlash davom etmoqda' : "O'quv rejalar va fanlarini HEMIS'dan yangilash";
+        }
+
+        // Sahifa yangilansa ham davom etayotgan / oxirgi sinxronlash holati ko'rinsin
+        document.addEventListener('DOMContentLoaded', pollHemisSync);
+    </script>
+    @endif
 
     <script>
         function stripSpecialChars(str) {
@@ -1396,6 +1518,27 @@
             box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
             text-decoration: none;
         }
+        .ktr-sync-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+            white-space: nowrap;
+        }
+        .ktr-sync-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+            transform: translateY(-1px);
+        }
+        .ktr-sync-btn:disabled { opacity: .5; cursor: not-allowed; }
         .ktr-export-btn:hover {
             background: linear-gradient(135deg, #047857, #065f46);
             box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);

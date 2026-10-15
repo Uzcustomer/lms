@@ -361,16 +361,22 @@ class TimetableController extends Controller
             ->where('cs.is_active', true)
             ->where('s.education_year', (string) $start)
             ->whereRaw('MOD(CAST(cs.semester_code AS UNSIGNED) - 10, 2) = ?', [$parityRem])
-            ->get(['cs.subject_name', 'cs.subject_details', 'cs.department_name', 'cs.semester_code', 'cs.updated_at',
+            ->get(['cs.subject_name', 'cs.subject_details', 'cs.department_name', 'cs.semester_code', 'cs.updated_at', 'cs.curricula_hemis_id',
                 'c.name as plan_name', 'sp.name as specialty_name', 'f.name as faculty_name', 's.level_code']);
 
+        // Mashg'ulot turi: ma'ruza / laboratoriya / seminar / amaliy (klinik amaliy ham).
+        // Mustaqil ta'lim, amaliyot (malakaviy, ishlab chiqarish), kurs ishi olinmaydi.
         $typeOf = function (array $d): ?string {
             $code = (string) ($d['trainingType']['code'] ?? '');
             $name = mb_strtolower((string) ($d['trainingType']['name'] ?? ''));
-            if ($code === '11' || str_contains($name, "ma'ruza") || str_contains($name, 'ma’ruza') || str_contains($name, 'maruza')) return 'lecture';
-            if ($code === '13' || str_contains($name, 'laborator')) return 'laboratory';
-            if ($code === '14' || str_contains($name, 'seminar')) return 'seminar';
-            if ($code === '12' || (str_starts_with($name, 'amaliy') && !str_contains($name, 'amaliyot'))) return 'practice';
+            foreach (['mustaqil', 'amaliyot', 'kurs ishi', 'самостоят', 'практика', 'курсов'] as $skip) {
+                if (str_contains($name, $skip)) return null;
+            }
+            if ($code === '11' || preg_match("/ma['’ʻ`]?ruza|лекц/u", $name)) return 'lecture';
+            if ($code === '13' || str_contains($name, 'laborator') || str_contains($name, 'лаборатор')) return 'laboratory';
+            if ($code === '14' || str_contains($name, 'seminar') || str_contains($name, 'семинар')) return 'seminar';
+            if ($code === '12' || str_contains($name, 'amaliy') || str_contains($name, 'klinik')
+                || str_contains($name, 'практическ') || str_contains($name, 'клиническ')) return 'practice';
             return null;
         };
 
@@ -397,9 +403,11 @@ class TimetableController extends Controller
                     'specialty_name' => $spec, 'level_code' => $level, 'subject_name' => (string) $r->subject_name,
                     'lecture' => 0, 'practice' => 0, 'laboratory' => 0, 'seminar' => 0,
                     'semester' => (int) $r->semester_code - 10, 'plans' => [], 'kafedras' => [], 'updated_at' => $r->updated_at,
+                    'curricula' => [],
                 ];
             }
             $o = $acc[$key];
+            $o->curricula[(int) $r->curricula_hemis_id] = true;
             foreach ($h as $t => $v) {
                 $o->$t = max((float) $o->$t, $v);
             }
@@ -429,6 +437,50 @@ class TimetableController extends Controller
         }
 
         return $cache[$board->id] = collect($out);
+    }
+
+    /** Variant harfi: "... (a)" / "(А)" -> a, "(b)" / "(Б)" -> b, "(c)" / "(С)" -> c. */
+    private function variantLetter(string $text, bool $groupName = false): ?string
+    {
+        $re = $groupName
+            ? '/\d\s*([a-zа-яё])\s*(?:\(|$)/iu'   // guruh: "d1/d23-07a (o'z)" -> a
+            : '/\(\s*([a-zа-яё])\s*\)\s*$/iu';   // fan: "Umumiy xirurgiya (a)" -> a
+        if (!preg_match($re, trim($text), $m)) {
+            return null;
+        }
+        $l = mb_strtolower($m[1]);
+
+        return ['а' => 'a', 'б' => 'b', 'в' => 'c', 'с' => 'c', 'ц' => 'c'][$l] ?? $l;
+    }
+
+    /**
+     * HEMIS doska: oqim guruhlaridan shu fanni o'qiydiganlari — guruhning o'quv rejasida
+     * shu fan bo'lsa va (variant fan bo'lsa) guruh harfi variant harfiga mos bo'lsa.
+     * Rejasi yoki harfi aniqlanmagan guruh chiqarib tashlanmaydi.
+     */
+    private function hemisGroupsFor($subject, array $rows, array $groupCurricula): array
+    {
+        $variant = $this->variantLetter((string) $subject->subject_name);
+        $curricula = $subject->curricula ?? [];
+
+        return array_values(array_filter($rows, function ($r) use ($variant, $curricula, $groupCurricula) {
+            $name = trim((string) ($r['name'] ?? ''));
+            if ($name === '') {
+                return false;
+            }
+            $cur = $groupCurricula[$name] ?? null;
+            if ($curricula && $cur && !isset($curricula[(int) $cur])) {
+                return false;
+            }
+            if ($variant !== null) {
+                $gl = $this->variantLetter(preg_replace('/\s*\(.*$/u', '', $name), true);
+                if ($gl !== null && $gl !== $variant) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
     }
 
     /** Kartaning kafedrasi: qo'lda belgilangan, so'ng HEMIS fanining o'z kafedrasi (HEMIS doska), so'ng xarita. */
@@ -671,6 +723,12 @@ class TimetableController extends Controller
         $facMap = \App\Models\Department::where('structure_type_code', 11)
             ->pluck('name', 'id')->all();
 
+        // HEMIS doska: guruh nomi → o'quv reja (fanlar guruhning o'z rejasidan)
+        $hemisBoard = $this->isHemisBoard($board);
+        $groupCurricula = $hemisBoard
+            ? DB::table('groups')->whereNotNull('curriculum_hemis_id')->pluck('curriculum_hemis_id', 'name')->all()
+            : [];
+
         $now = now();
         $rows = [];
         // Takrorlanishdan himoya: bir guruhga bir fan bo'yicha karta to'plami FAQAT
@@ -721,6 +779,18 @@ class TimetableController extends Controller
                         }
                         $oqTotal = (int) ($oq['total'] ?? 0);
                         foreach ($subs as $s) {
+                            // HEMIS doska: shu fanni o'qiydigan guruhlargina (o'z rejasi + variant harfi)
+                            $oqRows = $oq['rows'] ?? [];
+                            $sGroupNames = $groupNames;
+                            $sOqTotal = $oqTotal;
+                            if ($hemisBoard) {
+                                $oqRows = $this->hemisGroupsFor($s, $oqRows, $groupCurricula);
+                                if (!$oqRows) {
+                                    continue;
+                                }
+                                $sGroupNames = array_values(array_unique(array_map(fn ($r) => trim((string) $r['name']), $oqRows)));
+                                $sOqTotal = array_sum(array_map(fn ($r) => (int) ($r['count'] ?? 0), $oqRows));
+                            }
                             $kaf = $this->rowKafedra($overrides, $kafMap, $s, (string) $specName, (int) $course);
                             $prcHours = (float) $s->practice + (float) $s->laboratory + (float) $s->seminar;
                             $practiceGroupSize = $this->practiceGroupSizeFor($practiceSizeOverrides, (string) $s->subject_name);
@@ -743,7 +813,7 @@ class TimetableController extends Controller
                             $lecKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|'
                                 . $flowLabel . '|' . $subjKey;
                             if ((float) $s->lecture > 0) {
-                                foreach ($oq['rows'] ?? [] as $lectureGroup) {
+                                foreach ($oqRows as $lectureGroup) {
                                     $lectureGroupName = trim((string) ($lectureGroup['name'] ?? ''));
                                     if ($lectureGroupName === '') {
                                         continue;
@@ -763,9 +833,9 @@ class TimetableController extends Controller
                                         'specialty_name' => $specName, 'course' => $course, 'faculty_name' => $blockFac,
                                         'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
                                         'training_type' => 'lecture',
-                                        'group_name' => null, 'group_names' => json_encode($mergedLectureGroups ?: $groupNames),
+                                        'group_name' => null, 'group_names' => json_encode($mergedLectureGroups ?: $sGroupNames),
                                         'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
-                                        'students' => $mergedLectureStudents > 0 ? $mergedLectureStudents : $oqTotal,
+                                        'students' => $mergedLectureStudents > 0 ? $mergedLectureStudents : $sOqTotal,
                                         // Ma'ruza — 2 soat (1 para). MUHIM: ustunlar to'plami
                                         // amaliy qatorlar bilan bir xil bo'lishi shart, aks holda
                                         // ommaviy insert() ustunlarni birinchi qatordan olib,
@@ -779,7 +849,7 @@ class TimetableController extends Controller
                                     $rows[$lectureRowIndex]['group_names'] = json_encode($mergedLectureGroups);
                                     $rows[$lectureRowIndex]['students'] = $mergedLectureStudents > 0
                                         ? $mergedLectureStudents
-                                        : max((int) $rows[$lectureRowIndex]['students'], $oqTotal);
+                                        : max((int) $rows[$lectureRowIndex]['students'], $sOqTotal);
                                 }
                             }
 
@@ -803,7 +873,7 @@ class TimetableController extends Controller
 
                             if ($cardPlan) {
                                 $practiceRowsByName = [];
-                                foreach ($oq['rows'] ?? [] as $gr) {
+                                foreach ($oqRows as $gr) {
                                     $gn = trim((string) ($gr['name'] ?? ''));
                                     if ($gn === '') {
                                         continue;

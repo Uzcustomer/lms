@@ -2092,6 +2092,14 @@
         #asgTable tbody tr:hover td { background: #eff6ff; }
         #asgTable tbody tr.sel td { background: #dbeafe; box-shadow: inset 3px 0 0 #2563eb; }
         #asgTable thead th { cursor: default; }
+        /* Ustun filtrlari qatori */
+        #asgTable thead tr.asg-frow th { background: #f8fafc; padding: 3px 4px; }
+        #asgTable thead tr.asg-frow input, #asgTable thead tr.asg-frow select {
+            width: 100%; height: 24px; box-sizing: border-box; font-size: 11px; font-weight: 400;
+            padding: 0 6px; border: 1px solid #d1d5db; border-radius: 5px; background: #fff; color: #334155;
+        }
+        #asgTable thead tr.asg-frow select { padding-right: 18px; }
+        #asgTable thead tr.asg-frow input.is-active, #asgTable thead tr.asg-frow select.is-active { border-color: #2563eb; background: #eff6ff; }
         .asg-sort-btn {
             width: 100%;
             display: flex;
@@ -6450,6 +6458,41 @@
 
             let asgHeaderFilters = newAsgHeaderFilters();
 
+            // Ustun filtrlari (jadval sarlavhasi ostidagi qator): matn bo'yicha qidiruv, tur — tanlov
+            const asgColFilters = { subject: '', spec: '', type: '', scope: '', kaf: '', teacher: '', room: '' };
+            const asgNormText = v => String(v || '').toLowerCase().replace(/[‘’ʻʼ`´]/g, "'");
+            function asgColMatch(u) {
+                const has = (val, q) => !q || asgNormText(val).includes(asgNormText(q));
+                return has(u.subject_name, asgColFilters.subject)
+                    && has(asgSpecLabel(u), asgColFilters.spec)
+                    && (!asgColFilters.type || u.training_type === asgColFilters.type)
+                    && has(asgScopeLabel(u) + ' ' + (u.group_names || []).join(' '), asgColFilters.scope)
+                    && has(u.kafedra_name, asgColFilters.kaf)
+                    && has(asgTeacherText(u), asgColFilters.teacher)
+                    && has(u.room_mixed ? 'turlicha' : (u.auditorium_name || ''), asgColFilters.room);
+            }
+            let asgColTimer = null;
+            function ensureAsgHead() {
+                const table = $('asgTable');
+                if (table.tHead && table.tHead.dataset.f) return;
+                const inp = (key, ph) => '<th><input type="search" data-asg-col="' + key + '" placeholder="' + ph + '" aria-label="' + ph + '"></th>';
+                table.innerHTML = '<thead data-f="1"><tr><th>Fan</th><th>Fakultet / yo\'nalish</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th><th>Xona</th></tr>' +
+                    '<tr class="asg-frow">' + inp('subject', 'Fan...') + inp('spec', 'Fakultet / yo\'nalish...') +
+                    '<th><select data-asg-col="type" aria-label="Tur"><option value="">Hammasi</option><option value="lecture">Ma\'ruza</option><option value="practice">Amaliy</option></select></th>' +
+                    inp('scope', 'Oqim / guruh...') + inp('kaf', 'Kafedra...') + '<th></th>' +
+                    inp('teacher', "O'qituvchi...") + inp('room', 'Xona...') + '</tr></thead><tbody></tbody>';
+                table.tHead.querySelectorAll('[data-asg-col]').forEach(el => {
+                    el.value = asgColFilters[el.dataset.asgCol] || '';
+                    const apply = () => {
+                        asgColFilters[el.dataset.asgCol] = el.value.trim();
+                        el.classList.toggle('is-active', !!el.value.trim());
+                        clearTimeout(asgColTimer);
+                        asgColTimer = setTimeout(renderAsgTable, el.tagName === 'SELECT' ? 0 : 200);
+                    };
+                    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', apply);
+                });
+            }
+
             function resetAsgHeaderFilters() {
                 asgHeaderFilters = newAsgHeaderFilters();
             }
@@ -6648,13 +6691,14 @@
             function renderAsgTable() {
                 const baseRows = asgFilteredScoped();
                 asgNormalizeHeaderFilters(baseRows);
-                const rows = baseRows.filter(unit => asgMatchesHeaderFilters(unit));
+                const rows = baseRows.filter(unit => asgMatchesHeaderFilters(unit) && asgColMatch(unit));
                 if (asgSel && !rows.includes(asgSel)) {
                     asgSel = null;
                     setAsgTeacherPanel(null);
                 }
                 $('asgCount').textContent = rows.length + ' ta';
-                let h = '<thead><tr><th>Fan</th><th>Fakultet / yo\'nalish</th><th>Tur</th><th>Oqim/Guruh</th><th>Kafedra</th><th>Karta</th><th>O\'qituvchi</th><th>Xona</th></tr></thead><tbody>';
+                ensureAsgHead();
+                let h = '';
                 if (!rows.length) h += '<tr><td colspan="8" class="p-3 text-gray-400">Ma\'lumot topilmadi</td></tr>';
                 rows.forEach((u, i) => {
                     const scopeLabel = asgScopeLabel(u);
@@ -6689,8 +6733,11 @@
                         '<td class="text-center">' + u.cards + (u.placed ? ' <span class="text-green-600">(' + u.placed + '⚑)</span>' : '') + '</td>' +
                         '<td>' + teacher + '</td></tr>';
                 });
-                h += '</tbody>';
-                $('asgTable').innerHTML = h;
+                $('asgTable').tBodies[0].innerHTML = h;
+                // Filtr qatori birinchi sarlavha ostida yopishib tursin
+                const head = $('asgTable').tHead;
+                const firstRowH = head.rows[0].offsetHeight;
+                if (firstRowH) head.rows[1].querySelectorAll('th').forEach(th => th.style.top = firstRowH + 'px');
                 const rowsRef = rows;
                 $('asgTable').querySelectorAll('tbody tr[data-i]').forEach(tr => tr.onclick = () => {
                     asgSel = rowsRef[+tr.dataset.i];

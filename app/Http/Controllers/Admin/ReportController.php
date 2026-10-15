@@ -3506,6 +3506,53 @@ class ReportController extends Controller
     }
 
     /**
+     * Dars jadvalini HEMIS'dan import qilishni boshlash (import:schedules bilan
+     * bir xil, navbat orqali). Bir vaqtda faqat bitta import ishlaydi.
+     */
+    public function startScheduleImport()
+    {
+        $key = \App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY;
+        $state = \Illuminate\Support\Facades\Cache::get($key);
+
+        // Ishlayotgan import — 10 daqiqa ichida yangilangan bo'lsa haqiqiy hisoblanadi
+        // (aks holda worker o'lgan, qotib qolgan holat)
+        if ($state && in_array($state['status'] ?? null, ['queued', 'running'], true)
+            && !empty($state['updated_at'])
+            && \Carbon\Carbon::parse($state['updated_at'])->gt(now()->subMinutes(10))) {
+            return response()->json(['success' => true, 'already_running' => true, 'state' => $state]);
+        }
+
+        $user = auth()->user() ?? auth()->guard('teacher')->user();
+        $name = (string) ($user->name ?? $user->full_name ?? '');
+
+        $state = [
+            'status' => 'queued',
+            'page' => 0,
+            'pages' => 0,
+            'total' => 0,
+            'started_by' => $name,
+            'started_at' => now()->toDateTimeString(),
+            'updated_at' => now()->toDateTimeString(),
+            'message' => 'Navbatda — import tez orada boshlanadi...',
+        ];
+        \Illuminate\Support\Facades\Cache::put($key, $state, now()->addDay());
+
+        \App\Jobs\ImportSchedulesWithProgressJob::dispatch($name);
+
+        return response()->json(['success' => true, 'already_running' => false, 'state' => $state]);
+    }
+
+    /**
+     * Dars jadvali importi holati (progress bar uchun).
+     */
+    public function scheduleImportStatus()
+    {
+        $state = \Illuminate\Support\Facades\Cache::get(\App\Jobs\ImportSchedulesWithProgressJob::PROGRESS_KEY);
+
+        return response()->json(['state' => $state]);
+    }
+
+    /**
      * Auditoriyalar ro'yxati sahifasi
      */
     public function auditoriumList()

@@ -100,7 +100,7 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Ma'ruza xonalari</label>
                             <div style="display:flex;gap:4px;align-items:center;">
                                 <select id="auditorium" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                                <button type="button" id="btn-sync-auditoriums" class="btn-sync" onclick="syncAuditoriums()" title="HEMIS dan sinxronlash">
+                                <button type="button" id="btn-sync-auditoriums" class="btn-sync" onclick="syncFromHemis()" title="HEMIS dan sinxronlash: ma'ruza xonalari va dars jadvali">
                                     <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                 </button>
                             </div>
@@ -115,6 +115,18 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Dars jadvali importi (HEMIS) — progress -->
+                <div id="sched-import-panel" style="display:none;padding:12px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+                        <span id="sched-import-title" style="font-size:13px;font-weight:700;color:#1e293b;">Dars jadvali HEMIS'dan yangilanmoqda</span>
+                        <span id="sched-import-meta" style="font-size:12px;color:#64748b;"></span>
+                    </div>
+                    <div id="sched-import-track" style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;">
+                        <div id="sched-import-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:999px;transition:width .4s ease;"></div>
+                    </div>
+                    <div id="sched-import-msg" style="font-size:12px;color:#475569;margin-top:6px;"></div>
                 </div>
 
                 <!-- Result Area -->
@@ -265,7 +277,105 @@
             return params;
         }
 
-        function syncAuditoriums() {
+        // ── HEMIS sinxronlash: ma'ruza xonalari + dars jadvali importi ──
+        var schedImportTimer = null;
+
+        function syncFromHemis() {
+            syncAuditoriums(true);
+            startScheduleImport();
+        }
+
+        function startScheduleImport() {
+            $.ajax({
+                url: '{{ route("admin.reports.schedule-report.import-schedules") }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                success: function(res) {
+                    renderScheduleImport(res.state);
+                    pollScheduleImport();
+                },
+                error: function(xhr) {
+                    var errMsg = 'Dars jadvali importini boshlashda xatolik';
+                    try { errMsg = JSON.parse(xhr.responseText).message || errMsg; } catch(e) {}
+                    alert(errMsg);
+                }
+            });
+        }
+
+        function pollScheduleImport() {
+            if (schedImportTimer) clearTimeout(schedImportTimer);
+            $.get('{{ route("admin.reports.schedule-report.import-schedules.status") }}', function(res) {
+                var st = res.state;
+                renderScheduleImport(st);
+                if (st && (st.status === 'queued' || st.status === 'running')) {
+                    schedImportTimer = setTimeout(pollScheduleImport, 2000);
+                }
+            }).fail(function() {
+                schedImportTimer = setTimeout(pollScheduleImport, 5000);
+            });
+        }
+
+        function fmtDuration(sec) {
+            sec = Math.max(0, Math.round(sec));
+            var m = Math.floor(sec / 60), s = sec % 60;
+            return m > 0 ? (m + ' daq ' + s + ' son') : (s + ' son');
+        }
+
+        function renderScheduleImport(st) {
+            var panel = document.getElementById('sched-import-panel');
+            if (!st) { panel.style.display = 'none'; return; }
+            panel.style.display = '';
+
+            var bar = document.getElementById('sched-import-bar');
+            var title = document.getElementById('sched-import-title');
+            var meta = document.getElementById('sched-import-meta');
+            var msg = document.getElementById('sched-import-msg');
+            var btn = document.getElementById('btn-sync-auditoriums');
+            var active = st.status === 'queued' || st.status === 'running';
+
+            var pct = st.pages > 0 ? Math.floor(st.page * 100 / st.pages) : 0;
+            if (st.status === 'done') pct = 100;
+
+            bar.style.width = pct + '%';
+            bar.style.background = st.status === 'error'
+                ? '#dc2626'
+                : (st.status === 'done' ? '#16a34a' : 'linear-gradient(90deg,#6366f1,#818cf8)');
+
+            if (st.status === 'queued') {
+                title.textContent = 'Dars jadvali importi navbatda...';
+                meta.textContent = '';
+            } else if (st.status === 'running') {
+                title.textContent = "Dars jadvali HEMIS'dan yangilanmoqda — " + pct + '%';
+                var parts = [];
+                if (st.pages > 0) parts.push(st.page + ' / ' + st.pages + ' sahifa');
+                parts.push((st.total || 0) + ' ta yozuv');
+                if (st.page > 0 && st.pages > 0 && st.started_at) {
+                    var elapsed = (Date.now() - new Date(st.started_at.replace(' ', 'T')).getTime()) / 1000;
+                    var left = elapsed / st.page * (st.pages - st.page);
+                    if (left > 0 && isFinite(left)) parts.push('~' + fmtDuration(left) + ' qoldi');
+                }
+                meta.textContent = parts.join(' · ');
+            } else if (st.status === 'done') {
+                title.textContent = 'Dars jadvali yangilandi — 100%';
+                meta.textContent = (st.total || 0) + ' ta yozuv';
+            } else {
+                title.textContent = 'Dars jadvali importi xato bilan tugadi';
+                meta.textContent = st.pages > 0 ? (st.page + ' / ' + st.pages + ' sahifa') : '';
+            }
+
+            var who = st.started_by ? (' (' + st.started_by + ')') : '';
+            if (active) {
+                msg.textContent = (st.message || '') + (st.started_at ? ' · boshlandi: ' + st.started_at + who : '');
+            } else {
+                msg.textContent = (st.message || '') + (st.finished_at ? ' · oxirgi yangilanish: ' + st.finished_at + who : '');
+            }
+
+            btn.disabled = active;
+            btn.style.opacity = active ? '0.5' : '1';
+            btn.title = active ? 'Dars jadvali importi davom etmoqda' : "HEMIS dan sinxronlash: ma'ruza xonalari va dars jadvali";
+        }
+
+        function syncAuditoriums(quiet) {
             var btn = document.getElementById('btn-sync-auditoriums');
             btn.disabled = true;
             btn.style.opacity = '0.5';
@@ -281,7 +391,12 @@
                     btn.style.opacity = '1';
                     btn.innerHTML = '<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
                     loadAuditoriums();
-                    alert(res.message || 'Sinxronlashtirildi');
+                    if (quiet) {
+                        // Tugma holatini dars jadvali importi boshqaradi
+                        pollScheduleImport();
+                    } else {
+                        alert(res.message || 'Sinxronlashtirildi');
+                    }
                 },
                 error: function(xhr) {
                     btn.disabled = false;
@@ -650,6 +765,7 @@
         }
 
         $(document).ready(function() {
+            pollScheduleImport();
             // Kalendarlarni yaratish
             new ScrollCalendar('date_from');
             new ScrollCalendar('date_to');

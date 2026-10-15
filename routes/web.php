@@ -1030,6 +1030,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/schedule-report/detail/{csId}', [ReportController::class, 'scheduleKtrCompareDetail'])->name('reports.schedule-report.detail');
         Route::get('/reports/schedule-report/get-auditoriums', [ReportController::class, 'getAuditoriums'])->name('reports.schedule-report.get-auditoriums');
         Route::post('/reports/schedule-report/sync-auditoriums', [ReportController::class, 'syncAuditoriums'])->name('reports.schedule-report.sync-auditoriums');
+        Route::post('/reports/schedule-report/import-schedules', [ReportController::class, 'startScheduleImport'])->name('reports.schedule-report.import-schedules');
+        Route::get('/reports/schedule-report/import-schedules/status', [ReportController::class, 'scheduleImportStatus'])->name('reports.schedule-report.import-schedules.status');
 
         Route::get('/reports/auditorium-list', [ReportController::class, 'auditoriumList'])->name('reports.auditorium-list');
         Route::get('/reports/auditorium-list/data', [ReportController::class, 'auditoriumListData'])->name('reports.auditorium-list.data');

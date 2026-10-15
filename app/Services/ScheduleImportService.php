@@ -162,7 +162,10 @@ class ScheduleImportService
     /**
      * Joriy o'quv yili bo'yicha jadval import (cron uchun)
      */
-    public function importByEducationYear(?\Closure $log = null, bool $silent = false): void
+    /**
+     * @param \Closure|null $onProgress fn(int $page, int $pages, int $totalImported) — har sahifadan keyin
+     */
+    public function importByEducationYear(?\Closure $log = null, bool $silent = false, ?\Closure $onProgress = null): void
     {
         $this->silent = $silent;
 
@@ -243,6 +246,7 @@ class ScheduleImportService
             $this->insertTempIds($items);
 
             if ($log) $log("  ✓ Sahifa {$page}/{$pages} — {$count} ta yozuv (jami: {$totalImported})");
+            if ($onProgress) $onProgress($page, $pages, $totalImported);
 
             // Nightly wrapper ga progress yuborish
             if (app()->bound('nightly.progress')) {

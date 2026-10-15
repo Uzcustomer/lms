@@ -44,7 +44,10 @@ class ImportSpecialtiesDepartments extends Command
         $this->info('Fetching specialties and departments data from HEMIS API...');
 
         $token = config('services.hemis.token');
-        $baseUrl = rtrim(config('services.hemis.base_url'), '/');
+        // .env da "/rest" yoki "/rest/v1" bo'lishi mumkin — "/v1" bir marta qo'shiladi (HemisService::apiUrl kabi)
+        $baseUrl = rtrim(trim((string) config('services.hemis.base_url')), '/');
+        $baseUrl = (preg_replace('~/v1$~', '', $baseUrl) ?? $baseUrl) . '/v1';
+        $failed = false;
         $page = 1;
         $pageSize = 40;
         $totalDepartments = 0;
@@ -67,6 +70,7 @@ class ImportSpecialtiesDepartments extends Command
             } catch (\Exception $e) {
                 $this->error("HTTP xatolik: " . $e->getMessage());
                 $telegram->notify("❌ Kafedralar importida HTTP xatolik: " . $e->getMessage());
+                $failed = true;
                 break;
             }
 
@@ -100,6 +104,7 @@ class ImportSpecialtiesDepartments extends Command
                 $this->error("API xatolik! Status: {$response->status()}, URL: {$url}");
                 $this->error("Javob: " . mb_substr($response->body(), 0, 500));
                 $telegram->notify("❌ Kafedralar importida xatolik: HTTP {$response->status()}");
+                $failed = true;
                 break;
             }
         } while ($page <= $totalPages);
@@ -114,6 +119,7 @@ class ImportSpecialtiesDepartments extends Command
             } catch (\Exception $e) {
                 $this->error("HTTP xatolik: " . $e->getMessage());
                 $telegram->notify("❌ Mutaxassisliklar importida HTTP xatolik: " . $e->getMessage());
+                $failed = true;
                 break;
             }
 
@@ -156,12 +162,21 @@ class ImportSpecialtiesDepartments extends Command
                 $this->error("API xatolik! Status: {$response->status()}, URL: {$url}");
                 $this->error("Javob: " . mb_substr($response->body(), 0, 500));
                 $telegram->notify("❌ Mutaxassisliklar importida xatolik: HTTP {$response->status()}");
+                $failed = true;
                 break;
             }
         } while ($page <= $totalPages);
 
+        if ($failed) {
+            $this->error("Import xatolik bilan tugadi. Kafedralar: {$totalDepartments} ta, Mutaxassisliklar: {$totalSpecialties} ta");
+
+            return 1;
+        }
+
         $telegram->notify("✅ Mutaxassislik va kafedralar importi tugadi. Kafedralar: {$totalDepartments} ta, Mutaxassisliklar: {$totalSpecialties} ta");
         $this->info('Specialties and departments import completed successfully.');
+
+        return 0;
     }
 
     /**

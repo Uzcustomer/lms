@@ -1571,8 +1571,7 @@ class VedomostSubmissionService
             return $this->mudiriCache[$departmentHemisId];
         }
 
-        $mudiri = Teacher::whereHas('roles', fn($q) => $q->where('name', 'kafedra_mudiri'))
-            ->where('department_hemis_id', $departmentHemisId)
+        $mudiri = Teacher::headsOfDepartment($departmentHemisId)
             ->where('is_active', true)
             ->first();
         if (!$mudiri) {

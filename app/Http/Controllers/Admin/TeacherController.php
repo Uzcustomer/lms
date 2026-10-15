@@ -97,6 +97,11 @@ class TeacherController extends Controller
             ->where('active', true)
             ->orderBy('name')
             ->get();
+        // Kafedra mudiri uchun kafedralar (12 — kafedra)
+        $kafedras = Department::where('structure_type_code', '12')
+            ->where(fn ($q) => $q->where('active', true)->orWhere('department_hemis_id', $teacher->head_department_hemis_id))
+            ->orderBy('name')
+            ->get(['department_hemis_id', 'name']);
         $roles = ProjectRole::staffRoles();
 
         // Tyutor guruhlari va talabalar
@@ -128,7 +133,7 @@ class TeacherController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'department_name']);
 
-        return view('admin.teachers.show', compact('teacher', 'departments', 'roles', 'tutorGroups', 'nazoratchiGroups', 'allGroups', 'subjectMeta'));
+        return view('admin.teachers.show', compact('teacher', 'departments', 'kafedras', 'roles', 'tutorGroups', 'nazoratchiGroups', 'allGroups', 'subjectMeta'));
     }
 
     public function edit(Teacher $teacher)
@@ -228,6 +233,7 @@ class TeacherController extends Controller
         $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
         $isFirmResponsible = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $roles);
         $isSupervisor = in_array(ProjectRole::SUPERVISOR->value, $roles);
+        $isDepartmentHead = in_array(ProjectRole::DEPARTMENT_HEAD->value, $roles);
 
         $request->validate([
             'roles' => 'nullable|array',
@@ -235,6 +241,7 @@ class TeacherController extends Controller
             'lavozim' => 'nullable|string|max:255',
             'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
             'dean_faculties.*' => 'exists:departments,department_hemis_id',
+            'head_department_hemis_id' => 'nullable|exists:departments,department_hemis_id',
             'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
             'responsible_subjects.*' => 'exists:curriculum_subjects,id',
             'nazoratchi_groups' => [$isSupervisor ? 'required' : 'nullable', 'array'],
@@ -246,6 +253,10 @@ class TeacherController extends Controller
         ]);
 
         $teacher->lavozim = $request->input('lavozim') ?: null;
+        // Bo'sh qoldirilsa — HEMIS dagi kafedrasi ishlatiladi
+        $teacher->head_department_hemis_id = $isDepartmentHead
+            ? ($request->input('head_department_hemis_id') ?: null)
+            : null;
         if ($isFirmResponsible) {
             $firmValue = $request->input('assigned_firm');
             // Agar "other" tanlangan va yangi firma nomi kiritilgan bo'lsa

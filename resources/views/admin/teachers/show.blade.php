@@ -452,6 +452,26 @@
                             </div>
 
                             @php
+                                $isMudiriChecked = in_array('kafedra_mudiri', $oldRoles);
+                                $oldHeadDept = (string) old('head_department_hemis_id', $teacher->head_department_hemis_id);
+                            @endphp
+                            <div id="head-department-section" style="display: {{ $isMudiriChecked ? 'block' : 'none' }}; margin-top: 10px;">
+                                <div style="padding: 10px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0;">
+                                    <label for="head_department_hemis_id" style="font-size: 11px; font-weight: 600; color: #166534; display: block; margin-bottom: 6px;">Kafedra mudiri roli uchun kafedra:</label>
+                                    <select name="head_department_hemis_id" id="head_department_hemis_id"
+                                            style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; background: #fff;">
+                                        <option value="">— HEMIS dagi kafedrasi: {{ $teacher->department ?: 'aniqlanmagan' }} —</option>
+                                        @foreach($kafedras as $kafedra)
+                                            <option value="{{ $kafedra->department_hemis_id }}" {{ $oldHeadDept === (string) $kafedra->department_hemis_id ? 'selected' : '' }}>{{ $kafedra->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                                        Xodim HEMIS da boshqa bo'limda (masalan o'rindosh) bo'lsa, mudir bo'lgan kafedrasini tanlang.
+                                    </div>
+                                </div>
+                            </div>
+
+                            @php
                                 $oldDeanFaculties = old('dean_faculties', $teacher->deanFaculties->pluck('department_hemis_id')->toArray());
                                 $isDekanChecked = in_array('dekan', $oldRoles);
                             @endphp
@@ -895,6 +915,16 @@
                 }
             } catch (e) {
                 console.error('toggleRole dept error:', e);
+            }
+
+            try {
+                var mudiriCheckbox = document.querySelector('input[value="kafedra_mudiri"]');
+                var headDept = document.getElementById('head-department-section');
+                if (headDept && mudiriCheckbox) {
+                    headDept.style.display = mudiriCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole head dept error:', e);
             }
 
             try {

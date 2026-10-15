@@ -1102,8 +1102,7 @@ class RetakeJournalService
         if ($teacher && $teacher->department_hemis_id) {
             try {
                 $mudiri = \App\Models\Teacher::query()
-                    ->whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
-                    ->where('department_hemis_id', $teacher->department_hemis_id)
+                    ->headsOfDepartment($teacher->department_hemis_id)
                     ->where('is_active', true)
                     ->first();
                 if (!$mudiri) {

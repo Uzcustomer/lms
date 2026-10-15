@@ -81,11 +81,12 @@ class ClubApplicationsExport implements WithMultipleSheets
         $headByDept = [];
         if ($deptIds !== []) {
             Teacher::query()
-                ->whereIn('department_hemis_id', $deptIds)
+                ->where(fn ($q) => $q->whereIn('head_department_hemis_id', $deptIds)
+                    ->orWhere(fn ($q) => $q->whereNull('head_department_hemis_id')->whereIn('department_hemis_id', $deptIds)))
                 ->whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
-                ->get(['department_hemis_id', 'full_name'])
+                ->get(['department_hemis_id', 'head_department_hemis_id', 'full_name'])
                 ->each(function ($t) use (&$headByDept) {
-                    $headByDept[(string) $t->department_hemis_id] ??= (string) $t->full_name;
+                    $headByDept[(string) $t->headDepartmentHemisId()] ??= (string) $t->full_name;
                 });
         }
 

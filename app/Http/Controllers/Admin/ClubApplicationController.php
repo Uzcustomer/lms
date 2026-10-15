@@ -38,7 +38,7 @@ class ClubApplicationController extends Controller
 
         try {
             if ($activeRole === 'kafedra_mudiri') {
-                return ClubMembership::where('department_hemis_id', $user->department_hemis_id)
+                return ClubMembership::where('department_hemis_id', $user->headDepartmentHemisId())
                     ->orderByDesc('created_at')
                     ->get();
             }
@@ -134,7 +134,7 @@ class ClubApplicationController extends Controller
             return;
         }
 
-        if ($activeRole === 'kafedra_mudiri' && $application->department_hemis_id == $user->department_hemis_id) {
+        if ($activeRole === 'kafedra_mudiri' && $application->department_hemis_id == $user->headDepartmentHemisId()) {
             return;
         }
 

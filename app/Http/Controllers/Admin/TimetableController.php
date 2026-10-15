@@ -4036,13 +4036,14 @@ class TimetableController extends Controller
         }
 
         $department = null;
-        $departmentHemisId = $actor->department_hemis_id ?? null;
+        // Admin tanlagan kafedra (HEMIS da boshqa bo'limda bo'lsa ham), aks holda HEMIS dagi
+        $departmentHemisId = $actor->head_department_hemis_id ?: ($actor->department_hemis_id ?? null);
         if ($departmentHemisId) {
             $department = Department::where('department_hemis_id', $departmentHemisId)->first();
         }
 
         $departmentName = trim((string) ($actor->department ?? ''));
-        if (!$department && $departmentName !== '') {
+        if (!$department && $departmentName !== '' && !$actor->head_department_hemis_id) {
             $department = Department::where('name', $departmentName)
                 ->where('structure_type_code', '!=', 11)
                 ->first();

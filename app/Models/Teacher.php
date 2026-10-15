@@ -43,6 +43,7 @@ class Teacher extends Authenticatable
         'status',
         'is_active',
         'department_hemis_id',
+        'head_department_hemis_id',
         'role',
         'must_change_password',
         'phone',
@@ -87,6 +88,30 @@ class Teacher extends Authenticatable
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Kafedra mudiri qaysi kafedraga mudir: admin tanlagan kafedra,
+     * tanlanmagan bo'lsa — HEMIS dagi kafedrasi.
+     */
+    public function headDepartmentHemisId(): ?int
+    {
+        $id = $this->head_department_hemis_id ?: $this->department_hemis_id;
+
+        return $id ? (int) $id : null;
+    }
+
+    /** Berilgan kafedraning mudirlari (kafedra_mudiri roli + headDepartmentHemisId() bo'yicha). */
+    public function scopeHeadsOfDepartment($query, $departmentHemisId)
+    {
+        return $query->whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
+            ->where(function ($q) use ($departmentHemisId) {
+                $q->where('head_department_hemis_id', $departmentHemisId)
+                    ->orWhere(function ($q) use ($departmentHemisId) {
+                        $q->whereNull('head_department_hemis_id')
+                            ->where('department_hemis_id', $departmentHemisId);
+                    });
+            });
     }
 
     public function isProfileComplete(): bool

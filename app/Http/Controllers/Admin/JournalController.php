@@ -10188,8 +10188,7 @@ class JournalController extends Controller
         $kafedra = Department::where('department_hemis_id', $subject->department_id)->first();
         $kafedraMudiriName = '';
         if ($kafedra) {
-            $mudiri = Teacher::whereHas('roles', fn($q) => $q->where('name', 'kafedra_mudiri'))
-                ->where('department_hemis_id', $kafedra->department_hemis_id)
+            $mudiri = Teacher::headsOfDepartment($kafedra->department_hemis_id)
                 ->where('is_active', true)
                 ->first();
             if (!$mudiri) {

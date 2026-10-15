@@ -1136,8 +1136,7 @@ class KtrController extends Controller
                 $info['kafedra_name'] = $kafedra->name;
 
                 // Kafedra mudiri - Spatie role orqali
-                $mudiri = Teacher::whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
-                    ->where('department_hemis_id', $kafedra->department_hemis_id)
+                $mudiri = Teacher::headsOfDepartment($kafedra->department_hemis_id)
                     ->where('is_active', true)
                     ->first();
                 // Fallback: role ustuni orqali

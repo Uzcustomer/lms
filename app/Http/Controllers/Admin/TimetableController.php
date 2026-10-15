@@ -157,15 +157,18 @@ class TimetableController extends Controller
             ->selectRaw("{$p}subject_name as subject_name, {$p}department_name as department_name, COUNT(*) as c")
             ->groupBy($p . 'subject_name', $p . 'department_name')->get();
         $acc = [];
+        $totals = [];
         foreach ($kafRows as $r) {
             $k = $this->normSubject($r->subject_name);
             if ($k !== '') {
                 $acc[$k][$r->department_name] = ($acc[$k][$r->department_name] ?? 0) + (int) $r->c;
+                $totals[$r->department_name] = ($totals[$r->department_name] ?? 0) + (int) $r->c;
             }
         }
         $kafMap = [];
         foreach ($acc as $k => $deps) {
-            arsort($deps);
+            // Teng bo'lsa — umumiy fanlari ko'proq kafedra (bo'lingan eski kafedra yutmasin)
+            uksort($deps, fn ($a, $b) => [$deps[$b], $totals[$b] ?? 0, $a] <=> [$deps[$a], $totals[$a] ?? 0, $b]);
             $kafMap[$k] = array_key_first($deps);
         }
 

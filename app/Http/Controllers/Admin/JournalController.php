@@ -6200,7 +6200,9 @@ class JournalController extends Controller
                     Storage::disk('public')->delete($oldPath);
                 }
             }
-            $reuse->update($payload);
+            // Qayta yuborilgan so'rovning sanasi — yangi yuborilgan vaqt (ro'yxatda
+            // tepaga chiqadi va "kutmoqda" vaqti shu paytdan hisoblanadi)
+            $reuse->forceFill($payload + ['created_at' => now()])->save();
             $opening = $reuse->fresh();
         } else {
             $opening = LessonOpening::create($payload);

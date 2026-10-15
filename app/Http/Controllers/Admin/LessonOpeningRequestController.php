@@ -52,13 +52,9 @@ class LessonOpeningRequestController extends Controller
         if ($status !== 'all') {
             $query->where('status', $status);
         }
-        // Avval shu foydalanuvchi qarori kerak bo'lganlari
-        if ($stage) {
-            $column = LessonOpening::statusColumn($stage);
-            $query->orderByRaw("CASE WHEN status = 'pending' AND {$column} IS NULL THEN 0 ELSE 1 END");
-        }
+        // Eng yangi yuborilgan so'rov eng tepada (qayta yuborilganda created_at yangilanadi)
         $reviewer = $stage ? $this->reviewer() : null;
-        $query->latest();
+        $query->latest()->orderByDesc('id');
 
         $openings = $query->paginate(30)->withQueryString();
 

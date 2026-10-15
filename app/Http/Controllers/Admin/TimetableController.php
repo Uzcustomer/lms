@@ -120,13 +120,42 @@ class TimetableController extends Controller
         return ($overrides[$k] ?? null) ?: ($kafMap[$k] ?? null);
     }
 
-    /** Fan → kafedra xaritasi: [$kafMap, $overrides] (assembleRows va subjects uchun umumiy). */
+    /**
+     * Fan → kafedra xaritasi: [$kafMap, $overrides] (assembleRows va subjects uchun umumiy).
+     * Avval joriy o'quv yilida o'tiladigan fanlarning kafedrasi olinadi (kafedra bo'linsa/
+     * qayta nomlansa eski rejalar ko'pchilik bo'lib yutib ketmasin), joriy yilda
+     * uchramagan fanlar uchun — barcha rejalardagi eng ko'p uchragan kafedra.
+     */
     private function buildKafedraMap(): array
     {
-        $kafRows = DB::table('curriculum_subjects')
-            ->whereNotNull('department_name')->where('department_name', '!=', '')
-            ->selectRaw('subject_name, department_name, COUNT(*) as c')
-            ->groupBy('subject_name', 'department_name')->get();
+        $kafMap = $this->kafedraCounts(DB::table('curriculum_subjects'));
+
+        $year = DB::table('semesters')->where('current', true)->max('education_year');
+        if ($year) {
+            $current = $this->kafedraCounts(DB::table('curriculum_subjects as cs')
+                ->join('semesters as s', function ($j) {
+                    $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+                        ->on('s.code', '=', 'cs.semester_code');
+                })
+                ->where('s.education_year', $year)
+                ->where('cs.is_active', true), 'cs.');
+            $kafMap = $current + $kafMap;
+        }
+
+        $overrides = DB::table('subject_kafedra_overrides')
+            ->where('kafedra_name', '!=', '')
+            ->pluck('kafedra_name', 'norm_name')->all();
+
+        return [$kafMap, $overrides];
+    }
+
+    /** Normallashtirilgan fan nomi → eng ko'p uchragan kafedra nomi. */
+    private function kafedraCounts($query, string $p = ''): array
+    {
+        $kafRows = $query
+            ->whereNotNull($p . 'department_name')->where($p . 'department_name', '!=', '')
+            ->selectRaw("{$p}subject_name as subject_name, {$p}department_name as department_name, COUNT(*) as c")
+            ->groupBy($p . 'subject_name', $p . 'department_name')->get();
         $acc = [];
         foreach ($kafRows as $r) {
             $k = $this->normSubject($r->subject_name);
@@ -139,11 +168,8 @@ class TimetableController extends Controller
             arsort($deps);
             $kafMap[$k] = array_key_first($deps);
         }
-        $overrides = DB::table('subject_kafedra_overrides')
-            ->where('kafedra_name', '!=', '')
-            ->pluck('kafedra_name', 'norm_name')->all();
 
-        return [$kafMap, $overrides];
+        return $kafMap;
     }
 
     private function practiceGroupSizeOverrides(): array

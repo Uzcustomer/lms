@@ -1210,6 +1210,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/boards/{board}/teacher-units', [\App\Http\Controllers\Admin\TimetableController::class, 'teacherUnits'])->name('teacher-units');
                 Route::post('/boards/{board}/assign-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignTeacher'])->name('assign-teacher');
                 Route::post('/boards/{board}/assign-room', [\App\Http\Controllers\Admin\TimetableController::class, 'assignUnitRoom'])->name('assign-room');
+                Route::get('/boards/{board}/assignment-report', [\App\Http\Controllers\Admin\TimetableController::class, 'assignmentReport'])->name('assignment-report');
                 Route::get('/boards/{board}/auditorium-teachers', [\App\Http\Controllers\Admin\TimetableController::class, 'auditoriumTeacherAssignments'])->name('auditorium-teachers');
                 Route::post('/boards/{board}/assign-auditorium-teacher', [\App\Http\Controllers\Admin\TimetableController::class, 'assignAuditoriumTeacher'])->name('assign-auditorium-teacher');
                 Route::delete('/boards/{board}/auditorium-teachers/{auditorium}', [\App\Http\Controllers\Admin\TimetableController::class, 'unassignAuditoriumTeacher'])->name('auditorium-teachers.destroy');

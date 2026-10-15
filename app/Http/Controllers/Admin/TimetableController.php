@@ -4314,6 +4314,74 @@ class TimetableController extends Controller
         return implode('¦', [$c->specialty_name, $c->course, $c->subject_name, $c->training_type, $scope]);
     }
 
+    /**
+     * Excel: kafedralar kesimida o'qituvchi va xona biriktirish holati
+     * (faqat admin / superadmin). Dars birligi "biriktirilgan" — barcha
+     * kartalarida o'qituvchi (xona) bo'lsa.
+     */
+    public function assignmentReport(Request $request, TimetableBoard $board)
+    {
+        abort_unless(in_array($this->timetableActiveRole($request), ['admin', 'superadmin'], true), 403, 'Hisobot faqat admin uchun.');
+
+        $units = [];
+        foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
+            $k = $this->unitKey($c);
+            $units[$k] ??= [
+                'kafedra' => trim((string) $c->kafedra_name) ?: '— kafedra aniqlanmagan —',
+                'subject' => (string) $c->subject_name,
+                'scope' => trim(($c->faculty_name ? $c->faculty_name . ' · ' : '') . $c->specialty_name . ' · ' . (int) $c->course . '-kurs'),
+                'type' => $c->training_type === 'lecture' ? "Ma'ruza" : 'Amaliy',
+                'group' => (string) ($c->training_type === 'lecture' ? ($c->oqim_label ?: 'oqim') : $c->group_name),
+                'cards' => 0, 'with_teacher' => 0, 'with_room' => 0,
+                'teacher' => null, 'room' => null,
+            ];
+            $units[$k]['cards']++;
+            if ($c->teacher_id) {
+                $units[$k]['with_teacher']++;
+                $units[$k]['teacher'] ??= $c->teacher_name;
+            }
+            if ($c->auditorium_code) {
+                $units[$k]['with_room']++;
+                $units[$k]['room'] ??= $c->auditorium_name ?: $c->auditorium_code;
+            }
+        }
+
+        $kafedras = [];
+        $missing = [];
+        foreach ($units as $u) {
+            $hasTeacher = $u['with_teacher'] === $u['cards'];
+            $hasRoom = $u['with_room'] === $u['cards'];
+            $kafedras[$u['kafedra']] ??= ['name' => $u['kafedra'], 'units' => 0, 'teacher' => 0, 'room' => 0, 'full' => 0, 'subject_set' => []];
+            $kafedras[$u['kafedra']]['units']++;
+            $kafedras[$u['kafedra']]['teacher'] += $hasTeacher ? 1 : 0;
+            $kafedras[$u['kafedra']]['room'] += $hasRoom ? 1 : 0;
+            $kafedras[$u['kafedra']]['full'] += ($hasTeacher && $hasRoom) ? 1 : 0;
+            $kafedras[$u['kafedra']]['subject_set'][mb_strtolower($u['subject'])] = true;
+            if (!$hasTeacher || !$hasRoom) {
+                $missing[] = $u + [
+                    // Qisman biriktirilgan bo'lsa ham "biriktirilmagan" deb ko'rsatiladi
+                    'teacher' => $hasTeacher ? $u['teacher'] : null,
+                    'room' => $hasRoom ? $u['room'] : null,
+                ];
+            }
+        }
+        foreach ($kafedras as &$k) {
+            $k['subjects'] = count($k['subject_set']);
+            unset($k['subject_set']);
+        }
+        unset($k);
+        uasort($kafedras, fn ($a, $b) => strcmp(mb_strtolower($a['name']), mb_strtolower($b['name'])));
+        usort($missing, fn ($a, $b) => [mb_strtolower($a['kafedra']), mb_strtolower($a['subject']), $a['scope'], $a['group']]
+            <=> [mb_strtolower($b['kafedra']), mb_strtolower($b['subject']), $b['scope'], $b['group']]);
+
+        $title = trim(($board->name ?? '') ?: ('Doska #' . $board->id));
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\TimetableAssignmentReportExport($kafedras, $missing, $title),
+            'biriktirish-hisoboti-' . now('Asia/Tashkent')->format('Y-m-d') . '.xlsx'
+        );
+    }
+
     /** Doskadagi dars birliklari + joriy o'qituvchi (biriktirish matritsasi uchun). */
     public function teacherUnits(Request $request, TimetableBoard $board)
     {

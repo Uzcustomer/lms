@@ -797,6 +797,13 @@
                                     <label class="flex items-center gap-1.5 text-xs text-slate-600 ml-1"><input type="checkbox" id="asgOnlyEmpty" class="rounded border-slate-300"> faqat biriktirilmagan</label>
                                     <input id="asgSearch" placeholder="Fan qidirish..." class="ml-auto w-48 rounded-md border-slate-300 text-xs py-1.5">
                                     <span id="asgCount" class="text-xs text-slate-400"></span>
+                                    @if(in_array($timetableActiveRole, ['admin', 'superadmin'], true))
+                                        {{-- Kafedralar kesimida o'qituvchi va xona biriktirish hisoboti (faqat admin) --}}
+                                        <button type="button" id="asgReportBtn" class="asc-btn text-xs" style="background:#059669;color:#fff;border-color:#059669"
+                                                title="Har bir kafedra bo'yicha o'qituvchi va xona biriktirilgan / biriktirilmagan darslar">
+                                            <i class="bi bi-file-earmark-excel" aria-hidden="true"></i> Excel hisobot
+                                        </button>
+                                    @endif
                                 </div>
                                 <div class="overflow-y-auto overflow-x-hidden asc-table-scroll" style="max-height: none; flex: 1 1 auto;" data-drag-scroll>
                                     <table id="asgTable" class="w-full text-xs asc-table"></table>
@@ -6565,6 +6572,12 @@
                     scopedSpecs.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
                 renderAsgTable();
             };
+            // Excel hisobot: kafedralar kesimida biriktirish holati (faqat admin)
+            if ($('asgReportBtn')) {
+                $('asgReportBtn').onclick = () => {
+                    if (board) window.location.href = BASE + '/boards/' + board.id + '/assignment-report';
+                };
+            }
             $('asgClose').onclick = $('asgCloseBtn').onclick = () => {
                 $('assignModal').classList.add('hidden');
                 renderAll();   // grid/panel o'qituvchi o'zgarishlarini aks ettirsin

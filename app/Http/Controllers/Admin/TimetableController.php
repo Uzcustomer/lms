@@ -497,11 +497,14 @@ class TimetableController extends Controller
         }));
     }
 
-    /** Kartaning kafedrasi: qo'lda belgilangan, so'ng HEMIS fanining o'z kafedrasi (HEMIS doska), so'ng xarita. */
+    /**
+     * Kartaning kafedrasi. HEMIS doskada — faqat fanning HEMIS dagi o'z kafedrasi (KTR kabi,
+     * "O'quv reja to'g'riligi"dagi qo'lda belgilanganlar ishlatilmaydi). Ishchi reja doskada —
+     * qo'lda belgilangan, so'ng xarita.
+     */
     private function rowKafedra(array $overrides, array $kafMap, $row, ?string $specialty = null, ?int $course = null): ?string
     {
-        $k = $this->normSubject((string) $row->subject_name);
-        if (empty($overrides[$k]) && !empty($row->hemis_kafedra)) {
+        if (!empty($row->hemis_kafedra)) {
             return $row->hemis_kafedra;
         }
 
@@ -1267,6 +1270,21 @@ class TimetableController extends Controller
         // HEMIS da kafedra o'zgargan / bo'lingan bo'lsa joylashuvlarni yo'qotmasdan to'g'rilansin)
         [$kafMap, $overrides] = $this->buildKafedraMap();
 
+        // HEMIS doska: kafedra faqat HEMIS fanining o'zidan (qo'lda belgilanganlar ishlatilmaydi)
+        $hemisKaf = [];
+        if ($this->isHemisBoard($board)) {
+            foreach ($subjects as $s) {
+                if (empty($s->hemis_kafedra)) {
+                    continue;
+                }
+                $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
+                [$facAlias, $specAlias] = $this->curriculumScopeAlias((string) $s->specialty_name);
+                $k = $this->specKey($specAlias) . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
+                $hemisKaf[($facAlias !== null ? $this->specKey($facAlias) . '|' : '') . $k] ??= $s->hemis_kafedra;
+                $hemisKaf[$k] ??= $s->hemis_kafedra;
+            }
+        }
+
         $updated = 0;
         $kafUpdated = 0;
         $touched = [];
@@ -1279,7 +1297,9 @@ class TimetableController extends Controller
                 $updated++;
                 $changed = true;
             }
-            $kaf = $this->kafedraFor($overrides, $kafMap, (string) $c->subject_name, (string) $c->specialty_name, (int) $c->course);
+            $hk = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
+            $kaf = $hemisKaf[$this->specKey((string) $c->faculty_name) . '|' . $hk] ?? $hemisKaf[$hk]
+                ?? ($hemisKaf ? null : $this->kafedraFor($overrides, $kafMap, (string) $c->subject_name, (string) $c->specialty_name, (int) $c->course));
             if ($kaf && $kaf !== $c->kafedra_name) {
                 $c->kafedra_name = $kaf;
                 $kafUpdated++;

@@ -1,6 +1,7 @@
 # «Monitoring» moduli — 1-bosqich (pilot) rejasi
 
-Holat: **taklif, buyurtmachi tasdig'ini kutmoqda.** Tasdiqlanmaguncha kod yozilmaydi.
+Holat: **ish boshlandi** (16.10.2026). Buyurtmachi javoblari 11-bo'limda; ish `feature/monitoring`
+branch'ida.
 Asos: `docs/MONITORING_TZ.md` (v1.0), `docs/detectors.yaml` (54 detektor), `docs/ARXITEKTURA_XULOSA.md`.
 
 ---
@@ -25,10 +26,11 @@ Asos: `docs/MONITORING_TZ.md` (v1.0), `docs/detectors.yaml` (54 detektor), `docs
   - **PR 1a — yadro + A-5 + D-2.** A-5 ning muddati 01.11.2026, ya'ni 17 kun qoldi, shuning uchun
     u birinchi navbatda.
   - **PR 1b — Q-1, E-1, E-7** va M3/M8 ning soddalashtirilgan shakllari.
-- **PR 0 (tavsiya, Monitoring'dan tashqari).** Arxitektura xulosasining 10-bo'limidagi xavfsizlik
-  muammolarini tuzatish: rol berishda huquq tekshiruvi, `public/` dagi phpMyAdmin va debug skriptlar,
-  repozitoriydagi sirlar, haqiqiy shaxsiy ma'lumotli CSV. Monitoring rollari aynan shu rol berish
-  mexanizmi orqali beriladi.
+- **PR 0 (Monitoring'dan tashqari) — `claude/new-session-qm95zg` branch'ida tayyor.** Arxitektura
+  xulosasining 10-bo'limidagi xavfsizlik muammolari, platforma ishiga ta'sir qilmaydigan qismi:
+  rol berish, parol tiklash va foydalanuvchilarni boshqarish faqat superadmin/admin/kichik_admin'ga;
+  `public/` dagi debug skriptlar va phpMyAdmin yopildi; `.env.example` va Moodle skriptidagi sirlar
+  olib tashlandi; haqiqiy shaxsiy ma'lumotli CSV o'chirildi.
 
 ## 3. Ma'lumotlar modeli
 
@@ -95,14 +97,16 @@ quyidagi kalitlarni yaml'ga qo'shishni taklif qilaman (qiymatlar TZ va katalog m
     params: { threshold_hours: 74, exclude_medical: true, medical_reasons: [kasallik, tibbiy_korik] }
     default_owner_role: dekan
   - code: Q-1
-    params: { days: 3, day_type: calendar, exam_kinds: [oski, test], include_resits: true }
+    params: { days: 3, day_type: workdays, include_resits: false, late_completion: auto_close }
     default_owner_role: kafedra_mudiri
   - code: A-5
-    params: { deadline: "2026-11-01", education_year: "2026-2027", min_paid_percent: 25 }
+    params: { deadline: "2026-11-01", education_year: "2026-2027",
+              min_paid_percent: 25, min_paid_percent_special: 50 }
     default_owner_role: registrator_ofisi
   - code: E-1
     params: { workdays: 1, order_types: [akademik_tatil, chetlashtirish, kursda_qoldirish],
-              recipients: [ijara_kotibi, buxgalteriya] }
+              recipients: [ijara_kotibi, buxgalteriya], since_date: "2026-10-01" }
+    # ijara kotibi (Muhammadzafar) va buxgalteriya qabul qiluvchilari panelda tanlanadi
     default_owner_role: registrator_ofisi
   - code: E-7
     params: { required_docs: 6, require_original_check: true }
@@ -120,10 +124,14 @@ holatida ko'rinadi.
 | Kod | Trigger to'plami | Kutilgan harakat to'plami | Fingerprint | Avtomatik yopilish | Mas'ul |
 |---|---|---|---|---|---|
 | **D-2** | Joriy semestr bo'yicha `SUM(attendances.absent_off)` > `threshold_hours`. `exclude_medical` yoqilgan bo'lsa, LMS'da tasdiqlangan tibbiy `AbsenceExcuse` qamragan kunlardagi soatlar ayiriladi | `monitoring_orders` da shu talabaga `chetlashtirish` buyrug'i bor yoki `student_status_code` endi «o'qimoqda» emas | `D-2:{student_hemis_id}:{o'quv yili}:{semestr}` | buyruq paydo bo'ldi, holat o'zgardi yoki soat chegaradan tushdi | talaba fakulteti dekani (`dean_faculties`) |
-| **Q-1** | `exam_schedules` dagi OSKI yoki test sanasi (qayta topshirishlar ham) + `days` < bugun | guruhning faol talabalari uchun `hemis_exam_grades` da shu fan va nazorat turi bo'yicha baho bor va **kiritilgan sana** ≤ muddat | `Q-1:{group}:{subject}:{semestr}:{tur}:{sana}` | barcha baholar kiritildi (kechikish `details` da qoladi) | fan kafedrasi mudiri (`curriculum_subjects.department_id`) |
+| **Q-1** | YN sanasi — `exam_schedules` dagi OSKI va test sanalarining kechrog'i (vedomost `base_date` mantig'i bilan bir xil) + **3 ish kuni** < bugun | guruhning faol talabalari uchun `hemis_exam_grades` da YN bahosi (`exam_type_code = 13`) bor | `Q-1:{group}:{subject}:{semestr}:{tur}:{sana}` | barcha baholar kiritildi (kechikish `details` da qoladi) | fan kafedrasi mudiri (`curriculum_subjects.department_id`) |
 | **A-5** | 2026/2027 kontrakt bo'yicha tavsiya etilganlar (import) | (a) to'lov ≥ `min_paid_percent` (`contract_list`), (b) qabul buyrug'i (`monitoring_orders`), (c) HEMIS kontingentida bor. Signal: to'lamagan bo'lib kontingentda turgan yoki to'lab buyrug'i chiqmagan. Xabarnoma dalillari (sayt, SMS) — bitta tekshiruv nuqtasi | `A-5:{abituriyent id}` (+ `A-5:xabarnoma`) | uchala shart bajarildi | registrator ofisi |
-| **E-1** | `monitoring_orders` dagi akademik ta'til, chetlashtirish yoki kursda qoldirish buyrug'i | `monitoring_notice_logs` da ikkala qabul qiluvchiga ham xabar yozuvi bor va `sent_at` ≤ buyruq sanasi + `workdays` ish kuni | `E-1:{order_id}` | ikkala yozuv ham kiritildi (kechikish `details` da qoladi) | registrator ofisi |
+| **E-1** | `monitoring_orders` dagi akademik ta'til, chetlashtirish yoki kursda qoldirish buyrug'i | ijara kotibi va buxgalteriyaga xabar yuborilgani `monitoring_notice_logs` da qayd etilgan, `sent_at` ≤ buyruq sanasi + 1 ish kuni. Registrator «Xabar yuborish» tugmasini bossa, mark xabarni o'zi yuboradi (ichki bildirishnoma + Telegram) va yozuvni o'zi qo'yadi | `E-1:{order_id}` | ikkala yozuv ham kiritildi (kechikish `details` da qoladi) | registrator ofisi |
 | **E-7** | ko'chirib kelgan talabalar (reyestrdagi `kochirish` buyrug'i yoki M8 ga qo'lda qo'shilgan) | M8 cheklisti: 6 hujjat bor va asli tekshirilgan | `E-7:{student_hemis_id}` | cheklist to'liq | registrator ofisi (yoki dekan) |
+
+A-5 uchun to'lov chegarasi 578-qaror 1-ilovasidan: oddiy kontraktda yillik summaning **kamida 25 %**,
+qo'shimcha va tabaqalashtirilgan kontraktda birinchi yilning **kamida 50 %** (katalogdagi F-7 bilan bir
+xil). To'lov ulushi mavjud kod bilan bir xil hisoblanadi: `paid_credit_amount / edu_contract_sum`.
 
 A-5 01.11.2026 gacha **prognoz** rejimida ishlaydi: kim xavf ostida ekani `warning_only` sifatida
 ko'rsatiladi. 01.11 dan keyin haqiqiy istisnolarga o'tadi.
@@ -136,8 +144,16 @@ ko'rsatiladi. 01.11 dan keyin haqiqiy istisnolarga o'tadi.
   o'zgarish) saqlanadi. `hemis_exam_grades` ga `hemis_created_at` (API qaytarsa) yoki
   `first_seen_at` qo'shiladi. Lekin sinxron kuniga bir marta (03:00), shuning uchun `first_seen_at`
   ±1 kun xatoli bo'ladi.
-- **Tavsiya etilganlar ro'yxati** (A-5) — import. `students` va `contract_list` da JSHSHIR yo'q,
-  shuning uchun moslashtirish kaliti aniqlanishi kerak (10-bo'lim, 5-savol).
+- **Tavsiya etilganlar ro'yxati** (A-5). Mandat test markaziga qog'ozda keladi, shuning uchun:
+  1) test markazi yoki registrator Agentlikdan ro'yxatning elektron nusxasini (Excel) so'raydi;
+  2) elektron nusxa bo'lmasa, mark beradigan Excel shablonga ro'yxat bir marta kiritiladi.
+  Fayl «Importlar» sahifasidan yuklanadi, qog'oz mandatning skani esa importga dalil sifatida biriktiriladi.
+  Talabaga moslash tartibi: pasport (seriya + raqam) → HEMIS ID → F.I.Sh. Faqat F.I.Sh. bo'yicha
+  topilganlar «tasdiqlanmagan moslik» deb belgilanadi va qo'lda tasdiqlanadi.
+- **Buyruqlar endpointi.** `php artisan monitoring:hemis-probe` buyrug'i HEMIS'dagi ehtimoliy buyruq
+  endpointlariga so'rov yuboradi. U faqat HTTP holatini, yozuvlar sonini va maydon **nomlarini**
+  chiqaradi, qiymatlarni chiqarmaydi. RTM uni prod serverda bir marta ishga tushiradi; endpoint
+  topilmaguncha buyruqlar Excel/CSV orqali yuklanadi.
 - **M3 va M8** — mark ichida oddiy shakllar (soddalashtirilgan).
 
 ## 6. Rollar va kirish
@@ -147,7 +163,7 @@ ko'rsatiladi. 01.11 dan keyin haqiqiy istisnolarga o'tadi.
 | Monitoring administratori | **yangi rol** `monitoring_admin` («Monitoring administratori») |
 | Registrator ofisi menejeri | mavjud `registrator_ofisi` |
 | Mas'ul xodim | alohida rol shart emas: istisno biriktirilgan har bir xodim «Menga biriktirilganlar» sahifasida faqat o'zinikini ko'radi |
-| Rahbariyat | **yangi rol** `rahbariyat` (faqat o'qish; `nazoratchi` namunasidagi kabi) + mavjud `oquv_prorektori` |
+| Rahbariyat | mavjud `oquv_prorektori` (faqat o'qish). Alohida `rahbariyat` roli hozircha qo'shilmaydi |
 | RTM | mavjud `superadmin` / `admin`: run'lar va importlar jurnali |
 
 - Ko'rish doirasi `MonitoringIstisno::scopeVisibleTo($actor)` va `MonitoringIstisnoPolicy` da
@@ -199,7 +215,30 @@ muddat o'tganda yuboriladigan eslatmalar, kalendar va oylik svod — 2-bosqichda
 | `.env.example`, migratsiyalar, README | PR tarkibida |
 | Haqiqiy shaxsiy ma'lumot yo'q | faqat factory/Faker; PR'dan oldin diff tekshiriladi |
 
-## 10. Javobi topilmagan savollar (buyurtmachi va RTM uchun)
+## 10. Savollar va javoblar
+
+### 10.1. Buyurtmachi javoblari (16.10.2026)
+
+| Savol | Javob | Rejadagi natija |
+|---|---|---|
+| A-5: tavsiya etilganlar | Mandat test markaziga qog'ozda keladi | Excel shablon orqali import, skan dalil sifatida (5-bo'lim) |
+| A-5: to'lov ulushi | 578-qarordagi qoida | 25 % (oddiy), 50 % (qo'shimcha/tabaqalashtirilgan) |
+| Q-1: «3 kun» | 3 ish kuni | `day_type: workdays` |
+| E-1: ijara kotibi | Muhammadzafar | qabul qiluvchi panelda tanlanadi (kodga yozilmaydi) |
+| Rollar | `monitoring_admin` ma'qul | qo'shiladi; rahbariyat — `oquv_prorektori` |
+| Xavfsizlik | platformaga ta'sir qilmasa tuzatilsin | PR 0 tayyor (2-bo'lim) |
+| Branch | `feature/monitoring` ga ruxsat | ish shu branch'da |
+
+Javobsiz qolgan savollar bo'yicha standart qarorlar (panelda o'zgartiriladi):
+- **Q-1:** baho kechikib kiritilsa, istisno avtomatik yopiladi (`late_completion: auto_close`).
+  Kechikish istisno tarixida qoladi. Qayta topshirishlar hozircha tekshirilmaydi
+  (`include_resits: false`), chunki HEMIS'dagi urinish kodlari tasdiqlanmagan.
+- **D-2:** barcha fanlar hisobga olinadi. LMS'da tasdiqlangan «kasallik» va «tibbiy ko'rik»
+  arizalari qamragan kunlar ayiriladi.
+- **E-1:** qoida barcha talabalarga qo'llanadi. Tekshiruv 01.10.2026 dan keyingi buyruqlardan boshlanadi.
+- **E-7:** ro'yxat buyruqlar reyestridan («ko'chirib kelish» turi) va qo'lda qo'shishdan olinadi.
+
+### 10.2. Hali ochiq savollar
 
 **Infratuzilma va ma'lumot manbalari**
 1. Staging (sinov) serveri bormi? Yo'q bo'lsa, PR'lar prod'ga chiqishdan oldin qayerda tekshiriladi?
@@ -211,28 +250,18 @@ muddat o'tganda yuboriladigan eslatmalar, kalendar va oylik svod — 2-bosqichda
    kerakmi, yoki u 2-bosqichdagi kalendar bilan birga qo'shiladimi?
 
 **Pilot detektorlar**
-5. **A-5:** «tavsiya etilganlar» ro'yxati qayerdan olinadi (qaysi platforma yoki fayl)?
-   `admission_indicators` (Qabul ko'rsatkichlari importi) shu ro'yxatmi? Moslashtirish kaliti
-   qaysi: JSHSHIR, pasport yoki HEMIS ID? «To'lov qilgan» deganda ≥ 25 % (F-6) to'lov tushuniladimi
-   yoki to'liq to'lovmi?
+5. **A-5:** mandatning elektron (Excel) nusxasini Agentlikdan olish mumkinmi?
 6. **D-2:** 74 soatga semestrdagi barcha fanlar va mashg'ulot turlari kiradimi yoki ayrim turlar
    (masalan 99–102 kodlilar) chiqariladimi? LMS'da tasdiqlangan, lekin HEMIS'da hali sababli
    bo'lmagan tibbiy arizalar ayiriladimi? Qaysi sabablar «tibbiy» hisoblanadi?
-7. **Q-1:** «3 kun» kalendar kunimi yoki ish kunimi? Qayta topshirishlar ham tekshiriladimi?
-   Baho kechikib kiritilsa, istisno avtomatik yopilsinmi (kechikish statistikada qoladi) yoki
-   administrator yopguncha ochiq tursinmi?
-8. **E-1:** «ijara kotibi» kim — mark'da uning hisobi bormi? Qoida barcha talabalarga
-   qo'llanadimi yoki faqat ijarada/TTJ da yashovchilarga (`students.accommodation_*`)?
-   Xabar yuborilganini kim qayd etadi: yuboruvchi (registrator) yoki qabul qiluvchi?
+7. **Q-1:** qayta topshirishlar ham tekshiriladimi? Kechikib kiritilgan baholar ochiq qolsinmi?
+8. **E-1:** qoida faqat ijarada/TTJ da yashovchilarga qo'llanadimi?
 9. **E-7:** ko'chirib kelgan talabalar ro'yxati qayerdan olinadi (buyruqlar reyestri yoki qo'lda)?
    Qaysi sanadan boshlab tekshiriladi: faqat 2026/2027 yoki avvalgilar ham?
 10. `AbsenceExcuse` da 8 ta sabab toifasi bor, D-4 da esa «9 rasmiy toifa» deyilgan.
     Yetishmayotgani qaysi? Bu 2-bosqich uchun.
 
 **Rollar va tartib**
-11. Yangi rollar — `monitoring_admin` va `rahbariyat` — ma'qulmi? Ular kimlarga beriladi?
-12. Xavfsizlik bo'yicha PR 0 pilotdan oldin qilinsinmi? Sirlarni almashtirish va `public/` dagi
-    vositalarni olib tashlash server tomonida ham ish talab qiladi.
-13. Pilot bitta PR'da bo'lsinmi yoki taklif qilingandek ikkita (1a, 1b)?
-14. `symfony/yaml` ni prod bog'liqligiga qo'shish ma'qulmi? Muqobili — yaml'dan generatsiya
-    qilingan JSON fayl.
+11. `monitoring_admin` roli kimlarga beriladi (Registrator ofisi boshlig'i A.K. Sharipov)?
+12. Server tomonida (RTM): HEMIS OAuth va Moodle sirlarini almashtirish, docker-compose'dagi DB
+    parolini `.env` ga ko'chirish, `public/rest_*.php` dan kim foydalanishini aniqlash.

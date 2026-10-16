@@ -7,6 +7,7 @@ use App\Models\MonitoringDetector;
 use App\Services\Monitoring\Contracts\Detector;
 use App\Services\Monitoring\DetectorResult;
 use App\Services\Monitoring\Finding;
+use App\Services\Monitoring\OwnerResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,10 @@ use Illuminate\Support\Facades\DB;
  */
 class A5ContractAdmission implements Detector
 {
+    public function __construct(private OwnerResolver $owners)
+    {
+    }
+
     public function run(array $params, MonitoringDetector $detector): DetectorResult
     {
         $year = (string) ($params['education_year'] ?? '2026-2027');
@@ -51,7 +56,7 @@ class A5ContractAdmission implements Detector
 
         $hemisIds = $recommendations->pluck('student_hemis_id')->filter()->unique()->values()->all();
         $students = DB::table('students')->whereIn('hemis_id', $hemisIds)
-            ->get(['hemis_id', 'student_id_number', 'student_status_code', 'department_id', 'group_name'])
+            ->get(['hemis_id', 'student_id_number', 'student_status_code', 'department_id', 'specialty_id', 'level_code', 'group_name'])
             ->keyBy('hemis_id');
         $contracts = DB::table('contract_list')->whereIn('student_hemis_id', $hemisIds)
             ->where('edu_year', 'like', $year . '%')
@@ -115,6 +120,7 @@ class A5ContractAdmission implements Detector
                 ],
                 scopeKey: $year,
                 facultyHemisId: $student?->department_id ? (int) $student->department_id : null,
+                owner: $this->owners->registrarOfStudent($student, $params['registrar_office'] ?? null),
                 warningOnly: $forecast,
             ));
         }

@@ -92,3 +92,40 @@ test('kodlar berilsa faqat kod hal qiladi: nomida «ijara» bo\'lsa ham boshqa k
 
     expect(MonitoringIstisno::count())->toBe(0);
 });
+
+test('istisno talaba kursining registratoriga, biriktirilmagan bo\'lsa standart mas\'ulga boradi', function () {
+    $registrar = monTeacher(['registrator_ofisi']);
+    $other = monTeacher(['registrator_ofisi']);
+    $fallback = monTeacher(['registrator_ofisi']);
+    \App\Models\StaffRegistrationDivision::create([
+        'teacher_id' => $registrar->id, 'division_type' => 'back_office', 'department_hemis_id' => 7101, 'level_code' => '12',
+    ]);
+    \App\Models\StaffRegistrationDivision::create([
+        'teacher_id' => $other->id, 'division_type' => 'back_office', 'department_hemis_id' => 7101, 'level_code' => '13',
+    ]);
+    $second = monStudent(['department_id' => 7101, 'level_code' => '12', 'accommodation_name' => 'Ijarada']);
+    $fourth = monStudent(['department_id' => 7102, 'level_code' => '14', 'accommodation_name' => 'Ijarada']);
+    $byCourse = monOrder(['order_type' => 'akademik_tatil', 'order_date' => '2026-10-12', 'student_hemis_id' => $second->hemis_id]);
+    $unassigned = monOrder(['order_type' => 'akademik_tatil', 'order_date' => '2026-10-12', 'student_hemis_id' => $fourth->hemis_id]);
+    $detector = monDetector('E-1', [], ['default_owner_type' => $fallback->getMorphClass(), 'default_owner_id' => $fallback->id]);
+
+    app(DetectorRunner::class)->run($detector);
+
+    expect(MonitoringIstisno::where('fingerprint', "E-1:{$byCourse->id}")->sole()->isOwnedBy($registrar))->toBeTrue()
+        ->and(MonitoringIstisno::where('fingerprint', "E-1:{$unassigned->id}")->sole()->isOwnedBy($fallback))->toBeTrue();
+});
+
+test('registrar_office o\'chirilsa — standart mas\'ulga', function () {
+    $registrar = monTeacher(['registrator_ofisi']);
+    $fallback = monTeacher(['registrator_ofisi']);
+    \App\Models\StaffRegistrationDivision::create([
+        'teacher_id' => $registrar->id, 'division_type' => 'back_office', 'department_hemis_id' => 7101,
+    ]);
+    $student = monStudent(['department_id' => 7101, 'accommodation_name' => 'Ijarada']);
+    monOrder(['order_type' => 'akademik_tatil', 'order_date' => '2026-10-12', 'student_hemis_id' => $student->hemis_id]);
+    $detector = monDetector('E-1', ['registrar_office' => ''], ['default_owner_type' => $fallback->getMorphClass(), 'default_owner_id' => $fallback->id]);
+
+    app(DetectorRunner::class)->run($detector);
+
+    expect(MonitoringIstisno::sole()->isOwnedBy($fallback))->toBeTrue();
+});

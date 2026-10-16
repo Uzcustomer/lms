@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\RunMonitoringDetectorJob;
 use App\Models\MonitoringDetector;
 use App\Services\Monitoring\MonitoringAccess;
+use App\Services\Monitoring\OwnerResolver;
 use Illuminate\Http\Request;
 
 /**
@@ -71,6 +72,7 @@ class MonitoringDetectorController extends Controller
                 'float' => (float) ($input[$key] ?? $field['value']),
                 'list' => array_values(array_filter(array_map('trim', explode(',', (string) ($input[$key] ?? ''))), fn ($v) => $v !== '')),
                 'staff' => MonitoringAccess::ownerKey(MonitoringAccess::resolveOwnerKey($input[$key] ?? null)) ?? '',
+                'choice' => array_key_exists((string) ($input[$key] ?? ''), $field['options']) ? (string) ($input[$key] ?? '') : '',
                 default => trim((string) ($input[$key] ?? '')),
             };
         }
@@ -104,9 +106,9 @@ class MonitoringDetectorController extends Controller
     }
 
     /**
-     * Mavjud parametrlar turini qiymatidan aniqlaydi (bool, son, ro'yxat, xodim, matn).
+     * Mavjud parametrlar turini qiymatidan aniqlaydi (bool, son, ro'yxat, xodim, tanlov, matn).
      *
-     * @return array<string, array{type: string, value: mixed, label: ?string}>
+     * @return array<string, array{type: string, value: mixed, label: ?string, options?: array<string, string>}>
      */
     private function paramFields(MonitoringDetector $detector): array
     {
@@ -114,6 +116,7 @@ class MonitoringDetectorController extends Controller
         foreach ((array) ($detector->params ?? []) as $key => $value) {
             $type = match (true) {
                 str_starts_with($key, 'recipient_') => 'staff',
+                $key === 'registrar_office' => 'choice',
                 is_bool($value) => 'bool',
                 is_int($value) => 'int',
                 is_float($value) => 'float',
@@ -125,6 +128,9 @@ class MonitoringDetectorController extends Controller
                 'value' => $value,
                 'label' => $type === 'staff' ? MonitoringAccess::displayName(MonitoringAccess::resolveOwnerKey(is_string($value) ? $value : null)) : null,
             ];
+            if ($type === 'choice') {
+                $fields[$key]['options'] = ['' => "O'chirilgan — standart mas'ulga"] + OwnerResolver::REGISTRAR_OFFICES;
+            }
         }
 
         return $fields;

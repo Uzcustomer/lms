@@ -938,6 +938,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-grades-week/export-box', [AdminStudentController::class, 'exportStudentGradesBox'])->name('student-grades-week.export-box');
         Route::post('/student-grades-update-via-excel/import', [AdminStudentController::class, 'import'])->name('student-import-grades');
 
+        // Fanlar bo'yicha hisobot (kafedra mudiri): fanlar → guruhlar → talabalar baholari
+        Route::prefix('kafedra-hisobot')->name('kafedra-report.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'index'])->name('index');
+            Route::get('/fan', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'subject'])->name('subject');
+            Route::get('/guruh', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'group'])->name('group');
+            Route::get('/excel', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'export'])->name('export');
+        });
+
         // KTR (Kalendar tematik reja)
         Route::prefix('ktr')->name('ktr.')->group(function () {
             Route::get('/', [KtrController::class, 'index'])->name('index');

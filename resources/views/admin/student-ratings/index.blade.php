@@ -5,101 +5,127 @@
         </h2>
     </x-slot>
 
+    <style>
+        .srf-card { background: #fff; border: 1px solid #e5e9f0; border-radius: 14px; box-shadow: 0 1px 3px rgba(15, 23, 42, .06); padding: 18px 20px 14px; margin-bottom: 24px; }
+        .srf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px 16px; align-items: end; }
+        .srf-field label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px; letter-spacing: .01em; }
+        .srf-field select, .srf-field input { width: 100%; height: 40px; box-sizing: border-box; border: 1px solid #d5dbe5; border-radius: 10px;
+            background-color: #f8fafc; padding: 0 12px; font-size: 13px; color: #1e293b; transition: border-color .15s, box-shadow .15s, background-color .15s; }
+        .srf-field select { padding-right: 34px; }
+        .srf-field select:focus, .srf-field input:focus { outline: none; border-color: #2563eb; background-color: #fff; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
+        .srf-field.is-set select, .srf-field.is-set input { border-color: #93b4f5; background-color: #eef4ff; }
+        .srf-search { display: flex; gap: 8px; }
+        .srf-search input { flex: 1; min-width: 0; }
+        .srf-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #eef1f6; }
+        .srf-meta { font-size: 12px; color: #64748b; }
+        .srf-meta b { color: #1e293b; }
+        .srf-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+        .srf-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 40px; padding: 0 16px; border-radius: 10px;
+            border: 1px solid transparent; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; transition: filter .15s, transform .15s; white-space: nowrap; }
+        .srf-btn:hover { filter: brightness(.95); transform: translateY(-1px); }
+        .srf-btn:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+        .srf-btn svg { width: 16px; height: 16px; flex: none; }
+        .srf-btn-icon { width: 40px; padding: 0; background: #2563eb; color: #fff; }
+        .srf-btn-excel { background: #16a34a; color: #fff; }
+        .srf-btn-five { background: #f59e0b; color: #fff; box-shadow: 0 2px 6px rgba(245, 158, 11, .35); }
+        .srf-btn-reset { background: #fff; color: #475569; border-color: #d5dbe5; }
+    </style>
+
     {{-- Filtrlar --}}
-    <div class="bg-white shadow rounded-lg p-5 mb-6">
-        <form method="GET" action="{{ route('admin.student-ratings.index') }}" class="flex flex-wrap items-end gap-4">
-            <div class="flex-1 min-w-[200px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Fakultet</label>
-                <select name="department" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">Barcha fakultetlar</option>
-                    @foreach($departments as $dept)
-                        <option value="{{ $dept->department_code }}" {{ $selectedDepartment == $dept->department_code ? 'selected' : '' }}>
-                            {{ $dept->department_name }}
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="flex-1 min-w-[200px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Yo'nalish</label>
-                <select name="specialty" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">Barcha yo'nalishlar</option>
-                    @foreach($specialties as $spec)
-                        <option value="{{ $spec->specialty_code }}" {{ $selectedSpecialty == $spec->specialty_code ? 'selected' : '' }}>
-                            {{ $spec->specialty_name }}
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="w-[140px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Kurs</label>
-                <select name="level" id="rating-level-select" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">Barchasi</option>
-                    @foreach(['11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs', '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs'] as $code => $label)
-                        <option value="{{ $code }}" {{ $selectedLevel == $code ? 'selected' : '' }}>{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="w-[160px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Semestr</label>
-                <select name="semester" id="rating-semester-select" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">Barchasi</option>
-                    @foreach($semesterRows as $sem)
-                        <option value="{{ $sem->code }}"
-                                data-level="{{ $sem->level_code }}"
-                                data-current="{{ $sem->current ? '1' : '0' }}"
-                                {{ (string) $selectedSemester === (string) $sem->code ? 'selected' : '' }}>
-                            {{ $sem->name }}{{ $sem->current ? ' (joriy)' : '' }}
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="flex-1 min-w-[180px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Guruh</label>
-                <select name="group_name" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">Barchasi</option>
-                    @foreach($groups as $g)
-                        <option value="{{ $g }}" {{ $selectedGroup === $g ? 'selected' : '' }}>{{ $g }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="flex-1 min-w-[220px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Fan</label>
-                <select name="subject_id" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">Barcha fanlar</option>
-                    @foreach($subjects as $s)
-                        <option value="{{ $s->subject_id }}" {{ (string) $selectedSubject === (string) $s->subject_id ? 'selected' : '' }}>{{ $s->subject_name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="flex-1 min-w-[200px]">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Qidirish</label>
-                <div class="flex gap-2">
-                    <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="F.I.O yoki guruh..."
-                           class="flex-1 border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 font-medium">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </button>
+    <div class="srf-card">
+        <form method="GET" action="{{ route('admin.student-ratings.index') }}">
+            <div class="srf-grid">
+                <div class="srf-field {{ $selectedDepartment ? 'is-set' : '' }}">
+                    <label for="srf-department">Fakultet</label>
+                    <select id="srf-department" name="department" onchange="this.form.submit()">
+                        <option value="">Barcha fakultetlar</option>
+                        @foreach($departments as $dept)
+                            <option value="{{ $dept->department_code }}" {{ $selectedDepartment == $dept->department_code ? 'selected' : '' }}>{{ $dept->department_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="srf-field {{ $selectedSpecialty ? 'is-set' : '' }}">
+                    <label for="srf-specialty">Yo'nalish</label>
+                    <select id="srf-specialty" name="specialty" onchange="this.form.submit()">
+                        <option value="">Barcha yo'nalishlar</option>
+                        @foreach($specialties as $spec)
+                            <option value="{{ $spec->specialty_code }}" {{ $selectedSpecialty == $spec->specialty_code ? 'selected' : '' }}>{{ $spec->specialty_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="srf-field {{ $selectedLevel ? 'is-set' : '' }}">
+                    <label for="rating-level-select">Kurs</label>
+                    <select name="level" id="rating-level-select" onchange="this.form.submit()">
+                        <option value="">Barchasi</option>
+                        @foreach(['11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs', '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs'] as $code => $label)
+                            <option value="{{ $code }}" {{ $selectedLevel == $code ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="srf-field {{ $selectedSemester ? 'is-set' : '' }}">
+                    <label for="rating-semester-select">Semestr</label>
+                    <select name="semester" id="rating-semester-select" onchange="this.form.submit()">
+                        <option value="">Barchasi</option>
+                        @foreach($semesterRows as $sem)
+                            <option value="{{ $sem->code }}"
+                                    data-level="{{ $sem->level_code }}"
+                                    data-current="{{ $sem->current ? '1' : '0' }}"
+                                    {{ (string) $selectedSemester === (string) $sem->code ? 'selected' : '' }}>
+                                {{ $sem->name }}{{ $sem->current ? ' (joriy)' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="srf-field {{ $selectedGroup ? 'is-set' : '' }}">
+                    <label for="srf-group">Guruh</label>
+                    <select id="srf-group" name="group_name" onchange="this.form.submit()">
+                        <option value="">Barchasi</option>
+                        @foreach($groups as $g)
+                            <option value="{{ $g }}" {{ $selectedGroup === $g ? 'selected' : '' }}>{{ $g }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="srf-field {{ $selectedSubject ? 'is-set' : '' }}">
+                    <label for="srf-subject">Fan</label>
+                    <select id="srf-subject" name="subject_id" onchange="this.form.submit()">
+                        <option value="">Barcha fanlar</option>
+                        @foreach($subjects as $s)
+                            <option value="{{ $s->subject_id }}" {{ (string) $selectedSubject === (string) $s->subject_id ? 'selected' : '' }}>{{ $s->subject_name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="srf-field {{ ($search ?? '') !== '' ? 'is-set' : '' }}">
+                    <label for="srf-search">Qidirish</label>
+                    <div class="srf-search">
+                        <input type="text" id="srf-search" name="search" value="{{ $search ?? '' }}" placeholder="F.I.O yoki guruh...">
+                        <button type="submit" class="srf-btn srf-btn-icon" title="Qidirish" aria-label="Qidirish">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <a href="{{ route('admin.student-ratings.export-excel', request()->query()) }}" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 font-medium flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                Excel
-            </a>
-            <a href="{{ route('admin.student-ratings.five-candidates') }}" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600 font-medium flex items-center gap-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                5 ga da'vogarlar
-            </a>
+
+            <div class="srf-actions">
+                <div class="srf-meta">
+                    @if($lastUpdated)
+                        Oxirgi yangilanish: <b>{{ \Carbon\Carbon::parse($lastUpdated)->format('d.m.Y H:i') }}</b> &middot; Jami: <b>{{ $totalStudents }}</b> ta talaba
+                    @endif
+                </div>
+                <div class="srf-buttons">
+                    @if(request()->query())
+                        <a href="{{ route('admin.student-ratings.index') }}" class="srf-btn srf-btn-reset">Filtrlarni tozalash</a>
+                    @endif
+                    <a href="{{ route('admin.student-ratings.export-excel', request()->query()) }}" class="srf-btn srf-btn-excel">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Excel
+                    </a>
+                    <a href="{{ route('admin.student-ratings.five-candidates') }}" class="srf-btn srf-btn-five">
+                        <svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                        5 ga da'vogarlar
+                    </a>
+                </div>
+            </div>
         </form>
-        @if($lastUpdated)
-        <div class="mt-3 text-xs text-gray-400">
-            Oxirgi yangilanish: {{ \Carbon\Carbon::parse($lastUpdated)->format('d.m.Y H:i') }}
-            &middot; Jami: {{ $totalStudents }} ta talaba
-        </div>
-        @endif
     </div>
 
     @if($top10->isEmpty())

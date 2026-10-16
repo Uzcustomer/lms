@@ -63,6 +63,76 @@ class TeacherMissedLessons
         )
         SQL;
 
+    /**
+     * Bir guruh+fan amaliyotini bir nechta o'qituvchi o'tsa (kichik guruhlar), har
+     * talabaning "o'z o'qituvchisi" — shu fanda unga eng ko'p baho qo'ygan xodim.
+     * Bo'sh katak faqat o'sha o'qituvchiga tegishli bo'ladi.
+     *
+     * @return array ['multi' => [guruh|fan => true], 'own' => [guruh|fan => [talaba hemis => xodim hemis]]]
+     */
+    public function subgroupOwners(array $groupIds, array $subjectIds, string $from, string $to): array
+    {
+        $out = ['multi' => [], 'own' => []];
+        if (! $groupIds || ! $subjectIds) {
+            return $out;
+        }
+        foreach (DB::table('schedules')
+            ->whereIn('group_id', $groupIds)->whereIn('subject_id', $subjectIds)
+            ->whereNull('deleted_at')->where('education_year_current', true)
+            ->where('training_type_code', '!=', '11')->whereNotNull('employee_id')
+            ->where('lesson_date', '>=', $from.' 00:00:00')->where('lesson_date', '<', $to.' 23:59:59')
+            ->groupBy('group_id', 'subject_id')
+            ->havingRaw('COUNT(DISTINCT employee_id) > 1')
+            ->get(['group_id', 'subject_id']) as $r) {
+            $out['multi'][$r->group_id.'|'.$r->subject_id] = true;
+        }
+        if (! $out['multi']) {
+            return $out;
+        }
+        $multiGroups = array_unique(array_map(fn ($k) => explode('|', $k)[0], array_keys($out['multi'])));
+        $multiSubjects = array_unique(array_map(fn ($k) => explode('|', $k)[1], array_keys($out['multi'])));
+        $studentGroup = DB::table('students')->whereIn('group_id', $multiGroups)->pluck('group_id', 'hemis_id')->all();
+        if (! $studentGroup) {
+            return $out;
+        }
+        $counts = [];
+        foreach (array_chunk(array_keys($studentGroup), 1000) as $chunk) {
+            foreach (DB::table('student_grades')
+                ->whereIn('student_hemis_id', $chunk)->whereIn('subject_id', $multiSubjects)
+                ->whereNull('deleted_at')->whereNotNull('employee_id')->where('training_type_code', '!=', 11)
+                ->where('lesson_date', '>=', $from.' 00:00:00')
+                ->groupBy('student_hemis_id', 'subject_id', 'employee_id')
+                ->selectRaw('student_hemis_id, subject_id, employee_id, COUNT(*) as c')
+                ->get() as $g) {
+                $key = ($studentGroup[$g->student_hemis_id] ?? '').'|'.$g->subject_id;
+                if (isset($out['multi'][$key])) {
+                    $counts[$key][(string) $g->student_hemis_id][(string) $g->employee_id] = (int) $g->c;
+                }
+            }
+        }
+        foreach ($counts as $key => $students) {
+            foreach ($students as $hemis => $byEmployee) {
+                arsort($byEmployee);
+                $out['own'][$key][$hemis] = (string) array_key_first($byEmployee);
+            }
+        }
+
+        return $out;
+    }
+
+    /** Bo'sh kataklar to'plamidan boshqa o'qituvchining kichik guruhidagi talabalarni olib tashlaydi. */
+    public function ownMissing(array $missing, $groupId, $subjectId, $employeeId, array $owners): array
+    {
+        $key = $groupId.'|'.$subjectId;
+        if (! $missing || ! isset($owners['multi'][$key])) {
+            return $missing;
+        }
+        $own = $owners['own'][$key] ?? [];
+
+        return array_filter($missing, fn ($v, $hemis) => ! isset($own[(string) $hemis]) || $own[(string) $hemis] === (string) $employeeId,
+            ARRAY_FILTER_USE_BOTH);
+    }
+
     /** @return Collection<int, array> eng yangi sana birinchi */
     public function forTeacher(Teacher $teacher): Collection
     {
@@ -96,12 +166,20 @@ class TeacherMissedLessons
 
         // Kun bo'yicha noyob talabalar: bir talaba ikki juftlikda ham
         // qoldirilsa bir marta sanaladi (hisobot bilan bir xil qoida)
+        // Bir guruhni bir nechta o'qituvchi (kichik guruhlar) o'qitsa — faqat o'z talabalari
+        $owners = $this->subgroupOwners($groupIds, $subjectIds, $from, $today);
         $missingByDay = [];
+        $othersOnly = [];   // bo'sh kataklar faqat boshqa o'qituvchining talabalarida
         foreach ($slots as $slot) {
             $pairKey = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
             if (isset($missing[$pairKey])) {
                 $dayKey = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
-                $missingByDay[$dayKey] = ($missingByDay[$dayKey] ?? []) + $missing[$pairKey];
+                $mine = $this->ownMissing($missing[$pairKey], $slot->group_id, $slot->subject_id, $teacher->hemis_id, $owners);
+                if ($missing[$pairKey] && ! $mine) {
+                    $othersOnly[$pairKey] = true;
+                    continue;
+                }
+                $missingByDay[$dayKey] = ($missingByDay[$dayKey] ?? []) + $mine;
             }
         }
 
@@ -143,7 +221,7 @@ class TeacherMissedLessons
         foreach ($slots as $slot) {
             $key = $this->key($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day);
             $pairKey = $this->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
-            if (isset($marked[$pairKey]) || ! isset($groupsWithStudents[(string) $slot->group_id]) || isset($seen[$key])) {
+            if (isset($marked[$pairKey]) || isset($othersOnly[$pairKey]) || ! isset($groupsWithStudents[(string) $slot->group_id]) || isset($seen[$key])) {
                 continue;
             }
             $seen[$key] = true;

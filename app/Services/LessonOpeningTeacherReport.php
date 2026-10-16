@@ -115,6 +115,10 @@ class LessonOpeningTeacherReport
             $dayMarked[substr($pairKey, 0, strrpos($pairKey, '|'))] = true;
         }
 
+        // Bir guruhni bir nechta o'qituvchi (kichik guruhlar) o'qitsa — bo'sh katak
+        // faqat talabaning o'z o'qituvchisiga (unga eng ko'p baho qo'ygan) yoziladi
+        $owners = $groupIds ? $this->missed->subgroupOwners($groupIds, $subjectIds, $from, $upper) : ['multi' => [], 'own' => []];
+
         // kun kaliti => [xodim HEMIS id => ['name', 'group', 'subject', 'date', 'unmarked']]
         $byDay = [];
         foreach ($slots as $slot) {
@@ -134,11 +138,13 @@ class LessonOpeningTeacherReport
             ];
 
             $pairKey = $this->missed->pairKey($slot->group_id, $slot->subject_id, $slot->semester_code, $slot->lesson_day, $slot->lesson_pair_code);
-            if (! isset($marked[$pairKey]) && isset($active[(string) $slot->group_id])) {
+            $mine = $this->missed->ownMissing($missing[$pairKey] ?? [], $slot->group_id, $slot->subject_id, $employee, $owners);
+            $othersOnly = ($missing[$pairKey] ?? []) !== [] && $mine === [];
+            if (! isset($marked[$pairKey]) && ! $othersOnly && isset($active[(string) $slot->group_id])) {
                 $byDay[$dayKey][$employee]['unmarked'] = true;
                 // Juftliklarni birlashtiramiz: bir talaba ikki juftlikda ham
                 // qoldirilsa bir marta sanaladi, turli talabalar bo'lsa ikkalasi ham.
-                $byDay[$dayKey][$employee]['missing_students'] += $missing[$pairKey] ?? [];
+                $byDay[$dayKey][$employee]['missing_students'] += $mine;
                 $code = (string) $slot->lesson_pair_code;
                 $byDay[$dayKey][$employee]['pairs'][$code] ??= [
                     'label' => $this->pairLabel($slot),

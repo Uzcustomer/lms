@@ -1220,6 +1220,10 @@
                                 }
                                 if ($skCount > 0) $skPending[$skHemis] = $skCount;
                             }
+                            // Kichik guruhlar: boshqa o'qituvchining talabasi — bu o'qituvchi baho qo'ymaydi
+                            $skMine = fn ($hemis) => empty($skOwner[(string) $hemis]) || ($skViewerHemis ?? '') === ''
+                                || $skOwner[(string) $hemis]['id'] === $skViewerHemis;
+                            $skPending = array_filter($skPending, fn ($v, $h) => $skMine($h), ARRAY_FILTER_USE_BOTH);
                             $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
                                 return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
                             }));
@@ -2235,7 +2239,7 @@
                                                             <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                         @endif
                                                     @else
-                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr)
+                                                        @if($skCanGrade && $cellEditable && $isEmpty && isset($skJoin[(string) $student->hemis_id]) && $colDateStr <= $skJoin[(string) $student->hemis_id] && $colDateStr <= $todayStr && $skMine($student->hemis_id))
                                                             {{-- Talaba HEMISga kiritilishidan oldingi dars — arizasiz baho --}}
                                                             <div class="editable-cell grade-cell-opened sk-cell"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"

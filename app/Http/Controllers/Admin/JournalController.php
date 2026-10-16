@@ -2422,7 +2422,24 @@ class JournalController extends Controller
             ->mapWithKeys(fn ($st) => [(string) $st->hemis_id => $jbJoinDateOf($st)])
             ->all();
 
+        // Bir guruhni bir nechta o'qituvchi (kichik guruhlar) o'qitsa: sariq katakka faqat
+        // talabaning o'z o'qituvchisi (unga eng ko'p baho qo'ygan) baho qo'yadi
+        $skOwner = [];
+        $skViewerHemis = (string) (auth()->guard('teacher')->user()?->hemis_id ?? '');
+        if ($lateJoinDates) {
+            $owners = app(\App\Services\TeacherMissedLessons::class)->subgroupOwners(
+                [(string) $group->group_hemis_id], [(string) $subjectId],
+                \App\Models\LessonOpening::periodStart()->toDateString(), now('Asia/Tashkent')->toDateString());
+            $skOwner = $owners['own'][$group->group_hemis_id . '|' . $subjectId] ?? [];
+            if ($skOwner) {
+                $ownerNames = \App\Models\Teacher::whereIn('hemis_id', array_unique(array_values($skOwner)))->pluck('short_name', 'hemis_id')->all();
+                $skOwner = array_map(fn ($e) => ['id' => (string) $e, 'name' => $ownerNames[$e] ?? ''], $skOwner);
+            }
+        }
+
         return view('admin.journal.show', compact(
+            'skOwner',
+            'skViewerHemis',
             'lateJoinDates',
             'group',
             'subject',
@@ -6400,6 +6417,21 @@ class JournalController extends Controller
             // arizasiz baho qo'yadi (talaba o'shanda hali ro'yxatda yo'q edi)
             $isLateJoinGap = !$isExcuseOpening
                 && $this->isLateJoinGap((string) $request->student_hemis_id, $lessonDate, (string) $request->semester_code, (string) $request->subject_id);
+
+            // Kichik guruhlar: kech kiritilgan talabaga faqat uning o'z o'qituvchisi baho qo'yadi
+            $viewerHemis = (string) (auth()->guard('teacher')->user()?->hemis_id ?? '');
+            $viewerIsAdmin = (auth()->guard('web')->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']) ?? false)
+                || (auth()->guard('teacher')->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']) ?? false);
+            if ($isLateJoinGap && $viewerHemis !== '' && !$viewerIsAdmin) {
+                $owners = app(\App\Services\TeacherMissedLessons::class)->subgroupOwners(
+                    [(string) $groupHemisId], [(string) $request->subject_id],
+                    \App\Models\LessonOpening::periodStart()->toDateString(), now('Asia/Tashkent')->toDateString());
+                $own = $owners['own'][$groupHemisId . '|' . $request->subject_id][(string) $request->student_hemis_id] ?? null;
+                if ($own !== null && $own !== $viewerHemis) {
+                    $ownName = Teacher::where('hemis_id', $own)->value('short_name') ?: 'boshqa o\'qituvchi';
+                    return response()->json(['success' => false, 'message' => "Bu talaba boshqa kichik guruhda — unga {$ownName} baho qo'yadi."], 403);
+                }
+            }
 
             if (!$isExcuseOpening && !$isLateJoinGap) {
                 // Sozlamadagi "baho qo'yilmay qolganlar" oynasi ochiq bo'lsa,

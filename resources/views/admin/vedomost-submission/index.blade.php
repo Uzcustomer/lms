@@ -118,15 +118,27 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="filter-item" style="min-width:170px;">
+                                <label class="filter-label">&nbsp;</label>
+                                {{-- Standart yoqilgan: o'chirilganda yashirin "0" yuboriladi --}}
+                                <input type="hidden" name="current_semester" value="0">
+                                <label class="vs-switch" title="Faqat guruhlar hozir o'qiyotgan semestr vedomostlari">
+                                    <input type="checkbox" name="current_semester" value="1" id="current_semester"
+                                           {{ request('current_semester', '1') === '1' ? 'checked' : '' }}
+                                           onchange="this.form.submit()">
+                                    <span class="vs-switch-track" aria-hidden="true"><span class="vs-switch-thumb"></span></span>
+                                    Joriy semestr
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="filter-row">
                             <div class="filter-item" style="min-width:120px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
                                 <select name="level_code" id="level_code" class="select2" style="width:100%;">
                                     <option value="">Barchasi</option>
                                 </select>
                             </div>
-                        </div>
-
-                        <div class="filter-row">
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
                                 <select name="semester_code" id="semester_code" class="select2" style="width:100%;">
@@ -171,18 +183,6 @@
                                         <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>{{ $pageSize }}</option>
                                     @endforeach
                                 </select>
-                            </div>
-                            <div class="filter-item" style="min-width:170px;">
-                                <label class="filter-label">&nbsp;</label>
-                                {{-- Standart yoqilgan: o'chirilganda yashirin "0" yuboriladi --}}
-                                <input type="hidden" name="current_semester" value="0">
-                                <label class="vs-switch" title="Faqat guruhlar hozir o'qiyotgan semestr vedomostlari">
-                                    <input type="checkbox" name="current_semester" value="1" id="current_semester"
-                                           {{ request('current_semester', '1') === '1' ? 'checked' : '' }}
-                                           onchange="this.form.submit()">
-                                    <span class="vs-switch-track" aria-hidden="true"><span class="vs-switch-thumb"></span></span>
-                                    Joriy semestr
-                                </label>
                             </div>
                             <div class="filter-item" style="min-width:150px;">
                                 <label class="filter-label">&nbsp;</label>

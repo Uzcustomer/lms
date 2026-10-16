@@ -42,14 +42,27 @@ class ClosingFormController extends Controller
      */
     private function currentSemesterHemisIds(): array
     {
-        // Faol talabalar haqiqatan turgan (reja, semestr) juftliklari.
+        // Faol talabalar haqiqatan turgan (reja, semestr) juftliklari — talabaning
+        // o'z rejasi VA guruhining rejasi bo'yicha (vedomost servisi kabi guruh
+        // orqali): talabada reja bo'sh yoki guruh rejasidan farq qilsa ham
+        // (xalqaro fakultet kohortalari) guruh fanlari ro'yxatdan tushmasin.
         $pairs = DB::table('students')
             ->where('student_status_code', 11)
             ->whereNotNull('curriculum_id')
             ->whereNotNull('semester_code')
             ->select('curriculum_id', 'semester_code')
             ->distinct()
-            ->get();
+            ->get()
+            ->concat(
+                DB::table('students as st')
+                    ->join('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
+                    ->where('st.student_status_code', 11)
+                    ->whereNotNull('g.curriculum_hemis_id')
+                    ->whereNotNull('st.semester_code')
+                    ->select('g.curriculum_hemis_id as curriculum_id', 'st.semester_code')
+                    ->distinct()
+                    ->get()
+            );
 
         if ($pairs->isEmpty()) {
             return [];

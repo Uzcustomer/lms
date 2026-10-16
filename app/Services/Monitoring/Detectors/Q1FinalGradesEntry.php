@@ -80,7 +80,7 @@ class Q1FinalGradesEntry implements Detector
 
         // Individual sana belgilangan talaba shu urinishda guruh birligidan chiqariladi va o'z sanasi bo'yicha tekshiriladi.
         $overridden = [];
-        foreach ($this->individualDates($recent, $columns, $includeResits) as $o) {
+        foreach ($this->individualDates($recent, $schedules, $columns, $includeResits) as $o) {
             $overridden[implode('|', [$o['student'], $o['row']->subject_id, $o['row']->semester_code, $o['attempt']])] = true;
             $this->addUnit($units, $o['row'], $o['attempt'], $o['date'], $o['student']);
         }
@@ -226,12 +226,23 @@ class Q1FinalGradesEntry implements Detector
     /**
      * Individual sanalar: o'qiyotgan talabaning alohida qatorida belgilangan ustun guruh qatoridagi qiymat o'rniga olinadi,
      * belgilanmagani guruhnikidan (ExamCapacityService bilan bir xil). Faqat talaba qatorida sanasi bor urinishlar qaytadi.
+     * Tekshiriladigan guruh × fanlarning individual qatorlari sanasi lookback'dan eski bo'lsa ham olinadi: talaba guruh
+     * sanasi bo'yicha tekshirilmasligi kerak.
      *
      * @return list<array{row: object, student: string, attempt: int, date: Carbon}>
      */
-    private function individualDates(\Closure $recent, array $columns, bool $includeResits): array
+    private function individualDates(\Closure $recent, Collection $schedules, array $columns, bool $includeResits): array
     {
-        $rows = DB::table('exam_schedules')->whereNotNull('student_hemis_id')->where($recent)
+        $rows = DB::table('exam_schedules')
+            ->whereNotNull('student_hemis_id')
+            ->where(function ($q) use ($recent, $schedules) {
+                $q->where($recent);
+                if ($schedules->isNotEmpty()) {
+                    $q->orWhere(fn ($w) => $w
+                        ->whereIn('group_hemis_id', $schedules->pluck('group_hemis_id')->unique()->all())
+                        ->whereIn('subject_id', $schedules->pluck('subject_id')->unique()->all()));
+                }
+            })
             ->get(array_merge($columns, ['student_hemis_id']));
         if ($rows->isEmpty()) {
             return [];

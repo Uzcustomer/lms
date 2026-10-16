@@ -234,3 +234,24 @@ test('individual asosiy sana: talaba guruh sanasida emas, o\'z sanasi bo\'yicha 
         ->and($istisno->details['talabalar'])->toBe(1)
         ->and($istisno->details['kiritilmagan'])->toBe(1);
 });
+
+test('individual sana lookback\'dan eski bo\'lsa ham talaba guruh sanasi bo\'yicha tekshirilmaydi', function () {
+    q1Exam($this->group, '2026-10-05');
+    q1Grade($this->students[1], '2026-10-06 10:00:00');
+    q1IndividualExam($this->group, $this->students[0], ['oski_date' => '2026-07-20', 'test_date' => '2026-07-20']); // lookback 60 kun
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    expect(MonitoringIstisno::count())->toBe(0);
+});
+
+test('include_resits o\'chirilganda individual qator detektorni buzmaydi', function () {
+    q1Exam($this->group, '2026-10-05');
+    q1Grade($this->students[1], '2026-10-06 10:00:00');
+    q1IndividualExam($this->group, $this->students[0], ['oski_date' => '2026-10-14', 'oski_resit_date' => '2026-10-07']);
+
+    app(DetectorRunner::class)->run(monDetector('Q-1', ['include_resits' => false]));
+
+    expect(MonitoringIstisno::count())->toBe(0)
+        ->and(\App\Models\MonitoringRun::latest('id')->value('status'))->toBe(\App\Models\MonitoringRun::STATUS_OK);
+});

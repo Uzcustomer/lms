@@ -74,7 +74,7 @@ Mavjud migratsiyalar MySQL'ga xos SQL ishlatadi, shuning uchun testlar alohida b
 ```bash
 cp .env.testing.example .env.testing   # DB_* ni to'ldiring, APP_KEY: php artisan key:generate --env=testing
 mysql -e "CREATE DATABASE lms_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-php artisan test tests/Feature/Monitoring     # 67 test
+php artisan test tests/Feature/Monitoring     # 70 test
 ```
 
 Test ma'lumotlari faqat soxta: Faker yoki «Sinov ...» nomlari ishlatiladi.

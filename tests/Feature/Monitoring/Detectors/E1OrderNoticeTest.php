@@ -83,3 +83,12 @@ test('turar joy kodi berilsa kod bo\'yicha aniqlanadi', function () {
     app(DetectorRunner::class)->run(monDetector('E-1', ['accommodation_codes' => [], 'accommodation_keywords' => ['ijara']]));
     expect(MonitoringIstisno::sole()->status)->toBe('yopildi');
 });
+
+test('kodlar berilsa faqat kod hal qiladi: nomida «ijara» bo\'lsa ham boshqa kod — istisno yo\'q', function () {
+    $student = monStudent(['accommodation_code' => '13', 'accommodation_name' => 'Ijarada (vaqtincha)']);
+    monOrder(['order_type' => 'chetlashtirish', 'order_date' => '2026-10-12', 'student_hemis_id' => $student->hemis_id]);
+
+    app(DetectorRunner::class)->run(monDetector('E-1', ['accommodation_codes' => ['12'], 'accommodation_keywords' => ['ijara']]));
+
+    expect(MonitoringIstisno::count())->toBe(0);
+});

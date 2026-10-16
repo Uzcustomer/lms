@@ -52,3 +52,15 @@ test('eski katalog bilan seed qilingan serverda buyurtmachi qarorlari migratsiya
         ->and(MonitoringDetector::where('code', 'Q-1')->value('warning_mode'))->toBeTruthy()
         ->and(MonitoringDetector::where('code', 'D-2')->value('warning_mode'))->toBeFalsy();
 });
+
+test('katalog o\'qilmasa ham migratsiya qarorlarni mavjud detektorlarga qo\'llaydi', function () {
+    config(['monitoring.catalog_path' => base_path('docs/yoq-fayl.yaml')]);
+    MonitoringDetector::where('pilot', true)->update(['warning_mode' => false]);
+    $q1 = MonitoringDetector::where('code', 'Q-1')->first();
+    $q1->update(['params' => array_merge($q1->params, ['include_resits' => false])]);
+
+    (require base_path('database/migrations/2026_10_16_110000_apply_monitoring_pilot_decisions.php'))->up();
+
+    expect(MonitoringDetector::where('code', 'Q-1')->first()->params['include_resits'])->toBeTrue()
+        ->and(MonitoringDetector::where('pilot', true)->where('warning_mode', false)->count())->toBe(0);
+});

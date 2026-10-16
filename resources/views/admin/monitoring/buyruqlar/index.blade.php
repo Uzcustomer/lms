@@ -9,8 +9,8 @@
 
             <p class="text-sm text-gray-600 mb-3">
                 HEMIS buyruqlari mark'ka sinxronlanmaydi — reyestr «Importlar» orqali to'ldiriladi.
-                Akademik ta'til, chetlashtirish va kursda qoldirish buyruqlari bo'yicha ijara kotibi va buxgalteriyaga
-                1 ish kunida xabar berilishi kerak: «Xabar yuborish» tugmasi xabarni mark (va Telegram) orqali yuboradi va qayd etadi.
+                Ijarada yashovchi talabalar bo'yicha akademik ta'til, chetlashtirish va kursda qoldirish buyruqlari haqida
+                ijara kotibi va buxgalteriyaga 1 ish kunida xabar berilishi kerak: «Xabar yuborish» tugmasi xabarni mark (va Telegram) orqali yuboradi va qayd etadi.
             </p>
 
             <form method="GET" class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end text-sm">
@@ -38,10 +38,13 @@
                     </thead>
                     <tbody>
                     @forelse($orders as $order)
-                        @php $needsNotice = in_array($order->order_type, $noticeTypes, true); @endphp
+                        @php
+                            $applies = \App\Services\Monitoring\Detectors\E1OrderNotice::appliesTo($order->student, $e1Params);
+                            $needsNotice = in_array($order->order_type, $noticeTypes, true) && $applies !== false;
+                        @endphp
                         <tr class="border-t align-top">
                             <td class="px-3 py-2 whitespace-nowrap">№ {{ $order->order_number }}<div class="text-xs text-gray-500">{{ $order->order_date->format('d.m.Y') }}</div></td>
-                            <td class="px-3 py-2">{{ $order->full_name }}<div class="text-xs text-gray-500">{{ $order->student_id_number }} @unless($order->student_hemis_id)· HEMIS'da topilmadi @endunless</div></td>
+                            <td class="px-3 py-2">{{ $order->full_name }}<div class="text-xs text-gray-500">{{ $order->student_id_number }} @unless($order->student_hemis_id)· HEMIS'da topilmadi @endunless @if($order->student?->accommodation_name)· {{ $order->student->accommodation_name }} @endif</div></td>
                             <td class="px-3 py-2">{{ $order->typeLabel() }}<div class="text-xs text-gray-500">{{ $order->order_type_raw }}</div></td>
                             <td class="px-3 py-2">
                                 @if($needsNotice)
@@ -89,7 +92,7 @@
                                         </div>
                                     @endif
                                 @else
-                                    <span class="text-xs text-gray-500">talab qilinmaydi</span>
+                                    <span class="text-xs text-gray-500">talab qilinmaydi{{ in_array($order->order_type, $noticeTypes, true) ? ' (ijarada yashamaydi)' : '' }}</span>
                                 @endif
                             </td>
                         </tr>

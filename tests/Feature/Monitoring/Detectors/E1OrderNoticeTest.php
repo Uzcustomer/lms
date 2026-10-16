@@ -59,3 +59,27 @@ test('muddat hali tugamagan yoki buyruq turi talab qilmaydi — istisno yo\'q', 
 
     expect(MonitoringIstisno::count())->toBe(0);
 });
+
+test('qoida faqat ijarada yashovchilarga: ijarada — istisno, TTJ da — yo\'q', function () {
+    $tenant = monStudent(['accommodation_code' => '12', 'accommodation_name' => 'Ijarada']);
+    $dorm = monStudent(['accommodation_code' => '13', 'accommodation_name' => 'Talabalar turar joyida']);
+    monOrder(['order_type' => 'chetlashtirish', 'order_date' => '2026-10-12', 'student_hemis_id' => $tenant->hemis_id]);
+    monOrder(['order_type' => 'chetlashtirish', 'order_date' => '2026-10-12', 'student_hemis_id' => $dorm->hemis_id]);
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->subject_label)->toContain('B-')
+        ->and($istisno->details['turar_joy'])->toBe('Ijarada');
+});
+
+test('turar joy kodi berilsa kod bo\'yicha aniqlanadi', function () {
+    $student = monStudent(['accommodation_code' => '15', 'accommodation_name' => 'Boshqa']);
+    monOrder(['order_type' => 'akademik_tatil', 'order_date' => '2026-10-12', 'student_hemis_id' => $student->hemis_id]);
+
+    app(DetectorRunner::class)->run(monDetector('E-1', ['accommodation_codes' => ['15']]));
+    expect(MonitoringIstisno::count())->toBe(1);
+
+    app(DetectorRunner::class)->run(monDetector('E-1', ['accommodation_codes' => [], 'accommodation_keywords' => ['ijara']]));
+    expect(MonitoringIstisno::sole()->status)->toBe('yopildi');
+});

@@ -221,7 +221,8 @@ class MonitoringIstisnoController extends Controller
         $status = $request->input('holat', 'ochiq');
 
         return $query
-            ->when($status === 'ochiq', fn ($q) => $q->open()->where('warning_only', false))
+            ->when($status === 'ochiq', fn ($q) => $q->open())
+            ->when($status === 'yuborilgan', fn ($q) => $q->open()->where('warning_only', false))
             ->when($status === 'muddati_otgan', fn ($q) => $q->overdue()->where('warning_only', false))
             ->when($status === 'ogohlantirish', fn ($q) => $q->open()->where('warning_only', true))
             ->when($status !== MonitoringIstisno::STATUS_OCHIQ && array_key_exists($status, MonitoringIstisno::STATUSES), fn ($q) => $q->where('status', $status))

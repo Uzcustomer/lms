@@ -64,3 +64,21 @@ test('katalog o\'qilmasa ham migratsiya qarorlarni mavjud detektorlarga qo\'llay
     expect(MonitoringDetector::where('code', 'Q-1')->first()->params['include_resits'])->toBeTrue()
         ->and(MonitoringDetector::where('pilot', true)->where('warning_mode', false)->count())->toBe(0);
 });
+
+test('D-1 xavf zonasi yoqilgan (ogohlantirish rejimida), Q-1 standart tekshiruvi — vedomost', function () {
+    $d1 = MonitoringDetector::where('code', 'D-1')->first();
+    expect($d1->enabled)->toBeTrue()->and($d1->warning_mode)->toBeTrue()->and($d1->isImplemented())->toBeTrue()
+        ->and(MonitoringDetector::where('code', 'Q-1')->first()->params['check_against'])->toBe('vedomost');
+});
+
+test('eski katalogli serverda migratsiya D-1 ni yoqadi va Q-1 ni vedomost tekshiruviga o\'tkazadi', function () {
+    config(['monitoring.catalog_path' => base_path('docs/yoq-fayl.yaml')]);
+    MonitoringDetector::where('code', 'D-1')->update(['enabled' => false]);
+    $q1 = MonitoringDetector::where('code', 'Q-1')->first();
+    $q1->update(['params' => \Illuminate\Support\Arr::except($q1->params, ['check_against'])]);
+
+    (require base_path('database/migrations/2026_10_16_130000_apply_monitoring_vedomost_and_risk_zone.php'))->up();
+
+    expect(MonitoringDetector::where('code', 'D-1')->value('enabled'))->toBeTruthy()
+        ->and(MonitoringDetector::where('code', 'Q-1')->first()->params['check_against'])->toBe('vedomost');
+});

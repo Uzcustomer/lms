@@ -168,3 +168,20 @@ test('ma\'lumot bor holatda panel, ro\'yxat va kartochka ochiladi; dalil fayli y
     $this->actingAs($this->admin, 'web')->get(route('admin.monitoring.istisnolar.show', $istisno))
         ->assertOk()->assertSee($student->full_name)->assertSee('buyruq.pdf');
 });
+
+test('sinov rejimidagi istisnolar panel jadvallarida va «Ochiq (hammasi)» ro\'yxatida ko\'rinadi', function () {
+    $faculty = monFaculty();
+    $student = monStudent(['department_id' => $faculty]);
+    monAbsence($student, 90);
+    app(\App\Services\Monitoring\DetectorRunner::class)->run(monDetector('D-2', [], ['warning_mode' => true]));
+    expect(\App\Models\MonitoringIstisno::sole()->warning_only)->toBeTrue();
+
+    $this->actingAs($this->admin, 'web')->get(route('admin.monitoring.index'))
+        ->assertOk()
+        ->assertViewHas('byDetector', fn ($rows) => $rows->firstWhere('code', 'D-2')->warning_count === 1)
+        ->assertViewHas('byFaculty', fn ($rows) => (int) $rows->first()->warning_count === 1 && (int) $rows->first()->open_count === 0);
+
+    $this->actingAs($this->admin, 'web')->get(route('admin.monitoring.istisnolar.index'))->assertOk()->assertSee($student->full_name);
+    $this->actingAs($this->admin, 'web')->get(route('admin.monitoring.istisnolar.index', ['holat' => 'yuborilgan']))
+        ->assertOk()->assertDontSee($student->full_name);
+});

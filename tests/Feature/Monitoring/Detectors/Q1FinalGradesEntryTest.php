@@ -27,7 +27,7 @@ beforeEach(function () {
         monStudent(['group_id' => $this->group->group_hemis_id]),
         monStudent(['group_id' => $this->group->group_hemis_id]),
     ];
-    $this->detector = monDetector('Q-1');
+    $this->detector = monDetector('Q-1', ['check_against' => 'hemis']);
 });
 
 function q1Exam(object $group, string $oski, ?string $test = null): void

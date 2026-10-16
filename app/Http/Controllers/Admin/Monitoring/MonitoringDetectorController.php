@@ -105,6 +105,16 @@ class MonitoringDetectorController extends Controller
         return back()->with('success', "{$detector->code} navbatga qo'yildi. Natija bir necha daqiqada «Oxirgi ishga tushirishlar» jadvalida ko'rinadi.");
     }
 
+    /** Ro'yxatdan tanlanadigan parametrlar: qiymat => nom. */
+    private static function choiceOptions(string $key): ?array
+    {
+        return match ($key) {
+            'registrar_office' => ['' => "O'chirilgan — standart mas'ulga"] + OwnerResolver::REGISTRAR_OFFICES,
+            'check_against' => ['vedomost' => "Vedomost mark'ka 3 ish kunida yuklanganmi", 'hemis' => "Baho HEMIS'ga 3 ish kunida kiritilganmi"],
+            default => null,
+        };
+    }
+
     /**
      * Mavjud parametrlar turini qiymatidan aniqlaydi (bool, son, ro'yxat, xodim, tanlov, matn).
      *
@@ -116,7 +126,7 @@ class MonitoringDetectorController extends Controller
         foreach ((array) ($detector->params ?? []) as $key => $value) {
             $type = match (true) {
                 str_starts_with($key, 'recipient_') => 'staff',
-                $key === 'registrar_office' => 'choice',
+                self::choiceOptions($key) !== null => 'choice',
                 is_bool($value) => 'bool',
                 is_int($value) => 'int',
                 is_float($value) => 'float',
@@ -129,7 +139,7 @@ class MonitoringDetectorController extends Controller
                 'label' => $type === 'staff' ? MonitoringAccess::displayName(MonitoringAccess::resolveOwnerKey(is_string($value) ? $value : null)) : null,
             ];
             if ($type === 'choice') {
-                $fields[$key]['options'] = ['' => "O'chirilgan — standart mas'ulga"] + OwnerResolver::REGISTRAR_OFFICES;
+                $fields[$key]['options'] = self::choiceOptions($key);
             }
         }
 

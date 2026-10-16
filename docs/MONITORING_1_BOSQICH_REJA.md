@@ -1,7 +1,11 @@
 # «Monitoring» moduli — 1-bosqich (pilot) rejasi
 
-Holat: **ish boshlandi** (16.10.2026). Buyurtmachi javoblari 11-bo'limda; ish `feature/monitoring`
-branch'ida.
+Holat: **1-bosqich kodi tayyor** (16.10.2026), `feature/monitoring` branch'ida, RTM ko'rib chiqishini kutmoqda.
+Buyurtmachi javoblari 10-bo'limda. O'rnatish va ishga tushirish: `docs/MONITORING_README.md`.
+
+**Bajarildi:** yadro (detektor, run, istisno, izoh, dalil, import jadvallari; `monitoring_admin` roli;
+dvigatel; kunlik jadval), 5 pilot detektor, sahifalar (panel, ro'yxat va Excel, kartochka, mas'ul
+kabineti, detektorlar sozlamasi, importlar, buyruqlar + M3, tavsiya etilganlar, M8), 59 test.
 Asos: `docs/MONITORING_TZ.md` (v1.0), `docs/detectors.yaml` (54 detektor), `docs/ARXITEKTURA_XULOSA.md`.
 
 ---
@@ -22,10 +26,8 @@ Asos: `docs/MONITORING_TZ.md` (v1.0), `docs/detectors.yaml` (54 detektor), `docs
 ## 2. Branch va pull request'lar
 
 - Kod `feature/monitoring` branch'ida yoziladi (TZ 0.3); `main` ga push qilinmaydi.
-- Pilotni ko'rib chiqish oson bo'lishi uchun ikkita PR taklif qilaman:
-  - **PR 1a — yadro + A-5 + D-2.** A-5 ning muddati 01.11.2026, ya'ni 17 kun qoldi, shuning uchun
-    u birinchi navbatda.
-  - **PR 1b — Q-1, E-1, E-7** va M3/M8 ning soddalashtirilgan shakllari.
+- 1-bosqich bitta PR bo'ladi (TZ 0.3): yadro va 5 detektor birga tayyor bo'ldi. A-5 ning muddati
+  01.11.2026, shuning uchun PR'ni shu sanagacha ko'rib chiqib serverga chiqarish tavsiya etiladi.
 - **PR 0 (Monitoring'dan tashqari) — `claude/new-session-qm95zg` branch'ida tayyor.** Arxitektura
   xulosasining 10-bo'limidagi xavfsizlik muammolari, platforma ishiga ta'sir qilmaydigan qismi:
   rol berish, parol tiklash va foydalanuvchilarni boshqarish faqat superadmin/admin/kichik_admin'ga;
@@ -205,15 +207,18 @@ muddat o'tganda yuboriladigan eslatmalar, kalendar va oylik svod — 2-bosqichda
 
 ## 9. Qabul mezonlari (TZ 9-bo'lim) — qanday tekshiriladi
 
-| Mezon | Tekshiruv |
-|---|---|
-| 5 detektor test ma'lumotida to'g'ri ishlaydi (har biriga ≥ 2 test) | `tests/Feature/Monitoring/Detectors/*` |
-| Qayta ishga tushirishda dublikat yo'q | `DetectorRunnerTest` |
-| Bartaraf bo'lsa avtomatik yopiladi, tarixda qoladi | `DetectorRunnerTest` |
-| Mas'ul faqat o'zinikini ko'radi | `IstisnoAccessTest` |
-| Parametr panelda o'zgarsa kuchga kiradi | `DetectorSettingsTest` |
-| `.env.example`, migratsiyalar, README | PR tarkibida |
-| Haqiqiy shaxsiy ma'lumot yo'q | faqat factory/Faker; PR'dan oldin diff tekshiriladi |
+| Mezon | Tekshiruv | Holat |
+|---|---|---|
+| 5 detektor test ma'lumotida to'g'ri ishlaydi (har biriga ≥ 2 test) | `tests/Feature/Monitoring/Detectors/*` — D-2: 6, Q-1: 4, A-5: 6, E-1: 4, E-7: 3 | ✅ |
+| Qayta ishga tushirishda dublikat yo'q | `DetectorRunnerTest` | ✅ |
+| Bartaraf bo'lsa avtomatik yopiladi, tarixda qoladi | `DetectorRunnerTest`, `D2UnexcusedAbsenceTest` | ✅ |
+| Mas'ul faqat o'zinikini ko'radi | `MonitoringAccessTest` | ✅ |
+| Parametr panelda o'zgarsa kuchga kiradi | `MonitoringPagesTest`, `D2UnexcusedAbsenceTest` | ✅ |
+| `.env.example`, migratsiyalar, README | `docs/MONITORING_README.md`, 4 migratsiya | ✅ |
+| Haqiqiy shaxsiy ma'lumot yo'q | testlarda faqat soxta ma'lumot | ✅ |
+
+To'liq test to'plami: 105 ta o'tdi, 58 ta yiqildi. Yiqilganlar Monitoring'dan oldin ham yiqilgan
+(eskirgan Timetable va LessonOpening testlari); `main` dagi natija bilan solishtirilgan.
 
 ## 10. Savollar va javoblar
 

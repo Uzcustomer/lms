@@ -3,10 +3,8 @@
 namespace App\Services\Monitoring\Detectors;
 
 use App\Models\MonitoringDetector;
-use App\Services\Monitoring\Contracts\Detector;
 use App\Services\Monitoring\DetectorResult;
 use App\Services\Monitoring\Finding;
-use App\Services\Monitoring\OwnerResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -21,14 +19,8 @@ use Illuminate\Support\Facades\DB;
  *          yoki talaba endi «o'qimoqda» (student_status_code = 11) holatida emas.
  * Mas'ul: talaba fakulteti dekani.
  */
-class D2UnexcusedAbsence implements Detector
+class D2UnexcusedAbsence extends UnexcusedAbsenceDetector
 {
-    public const STUDYING = '11';
-
-    public function __construct(private OwnerResolver $owners)
-    {
-    }
-
     public function run(array $params, MonitoringDetector $detector): DetectorResult
     {
         $threshold = (float) ($params['threshold_hours'] ?? 74);
@@ -36,39 +28,14 @@ class D2UnexcusedAbsence implements Detector
         $medicalReasons = array_values((array) ($params['medical_reasons'] ?? ['kasallik', 'tibbiy_korik']));
         $excludedTypes = array_map('strval', (array) ($params['excluded_training_types'] ?? []));
 
-        $base = DB::table('attendances as a')
-            ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
-            ->where('a.education_year_current', true)
-            ->whereColumn('a.semester_code', 's.semester_code')
-            ->when($excludedTypes !== [], fn ($q) => $q->whereNotIn('a.training_type_code', $excludedTypes));
+        $result = new DetectorResult($this->currentScopes());
 
-        // Shu run'da to'liq tekshirilgan semestrlar (joriy o'quv yili × talabalarning joriy semestrlari) —
-        // faqat ulardagi istisnolar avtomatik yopiladi. Katta davomat jadvalini qayta skan qilmaslik uchun
-        // semestrlar students'dan olinadi.
-        $currentYear = DB::table('attendances')->where('education_year_current', true)->max('education_year_code');
-        $scopes = $currentYear === null ? [] : DB::table('students')
-            ->where('student_status_code', self::STUDYING)
-            ->whereNotNull('semester_code')
-            ->distinct()
-            ->pluck('semester_code')
-            ->map(fn ($semester) => self::scope($currentYear, $semester))
-            ->values()->all();
-        $result = new DetectorResult($scopes);
-
-        $candidates = (clone $base)
-            ->groupBy('a.student_hemis_id', 'a.education_year_code', 'a.semester_code')
-            ->havingRaw('SUM(a.absent_off) > ?', [$threshold])
-            ->selectRaw('a.student_hemis_id, a.education_year_code, MAX(a.education_year_name) as education_year_name, a.semester_code, MAX(a.semester_name) as semester_name, SUM(a.absent_off) as hours')
-            ->get();
-
+        $candidates = $this->candidates($excludedTypes, '>', $threshold);
         if ($candidates->isEmpty()) {
             return $result;
         }
 
-        $students = DB::table('students')
-            ->whereIn('hemis_id', $candidates->pluck('student_hemis_id')->all())
-            ->get(['hemis_id', 'full_name', 'student_id_number', 'group_name', 'department_id', 'student_status_code'])
-            ->keyBy('hemis_id');
+        $students = $this->students($candidates);
 
         foreach ($candidates as $row) {
             $student = $students->get($row->student_hemis_id);
@@ -110,29 +77,6 @@ class D2UnexcusedAbsence implements Detector
         }
 
         return $result;
-    }
-
-    public static function scope($educationYearCode, $semesterCode): string
-    {
-        return "{$educationYearCode}:{$semesterCode}";
-    }
-
-    private function medicallyExcusedHours(object $row, array $reasons, array $excludedTypes): float
-    {
-        return (float) DB::table('attendances as a')
-            ->where('a.student_hemis_id', $row->student_hemis_id)
-            ->where('a.education_year_code', $row->education_year_code)
-            ->where('a.semester_code', $row->semester_code)
-            ->when($excludedTypes !== [], fn ($q) => $q->whereNotIn('a.training_type_code', $excludedTypes))
-            ->whereExists(function ($q) use ($reasons) {
-                $q->selectRaw('1')
-                    ->from('absence_excuses as e')
-                    ->whereColumn('e.student_hemis_id', 'a.student_hemis_id')
-                    ->where('e.status', 'approved')
-                    ->whereIn('e.reason', $reasons)
-                    ->whereRaw('DATE(a.lesson_date) BETWEEN e.start_date AND e.end_date');
-            })
-            ->sum('a.absent_off');
     }
 
     private function hasExpulsionOrder(object $student, $educationYearCode): bool

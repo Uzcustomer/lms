@@ -10,7 +10,8 @@
         'moslik' => 'Talabaga moslik', 'talab' => 'Talab', 'buyruq_raqami' => 'Buyruq raqami',
         'buyruq_sanasi' => 'Buyruq sanasi', 'turi' => 'Turi', 'xabar_berilmagan' => 'Xabar berilmagan',
         'kechikib_xabar_berilgan' => 'Kechikib xabar berilgan', 'turar_joy' => 'Turar joy', 'kelgan_sana' => 'Kelgan sana',
-        'yetishmaydi' => 'Yetishmaydi',
+        'yetishmaydi' => 'Yetishmaydi', 'shakl' => 'Vedomost shakli', 'vedomost_holati' => 'Vedomost holati',
+        'yuklangan' => 'Yuklangan', 'kafedra_mudiri' => 'Kafedra mudiri', 'guruhchalar' => 'Guruhchalar', 'chetlashtirishgacha' => 'Chegaragacha qolgan soat',
     ];
 @endphp
 <dl class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-sm">

@@ -3,6 +3,8 @@
 namespace App\Services\Monitoring\Detectors;
 
 use App\Models\MonitoringDetector;
+use App\Models\VedomostSubmission;
+use App\Services\VedomostMergeService;
 use App\Services\Monitoring\Contracts\Detector;
 use App\Services\Monitoring\DetectorResult;
 use App\Services\Monitoring\Finding;
@@ -16,6 +18,12 @@ use Illuminate\Support\Facades\DB;
 /**
  * Q-1. Yakuniy nazorat baholari nazoratdan keyin 3 (ish) kun ichida HEMISga kiritiladi;
  * haqqoniylik uchun kafedra mudiri javobgar. (Baholash tartibi 38)
+ *
+ * check_against = vedomost (standart; buyurtmachi qarori 16.10.2026 — HEMIS'ga yakuniy natijalar semestr oxirida
+ *          markazlashtirib kiritiladi): mark'dagi vedomost topshirish jarayoni (vedomost_submissions) — YN yoki
+ *          oxirgi dars sanasi + 3 ish kuni (jarayonning o'zi hisoblagan deadline) ichida vedomost yuklanganmi.
+ *          Mas'ul — vedomostdagi kafedra mudiri.
+ * check_against = hemis — quyidagi HEMIS tekshiruvi.
  *
  * Trigger: exam_schedules (guruh bo'yicha) — YN sanasi = OSKI va test sanalarining kechrog'i
  *          (vedomost base_date mantig'i bilan bir xil), muddat = sana + days.
@@ -56,6 +64,10 @@ class Q1FinalGradesEntry implements Detector
         $keepLate = ($params['late_completion'] ?? 'auto_close') === 'keep_open';
         $lookback = max(1, (int) ($params['lookback_days'] ?? 60));
         $includeResits = (bool) ($params['include_resits'] ?? true);
+
+        if (($params['check_against'] ?? 'vedomost') !== 'hemis') {
+            return $this->vedomostFindings($lookback, $keepLate);
+        }
 
         $now = now();
         $from = $now->copy()->startOfDay()->subDays($lookback);
@@ -163,6 +175,92 @@ class Q1FinalGradesEntry implements Detector
                 facultyHemisId: $group?->department_hemis_id ? (int) $group->department_hemis_id : null,
                 departmentHemisId: $kafedraId,
                 owner: $this->owners->headOfDepartment($kafedraId),
+            ));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Vedomost rejimi: muddati (deadline) o'tgan, lekin topshirilmagan vedomostlar. Topshirilmagan —
+     * vedomost jarayonidagi kabi «kutilmoqda» yoki «rad etilgan» (qayta yuklash kerak) holat; keep_open bo'lsa
+     * kechikib topshirilganlar ham. Guruhcha (a/b) va fan variantlari qatorlari jarayondagidek bitta
+     * vedomostga birlashtiriladi (VedomostMergeService). Tekshirilgan davr — oxirgi lookback kunlari:
+     * shu davrdagi boshqa Q-1 istisnolari (jumladan HEMIS rejimidan qolganlari) bartaraf bo'lgan deb yopiladi.
+     */
+    private function vedomostFindings(int $lookback, bool $keepLate): DetectorResult
+    {
+        $now = now();
+        $from = $now->copy()->startOfDay()->subDays($lookback);
+
+        $scopes = [];
+        for ($day = $from->copy(); $day->lte($now); $day->addDay()) {
+            $scopes[] = $day->toDateString();
+        }
+        $result = new DetectorResult($scopes);
+
+        $rows = DB::table('vedomost_submissions')
+            ->whereNotNull('base_date')
+            ->whereNotNull('deadline')
+            ->where('base_date', '>=', $from->toDateString())
+            ->get();
+        if ($rows->isEmpty()) {
+            return $result;
+        }
+
+        $merge = app(VedomostMergeService::class);
+        $faculties = DB::table('groups')
+            ->whereIn('group_hemis_id', $rows->pluck('group_hemis_id')->unique()->all())
+            ->pluck('department_hemis_id', 'group_hemis_id');
+        $statuses = VedomostSubmission::statusLabels();
+        $outstandingStatuses = [VedomostSubmission::STATUS_PENDING, VedomostSubmission::STATUS_REJECTED];
+
+        foreach ($rows->groupBy(fn ($row) => $merge->mergeKey($row)) as $siblings) {
+            $sheet = $merge->aggregate($siblings)->first();
+            $deadline = Carbon::parse($sheet->deadline)->endOfDay();
+            if ($now->lte($deadline)) {
+                continue; // muddat hali tugamagan
+            }
+
+            $outstanding = $siblings->contains(fn ($row) => in_array($row->status, $outstandingStatuses, true));
+            $uploadedAt = $siblings->pluck('uploaded_at')->filter()->max();
+            $uploadedAt = $uploadedAt ? Carbon::parse($uploadedAt) : null;
+            if (!$outstanding && (!$keepLate || $uploadedAt === null || $uploadedAt->lte($deadline))) {
+                continue;
+            }
+
+            $rep = $siblings->sortBy('id')->first();
+            $baseDate = Carbon::parse($sheet->base_date);
+            $baseLabel = ($sheet->base_type === 'lesson' ? 'oxirgi dars ' : 'YN ') . $baseDate->format('d.m.Y');
+            $faculty = $faculties[$rep->group_hemis_id] ?? null;
+            $headHemisId = $siblings->pluck('kafedra_mudiri_hemis_id')->filter()->first();
+            $departmentId = $siblings->pluck('department_hemis_id')->filter()->first();
+
+            $result->add(new Finding(
+                fingerprint: "Q-1:v:{$rep->id}",
+                subjectType: 'qaydnoma',
+                subjectLabel: "{$sheet->group_name} — {$sheet->subject_name} (vedomost {$sheet->form_type}-shakl, {$baseLabel})",
+                subjectRef: (string) $rep->group_hemis_id,
+                details: [
+                    'guruh' => $sheet->group_name,
+                    ...($sheet->merge_count > 1 ? ['guruhchalar' => $sheet->subgroup_label] : []),
+                    'fan' => $sheet->subject_name,
+                    'semestr' => $sheet->semester_code,
+                    'shakl' => $sheet->form_type . '-shakl',
+                    'nazorat_sanasi' => $baseDate->toDateString(),
+                    'muddat' => $deadline->toDateTimeString(),
+                    'vedomost_holati' => $statuses[$sheet->status] ?? $sheet->status,
+                    'yuklangan' => $uploadedAt?->toDateTimeString() ?? 'yuklanmagan',
+                    'kafedra_mudiri' => $sheet->kafedra_mudiri_name,
+                    'kutilgan_harakat' => $sheet->status === VedomostSubmission::STATUS_REJECTED
+                        ? "Rad etilgan vedomostni tuzatib qayta yuklash"
+                        : "Imzolangan vedomost muddatida mark'ka yuklanishi",
+                ],
+                scopeKey: $baseDate->toDateString(),
+                facultyHemisId: $faculty ? (int) $faculty : null,
+                departmentHemisId: $departmentId ? (int) $departmentId : null,
+                owner: $this->owners->teacherByHemisId($headHemisId)
+                    ?? $this->owners->headOfDepartment($departmentId ? (int) $departmentId : null),
             ));
         }
 

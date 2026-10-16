@@ -18,6 +18,7 @@ return [
 
     // Detektor kodi → klass. Klassi yo'q detektorlar katalogda «amalga oshirilmagan» bo'lib turadi.
     'detectors' => [
+        'D-1' => \App\Services\Monitoring\Detectors\D1AbsenceRiskZone::class,
         'D-2' => \App\Services\Monitoring\Detectors\D2UnexcusedAbsence::class,
         'Q-1' => \App\Services\Monitoring\Detectors\Q1FinalGradesEntry::class,
         'A-5' => \App\Services\Monitoring\Detectors\A5ContractAdmission::class,

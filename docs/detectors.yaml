@@ -18,7 +18,15 @@ detectors:
     detection: "HEMIS davomat ↔ intizomiy buyruqlar"
     status: "⚠"
     pilot: false
-    enabled: false
+    enabled: true                    # buyurtmachi (16.10.2026): «xavf zonasi» panelda ko'rinsin
+    warning_mode: true
+    default_owner_role: "dekan"
+    params:
+      min_hours: 30                  # xavf zonasi: sababsiz soat shu chegaradan (D-2 bilan bir xil hisob)
+      max_hours: 74                  # shu chegaragacha; oshsa — D-2
+      exclude_medical: true
+      medical_reasons: [kasallik, tibbiy_korik]
+      excluded_training_types: []
   - code: D-2
     group: "DAVOMAT"
     rule: "Bir semestrda uzrli sababsiz 74 soatdan ortiq — chetlashtirish asosi (belgilangan shakldagi tibbiy ma'lumotnoma bo'lsa istisno); semestr to'lovi qaytarilmaydi"
@@ -83,6 +91,7 @@ detectors:
       include_resits: true           # buyurtmachi: qayta topshirish (12a, 12b) baholari ham tekshiriladi
       late_completion: auto_close    # buyurtmachi: kechikib kiritilsa istisno avtomatik yopiladi (keep_open — ochiq qoladi)
       lookback_days: 60              # necha kun oldingi nazoratlargacha tekshiriladi
+      check_against: vedomost        # buyurtmachi (16.10.2026): HEMIS'ga semestr oxirida kiritiladi — vedomost mark'ka 3 ish kunida yuklanganmi (hemis — baho HEMIS'da)
   - code: Q-1b
     group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
     rule: "Yakuniy qaydnoma nazoratdan 5 kun ichida, bir marta to'ldirib saqlanadi"

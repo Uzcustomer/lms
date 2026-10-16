@@ -18,6 +18,21 @@ class OwnerResolver
     private array $deans = [];
     private array $heads = [];
     private array $registrars = [];
+    private array $byHemisId = [];
+
+    /** Xodim HEMIS ID bo'yicha (masalan vedomostda ko'rsatilgan kafedra mudiri). */
+    public function teacherByHemisId($hemisId): ?Teacher
+    {
+        if (empty($hemisId)) {
+            return null;
+        }
+
+        if (!array_key_exists((string) $hemisId, $this->byHemisId)) {
+            $this->byHemisId[(string) $hemisId] = Teacher::where('hemis_id', $hemisId)->orderByDesc('is_active')->first();
+        }
+
+        return $this->byHemisId[(string) $hemisId];
+    }
 
     /**
      * Talabaga biriktirilgan registrator: «Registrator bo'linmalari» (staff_registration_divisions) dagi

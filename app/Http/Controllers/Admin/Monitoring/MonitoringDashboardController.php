@@ -33,27 +33,35 @@ class MonitoringDashboardController extends Controller
             'ogohlantirish' => MonitoringIstisno::query()->open()->where('warning_only', true)->count(),
         ];
 
+        // Ochiq — mas'ulga yuborilgan; ogohlantirish — sinov rejimidagi (faqat panelda ko'rinadi).
+        $counts = 'SUM(CASE WHEN i.warning_only = 0 THEN 1 ELSE 0 END) as open_count, '
+            . 'SUM(CASE WHEN i.warning_only = 1 THEN 1 ELSE 0 END) as warning_count, '
+            . 'SUM(CASE WHEN i.warning_only = 0 AND i.due_at < ? THEN 1 ELSE 0 END) as overdue_count';
+
         $byGroup = DB::table('monitoring_istisnos as i')
             ->join('monitoring_detectors as d', 'd.id', '=', 'i.detector_id')
             ->whereIn('i.status', MonitoringIstisno::OPEN_STATUSES)
-            ->where('i.warning_only', false)
             ->groupBy('d.group_name')
-            ->selectRaw('d.group_name, COUNT(*) as open_count, SUM(CASE WHEN i.due_at < ? THEN 1 ELSE 0 END) as overdue_count', [now()])
+            ->selectRaw("d.group_name, {$counts}", [now()])
             ->orderByDesc('open_count')
+            ->orderByDesc('warning_count')
             ->get();
 
         $byFaculty = DB::table('monitoring_istisnos as i')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'i.faculty_hemis_id')
             ->whereIn('i.status', MonitoringIstisno::OPEN_STATUSES)
-            ->where('i.warning_only', false)
             ->groupBy('i.faculty_hemis_id', 'f.name')
-            ->selectRaw('i.faculty_hemis_id, f.name as faculty_name, COUNT(*) as open_count, SUM(CASE WHEN i.due_at < ? THEN 1 ELSE 0 END) as overdue_count', [now()])
+            ->selectRaw("i.faculty_hemis_id, f.name as faculty_name, {$counts}", [now()])
             ->orderByDesc('open_count')
+            ->orderByDesc('warning_count')
             ->get();
 
         $byDetector = MonitoringDetector::query()
             ->where('enabled', true)
-            ->withCount(['istisnolar as open_count' => fn ($q) => $q->open()->where('warning_only', false)])
+            ->withCount([
+                'istisnolar as open_count' => fn ($q) => $q->open()->where('warning_only', false),
+                'istisnolar as warning_count' => fn ($q) => $q->open()->where('warning_only', true),
+            ])
             ->with('lastRun')
             ->orderBy('code')
             ->get()

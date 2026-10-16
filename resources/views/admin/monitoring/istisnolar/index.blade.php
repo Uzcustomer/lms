@@ -11,7 +11,7 @@
                 <div>
                     <label class="block text-gray-600">Holat</label>
                     <select name="holat" class="w-full border-gray-300 rounded">
-                        @foreach(['ochiq' => 'Ochiq (hammasi)', 'muddati_otgan' => "Muddati o'tgan", 'ogohlantirish' => 'Ogohlantirish', 'javob_berildi' => 'Javob berildi', 'qayta_ochildi' => 'Qayta ochildi', 'yopildi' => 'Yopildi', 'asosli_istisno' => 'Asosli istisno', 'hammasi' => 'Hammasi'] as $value => $label)
+                        @foreach(['ochiq' => 'Ochiq (hammasi)', 'yuborilgan' => "Ochiq (mas'ulga yuborilgan)", 'muddati_otgan' => "Muddati o'tgan", 'ogohlantirish' => 'Ogohlantirish', 'javob_berildi' => 'Javob berildi', 'qayta_ochildi' => 'Qayta ochildi', 'yopildi' => 'Yopildi', 'asosli_istisno' => 'Asosli istisno', 'hammasi' => 'Hammasi'] as $value => $label)
                             <option value="{{ $value }}" @selected(request('holat', 'ochiq') === $value)>{{ $label }}</option>
                         @endforeach
                     </select>

@@ -18,7 +18,7 @@
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 @foreach([
-                    ['ochiq', 'Ochiq istisnolar', 'text-orange-700', 'ochiq'],
+                    ['ochiq', 'Ochiq istisnolar', 'text-orange-700', 'yuborilgan'],
                     ['muddati_otgan', "Muddati o'tgan", 'text-red-700', 'muddati_otgan'],
                     ['shu_hafta_yopilgan', 'Shu hafta yopilgan', 'text-green-700', 'yopildi'],
                     ['ogohlantirish', 'Ogohlantirish (prognoz)', 'text-yellow-700', 'ogohlantirish'],
@@ -34,16 +34,17 @@
                 <div class="bg-white rounded-lg shadow p-4">
                     <h3 class="font-semibold mb-3">Detektor guruhlari kesimida (ochiq)</h3>
                     <table class="min-w-full text-sm">
-                        <thead><tr class="text-left text-gray-500"><th class="py-1">Guruh</th><th class="py-1 text-right">Ochiq</th><th class="py-1 text-right">Muddati o'tgan</th></tr></thead>
+                        <thead><tr class="text-left text-gray-500"><th class="py-1">Guruh</th><th class="py-1 text-right">Ochiq</th><th class="py-1 text-right">Ogohlantirish</th><th class="py-1 text-right">Muddati o'tgan</th></tr></thead>
                         <tbody>
                         @forelse($byGroup as $row)
                             <tr class="border-t">
                                 <td class="py-1"><a href="{{ route('admin.monitoring.istisnolar.index', ['guruh' => $row->group_name]) }}">{{ $row->group_name }}</a></td>
                                 <td class="py-1 text-right">{{ $row->open_count }}</td>
+                                <td class="py-1 text-right text-yellow-700">{{ $row->warning_count }}</td>
                                 <td class="py-1 text-right {{ $row->overdue_count ? 'text-red-700 font-semibold' : '' }}">{{ $row->overdue_count }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="3" class="py-2 text-gray-500">Ochiq istisno yo'q.</td></tr>
+                            <tr><td colspan="4" class="py-2 text-gray-500">Ochiq istisno yo'q.</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -52,7 +53,7 @@
                 <div class="bg-white rounded-lg shadow p-4">
                     <h3 class="font-semibold mb-3">Fakultetlar kesimida (ochiq)</h3>
                     <table class="min-w-full text-sm">
-                        <thead><tr class="text-left text-gray-500"><th class="py-1">Fakultet</th><th class="py-1 text-right">Ochiq</th><th class="py-1 text-right">Muddati o'tgan</th></tr></thead>
+                        <thead><tr class="text-left text-gray-500"><th class="py-1">Fakultet</th><th class="py-1 text-right">Ochiq</th><th class="py-1 text-right">Ogohlantirish</th><th class="py-1 text-right">Muddati o'tgan</th></tr></thead>
                         <tbody>
                         @forelse($byFaculty as $row)
                             <tr class="border-t">
@@ -64,10 +65,11 @@
                                     @endif
                                 </td>
                                 <td class="py-1 text-right">{{ $row->open_count }}</td>
+                                <td class="py-1 text-right text-yellow-700">{{ $row->warning_count }}</td>
                                 <td class="py-1 text-right {{ $row->overdue_count ? 'text-red-700 font-semibold' : '' }}">{{ $row->overdue_count }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="3" class="py-2 text-gray-500">Ochiq istisno yo'q.</td></tr>
+                            <tr><td colspan="4" class="py-2 text-gray-500">Ochiq istisno yo'q.</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -77,13 +79,14 @@
             <div class="bg-white rounded-lg shadow p-4 mb-6">
                 <h3 class="font-semibold mb-3">Ishlayotgan detektorlar</h3>
                 <table class="min-w-full text-sm">
-                    <thead><tr class="text-left text-gray-500"><th class="py-1">Kod</th><th class="py-1">Qoida</th><th class="py-1 text-right">Ochiq</th><th class="py-1">Oxirgi ishga tushish</th></tr></thead>
+                    <thead><tr class="text-left text-gray-500"><th class="py-1">Kod</th><th class="py-1">Qoida</th><th class="py-1 text-right">Ochiq</th><th class="py-1 text-right">Ogohlantirish</th><th class="py-1">Oxirgi ishga tushish</th></tr></thead>
                     <tbody>
                     @forelse($byDetector as $d)
                         <tr class="border-t">
                             <td class="py-1 font-semibold"><a href="{{ route('admin.monitoring.istisnolar.index', ['detector_id' => $d->id]) }}">{{ $d->code }}</a></td>
                             <td class="py-1">{{ $d->title }} @if($d->warning_mode)<span class="text-xs text-yellow-700">(ogohlantirish rejimi)</span>@endif</td>
                             <td class="py-1 text-right">{{ $d->open_count }}</td>
+                            <td class="py-1 text-right text-yellow-700">{{ $d->warning_count }}</td>
                             <td class="py-1">
                                 @if($d->lastRun)
                                     {{ $d->lastRun->started_at->format('d.m.Y H:i') }} —
@@ -94,7 +97,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="4" class="py-2 text-gray-500">Yoqilgan detektor yo'q.</td></tr>
+                        <tr><td colspan="5" class="py-2 text-gray-500">Yoqilgan detektor yo'q.</td></tr>
                     @endforelse
                     </tbody>
                 </table>

@@ -1,0 +1,440 @@
+# TTATF Registrator ofisi — nazorat detektorlari katalogi
+# Manba: TTATF_Monitoring_va_avtomatlashtirish_rejasi.md, 7-bo'lim (15.10.2026 tekshirilgan tahrir)
+# status: ✅ tasdiqlangan · ✏️ tuzatilgan · 🆕 yangi · ⚠ normasi tekshirilishi kerak (faqat ogohlantirish rejimi)
+# Har bir detektor: trigger to'plami ↔ kutilgan harakat to'plami; farq = istisno (exception).
+# Muddat va chegaralar kodga qotirilmaydi — shu fayldan (keyin DB dan) o'qiladi.
+# Jami: 54 ta detektor
+
+detectors:
+  - code: D-1
+    group: "DAVOMAT"
+    rule: "Semestrda sababsiz 30–74 soat — intizomiy chora"
+    legal_basis: "Faqat Filial ichki tartib-qoidalarida belgilangan bo'lsa (VMQ 578 3-il. 49(v) umumiy havola)"
+    detection: "HEMIS davomat ↔ intizomiy buyruqlar"
+    status: "⚠"
+    pilot: false
+    enabled: false
+  - code: D-2
+    group: "DAVOMAT"
+    rule: "Bir semestrda uzrli sababsiz 74 soatdan ortiq — chetlashtirish asosi (belgilangan shakldagi tibbiy ma'lumotnoma bo'lsa istisno); semestr to'lovi qaytarilmaydi"
+    legal_basis: "VMQ 578 3-il. 49(g); DR-2431 27"
+    detection: "HEMIS davomat ro'yxati ↔ chetlashtirish buyruqlari"
+    status: "✏️"
+    pilot: true
+    enabled: true
+  - code: D-3
+    group: "DAVOMAT"
+    rule: "Fan auditoriya soatining ≥25% ini sababsiz qoldirgan — fandan chetlashtiriladi, YB ga kiritilmaydi, kreditlar o'zlashtirilmagan"
+    legal_basis: "Baholash tartibi 39"
+    detection: "Fan kesimi davomat ↔ YB qaydnomasi"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: D-4
+    group: "DAVOMAT"
+    rule: "Sababli hujjat rasmiylashtirilgan yoki darsga qaytgan kundan 10 kun ichida taqdim etiladi; sababli qilishni dekan yoki Registrator ofisi rahbari amalga oshiradi, hujjatni tyutor beradi; 9 rasmiy toifa"
+    legal_basis: "OTFIV 451 ilova izohi; 4-band; Baholash tartibi 75"
+    detection: "Sababli qilish sanasi ↔ hujjat sanasi; kim kiritgani (rol)"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: D-5
+    group: "DAVOMAT"
+    rule: "Davomat va baho — mashg'ulot o'tkazilgan kunning o'zida Elektron jurnalga"
+    legal_basis: "Baholash tartibi 60; HEMIS reglamenti"
+    detection: "HEMIS o'qituvchi faolligi"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: D-6
+    group: "DAVOMAT"
+    rule: "Bir semestrda qoldirilgan darslar 30 kundan oshsa — sababli bo'lsa ham — akademik ta'til yoki chetlashtirish"
+    legal_basis: "OTFIV 451 ilova izohi"
+    detection: "HEMIS: sababli+sababsiz kunlar yig'indisi > 30 ↔ ta'til/chetlashtirish buyrug'i yo'q"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: Q-1
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Yakuniy nazorat baholari 3 kun ichida HEMISga; haqqoniylik uchun kafedra mudiri javobgar"
+    legal_basis: "Baholash tartibi 38"
+    detection: "Nazorat sanasi ↔ HEMIS kiritish sanasi (kafedra kesimi)"
+    status: "✅"
+    pilot: true
+    enabled: true
+  - code: Q-1b
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Yakuniy qaydnoma nazoratdan 5 kun ichida, bir marta to'ldirib saqlanadi"
+    legal_basis: "HEMIS cheklovi (reyestr Y15/Y24)"
+    detection: "HEMIS qaydnoma holati"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-2
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Baho faqat apellyatsiya «asosli» qarori yoki dekan bildirishnomasi asosida, o'quv ishlari bo'yicha direktor o'rinbosari profilidan o'zgartiriladi; tuzatish — bildirishnomadan 10 ish kuni ichida; bir fan bahosi ikki marta tuzatilmaydi; texnik xato 3 kundan keyin tuzatilmaydi"
+    legal_basis: "Baholash tartibi 70; OTFIV 451 ilova 2.2–2.5"
+    detection: "HEMIS o'zgarishlar jurnali ↔ qaror/bildirishnoma; muddat va takror"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: Q-3
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Kirish shartlari: JB < 60 → keyingi turlarga kiritilmaydi; oraliqqa JB o'rtachasi > 60; YB ga JN, MT, OB har biri ≥ 60"
+    legal_basis: "Baholash tartibi 14, 17, 20"
+    detection: "Komponent ballari ↔ YB ro'yxati"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-4
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Oraliq < 60 yoki uzrli sabab bilan qatnashmagan — YB gacha qayta: 1-marta dekan farmoyishi, 2-marta koordinatsion kengash; topshirmasa — YB ga kiritilmaydi"
+    legal_basis: "Baholash tartibi 18"
+    detection: "Oraliq ↔ farmoyish ↔ kengash protokoli ↔ YB"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-5
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Apellyatsiya: shikoyat 24 soat; komissiya (≥5, baholamaganlardan) 48 soat; qaror shu kuni"
+    legal_basis: "Baholash tartibi 65–69"
+    detection: "Apellyatsiya jurnali"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-6
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Qarzdorlik (02216-son buyruq talqini bilan): 3 tagacha fan → qo'shimcha semestr, to'lov kredit qiymatidan, xarajatni Registrator ofisi hisoblab talabaga ma'lum qiladi; 4+ chegarasi HAR SEMESTR ALOHIDA hisoblanadi; 45-banddagi «qayta topshirishga ruxsat berilmaydi» = qayta o'qish huquqidan mahrum etish, 46-banddagi barcha urinishlar saqlanadi (dekanat + koordinatsion kengash); kursda qoldirish — barcha urinishlardan keyin ham semestrda 4+ qolganda; 2024/2025 va oldingi qarzlar yig'ilmaydi (eski tartib bo'yicha yopiladi); qo'shimcha semestrda topshirmasa — dekan bildirgisi → kursda qoldirish; OSKI < 60 → kursda qoldiriladi; HEMISda holatni O'UB va Registrator ofisi yangilaydi"
+    legal_basis: "Baholash tartibi 42–48; Buyruq 02216 (1–3, 5-bandlar)"
+    detection: "Qarzdorlar (semestr kesimi) ↔ urinishlar soni ↔ to'lov hisob-kitobi yetkazilgani ↔ kursda qoldirish buyruqlari. Urinishlar tugamasdan kursda qoldirilgan, yoki eski qarz qo'shib hisoblangan — signal"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: Q-7
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Kursdan kursga: GPA ≥ 3,0 va qarzdorlik yo'q"
+    legal_basis: "Baholash tartibi 50–51; VMQ 578 3-il. 50 (kredit-modulda — GPA o'tish bali)"
+    detection: "O'tkazish buyrug'i ↔ GPA/qarz"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-8
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Qayta topshirilgan mashg'ulot bali 0,8 koeffitsiyent bilan (uzrli — istisno)"
+    legal_basis: "Baholash tartibi 74"
+    detection: "Elektron jurnal yozuvlari"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-9
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Uzrli sabab bilan qoldirilgan nazoratlar — o'qishni boshlagandan 2 hafta ichida, dekan farmoyishi bilan"
+    legal_basis: "Baholash tartibi 41, 75"
+    detection: "Farmoyish ↔ topshirish sanasi"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-10
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "Imtiyozli diplom: fanlarning ≥ 3/4 «5» (90–100), qolganlari ≥ «4» (70–89,9), attestatsiya «5»"
+    legal_basis: "Baholash tartibi 52; VMQ 836 1-il. 30"
+    detection: "Bitiruvchilar ↔ imtiyozli diplomlar"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: Q-11
+    group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
+    rule: "«3», «4» yoki «5» bilan baholangan nazorat turini qayta topshirishga yo'l qo'yilmaydi"
+    legal_basis: "OTFIV 451, 5-band; Baholash tartibi 61"
+    detection: "Qayta topshirish yozuvlari ↔ dastlabki baho ≥ 60"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: S-1
+    group: "NAZORAT-IMTIHON TASHKILI"
+    rule: "YN topshiriqlari imtihondan ≥ 1 oy oldin tayyorlanib dekan tasdiqlaydi; savolnoma va mezon ≥ 1 oy oldin talabalarga; test bazasi — har soatga ≥ 5 savol"
+    legal_basis: "Baholash tartibi 24, 26"
+    detection: "Tasdiq/e'lon sanasi ↔ imtihon sanasi"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: S-2
+    group: "NAZORAT-IMTIHON TASHKILI"
+    rule: "Bir kunda 1 fandan ortiq yakuniy yo'q; oralig'i ≥ 2 kun"
+    legal_basis: "Baholash tartibi 21"
+    detection: "Jadval validatori"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: S-3
+    group: "NAZORAT-IMTIHON TASHKILI"
+    rule: "Test — Test markazida video kuzatuv; OSKI — ovozli kameralar; darsni olib bormaganlar baholaydi; videoyozuvlar ≥ 1 yil"
+    legal_basis: "Baholash tartibi 23"
+    detection: "Imtihon va arxiv jurnali"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: A-1
+    group: "QABUL"
+    rule: "Davlat komissiyasi qaroridan bir hafta ichida darsga ruxsat buyrug'i; hujjatlar (9-band) topshirilgach qabul buyrug'i; kontrakt — 2-sentabrdan darsga ruxsat, to'lovdan keyin qabul buyrug'i. To'lov muddati — 15-sentabr yoki vakolatli organ belgilagan muddat (2026/2027 uchun — 1-noyabr, A-5)"
+    legal_basis: "VMQ 578 1-il. 79; PF-58 2-il. 1(a)(ii)"
+    detection: "DK/OTFIV qarori sanasi ↔ buyruq sanasi; to'lov ↔ buyruq"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: A-5
+    group: "QABUL"
+    rule: "2026/2027: kontrakt to'lovi va qabul hujjatlarining yagona so'nggi muddati — 01.11.2026; abituriyentlarni 3 ish kunida (sayt, ijtimoiy tarmoq, shaxsiy kabinet, SMS) xabardor qilish; HEMISga to'liq kiritish"
+    legal_basis: "OTFIV komissiyasi 7-son bayoni (25.09.2026); PF-58"
+    detection: "(1) xabarnoma dalillari (sayt e'loni, SMS hisoboti) sanasi; (2) 01.11 holatiga tavsiya etilganlar ↔ to'lov qilganlar ↔ qabul buyrug'i ↔ HEMIS. To'lamagan bo'lib kontingentda turgan yoki to'lab buyrug'i chiqmagan — signal"
+    status: "🆕🔴"
+    pilot: true
+    enabled: true
+  - code: A-2
+    group: "QABUL"
+    rule: "Ta'lim ma'lumoti — integratsiya platformasidan, shaxs va yashash joyi — IIVdan real vaqtda; qalbaki hujjat → chetlashtirish va huquqni muhofaza organlariga xabar"
+    legal_basis: "VMQ 578 1-il. 13 (VMQ 224 tahriri), 80"
+    detection: "Verifikatsiya belgisi ↔ buyruq; qalbakilik holatlari ↔ xabar xati"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: A-3
+    group: "QABUL"
+    rule: "Maqsadli qabul — to'rt tomonlama shartnoma (hokimlik, buyurtmachi, OTM, talaba)"
+    legal_basis: "VMQ 578 1-il. 53 (VMQ 32 tahriri)"
+    detection: "Maqsadli ro'yxat ↔ shartnomalar"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: A-4
+    group: "QABUL"
+    rule: "Davlat granti ikkinchi marta shu bosqichda berilmaydi; imtiyoz takroran qo'llanmaydi"
+    legal_basis: "VMQ 578 1-il. 48"
+    detection: "Grant ro'yxati ↔ OTFIV tizimi belgisi"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: E-1
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Akademik ta'til / chetlashtirish / kursda qoldirish buyrug'i → 1 ish kunida ijara kotibi va buxgalteriyaga; kelishuv zanjirida kotib"
+    legal_basis: "Ijara buyrug'imiz 7-band; VMQ 605 33"
+    detection: "Buyruqlar ↔ xabar jurnali"
+    status: "✅"
+    pilot: true
+    enabled: true
+  - code: E-2
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "VMQ 299: ariza 15-iyul – 5-avgust; ishchi organ qarori 15-iyul – 6-avgust; rad etilganda kamchilikni bartaraf etish uchun 5 ish kuni; rad sababi talabaning shaxsiy kabinetida"
+    legal_basis: "VMQ 299 9–10; VMQ 578 3-il. 21–22"
+    detection: "Agentlik platformasi: ariza ↔ qaror sanasi; rad sababi yozilganmi"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: E-3
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "my.edu.uz o'chirish arizalari"
+    legal_basis: "HEMIS reglamenti (Y4)"
+    detection: "HEMIS arizalar ↔ holati"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: E-4
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Ko'chirish arizasi 15.07–05.08 va 10–20.01; qaror 06–30.08 va 21.01–10.02; tiklash qarori 06–31.08 va 21.01–10.02; bahorda boshqa OTMdan ko'chirib tiklash arizasi qabul qilinmaydi; fanlar farqi joriy semestr davomida topshiriladi"
+    legal_basis: "VMQ 578 3-il. 11, 14, 18, 42, 44"
+    detection: "Ariza/qaror sanasi ↔ oyna; farq topshirish muddati"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: E-5
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Darsga ruxsat buyrug'i bilan birga avvalgi OTMga so'rovnoma; yig'majild muddati ≥ 20 ish kuni (direktor belgilaydi); yuboruvchi OTM 3 kunda jo'natadi; to'lovdan keyin 10 kun ichida qabul (tiklash) buyrug'i"
+    legal_basis: "VMQ 578 3-il. 34, 35, 40, 47"
+    detection: "So'rovnoma reyestri ↔ yig'majild sanasi ↔ buyruq"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: E-7
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Yig'majildda 6 majburiy hujjat: (1) o'rta ta'lim hujjati va ilovasining asli; (2) avvalgi OTMga qabul buyrug'idan ko'chirma; (3) oxirgi kursga o'tganlik buyrug'idan ko'chirma; (4) akademik ma'lumotnoma/transkript asli; (5) chetlatilganlik buyrug'idan ko'chirma; (6) so'rovnomaning javob xati. Komissiya 5-band asoslovchi hujjatlar aslini tekshiradi; to'liq bo'lmasa direktor buyruq chiqarmaslik huquqiga ega"
+    legal_basis: "VMQ 578 3-il. 53, 39(a), 52; Adliya 01-16173, 1-kamchilik"
+    detection: "mark M8 cheklisti (6 katak + asl tekshiruvi); to'liq emas = signal"
+    status: "✏️"
+    pilot: true
+    enabled: true
+  - code: E-8
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Kredit tizimida ko'chirib kelinganda kurs davomi uchun namunaviy o'quv reja bo'yicha GPA ≥ 2,4; aks holda quyi kursdan"
+    legal_basis: "VMQ 578 3-il. 11(b)"
+    detection: "Ko'chirish buyrug'idagi kurs ↔ GPA"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: E-9
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Chetlashtirilgan o'quv yilida tiklash taqiqlanadi; 1-kurs 1-semestriga ko'chirish rad (istisnolar bilan); o'qimagan semestrdan keyingisiga tavsiya etilmaydi"
+    legal_basis: "VMQ 578 3-il. 48, 10"
+    detection: "Tiklash buyrug'i ↔ chetlashtirish sanasi"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: E-10
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Kontrakt to'lovi o'z vaqtida qilinmasa — chetlashtirish asosi"
+    legal_basis: "VMQ 578 3-il. 49(d); DR-2431 22, 27"
+    detection: "F-6 bilan birga: muddati o'tgan qarzdorlar ↔ choralar"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: E-11
+    group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
+    rule: "Kursda qoldirilgan talaba tiklash muddatlarida murojaat qilmasa — chetlashtirish asosi"
+    legal_basis: "VMQ 578 3-il. 49(z), 51"
+    detection: "Kursda qoldirilganlar ↔ tiklash arizalari"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: F-1
+    group: "MOLIYA"
+    rule: "Ijara sikli 7/12/13/14/15"
+    legal_basis: "VMQ 605; ijara buyrug'imiz"
+    detection: "M2 paneli"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: F-2
+    group: "MOLIYA"
+    rule: "Chetlashtirilgan/ta'tildagi talabaga ijara va TTJ to'lovi to'xtatiladi"
+    legal_basis: "VMQ 605 33"
+    detection: "Buyruqlar ↔ billing (oylik vypiska)"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: F-3
+    group: "MOLIYA"
+    rule: "Stipendiya buyrug'i semestr natijalaridan keyin muddatda"
+    legal_basis: "Stipendiya nizomi"
+    detection: "Qaydnoma yopilishi ↔ buyruq"
+    status: "⚠"
+    pilot: false
+    enabled: false
+  - code: F-4
+    group: "MOLIYA"
+    rule: "Pedagoglar farzandlari chegirmasi: ariza 2 kun ichida ko'riladi; chegirma yiliga bir marta; qo'shimcha/tabaqalashtirilgan kontrakt va qo'shma dastur talabalariga qo'llanmaydi; shartnomada umumiy summa, chegirma va yakuniy summa alohida; ro'yxat 10-aprelgacha OTFIVga; Registrator ofisi boshlig'i — komissiya a'zosi"
+    legal_basis: "VMQ 501; OTFIV 417 (09.10.2026); Buyruq 02458"
+    detection: "Arizalar ↔ ko'rib chiqish sanasi; chegirma oluvchilar ↔ kontrakt turi"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: F-5
+    group: "MOLIYA"
+    rule: "TTJ sikli: ariza 7-sanagacha; 1 kunda umumlashtirish; bayonnomadan 1 kunda buyruq"
+    legal_basis: "VMQ 32"
+    detection: "M2 paneli"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: F-6
+    group: "MOLIYA"
+    rule: "Kontrakt: ≥25% — 1-kurs 15-sentabr (⚠ 2026/2027 qabul uchun — 1-noyabr 2026, A-5), 2+ kurs 1-oktabr; ≥50% — 1-yanvar; ≥75% — 1-mart; 100% — 1-may. Muddatni filial direktori uzaytirishi mumkin (PF-58, DR-2431 22), vakolatli organ ham"
+    legal_basis: "DR-2431 22; PF-58; OTFIV 7-son bayoni"
+    detection: "To'lov holati ↔ bosqich sanasi; uzaytirish bo'lsa — direktor buyrug'i bormi"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: F-7
+    group: "MOLIYA"
+    rule: "Qo'shimcha/tabaqalashtirilgan kontrakt: birinchi yilning ≥50% i to'langach qabul buyrug'i"
+    legal_basis: "DR-2431 22; VMQ 578 3-il. 27–28"
+    detection: "To'lov ↔ buyruq"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: F-8
+    group: "MOLIYA"
+    rule: "Chetlashtirishda to'lov: 74 soat, intizom, to'lamaslik, akademik qarz bilan kursda qoldirish — qaytarilmaydi; o'z xohishi, ko'chish, salomatlik, vafot — haqiqiy xarajat chegirilib yozma murojaat bilan qaytariladi"
+    legal_basis: "DR-2431 27–28"
+    detection: "Chetlashtirish asosi ↔ buxgalteriya qaytarish yozuvi"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: H-1
+    group: "YAKUNIY DAVLAT ATTESTATSIYASI VA DIPLOM (VMQ 836 1-ilova)"
+    rule: "Diplom va ilovasi attestatsiyadan bir oy ichida"
+    legal_basis: "VMQ 836 1-il. 30"
+    detection: "YaDA sanasi ↔ diplom berilgan sana; reestrga o'tkazish (Y22)"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: H-2
+    group: "YAKUNIY DAVLAT ATTESTATSIYASI VA DIPLOM (VMQ 836 1-ilova)"
+    rule: "O'ta olmagan bitiruvchi — 3 yil davomida, yiliga ≤ 2 marta, to'lovsiz, direktor buyrug'i bilan; 3 yildan keyin — akademik ma'lumotnoma va kontrakt asosida tiklash"
+    legal_basis: "VMQ 836 1-il. 31–32; HEMIS Y8"
+    detection: "Qarzdor bitiruvchilar ↔ urinishlar"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: H-3
+    group: "YAKUNIY DAVLAT ATTESTATSIYASI VA DIPLOM (VMQ 836 1-ilova)"
+    rule: "Filial Kengashi har yili 31-oktabrgacha YaDA yo'nalishlari va maxsus fanlar ro'yxatini tasdiqlaydi; saytda ≥ 6 oy oldin; korxonalar bilan shartnoma — noyabrda"
+    legal_basis: "VMQ 836 1-il. 17"
+    detection: "Kengash qarori sanasi; sayt e'loni sanasi"
+    status: "🆕🔴"
+    pilot: false
+    enabled: true
+  - code: H-4
+    group: "YAKUNIY DAVLAT ATTESTATSIYASI VA DIPLOM (VMQ 836 1-ilova)"
+    rule: "Komissiya raisi — filialda ishlamaydigan, direktor buyrug'i bilan 1 kalendar yil, ketma-ket 2 martadan ortiq emas; tarkib bitiruv semestridan ≥ 1 oy oldin, ≥ 5 a'zo, filial xodimlari ≤ 40%"
+    legal_basis: "VMQ 836 1-il. 9–10"
+    detection: "Buyruq sanasi ↔ semestr boshi; tarkib tahlili"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: H-5
+    group: "YAKUNIY DAVLAT ATTESTATSIYASI VA DIPLOM (VMQ 836 1-ilova)"
+    rule: "Sinov shakli 6 oy, dasturlar 3 oy oldin saytda; BMI mavzulari bitiruv semestrigacha; antiplagiat va rais bilan yig'ilish 2 hafta oldin; onlayn videotranslyatsiya, videolar 1 yil"
+    legal_basis: "VMQ 836 1-il. 12, 18, 19, 22, 25"
+    detection: "Sanalar ↔ YaDA jadvali"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: H-6
+    group: "YAKUNIY DAVLAT ATTESTATSIYASI VA DIPLOM (VMQ 836 1-ilova)"
+    rule: "YaDAga faqat kontrakt to'liq to'langanlar qo'yiladi"
+    legal_basis: "VMQ 836 1-il. 15"
+    detection: "YaDA ro'yxati ↔ kontrakt qarzdorlari"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: H-7
+    group: "YAKUNIY DAVLAT ATTESTATSIYASI VA DIPLOM (VMQ 836 1-ilova)"
+    rule: "YaDA apellyatsiyasi: 3 ish kuni ichida ariza, 1 kunda ko'rib chiqish, qaror nusxasi shu kuni"
+    legal_basis: "VMQ 836 1-il. 36–38"
+    detection: "Apellyatsiya jurnali"
+    status: "🆕"
+    pilot: false
+    enabled: true
+  - code: P-1
+    group: "BOSHQA"
+    rule: "Ariza/shikoyat — 15 kun; qo'shimcha o'rganish — 1 oygacha; rahbar istisno tariqasida yana 1 oyga uzaytirishi mumkin (murojaatchiga xabar); taklif — 1 oy"
+    legal_basis: "O'RQ-445, 28-modda"
+    detection: "M7 jurnali"
+    status: "✏️"
+    pilot: false
+    enabled: true
+  - code: G-5
+    group: "BOSHQA"
+    rule: "Yillik amaliyot: har oyning 15-sanasigacha vazirlik tizimiga ma'lumot"
+    legal_basis: "Reyestr G3 (PF-191 ijrosi)"
+    detection: "Oylik checkpoint"
+    status: "✅"
+    pilot: false
+    enabled: true
+  - code: O-1
+    group: "BOSHQA"
+    rule: "Komissiya tarkiblari muddati tugashidan 30 kun oldin eslatma"
+    legal_basis: "Reyestr O0"
+    detection: "M6 reestri"
+    status: "✅"
+    pilot: false
+    enabled: true

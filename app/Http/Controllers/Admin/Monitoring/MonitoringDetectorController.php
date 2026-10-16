@@ -72,7 +72,7 @@ class MonitoringDetectorController extends Controller
                 'float' => (float) ($input[$key] ?? $field['value']),
                 'list' => array_values(array_filter(array_map('trim', explode(',', (string) ($input[$key] ?? ''))), fn ($v) => $v !== '')),
                 'staff' => MonitoringAccess::ownerKey(MonitoringAccess::resolveOwnerKey($input[$key] ?? null)) ?? '',
-                'choice' => array_key_exists((string) ($input[$key] ?? ''), $field['options']) ? (string) $input[$key] : '',
+                'choice' => array_key_exists((string) ($input[$key] ?? ''), $field['options']) ? (string) ($input[$key] ?? '') : '',
                 default => trim((string) ($input[$key] ?? '')),
             };
         }

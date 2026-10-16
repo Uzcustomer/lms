@@ -72,6 +72,12 @@ test('registrator ofisi turi paneldan tanlanadi, noma\'lum qiymat saqlanmaydi', 
 
     $save('dekanat');
     expect($detector->fresh()->params['registrar_office'])->toBe('');
+
+    // Yangilanishdan oldin ochilgan forma: maydon yuborilmaydi — xato emas, bo'sh saqlanadi.
+    $this->actingAs($this->admin, 'web')->put(route('admin.monitoring.detektorlar.update', $detector), [
+        'enabled' => 1, 'due_workdays' => 3, 'severity' => 'orta', 'params' => ['require_original_check' => '1'],
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    expect($detector->fresh()->params['registrar_office'])->toBe('');
 });
 
 test('detektor sozlamasini faqat monitoring administratori o\'zgartiradi', function () {

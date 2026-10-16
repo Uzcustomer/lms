@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\ProjectRole;
+use App\Http\Controllers\Concerns\GuardsSuperadminAccounts;
 use App\Http\Controllers\Controller;
 use App\Models\StudentVisaInfo;
 use App\Services\ActivityLogService;
@@ -12,6 +13,8 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    use GuardsSuperadminAccounts;
+
     public function index()
     {
         $users = User::all();
@@ -50,6 +53,8 @@ class UserController extends Controller
 
         $request->validate($rules);
 
+        $this->ensureCanChangeSuperadminRole($request->input('roles', []), []);
+
         $isFirmRole = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []));
 
         $user = User::create([
@@ -70,6 +75,8 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $this->ensureCanManageAccount($user);
+
         $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
 
         $rules = [
@@ -86,6 +93,7 @@ class UserController extends Controller
         $request->validate($rules);
 
         $oldRoles = $user->getRoleNames()->toArray();
+        $this->ensureCanChangeSuperadminRole($request->input('roles', []), $oldRoles);
 
         $isFirmRole = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []));
 
@@ -112,6 +120,8 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
+        $this->ensureCanManageAccount($user);
+
         $user->delete();
         return redirect()->route('admin.users.index')->with('success', 'User deleted successfully');
     }

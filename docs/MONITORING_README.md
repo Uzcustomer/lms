@@ -7,18 +7,22 @@ Registrator ofisi nazorat detektorlari (TZ: `docs/MONITORING_TZ.md`, katalog: `d
 
 ```bash
 composer install --no-dev          # symfony/yaml endi prod bog'liqligi
-php artisan migrate                # 4 ta migratsiya: jadvallar, manba reyestrlari,
-                                   # hemis_exam_grades ga kiritilgan sana, katalog seed'i
+php artisan migrate                # 5 ta migratsiya: jadvallar, manba reyestrlari,
+                                   # hemis_exam_grades ga kiritilgan sana, katalog seed'i,
+                                   # buyurtmachi qarorlari (16.10.2026)
 php artisan config:cache
 ```
 
 Chiqarishdan oldin zaxira nusxa oling (`./backup_db.sh`). Staging yo'q, orqaga qaytarish:
-`php artisan migrate:rollback --step=4`.
+`php artisan migrate:rollback --step=5` (birinchi chiqarishda; 2026_10_16_110000 avvalroq bajarilgan
+bo'lsa — mos ravishda kamroq).
 
 Migratsiya:
 - `monitoring_*` jadvallarini yaratadi;
 - `monitoring_admin` rolini qo'shadi;
 - `docs/detectors.yaml` dagi 54 detektorni yuklaydi;
+- katalog avvalroq yuklangan bo'lsa, buyurtmachi qarorlarini qo'llaydi: Q-1 da qayta topshirishlar yoqiladi,
+  hali ishlamagan pilot detektorlar sinov (ogohlantirish) rejimiga o'tadi;
 - `hemis_exam_grades` ga `hemis_created_at` va `first_seen_at` ustunlarini qo'shadi. Mavjud qatorlarda
   `first_seen_at` qiymati `created_at` dan olinadi.
 
@@ -70,7 +74,7 @@ Mavjud migratsiyalar MySQL'ga xos SQL ishlatadi, shuning uchun testlar alohida b
 ```bash
 cp .env.testing.example .env.testing   # DB_* ni to'ldiring, APP_KEY: php artisan key:generate --env=testing
 mysql -e "CREATE DATABASE lms_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-php artisan test tests/Feature/Monitoring     # 66 test
+php artisan test tests/Feature/Monitoring     # 75 test
 ```
 
 Test ma'lumotlari faqat soxta: Faker yoki «Sinov ...» nomlari ishlatiladi.

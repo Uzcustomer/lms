@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 class ImportAdmissionExcuses extends Command
 {
-    protected $signature = 'import:admission-excuses {--file=tests/re_apply.csv : CSV fayl yo\'li} {--clean : Avval eski admission arizalarni o\'chirish}';
+    protected $signature = 'import:admission-excuses {--file=storage/app/imports/re_apply.csv : CSV fayl yo\'li (repozitoriyda saqlanmaydi — shaxsiy ma\'lumot)} {--clean : Avval eski admission arizalarni o\'chirish}';
     protected $description = 'Admission (re_apply) CSV dan sababli arizalarni import qilish';
 
     private array $sababKeyMap = [

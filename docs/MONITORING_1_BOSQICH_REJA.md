@@ -5,7 +5,7 @@ Buyurtmachi javoblari 11-bo'limda, xavfsiz ishga tushirish tartibi 10-bo'limda. 
 
 **Bajarildi:** yadro (detektor, run, istisno, izoh, dalil, import jadvallari; `monitoring_admin` roli;
 dvigatel; kunlik jadval), 5 pilot detektor, sahifalar (panel, ro'yxat va Excel, kartochka, mas'ul
-kabineti, detektorlar sozlamasi, importlar, buyruqlar + M3, tavsiya etilganlar, M8), 66 test.
+kabineti, detektorlar sozlamasi, importlar, buyruqlar + M3, tavsiya etilganlar, M8), 67 test.
 Asos: `docs/MONITORING_TZ.md` (v1.0), `docs/detectors.yaml` (54 detektor), `docs/ARXITEKTURA_XULOSA.md`.
 
 ---
@@ -214,7 +214,7 @@ muddat o'tganda yuboriladigan eslatmalar, kalendar va oylik svod — 2-bosqichda
 | Bartaraf bo'lsa avtomatik yopiladi, tarixda qoladi | `DetectorRunnerTest`, `D2UnexcusedAbsenceTest` | ✅ |
 | Mas'ul faqat o'zinikini ko'radi | `MonitoringAccessTest` | ✅ |
 | Parametr panelda o'zgarsa kuchga kiradi | `MonitoringPagesTest`, `D2UnexcusedAbsenceTest` | ✅ |
-| `.env.example`, migratsiyalar, README | `docs/MONITORING_README.md`, 4 migratsiya | ✅ |
+| `.env.example`, migratsiyalar, README | `docs/MONITORING_README.md`, 5 migratsiya | ✅ |
 | Haqiqiy shaxsiy ma'lumot yo'q | testlarda faqat soxta ma'lumot | ✅ |
 
 To'liq test to'plami: 105 ta o'tdi, 58 ta yiqildi. Yiqilganlar Monitoring'dan oldin ham yiqilgan
@@ -225,7 +225,7 @@ To'liq test to'plami: 105 ta o'tdi, 58 ta yiqildi. Yiqilganlar Monitoring'dan ol
 Sinov serveri yo'q, shuning uchun modul to'g'ridan-to'g'ri prod'da ishga tushadi. Xatarni kamaytirish uchun:
 
 1. Chiqarishdan oldin bazaning zaxira nusxasi olinadi (`backup_db.sh`). Migratsiyalarni orqaga qaytarish
-   mumkin: `php artisan migrate:rollback --step=4`.
+   mumkin (`docs/MONITORING_README.md`, 1-bo'lim).
 2. Pilot detektorlar **ogohlantirish rejimida** boshlanadi (`docs/detectors.yaml` → `warning_mode: true`).
    Istisnolar topiladi va panelda ko'rinadi, lekin mas'ullarga biriktirilmaydi va xabar yuborilmaydi.
    Panelda bu haqida sariq ogohlantirish chiqadi.

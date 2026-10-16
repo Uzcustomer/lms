@@ -3206,8 +3206,9 @@ class QuizResultController extends Controller
         $updatedAnyPair = false;
         $skipReasons = [];
 
-        // Xalqaro ta'lim fakulteti — jurnal 5 ballik (2–5): koeffitsient 100 ballik
-        // natijaga qo'llanadi, keyin 5 ballikka o'tkaziladi; o'tish chegarasi 3.
+        // Xalqaro ta'lim fakulteti — jurnal 5 ballik (2–5): koeffitsient (0.8)
+        // qo'llanmaydi, har qanday holatda Moodle bahosining o'zi 5 ballikka
+        // o'tkaziladi (70 → 4); o'tish chegarasi 3.
         $isFivePoint = $student->isInternationalFaculty();
         $passMark = $isFivePoint ? 3 : 60;
         $scaled = fn (float $v) => $isFivePoint ? self::toFivePointScale($v) : round($v, 2);
@@ -3253,7 +3254,7 @@ class QuizResultController extends Controller
             }
 
             if ($isNb) {
-                $multiplier = $isSababli ? 1.0 : 0.8;
+                $multiplier = ($isSababli || $isFivePoint) ? 1.0 : 0.8;
                 $retakeValue = $scaled($moodleGrade * $multiplier);
 
                 // Agar mavjud retake baho yangisidan katta yoki teng bo'lsa — skip
@@ -3262,7 +3263,9 @@ class QuizResultController extends Controller
                     continue;
                 }
 
-                $label = $isSababli ? 'sababli ×1.0' : 'sababsiz ×0.8';
+                $label = $isFivePoint
+                    ? ($isSababli ? 'sababli' : 'sababsiz') . ', 5 ballik'
+                    : ($isSababli ? 'sababli ×1.0' : 'sababsiz ×0.8');
                 $updates = [
                     'retake_grade'         => $retakeValue,
                     'retake_comment'       => "Moodle mavzu {$result->shakl}: {$moodleGrade} {$label} = {$retakeValue} (quiz_result#{$result->id})",
@@ -3292,7 +3295,8 @@ class QuizResultController extends Controller
                 }
 
                 // Baho o'tish chegarasidan past — retake × 0.8
-                $retakeValue = $scaled($moodleGrade * 0.8);
+                $lowFactor = $isFivePoint ? 1.0 : 0.8;
+                $retakeValue = $scaled($moodleGrade * $lowFactor);
 
                 // Yangi retake hozirgi asl bahodan past bo'lmasligi kerak (aks holda qabul qilinmaydi)
                 if ($sg->grade !== null && $retakeValue <= $sg->grade) {
@@ -3308,7 +3312,7 @@ class QuizResultController extends Controller
 
                 $updates = [
                     'retake_grade'         => $retakeValue,
-                    'retake_comment'       => "Moodle mavzu {$result->shakl}: {$moodleGrade} ×0.8 = {$retakeValue} (quiz_result#{$result->id})",
+                    'retake_comment'       => "Moodle mavzu {$result->shakl}: {$moodleGrade}" . ($isFivePoint ? ' (5 ballik)' : ' ×0.8') . " = {$retakeValue} (quiz_result#{$result->id})",
                     'retake_was_sababli'   => false,
                     'reason'               => $sg->reason ?? 'low_grade',
                     'status'               => 'closed',

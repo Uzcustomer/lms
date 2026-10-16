@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ProjectRole;
 use App\Exports\TeacherExport;
+use App\Http\Controllers\Concerns\GuardsSuperadminAccounts;
 use App\Http\Controllers\Controller;
 use App\Models\CurriculumSubject;
 use App\Models\Department;
@@ -22,6 +23,8 @@ use Spatie\Permission\Models\Role;
 
 class TeacherController extends Controller
 {
+    use GuardsSuperadminAccounts;
+
     public function index(Request $request)
     {
         $query = Teacher::with('roles');
@@ -148,6 +151,8 @@ class TeacherController extends Controller
 
     public function update(Request $request, Teacher $teacher)
     {
+        $this->ensureCanManageAccount($teacher);
+
         $request->validate([
             'login' => 'required|string|max:255|unique:teachers,login,' . $teacher->id,
             'password' => 'nullable|string|min:6',
@@ -166,6 +171,8 @@ class TeacherController extends Controller
 
     public function resetPassword(Teacher $teacher)
     {
+        $this->ensureCanManageAccount($teacher);
+
         if (!$teacher->birth_date) {
             return redirect()->route('admin.teachers.show', $teacher)
                 ->with('error', 'Xodimning tug\'ilgan sanasi mavjud emas, parolni tiklab bo\'lmaydi.');
@@ -251,6 +258,8 @@ class TeacherController extends Controller
             'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
             'nazoratchi_groups.required' => 'Nazoratchi roli uchun kamida bitta guruhni tanlash majburiy.',
         ]);
+
+        $this->ensureCanChangeSuperadminRole($roles, $teacher->getRoleNames()->toArray());
 
         $teacher->lavozim = $request->input('lavozim') ?: null;
         // Bo'sh qoldirilsa — HEMIS dagi kafedrasi ishlatiladi
@@ -345,6 +354,7 @@ class TeacherController extends Controller
         if (!$user->hasAnyRole(['superadmin', 'admin', 'kichik_admin'])) {
             abort(403, 'Sizda bu amalni bajarish huquqi yo\'q.');
         }
+        $this->ensureCanManageAccount($teacher);
 
         $request->validate([
             'phone' => ['nullable', 'string', 'regex:/^\+\d{7,15}$/'],

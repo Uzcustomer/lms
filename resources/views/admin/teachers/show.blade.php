@@ -124,6 +124,7 @@
                             <span class="profile-id-label">ID RAQAMI</span>
                             <span class="profile-id-value">{{ $teacher->employee_id_number }}</span>
                         </div>
+                        @if(auth()->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
                         <form action="{{ route('admin.teachers.reset-password', $teacher) }}" method="POST"
                               id="reset-password-form"
                               onsubmit="return handleResetSubmit(this)">
@@ -136,6 +137,7 @@
                                 <span id="reset-btn-text">Parolni tiklash</span>
                             </button>
                         </form>
+                        @endif
                         @if(auth()->user()?->hasRole('superadmin'))
                             <form action="{{ route('admin.impersonate.teacher', $teacher) }}" method="POST"
                                   onsubmit="return confirm('{{ addslashes($teacher->full_name) }} sifatida tizimga kirasizmi?')">
@@ -338,6 +340,8 @@
                     </div>
                 </div>
 
+                {{-- Hisob va rollar — faqat rol boshqaruvchilari (route ham shunday cheklangan) --}}
+                @if(auth()->user()?->hasAnyRole(['superadmin', 'admin', 'kichik_admin']))
                 {{-- 3. Hisob sozlamalari --}}
                 <div class="card card-violet">
                     <div class="card-header card-header-violet">
@@ -613,6 +617,7 @@
                         </form>
                     </div>
                 </div>
+                @endif
 
             </div>
 

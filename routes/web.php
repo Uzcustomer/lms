@@ -163,6 +163,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/student-ratings', [\App\Http\Controllers\Admin\StudentRatingController::class, 'index'])->name('student-ratings.index');
         Route::get('/student-ratings/export-excel', [\App\Http\Controllers\Admin\StudentRatingController::class, 'exportExcel'])->name('student-ratings.export-excel');
+        Route::get('/student-ratings/five-candidates', [\App\Http\Controllers\Admin\StudentRatingController::class, 'fiveCandidates'])->name('student-ratings.five-candidates');
+        Route::get('/student-ratings/five-candidates/export', [\App\Http\Controllers\Admin\StudentRatingController::class, 'fiveCandidatesExport'])->name('student-ratings.five-candidates.export');
         Route::get('/student-ratings/{studentHemisId}/subjects', [\App\Http\Controllers\Admin\StudentRatingController::class, 'subjectDetails'])->name('student-ratings.subjects');
 
         // Beacon davomat — o'qituvchi darsni ochadi, talabalar telefondan tasdiqlaydi
@@ -537,13 +539,18 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/teachers/search-subjects', [TeacherController::class, 'searchSubjects'])->name('teachers.search-subjects');
         Route::get('/teachers/subject-courses', [TeacherController::class, 'getSubjectCourses'])->name('teachers.subject-courses');
         Route::get('/teachers/{teacher}', [TeacherController::class, 'show'])->name('teachers.show');
-        Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
-        Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
-        Route::put('/teachers/{teacher}/roles', [TeacherController::class, 'updateRoles'])->name('teachers.update-roles');
-        Route::post('/teachers/{teacher}/reset-password', [TeacherController::class, 'resetPassword'])->name('teachers.reset-password');
-        Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
 
-        Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
+        // Xodim login/paroli, rollari va kontaktini o'zgartirish — faqat rol boshqaruvchilari
+        // (menyuda ham faqat ularga ko'rinadi).
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')->group(function () {
+            Route::get('/teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('teachers.edit');
+            Route::put('/teachers/{teacher}', [TeacherController::class, 'update'])->name('teachers.update');
+            Route::put('/teachers/{teacher}/roles', [TeacherController::class, 'updateRoles'])->name('teachers.update-roles');
+            Route::post('/teachers/{teacher}/reset-password', [TeacherController::class, 'resetPassword'])->name('teachers.reset-password');
+            Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
+
+            Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
+        });
 
         // Registrator ofisi bo'linmalari
         // Talabalarni taqsimlash — registrator ofisi
@@ -1159,11 +1166,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/get-filtered-students', [LessonController::class, 'getFilteredStudents'])->name('get.filtered-students');
         Route::post('/import-schedules', [ScheduleController::class, 'importSchedules'])->name('import-schedules');
 
-        Route::resource('users', \App\Http\Controllers\Admin\UserController::class);
+        // Foydalanuvchilar va audit jurnali — faqat rol boshqaruvchilari (menyu bilan bir xil)
+        Route::middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')->group(function () {
+            Route::resource('users', \App\Http\Controllers\Admin\UserController::class);
 
-        Route::prefix('activity-log')->name('activity-log.')->group(function () {
-            Route::get('/', [ActivityLogController::class, 'index'])->name('index');
-            Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
+            Route::prefix('activity-log')->name('activity-log.')->group(function () {
+                Route::get('/', [ActivityLogController::class, 'index'])->name('index');
+                Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
+            });
         });
 
         Route::prefix('grade-history')->name('grade-history.')->group(function () {

@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\DB;
  * eski variantdagi bahoni yangi variant darsiga (dars jadvalidagi o'sha kun va juftlik)
  * ko'chiradi; izohda qaysi variant va o'qituvchidan ko'chirilgani yoziladi.
  *
- * Talaba yangi variantga tegishli deb hisoblanadi, agar shu fandan undan keyingi
- * sanada bahosi bo'lsa yoki HEMIS (student_subjects) da shu fanga biriktirilgan bo'lsa.
+ * Talabaning hozirgi varianti HEMIS biriktiruvidan (student_subjects) olinadi — avval
+ * import:student-subjects bilan yangilang. --guess bilan biriktiruv bo'lmagan talabalar
+ * uchun eng oxirgi baho qo'yilgan variant hozirgi deb olinadi.
  */
 class FillVariantGradeGaps extends Command
 {
@@ -23,11 +24,50 @@ class FillVariantGradeGaps extends Command
         {--since= : Shu sanadan (Y-m-d), sukut — 90 kun oldin}
         {--group= : Faqat shu guruh (nomi, masalan "p/p24-01a (rus)")}
         {--student= : Faqat shu talaba (ID raqami yoki hemis_id)}
-        {--dry-run : Hech narsa yozmasdan faqat ko\'rsatish}';
+        {--dry-run : Hech narsa yozmasdan faqat ko\'rsatish}
+        {--guess : HEMIS biriktiruvi bo\'lmasa — eng oxirgi baho qo\'yilgan variantni hozirgi deb olish}';
 
     protected $description = "Variant almashgan talabalarning yangi variantdagi bo'sh kunlariga eski variant bahosini ko'chirish";
 
     private const VARIANT_RE = '/\s*\(\s*[a-zA-Zа-яА-ЯёЁ]\s*\)\s*$/u';
+
+    /**
+     * Talabaning shu fan bo'yicha hozirgi varianti: [subject_id, shu variantdagi oxirgi baho sanasi].
+     * 1) HEMIS biriktiruvi (student_subjects) — bir nechta bo'lsa eng keyingi biriktirilgani;
+     * 2) bo'lmasa — variantlar ichida eng oxirgi bahosi qo'yilgani (teng bo'lsa — aniqlanmaydi).
+     */
+    private function currentVariant(int $studentHemis, string $semester, string $base): array
+    {
+        $isSibling = fn ($name) => (string) $name !== trim((string) preg_replace(self::VARIANT_RE, '', (string) $name))
+            && trim((string) preg_replace(self::VARIANT_RE, '', (string) $name)) === $base;
+
+        $latestBySubject = DB::table('student_grades')
+            ->where('student_hemis_id', $studentHemis)->where('semester_code', $semester)->whereNull('deleted_at')
+            ->where('training_type_code', '!=', '11')->where('subject_name', 'like', $base . '%')
+            ->groupBy('subject_id', 'subject_name')
+            ->selectRaw('subject_id, subject_name, MAX(lesson_date) as last_date')
+            ->get()->filter(fn ($r) => $isSibling($r->subject_name))
+            ->groupBy('subject_id')->map(fn ($rows) => $rows->max('last_date'));
+
+        $hemis = DB::table('student_subjects')->where('student_hemis_id', $studentHemis)
+            ->where('subject_name', 'like', $base . '%')
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('student_subjects', 'hemis_created_at'), fn ($q) => $q->orderByDesc('hemis_created_at'))
+            ->get(['subject_id', 'subject_name'])->filter(fn ($r) => $isSibling($r->subject_name))->first();
+        if ($hemis && $hemis->subject_id) {
+            return [(int) $hemis->subject_id, $latestBySubject->get($hemis->subject_id)];
+        }
+        // HEMIS biriktiruvi yo'q — sukut bo'yicha tegilmaydi (--guess bilan taxmin qilinadi)
+        if (!$this->option('guess') || $latestBySubject->isEmpty()) {
+            return [0, null];
+        }
+        $sorted = $latestBySubject->sortDesc();
+        $top = $sorted->keys()->first();
+        if ($sorted->count() > 1 && $sorted->values()[0] === $sorted->values()[1]) {
+            return [0, null];   // teng — qaysi variant ekani noma'lum, tegilmaydi
+        }
+
+        return [(int) $top, $sorted->first()];
+    }
 
     public function handle(): int
     {
@@ -77,15 +117,12 @@ class FillVariantGradeGaps extends Command
             $date = substr((string) $c->lesson_date, 0, 10);
             $base = trim((string) preg_replace(self::VARIANT_RE, '', (string) $c->subject_name));
 
-            // 2) Talaba shu variantga tegishlimi (keyingi sanada shu fandan bahosi bor yoki HEMIS biriktiruvi)
-            $bk = $c->st_hemis . '|' . $c->subject_id;
-            if (!isset($belongCache[$bk])) {
-                $belongCache[$bk] = DB::table('student_grades')->where('student_hemis_id', $c->st_hemis)
-                        ->where('subject_id', $c->subject_id)->whereNull('deleted_at')->max('lesson_date')
-                    ?? (DB::table('student_subjects')->where('student_hemis_id', $c->st_hemis)->where('subject_id', $c->subject_id)->exists() ? '9999-12-31' : null);
-            }
-            $latest = $belongCache[$bk];
-            if (!$latest || substr((string) $latest, 0, 10) <= $date) {
+            // 2) Talabaning HOZIRGI varianti shu darsning fanimi — faqat shunga ko'chiriladi
+            //    (aks holda doim (b) da bo'lgan talabaga (a) ga ham ko'chib ketardi)
+            $bk = $c->st_hemis . '|' . $c->semester_code . '|' . $base;
+            $belongCache[$bk] ??= $this->currentVariant((int) $c->st_hemis, (string) $c->semester_code, $base);
+            [$currentSubject, $latest] = $belongCache[$bk];
+            if ((int) $currentSubject !== (int) $c->subject_id || ($latest !== null && substr((string) $latest, 0, 10) <= $date)) {
                 continue;
             }
 

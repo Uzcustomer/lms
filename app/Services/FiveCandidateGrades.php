@@ -134,6 +134,38 @@ class FiveCandidateGrades
         return $out;
     }
 
+    /**
+     * Fan bo'yicha tafsilot (accordion uchun): o'rtacha, kunlik baholar sanasi bilan va
+     * boshqa turdagi baholar (MT, ON, OSKI, Test).
+     * @return list<array{name:string, average:float, days:int, daily:list<array>, others:list<array>}>
+     */
+    public static function subjectDetails(Collection $grades): array
+    {
+        $avg = collect(self::subjectAverages($grades))->keyBy('name');
+        $out = [];
+        foreach ($grades->groupBy('subject_name') as $name => $rows) {
+            $daily = [];
+            $others = [];
+            foreach ($rows as $g) {
+                $date = $g->lesson_date ?: $g->created_at;
+                $item = [
+                    'date' => $date ? date('d.m', strtotime($date)) : '',
+                    'full_date' => $date ? date('d.m.Y', strtotime($date)) : '',
+                    'value' => self::value($g),
+                    'type' => self::typeName($g),
+                    'note' => self::note($g),
+                ];
+                self::isDaily($g) ? $daily[] = $item : $others[] = $item;
+            }
+            $a = $avg->get($name);
+            $out[] = ['name' => (string) $name, 'average' => $a['average'] ?? null, 'days' => $a['days'] ?? 0,
+                'daily' => $daily, 'others' => $others];
+        }
+        usort($out, fn ($x, $y) => strcmp($x['name'], $y['name']));
+
+        return $out;
+    }
+
     /** student_hemis_id => JN reyting o'rtachasi (student_ratings). */
     public static function ratings(array $hemisIds): array
     {

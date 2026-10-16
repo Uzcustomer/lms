@@ -79,6 +79,33 @@
         .fc-empty { padding: 40px 20px; text-align: center; color: var(--muted); }
         .fc-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
         .fc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+        /* Accordion */
+        .fc-row { cursor: pointer; }
+        .fc-row.is-open td { background: #eef4ff !important; border-bottom-color: #dbe6fb; }
+        .fc-toggle { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line);
+            border-radius: 7px; background: #fff; color: #475569; cursor: pointer; transition: transform .2s, background .15s; padding: 0; }
+        .fc-toggle svg { width: 14px; height: 14px; transition: transform .2s; }
+        .fc-row.is-open .fc-toggle { background: #2563eb; border-color: #2563eb; color: #fff; }
+        .fc-row.is-open .fc-toggle svg { transform: rotate(90deg); }
+        .fc-toggle:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+        .fc-lowcount { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--low-fg); background: var(--low-bg); border-radius: 999px; padding: 2px 8px; }
+        .fc-okcount { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--good-fg); background: var(--good-bg); border-radius: 999px; padding: 2px 8px; }
+        .fc-detail > td { background: #f7f9fd !important; padding: 0 12px 14px 48px !important; border-bottom: 1px solid var(--line) !important; }
+        .fc-detail[hidden] { display: none; }
+        .fc-sub { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 12px; }
+        .fc-sub th { background: #f1f5fb; text-align: left; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 7px 10px; font-weight: 700; }
+        .fc-sub td { padding: 8px 10px; border-top: 1px solid #eef1f6; vertical-align: top; background: #fff !important; }
+        .fc-sub td.fc-sub-name { font-weight: 600; color: var(--ink); width: 26%; }
+        .fc-grades { display: flex; flex-wrap: wrap; gap: 4px; }
+        .fc-g { display: inline-flex; flex-direction: column; align-items: center; min-width: 40px; border-radius: 6px; padding: 2px 5px; border: 1px solid var(--line); background: #fff; line-height: 1.15; }
+        .fc-g em { font-style: normal; font-size: 9.5px; color: var(--muted); }
+        .fc-g b { font-size: 12px; font-variant-numeric: tabular-nums; }
+        .fc-g.good b { color: var(--good-fg); } .fc-g.mid b { color: var(--mid-fg); } .fc-g.low { border-color: #f5c2bf; background: #fff7f6; } .fc-g.low b { color: var(--low-fg); }
+        .fc-g.nb { background: #fff7e0; border-color: #f7d99b; } .fc-g.nb b { color: #92400e; }
+        .fc-g.other { border-color: #c7d7f7; background: #f3f7ff; }
+        .fc-tools { display: flex; gap: 6px; }
+        .fc-link-btn { border: 1px solid var(--line); background: #fff; color: #334155; font-size: 12px; font-weight: 600; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+        .fc-link-btn:hover { background: #f1f5fb; }
     </style>
 
     <div class="fc-wrap">
@@ -146,28 +173,43 @@
             <section class="fc-card fc-section">
                 <div class="fc-section-head">
                     <h3>{{ $facultyName }}</h3>
-                    <span class="fc-count">{{ $students->count() }} ta talaba</span>
+                    <div class="fc-tools">
+                        <button type="button" class="fc-link-btn" data-fc-all="open">Hammasini ochish</button>
+                        <button type="button" class="fc-link-btn" data-fc-all="close">Yopish</button>
+                        <span class="fc-count">{{ $students->count() }} ta talaba</span>
+                    </div>
                 </div>
                 <div class="fc-table-wrap">
                     <table class="fc-table">
                         <thead>
                             <tr>
+                                <th style="width:36px"></th>
                                 <th>№</th>
                                 <th>F.I.Sh.</th>
                                 <th>Guruh</th>
                                 <th>Yo'nalish</th>
                                 <th>Semestr</th>
                                 <th class="fc-center">JN reyting</th>
-                                <th>Joriy baholar (fan bo'yicha)</th>
+                                <th class="fc-center">Joriy o'rtacha</th>
+                                <th>Fanlar</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($students as $s)
                                 @php
                                     $subs = $averages[$s->hemis_id] ?? [];
+                                    $det = $details[$s->hemis_id] ?? [];
                                     $jn = isset($ratings[$s->hemis_id]) ? (float) $ratings[$s->hemis_id] : null;
+                                    $mean = $subs ? round(collect($subs)->avg('average'), 1) : null;
+                                    $lowN = collect($subs)->filter(fn ($a) => $a['average'] < 90)->count();
+                                    $rowId = 'fc-d-' . $s->hemis_id;
                                 @endphp
-                                <tr>
+                                <tr class="fc-row" data-fc-row aria-controls="{{ $rowId }}">
+                                    <td>
+                                        <button type="button" class="fc-toggle" aria-expanded="false" aria-controls="{{ $rowId }}" aria-label="Fanlar bo'yicha baholarni ko'rsatish">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+                                        </button>
+                                    </td>
                                     <td class="fc-num">{{ $loop->iteration }}</td>
                                     <td>
                                         <span class="fc-name">{{ $s->full_name }}</span>
@@ -177,17 +219,59 @@
                                     <td>{{ $s->specialty_name }}</td>
                                     <td class="fc-nowrap">{{ $s->semester_name }}</td>
                                     <td class="fc-center"><span class="fc-pill {{ $tone($jn) }}">{{ $jn !== null ? $fmt($jn) : '—' }}</span></td>
-                                    <td>
-                                        @if($subs)
-                                            <div class="fc-subjects">
-                                                @foreach($subs as $sub)
-                                                    <span class="fc-subj {{ $tone($sub['average']) }}" title="{{ $sub['days'] }} kunlik baho">
-                                                        <span>{{ $sub['name'] }}</span><b>{{ $fmt($sub['average']) }}</b>
-                                                    </span>
-                                                @endforeach
-                                            </div>
+                                    <td class="fc-center"><span class="fc-pill {{ $tone($mean) }}">{{ $mean !== null ? $fmt($mean) : '—' }}</span></td>
+                                    <td class="fc-nowrap">
+                                        {{ count($subs) }} ta fan
+                                        @if($lowN)
+                                            <span class="fc-lowcount">{{ $lowN }} ta 90 dan past</span>
+                                        @elseif($subs)
+                                            <span class="fc-okcount">hammasi 90+</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                                <tr class="fc-detail" id="{{ $rowId }}" hidden>
+                                    <td colspan="9">
+                                        @if($det)
+                                            <table class="fc-sub">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Fan</th>
+                                                        <th class="fc-center" style="width:80px">O'rtacha</th>
+                                                        <th>Kunlik baholar (sana · baho)</th>
+                                                        <th style="width:22%">MT / ON / OSKI / Test</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($det as $d)
+                                                        <tr>
+                                                            <td class="fc-sub-name">{{ $d['name'] }}<span class="fc-id">{{ $d['days'] }} kun</span></td>
+                                                            <td class="fc-center"><span class="fc-pill {{ $tone($d['average']) }}">{{ $d['average'] !== null ? $fmt($d['average']) : '—' }}</span></td>
+                                                            <td>
+                                                                <div class="fc-grades">
+                                                                    @forelse($d['daily'] as $g)
+                                                                        @php $gv = $g['value']; $gt = $gv === 'NB' ? 'nb' : (is_numeric($gv) ? $tone((float) $gv) : 'none'); @endphp
+                                                                        <span class="fc-g {{ $gt }}" title="{{ $g['full_date'] }} · {{ $g['type'] }}{{ $g['note'] ? ' · ' . $g['note'] : '' }}"><em>{{ $g['date'] }}</em><b>{{ is_numeric($gv) ? $fmt($gv) : ($gv === '' ? '—' : $gv) }}</b></span>
+                                                                    @empty
+                                                                        <span class="fc-empty-cell">—</span>
+                                                                    @endforelse
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="fc-grades">
+                                                                    @forelse($d['others'] as $g)
+                                                                        @php $gv = $g['value']; @endphp
+                                                                        <span class="fc-g other" title="{{ $g['full_date'] }}{{ $g['note'] ? ' · ' . $g['note'] : '' }}"><em>{{ $g['type'] }}</em><b>{{ is_numeric($gv) ? $fmt($gv) : ($gv === '' ? '—' : $gv) }}</b></span>
+                                                                    @empty
+                                                                        <span class="fc-empty-cell">—</span>
+                                                                    @endforelse
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
                                         @else
-                                            <span class="fc-empty-cell">Davrda baho yo'q</span>
+                                            <span class="fc-empty-cell">Tanlangan davrda baho yo'q.</span>
                                         @endif
                                     </td>
                                 </tr>
@@ -202,4 +286,29 @@
             </div>
         @endforelse
     </div>
+
+    <script>
+        (function () {
+            function setOpen(row, open) {
+                const detail = document.getElementById(row.getAttribute('aria-controls'));
+                if (!detail) return;
+                detail.hidden = !open;
+                row.classList.toggle('is-open', open);
+                const btn = row.querySelector('.fc-toggle');
+                if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+            document.querySelectorAll('[data-fc-row]').forEach(row => {
+                row.addEventListener('click', () => {
+                    const detail = document.getElementById(row.getAttribute('aria-controls'));
+                    setOpen(row, detail ? detail.hidden : false);
+                });
+            });
+            document.querySelectorAll('[data-fc-all]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const open = btn.dataset.fcAll === 'open';
+                    btn.closest('.fc-section').querySelectorAll('[data-fc-row]').forEach(row => setOpen(row, open));
+                });
+            });
+        })();
+    </script>
 </x-app-layout>

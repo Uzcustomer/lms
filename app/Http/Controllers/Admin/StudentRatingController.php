@@ -204,14 +204,18 @@ class StudentRatingController extends Controller
         $grades = \App\Services\FiveCandidateGrades::grades($ids, $from, $to);
         $ratings = \App\Services\FiveCandidateGrades::ratings($ids);
         $averages = [];
+        $details = [];
         foreach ($students as $s) {
-            $averages[$s->hemis_id] = \App\Services\FiveCandidateGrades::subjectAverages($grades->get($s->hemis_id, collect()));
+            $own = $grades->get($s->hemis_id, collect());
+            $averages[$s->hemis_id] = \App\Services\FiveCandidateGrades::subjectAverages($own);
+            $details[$s->hemis_id] = \App\Services\FiveCandidateGrades::subjectDetails($own);
         }
         $faculties = \App\Services\FiveCandidateGrades::students()->pluck('department_name')->filter()->unique()->sort()->values();
 
         return view('admin.student-ratings.five-candidates', [
             'byFaculty' => $students->groupBy(fn ($s) => $s->department_name ?: 'Fakultetsiz'),
             'averages' => $averages,
+            'details' => $details,
             'ratings' => $ratings,
             'faculties' => $faculties,
             'faculty' => $faculty,

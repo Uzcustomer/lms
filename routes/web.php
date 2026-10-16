@@ -1170,6 +1170,44 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
         });
 
+        // ─── Monitoring (Registrator ofisi nazorat detektorlari, docs/MONITORING_TZ.md) ───
+        // Istalgan xodim kiradi: kim nimani ko'rishi va qilishi controller'da
+        // App\Services\Monitoring\MonitoringAccess orqali tekshiriladi (mas'ul — faqat o'zinikini).
+        Route::prefix('monitoring')->name('monitoring.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\Monitoring\MonitoringDashboardController::class, 'index'])->name('index');
+            Route::get('/mening', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'mine'])->name('mine');
+            Route::get('/xodimlar', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'staffSearch'])->name('staff-search');
+
+            Route::get('/istisnolar', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'index'])->name('istisnolar.index');
+            Route::post('/istisnolar/biriktirish', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'bulkAssign'])->name('istisnolar.bulk-assign');
+            Route::get('/istisnolar/{istisno}', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'show'])->name('istisnolar.show');
+            Route::post('/istisnolar/{istisno}/javob', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'respond'])->name('istisnolar.respond');
+            Route::post('/istisnolar/{istisno}/biriktirish', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'assign'])->name('istisnolar.assign');
+            Route::post('/istisnolar/{istisno}/holat', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'transition'])->name('istisnolar.transition');
+            Route::get('/istisnolar/{istisno}/dalil/{evidence}', [\App\Http\Controllers\Admin\Monitoring\MonitoringIstisnoController::class, 'evidence'])->name('istisnolar.evidence');
+
+            Route::get('/detektorlar', [\App\Http\Controllers\Admin\Monitoring\MonitoringDetectorController::class, 'index'])->name('detektorlar.index');
+            Route::get('/detektorlar/{detector}', [\App\Http\Controllers\Admin\Monitoring\MonitoringDetectorController::class, 'edit'])->name('detektorlar.edit');
+            Route::put('/detektorlar/{detector}', [\App\Http\Controllers\Admin\Monitoring\MonitoringDetectorController::class, 'update'])->name('detektorlar.update');
+            Route::post('/detektorlar/{detector}/ishga-tushirish', [\App\Http\Controllers\Admin\Monitoring\MonitoringDetectorController::class, 'run'])->name('detektorlar.run');
+
+            Route::get('/importlar', [\App\Http\Controllers\Admin\Monitoring\MonitoringImportController::class, 'index'])->name('importlar.index');
+            Route::get('/importlar/shablon/{kind}', [\App\Http\Controllers\Admin\Monitoring\MonitoringImportController::class, 'template'])->name('importlar.template');
+            Route::post('/importlar', [\App\Http\Controllers\Admin\Monitoring\MonitoringImportController::class, 'upload'])->name('importlar.upload');
+            Route::get('/importlar/{import}/moslash', [\App\Http\Controllers\Admin\Monitoring\MonitoringImportController::class, 'mapping'])->name('importlar.mapping');
+            Route::post('/importlar/{import}/moslash', [\App\Http\Controllers\Admin\Monitoring\MonitoringImportController::class, 'process'])->name('importlar.process');
+            Route::get('/importlar/{import}/dalil', [\App\Http\Controllers\Admin\Monitoring\MonitoringImportController::class, 'evidence'])->name('importlar.evidence');
+
+            Route::get('/buyruqlar', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'orders'])->name('buyruqlar.index');
+            Route::post('/buyruqlar/{order}/xabar-yuborish', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'sendNotice'])->name('buyruqlar.send-notice');
+            Route::post('/buyruqlar/{order}/xabarnoma', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'recordNotice'])->name('buyruqlar.record-notice');
+            Route::get('/tavsiyalar', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'recommendations'])->name('tavsiyalar.index');
+            Route::post('/tavsiyalar/{recommendation}/moslash', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'linkRecommendation'])->name('tavsiyalar.link');
+            Route::get('/yigmajild', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'checklists'])->name('yigmajild.index');
+            Route::post('/yigmajild', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'storeChecklist'])->name('yigmajild.store');
+            Route::put('/yigmajild/{checklist}', [\App\Http\Controllers\Admin\Monitoring\MonitoringRegisterController::class, 'updateChecklist'])->name('yigmajild.update');
+        });
+
         // Dars jadvali tuzish (aSc Timetables uslubida)
         Route::prefix('dars-jadvali-tuzish')->name('timetable.')
             ->middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|kafedra_mudiri', \App\Http\Middleware\TimetableAssignmentAccess::class])

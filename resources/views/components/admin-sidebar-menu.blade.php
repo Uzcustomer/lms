@@ -162,6 +162,30 @@
             Dashboard
         </a>
 
+        {{-- Monitoring (Registrator ofisi nazorati): panel — monitoring rollariga, «menga» — istisno biriktirilgan har bir xodimga --}}
+        @php
+            try {
+                $monitoringRoles = array_merge(config('monitoring.roles.manage', []), config('monitoring.roles.work', []), config('monitoring.roles.view', []));
+                $monitoringPanel = $hasActiveRole($monitoringRoles);
+                $monitoringMine = \App\Services\Monitoring\MonitoringAccess::openAssignedCount($user);
+            } catch (\Throwable $e) {
+                $monitoringPanel = false;
+                $monitoringMine = 0;
+            }
+        @endphp
+        @if($monitoringPanel || $monitoringMine > 0)
+        <a href="{{ $monitoringPanel ? route('admin.monitoring.index') : route('admin.monitoring.mine') }}"
+           class="sidebar-link {{ request()->routeIs('admin.monitoring.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h6m0 0l-3-3m3 3l-3 3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+            </svg>
+            {{ $monitoringPanel ? 'Monitoring' : 'Monitoring: menga' }}
+            @if($monitoringMine > 0)
+            <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $monitoringMine }}</span>
+            @endif
+        </a>
+        @endif
+
         @if($hasActiveRole('javobgar_firma'))
         <a href="{{ route('admin.firm-students.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.firm-students.*') ? 'sidebar-active' : '' }}">

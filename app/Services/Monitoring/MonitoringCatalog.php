@@ -53,8 +53,10 @@ class MonitoringCatalog
                 $settings = [
                     'params' => (array) ($entry['params'] ?? []),
                     'enabled' => (bool) ($entry['enabled'] ?? false),
-                    // TZ 5-bo'lim: ⚠ — normasi tekshirilishi kerak, faqat ogohlantirish rejimida
-                    'warning_mode' => str_contains($status, '⚠'),
+                    // TZ 5-bo'lim: ⚠ — normasi tekshirilishi kerak, faqat ogohlantirish rejimida.
+                    // yaml'da warning_mode: true — xavfsiz ishga tushirish (staging yo'q): natija avval
+                    // panelda tekshiriladi, mas'ullarga yuborish administrator o'chirgach boshlanadi.
+                    'warning_mode' => (bool) ($entry['warning_mode'] ?? str_contains($status, '⚠')),
                     'due_workdays' => (int) ($entry['due_workdays'] ?? config('monitoring.default_due_workdays', 3)),
                     'severity' => (string) ($entry['severity'] ?? (str_contains($status, '🔴') ? 'yuqori' : 'orta')),
                 ];

@@ -26,9 +26,13 @@ if (!function_exists('monSeq')) {
         }
     }
 
-    /** Katalogdagi detektor (migratsiya seed qilgan), kerak bo'lsa parametrlar bilan. */
+    /**
+     * Katalogdagi detektor (migratsiya seed qilgan), kerak bo'lsa parametrlar bilan.
+     * Testlar «jonli» rejimni tekshiradi: katalogdagi xavfsiz ishga tushirish (warning_mode) o'chiriladi.
+     */
     function monDetector(string $code, array $params = [], array $attrs = []): MonitoringDetector
     {
+        $attrs += ['warning_mode' => false];
         $detector = MonitoringDetector::where('code', $code)->firstOrFail();
         if ($params !== []) {
             $attrs['params'] = array_merge($detector->params ?? [], $params);

@@ -59,9 +59,12 @@ class MonitoringDashboardController extends Controller
             ->get()
             ->filter(fn ($d) => $d->isImplemented());
 
+        // Xavfsiz ishga tushirish: ogohlantirish rejimidagi yoqilgan detektorlar (mas'ullarga hali yuborilmaydi).
+        $warningDetectors = $byDetector->filter(fn ($d) => $d->warning_mode)->pluck('code')->values();
+
         $lastRuns = MonitoringRun::with('detector')->latest('started_at')->limit(10)->get();
         $lastImports = MonitoringDataImport::latest()->limit(5)->get();
 
-        return view('admin.monitoring.index', compact('cards', 'byGroup', 'byFaculty', 'byDetector', 'lastRuns', 'lastImports'));
+        return view('admin.monitoring.index', compact('cards', 'byGroup', 'byFaculty', 'byDetector', 'warningDetectors', 'lastRuns', 'lastImports'));
     }
 }

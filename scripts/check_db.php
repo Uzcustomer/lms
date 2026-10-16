@@ -7,36 +7,25 @@
  * Docker container ichida va tashqarisida ishlaydi.
  *
  * Foydalanish (CLI):
- *   php public/check_db.php                          — ulanish + jadvallar ro'yxati
- *   php public/check_db.php students                 — students jadvalidagi ma'lumotlar (oxirgi 10 ta)
- *   php public/check_db.php students 25              — students jadvalidan 25 ta yozuv
- *   php public/check_db.php students --count         — students jadvalidagi yozuvlar soni
- *   php public/check_db.php students --where="group_name=A-101"  — filtr bilan
- *   php public/check_db.php students --search="Ali"  — full_name yoki boshqa ustunlardan qidirish
+ *   php scripts/check_db.php                          — ulanish + jadvallar ro'yxati
+ *   php scripts/check_db.php students                 — students jadvalidagi ma'lumotlar (oxirgi 10 ta)
+ *   php scripts/check_db.php students 25              — students jadvalidan 25 ta yozuv
+ *   php scripts/check_db.php students --count         — students jadvalidagi yozuvlar soni
+ *   php scripts/check_db.php students --where="group_name=A-101"  — filtr bilan
+ *   php scripts/check_db.php students --search="Ali"  — full_name yoki boshqa ustunlardan qidirish
  *
- * Foydalanish (Web):
- *   GET /check_db.php?api_key=...                    — ulanish tekshirish
- *   GET /check_db.php?api_key=...&table=students     — jadval ma'lumotlari
- *   GET /check_db.php?api_key=...&table=students&limit=25
- *   GET /check_db.php?api_key=...&table=students&count=1
- *   GET /check_db.php?api_key=...&table=students&where=group_name:A-101
- *   GET /check_db.php?api_key=...&table=students&search=Ali
+ * Web orqali ishlamaydi (avval public/ da API kalit bilan ochiq edi).
  */
 
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=UTF-8');
 
-// --- Xavfsizlik: Web orqali kirilganda API key tekshirish ---
+// --- Faqat CLI: skript web-ildizdan (public/) olib tashlangan, brauzer orqali ishlamaydi ---
 $isCli = php_sapi_name() === 'cli';
 if (!$isCli) {
-    $apiKey = '1864fbf94224aef9488ee865a4cfb1cec4d784d82dddb7106c43abc4220e677f596d13ad8e7134058a779b83eb960625';
-    $k = $_SERVER['HTTP_X_API_KEY'] ?? ($_GET['api_key'] ?? '');
-    if (!hash_equals($apiKey, (string)$k)) {
-        http_response_code(401);
-        echo json_encode(['ok' => false, 'error' => 'unauthorized']);
-        exit;
-    }
+    http_response_code(404);
+    exit;
 }
 
 // --- CLI argumentlarni parse qilish ---

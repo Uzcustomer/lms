@@ -21,9 +21,8 @@ return new class extends Migration
         try {
             app(MonitoringCatalog::class)->sync();
         } catch (\Throwable $e) {
+            // Katalog o'qilmasa ham quyidagi qarorlar mavjud detektorlarga qo'llanadi.
             Log::warning('Monitoring katalogi yuklanmadi: ' . $e->getMessage());
-
-            return;
         }
 
         $q1 = MonitoringDetector::where('code', 'Q-1')->first();

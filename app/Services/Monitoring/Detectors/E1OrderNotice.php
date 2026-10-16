@@ -109,7 +109,8 @@ class E1OrderNotice implements Detector
 
     /**
      * Qoida shu talabaga qo'llanadimi: true — ijarada, false — ijarada emas, null — noma'lum
-     * (talaba topilmagan). Kod ham, kalit so'z ham berilmasa — barcha talabalarga qo'llanadi.
+     * (talaba topilmagan). Kodlar berilsa faqat kod hal qiladi; aks holda kalit so'z nomda qidiriladi.
+     * Kod ham, kalit so'z ham berilmasa — barcha talabalarga qo'llanadi.
      */
     public static function appliesTo(?object $student, array $params): ?bool
     {
@@ -122,8 +123,8 @@ class E1OrderNotice implements Detector
             return null;
         }
 
-        if ($codes !== [] && in_array((string) $student->accommodation_code, $codes, true)) {
-            return true;
+        if ($codes !== []) {
+            return in_array((string) $student->accommodation_code, $codes, true);
         }
         $name = ImportSheet::normalize($student->accommodation_name ?? '');
         foreach ($keywords as $keyword) {

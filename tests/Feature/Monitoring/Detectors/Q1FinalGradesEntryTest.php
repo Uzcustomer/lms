@@ -169,3 +169,24 @@ test('mark\'da qayta topshirgan talaba bo\'lmasa yoki include_resits o\'chirilga
     app(DetectorRunner::class)->run(monDetector('Q-1', ['include_resits' => false]));
     expect(MonitoringIstisno::count())->toBe(0);
 });
+
+test('eski 103 yozuvi faqat quiz turi OSKI/YN test bo\'lsa qayta topshirish hisoblanadi', function () {
+    q1ResitExam($this->group, '2026-09-21', '2026-10-05');
+    foreach ($this->students as $s) {
+        q1Grade($s, '2026-09-22 10:00:00');
+    }
+    $otherQuiz = DB::table('hemis_quiz_results')->insertGetId(['attempt_id' => 1, 'quiz_type' => 'Oraliq nazorat', 'created_at' => now(), 'updated_at' => now()]);
+    q1ResitComponent($this->students[0], 2, '2026-10-05');
+    DB::table('student_grades')->where('student_hemis_id', $this->students[0]->hemis_id)->where('attempt', 2)
+        ->update(['training_type_code' => '103', 'quiz_result_id' => $otherQuiz]);
+
+    app(DetectorRunner::class)->run($this->detector);
+    expect(MonitoringIstisno::count())->toBe(0);
+
+    $ynQuiz = DB::table('hemis_quiz_results')->insertGetId(['attempt_id' => 2, 'quiz_type' => 'YN test (uzb)', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('student_grades')->where('student_hemis_id', $this->students[0]->hemis_id)->where('attempt', 2)
+        ->update(['quiz_result_id' => $ynQuiz]);
+
+    app(DetectorRunner::class)->run($this->detector);
+    expect(MonitoringIstisno::sole()->fingerprint)->toEndWith(':u2');
+});

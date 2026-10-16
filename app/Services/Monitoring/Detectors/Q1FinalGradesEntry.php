@@ -29,8 +29,11 @@ use Illuminate\Support\Facades\DB;
  */
 class Q1FinalGradesEntry implements Detector
 {
-    /** mark'dagi YN komponent baholari: 101 — OSKI, 102 — test, 103 — eski quiz. */
+    /** mark'dagi YN komponent baholari: 101 — OSKI, 102 — test, 103 — eski quiz (turi quiz_type'dan). */
     private const YN_COMPONENT_TYPES = ['101', '102', '103'];
+
+    /** 103 yozuvi faqat shu quiz turlarida OSKI/YN test hisoblanadi (AcademicScheduleController bilan bir xil). */
+    private const YN_QUIZ_TYPES = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)', 'YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
     public function __construct(private OwnerResolver $owners)
     {
@@ -226,16 +229,25 @@ class Q1FinalGradesEntry implements Detector
     /** Qayta topshirishda qatnashganlar: mark'da shu urinish bo'yicha OSKI/test bahosi bor talabalar. */
     private function resitParticipants(array $studentIds, string $subjectId, string $semesterCode, int $attempt): array
     {
-        return DB::table('student_grades')
+        $rows = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereIn('training_type_code', self::YN_COMPONENT_TYPES)
             ->where('attempt', $attempt)
             ->whereNull('deleted_at')
-            ->distinct()
+            ->get(['student_hemis_id', 'training_type_code', 'quiz_result_id']);
+
+        // Eski 103 yozuvlari: faqat quiz turi OSKI yoki YN test bo'lsa (boshqa quizlar qayta topshirish emas).
+        $quizIds = $rows->where('training_type_code', '103')->pluck('quiz_result_id')->filter()->unique()->values()->all();
+        $quizTypes = $quizIds === [] ? [] : DB::table('hemis_quiz_results')->whereIn('id', $quizIds)->pluck('quiz_type', 'id')->all();
+
+        return $rows
+            ->filter(fn ($r) => (string) $r->training_type_code !== '103'
+                || ($r->quiz_result_id && in_array($quizTypes[$r->quiz_result_id] ?? null, self::YN_QUIZ_TYPES, true)))
             ->pluck('student_hemis_id')
             ->map(fn ($v) => (string) $v)
+            ->unique()
             ->values()
             ->all();
     }

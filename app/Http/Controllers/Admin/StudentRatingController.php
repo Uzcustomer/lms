@@ -193,6 +193,59 @@ class StudentRatingController extends Controller
         );
     }
 
+    /** "5 ga da'vogar" talabalar: fakultetlar bo'yicha ro'yxat va davrdagi joriy baholar. */
+    public function fiveCandidates(Request $request)
+    {
+        [$from, $to] = $this->fiveCandidatePeriod($request);
+        $faculty = $request->input('faculty') ?: null;
+
+        $students = \App\Services\FiveCandidateGrades::students($faculty);
+        $ids = $students->pluck('hemis_id')->all();
+        $grades = \App\Services\FiveCandidateGrades::grades($ids, $from, $to);
+        $ratings = \App\Services\FiveCandidateGrades::ratings($ids);
+        $averages = [];
+        foreach ($students as $s) {
+            $averages[$s->hemis_id] = \App\Services\FiveCandidateGrades::subjectAverages($grades->get($s->hemis_id, collect()));
+        }
+        $faculties = \App\Services\FiveCandidateGrades::students()->pluck('department_name')->filter()->unique()->sort()->values();
+
+        return view('admin.student-ratings.five-candidates', [
+            'byFaculty' => $students->groupBy(fn ($s) => $s->department_name ?: 'Fakultetsiz'),
+            'averages' => $averages,
+            'ratings' => $ratings,
+            'faculties' => $faculties,
+            'faculty' => $faculty,
+            'from' => $from,
+            'to' => $to,
+            'total' => $students->count(),
+        ]);
+    }
+
+    /** Excel: har fakultet alohida varaq, har bir baho sanasi va turi bilan. */
+    public function fiveCandidatesExport(Request $request)
+    {
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(300);
+        [$from, $to] = $this->fiveCandidatePeriod($request);
+        $students = \App\Services\FiveCandidateGrades::students($request->input('faculty') ?: null);
+        $grades = \App\Services\FiveCandidateGrades::grades($students->pluck('hemis_id')->all(), $from, $to);
+
+        return Excel::download(
+            new \App\Exports\FiveCandidatesGradesExport($students, $grades, $from, $to),
+            '5_ga_davogarlar_' . $from . '_' . $to . '.xlsx'
+        );
+    }
+
+    private function fiveCandidatePeriod(Request $request): array
+    {
+        [$defFrom, $defTo] = \App\Services\FiveCandidateGrades::defaultPeriod();
+        $valid = fn ($d) => is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) ? $d : null;
+        $from = $valid($request->input('from')) ?? $defFrom;
+        $to = $valid($request->input('to')) ?? $defTo;
+
+        return $from <= $to ? [$from, $to] : [$to, $from];
+    }
+
     public function subjectDetails(string $studentHemisId)
     {
         $rating = StudentRating::where('student_hemis_id', $studentHemisId)->first();

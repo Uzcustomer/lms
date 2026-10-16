@@ -163,6 +163,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::get('/student-ratings', [\App\Http\Controllers\Admin\StudentRatingController::class, 'index'])->name('student-ratings.index');
         Route::get('/student-ratings/export-excel', [\App\Http\Controllers\Admin\StudentRatingController::class, 'exportExcel'])->name('student-ratings.export-excel');
+        Route::get('/student-ratings/five-candidates', [\App\Http\Controllers\Admin\StudentRatingController::class, 'fiveCandidates'])->name('student-ratings.five-candidates');
+        Route::get('/student-ratings/five-candidates/export', [\App\Http\Controllers\Admin\StudentRatingController::class, 'fiveCandidatesExport'])->name('student-ratings.five-candidates.export');
         Route::get('/student-ratings/{studentHemisId}/subjects', [\App\Http\Controllers\Admin\StudentRatingController::class, 'subjectDetails'])->name('student-ratings.subjects');
 
         // Beacon davomat — o'qituvchi darsni ochadi, talabalar telefondan tasdiqlaydi

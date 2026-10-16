@@ -48,7 +48,7 @@ class FiveCandidatesGradesExport implements WithMultipleSheets
 
 class FiveCandidatesFacultySheet implements FromArray, WithEvents, WithTitle, WithStrictNullComparison
 {
-    private const FIXED = ['№', 'F.I.Sh.', 'Guruh', "Yo'nalish", 'Semestr', 'Fan'];
+    private const FIXED = ['№', 'F.I.Sh.', 'Guruh', "Yo'nalish", 'Kurs', 'Semestr', 'Fan'];
     private const OTHER_TYPES = ['MT', 'ON', 'OSKI', 'Test', 'Quiz'];
 
     private int $lastRow = 2;
@@ -109,7 +109,7 @@ class FiveCandidatesFacultySheet implements FromArray, WithEvents, WithTitle, Wi
         foreach ($this->students as $s) {
             $n++;
             $list = $this->grades->get($s->hemis_id, collect());
-            $fixed = fn ($subject) => [$n, $s->full_name, $s->group_name, $s->specialty_name, $s->semester_name, $subject];
+            $fixed = fn ($subject) => [$n, $s->full_name, $s->group_name, $s->specialty_name, $s->level_name, $s->semester_name, $subject];
             if ($list->isEmpty()) {
                 $rows[] = array_pad($fixed("— davrda baho yo'q —"), $width, '');
                 continue;
@@ -165,7 +165,7 @@ class FiveCandidatesFacultySheet implements FromArray, WithEvents, WithTitle, Wi
                 $col = fn (int $i) => Coordinate::stringFromColumnIndex($i);
 
                 // O'lchamlar
-                foreach (['A' => 5, 'B' => 32, 'C' => 14, 'D' => 20, 'E' => 11, 'F' => 34] as $c => $w) {
+                foreach (['A' => 5, 'B' => 32, 'C' => 14, 'D' => 20, 'E' => 8, 'F' => 11, 'G' => 34] as $c => $w) {
                     $sheet->getColumnDimension($c)->setWidth($w);
                 }
                 for ($i = $firstDate; $i < $jnCol; $i++) {

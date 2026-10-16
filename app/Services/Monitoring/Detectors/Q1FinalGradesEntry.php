@@ -25,12 +25,21 @@ use Illuminate\Support\Facades\DB;
  *          3-urinish (12b) — *_resit2_date. Tekshiriladiganlar — mark'da shu urinish bo'yicha OSKI/test
  *          bahosi bor talabalar (student_grades.attempt); kutilgan — HEMIS'da nazorat sanasi qayta topshirish
  *          kunidan kech bo'lmagan YN yozuvi (HEMIS urinish kodlariga bog'lanmaydi).
+ * Individual sanalar (exam_schedules.student_hemis_id; IndividualExamScheduleController): talaba qatorida belgilangan
+ *          urinish sanasi guruh sanasi o'rniga olinadi — talaba o'z sanasi bo'yicha tekshiriladi.
  * Bitta istisno — bitta guruh × fan × nazorat sanasi (× urinish). Mas'ul: fan kafedrasi mudiri.
  */
 class Q1FinalGradesEntry implements Detector
 {
     /** mark'dagi YN komponent baholari: 101 — OSKI, 102 — test, 103 — eski quiz (turi quiz_type'dan). */
     private const YN_COMPONENT_TYPES = ['101', '102', '103'];
+
+    /** Urinish → shu urinishning OSKI va test sanasi ustunlari. */
+    private const ATTEMPT_COLUMNS = [
+        1 => ['oski_date', 'test_date'],
+        2 => ['oski_resit_date', 'test_resit_date'],
+        3 => ['oski_resit2_date', 'test_resit2_date'],
+    ];
 
     /** 103 yozuvi faqat shu quiz turlarida OSKI/YN test hisoblanadi (AcademicScheduleController bilan bir xil). */
     private const YN_QUIZ_TYPES = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)', 'YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
@@ -54,27 +63,38 @@ class Q1FinalGradesEntry implements Detector
             ? ['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date', 'oski_resit2_date', 'test_resit2_date']
             : ['oski_date', 'test_date'];
 
-        $schedules = DB::table('exam_schedules')
-            ->whereNull('student_hemis_id')
-            ->where(function ($q) use ($dateColumns, $from) {
-                foreach ($dateColumns as $column) {
-                    $q->orWhere($column, '>=', $from);
-                }
-            })
-            ->get(array_merge(['group_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'oski_na', 'test_na'], $dateColumns));
+        $columns = array_merge(['group_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'oski_na', 'test_na'], $dateColumns);
+        $recent = function ($q) use ($dateColumns, $from) {
+            foreach ($dateColumns as $column) {
+                $q->orWhere($column, '>=', $from);
+            }
+        };
 
-        $due = [];
+        $units = [];
+        $schedules = DB::table('exam_schedules')->whereNull('student_hemis_id')->where($recent)->get($columns);
         foreach ($schedules as $s) {
             foreach (self::attemptDates($s, $includeResits) as $attempt => $examDate) {
-                if ($examDate->lt($from)) {
-                    continue;
-                }
-                $deadline = self::deadline($examDate, $days, $workdays);
-                if ($now->lte($deadline)) {
-                    continue; // muddat hali tugamagan
-                }
-                $due[] = ['row' => $s, 'attempt' => $attempt, 'date' => $examDate, 'deadline' => $deadline];
+                $this->addUnit($units, $s, $attempt, $examDate);
             }
+        }
+
+        // Individual sana belgilangan talaba shu urinishda guruh birligidan chiqariladi va o'z sanasi bo'yicha tekshiriladi.
+        $overridden = [];
+        foreach ($this->individualDates($recent, $columns, $includeResits) as $o) {
+            $overridden[implode('|', [$o['student'], $o['row']->subject_id, $o['row']->semester_code, $o['attempt']])] = true;
+            $this->addUnit($units, $o['row'], $o['attempt'], $o['date'], $o['student']);
+        }
+
+        $due = [];
+        foreach ($units as $unit) {
+            if ($unit['date']->lt($from)) {
+                continue;
+            }
+            $unit['deadline'] = self::deadline($unit['date'], $days, $workdays);
+            if ($now->lte($unit['deadline'])) {
+                continue; // muddat hali tugamagan
+            }
+            $due[] = $unit;
         }
 
         $result = new DetectorResult(array_values(array_unique(array_map(fn ($d) => $d['date']->toDateString(), $due))));
@@ -98,7 +118,10 @@ class Q1FinalGradesEntry implements Detector
             $s = $item['row'];
             $attempt = $item['attempt'];
             $group = $groups->get($s->group_hemis_id);
-            $studentIds = $studentsByGroup->get($s->group_hemis_id, []);
+            $studentIds = $item['group_wide']
+                ? array_filter($studentsByGroup->get($s->group_hemis_id, []), fn ($id) => !isset($overridden[implode('|', [$id, $s->subject_id, $s->semester_code, $attempt])]))
+                : [];
+            $studentIds = array_values(array_unique(array_merge($studentIds, $item['students'])));
             if ($attempt > 1) {
                 // Qayta topshirishda faqat shu urinishda qatnashganlar (mark'da OSKI/test bahosi bor).
                 $studentIds = $this->resitParticipants($studentIds, (string) $s->subject_id, (string) $s->semester_code, $attempt);
@@ -159,8 +182,8 @@ class Q1FinalGradesEntry implements Detector
             $result[1] = $main;
         }
         if ($includeResits) {
-            foreach ([2 => ['oski_resit_date', 'test_resit_date'], 3 => ['oski_resit2_date', 'test_resit2_date']] as $attempt => $columns) {
-                $dates = array_filter(array_map(fn ($c) => !empty($s->{$c}) ? Carbon::parse($s->{$c})->startOfDay() : null, $columns));
+            foreach ([2, 3] as $attempt) {
+                $dates = array_filter(array_map(fn ($c) => !empty($s->{$c}) ? Carbon::parse($s->{$c})->startOfDay() : null, self::ATTEMPT_COLUMNS[$attempt]));
                 if ($dates !== []) {
                     $result[$attempt] = max($dates);
                 }
@@ -182,6 +205,73 @@ class Q1FinalGradesEntry implements Detector
         }
 
         return $dates === [] ? null : max($dates);
+    }
+
+    /**
+     * Birlik — guruh × fan × semestr × urinish × nazorat sanasi. $student berilmasa — guruhning barcha talabalari,
+     * berilsa — individual sanasi shu kunga to'g'ri kelgan talaba qo'shiladi.
+     */
+    private function addUnit(array &$units, object $row, int $attempt, Carbon $date, ?string $student = null): void
+    {
+        $key = implode('|', [$row->group_hemis_id, $row->subject_id, $row->semester_code, $attempt, $date->format('Ymd')]);
+        $units[$key] ??= ['row' => $row, 'attempt' => $attempt, 'date' => $date, 'group_wide' => false, 'students' => []];
+        if ($student === null) {
+            $units[$key]['row'] = $row;
+            $units[$key]['group_wide'] = true;
+        } else {
+            $units[$key]['students'][] = $student;
+        }
+    }
+
+    /**
+     * Individual sanalar: o'qiyotgan talabaning alohida qatorida belgilangan ustun guruh qatoridagi qiymat o'rniga olinadi,
+     * belgilanmagani guruhnikidan (ExamCapacityService bilan bir xil). Faqat talaba qatorida sanasi bor urinishlar qaytadi.
+     *
+     * @return list<array{row: object, student: string, attempt: int, date: Carbon}>
+     */
+    private function individualDates(\Closure $recent, array $columns, bool $includeResits): array
+    {
+        $rows = DB::table('exam_schedules')->whereNotNull('student_hemis_id')->where($recent)
+            ->get(array_merge($columns, ['student_hemis_id']));
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $active = DB::table('students')
+            ->whereIn('hemis_id', $rows->pluck('student_hemis_id')->unique()->all())
+            ->where('student_status_code', D2UnexcusedAbsence::STUDYING)
+            ->pluck('hemis_id')
+            ->mapWithKeys(fn ($v) => [(string) $v => true]);
+
+        $groupRows = DB::table('exam_schedules')
+            ->whereNull('student_hemis_id')
+            ->whereIn('group_hemis_id', $rows->pluck('group_hemis_id')->unique()->all())
+            ->whereIn('subject_id', $rows->pluck('subject_id')->unique()->all())
+            ->get($columns)
+            ->keyBy(fn ($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code);
+
+        $result = [];
+        foreach ($rows as $row) {
+            $student = (string) $row->student_hemis_id;
+            if (!$active->has($student)) {
+                continue;
+            }
+            $groupRow = $groupRows->get($row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code);
+            $merged = clone $row;
+            foreach (array_merge(...self::ATTEMPT_COLUMNS) as $column) {
+                $merged->{$column} = $row->{$column} ?? $groupRow?->{$column} ?? null;
+            }
+            $merged->oski_na = $row->oski_date ? 0 : ($groupRow->oski_na ?? 0);
+            $merged->test_na = $row->test_date ? 0 : ($groupRow->test_na ?? 0);
+
+            foreach (self::attemptDates($merged, $includeResits) as $attempt => $date) {
+                if (array_filter(self::ATTEMPT_COLUMNS[$attempt], fn ($c) => !empty($row->{$c})) !== []) {
+                    $result[] = ['row' => $merged, 'student' => $student, 'attempt' => $attempt, 'date' => $date];
+                }
+            }
+        }
+
+        return $result;
     }
 
     public static function deadline(CarbonInterface $examDate, int $days, bool $workdays): Carbon

@@ -95,6 +95,28 @@ test('E-1: «Xabar yuborish» ijara kotibi va buxgalteriyaga xabar beradi va qay
         ->and(TeacherNotification::whereIn('teacher_id', [$secretary->id, $accountant->id])->count())->toBe(2);
 });
 
+test('E-1: ijarada yashamaydigan talaba buyrug\'i bo\'yicha xabar yuborilmaydi va qayd etilmaydi', function () {
+    $secretary = monTeacher(['oqituvchi']);
+    monDetector('E-1', ['recipient_ijara_kotibi' => 'teacher:' . $secretary->id]);
+    $student = monStudent(['accommodation_code' => '13', 'accommodation_name' => 'Talabalar turar joyida']);
+    $order = monOrder(['order_type' => 'akademik_tatil', 'student_hemis_id' => $student->hemis_id]);
+    $registrar = monTeacher(['registrator_ofisi']);
+
+    $this->actingAs($registrar, 'teacher')
+        ->post(route('admin.monitoring.buyruqlar.send-notice', $order), ['kinds' => ['ijara_kotibi']])
+        ->assertRedirect()
+        ->assertSessionHas('error');
+    $this->actingAs($registrar, 'teacher')
+        ->post(route('admin.monitoring.buyruqlar.record-notice', $order), [
+            'recipient_kind' => 'ijara_kotibi', 'sent_at' => '2026-10-06 10:00:00', 'method' => 'qogoz',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    expect(MonitoringNoticeLog::where('order_id', $order->id)->count())->toBe(0)
+        ->and(TeacherNotification::where('teacher_id', $secretary->id)->count())->toBe(0);
+});
+
 test('ma\'lumot bor holatda panel, ro\'yxat va kartochka ochiladi; dalil fayli yuklanadi va beriladi', function () {
     \Illuminate\Support\Facades\Storage::fake('local');
     $faculty = monFaculty();

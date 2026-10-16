@@ -21,10 +21,17 @@ use Illuminate\Support\Facades\DB;
  *          (vedomost base_date mantig'i bilan bir xil), muddat = sana + days.
  * Kutilgan harakat: guruhning faol talabalari uchun hemis_exam_grades da shu fan va semestr
  *          bo'yicha YN bahosi (exam_type_code = yn_exam_type_code) bor.
- * Bitta istisno — bitta guruh × fan × nazorat sanasi. Mas'ul: fan kafedrasi mudiri.
+ * Qayta topshirish (include_resits; buyurtmachi qarori 16.10.2026): 2-urinish (12a) — oski/test_resit_date,
+ *          3-urinish (12b) — *_resit2_date. Tekshiriladiganlar — mark'da shu urinish bo'yicha OSKI/test
+ *          bahosi bor talabalar (student_grades.attempt); kutilgan — HEMIS'da nazorat sanasi qayta topshirish
+ *          kunidan kech bo'lmagan YN yozuvi (HEMIS urinish kodlariga bog'lanmaydi).
+ * Bitta istisno — bitta guruh × fan × nazorat sanasi (× urinish). Mas'ul: fan kafedrasi mudiri.
  */
 class Q1FinalGradesEntry implements Detector
 {
+    /** mark'dagi YN komponent baholari: 101 — OSKI, 102 — test, 103 — eski quiz. */
+    private const YN_COMPONENT_TYPES = ['101', '102', '103'];
+
     public function __construct(private OwnerResolver $owners)
     {
     }
@@ -36,26 +43,35 @@ class Q1FinalGradesEntry implements Detector
         $ynCode = (string) ($params['yn_exam_type_code'] ?? '13');
         $keepLate = ($params['late_completion'] ?? 'auto_close') === 'keep_open';
         $lookback = max(1, (int) ($params['lookback_days'] ?? 60));
+        $includeResits = (bool) ($params['include_resits'] ?? true);
 
         $now = now();
         $from = $now->copy()->startOfDay()->subDays($lookback);
+        $dateColumns = $includeResits
+            ? ['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date', 'oski_resit2_date', 'test_resit2_date']
+            : ['oski_date', 'test_date'];
 
         $schedules = DB::table('exam_schedules')
             ->whereNull('student_hemis_id')
-            ->where(fn ($q) => $q->where('oski_date', '>=', $from)->orWhere('test_date', '>=', $from))
-            ->get(['group_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'oski_date', 'oski_na', 'test_date', 'test_na']);
+            ->where(function ($q) use ($dateColumns, $from) {
+                foreach ($dateColumns as $column) {
+                    $q->orWhere($column, '>=', $from);
+                }
+            })
+            ->get(array_merge(['group_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'oski_na', 'test_na'], $dateColumns));
 
         $due = [];
         foreach ($schedules as $s) {
-            $examDate = self::examDate($s);
-            if ($examDate === null || $examDate->lt($from)) {
-                continue;
+            foreach (self::attemptDates($s, $includeResits) as $attempt => $examDate) {
+                if ($examDate->lt($from)) {
+                    continue;
+                }
+                $deadline = self::deadline($examDate, $days, $workdays);
+                if ($now->lte($deadline)) {
+                    continue; // muddat hali tugamagan
+                }
+                $due[] = ['row' => $s, 'attempt' => $attempt, 'date' => $examDate, 'deadline' => $deadline];
             }
-            $deadline = self::deadline($examDate, $days, $workdays);
-            if ($now->lte($deadline)) {
-                continue; // muddat hali tugamagan
-            }
-            $due[] = ['row' => $s, 'date' => $examDate, 'deadline' => $deadline];
         }
 
         $result = new DetectorResult(array_values(array_unique(array_map(fn ($d) => $d['date']->toDateString(), $due))));
@@ -77,13 +93,18 @@ class Q1FinalGradesEntry implements Detector
 
         foreach ($due as $item) {
             $s = $item['row'];
+            $attempt = $item['attempt'];
             $group = $groups->get($s->group_hemis_id);
             $studentIds = $studentsByGroup->get($s->group_hemis_id, []);
+            if ($attempt > 1) {
+                // Qayta topshirishda faqat shu urinishda qatnashganlar (mark'da OSKI/test bahosi bor).
+                $studentIds = $this->resitParticipants($studentIds, (string) $s->subject_id, (string) $s->semester_code, $attempt);
+            }
             if ($studentIds === []) {
                 continue;
             }
 
-            $entries = $this->entryDates($studentIds, (string) $s->subject_id, (string) $s->semester_code, $ynCode);
+            $entries = $this->entryDates($studentIds, (string) $s->subject_id, (string) $s->semester_code, $ynCode, $attempt > 1 ? $item['date'] : null);
             $missing = array_values(array_diff($studentIds, array_keys($entries)));
             $late = array_keys(array_filter($entries, fn ($at) => $at !== null && $at->gt($item['deadline'])));
 
@@ -93,16 +114,19 @@ class Q1FinalGradesEntry implements Detector
 
             $kafedraId = $this->kafedraOf($group, (string) $s->subject_id, (string) $s->semester_code);
             $groupName = $group->name ?? (string) $s->group_hemis_id;
+            $attemptLabel = $attempt > 1 ? ', qayta topshirish ' . ($attempt - 1) : '';
 
             $result->add(new Finding(
-                fingerprint: sprintf('Q-1:%s:%s:%s:%s', $s->group_hemis_id, $s->subject_id, $s->semester_code, $item['date']->format('Ymd')),
+                fingerprint: sprintf('Q-1:%s:%s:%s:%s', $s->group_hemis_id, $s->subject_id, $s->semester_code, $item['date']->format('Ymd'))
+                    . ($attempt > 1 ? ":u{$attempt}" : ''),
                 subjectType: 'qaydnoma',
-                subjectLabel: "{$groupName} — {$s->subject_name} (YN {$item['date']->format('d.m.Y')})",
+                subjectLabel: "{$groupName} — {$s->subject_name} (YN {$item['date']->format('d.m.Y')}{$attemptLabel})",
                 subjectRef: (string) $s->group_hemis_id,
                 details: [
                     'guruh' => $groupName,
                     'fan' => $s->subject_name,
                     'semestr' => $s->semester_code,
+                    'urinish' => $attempt === 1 ? 'asosiy' : ($attempt - 1) . '-qayta topshirish',
                     'nazorat_sanasi' => $item['date']->toDateString(),
                     'muddat' => $item['deadline']->toDateTimeString(),
                     'talabalar' => count($studentIds),
@@ -114,6 +138,30 @@ class Q1FinalGradesEntry implements Detector
                 departmentHemisId: $kafedraId,
                 owner: $this->owners->headOfDepartment($kafedraId),
             ));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Urinish → nazorat sanasi: 1 — asosiy (OSKI va test sanalarining kechrog'i),
+     * 2 — 1-qayta topshirish, 3 — 2-qayta topshirish.
+     *
+     * @return array<int, Carbon>
+     */
+    public static function attemptDates(object $s, bool $includeResits): array
+    {
+        $result = [];
+        if ($main = self::examDate($s)) {
+            $result[1] = $main;
+        }
+        if ($includeResits) {
+            foreach ([2 => ['oski_resit_date', 'test_resit_date'], 3 => ['oski_resit2_date', 'test_resit2_date']] as $attempt => $columns) {
+                $dates = array_filter(array_map(fn ($c) => !empty($s->{$c}) ? Carbon::parse($s->{$c})->startOfDay() : null, $columns));
+                if ($dates !== []) {
+                    $result[$attempt] = max($dates);
+                }
+            }
         }
 
         return $result;
@@ -145,20 +193,27 @@ class Q1FinalGradesEntry implements Detector
      *
      * @return array<string, ?Carbon>
      */
-    private function entryDates(array $studentIds, string $subjectId, string $semesterCode, string $ynCode): array
+    private function entryDates(array $studentIds, string $subjectId, string $semesterCode, string $ynCode, ?Carbon $minExamDate = null): array
     {
         $rows = DB::table('hemis_exam_grades')
             ->whereIn('student_hemis_id', $studentIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('exam_type_code', $ynCode)
-            ->get(['student_hemis_id', 'hemis_created_at', 'first_seen_at', 'created_at']);
+            ->get(['student_hemis_id', 'exam_date', 'hemis_created_at', 'first_seen_at', 'created_at']);
 
         $result = [];
         foreach ($rows as $r) {
             $at = $r->hemis_created_at
                 ? Carbon::createFromTimestamp((int) $r->hemis_created_at)
                 : (($r->first_seen_at ?? $r->created_at) ? Carbon::parse($r->first_seen_at ?? $r->created_at) : null);
+            if ($minExamDate !== null) {
+                // Qayta topshirish bahosi: HEMIS'dagi nazorat sanasi (bo'lmasa kiritilgan vaqti) qayta topshirish kunidan oldin emas.
+                $examAt = $r->exam_date ? Carbon::parse($r->exam_date)->startOfDay() : $at?->copy()->startOfDay();
+                if ($examAt === null || $examAt->lt($minExamDate)) {
+                    continue;
+                }
+            }
             $key = (string) $r->student_hemis_id;
             if (!array_key_exists($key, $result) || ($at !== null && ($result[$key] === null || $at->lt($result[$key])))) {
                 $result[$key] = $at;
@@ -166,6 +221,23 @@ class Q1FinalGradesEntry implements Detector
         }
 
         return $result;
+    }
+
+    /** Qayta topshirishda qatnashganlar: mark'da shu urinish bo'yicha OSKI/test bahosi bor talabalar. */
+    private function resitParticipants(array $studentIds, string $subjectId, string $semesterCode, int $attempt): array
+    {
+        return DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereIn('training_type_code', self::YN_COMPONENT_TYPES)
+            ->where('attempt', $attempt)
+            ->whereNull('deleted_at')
+            ->distinct()
+            ->pluck('student_hemis_id')
+            ->map(fn ($v) => (string) $v)
+            ->values()
+            ->all();
     }
 
     private function kafedraOf(?object $group, string $subjectId, string $semesterCode): ?int

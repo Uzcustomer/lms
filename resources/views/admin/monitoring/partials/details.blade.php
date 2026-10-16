@@ -3,7 +3,7 @@
         'oquv_yili' => "O'quv yili", 'semestr' => 'Semestr', 'sababsiz_soat' => 'Sababsiz soat (HEMIS)',
         'tibbiy_ayirilgan_soat' => 'Tibbiy arizalar bo\'yicha ayirilgan', 'hisoblangan_soat' => 'Hisoblangan soat',
         'chegara' => 'Chegara', 'kutilgan_harakat' => 'Kutilgan harakat', 'guruh' => 'Guruh', 'fan' => 'Fan',
-        'nazorat_sanasi' => 'Nazorat sanasi', 'muddat' => 'Muddat', 'talabalar' => 'Faol talabalar',
+        'urinish' => 'Urinish', 'nazorat_sanasi' => 'Nazorat sanasi', 'muddat' => 'Muddat', 'talabalar' => 'Faol talabalar',
         'kiritilmagan' => 'Baho kiritilmagan', 'kechikib_kiritilgan' => 'Kechikib kiritilgan',
         'kontrakt_turi' => 'Kontrakt turi', 'tolov_foizi' => "To'lov, %", 'talab_foizi' => 'Talab, %',
         'qabul_buyrugi' => "Qabul buyrug'i", 'kontingentda' => 'Kontingentda', 'signallar' => 'Signallar',

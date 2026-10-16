@@ -102,3 +102,70 @@ test('kechikib kiritilsa: auto_close — yopiladi, keep_open — ochiq qoladi', 
     expect($istisno->status)->toBe('qayta_ochildi')
         ->and($istisno->details['kechikib_kiritilgan'])->toBe(2);
 });
+
+function q1ResitComponent(object $student, int $attempt, string $date): void
+{
+    DB::table('student_grades')->insert([
+        'hemis_id' => random_int(1, 1_000_000_000), 'student_id' => $student->id, 'student_hemis_id' => $student->hemis_id,
+        'semester_code' => '13', 'semester_name' => '3-semestr', 'subject_schedule_id' => 0, 'subject_id' => 3001,
+        'subject_name' => 'Sinov fani', 'subject_code' => 'SF01', 'training_type_code' => '101', 'training_type_name' => 'OSKI',
+        'employee_id' => 1, 'employee_name' => 'Sinov', 'lesson_pair_code' => '11', 'lesson_pair_name' => '1',
+        'lesson_pair_start_time' => '08:30', 'lesson_pair_end_time' => '09:50', 'lesson_date' => $date . ' 09:00:00',
+        'created_at_api' => $date . ' 12:00:00', 'grade' => 70, 'attempt' => $attempt,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+}
+
+function q1ResitExam(object $group, string $main, string $resit): void
+{
+    q1Exam($group, $main);
+    DB::table('exam_schedules')->where('group_hemis_id', (string) $group->group_hemis_id)->update(['oski_resit_date' => $resit]);
+}
+
+test('qayta topshirish: qatnashgan talabaning bahosi 3 ish kunida kiritilmagan — alohida istisno', function () {
+    q1ResitExam($this->group, '2026-09-21', '2026-10-05');
+    foreach ($this->students as $s) {
+        q1Grade($s, '2026-09-22 10:00:00'); // asosiy urinish o'z vaqtida
+    }
+    q1ResitComponent($this->students[0], 2, '2026-10-05'); // faqat bittasi qayta topshirgan
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->fingerprint)->toEndWith(':u2')
+        ->and($istisno->details['urinish'])->toBe('1-qayta topshirish')
+        ->and($istisno->details['talabalar'])->toBe(1)
+        ->and($istisno->details['kiritilmagan'])->toBe(1)
+        ->and($istisno->subject_label)->toContain('qayta topshirish 1');
+});
+
+test('qayta topshirish bahosi HEMISga kiritilgan bo\'lsa — istisno yo\'q', function () {
+    q1ResitExam($this->group, '2026-09-21', '2026-10-05');
+    foreach ($this->students as $s) {
+        q1Grade($s, '2026-09-22 10:00:00');
+    }
+    q1ResitComponent($this->students[0], 2, '2026-10-05');
+    HemisExamGrade::create([
+        'hemis_record_id' => random_int(1, 1_000_000_000), 'student_hemis_id' => (string) $this->students[0]->hemis_id,
+        'subject_id' => '3001', 'semester_code' => '13', 'exam_type_code' => '13', 'grade' => 64,
+        'exam_date' => '2026-10-05 09:00:00', 'first_seen_at' => '2026-10-06 03:00:00',
+    ]);
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    expect(MonitoringIstisno::count())->toBe(0);
+});
+
+test('mark\'da qayta topshirgan talaba bo\'lmasa yoki include_resits o\'chirilgan bo\'lsa — istisno yo\'q', function () {
+    q1ResitExam($this->group, '2026-09-21', '2026-10-05');
+    foreach ($this->students as $s) {
+        q1Grade($s, '2026-09-22 10:00:00');
+    }
+
+    app(DetectorRunner::class)->run($this->detector);
+    expect(MonitoringIstisno::count())->toBe(0);
+
+    q1ResitComponent($this->students[0], 2, '2026-10-05');
+    app(DetectorRunner::class)->run(monDetector('Q-1', ['include_resits' => false]));
+    expect(MonitoringIstisno::count())->toBe(0);
+});

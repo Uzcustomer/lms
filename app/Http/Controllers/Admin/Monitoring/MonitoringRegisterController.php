@@ -11,6 +11,7 @@ use App\Models\MonitoringTransferChecklist;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Services\Monitoring\Detectors\E1OrderNotice;
 use App\Services\Monitoring\IstisnoNotifier;
 use App\Services\Monitoring\MonitoringAccess;
 use Illuminate\Http\Request;
@@ -25,6 +26,10 @@ use Illuminate\Support\Str;
  */
 class MonitoringRegisterController extends Controller
 {
+    private const DEFAULT_NOTICE_TYPES = ['akademik_tatil', 'chetlashtirish', 'kursda_qoldirish'];
+
+    private const NOT_REQUIRED_MESSAGE = "Bu buyruq bo'yicha E-1 xabarnomasi talab qilinmaydi (buyruq turi yoki talabaning turar joyi).";
+
     public function __construct(private IstisnoNotifier $notifier)
     {
     }
@@ -35,7 +40,7 @@ class MonitoringRegisterController extends Controller
         abort_unless(MonitoringAccess::canViewAll($actor), 403);
 
         $e1 = MonitoringDetector::where('code', 'E-1')->first();
-        $noticeTypes = (array) ($e1?->param('order_types') ?? ['akademik_tatil', 'chetlashtirish', 'kursda_qoldirish']);
+        $noticeTypes = (array) ($e1?->param('order_types') ?? self::DEFAULT_NOTICE_TYPES);
         $recipients = (array) ($e1?->param('recipients') ?? array_keys(MonitoringNoticeLog::RECIPIENT_KINDS));
 
         $orders = MonitoringOrder::query()
@@ -67,6 +72,9 @@ class MonitoringRegisterController extends Controller
         abort_unless(MonitoringAccess::canWork($actor), 403);
 
         $e1 = MonitoringDetector::where('code', 'E-1')->first();
+        if (!$this->noticeRequired($order, $e1)) {
+            return back()->with('error', self::NOT_REQUIRED_MESSAGE);
+        }
         $kinds = array_intersect(
             (array) $request->input('kinds', (array) ($e1?->param('recipients') ?? [])),
             array_keys(MonitoringNoticeLog::RECIPIENT_KINDS)
@@ -125,6 +133,9 @@ class MonitoringRegisterController extends Controller
     {
         $actor = MonitoringAccess::actor();
         abort_unless(MonitoringAccess::canWork($actor), 403);
+        if (!$this->noticeRequired($order, MonitoringDetector::where('code', 'E-1')->first())) {
+            return back()->with('error', self::NOT_REQUIRED_MESSAGE);
+        }
 
         $data = $request->validate([
             'recipient_kind' => 'required|in:' . implode(',', array_keys(MonitoringNoticeLog::RECIPIENT_KINDS)),
@@ -302,6 +313,16 @@ class MonitoringRegisterController extends Controller
         $checklist->save();
 
         return back()->with('success', $complete ? 'Yig\'majild to\'liq.' : 'Cheklist saqlandi.');
+    }
+
+    /**
+     * E-1 xabarnomasi kerakmi — sahifadagi shart bilan bir xil: buyruq turi ro'yxatda va talaba ijarada
+     * (yoki HEMIS'da topilmagan). Eskirgan yoki qo'lda yuborilgan so'rov ham shu yerda tekshiriladi.
+     */
+    private function noticeRequired(MonitoringOrder $order, ?MonitoringDetector $e1): bool
+    {
+        return in_array($order->order_type, (array) ($e1?->param('order_types') ?? self::DEFAULT_NOTICE_TYPES), true)
+            && E1OrderNotice::appliesTo($order->student, (array) ($e1?->params ?? [])) !== false;
     }
 
     /**

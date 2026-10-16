@@ -190,3 +190,68 @@ test('eski 103 yozuvi faqat quiz turi OSKI/YN test bo\'lsa qayta topshirish hiso
     app(DetectorRunner::class)->run($this->detector);
     expect(MonitoringIstisno::sole()->fingerprint)->toEndWith(':u2');
 });
+
+function q1IndividualExam(object $group, object $student, array $dates): void
+{
+    DB::table('exam_schedules')->insert(array_merge([
+        'department_hemis_id' => (string) $group->department_hemis_id, 'specialty_hemis_id' => '1',
+        'curriculum_hemis_id' => (string) $group->curriculum_hemis_id, 'semester_code' => '13',
+        'group_hemis_id' => (string) $group->group_hemis_id, 'student_hemis_id' => (string) $student->hemis_id,
+        'subject_id' => '3001', 'subject_name' => 'Sinov fani', 'oski_na' => 0, 'test_na' => 0,
+        'created_at' => now(), 'updated_at' => now(),
+    ], $dates));
+}
+
+test('individual qayta topshirish sanasi (guruhda yo\'q) ham tekshiriladi', function () {
+    q1Exam($this->group, '2026-09-21');
+    foreach ($this->students as $s) {
+        q1Grade($s, '2026-09-22 10:00:00');
+    }
+    q1IndividualExam($this->group, $this->students[0], ['oski_resit_date' => '2026-10-05']);
+    q1ResitComponent($this->students[0], 2, '2026-10-05');
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->fingerprint)->toEndWith(':20261005:u2')
+        ->and($istisno->details['talabalar'])->toBe(1)
+        ->and($istisno->details['kiritilmagan'])->toBe(1);
+});
+
+test('individual asosiy sana: talaba guruh sanasida emas, o\'z sanasi bo\'yicha tekshiriladi', function () {
+    q1Exam($this->group, '2026-10-05');
+    q1Grade($this->students[1], '2026-10-06 10:00:00');
+    q1IndividualExam($this->group, $this->students[0], ['oski_date' => '2026-10-14']); // muddat 17.10
+
+    app(DetectorRunner::class)->run($this->detector);
+    expect(MonitoringIstisno::count())->toBe(0);
+
+    $this->travelTo(now()->setDate(2026, 10, 19)->setTime(8, 0));
+    app(DetectorRunner::class)->run($this->detector->fresh());
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->details['nazorat_sanasi'])->toBe('2026-10-14')
+        ->and($istisno->details['talabalar'])->toBe(1)
+        ->and($istisno->details['kiritilmagan'])->toBe(1);
+});
+
+test('individual sana lookback\'dan eski bo\'lsa ham talaba guruh sanasi bo\'yicha tekshirilmaydi', function () {
+    q1Exam($this->group, '2026-10-05');
+    q1Grade($this->students[1], '2026-10-06 10:00:00');
+    q1IndividualExam($this->group, $this->students[0], ['oski_date' => '2026-07-20', 'test_date' => '2026-07-20']); // lookback 60 kun
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    expect(MonitoringIstisno::count())->toBe(0);
+});
+
+test('include_resits o\'chirilganda individual qator detektorni buzmaydi', function () {
+    q1Exam($this->group, '2026-10-05');
+    q1Grade($this->students[1], '2026-10-06 10:00:00');
+    q1IndividualExam($this->group, $this->students[0], ['oski_date' => '2026-10-14', 'oski_resit_date' => '2026-10-07']);
+
+    app(DetectorRunner::class)->run(monDetector('Q-1', ['include_resits' => false]));
+
+    expect(MonitoringIstisno::count())->toBe(0)
+        ->and(\App\Models\MonitoringRun::latest('id')->value('status'))->toBe(\App\Models\MonitoringRun::STATUS_OK);
+});

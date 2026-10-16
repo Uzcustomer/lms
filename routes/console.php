@@ -21,11 +21,11 @@ Artisan::command('timetable:backup-assignments {--board= : Faqat shu doska (id)}
 
 // Dars jadvali: bir doskadagi o'qituvchi/xona biriktirishlarini boshqa doskaga ko'chirish
 // (dars birligi bo'yicha). --dry-run — faqat sanaydi; --overwrite — bor biriktirishni ham almashtiradi.
-Artisan::command('timetable:copy-assignments {from : Manba doska id} {to : Maqsad doska id} {--overwrite} {--dry-run}', function () {
+Artisan::command('timetable:copy-assignments {from : Manba doska id} {to : Maqsad doska id} {--kafedra= : Faqat shu kafedra (nomining bir qismi)} {--overwrite} {--dry-run}', function () {
     $from = \App\Models\TimetableBoard::findOrFail($this->argument('from'));
     $to = \App\Models\TimetableBoard::findOrFail($this->argument('to'));
     $stats = app(\App\Http\Controllers\Admin\TimetableController::class)
-        ->copyUnitAssignments($from, $to, (bool) $this->option('overwrite'), (bool) $this->option('dry-run'));
+        ->copyUnitAssignments($from, $to, (bool) $this->option('overwrite'), (bool) $this->option('dry-run'), $this->option('kafedra'));
     $this->info(($this->option('dry-run') ? '[SINOV — hech narsa yozilmadi] ' : '') . "#{$from->id} → #{$to->id}");
     $this->table(['Ko\'rsatkich', 'Soni'], [
         ['Manbadagi biriktirilgan birliklar', $stats['source_units']],

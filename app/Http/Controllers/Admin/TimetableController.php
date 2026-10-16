@@ -1155,7 +1155,7 @@ class TimetableController extends Controller
      * Manba: doska kartalari + timetable_unit_assignments jadvali.
      * $overwrite = false — maqsad doskada allaqachon bor biriktirish o'zgartirilmaydi.
      */
-    public function copyUnitAssignments(TimetableBoard $from, TimetableBoard $to, bool $overwrite = false, bool $dryRun = false): array
+    public function copyUnitAssignments(TimetableBoard $from, TimetableBoard $to, bool $overwrite = false, bool $dryRun = false, ?string $kafedra = null): array
     {
         $baseName = fn (string $name) => $this->normSubject((string) preg_replace('/\s*\(\s*[a-zа-яё]\s*\)\s*$/iu', '', $name));
         $keyOf = function (TimetableCard $c, ?string $subjectNorm = null) {
@@ -1210,9 +1210,14 @@ class TimetableController extends Controller
 
         $stats = ['source_units' => count($src), 'target_units' => count($units), 'matched' => 0, 'by_variant' => 0,
             'teacher_set' => 0, 'room_set' => 0, 'skipped_existing' => 0, 'cards_updated' => 0];
-        DB::transaction(function () use ($units, $src, $srcBase, $keyOf, $baseName, $overwrite, $dryRun, &$stats) {
+        $kafedra = trim((string) $kafedra);
+        DB::transaction(function () use ($units, $src, $srcBase, $keyOf, $baseName, $overwrite, $dryRun, $kafedra, &$stats) {
             foreach ($units as $k => $cards) {
                 $first = $cards[0];
+                // Faqat shu kafedra (maqsad doskadagi kafedra nomi bo'yicha)
+                if ($kafedra !== '' && mb_stripos((string) $first->kafedra_name, $kafedra) === false) {
+                    continue;
+                }
                 $a = $src[$k] ?? null;
                 if (!$a) {
                     $a = $srcBase[$keyOf($first, $baseName((string) $first->subject_name))] ?? null;

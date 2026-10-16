@@ -7,6 +7,15 @@
         <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
             @include('admin.monitoring.partials.nav')
 
+            @if($warningDetectors->isNotEmpty())
+                <div class="p-3 mb-4 text-sm bg-yellow-50 border border-yellow-300 rounded-lg">
+                    <b>Sinov rejimi:</b> {{ $warningDetectors->implode(', ') }} — ogohlantirish rejimida. Topilgan istisnolar shu yerda
+                    ko'rinadi, lekin mas'ullarga hali biriktirilmaydi va xabar yuborilmaydi. Natijalar to'g'ri bo'lsa, detektor
+                    sozlamasida «Faqat ogohlantirish» belgisini olib tashlang — keyingi ishga tushirishda istisnolar mas'ullarga
+                    biriktiriladi va xabar boradi.
+                </div>
+            @endif
+
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 @foreach([
                     ['ochiq', 'Ochiq istisnolar', 'text-orange-700', 'ochiq'],

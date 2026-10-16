@@ -39,7 +39,7 @@ class MonitoringRegisterController extends Controller
         $recipients = (array) ($e1?->param('recipients') ?? array_keys(MonitoringNoticeLog::RECIPIENT_KINDS));
 
         $orders = MonitoringOrder::query()
-            ->with('noticeLogs')
+            ->with(['noticeLogs', 'student:hemis_id,accommodation_code,accommodation_name'])
             ->when($request->filled('turi'), fn ($q) => $q->where('order_type', $request->input('turi')))
             ->when($request->input('xabar') === 'kerak', fn ($q) => $q->whereIn('order_type', $noticeTypes))
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($w) => $w
@@ -53,6 +53,7 @@ class MonitoringRegisterController extends Controller
             'orders' => $orders,
             'noticeTypes' => $noticeTypes,
             'recipients' => $recipients,
+            'e1Params' => (array) ($e1?->params ?? []),
             'canWork' => MonitoringAccess::canWork($actor),
         ]);
     }

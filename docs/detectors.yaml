@@ -7,6 +7,7 @@
 #   params             — chegara va muddatlar; birinchi seed'dan keyin paneldan tahrirlanadi
 #   default_owner_role — istisno kimga avtomatik biriktiriladi (dekan, kafedra_mudiri, registrator_ofisi ...)
 #   due_workdays       — mas'ulning javob muddati, ish kunida (standart 3)
+#   warning_mode       — true: faqat ogohlantirish (mas'ulga yuborilmaydi); paneldan o'chiriladi
 # Jami: 54 ta detektor
 
 detectors:
@@ -26,6 +27,7 @@ detectors:
     status: "✏️"
     pilot: true
     enabled: true
+    warning_mode: true               # xavfsiz ishga tushirish: natijani tekshirib, paneldan o'chiring (staging yo'q)
     default_owner_role: "dekan"
     params:
       threshold_hours: 74            # sababsiz soat chegarasi (absent_off yig'indisi)
@@ -72,13 +74,14 @@ detectors:
     status: "✅"
     pilot: true
     enabled: true
+    warning_mode: true               # xavfsiz ishga tushirish: natijani tekshirib, paneldan o'chiring (staging yo'q)
     default_owner_role: "kafedra_mudiri"
     params:
       days: 3                        # buyurtmachi: 3 ish kuni
       day_type: workdays             # workdays | calendar
       yn_exam_type_code: "13"        # HEMIS examType: 13 = yakuniy nazorat
-      include_resits: false          # qayta topshirishlar (HEMIS urinish kodlari tasdiqlangach)
-      late_completion: auto_close    # kechikib kiritilsa: auto_close | keep_open
+      include_resits: true           # buyurtmachi: qayta topshirish (12a, 12b) baholari ham tekshiriladi
+      late_completion: auto_close    # buyurtmachi: kechikib kiritilsa istisno avtomatik yopiladi (keep_open — ochiq qoladi)
       lookback_days: 60              # necha kun oldingi nazoratlargacha tekshiriladi
   - code: Q-1b
     group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
@@ -208,6 +211,7 @@ detectors:
     status: "🆕🔴"
     pilot: true
     enabled: true
+    warning_mode: true               # xavfsiz ishga tushirish: natijani tekshirib, paneldan o'chiring (staging yo'q)
     default_owner_role: "registrator_ofisi"
     params:
       deadline: "2026-11-01"
@@ -248,6 +252,7 @@ detectors:
     status: "✅"
     pilot: true
     enabled: true
+    warning_mode: true               # xavfsiz ishga tushirish: natijani tekshirib, paneldan o'chiring (staging yo'q)
     default_owner_role: "registrator_ofisi"
     params:
       workdays: 1
@@ -257,6 +262,8 @@ detectors:
       recipient_buxgalteriya: ""     # bo'sh bo'lsa — buxgalteriya rolidagi barcha xodimlar
       since_date: "2026-10-01"       # shu sanadan keyingi buyruqlar tekshiriladi
       late_completion: auto_close
+      accommodation_keywords: [ijara] # buyurtmachi: faqat ijarada yashovchilar (HEMIS turar joyi nomida)
+      accommodation_codes: []        # yoki aniq HEMIS turar joy kodlari (berilsa kalit so'zdan ustun)
   - code: E-2
     group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
     rule: "VMQ 299: ariza 15-iyul – 5-avgust; ishchi organ qarori 15-iyul – 6-avgust; rad etilganda kamchilikni bartaraf etish uchun 5 ish kuni; rad sababi talabaning shaxsiy kabinetida"
@@ -297,6 +304,7 @@ detectors:
     status: "✏️"
     pilot: true
     enabled: true
+    warning_mode: true               # xavfsiz ishga tushirish: natijani tekshirib, paneldan o'chiring (staging yo'q)
     default_owner_role: "registrator_ofisi"
     params:
       require_original_check: true   # komissiya hujjatlar aslini tekshirgani belgilanishi shart

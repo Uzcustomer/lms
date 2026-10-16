@@ -7,15 +7,22 @@ Registrator ofisi nazorat detektorlari (TZ: `docs/MONITORING_TZ.md`, katalog: `d
 
 ```bash
 composer install --no-dev          # symfony/yaml endi prod bog'liqligi
-php artisan migrate                # 4 ta migratsiya: jadvallar, manba reyestrlari,
-                                   # hemis_exam_grades ga kiritilgan sana, katalog seed'i
+php artisan migrate                # 5 ta migratsiya: jadvallar, manba reyestrlari,
+                                   # hemis_exam_grades ga kiritilgan sana, katalog seed'i,
+                                   # buyurtmachi qarorlari (16.10.2026)
 php artisan config:cache
 ```
+
+Chiqarishdan oldin zaxira nusxa oling (`./backup_db.sh`). Staging yo'q, orqaga qaytarish:
+`php artisan migrate:rollback --step=5` (birinchi chiqarishda; 2026_10_16_110000 avvalroq bajarilgan
+bo'lsa — mos ravishda kamroq).
 
 Migratsiya:
 - `monitoring_*` jadvallarini yaratadi;
 - `monitoring_admin` rolini qo'shadi;
 - `docs/detectors.yaml` dagi 54 detektorni yuklaydi;
+- katalog avvalroq yuklangan bo'lsa, buyurtmachi qarorlarini qo'llaydi: Q-1 da qayta topshirishlar yoqiladi,
+  hali ishlamagan pilot detektorlar sinov (ogohlantirish) rejimiga o'tadi;
 - `hemis_exam_grades` ga `hemis_created_at` va `first_seen_at` ustunlarini qo'shadi. Mavjud qatorlarda
   `first_seen_at` qiymati `created_at` dan olinadi.
 
@@ -34,12 +41,17 @@ Migratsiya:
 2. **Detektorlar** sahifasida pilot detektorlarni tekshirish:
    - **E-1:** `recipient_ijara_kotibi` maydonida ijara kotibini tanlash (Muhammadzafar). `recipient_buxgalteriya`
      bo'sh qolsa, xabar buxgalteriya rolidagi barcha xodimlarga boradi.
+     Qoida faqat ijarada yashovchilarga qo'llanadi: `accommodation_keywords` (standart `ijara`) HEMIS turar joyi
+     nomida qidiriladi. Nomlarni Talabalar → Statistika → «Yashash joyi» bo'limida ko'rish mumkin.
    - **A-5, E-1, E-7:** «Standart mas'ul» maydonida registrator ofisi xodimini tanlash.
    - **D-2** dekanga, **Q-1** kafedra mudiriga avtomatik biriktiriladi.
 3. **Importlar** sahifasida:
    - buyruqlar reyestrini yuklash (HEMIS'dan eksport yoki shablon);
    - kontrakt bo'yicha tavsiya etilganlar ro'yxatini yuklash (mandat shabloni, skani dalil sifatida).
-4. HEMIS'da buyruqlar endpointi bor-yo'qligini RTM tekshiradi:
+4. **Sinov rejimini o'chirish.** Staging yo'q, shuning uchun pilot detektorlar «Faqat ogohlantirish» rejimida
+   boshlanadi: istisnolar panelda ko'rinadi, lekin hech kimga yuborilmaydi. Birinchi natijalarni ko'rib chiqib,
+   har bir detektor sozlamasida bu belgini olib tashlang (A-5 uchun 01.11.2026 gacha).
+5. HEMIS'da buyruqlar endpointi bor-yo'qligini RTM tekshiradi:
    ```bash
    php artisan monitoring:hemis-probe            # faqat HTTP holati, soni va maydon nomlari
    php artisan monitoring:hemis-probe --no-verify  # HEMIS sertifikati muammo bersa
@@ -62,7 +74,7 @@ Mavjud migratsiyalar MySQL'ga xos SQL ishlatadi, shuning uchun testlar alohida b
 ```bash
 cp .env.testing.example .env.testing   # DB_* ni to'ldiring, APP_KEY: php artisan key:generate --env=testing
 mysql -e "CREATE DATABASE lms_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-php artisan test tests/Feature/Monitoring     # 59 test
+php artisan test tests/Feature/Monitoring     # 67 test
 ```
 
 Test ma'lumotlari faqat soxta: Faker yoki «Sinov ...» nomlari ishlatiladi.

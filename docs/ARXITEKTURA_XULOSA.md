@@ -23,8 +23,8 @@ yozilgan; faqat kod o'qilgan, hech narsa o'zgartirilmagan. Fayl yo'llari repozit
 **Qayerda ishlaydi:** `docker-compose.yml` / `docker-compose.production.yml` — `lmsttatf_app`
 (php-fpm + cron + queue, supervisord) va `lmsttatf_nginx` (`server_name mark.tashmedunitf.uz`).
 Ma'lumotlar bazasi `lmsttatf` host'da, zaxira nusxa `backup_db.sh` (mysqldump, 10 kun).
-`docker-compose.dev.yml` — lokal ishlab chiqish muhiti. **Staging (sinov) serveri repozitoriyda
-ko'rinmaydi** — 11-bo'lim, 1-savolga qarang.
+`docker-compose.dev.yml` — lokal ishlab chiqish muhiti. **Staging (sinov) serveri yo'q**
+(buyurtmachi, 16.10.2026).
 
 ## 2. Papka tuzilishi va kod uslubi
 
@@ -237,8 +237,8 @@ o'zgartirmadim.
 
 **1. mark qaysi stekda yozilgan va qayerda ishlaydi? Staging bormi?**
 Laravel 11 / PHP 8.2 / MySQL, Docker (php-fpm + nginx + cron + queue, supervisord),
-`mark.tashmedunitf.uz`. Lokal dev muhiti bor (`docker-compose.dev.yml`). **Alohida staging
-serveri repozitoriyda ko'rinmaydi — RTM'dan so'raladi.**
+`mark.tashmedunitf.uz`. Lokal dev muhiti bor (`docker-compose.dev.yml`). **Staging serveri yo'q**
+(buyurtmachi, 16.10.2026) — shuning uchun Monitoring prod'da «ogohlantirish» rejimida boshlanadi.
 
 **2. Talaba/guruh/fan ma'lumotlari mark'da saqlanadimi yoki HEMIS'dan olinadimi?**
 Ikkalasi: HEMIS'dan muntazam tortiladi va mark bazasida **nusxa** sifatida saqlanadi

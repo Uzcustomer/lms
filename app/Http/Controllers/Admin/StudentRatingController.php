@@ -198,8 +198,9 @@ class StudentRatingController extends Controller
     {
         [$from, $to] = $this->fiveCandidatePeriod($request);
         $faculty = $request->input('faculty') ?: null;
+        $level = $request->input('level') ?: null;
 
-        $students = \App\Services\FiveCandidateGrades::students($faculty);
+        $students = \App\Services\FiveCandidateGrades::students($faculty, $level);
         $ids = $students->pluck('hemis_id')->all();
         $grades = \App\Services\FiveCandidateGrades::grades($ids, $from, $to);
         $ratings = \App\Services\FiveCandidateGrades::ratings($ids);
@@ -210,7 +211,9 @@ class StudentRatingController extends Controller
             $averages[$s->hemis_id] = \App\Services\FiveCandidateGrades::subjectAverages($own);
             $details[$s->hemis_id] = \App\Services\FiveCandidateGrades::subjectDetails($own);
         }
-        $faculties = \App\Services\FiveCandidateGrades::students()->pluck('department_name')->filter()->unique()->sort()->values();
+        $all = \App\Services\FiveCandidateGrades::students();
+        $faculties = $all->pluck('department_name')->filter()->unique()->sort()->values();
+        $levels = $all->filter(fn ($s) => $s->level_code)->mapWithKeys(fn ($s) => [$s->level_code => $s->level_name ?: $s->level_code])->sortKeys();
 
         return view('admin.student-ratings.five-candidates', [
             'byFaculty' => $students->groupBy(fn ($s) => $s->department_name ?: 'Fakultetsiz'),
@@ -219,6 +222,8 @@ class StudentRatingController extends Controller
             'ratings' => $ratings,
             'faculties' => $faculties,
             'faculty' => $faculty,
+            'levels' => $levels,
+            'level' => $level,
             'from' => $from,
             'to' => $to,
             'total' => $students->count(),
@@ -231,7 +236,7 @@ class StudentRatingController extends Controller
         @ini_set('memory_limit', '512M');
         @set_time_limit(300);
         [$from, $to] = $this->fiveCandidatePeriod($request);
-        $students = \App\Services\FiveCandidateGrades::students($request->input('faculty') ?: null);
+        $students = \App\Services\FiveCandidateGrades::students($request->input('faculty') ?: null, $request->input('level') ?: null);
         $grades = \App\Services\FiveCandidateGrades::grades($students->pluck('hemis_id')->all(), $from, $to);
 
         return Excel::download(

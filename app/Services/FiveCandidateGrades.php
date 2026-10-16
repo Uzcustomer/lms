@@ -32,15 +32,16 @@ class FiveCandidateGrades
     }
 
     /** Da'vogar talabalar (chetlashtirilganlarsiz), fakultet / guruh / ism bo'yicha. */
-    public static function students(?string $faculty = null): Collection
+    public static function students(?string $faculty = null, ?string $level = null): Collection
     {
         return Student::query()
             ->where('is_five_candidate', true)
             ->where(fn ($q) => $q->whereNull('student_status_code')->orWhere('student_status_code', '!=', '60'))
             ->when($faculty, fn ($q) => $q->where('department_name', $faculty))
+            ->when($level, fn ($q) => $q->where('level_code', $level))
             ->orderBy('department_name')->orderBy('level_code')->orderBy('group_name')->orderBy('full_name')
             ->get(['hemis_id', 'full_name', 'student_id_number', 'group_name', 'department_name', 'specialty_name',
-                'level_name', 'semester_name', 'semester_code']);
+                'level_code', 'level_name', 'semester_name', 'semester_code']);
     }
 
     /** Davrdagi baholar (ma'ruzadan tashqari barcha turlar), student_hemis_id bo'yicha guruhlangan. */

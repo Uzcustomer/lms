@@ -20,7 +20,13 @@
         .fc-back { font-size: 13px; color: #1d4ed8; text-decoration: none; font-weight: 600; }
         .fc-back:hover { text-decoration: underline; }
         .fc-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 3px rgba(15, 23, 42, .06); }
-        .fc-filters { padding: 18px 20px; margin-bottom: 18px; }
+        .fc-filters { margin-bottom: 18px; overflow: hidden; }
+        .fc-filters-head { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: #fff;
+            background: linear-gradient(135deg, #1b3a63 0%, #2b5ea7 100%); }
+        .fc-filters-head h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .01em; }
+        .fc-filters-head svg { width: 18px; height: 18px; opacity: .9; }
+        .fc-filters-body { padding: 16px 20px 14px; }
+        .fc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
         .fc-filter-row { display: flex; flex-wrap: wrap; gap: 14px 16px; align-items: flex-end; }
         .fc-field { display: flex; flex-direction: column; gap: 6px; min-width: 160px; }
         .fc-field.grow { flex: 1; min-width: 220px; }
@@ -39,16 +45,24 @@
         .fc-hint { margin-top: 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
 
         .fc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
-        .fc-stat { padding: 14px 16px; }
-        .fc-stat-label { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-        .fc-stat-value { margin-top: 4px; font-size: 24px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+        .fc-stat { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-color: var(--tint-line); background: linear-gradient(135deg, #fff 55%, var(--tint) 100%); }
+        .fc-stat-icon { flex: none; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            background: var(--tint); color: var(--tone); }
+        .fc-stat-icon svg { width: 22px; height: 22px; }
+        .fc-stat-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tone); opacity: .85; }
+        .fc-stat-value { margin-top: 2px; font-size: 24px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.15; }
         .fc-stat-value small { font-size: 12px; font-weight: 500; color: var(--muted); }
-        .fc-stat.warn .fc-stat-value { color: var(--low-fg); }
+        .fc-stat.blue   { --tone: #1d4ed8; --tint: #e8efff; --tint-line: #d5e1fb; }
+        .fc-stat.violet { --tone: #6d28d9; --tint: #f1eafe; --tint-line: #e2d6fb; }
+        .fc-stat.red    { --tone: #b42318; --tint: #fde8e7; --tint-line: #f6cfcc; }
+        .fc-stat.green  { --tone: #15803d; --tint: #e7f6ec; --tint-line: #cbe9d5; }
+        .fc-stat.teal   { --tone: #0f766e; --tint: #e3f5f3; --tint-line: #c7e8e4; }
 
         .fc-section { margin-bottom: 20px; overflow: hidden; }
         .fc-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 18px;
-            background: linear-gradient(180deg, #f8fafd, #f1f5fb); border-bottom: 1px solid var(--line); }
-        .fc-section-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }
+            background: linear-gradient(180deg, #f3f7fe, #e9f0fc); border-bottom: 1px solid #d9e4f7; border-left: 0; }
+        .fc-section-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: #1b3a63; display: flex; align-items: center; gap: 8px; }
+        .fc-section-head h3 svg { width: 18px; height: 18px; color: #2b5ea7; }
         .fc-count { font-size: 12px; font-weight: 600; color: var(--brand); background: #e8efff; border-radius: 999px; padding: 3px 10px; }
         .fc-table-wrap { overflow-x: auto; }
         .fc-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
@@ -110,69 +124,87 @@
 
     <div class="fc-wrap">
         <div class="fc-card fc-filters">
-            <form method="GET" action="{{ route('admin.student-ratings.five-candidates') }}" class="fc-filter-row">
-                <div class="fc-field">
-                    <label for="fc-from">Davr boshi</label>
-                    <input type="date" id="fc-from" name="from" value="{{ $from }}">
-                </div>
-                <div class="fc-field">
-                    <label for="fc-to">Davr oxiri</label>
-                    <input type="date" id="fc-to" name="to" value="{{ $to }}">
-                </div>
-                <div class="fc-field grow">
-                    <label for="fc-faculty">Fakultet</label>
-                    <select id="fc-faculty" name="faculty">
-                        <option value="">Barcha fakultetlar</option>
-                        @foreach($faculties as $f)
-                            <option value="{{ $f }}" {{ $faculty === $f ? 'selected' : '' }}>{{ $f }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <button type="submit" class="fc-btn fc-btn-primary">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18l-7 8v6l-4 2v-8L3 4z"></path></svg>
-                    Ko'rsatish
-                </button>
-                <a href="{{ route('admin.student-ratings.five-candidates.export', array_filter(['from' => $from, 'to' => $to, 'faculty' => $faculty])) }}" class="fc-btn fc-btn-excel">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                    Excel — kunlik baholar
-                </a>
-            </form>
-            <div class="fc-hint">
-                Joriy baho — tanlangan davrdagi kunlik baholarning fan bo'yicha o'rtachasi. Excelda har bir fakultet alohida varaqda,
-                har bir baho sanasi va turi (joriy, MT, ON, OSKI, Test) bilan.
+            <div class="fc-filters-head">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18l-7 8v6l-4 2v-8L3 4z"></path></svg>
+                <h3>Filtrlar</h3>
             </div>
-            <div class="fc-legend">
-                <span><i style="background:#e8f7ee;border:1px solid #9ad5b0"></i>90 va yuqori</span>
-                <span><i style="background:#fff4dc;border:1px solid #f7d99b"></i>80–89</span>
-                <span><i style="background:#fde8e7;border:1px solid #f5c2bf"></i>80 dan past</span>
+            <div class="fc-filters-body">
+                <form method="GET" action="{{ route('admin.student-ratings.five-candidates') }}" class="fc-filter-row">
+                    <div class="fc-field">
+                        <label for="fc-from"><span class="fc-dot" style="background:#2563eb"></span>Davr boshi</label>
+                        <input type="date" id="fc-from" name="from" value="{{ $from }}">
+                    </div>
+                    <div class="fc-field">
+                        <label for="fc-to"><span class="fc-dot" style="background:#2563eb"></span>Davr oxiri</label>
+                        <input type="date" id="fc-to" name="to" value="{{ $to }}">
+                    </div>
+                    <div class="fc-field grow">
+                        <label for="fc-faculty"><span class="fc-dot" style="background:#7c3aed"></span>Fakultet</label>
+                        <select id="fc-faculty" name="faculty">
+                            <option value="">Barcha fakultetlar</option>
+                            @foreach($faculties as $f)
+                                <option value="{{ $f }}" {{ $faculty === $f ? 'selected' : '' }}>{{ $f }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="fc-field">
+                        <label for="fc-level"><span class="fc-dot" style="background:#0d9488"></span>Kurs</label>
+                        <select id="fc-level" name="level">
+                            <option value="">Barcha kurslar</option>
+                            @foreach($levels as $code => $name)
+                                <option value="{{ $code }}" {{ (string) $level === (string) $code ? 'selected' : '' }}>{{ $name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <button type="submit" class="fc-btn fc-btn-primary">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        Ko'rsatish
+                    </button>
+                    <a href="{{ route('admin.student-ratings.five-candidates.export', array_filter(['from' => $from, 'to' => $to, 'faculty' => $faculty, 'level' => $level])) }}" class="fc-btn fc-btn-excel">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Excel — kunlik baholar
+                    </a>
+                </form>
+                <div class="fc-hint">
+                    Joriy baho — tanlangan davrdagi kunlik baholarning fan bo'yicha o'rtachasi. Excelda har bir fakultet alohida varaqda,
+                    har bir baho sanasi va turi (joriy, MT, ON, OSKI, Test) bilan.
+                </div>
+                <div class="fc-legend">
+                    <span><i style="background:#e8f7ee;border:1px solid #9ad5b0"></i>90 va yuqori</span>
+                    <span><i style="background:#fff4dc;border:1px solid #f7d99b"></i>80–89</span>
+                    <span><i style="background:#fde8e7;border:1px solid #f5c2bf"></i>80 dan past</span>
+                </div>
             </div>
         </div>
 
+        @php $allGood = $total - $studentsWithLow; @endphp
         <div class="fc-stats">
-            <div class="fc-card fc-stat">
-                <div class="fc-stat-label">Da'vogar talabalar</div>
-                <div class="fc-stat-value">{{ $total }}</div>
+            <div class="fc-card fc-stat blue">
+                <div class="fc-stat-icon"><svg fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>
+                <div><div class="fc-stat-label">Da'vogar talabalar</div><div class="fc-stat-value">{{ $total }}</div></div>
             </div>
-            <div class="fc-card fc-stat">
-                <div class="fc-stat-label">Fakultetlar</div>
-                <div class="fc-stat-value">{{ $byFaculty->count() }}</div>
+            <div class="fc-card fc-stat violet">
+                <div class="fc-stat-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg></div>
+                <div><div class="fc-stat-label">Fakultetlar</div><div class="fc-stat-value">{{ $byFaculty->count() }}</div></div>
             </div>
-            <div class="fc-card fc-stat {{ $studentsWithLow ? 'warn' : '' }}">
-                <div class="fc-stat-label">90 dan past fani bor</div>
-                <div class="fc-stat-value">{{ $studentsWithLow }} <small>talaba · {{ $lowSubjects }} fan</small></div>
+            <div class="fc-card fc-stat green">
+                <div class="fc-stat-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                <div><div class="fc-stat-label">Hamma fani 90+</div><div class="fc-stat-value">{{ $allGood }} <small>talaba</small></div></div>
             </div>
-            <div class="fc-card fc-stat">
-                <div class="fc-stat-label">Davr</div>
-                <div class="fc-stat-value" style="font-size:16px;padding-top:6px;">
-                    {{ \Carbon\Carbon::parse($from)->format('d.m.Y') }} – {{ \Carbon\Carbon::parse($to)->format('d.m.Y') }}
-                </div>
+            <div class="fc-card fc-stat red">
+                <div class="fc-stat-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"></path></svg></div>
+                <div><div class="fc-stat-label">90 dan past fani bor</div><div class="fc-stat-value">{{ $studentsWithLow }} <small>talaba · {{ $lowSubjects }} fan</small></div></div>
+            </div>
+            <div class="fc-card fc-stat teal">
+                <div class="fc-stat-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
+                <div><div class="fc-stat-label">Davr</div><div class="fc-stat-value" style="font-size:15px;">{{ \Carbon\Carbon::parse($from)->format('d.m.Y') }} – {{ \Carbon\Carbon::parse($to)->format('d.m.Y') }}</div></div>
             </div>
         </div>
 
         @forelse($byFaculty as $facultyName => $students)
             <section class="fc-card fc-section">
                 <div class="fc-section-head">
-                    <h3>{{ $facultyName }}</h3>
+                    <h3><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.42A12 12 0 0112 20.06a12 12 0 01-6.16-9.48L12 14z"></path></svg>{{ $facultyName }}</h3>
                     <div class="fc-tools">
                         <button type="button" class="fc-link-btn" data-fc-all="open">Hammasini ochish</button>
                         <button type="button" class="fc-link-btn" data-fc-all="close">Yopish</button>

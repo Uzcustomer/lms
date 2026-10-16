@@ -4,7 +4,7 @@
     </x-slot>
 
     @php
-        $q = array_filter(['kafedra' => $kafedras->isNotEmpty() ? $deptId : null, 'from' => $from, 'to' => $to]);
+        $q = array_filter(['kafedra' => $kafedras->isNotEmpty() ? $deptId : null, 'from' => $from, 'to' => $to, 'scope' => $scope ?? null]);
         $fmt = fn ($v) => $v === null || $v === '' ? '—' : (is_numeric($v) ? rtrim(rtrim(number_format((float) $v, 1, '.', ''), '0'), '.') : $v);
         $tone = fn ($v) => !is_numeric($v) ? ($v === 'NB' ? 'nb' : 'none') : ($v >= 90 ? 'a' : ($v >= 70 ? 'b' : ($v >= 60 ? 'c' : 'd')));
         $periodLabel = $from || $to
@@ -101,6 +101,19 @@
                         </select>
                     </div>
                 @endif
+                @if($mode === 'subjects')
+                    <div class="kr-field grow">
+                        <label for="kr-scope">Fakultet / yo'nalish · kurs</label>
+                        <select id="kr-scope" name="scope" onchange="this.form.submit()">
+                            <option value="">-- barcha yo'nalishlar --</option>
+                            @foreach($scopes as $k => $sc)
+                                <option value="{{ $k }}" {{ ($scope ?? null) === $k ? 'selected' : '' }}>{{ $sc['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                @elseif($scope ?? null)
+                    <input type="hidden" name="scope" value="{{ $scope }}">
+                @endif
                 <div class="kr-field">
                     <label for="kr-from">Davr boshi</label>
                     <input type="date" id="kr-from" name="from" value="{{ $from }}">
@@ -111,7 +124,7 @@
                 </div>
                 <button type="submit" class="kr-btn kr-btn-blue">Ko'rsatish</button>
                 @if($from || $to)
-                    <a class="kr-btn kr-btn-ghost" href="{{ url()->current() . '?' . http_build_query(array_filter(['kafedra' => $q['kafedra'] ?? null, 'unit' => $unit->key ?? null, 'group' => $group->group_hemis_id ?? null])) }}">Butun semestr</a>
+                    <a class="kr-btn kr-btn-ghost" href="{{ url()->current() . '?' . http_build_query(array_filter(['kafedra' => $q['kafedra'] ?? null, 'unit' => $unit->key ?? null, 'group' => $group->group_hemis_id ?? null, 'scope' => $scope ?? null])) }}">Butun semestr</a>
                 @endif
                 @if($mode !== 'subjects')
                     <a class="kr-btn kr-btn-green" href="{{ route('admin.kafedra-report.export', $q + ['unit' => $unit->key] + ($mode === 'students' ? ['group' => $group->group_hemis_id] : [])) }}">
@@ -131,7 +144,7 @@
                     <span>Fanlar: <b>{{ count($rows) }}</b></span>
                     <span>Guruhlar: <b>{{ collect($rows)->sum('groups') }}</b></span>
                     <span>Talabalar: <b>{{ collect($rows)->sum('students') }}</b></span>
-                    <span>Fanni bosing — guruhlar bo'yicha baholar ochiladi.</span>
+                    <span>{{ ($scope ?? null) ? "Fanni bosing — guruhlar bo'yicha baholar ochiladi." : "O'rtacha JN va taqsimotni ko'rish uchun fakultet / yo'nalish · kursni tanlang." }}</span>
                 </div>
                 @if($rows)
                     <div class="kr-wrap">
@@ -142,7 +155,7 @@
                             </tr></thead>
                             <tbody>
                                 @foreach($rows as $r)
-                                    @php $u = $r['unit']; $href = route('admin.kafedra-report.subject', $q + ['unit' => $u->key]); $tot = max(1, $r['graded']); @endphp
+                                    @php $u = $r['unit']; $href = route('admin.kafedra-report.subject', $q + ['unit' => $u->key]); $tot = max(1, (int) $r['graded']); @endphp
                                     <tr class="kr-link" onclick="location.href='{{ $href }}'">
                                         <td class="kr-mute">{{ $loop->iteration }}</td>
                                         <td class="kr-name"><a href="{{ $href }}">{{ $u->subject_name }}</a></td>
@@ -150,14 +163,18 @@
                                         <td class="kr-nw">{{ $u->level_name }} · {{ $u->semester_name }}</td>
                                         <td class="kr-c">{{ $r['groups'] }}</td>
                                         <td class="kr-c">{{ $r['students'] }}</td>
-                                        <td class="kr-c">{{ $r['graded'] }}</td>
+                                        <td class="kr-c">{{ $r['graded'] ?? '—' }}</td>
                                         <td class="kr-c"><span class="kr-pill {{ $tone($r['avg']) }}">{{ $fmt($r['avg']) }}</span></td>
                                         <td>
+                                            @if($r['graded'] === null)
+                                                <span class="kr-mute">tanlang</span>
+                                            @else
                                             <div class="kr-dist" title="90+: {{ $r['a'] }} · 70–89: {{ $r['b'] }} · 60–69: {{ $r['c'] }} · 60 dan past: {{ $r['d'] }}">
                                                 <i style="width:{{ 100 * $r['a'] / $tot }}%;background:#22c55e"></i><i style="width:{{ 100 * $r['b'] / $tot }}%;background:#3b82f6"></i>
                                                 <i style="width:{{ 100 * $r['c'] / $tot }}%;background:#f59e0b"></i><i style="width:{{ 100 * $r['d'] / $tot }}%;background:#ef4444"></i>
                                             </div>
                                             <div class="kr-dist-legend">{{ $r['a'] }} · {{ $r['b'] }} · {{ $r['c'] }} · {{ $r['d'] }}</div>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach

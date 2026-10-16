@@ -57,43 +57,91 @@ class KafedraSubjectReportController extends Controller
         return $unit;
     }
 
-    /** 1-bosqich: kafedra fanlari va ko'rsatkichlari. */
+    /** Tanlangan "fakultet / yo'nalish · kurs" (scope=fakultet¦yo'nalish¦kurs) — [fakultet, yo'nalish, kurs] yoki null. */
+    private function scope(Request $request): ?array
+    {
+        $parts = explode('¦', (string) $request->input('scope'));
+
+        return count($parts) === 3 && $parts[0] !== '' ? $parts : null;
+    }
+
+    /**
+     * 1-bosqich: kafedra fanlari. Sahifa ochilganda baholar hisoblanmaydi (tez) — faqat fan,
+     * guruh va talaba soni; JN va taqsimot "fakultet / yo'nalish · kurs" tanlanganda hisoblanadi.
+     */
     public function index(Request $request)
     {
         [$deptId, $kafedras] = $this->context($request);
         [$from, $to] = $this->period($request);
         $units = KafedraSubjectReport::units($deptId);
 
-        // Barcha fanlar uchun guruh/talabalar va baholar bitta so'rovda
+        $curricula = $units->flatMap(fn ($u) => array_keys($u->curricula))->unique()->values()->all();
+        $allGroups = KafedraSubjectReport::plainGroups($curricula);
+        $counts = KafedraSubjectReport::studentCounts($allGroups->pluck('group_hemis_id')->all());
+        $byCurriculum = $allGroups->groupBy('curriculum');
+
+        // Tanlov ro'yxati: fakultet / yo'nalish · kurs
+        $scopes = [];
         $unitGroups = [];
-        $studentIds = [];
         foreach ($units as $u) {
-            $unitGroups[$u->key] = KafedraSubjectReport::groups($u);
-            foreach ($unitGroups[$u->key] as $g) {
-                foreach ($g->students as $s) {
-                    $studentIds[(int) $s->hemis_id] = true;
-                }
+            $gs = collect(array_keys($u->curricula))->flatMap(fn ($c) => $byCurriculum->get($c, collect()))
+                ->filter(fn ($g) => ($counts[$g->group_hemis_id] ?? 0) > 0)->unique('group_hemis_id')->values();
+            $unitGroups[$u->key] = $gs;
+            foreach ($gs as $g) {
+                $k = KafedraSubjectReport::scopeKey($g->faculty, $u->specialty_name, $u->level_code);
+                $scopes[$k] ??= ['label' => ($g->faculty ?: '—') . ' / ' . mb_strtolower($u->specialty_name) . ' · ' . $u->level_name,
+                    'sort' => [$g->faculty, $u->level_code, $u->specialty_name]];
             }
         }
-        $grades = KafedraSubjectReport::grades(array_keys($studentIds), $units->pluck('subject_id')->unique()->all(),
-            $units->pluck('semester_code')->unique()->all(), $from, $to);
+        uasort($scopes, fn ($a, $b) => $a['sort'] <=> $b['sort']);
+
+        $scope = $this->scope($request);
+        if ($scope && !isset($scopes[implode('¦', $scope)])) {
+            $scope = null;
+        }
 
         $rows = [];
         foreach ($units as $u) {
-            $jns = [];
-            $students = 0;
-            foreach ($unitGroups[$u->key] as $g) {
-                foreach ($g->students as $s) {
-                    $students++;
-                    $jns[] = $grades[(int) $s->hemis_id][$u->subject_id]['jn'] ?? null;
+            $gs = $unitGroups[$u->key];
+            if ($scope) {
+                if ($u->specialty_name !== $scope[1] || (string) $u->level_code !== (string) $scope[2]) {
+                    continue;
+                }
+                $gs = $gs->where('faculty', $scope[0])->values();
+                if ($gs->isEmpty()) {
+                    continue;
                 }
             }
-            $rows[] = ['unit' => $u, 'groups' => $unitGroups[$u->key]->count(), 'students' => $students] + KafedraSubjectReport::stats($jns);
+            $rows[] = ['unit' => $u, 'groupList' => $gs, 'groups' => $gs->count(),
+                'students' => $gs->sum(fn ($g) => $counts[$g->group_hemis_id] ?? 0),
+                'avg' => null, 'graded' => null, 'a' => 0, 'b' => 0, 'c' => 0, 'd' => 0];
+        }
+
+        // Baholar — faqat tanlangan qism uchun
+        if ($scope && $rows) {
+            $groupIds = collect($rows)->flatMap(fn ($r) => $r['groupList']->pluck('group_hemis_id'))->unique()->values()->all();
+            $studentGroup = \Illuminate\Support\Facades\DB::table('students')->whereIn('group_id', $groupIds)
+                ->where(fn ($q) => $q->whereNull('student_status_code')->orWhere('student_status_code', '!=', '60'))
+                ->pluck('group_id', 'hemis_id')->all();
+            $grades = KafedraSubjectReport::grades(array_map('intval', array_keys($studentGroup)),
+                collect($rows)->pluck('unit.subject_id')->unique()->all(), collect($rows)->pluck('unit.semester_code')->unique()->all(), $from, $to);
+            foreach ($rows as &$r) {
+                $ids = $r['groupList']->pluck('group_hemis_id')->flip();
+                $jns = [];
+                foreach ($studentGroup as $sid => $gid) {
+                    if (isset($ids[$gid])) {
+                        $jns[] = $grades[(int) $sid][$r['unit']->subject_id]['jn'] ?? null;
+                    }
+                }
+                $r = array_merge($r, KafedraSubjectReport::stats($jns));
+            }
+            unset($r);
         }
 
         return view('admin.kafedra-report.index', [
             'mode' => 'subjects', 'rows' => $rows, 'kafedras' => $kafedras, 'deptId' => $deptId,
             'deptName' => Department::where('department_hemis_id', $deptId)->value('name'), 'from' => $from, 'to' => $to,
+            'scopes' => $scopes, 'scope' => $scope ? implode('¦', $scope) : null,
         ]);
     }
 
@@ -103,7 +151,7 @@ class KafedraSubjectReportController extends Controller
         [$deptId, $kafedras] = $this->context($request);
         [$from, $to] = $this->period($request);
         $unit = $this->findUnit($deptId, $request);
-        $groups = KafedraSubjectReport::groups($unit);
+        $groups = KafedraSubjectReport::groups($unit, $this->scope($request)[0] ?? null);
         $ids = $groups->flatMap(fn ($g) => $g->students->pluck('hemis_id'))->map(fn ($v) => (int) $v)->all();
         $grades = KafedraSubjectReport::grades($ids, [$unit->subject_id], [$unit->semester_code], $from, $to);
 
@@ -118,6 +166,7 @@ class KafedraSubjectReportController extends Controller
         return view('admin.kafedra-report.index', [
             'mode' => 'groups', 'unit' => $unit, 'rows' => $rows, 'kafedras' => $kafedras, 'deptId' => $deptId,
             'deptName' => Department::where('department_hemis_id', $deptId)->value('name'), 'from' => $from, 'to' => $to,
+            'scope' => $this->scope($request) ? implode('¦', $this->scope($request)) : null,
         ]);
     }
 
@@ -150,6 +199,7 @@ class KafedraSubjectReportController extends Controller
             'otherTypes' => $otherTypes, 'kafedras' => $kafedras, 'deptId' => $deptId,
             'deptName' => Department::where('department_hemis_id', $deptId)->value('name'), 'from' => $from, 'to' => $to,
             'teacher' => KafedraSubjectReport::teachers($grades, $unit->subject_id, $ids),
+            'scope' => $this->scope($request) ? implode('¦', $this->scope($request)) : null,
             'stats' => KafedraSubjectReport::stats(array_map(fn ($id) => $grades[$id][$unit->subject_id]['jn'] ?? null, $ids)),
         ]);
     }
@@ -162,7 +212,7 @@ class KafedraSubjectReportController extends Controller
         [$deptId] = $this->context($request);
         [$from, $to] = $this->period($request);
         $unit = $this->findUnit($deptId, $request);
-        $groups = KafedraSubjectReport::groups($unit);
+        $groups = KafedraSubjectReport::groups($unit, $this->scope($request)[0] ?? null);
         if ($request->filled('group')) {
             $groups = $groups->where('group_hemis_id', (int) $request->input('group'))->values();
         }

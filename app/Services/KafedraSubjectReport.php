@@ -61,12 +61,57 @@ class KafedraSubjectReport
         return $subjectId . '|' . $semesterCode . '|' . $level . '|' . md5($specialty);
     }
 
+    /**
+     * O'quv rejalarga bog'langan faol guruhlar (talabalarsiz, bitta so'rov):
+     * {group_hemis_id, name, lang, curriculum, faculty}.
+     */
+    public static function plainGroups(array $curriculaIds): Collection
+    {
+        if (!$curriculaIds) {
+            return collect();
+        }
+
+        return DB::table('groups')
+            ->whereIn('curriculum_hemis_id', $curriculaIds)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('groups', 'active'), fn ($q) => $q->where('active', true))
+            ->orderBy('name')
+            ->get(['group_hemis_id', 'name', 'education_lang_name', 'curriculum_hemis_id', 'department_name'])
+            ->map(fn ($g) => (object) [
+                'group_hemis_id' => (int) $g->group_hemis_id, 'name' => (string) $g->name, 'lang' => (string) $g->education_lang_name,
+                'curriculum' => (int) $g->curriculum_hemis_id, 'faculty' => (string) $g->department_name,
+            ]);
+    }
+
+    /** Guruhlardagi (chetlashtirilmagan) talabalar soni: group_hemis_id => soni. */
+    public static function studentCounts(array $groupIds): array
+    {
+        if (!$groupIds) {
+            return [];
+        }
+
+        return DB::table('students')
+            ->whereIn('group_id', $groupIds)
+            ->where(fn ($q) => $q->whereNull('student_status_code')->orWhere('student_status_code', '!=', '60'))
+            ->groupBy('group_id')
+            ->selectRaw('group_id, COUNT(*) as c')
+            ->pluck('c', 'group_id')
+            ->map(fn ($c) => (int) $c)
+            ->all();
+    }
+
+    /** Tanlov kaliti: fakultet ¦ yo'nalish ¦ kurs kodi. */
+    public static function scopeKey(string $faculty, string $specialty, string $level): string
+    {
+        return $faculty . '¦' . $specialty . '¦' . $level;
+    }
+
     /** Fan birligini guruhlari bilan: group_hemis_id => {name, students: [hemis_id => {full_name, id_number}]}. */
-    public static function groups(object $unit): Collection
+    public static function groups(object $unit, ?string $faculty = null): Collection
     {
         $groups = DB::table('groups')
             ->whereIn('curriculum_hemis_id', array_keys($unit->curricula))
             ->when(\Illuminate\Support\Facades\Schema::hasColumn('groups', 'active'), fn ($q) => $q->where('active', true))
+            ->when($faculty !== null && $faculty !== '', fn ($q) => $q->where('department_name', $faculty))
             ->orderBy('name')
             ->get(['group_hemis_id', 'name', 'education_lang_name']);
         if ($groups->isEmpty()) {

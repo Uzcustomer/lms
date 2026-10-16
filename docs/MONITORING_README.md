@@ -7,15 +7,16 @@ Registrator ofisi nazorat detektorlari (TZ: `docs/MONITORING_TZ.md`, katalog: `d
 
 ```bash
 composer install --no-dev          # symfony/yaml endi prod bog'liqligi
-php artisan migrate                # 5 ta migratsiya: jadvallar, manba reyestrlari,
+php artisan migrate                # 6 ta migratsiya: jadvallar, manba reyestrlari,
                                    # hemis_exam_grades ga kiritilgan sana, katalog seed'i,
-                                   # buyurtmachi qarorlari (16.10.2026)
+                                   # buyurtmachi qarorlari (16.10.2026), registrator taqsimoti
 php artisan config:cache
 ```
 
 Chiqarishdan oldin zaxira nusxa oling (`./backup_db.sh`). Staging yo'q, orqaga qaytarish:
-`php artisan migrate:rollback --step=5` (birinchi chiqarishda; 2026_10_16_110000 avvalroq bajarilgan
-bo'lsa — mos ravishda kamroq).
+`php artisan migrate:rollback --step=6` (birinchi chiqarishda; avvalroq bajarilgan migratsiyalar bo'lsa — mos ravishda kamroq).
+Migratsiya katalogni o'qiy olmasa (masalan `symfony/yaml` o'rnatilmagan), xato logga yoziladi:
+`composer install --no-dev` dan keyin `php artisan monitoring:sync-catalog` ni bajaring.
 
 Migratsiya:
 - `monitoring_*` jadvallarini yaratadi;
@@ -43,7 +44,9 @@ Migratsiya:
      bo'sh qolsa, xabar buxgalteriya rolidagi barcha xodimlarga boradi.
      Qoida faqat ijarada yashovchilarga qo'llanadi: `accommodation_keywords` (standart `ijara`) HEMIS turar joyi
      nomida qidiriladi. Nomlarni Talabalar → Statistika → «Yashash joyi» bo'limida ko'rish mumkin.
-   - **A-5, E-1, E-7:** «Standart mas'ul» maydonida registrator ofisi xodimini tanlash.
+   - **A-5, E-1, E-7:** istisno talabaning registratoriga boradi — **Registrator bo'linmalari** sahifasidagi
+     fakultet / yo'nalish / kurs taqsimoti bo'yicha (`registrar_office`: Back ofis yoki Front ofis).
+     Taqsimotda topilmagan talabalar uchun «Standart mas'ul» maydonida registrator ofisi xodimini tanlang.
    - **D-2** dekanga, **Q-1** kafedra mudiriga avtomatik biriktiriladi.
 3. **Importlar** sahifasida:
    - buyruqlar reyestrini yuklash (HEMIS'dan eksport yoki shablon);
@@ -74,7 +77,7 @@ Mavjud migratsiyalar MySQL'ga xos SQL ishlatadi, shuning uchun testlar alohida b
 ```bash
 cp .env.testing.example .env.testing   # DB_* ni to'ldiring, APP_KEY: php artisan key:generate --env=testing
 mysql -e "CREATE DATABASE lms_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-php artisan test tests/Feature/Monitoring     # 75 test
+php artisan test tests/Feature/Monitoring     # 78 test
 ```
 
 Test ma'lumotlari faqat soxta: Faker yoki «Sinov ...» nomlari ishlatiladi.

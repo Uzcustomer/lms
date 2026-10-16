@@ -220,6 +220,7 @@ detectors:
       min_paid_percent_special: 50   # qo'shimcha / tabaqalashtirilgan — birinchi yilning kamida 50 %
       forecast_before_deadline: true # muddatgacha — faqat ogohlantirish (prognoz)
       check_notice_evidence: true    # abituriyentlarni xabardor qilish dalillari (sayt, SMS)
+      registrar_office: back_office  # mas'ul — «Registrator bo'linmalari»dagi talaba kursi registratori (front_office / back_office / bo'sh)
   - code: A-2
     group: "QABUL"
     rule: "Ta'lim ma'lumoti — integratsiya platformasidan, shaxs va yashash joyi — IIVdan real vaqtda; qalbaki hujjat → chetlashtirish va huquqni muhofaza organlariga xabar"
@@ -264,6 +265,7 @@ detectors:
       late_completion: auto_close
       accommodation_keywords: [ijara] # buyurtmachi: faqat ijarada yashovchilar (HEMIS turar joyi nomida)
       accommodation_codes: []        # yoki aniq HEMIS turar joy kodlari (berilsa kalit so'zdan ustun)
+      registrar_office: back_office  # mas'ul — «Registrator bo'linmalari»dagi talaba kursi registratori (front_office / back_office / bo'sh)
   - code: E-2
     group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
     rule: "VMQ 299: ariza 15-iyul – 5-avgust; ishchi organ qarori 15-iyul – 6-avgust; rad etilganda kamchilikni bartaraf etish uchun 5 ish kuni; rad sababi talabaning shaxsiy kabinetida"
@@ -310,6 +312,7 @@ detectors:
       require_original_check: true   # komissiya hujjatlar aslini tekshirgani belgilanishi shart
       auto_from_orders: true         # «ko'chirib kelish» buyruqlaridan cheklist avtomatik ochiladi
       since_date: "2026-09-01"
+      registrar_office: back_office  # mas'ul — «Registrator bo'linmalari»dagi talaba kursi registratori (front_office / back_office / bo'sh)
   - code: E-8
     group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
     rule: "Kredit tizimida ko'chirib kelinganda kurs davomi uchun namunaviy o'quv reja bo'yicha GPA ≥ 2,4; aks holda quyi kursdan"

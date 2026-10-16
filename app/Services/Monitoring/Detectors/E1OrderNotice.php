@@ -8,6 +8,7 @@ use App\Models\MonitoringOrder;
 use App\Services\Monitoring\Contracts\Detector;
 use App\Services\Monitoring\DetectorResult;
 use App\Services\Monitoring\Finding;
+use App\Services\Monitoring\OwnerResolver;
 use App\Services\Monitoring\Imports\ImportSheet;
 use App\Support\WorkdayCalculator;
 use Illuminate\Support\Carbon;
@@ -26,6 +27,10 @@ use Illuminate\Support\Facades\DB;
  */
 class E1OrderNotice implements Detector
 {
+    public function __construct(private OwnerResolver $owners)
+    {
+    }
+
     public function run(array $params, MonitoringDetector $detector): DetectorResult
     {
         $workdays = max(0, (int) ($params['workdays'] ?? 1));
@@ -53,7 +58,7 @@ class E1OrderNotice implements Detector
 
         $students = DB::table('students')
             ->whereIn('hemis_id', $orders->pluck('student_hemis_id')->filter()->all())
-            ->get(['hemis_id', 'department_id', 'accommodation_code', 'accommodation_name'])
+            ->get(['hemis_id', 'department_id', 'specialty_id', 'level_code', 'accommodation_code', 'accommodation_name'])
             ->keyBy('hemis_id');
 
         foreach ($orders as $order) {
@@ -101,6 +106,7 @@ class E1OrderNotice implements Detector
                     'kechikib_xabar_berilgan' => $late,
                 ],
                 facultyHemisId: $faculty ? (int) $faculty : null,
+                owner: $this->owners->registrarOfStudent($student, $params['registrar_office'] ?? null),
             ));
         }
 

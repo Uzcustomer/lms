@@ -3,17 +3,42 @@
 namespace App\Services\Monitoring;
 
 use App\Models\MonitoringDetector;
+use App\Models\StaffRegistrationDivision;
 use App\Models\Teacher;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Istisno mas'ulini aniqlash: fakultet dekani, kafedra mudiri yoki detektorning
- * paneldan tanlangan standart mas'uli. Bir run ichida natijalar keshlanadi.
+ * Istisno mas'ulini aniqlash: fakultet dekani, kafedra mudiri, talabaning registratori yoki
+ * detektorning paneldan tanlangan standart mas'uli. Bir run ichida natijalar keshlanadi.
  */
 class OwnerResolver
 {
+    public const REGISTRAR_OFFICES = ['back_office' => 'Back ofis', 'front_office' => 'Front ofis'];
+
     private array $deans = [];
     private array $heads = [];
+    private array $registrars = [];
+
+    /**
+     * Talabaga biriktirilgan registrator: «Registrator bo'linmalari» (staff_registration_divisions) dagi
+     * fakultet → yo'nalish → kurs taqsimoti bo'yicha front yoki back ofis xodimi.
+     * $office bo'sh bo'lsa yoki biriktirish topilmasa — null (standart mas'ulga o'tadi).
+     */
+    public function registrarOfStudent(?object $student, ?string $office): ?Teacher
+    {
+        if ($student === null || empty($student->department_id) || !array_key_exists((string) $office, self::REGISTRAR_OFFICES)) {
+            return null;
+        }
+
+        $key = implode('|', [$office, $student->department_id, $student->specialty_id ?? '', $student->level_code ?? '']);
+        if (!array_key_exists($key, $this->registrars)) {
+            $this->registrars[$key] = StaffRegistrationDivision::findForStudent(
+                $student->department_id, $student->specialty_id ?? null, $student->level_code ?? null, $office
+            )?->teacher;
+        }
+
+        return $this->registrars[$key];
+    }
 
     public function deanOfFaculty(?int $facultyHemisId): ?Teacher
     {

@@ -57,6 +57,23 @@ test('detektor parametri paneldan saqlanadi va audit jurnaliga yoziladi', functi
         ->and(ActivityLog::where('module', 'monitoring_detector')->where('subject_id', $detector->id)->exists())->toBeTrue();
 });
 
+test('registrator ofisi turi paneldan tanlanadi, noma\'lum qiymat saqlanmaydi', function () {
+    $detector = MonitoringDetector::where('code', 'E-7')->firstOrFail();
+    $this->actingAs($this->admin, 'web')->get(route('admin.monitoring.detektorlar.edit', $detector))
+        ->assertOk()->assertSee('Front ofis');
+
+    $save = fn (string $office) => $this->actingAs($this->admin, 'web')->put(route('admin.monitoring.detektorlar.update', $detector), [
+        'enabled' => 1, 'due_workdays' => 3, 'severity' => 'orta',
+        'params' => array_merge($detector->params, ['registrar_office' => $office, 'require_original_check' => '1', 'auto_from_orders' => '1']),
+    ])->assertRedirect();
+
+    $save('front_office');
+    expect($detector->fresh()->params['registrar_office'])->toBe('front_office');
+
+    $save('dekanat');
+    expect($detector->fresh()->params['registrar_office'])->toBe('');
+});
+
 test('detektor sozlamasini faqat monitoring administratori o\'zgartiradi', function () {
     $detector = MonitoringDetector::where('code', 'D-2')->firstOrFail();
     $registrar = monTeacher(['registrator_ofisi']);

@@ -7,6 +7,7 @@ use App\Models\MonitoringTransferChecklist;
 use App\Services\Monitoring\Contracts\Detector;
 use App\Services\Monitoring\DetectorResult;
 use App\Services\Monitoring\Finding;
+use App\Services\Monitoring\OwnerResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,10 @@ use Illuminate\Support\Facades\DB;
  */
 class E7TransferFile implements Detector
 {
+    public function __construct(private OwnerResolver $owners)
+    {
+    }
+
     public function run(array $params, MonitoringDetector $detector): DetectorResult
     {
         $requireOriginal = (bool) ($params['require_original_check'] ?? true);
@@ -32,9 +37,10 @@ class E7TransferFile implements Detector
             ->when($since, fn ($q) => $q->where(fn ($w) => $w->whereNull('arrived_at')->orWhere('arrived_at', '>=', $since)))
             ->get();
 
-        $faculties = DB::table('students')
+        $students = DB::table('students')
             ->whereIn('hemis_id', $checklists->pluck('student_hemis_id')->filter()->all())
-            ->pluck('department_id', 'hemis_id');
+            ->get(['hemis_id', 'department_id', 'specialty_id', 'level_code'])
+            ->keyBy('hemis_id');
 
         foreach ($checklists as $checklist) {
             $missing = $checklist->missingDocuments($requireOriginal);
@@ -47,7 +53,8 @@ class E7TransferFile implements Detector
                 $labels[] = ($documents[$key] ?? $key) . ($reason === 'asli_tekshirilmagan' ? ' — asli tekshirilmagan' : '');
             }
             $done = count($documents) - count($missing);
-            $faculty = $checklist->student_hemis_id ? ($faculties[$checklist->student_hemis_id] ?? null) : null;
+            $student = $checklist->student_hemis_id ? $students->get($checklist->student_hemis_id) : null;
+            $faculty = $student?->department_id;
 
             $result->add(new Finding(
                 fingerprint: "E-7:{$checklist->id}",
@@ -59,6 +66,7 @@ class E7TransferFile implements Detector
                     'yetishmaydi' => $labels,
                 ],
                 facultyHemisId: $faculty ? (int) $faculty : null,
+                owner: $this->owners->registrarOfStudent($student, $params['registrar_office'] ?? null),
             ));
         }
 

@@ -46,7 +46,7 @@
                         <select name="default_owner" class="mon-staff-select">
                             @if($detector->defaultOwner)<option value="{{ \App\Services\Monitoring\MonitoringAccess::ownerKey($detector->defaultOwner) }}" selected>{{ \App\Services\Monitoring\MonitoringAccess::displayName($detector->defaultOwner) }}</option>@endif
                         </select>
-                        <p class="text-xs text-gray-500">Dekan yoki kafedra mudiri aniqlanmagan istisnolar shu xodimga biriktiriladi.</p>
+                        <p class="text-xs text-gray-500">Dekan, kafedra mudiri yoki talabaning registratori aniqlanmagan istisnolar shu xodimga biriktiriladi.</p>
                     </div>
                 </div>
 
@@ -69,6 +69,16 @@
                                         @case('list')
                                             <input type="text" name="params[{{ $key }}]" value="{{ implode(', ', (array) $field['value']) }}" class="w-full border-gray-300 rounded">
                                             <span class="text-xs text-gray-500">vergul bilan ajrating</span>
+                                            @break
+                                        @case('choice')
+                                            <select name="params[{{ $key }}]" class="w-full border-gray-300 rounded">
+                                                @foreach($field['options'] as $value => $label)
+                                                    <option value="{{ $value }}" @selected((string) $field['value'] === (string) $value)>{{ $label }}</option>
+                                                @endforeach
+                                            </select>
+                                            @if($key === 'registrar_office')
+                                                <span class="text-xs text-gray-500">Istisno talabaning kursiga «Registrator bo'linmalari»da biriktirilgan xodimga boradi</span>
+                                            @endif
                                             @break
                                         @case('staff')
                                             <select name="params[{{ $key }}]" class="mon-staff-select">

@@ -215,6 +215,44 @@ class KafedraSubjectReportController extends Controller
         ]);
     }
 
+    /**
+     * Excel — tanlangan "fakultet / yo'nalish · kurs" ning barcha fanlari: har fan alohida varaqda,
+     * varaq ichida guruhlar alohida bloklarda (talabalar kunlik baholari bilan).
+     */
+    public function exportScope(Request $request)
+    {
+        @ini_set('memory_limit', '768M');
+        @set_time_limit(300);
+        [$deptId] = $this->context($request);
+        [$from, $to] = $this->period($request);
+        $scope = $this->scope($request);
+        abort_unless($scope, 422, "Avval fakultet / yo'nalish · kursni tanlang.");
+
+        $units = KafedraSubjectReport::units($deptId)
+            ->filter(fn ($u) => $u->specialty_name === $scope[1] && (string) $u->level_code === (string) $scope[2])->values();
+        $items = [];
+        $ids = [];
+        foreach ($units as $u) {
+            $groups = KafedraSubjectReport::groups($u, $scope[0]);
+            if ($groups->isEmpty()) {
+                continue;
+            }
+            $items[] = ['unit' => $u, 'groups' => $groups];
+            foreach ($groups as $g) {
+                foreach ($g->students as $s) {
+                    $ids[(int) $s->hemis_id] = true;
+                }
+            }
+        }
+        $grades = KafedraSubjectReport::grades(array_keys($ids), collect($items)->pluck('unit.subject_id')->unique()->all(),
+            collect($items)->pluck('unit.semester_code')->unique()->all(), $from, $to);
+        $label = $scope[0] . ' / ' . mb_strtolower($scope[1]) . ' · ' . ($units->first()->level_name ?? $scope[2]);
+        $file = preg_replace('/[^\pL\pN]+/u', '_', $scope[0] . '_' . $scope[1] . '_' . ($units->first()->level_name ?? $scope[2]));
+
+        return Excel::download(new \App\Exports\KafedraScopeReportExport($items, $grades, $label, $from, $to),
+            mb_substr($file, 0, 80) . '_' . now('Asia/Tashkent')->format('Y-m-d') . '.xlsx');
+    }
+
     /** Excel: fan bo'yicha (har guruh alohida varaq) yoki bitta guruh. */
     public function export(Request $request)
     {

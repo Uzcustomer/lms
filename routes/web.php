@@ -944,6 +944,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/fan', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'subject'])->name('subject');
             Route::get('/guruh', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'group'])->name('group');
             Route::get('/excel', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'export'])->name('export');
+            Route::get('/excel-yonalish', [\App\Http\Controllers\Admin\KafedraSubjectReportController::class, 'exportScope'])->name('export-scope');
         });
 
         // KTR (Kalendar tematik reja)

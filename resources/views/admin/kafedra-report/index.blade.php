@@ -135,6 +135,12 @@
                 @if($from || $to)
                     <a class="kr-btn kr-btn-ghost" href="{{ url()->current() . '?' . http_build_query(array_filter(['kafedra' => $q['kafedra'] ?? null, 'unit' => $unit->key ?? null, 'group' => $group->group_hemis_id ?? null, 'scope' => $scope ?? null])) }}">Butun semestr</a>
                 @endif
+                @if($mode === 'subjects' && ($scope ?? null) && $rows)
+                    <a class="kr-btn kr-btn-green" href="{{ route('admin.kafedra-report.export-scope', $q) }}">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Excel — barcha fanlar va guruhlar
+                    </a>
+                @endif
                 @if($mode !== 'subjects')
                     <a class="kr-btn kr-btn-green" href="{{ route('admin.kafedra-report.export', $q + ['unit' => $unit->key] + ($mode === 'students' ? ['group' => $group->group_hemis_id] : [])) }}">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>

@@ -80,8 +80,8 @@ detectors:
       days: 3                        # buyurtmachi: 3 ish kuni
       day_type: workdays             # workdays | calendar
       yn_exam_type_code: "13"        # HEMIS examType: 13 = yakuniy nazorat
-      include_resits: false          # qayta topshirishlar (HEMIS urinish kodlari tasdiqlangach)
-      late_completion: auto_close    # kechikib kiritilsa: auto_close | keep_open
+      include_resits: true           # buyurtmachi: qayta topshirish (12a, 12b) baholari ham tekshiriladi
+      late_completion: auto_close    # buyurtmachi: kechikib kiritilsa istisno avtomatik yopiladi (keep_open — ochiq qoladi)
       lookback_days: 60              # necha kun oldingi nazoratlargacha tekshiriladi
   - code: Q-1b
     group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"

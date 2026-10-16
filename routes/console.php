@@ -176,6 +176,12 @@ Schedule::command('retake:auto-cancel-hemis')->dailyAt('02:30')->withoutOverlapp
 // Har kuni 12:00 da. Agar muammo bo'lsa admin chatiga Telegram xabar.
 Schedule::command('retake:monitor-stale-groups')->dailyAt('12:00');
 
+// ─── Monitoring (Registrator ofisi nazorat detektorlari) ──────────────
+// Har kuni 05:30 da — tungi HEMIS importlari (00:30, 03:00, 04:00) tugagandan
+// keyin. Yoqilgan detektorlar istisnolarni ochadi, yangilaydi va bartaraf
+// bo'lganlarini yopadi. Muddat va chegaralar paneldan (monitoring_detectors.params).
+Schedule::command('monitoring:run --all')->dailyAt('05:30')->withoutOverlapping(120);
+
 // ─── Face ID ─────────────────────────────────────────────────────────
 // public/uploads/face-temp/ papkasidagi orphan snapshot fayllarni tozalash.
 // Har yakshanba 01:30 da ishga tushadi (login paytida finally bloki ishlamagan

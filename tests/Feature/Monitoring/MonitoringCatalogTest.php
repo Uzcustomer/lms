@@ -16,6 +16,11 @@ test('katalog 54 detektorni yuklaydi, ⚠ lar ogohlantirish rejimida', function 
         ->and(MonitoringDetector::where('code', 'D-2')->first()->param('threshold_hours'))->toBe(74);
 });
 
+test('pilot detektorlar xavfsiz ishga tushirish uchun ogohlantirish rejimida boshlanadi', function () {
+    expect(MonitoringDetector::where('pilot', true)->where('warning_mode', false)->count())->toBe(0)
+        ->and(MonitoringDetector::where('code', 'D-3')->value('warning_mode'))->toBeFalsy();
+});
+
 test('qayta sinxron paneldagi parametrni o\'zgartirmaydi, yangi kalitni qo\'shadi', function () {
     $d2 = MonitoringDetector::where('code', 'D-2')->first();
     $d2->update(['params' => ['threshold_hours' => 90], 'enabled' => false]);

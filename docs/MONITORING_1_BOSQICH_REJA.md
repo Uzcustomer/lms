@@ -1,7 +1,7 @@
 # «Monitoring» moduli — 1-bosqich (pilot) rejasi
 
 Holat: **1-bosqich kodi tayyor** (16.10.2026), `feature/monitoring` branch'ida, RTM ko'rib chiqishini kutmoqda.
-Buyurtmachi javoblari 10-bo'limda. O'rnatish va ishga tushirish: `docs/MONITORING_README.md`.
+Buyurtmachi javoblari 11-bo'limda, xavfsiz ishga tushirish tartibi 10-bo'limda. O'rnatish va ishga tushirish: `docs/MONITORING_README.md`.
 
 **Bajarildi:** yadro (detektor, run, istisno, izoh, dalil, import jadvallari; `monitoring_admin` roli;
 dvigatel; kunlik jadval), 5 pilot detektor, sahifalar (panel, ro'yxat va Excel, kartochka, mas'ul
@@ -220,9 +220,23 @@ muddat o'tganda yuboriladigan eslatmalar, kalendar va oylik svod — 2-bosqichda
 To'liq test to'plami: 105 ta o'tdi, 58 ta yiqildi. Yiqilganlar Monitoring'dan oldin ham yiqilgan
 (eskirgan Timetable va LessonOpening testlari); `main` dagi natija bilan solishtirilgan.
 
-## 10. Savollar va javoblar
+## 10. Staging yo'q — xavfsiz ishga tushirish
 
-### 10.1. Buyurtmachi javoblari (16.10.2026)
+Sinov serveri yo'q, shuning uchun modul to'g'ridan-to'g'ri prod'da ishga tushadi. Xatarni kamaytirish uchun:
+
+1. Chiqarishdan oldin bazaning zaxira nusxasi olinadi (`backup_db.sh`). Migratsiyalarni orqaga qaytarish
+   mumkin: `php artisan migrate:rollback --step=4`.
+2. Pilot detektorlar **ogohlantirish rejimida** boshlanadi (`docs/detectors.yaml` → `warning_mode: true`).
+   Istisnolar topiladi va panelda ko'rinadi, lekin mas'ullarga biriktirilmaydi va xabar yuborilmaydi.
+   Panelda bu haqida sariq ogohlantirish chiqadi.
+3. Monitoring administratori birinchi natijalarni ko'rib chiqadi. To'g'ri bo'lsa, detektor sozlamasida
+   «Faqat ogohlantirish» belgisini olib tashlaydi. Keyingi ishga tushirishda ochiq istisnolar mas'ullarga
+   biriktiriladi va xabar boradi. Buni detektorlar bo'yicha birin-ketin qilish mumkin.
+4. A-5 01.11.2026 gacha baribir prognoz rejimida ishlaydi. Uning sinov rejimini shu sanagacha o'chirish kerak.
+
+## 11. Savollar va javoblar
+
+### 11.1. Buyurtmachi javoblari (16.10.2026)
 
 | Savol | Javob | Rejadagi natija |
 |---|---|---|
@@ -233,6 +247,8 @@ To'liq test to'plami: 105 ta o'tdi, 58 ta yiqildi. Yiqilganlar Monitoring'dan ol
 | Rollar | `monitoring_admin` ma'qul | qo'shiladi; rahbariyat — `oquv_prorektori` |
 | Xavfsizlik | platformaga ta'sir qilmasa tuzatilsin | PR 0 tayyor (2-bo'lim) |
 | Branch | `feature/monitoring` ga ruxsat | ish shu branch'da |
+| E-1: kimlarga | faqat ijarada yashovchilar | HEMIS turar joyi bo'yicha: `accommodation_keywords: [ijara]` (yoki aniq kodlar) |
+| Staging | yo'q | pilot detektorlar «ogohlantirish» rejimida boshlanadi (10-bo'lim) |
 
 Javobsiz qolgan savollar bo'yicha standart qarorlar (panelda o'zgartiriladi):
 - **Q-1:** baho kechikib kiritilsa, istisno avtomatik yopiladi (`late_completion: auto_close`).
@@ -240,10 +256,11 @@ Javobsiz qolgan savollar bo'yicha standart qarorlar (panelda o'zgartiriladi):
   (`include_resits: false`), chunki HEMIS'dagi urinish kodlari tasdiqlanmagan.
 - **D-2:** barcha fanlar hisobga olinadi. LMS'da tasdiqlangan «kasallik» va «tibbiy ko'rik»
   arizalari qamragan kunlar ayiriladi.
-- **E-1:** qoida barcha talabalarga qo'llanadi. Tekshiruv 01.10.2026 dan keyingi buyruqlardan boshlanadi.
+- **E-1:** tekshiruv 01.10.2026 dan keyingi buyruqlardan boshlanadi. Talaba HEMIS'da topilmasa, turar joyi
+  noma'lum bo'lgani uchun tekshiriladi (o'tkazib yuborilmasin).
 - **E-7:** ro'yxat buyruqlar reyestridan («ko'chirib kelish» turi) va qo'lda qo'shishdan olinadi.
 
-### 10.2. Hali ochiq savollar
+### 11.2. Hali ochiq savollar
 
 **Infratuzilma va ma'lumot manbalari**
 1. Staging (sinov) serveri bormi? Yo'q bo'lsa, PR'lar prod'ga chiqishdan oldin qayerda tekshiriladi?
@@ -260,7 +277,6 @@ Javobsiz qolgan savollar bo'yicha standart qarorlar (panelda o'zgartiriladi):
    (masalan 99–102 kodlilar) chiqariladimi? LMS'da tasdiqlangan, lekin HEMIS'da hali sababli
    bo'lmagan tibbiy arizalar ayiriladimi? Qaysi sabablar «tibbiy» hisoblanadi?
 7. **Q-1:** qayta topshirishlar ham tekshiriladimi? Kechikib kiritilgan baholar ochiq qolsinmi?
-8. **E-1:** qoida faqat ijarada/TTJ da yashovchilarga qo'llanadimi?
 9. **E-7:** ko'chirib kelgan talabalar ro'yxati qayerdan olinadi (buyruqlar reyestri yoki qo'lda)?
    Qaysi sanadan boshlab tekshiriladi: faqat 2026/2027 yoki avvalgilar ham?
 10. `AbsenceExcuse` da 8 ta sabab toifasi bor, D-4 da esa «9 rasmiy toifa» deyilgan.

@@ -176,3 +176,19 @@ test('monitoring:run buyrug\'i yoqilgan detektorlarni ishga tushiradi', function
 
     expect(MonitoringIstisno::count())->toBe(1);
 });
+
+test('ogohlantirish rejimi o\'chirilgach istisno mas\'ulga biriktiriladi va xabar boradi', function () {
+    $owner = monTeacher(['dekan']);
+    $this->detector->update(['warning_mode' => true]);
+    MonitoringFakeDetector::$findings = [monFinding('a', ['owner' => $owner])];
+    $this->runner->run($this->detector->fresh());
+    expect(MonitoringIstisno::sole()->owner_id)->toBeNull();
+
+    $this->detector->update(['warning_mode' => false]);
+    $this->runner->run($this->detector->fresh());
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->warning_only)->toBeFalse()
+        ->and($istisno->isOwnedBy($owner))->toBeTrue()
+        ->and(TeacherNotification::where('teacher_id', $owner->id)->count())->toBe(1);
+});

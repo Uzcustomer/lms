@@ -101,7 +101,7 @@ test('ma\'lumot bor holatda panel, ro\'yxat va kartochka ochiladi; dalil fayli y
     $dean = monDean($faculty);
     $student = monStudent(['department_id' => $faculty]);
     monAbsence($student, 90);
-    app(\App\Services\Monitoring\DetectorRunner::class)->run(MonitoringDetector::where('code', 'D-2')->first());
+    app(\App\Services\Monitoring\DetectorRunner::class)->run(monDetector('D-2'));
     $istisno = \App\Models\MonitoringIstisno::sole();
 
     $this->actingAs($dean, 'teacher')->post(route('admin.monitoring.istisnolar.respond', $istisno), [

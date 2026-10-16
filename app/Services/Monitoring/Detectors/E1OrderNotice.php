@@ -8,6 +8,7 @@ use App\Models\MonitoringOrder;
 use App\Services\Monitoring\Contracts\Detector;
 use App\Services\Monitoring\DetectorResult;
 use App\Services\Monitoring\Finding;
+use App\Services\Monitoring\Imports\ImportSheet;
 use App\Support\WorkdayCalculator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,11 @@ use Illuminate\Support\Facades\DB;
  * E-1. Akademik ta'til / chetlashtirish / kursda qoldirish buyrug'i → 1 ish kunida ijara
  * kotibi va buxgalteriyaga xabar. (Ijara buyrug'i 7-band; VMQ 605 33)
  *
- * Trigger: buyruqlar reyestridagi order_types turidagi buyruqlar (since_date dan keyingi).
+ * Trigger: buyruqlar reyestridagi order_types turidagi buyruqlar (since_date dan keyingi),
+ *          faqat ijarada yashovchi talabalar bo'yicha (buyurtmachi qarori, 16.10.2026).
+ *          Ijara HEMIS turar joyi bo'yicha aniqlanadi: accommodation_codes berilgan bo'lsa kod,
+ *          aks holda accommodation_keywords nomda bo'lsa. Talaba HEMIS'da topilmasa — tekshiriladi
+ *          (turar joyi noma'lum, o'tkazib yuborilmasin).
  * Kutilgan harakat: har bir qabul qiluvchiga (recipients) xabarnoma yozuvi (M3), sent_at ≤ muddat.
  */
 class E1OrderNotice implements Detector
@@ -46,11 +51,18 @@ class E1OrderNotice implements Detector
             ->get()
             ->groupBy('order_id');
 
-        $faculties = DB::table('students')
+        $students = DB::table('students')
             ->whereIn('hemis_id', $orders->pluck('student_hemis_id')->filter()->all())
-            ->pluck('department_id', 'hemis_id');
+            ->get(['hemis_id', 'department_id', 'accommodation_code', 'accommodation_name'])
+            ->keyBy('hemis_id');
 
         foreach ($orders as $order) {
+            $student = $order->student_hemis_id ? $students->get($order->student_hemis_id) : null;
+            $applies = self::appliesTo($student, $params);
+            if ($applies === false) {
+                continue; // ijarada yashamaydi — xabarnoma talab qilinmaydi
+            }
+
             $deadline = WorkdayCalculator::addWorkdays($order->order_date, $workdays)->endOfDay();
             if ($now->lte($deadline)) {
                 continue;
@@ -72,7 +84,7 @@ class E1OrderNotice implements Detector
                 continue;
             }
 
-            $faculty = $order->student_hemis_id ? ($faculties[$order->student_hemis_id] ?? null) : null;
+            $faculty = $student?->department_id;
 
             $result->add(new Finding(
                 fingerprint: "E-1:{$order->id}",
@@ -84,6 +96,7 @@ class E1OrderNotice implements Detector
                     'buyruq_sanasi' => $order->order_date->toDateString(),
                     'turi' => $order->typeLabel(),
                     'muddat' => $deadline->toDateTimeString(),
+                    'turar_joy' => $student?->accommodation_name ?? 'noma\'lum (talaba HEMIS\'da topilmadi)',
                     'xabar_berilmagan' => $missing,
                     'kechikib_xabar_berilgan' => $late,
                 ],
@@ -92,5 +105,33 @@ class E1OrderNotice implements Detector
         }
 
         return $result;
+    }
+
+    /**
+     * Qoida shu talabaga qo'llanadimi: true — ijarada, false — ijarada emas, null — noma'lum
+     * (talaba topilmagan). Kod ham, kalit so'z ham berilmasa — barcha talabalarga qo'llanadi.
+     */
+    public static function appliesTo(?object $student, array $params): ?bool
+    {
+        $codes = array_map('strval', (array) ($params['accommodation_codes'] ?? []));
+        $keywords = (array) ($params['accommodation_keywords'] ?? []);
+        if ($codes === [] && $keywords === []) {
+            return true;
+        }
+        if ($student === null) {
+            return null;
+        }
+
+        if ($codes !== [] && in_array((string) $student->accommodation_code, $codes, true)) {
+            return true;
+        }
+        $name = ImportSheet::normalize($student->accommodation_name ?? '');
+        foreach ($keywords as $keyword) {
+            if ($name !== '' && str_contains($name, ImportSheet::normalize((string) $keyword))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

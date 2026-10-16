@@ -9,7 +9,7 @@
         'qabul_buyrugi' => "Qabul buyrug'i", 'kontingentda' => 'Kontingentda', 'signallar' => 'Signallar',
         'moslik' => 'Talabaga moslik', 'talab' => 'Talab', 'buyruq_raqami' => 'Buyruq raqami',
         'buyruq_sanasi' => 'Buyruq sanasi', 'turi' => 'Turi', 'xabar_berilmagan' => 'Xabar berilmagan',
-        'kechikib_xabar_berilgan' => 'Kechikib xabar berilgan', 'kelgan_sana' => 'Kelgan sana',
+        'kechikib_xabar_berilgan' => 'Kechikib xabar berilgan', 'turar_joy' => 'Turar joy', 'kelgan_sana' => 'Kelgan sana',
         'yetishmaydi' => 'Yetishmaydi',
     ];
 @endphp

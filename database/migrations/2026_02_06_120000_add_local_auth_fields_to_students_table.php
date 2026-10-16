@@ -11,8 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('students', function (Blueprint $table) {
-            $table->string('local_password')->nullable()->after('token');
+        // Bo'sh bazada (yangi o'rnatish, testlar) `token` ustuni hali yo'q — u keyingi migratsiyada qo'shiladi.
+        $hasToken = Schema::hasColumn('students', 'token');
+
+        Schema::table('students', function (Blueprint $table) use ($hasToken) {
+            $column = $table->string('local_password')->nullable();
+            if ($hasToken) {
+                $column->after('token');
+            }
             $table->timestamp('local_password_expires_at')->nullable()->after('local_password');
             $table->boolean('must_change_password')->default(false)->after('local_password_expires_at');
         });

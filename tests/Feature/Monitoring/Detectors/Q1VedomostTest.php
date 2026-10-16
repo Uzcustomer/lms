@@ -83,3 +83,26 @@ test('HEMIS rejimidan qolgan istisnolar vedomost rejimiga o\'tganda yopiladi', f
 
     expect(MonitoringIstisno::sole()->status)->toBe('yopildi');
 });
+
+test('rad etilgan vedomost (avval yuklangan bo\'lsa ham) topshirilmagan hisoblanadi', function () {
+    q1Vedomost($this->group, ['uploaded_at' => '2026-10-09 15:00:00', 'status' => 'rejected']);
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->details['vedomost_holati'])->toBe('Rad etildi')
+        ->and($istisno->details['kutilgan_harakat'])->toContain('qayta yuklash');
+});
+
+test('guruhcha va fan varianti qatorlari bitta vedomost — bitta istisno', function () {
+    $a = q1Vedomost($this->group, ['group_name' => 'p/tp23-01a', 'subject_name' => 'Epidemiologiya (a)']);
+    q1Vedomost($this->group, ['group_name' => 'p/tp23-01b', 'subject_name' => 'Epidemiologiya (b)']);
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->fingerprint)->toBe("Q-1:v:{$a}")
+        ->and($istisno->details['guruh'])->toBe('p/tp23-01')
+        ->and($istisno->details['fan'])->toBe('Epidemiologiya')
+        ->and($istisno->details['guruhchalar'])->toBe('p/tp23-01a, p/tp23-01b');
+});

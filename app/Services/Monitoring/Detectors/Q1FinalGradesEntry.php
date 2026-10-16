@@ -4,6 +4,7 @@ namespace App\Services\Monitoring\Detectors;
 
 use App\Models\MonitoringDetector;
 use App\Models\VedomostSubmission;
+use App\Services\VedomostMergeService;
 use App\Services\Monitoring\Contracts\Detector;
 use App\Services\Monitoring\DetectorResult;
 use App\Services\Monitoring\Finding;
@@ -181,9 +182,11 @@ class Q1FinalGradesEntry implements Detector
     }
 
     /**
-     * Vedomost rejimi: muddati (deadline) o'tgan, lekin vedomost yuklanmagan (yoki keep_open bo'lsa — kechikib
-     * yuklangan) qatorlar. Tekshirilgan davr — oxirgi lookback kunlari: shu davrdagi boshqa Q-1 istisnolari
-     * (jumladan HEMIS rejimidan qolganlari) bartaraf bo'lgan deb yopiladi.
+     * Vedomost rejimi: muddati (deadline) o'tgan, lekin topshirilmagan vedomostlar. Topshirilmagan —
+     * vedomost jarayonidagi kabi «kutilmoqda» yoki «rad etilgan» (qayta yuklash kerak) holat; keep_open bo'lsa
+     * kechikib topshirilganlar ham. Guruhcha (a/b) va fan variantlari qatorlari jarayondagidek bitta
+     * vedomostga birlashtiriladi (VedomostMergeService). Tekshirilgan davr — oxirgi lookback kunlari:
+     * shu davrdagi boshqa Q-1 istisnolari (jumladan HEMIS rejimidan qolganlari) bartaraf bo'lgan deb yopiladi.
      */
     private function vedomostFindings(int $lookback, bool $keepLate): DetectorResult
     {
@@ -200,51 +203,64 @@ class Q1FinalGradesEntry implements Detector
             ->whereNotNull('base_date')
             ->whereNotNull('deadline')
             ->where('base_date', '>=', $from->toDateString())
-            ->where('deadline', '<', $now->toDateString())
-            ->get(['id', 'group_hemis_id', 'group_name', 'subject_name', 'semester_code', 'form_type', 'base_type', 'base_date',
-                'deadline', 'status', 'uploaded_at', 'department_hemis_id', 'kafedra_mudiri_hemis_id', 'kafedra_mudiri_name']);
+            ->get();
         if ($rows->isEmpty()) {
             return $result;
         }
 
+        $merge = app(VedomostMergeService::class);
         $faculties = DB::table('groups')
             ->whereIn('group_hemis_id', $rows->pluck('group_hemis_id')->unique()->all())
             ->pluck('department_hemis_id', 'group_hemis_id');
         $statuses = VedomostSubmission::statusLabels();
+        $outstandingStatuses = [VedomostSubmission::STATUS_PENDING, VedomostSubmission::STATUS_REJECTED];
 
-        foreach ($rows as $row) {
-            $deadline = Carbon::parse($row->deadline)->endOfDay();
-            $uploadedAt = $row->uploaded_at ? Carbon::parse($row->uploaded_at) : null;
-            if ($uploadedAt !== null && (!$keepLate || $uploadedAt->lte($deadline))) {
+        foreach ($rows->groupBy(fn ($row) => $merge->mergeKey($row)) as $siblings) {
+            $sheet = $merge->aggregate($siblings)->first();
+            $deadline = Carbon::parse($sheet->deadline)->endOfDay();
+            if ($now->lte($deadline)) {
+                continue; // muddat hali tugamagan
+            }
+
+            $outstanding = $siblings->contains(fn ($row) => in_array($row->status, $outstandingStatuses, true));
+            $uploadedAt = $siblings->pluck('uploaded_at')->filter()->max();
+            $uploadedAt = $uploadedAt ? Carbon::parse($uploadedAt) : null;
+            if (!$outstanding && (!$keepLate || $uploadedAt === null || $uploadedAt->lte($deadline))) {
                 continue;
             }
 
-            $baseDate = Carbon::parse($row->base_date);
-            $baseLabel = ($row->base_type === 'lesson' ? 'oxirgi dars ' : 'YN ') . $baseDate->format('d.m.Y');
-            $faculty = $faculties[$row->group_hemis_id] ?? null;
+            $rep = $siblings->sortBy('id')->first();
+            $baseDate = Carbon::parse($sheet->base_date);
+            $baseLabel = ($sheet->base_type === 'lesson' ? 'oxirgi dars ' : 'YN ') . $baseDate->format('d.m.Y');
+            $faculty = $faculties[$rep->group_hemis_id] ?? null;
+            $headHemisId = $siblings->pluck('kafedra_mudiri_hemis_id')->filter()->first();
+            $departmentId = $siblings->pluck('department_hemis_id')->filter()->first();
 
             $result->add(new Finding(
-                fingerprint: "Q-1:v:{$row->id}",
+                fingerprint: "Q-1:v:{$rep->id}",
                 subjectType: 'qaydnoma',
-                subjectLabel: "{$row->group_name} — {$row->subject_name} (vedomost {$row->form_type}-shakl, {$baseLabel})",
-                subjectRef: (string) $row->group_hemis_id,
+                subjectLabel: "{$sheet->group_name} — {$sheet->subject_name} (vedomost {$sheet->form_type}-shakl, {$baseLabel})",
+                subjectRef: (string) $rep->group_hemis_id,
                 details: [
-                    'guruh' => $row->group_name,
-                    'fan' => $row->subject_name,
-                    'semestr' => $row->semester_code,
-                    'shakl' => $row->form_type . '-shakl',
+                    'guruh' => $sheet->group_name,
+                    ...($sheet->merge_count > 1 ? ['guruhchalar' => $sheet->subgroup_label] : []),
+                    'fan' => $sheet->subject_name,
+                    'semestr' => $sheet->semester_code,
+                    'shakl' => $sheet->form_type . '-shakl',
                     'nazorat_sanasi' => $baseDate->toDateString(),
                     'muddat' => $deadline->toDateTimeString(),
-                    'vedomost_holati' => $statuses[$row->status] ?? $row->status,
+                    'vedomost_holati' => $statuses[$sheet->status] ?? $sheet->status,
                     'yuklangan' => $uploadedAt?->toDateTimeString() ?? 'yuklanmagan',
-                    'kafedra_mudiri' => $row->kafedra_mudiri_name,
-                    'kutilgan_harakat' => "Imzolangan vedomost muddatida mark'ka yuklanishi",
+                    'kafedra_mudiri' => $sheet->kafedra_mudiri_name,
+                    'kutilgan_harakat' => $sheet->status === VedomostSubmission::STATUS_REJECTED
+                        ? "Rad etilgan vedomostni tuzatib qayta yuklash"
+                        : "Imzolangan vedomost muddatida mark'ka yuklanishi",
                 ],
                 scopeKey: $baseDate->toDateString(),
                 facultyHemisId: $faculty ? (int) $faculty : null,
-                departmentHemisId: $row->department_hemis_id ? (int) $row->department_hemis_id : null,
-                owner: $this->owners->teacherByHemisId($row->kafedra_mudiri_hemis_id)
-                    ?? $this->owners->headOfDepartment($row->department_hemis_id ? (int) $row->department_hemis_id : null),
+                departmentHemisId: $departmentId ? (int) $departmentId : null,
+                owner: $this->owners->teacherByHemisId($headHemisId)
+                    ?? $this->owners->headOfDepartment($departmentId ? (int) $departmentId : null),
             ));
         }
 

@@ -66,21 +66,16 @@ class KafedraSubjectReportController extends Controller
     }
 
     /**
-     * 1-bosqich: kafedra fanlari. Sahifa ochilganda baholar hisoblanmaydi (tez) — faqat fan,
-     * guruh va talaba soni; JN va taqsimot "fakultet / yo'nalish · kurs" tanlanganda hisoblanadi.
+     * "Fakultet / yo'nalish · kurs" tanlov ro'yxati (ikki yengil so'rov):
+     * [scopes (kalit => label), fan birligi => guruhlari, guruh => talabalar soni].
      */
-    public function index(Request $request)
+    private function scopeList($units): array
     {
-        [$deptId, $kafedras] = $this->context($request);
-        [$from, $to] = $this->period($request);
-        $units = KafedraSubjectReport::units($deptId);
-
         $curricula = $units->flatMap(fn ($u) => array_keys($u->curricula))->unique()->values()->all();
         $allGroups = KafedraSubjectReport::plainGroups($curricula);
         $counts = KafedraSubjectReport::studentCounts($allGroups->pluck('group_hemis_id')->all());
         $byCurriculum = $allGroups->groupBy('curriculum');
 
-        // Tanlov ro'yxati: fakultet / yo'nalish · kurs
         $scopes = [];
         $unitGroups = [];
         foreach ($units as $u) {
@@ -94,6 +89,20 @@ class KafedraSubjectReportController extends Controller
             }
         }
         uasort($scopes, fn ($a, $b) => $a['sort'] <=> $b['sort']);
+
+        return [$scopes, $unitGroups, $counts];
+    }
+
+    /**
+     * 1-bosqich: kafedra fanlari. Sahifa ochilganda baholar hisoblanmaydi (tez) — faqat fan,
+     * guruh va talaba soni; JN va taqsimot "fakultet / yo'nalish · kurs" tanlanganda hisoblanadi.
+     */
+    public function index(Request $request)
+    {
+        [$deptId, $kafedras] = $this->context($request);
+        [$from, $to] = $this->period($request);
+        $units = KafedraSubjectReport::units($deptId);
+        [$scopes, $unitGroups, $counts] = $this->scopeList($units);
 
         $scope = $this->scope($request);
         if ($scope && !isset($scopes[implode('¦', $scope)])) {
@@ -165,6 +174,7 @@ class KafedraSubjectReportController extends Controller
 
         return view('admin.kafedra-report.index', [
             'mode' => 'groups', 'unit' => $unit, 'rows' => $rows, 'kafedras' => $kafedras, 'deptId' => $deptId,
+            'scopes' => $this->scopeList(KafedraSubjectReport::units($deptId))[0],
             'deptName' => Department::where('department_hemis_id', $deptId)->value('name'), 'from' => $from, 'to' => $to,
             'scope' => $this->scope($request) ? implode('¦', $this->scope($request)) : null,
         ]);
@@ -196,6 +206,7 @@ class KafedraSubjectReportController extends Controller
 
         return view('admin.kafedra-report.index', [
             'mode' => 'students', 'unit' => $unit, 'group' => $group, 'grades' => $grades, 'dates' => array_keys($dates),
+            'scopes' => $this->scopeList(KafedraSubjectReport::units($deptId))[0],
             'otherTypes' => $otherTypes, 'kafedras' => $kafedras, 'deptId' => $deptId,
             'deptName' => Department::where('department_hemis_id', $deptId)->value('name'), 'from' => $from, 'to' => $to,
             'teacher' => KafedraSubjectReport::teachers($grades, $unit->subject_id, $ids),

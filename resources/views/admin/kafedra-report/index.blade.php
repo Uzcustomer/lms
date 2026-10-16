@@ -24,6 +24,11 @@
         .kr-crumbs a { color:#dbe7ff; text-decoration:none; font-weight:600; }
         .kr-crumbs a:hover { color:#fff; text-decoration:underline; }
         .kr-crumbs span { opacity:.6; }
+        .kr-scopebar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 20px; background:#eef4ff; border-bottom:1px solid #d9e4f7; }
+        .kr-scopebar label { font-size:12.5px; font-weight:700; color:#1b3a63; white-space:nowrap; }
+        .kr-scopebar select { flex:1; min-width:260px; max-width:560px; height:40px; box-sizing:border-box; border:1px solid #9fbaf0; border-radius:10px;
+                              background:#fff; padding:0 34px 0 12px; font-size:13.5px; font-weight:600; color:#0f172a; }
+        .kr-scopebar select:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.18); }
         .kr-filters { display:flex; flex-wrap:wrap; gap:12px 14px; align-items:flex-end; padding:14px 20px; border-bottom:1px solid var(--line); }
         .kr-field { display:flex; flex-direction:column; gap:5px; }
         .kr-field.grow { flex:1; min-width:240px; }
@@ -88,6 +93,20 @@
                 </nav>
             </div>
 
+            {{-- Fakultet / yo'nalish · kurs — hamma sahifada tepada; tanlansa fanlar ro'yxatiga o'tadi --}}
+            <form method="GET" action="{{ route('admin.kafedra-report.index') }}" class="kr-scopebar">
+                @if($kafedras->isNotEmpty())<input type="hidden" name="kafedra" value="{{ $deptId }}">@endif
+                @if($from)<input type="hidden" name="from" value="{{ $from }}">@endif
+                @if($to)<input type="hidden" name="to" value="{{ $to }}">@endif
+                <label for="kr-scope">Fakultet / yo'nalish · kurs</label>
+                <select id="kr-scope" name="scope" onchange="this.form.submit()">
+                    <option value="">-- barcha yo'nalishlar --</option>
+                    @foreach($scopes ?? [] as $k => $sc)
+                        <option value="{{ $k }}" {{ ($scope ?? null) === $k ? 'selected' : '' }}>{{ $sc['label'] }}</option>
+                    @endforeach
+                </select>
+            </form>
+
             <form method="GET" class="kr-filters">
                 @if($mode !== 'subjects')<input type="hidden" name="unit" value="{{ $unit->key }}">@endif
                 @if($mode === 'students')<input type="hidden" name="group" value="{{ $group->group_hemis_id }}">@endif
@@ -101,17 +120,7 @@
                         </select>
                     </div>
                 @endif
-                @if($mode === 'subjects')
-                    <div class="kr-field grow">
-                        <label for="kr-scope">Fakultet / yo'nalish · kurs</label>
-                        <select id="kr-scope" name="scope" onchange="this.form.submit()">
-                            <option value="">-- barcha yo'nalishlar --</option>
-                            @foreach($scopes as $k => $sc)
-                                <option value="{{ $k }}" {{ ($scope ?? null) === $k ? 'selected' : '' }}>{{ $sc['label'] }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                @elseif($scope ?? null)
+                @if($scope ?? null)
                     <input type="hidden" name="scope" value="{{ $scope }}">
                 @endif
                 <div class="kr-field">

@@ -22,13 +22,25 @@ class HemisExamGrade extends Model
         'employee_hemis_id',
         'exam_schedule_id',
         'hemis_updated_at',
+        'hemis_created_at',
+        'first_seen_at',
     ];
 
     protected $casts = [
         'grade' => 'integer',
         'regrade' => 'integer',
         'exam_date' => 'datetime',
+        'first_seen_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        // Monitoring Q-1: baho mark'ga birinchi marta qachon kelganini saqlab qo'yamiz
+        // (HEMIS created_at qaytarmasa, kiritilgan sana shundan olinadi).
+        static::creating(function (self $grade) {
+            $grade->first_seen_at ??= now();
+        });
+    }
 
     /**
      * Taqqoslash uchun: berilgan talabalar, fan va semestr bo'yicha HEMIS baholarini olish.

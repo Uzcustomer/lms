@@ -3,6 +3,10 @@
 # status: ✅ tasdiqlangan · ✏️ tuzatilgan · 🆕 yangi · ⚠ normasi tekshirilishi kerak (faqat ogohlantirish rejimi)
 # Har bir detektor: trigger to'plami ↔ kutilgan harakat to'plami; farq = istisno (exception).
 # Muddat va chegaralar kodga qotirilmaydi — shu fayldan (keyin DB dan) o'qiladi.
+# Ixtiyoriy kalitlar (mark monitoring moduli o'qiydi):
+#   params             — chegara va muddatlar; birinchi seed'dan keyin paneldan tahrirlanadi
+#   default_owner_role — istisno kimga avtomatik biriktiriladi (dekan, kafedra_mudiri, registrator_ofisi ...)
+#   due_workdays       — mas'ulning javob muddati, ish kunida (standart 3)
 # Jami: 54 ta detektor
 
 detectors:
@@ -22,6 +26,12 @@ detectors:
     status: "✏️"
     pilot: true
     enabled: true
+    default_owner_role: "dekan"
+    params:
+      threshold_hours: 74            # sababsiz soat chegarasi (absent_off yig'indisi)
+      exclude_medical: true          # LMS'da tasdiqlangan tibbiy arizalar qamragan kunlar ayiriladi
+      medical_reasons: [kasallik, tibbiy_korik]
+      excluded_training_types: []    # hisobga olinmaydigan mashg'ulot turi kodlari
   - code: D-3
     group: "DAVOMAT"
     rule: "Fan auditoriya soatining ≥25% ini sababsiz qoldirgan — fandan chetlashtiriladi, YB ga kiritilmaydi, kreditlar o'zlashtirilmagan"
@@ -62,6 +72,14 @@ detectors:
     status: "✅"
     pilot: true
     enabled: true
+    default_owner_role: "kafedra_mudiri"
+    params:
+      days: 3                        # buyurtmachi: 3 ish kuni
+      day_type: workdays             # workdays | calendar
+      yn_exam_type_code: "13"        # HEMIS examType: 13 = yakuniy nazorat
+      include_resits: false          # qayta topshirishlar (HEMIS urinish kodlari tasdiqlangach)
+      late_completion: auto_close    # kechikib kiritilsa: auto_close | keep_open
+      lookback_days: 60              # necha kun oldingi nazoratlargacha tekshiriladi
   - code: Q-1b
     group: "BAHOLASH VA QAYDNOMA (Filial Baholash tartibi asosida)"
     rule: "Yakuniy qaydnoma nazoratdan 5 kun ichida, bir marta to'ldirib saqlanadi"
@@ -190,6 +208,14 @@ detectors:
     status: "🆕🔴"
     pilot: true
     enabled: true
+    default_owner_role: "registrator_ofisi"
+    params:
+      deadline: "2026-11-01"
+      education_year: "2026-2027"
+      min_paid_percent: 25           # VMQ 578 1-il.: oddiy kontrakt — yillik summaning kamida 25 %
+      min_paid_percent_special: 50   # qo'shimcha / tabaqalashtirilgan — birinchi yilning kamida 50 %
+      forecast_before_deadline: true # muddatgacha — faqat ogohlantirish (prognoz)
+      check_notice_evidence: true    # abituriyentlarni xabardor qilish dalillari (sayt, SMS)
   - code: A-2
     group: "QABUL"
     rule: "Ta'lim ma'lumoti — integratsiya platformasidan, shaxs va yashash joyi — IIVdan real vaqtda; qalbaki hujjat → chetlashtirish va huquqni muhofaza organlariga xabar"
@@ -222,6 +248,15 @@ detectors:
     status: "✅"
     pilot: true
     enabled: true
+    default_owner_role: "registrator_ofisi"
+    params:
+      workdays: 1
+      order_types: [akademik_tatil, chetlashtirish, kursda_qoldirish]
+      recipients: [ijara_kotibi, buxgalteriya]
+      recipient_ijara_kotibi: ""     # paneldan tanlanadi (xodim)
+      recipient_buxgalteriya: ""     # bo'sh bo'lsa — buxgalteriya rolidagi barcha xodimlar
+      since_date: "2026-10-01"       # shu sanadan keyingi buyruqlar tekshiriladi
+      late_completion: auto_close
   - code: E-2
     group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
     rule: "VMQ 299: ariza 15-iyul – 5-avgust; ishchi organ qarori 15-iyul – 6-avgust; rad etilganda kamchilikni bartaraf etish uchun 5 ish kuni; rad sababi talabaning shaxsiy kabinetida"
@@ -262,6 +297,11 @@ detectors:
     status: "✏️"
     pilot: true
     enabled: true
+    default_owner_role: "registrator_ofisi"
+    params:
+      require_original_check: true   # komissiya hujjatlar aslini tekshirgani belgilanishi shart
+      auto_from_orders: true         # «ko'chirib kelish» buyruqlaridan cheklist avtomatik ochiladi
+      since_date: "2026-09-01"
   - code: E-8
     group: "KO'CHIRISH, TIKLASH, CHETLASHTIRISH (VMQ 578 3-ilova)"
     rule: "Kredit tizimida ko'chirib kelinganda kurs davomi uchun namunaviy o'quv reja bo'yicha GPA ≥ 2,4; aks holda quyi kursdan"

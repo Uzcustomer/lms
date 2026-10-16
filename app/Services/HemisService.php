@@ -1455,6 +1455,7 @@ class HemisService
                                 'employee_hemis_id'   => (string) ($item['_employee'] ?? ''),
                                 'exam_schedule_id'    => $item['_exam_schedule'] ?? null,
                                 'hemis_updated_at'    => $item['updated_at'] ?? null,
+                                'hemis_created_at'    => is_numeric($item['created_at'] ?? null) ? (int) $item['created_at'] : null,
                             ]
                         );
                         $synced++;
@@ -1541,6 +1542,7 @@ class HemisService
                             'employee_hemis_id'   => (string) ($item['_employee'] ?? ''),
                             'exam_schedule_id'    => $item['_exam_schedule'] ?? null,
                             'hemis_updated_at'    => $item['updated_at'] ?? null,
+                            'hemis_created_at'    => is_numeric($item['created_at'] ?? null) ? (int) $item['created_at'] : null,
                         ]
                     );
                     $synced++;

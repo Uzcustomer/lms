@@ -22,6 +22,7 @@ enum ProjectRole: string
     case TEACHER = 'oqituvchi';
     case TEST_CENTER = 'test_markazi';
     case FIRM_RESPONSIBLE = 'javobgar_firma';
+    case MONITORING_ADMIN = 'monitoring_admin';
     case STUDENT = 'talaba';
 
     public function label(): string
@@ -45,6 +46,7 @@ enum ProjectRole: string
             self::TEACHER => "O'qituvchi",
             self::TEST_CENTER => 'Test markazi',
             self::FIRM_RESPONSIBLE => 'Javobgar firma',
+            self::MONITORING_ADMIN => 'Monitoring administratori',
             self::STUDENT => 'Talaba',
         };
     }

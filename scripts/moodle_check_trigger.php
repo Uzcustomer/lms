@@ -6,17 +6,19 @@
  * Moodle serverda crontab ga qo'shing:
  * (har 3 daqiqada tekshirish)
  *
- *    */3 * * * * /usr/bin/php /opt/scripts/moodle_check_trigger.php >> /var/log/moodle_check_trigger.log 2>&1
+ *    0-59/3 * * * * /usr/bin/php /opt/scripts/moodle_check_trigger.php >> /var/log/moodle_check_trigger.log 2>&1
  *
  * Sozlash:
  *   LMS_URL     — LMS server URL (Moodle dan kirsa bo'ladigan)
- *   SYNC_SECRET — LMS .env dagi MOODLE_SYNC_SECRET bilan bir xil
+ *   SYNC_SECRET — LMS .env dagi MOODLE_SYNC_SECRET bilan bir xil. Kodga yozilmaydi:
+ *                 crontab'da LMS_SYNC_SECRET=... muhit o'zgaruvchisi sifatida beriladi
+ *                 (yoki Moodle serverdagi nusxada qo'lda yoziladi).
  *   PUSH_SCRIPT — mavjud push skript yo'li
  */
 
 // ===== SOZLAMALAR =====
 $LMS_URL     = 'https://mark.tashmedunitf.uz';
-$SYNC_SECRET = '159357@Dax';
+$SYNC_SECRET = getenv('LMS_SYNC_SECRET') ?: ''; // LMS .env dagi MOODLE_SYNC_SECRET; repozitoriyda saqlanmaydi
 $PUSH_SCRIPT = '/opt/scripts/moodle_to_lmsttatf_push.php';
 // =======================
 

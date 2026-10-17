@@ -205,7 +205,7 @@
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
-                        <button type="button" id="cycleExcel" class="asc-tool text-xs py-1" title="Ekrandagi sikl jadvalini (tashqi yoki ichki) Excelga yuklash">Excel</button>
+                        <button type="button" id="cycleExcel" class="asc-tool text-xs py-1 cyc-excel-btn" title="Ekrandagi sikl jadvalini (tashqi yoki ichki) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Yakshanba va bayram ustunlarini jadvaldan yashiradi (ma'lumot o'zgarmaydi)">
                             <input type="checkbox" id="cycleHideOff" class="rounded border-gray-300"> Dam olish kunlarini yashirish</label>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sig'masa, bir fanning turli oqimlardagi sikllari ko'rsatilgan o'quv kunigacha kesishishi mumkin">
@@ -1216,6 +1216,12 @@
             color: rgba(15, 39, 72, .38);
         }
         #cycleGrid .cyc-mk-cell::after { content: ''; }
+        /* Sikl paneli: Excel tugmasi yashil — boshqa tugmalardan ajralib tursin */
+        #cycleArea .cyc-excel-btn { display: inline-flex; align-items: center; gap: 4px;
+            background: #1d6f42; border-color: #185c37; color: #fff; font-weight: 600; }
+        #cycleArea .cyc-excel-btn:hover:not(:disabled) { background: #185c37; color: #fff; }
+        #cycleArea .cyc-excel-btn i { font-size: 13px; line-height: 1; }
+        #cycleArea .cyc-excel-btn:disabled { opacity: .7; cursor: wait; }
         #cycleGrid .cyc-mk-cell { background: rgba(255, 255, 255, .82); }
         #cycleGrid .cyc-mk-cell.is-practice { background: rgba(13, 148, 136, .22); color: #0f766e; }
         #cycleGrid .cyc-mk-cell.is-practice::after { content: 'A'; }

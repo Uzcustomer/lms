@@ -1147,7 +1147,18 @@
         /* Dam olish kunlari: katak ichidagi ustunlar ranglanadi */
         #cycleGrid td.cyc-cell.has-off { background-repeat: no-repeat, repeat; }
         /* ── Kafedra mudiri: blok ichida ma'ruza soatlarini belgilash ── */
-        #cycleGrid tr.cyc-markrow td { height: 190px; vertical-align: top; }
+        #cycleGrid tr.cyc-markrow td { height: 156px; vertical-align: top; }
+        /* Fan nomi to'r ichida, paralar ustida (kataklarni bosishga xalaqit bermaydi) */
+        #cycleGrid .cyc-mk-grid { position: relative; }
+        #cycleGrid .cyc-mk-over { position: absolute; left: 4px; right: 4px; top: 50%; transform: translateY(-50%); z-index: 2;
+            display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; text-align: center; }
+        #cycleGrid .cyc-mk-over .cyc-mk-title { max-width: 100%; padding: 2px 7px; border-radius: 6px; background: rgba(255, 255, 255, .9);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .18); font-size: 12px; font-weight: 800; line-height: 1.2; color: #0f172a;
+            white-space: normal; overflow-wrap: anywhere; }
+        #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .85);
+            font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #cycleGrid .cyc-mk-over .cyc-mk-count { pointer-events: none; }
+        #cycleGrid .cyc-mk-gear { position: absolute; top: 2px; right: 2px; z-index: 3; }
         #cycleGrid .cyc-block.is-mark { padding: 0; overflow: visible; }
         #cycleGrid .cyc-mk {
             position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -1191,7 +1202,7 @@
         #cycleGrid .cyc-mk-cell { background: rgba(255, 255, 255, .82); }
         #cycleGrid .cyc-mk-cell.is-practice { background: rgba(13, 148, 136, .22); color: #0f766e; }
         #cycleGrid .cyc-mk-cell.is-practice::after { content: 'A'; }
-        #cycleGrid .cyc-mk-cell.is-lecture { background: #4f46e5; color: #fff; }
+        #cycleGrid .cyc-mk-cell.is-lecture { background: #facc15; color: #713f12; }
         #cycleGrid .cyc-mk-cell.is-lecture::after { content: 'M'; }
         #cycleGrid .cyc-mk-cell:hover { outline: 2px solid rgba(37, 99, 235, .45); outline-offset: -2px; }
         /* Blok ichidagi dam olish/bayram kuni: ustun yuqoridan pastgacha chiziqli — soat emas */
@@ -1214,7 +1225,7 @@
         #cycDayPop .dp-row { display: flex; gap: 6px; align-items: baseline; margin: 4px 0; }
         #cycDayPop .dp-tag { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px;
             font-size: 10px; font-weight: 800; color: #fff; }
-        #cycDayPop .dp-tag.l { background: #4f46e5; }
+        #cycDayPop .dp-tag.l { background: #eab308; color: #422006; }
         #cycDayPop .dp-tag.p { background: #0d9488; }
         #cycDayPop .dp-topic { color: #475569; font-size: 11px; }
         #cycDayPop .dp-note { margin-top: 6px; color: #b45309; font-size: 11px; }
@@ -1231,7 +1242,7 @@
             background: #f1f5f9; border: 1px solid #e2e8f0;
         }
         #cycleGrid .cyc-mk-side-box { display: flex; flex-direction: column; height: 100%; }
-        #cycleGrid .cyc-mk-side-gap { flex: none; height: 46px; border-bottom: 1px solid rgba(15, 39, 72, .22); }
+        #cycleGrid .cyc-mk-side-gap { display: none; }
         #cycleGrid .cyc-mk-side-rows { flex: 1 1 auto; display: grid; min-height: 0; }
         #cycleGrid .cyc-mk-side-row {
             display: flex; flex-direction: column; justify-content: center; align-items: center;
@@ -3342,7 +3353,9 @@
             }
 
             let cyclePlanData = null;
-            let cycleViewMode = 'flow';   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
+            let cycleViewMode = 'flow';
+            // Server ichki jadvalni guruhcha qatorlarida qaytaradi (view: group) — API so'rovlari shu bilan.
+            function cycleEffView() { return (cyclePlanData && cyclePlanData.view) || cycleViewMode; }   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             // Sikl jadvali qatlami: null — rol bo'yicha server tanlaydi
             // (o'quv bo'limi — tashqi, kafedra/o'qituvchi — ichki), keyin tugma bilan almashtiriladi.
             let cycleLayer = null;
@@ -3356,6 +3369,9 @@
                     b.className = 'px-2 py-1 ' + (on ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
                 if ($('cycLayerRo')) $('cycLayerRo').classList.toggle('hidden', !(j && j.can_edit === false));
+                // Ichki jadval doim guruhcha bo'yicha — Oqim/Guruh almashtirgichi kerak emas.
+                const viewSwitch = $('cycViewFlow') ? $('cycViewFlow').parentElement : null;
+                if (viewSwitch && j) viewSwitch.classList.toggle('hidden', Boolean(j.sub_rows));
             }
             let cyclePairsShown = null;   // ko'rinadigan para qatorlari (sukut: sikl kuni = 6 soat)
             let cycleBandsResize = null;  // kun chiziqlarini qayta chizuvchi resize ishlovchisi
@@ -3410,7 +3426,7 @@
                     renderCycleCards(j);
                     $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
                         ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
-                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + (cycleViewMode === 'group' ? ' guruh · ' : ' oqim · ') + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
+                    $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ((j.view || cycleViewMode) === 'group' ? ' guruh · ' : ' oqim · ') + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
                         (j.total_days ? (' · ' + j.total_days + ' o\'quv kuni') : '') +
 
                         (cycleHolidays.length ? (' · ' + cycleHolidays.length + ' bayram') : '');
@@ -3520,7 +3536,7 @@
                         ...cycleOverlapParams(), ...cycleLayerParams(),
                         action: 'place', specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject, start_index: index,
-                        training_type: card.type || 'practice', pair: pair || 1, view: cycleViewMode,
+                        training_type: card.type || 'practice', pair: pair || 1, view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
                     await loadCyclePlan();
@@ -3657,7 +3673,7 @@
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-assign-options', 'POST', {
                         specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject,
-                        training_type: card.type || 'practice', view: cycleViewMode,
+                        training_type: card.type || 'practice', view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
 
@@ -3667,6 +3683,11 @@
                     $('cycAssignRoom').innerHTML = '<option value="">— Tanlanmagan —</option>' +
                         (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '') + '</option>').join('');
 
+                    // "A + B" kabi umumiy karta: o'qituvchi/xona boshqa guruhchalarga ham tegadi.
+                    if (j.shared_with && j.shared_with.length) {
+                        $('cycAssignMeta').textContent = card.group + ' · ' + card.days + ' kun · umumiy karta: '
+                            + j.shared_with.join(', ') + ' bilan birga (o‘zgarish ularga ham tegadi)';
+                    }
                     const current = j.current || {};
                     if (current.teacher_id) $('cycAssignTeacher').value = String(current.teacher_id);
                     if (current.auditorium_code) $('cycAssignRoom').value = current.auditorium_code;
@@ -3691,7 +3712,7 @@
                     await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
                         specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
                         group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
-                        training_type: cycAssignCard.type || 'practice', view: cycleViewMode,
+                        training_type: cycAssignCard.type || 'practice', view: cycleEffView(), placement_group: (cycAssignCard && cycAssignCard.placement_group) || undefined,
                         teacher_id: null, lesson_time: null, auditorium_code: null,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
                     });
@@ -3717,7 +3738,7 @@
                     await api(BASE + '/boards/' + board.id + '/cycle-assign', 'POST', {
                         specialty_name: cycAssignCard.specialty, course: cycAssignCard.course,
                         group_name: cycAssignCard.group, subject_name: cycAssignCard.subject,
-                        training_type: cycAssignCard.type || 'practice', view: cycleViewMode,
+                        training_type: cycAssignCard.type || 'practice', view: cycleEffView(), placement_group: (cycAssignCard && cycAssignCard.placement_group) || undefined,
                         teacher_id: $('cycAssignTeacher').value ? +$('cycAssignTeacher').value : null,
                         auditorium_code: $('cycAssignRoom').value || null,
                         start_date: $('cycleStart').value, holidays: cycleHolidays,
@@ -3769,7 +3790,7 @@
                     + (markMode ? '<col style="width:62px">' : '')
                     + (simple ? '' : '<col style="width:52px">');
                 dates.forEach((d, i) => h += '<col class="cyc-date-col' + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '">');
-                h += '</colgroup><thead><tr><th class="cyc-gcol">' + (cycleViewMode === 'group' ? 'Guruh' : 'Oqim') + '</th>'
+                h += '</colgroup><thead><tr><th class="cyc-gcol">' + ((j.view || cycleViewMode) === 'group' ? 'Guruh' : 'Oqim') + '</th>'
                     + (markMode ? '<th class="cyc-mk-side">Para</th>' : '')
                     + (simple ? '' : '<th class="cyc-pcol" title="Juftlik">Para</th>');
                 dates.forEach((d, i) => h += '<th class="cyc-dcol' + cycleDateClass(d) + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
@@ -3874,18 +3895,14 @@
                                 const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
                                 cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
                                     '<div class="cyc-mk">' +
-                                    '<div class="cyc-mk-head">' +
-                                    '<div class="cyc-mk-line">' +
-                                    '<span class="cyc-mk-name">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
-                                    '<button type="button" class="cyc-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish" style="position:static;margin-left:auto">&#9881;</button>' +
-                                    '</div>' +
-                                    '<div class="cyc-mk-line">' +
-                                    (req ? '<i>' + esc(req) + '</i>' : '') +
-                                    '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '" title="KTR bo\'yicha jami / reja soati" style="margin-left:auto">' + sumLabel + '</b>' +
-                                    '</div>' +
-                                    '</div>' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
+                                    '<div class="cyc-mk-over">' +
+                                    '<span class="cyc-mk-title">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
+                                    (req ? '<span class="cyc-mk-sub">' + esc(req) + '</span>' : '') +
+                                    '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '" title="KTR bo\'yicha jami / reja soati">' + sumLabel + '</b>' +
+                                    '</div>' +
+                                    '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +
                                     '</div></div></td>';
                             } else if (rect.main) {
                                 cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
@@ -3907,7 +3924,7 @@
                         h += markMode ? '<tr class="cyc-markrow">' : '<tr>';
                         if (pair === 1) {
                             // Guruh rejimida qator — bitta guruh: nomi to'g'ridan-to'g'ri.
-                            const groupLabel = cycleViewMode === 'group'
+                            const groupLabel = (j.view || cycleViewMode) === 'group'
                                 ? '<div class="cyc-members"><div class="cyc-member-row"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div></div>'
                                 : cycleMembersHtml(row.group, row.subgroups);
                             h += '<td class="cyc-gcol" rowspan="' + (pairs + (showAddPair ? 1 : 0)) + '">' + groupLabel + '</td>';
@@ -3915,11 +3932,17 @@
                                 // Karta ichidagi soat qatorlari bilan bir tekis
                                 // turadigan yonbosh yorliqlar (qo'ng'iroq jadvalidan).
                                 let sideRows = '';
+                                // Qator — akademik soat. To'liq paralik jadvalda bitta para
+                                // 2 soat: 1–2-soat — I-para, 3–4 — II-para, 5–6 — III-para.
+                                const hpp = rowMins >= 60 ? 2 : 1;
                                 for (let hour = 1; hour <= dayHours; hour++) {
-                                    const pt = bellPairs[hour - 1];
-                                    sideRows += '<div class="cyc-mk-side-row' + (hour % 2 === 0 ? ' is-pair-end' : '') + '">' +
-                                        '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
-                                        (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '') +
+                                    const pt = bellPairs[Math.ceil(hour / hpp) - 1];
+                                    const firstOfPair = (hour - 1) % hpp === 0;
+                                    sideRows += '<div class="cyc-mk-side-row' + (hour % hpp === 0 ? ' is-pair-end' : '') + '">' +
+                                        (firstOfPair
+                                            ? '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
+                                              (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '')
+                                            : '<span>' + hour + '-soat' + (pt && pt.end ? ' · ' + esc(pt.end) : '') + '</span>') +
                                         '</div>';
                                 }
                                 h += '<td class="cyc-mk-side"><div class="cyc-mk-side-box">' +
@@ -4007,7 +4030,7 @@
                     await api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', {
                         specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject,
-                        training_type: card.type || 'practice', view: cycleViewMode,
+                        training_type: card.type || 'practice', view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                         slots_json: JSON.stringify(mkSlotsOf(key)),
                     });
                     // Keyingi renderda belgilar joyida qolsin.
@@ -4051,7 +4074,19 @@
                 const dayHours = Math.max(1, +cyclePlanData.day_hours || 6);
                 const total = (+dp.lec || 0) + (+dp.prc || 0);
                 const st = +dp.start || 1;
-                const range = (a, n) => n > 0 ? a + (n > 1 ? '–' + (a + n - 1) : '') + '-soat' : '';
+                // Soatlar oralig'i va qaysi paralarga to'g'ri kelishi (to'liq parada 1 para = 2 soat).
+                const bell = boardSchedule().filter(it => it.type === 'pair');
+                const pm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+                const d0 = bell.length ? (pm(bell[0].end) - pm(bell[0].start)) : 80;
+                const hpp = d0 >= 60 ? 2 : 1;
+                const pairName = h => { const pt = bell[Math.ceil(h / hpp) - 1]; return pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr : (pt.name || '')) : ''; };
+                const range = (a, n) => {
+                    if (n <= 0) return '';
+                    const b = a + n - 1;
+                    const p1 = pairName(a), p2 = pairName(b);
+                    const paras = p1 ? (p1 === p2 ? p1 + '-para' : p1 + '–' + p2 + ' para') : '';
+                    return a + (n > 1 ? '–' + b : '') + '-soat' + (paras ? ' (' + paras + ')' : '');
+                };
                 const canEdit = Boolean(cyclePlanData.day_edit);
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
@@ -4088,7 +4123,8 @@
                     await api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', {
                         specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject,
-                        training_type: card.type || 'practice', view: cycleViewMode,
+                        training_type: card.type || 'practice', view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
+                        sub_group: card.placement_group && card.placement_group !== card.group ? card.group : undefined,
                         day_index: dp.k - 1, start_hour: newStart,
                     });
                     await loadCyclePlan();
@@ -4183,7 +4219,7 @@
                             ...cycleOverlapParams(), ...cycleLayerParams(),
                             action: 'place', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject, start_index: index,
-                            training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleViewMode,
+                            training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                             start_date: $('cycleStart').value, holidays: cycleHolidays,
                         });
                         await loadCyclePlan();
@@ -4228,7 +4264,7 @@
                                 ...cycleOverlapParams(), ...cycleLayerParams(),
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
-                                training_type: card.type || 'practice', pair: card.pair || 1, view: cycleViewMode,
+                                training_type: card.type || 'practice', pair: card.pair || 1, view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                                 direction: direction, start_date: $('cycleStart').value, holidays: cycleHolidays,
                             });
                             await loadCyclePlan();
@@ -4332,7 +4368,7 @@
                             ...cycleOverlapParams(), ...cycleLayerParams(),
                             action: 'remove', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject,
-                            training_type: card.type || 'practice', view: cycleViewMode,
+                            training_type: card.type || 'practice', view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                         });
                         await loadCyclePlan();
                     } catch (e) { alert('Sikl blokini olib bo‘lmadi: ' + e.message); }

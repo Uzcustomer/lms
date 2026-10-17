@@ -290,6 +290,14 @@ class TimetableController extends Controller
             return 15;
         }
 
+        // Tibbiy amaliyot fanlari ("Pedagogikada hamshiralik ishi" kabi) nomida gumanitar
+        // so'z bo'lsa ham gumanitar emas — oddiy amaliy guruh
+        foreach (['hamshira', 'shifokor', 'bemor', 'parvarish', 'tibbiy yordam'] as $kw) {
+            if (str_contains($t, $kw)) {
+                return 15;
+            }
+        }
+
         foreach (['ijtimoiy', 'gumanitar', 'tarix', 'falsafa', 'din', 'huquq', 'iqtisod', 'pedagog',
                   'psixolog', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
             if (str_contains($t, $kw)) {
@@ -1367,9 +1375,20 @@ class TimetableController extends Controller
 
         // Kalit: specKey|kurs|normFan => joriy ko'rinadigan nom (birinchi = eng yangi)
         $map = [];
+        // "1-son Davolash ishi" kabi reja nomlari kartochkada fakultet ("1-son davolash")
+        // va sof yo'nalish ("Davolash ishi") bo'lib turadi — kalitni alias bo'yicha quramiz,
+        // aks holda bunday yo'nalishlardagi kartalar hech qachon yangilanmaydi.
+        // Fakultetli kalit ustuvor (1-son va 2-son nomlari bir-birini bosib ketmasin).
         foreach ($subjects as $s) {
             $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
-            $key = $this->specKey($s->specialty_name) . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
+            [$facAlias, $specAlias] = $this->curriculumScopeAlias((string) $s->specialty_name);
+            $key = $this->specKey($specAlias) . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
+            if ($facAlias !== null) {
+                $facKey = $this->specKey($facAlias) . '|' . $key;
+                if (!isset($map[$facKey])) {
+                    $map[$facKey] = $s->subject_name;
+                }
+            }
             if (!isset($map[$key])) {
                 $map[$key] = $s->subject_name;
             }
@@ -1399,7 +1418,7 @@ class TimetableController extends Controller
         $touched = [];
         foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
             $key = $this->specKey($c->specialty_name) . '|' . (int) $c->course . '|' . $this->normSubject((string) $c->subject_name);
-            $new = $map[$key] ?? null;
+            $new = $map[$this->specKey((string) $c->faculty_name) . '|' . $key] ?? $map[$key] ?? null;
             $changed = false;
             if ($new !== null && $new !== $c->subject_name) {
                 $c->subject_name = $new;
@@ -4614,14 +4633,19 @@ class TimetableController extends Controller
     private function whereDepartmentTeacher($q, array $context): void
     {
         $deptId = (int) $context['department_hemis_id'];
-        $year = DB::table('semesters')->where('current', true)->max('education_year');
-        $load = DB::table('curriculum_subject_teachers')
-            ->where('department_id', $deptId)
-            ->where('active', true)
-            ->when($year, fn ($w) => $w->where('education_year_id', $year));
+        // Kafedra bo'lingan bo'lsa — eski kafedra o'qituvchilari ham (config/kafedra.php)
+        $deptIds = array_values(array_unique(array_merge([$deptId], array_map('intval', config('kafedra.predecessors.' . $deptId, [])))));
 
-        $q->where(function ($w) use ($deptId, $context, $load) {
-            $w->where('department_hemis_id', $deptId)
+        // HEMIS yuklamasi: shu (va eski) kafedra fanlaridan joriy yoki o'tgan o'quv yilida dars bergan
+        // (yangi yil yuklamasi hali kiritilmagan bo'lishi mumkin; dekan/o'rindoshlar HEMIS da boshqa bo'limda)
+        $year = (int) DB::table('semesters')->where('current', true)->max('education_year');
+        $load = DB::table('curriculum_subject_teachers')
+            ->whereIn('department_id', $deptIds)
+            ->where('active', true)
+            ->when($year, fn ($w) => $w->where('education_year_id', '>=', $year - 1));
+
+        $q->where(function ($w) use ($deptId, $deptIds, $context, $load) {
+            $w->whereIn('department_hemis_id', $deptIds)
                 ->orWhere('head_department_hemis_id', $deptId)
                 ->orWhere('id', $context['actor_id'])
                 ->orWhereIn('hemis_id', (clone $load)->whereNotNull('employee_id')->select('employee_id'))

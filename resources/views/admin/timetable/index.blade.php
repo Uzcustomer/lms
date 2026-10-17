@@ -197,6 +197,11 @@
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sig'masa, bir fanning turli oqimlardagi sikllari ko'rsatilgan o'quv kunigacha kesishishi mumkin">
                             <input type="checkbox" id="cycleAllowOverlap" class="rounded border-gray-300"> Kesishishga ruxsat
                             <input type="number" id="cycleOverlapDays" min="1" max="60" value="1" class="w-14 rounded border-gray-300 text-xs py-0.5" disabled> kun</label>
+                        <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Tashqi — o'quv bo'limining umumiy (tavsiyaviy) jadvali; Ichki — kafedraning KTR bo'yicha ishchi jadvali">
+                            <button type="button" id="cycLayerExternal" class="px-2 py-1 bg-white text-gray-500">Tashqi</button>
+                            <button type="button" id="cycLayerInternal" class="px-2 py-1 bg-white text-gray-500">Ichki</button>
+                        </span>
+                        <span id="cycLayerRo" class="hidden text-[11px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5">faqat ko'rish</span>
                         <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Ko'rinish rejimi">
                             <button type="button" id="cycViewFlow" class="px-2 py-1 bg-blue-600 font-semibold text-white">Oqim bo'yicha</button>
                             <button type="button" id="cycViewGroup" class="px-2 py-1 bg-white text-gray-500">Guruh bo'yicha</button>
@@ -3262,7 +3267,21 @@
             }
 
             let cyclePlanData = null;
-            let cycleViewMode = 'flow';   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
+            let cycleViewMode = 'flow';
+            // Sikl jadvali qatlami: null — rol bo'yicha server tanlaydi
+            // (o'quv bo'limi — tashqi, kafedra/o'qituvchi — ichki), keyin tugma bilan almashtiriladi.
+            let cycleLayer = null;
+            function cycleLayerParams() { return cycleLayer ? { layer: cycleLayer } : {}; }
+            function renderCycleLayerUi(j) {
+                if (j && j.layer) cycleLayer = j.layer;
+                [['cycLayerExternal', 'external'], ['cycLayerInternal', 'internal']].forEach(([id, l]) => {
+                    const b = $(id);
+                    if (!b) return;
+                    const on = cycleLayer === l;
+                    b.className = 'px-2 py-1 ' + (on ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
+                });
+                if ($('cycLayerRo')) $('cycLayerRo').classList.toggle('hidden', !(j && j.can_edit === false));
+            }   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             let cyclePairsShown = null;   // ko'rinadigan para qatorlari (sukut: sikl kuni = 6 soat)
             let cycleBandsResize = null;  // kun chiziqlarini qayta chizuvchi resize ishlovchisi
             let cycleDayGeometry = [];    // kun ustunlari o'lchovi: [{left, width}]
@@ -3284,10 +3303,12 @@
                 body.holidays = cycleHolidays;
                 if (options.clear) body.clear = 1;
                 body.view = cycleViewMode;
+                Object.assign(body, cycleLayerParams());
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
                     cyclePlanData = j;
+                    renderCycleLayerUi(j);
                     if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
                     cycleHolidays = j.holidays || [];   // server — yagona manba (saqlangandan keyin)
                     renderHolChips();
@@ -3402,7 +3423,7 @@
                 if (!card) return;
                 try {
                     await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                        ...cycleOverlapParams(),
+                        ...cycleOverlapParams(), ...cycleLayerParams(),
                         action: 'place', specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject, start_index: index,
                         training_type: card.type || 'practice', pair: pair || 1, view: cycleViewMode,
@@ -3975,7 +3996,7 @@
                     }
                     try {
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                        ...cycleOverlapParams(),
+                        ...cycleOverlapParams(), ...cycleLayerParams(),
                             action: 'place', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject, start_index: index,
                             training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleViewMode,
@@ -4020,7 +4041,7 @@
                         shiftBtn.disabled = true;
                         try {
                             const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                        ...cycleOverlapParams(),
+                        ...cycleOverlapParams(), ...cycleLayerParams(),
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
                                 training_type: card.type || 'practice', pair: card.pair || 1, view: cycleViewMode,
@@ -4124,7 +4145,7 @@
                     if (!card || !card.placed) return;
                     try {
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                        ...cycleOverlapParams(),
+                        ...cycleOverlapParams(), ...cycleLayerParams(),
                             action: 'remove', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject,
                             training_type: card.type || 'practice', view: cycleViewMode,
@@ -4204,6 +4225,14 @@
                 loadCyclePlan();
             }
             if ($('cycViewFlow')) $('cycViewFlow').onclick = () => setCycleViewMode('flow');
+            function setCycleLayer(layer) {
+                if (cycleLayer === layer) return;
+                cycleLayer = layer;
+                renderCycleLayerUi(null);
+                loadCyclePlan();
+            }
+            if ($('cycLayerExternal')) $('cycLayerExternal').onclick = () => setCycleLayer('external');
+            if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
             if ($('cycViewGroup')) $('cycViewGroup').onclick = () => setCycleViewMode('group');
             if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
             // Bayram qo'shish

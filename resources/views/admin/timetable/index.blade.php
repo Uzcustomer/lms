@@ -3930,6 +3930,29 @@
                 const y = ((lo - 1) + hi) / 2 / Math.max(1, dayHours) * 100;
                 return '--mk-y:' + y.toFixed(2) + '%';
             }
+            // Yorliq markazini (blokka nisbatan, px) blok ichida ushlab, foizda qaytaradi:
+            // yorliqning yarim kengligi/balandligi chegaradan chiqmasin.
+            function cycTitleClampPct(cx, cy, or, ar) {
+                const hw = or.width / 2 + 2, hh = or.height / 2 + 2;
+                const x = Math.min(Math.max(cx, hw), Math.max(hw, ar.width - hw));
+                const y = Math.min(Math.max(cy, hh), Math.max(hh, ar.height - hh));
+                return [x / ar.width * 100, y / ar.height * 100];
+            }
+            // Avtomatik (chetki soat) yoki saqlangan joyda ikki qatorli uzun nom blokdan
+            // chiqib, qo'shni qatorni yopmasin (.is-mark — overflow: visible). Avval hamma
+            // o'lchov olinadi, keyin yoziladi — bitta layout.
+            function clampCycTitles() {
+                const items = [...document.querySelectorAll('#cycleGrid .cyc-mk-over')]
+                    .map(over => ({ over, or: over.getBoundingClientRect(), ar: over.parentElement.getBoundingClientRect() }));
+                items.forEach(({ over, or, ar }) => {
+                    if (!ar.width || !ar.height) return;
+                    const cx = or.left + or.width / 2 - ar.left, cy = or.top + or.height / 2 - ar.top;
+                    const pos = cycTitleClampPct(cx, cy, or, ar);
+                    if (Math.abs(pos[0] - cx / ar.width * 100) < 0.05 && Math.abs(pos[1] - cy / ar.height * 100) < 0.05) return;
+                    over.style.setProperty('--mk-x', pos[0].toFixed(2) + '%');
+                    over.style.setProperty('--mk-y', pos[1].toFixed(2) + '%');
+                });
+            }
             // Ushlab siljitish: sichqoncha 4px dan ko'p yursa — siljitish, aks holda oddiy bosish.
             let cycTitleDragged = false;
             function setupCycTitleDrag() {
@@ -3952,11 +3975,7 @@
                         if (!moving && Math.abs(dx) + Math.abs(dy) < 4) return;
                         if (!moving) { moving = true; over.classList.add('is-dragging'); try { title.setPointerCapture(ev.pointerId); } catch (_) { } }
                         e.preventDefault();
-                        // Blok chegarasidan chiqmasin.
-                        const hw = or.width / 2 + 2, hh = or.height / 2 + 2;
-                        const cx = Math.min(Math.max(cx0 + dx, hw), Math.max(hw, ar.width - hw));
-                        const cy = Math.min(Math.max(cy0 + dy, hh), Math.max(hh, ar.height - hh));
-                        pos = [cx / ar.width * 100, cy / ar.height * 100];
+                        pos = cycTitleClampPct(cx0 + dx, cy0 + dy, or, ar);
                         over.style.setProperty('--mk-x', pos[0].toFixed(2) + '%');
                         over.style.setProperty('--mk-y', pos[1].toFixed(2) + '%');
                     };
@@ -4237,6 +4256,7 @@
                 setupCycleGridEvents();
                 setupCycleMarking();
                 setupCycTitleDrag();
+                clampCycTitles();
                 renderCycleCards(j);
             }
 

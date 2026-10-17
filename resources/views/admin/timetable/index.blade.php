@@ -1248,6 +1248,11 @@
             width: 62px; min-width: 62px; max-width: 62px; padding: 0;
             background: #f1f5f9; border: 1px solid #e2e8f0;
         }
+        /* O'ngga surilganda guruh va para (vaqt) ustunlari joyida qotib turadi */
+        #cycleGrid td.cyc-mk-side, #cycleGrid th.cyc-mk-side {
+            position: sticky; left: var(--cycle-group-width); z-index: 4; box-sizing: border-box;
+        }
+        #cycleGrid thead th.cyc-mk-side { z-index: 7; background: #f1f5f9; }
         #cycleGrid .cyc-mk-side-box { display: flex; flex-direction: column; height: 100%; }
         #cycleGrid .cyc-mk-side-gap { display: none; }
         #cycleGrid .cyc-mk-side-rows { flex: 1 1 auto; display: grid; min-height: 0; }
@@ -3915,7 +3920,6 @@
                                     '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '">' +
                                     '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Fan haqida: soatlar, o\'qituvchi, xona" style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     (req && !compact ? '<span class="cyc-mk-sub">' + esc(req) + '</span>' : '') +
-                                    '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '">' + (compact ? shortSum : sumLabel) + '</b>' +
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +
                                     '</div></div></td>';
@@ -3957,7 +3961,7 @@
                                         (firstOfPair
                                             ? '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
                                               (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '')
-                                            : '<span>' + hour + '-soat' + (pt && pt.end ? ' · ' + esc(pt.end) : '') + '</span>') +
+                                            : '') +
                                         '</div>';
                                 }
                                 h += '<td class="cyc-mk-side"><div class="cyc-mk-side-box">' +

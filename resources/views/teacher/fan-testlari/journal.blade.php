@@ -30,7 +30,15 @@
         padding: 16px 20px;
         border: 1px solid var(--line); border-radius: 6px; background: #fff;
     }
-    .jr-filters { display: grid; grid-template-columns: 1.3fr 1.6fr 1fr 1.2fr auto auto; gap: 12px; align-items: end; }
+    .jr-filters { display: grid; grid-template-columns: 1.3fr 1.6fr 1fr 1.2fr auto auto auto; gap: 12px; align-items: end; }
+    .jr-excel {
+        display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 18px;
+        border: 1px solid #9fd3b9; border-radius: 9px; background: var(--ok-bg);
+        color: var(--ok); font-size: 13.5px; font-weight: 600; text-decoration: none; white-space: nowrap;
+        transition: background .16s, color .16s;
+    }
+    .jr-excel:hover { background: var(--ok); color: #fff; }
+    .jr-excel:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; }
     .jr-filters input[type='search'] {
         width: 100%; height: 40px; padding: 0 11px;
         border: 1px solid #c4d0e0; border-radius: 5px; background: #fcfdff;
@@ -241,7 +249,7 @@
         .jr-stats { grid-template-columns: repeat(2, 1fr); }
         .jr-stat { border-bottom: 1px solid var(--line-soft); }
         .jr-filters { grid-template-columns: 1fr; }
-        .jr-reset { justify-content: center; }
+        .jr-reset, .jr-excel { justify-content: center; }
         .jr-table thead { display: none; }
         .jr-table td { display: block; padding: 6px 16px; border-bottom: 0; }
         .jr-table tbody tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
@@ -399,6 +407,13 @@
                             <input type="search" name="student" id="student" value="{{ request('student') }}" placeholder="Familiya, ism yoki ID raqami">
                         </div>
                         <button class="jr-btn" type="submit">Ko'rsatish</button>
+                        @if($selected)
+                            <a class="jr-excel" href="{{ route('teacher.fan-testlari.journal.excel', array_filter(['test_id' => $selected->id, 'group' => request('group'), 'student' => request('student')])) }}"
+                               title="Tanlangan test natijalari va javoblari (guruh/talaba filtri bilan)">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M6 20h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2Z"/></svg>
+                                Excel
+                            </a>
+                        @endif
                         @if(request()->hasAny(['group', 'student', 'subject_id']))
                             <a class="jr-reset" href="{{ route('teacher.fan-testlari.journal', ['test_id' => $selected?->id]) }}">Tozalash</a>
                         @endif

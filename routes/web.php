@@ -1921,6 +1921,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             ->group(function () {
                 Route::get('/', [FanTestiController::class, 'index'])->name('index');
                 Route::get('/journal', [FanTestiController::class, 'journal'])->name('journal');
+                Route::get('/journal/excel', [FanTestiController::class, 'journalExport'])->name('journal.excel');
                 Route::get('/create', [FanTestiController::class, 'create'])->name('create');
                 Route::post('/', [FanTestiController::class, 'store'])->name('store');
                 Route::get('/{fanTesti}/edit', [FanTestiController::class, 'edit'])->name('edit');

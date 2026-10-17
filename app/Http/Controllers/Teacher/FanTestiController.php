@@ -763,18 +763,7 @@ class FanTestiController extends Controller
             ]);
         }
 
-        $search = trim((string) $request->input('student'));
-
-        $attempts = FanTestiAttempt::query()
-            ->with('answers')
-            ->where('fan_testi_id', $selected->id)
-            ->when($request->filled('group'), fn ($query) => $query->where('group_name', $request->string('group')))
-            ->when($search !== '', fn ($query) => $query->where(function ($inner) use ($search) {
-                $inner->where('student_name', 'like', "%{$search}%")
-                    ->orWhere('student_id_number', 'like', "%{$search}%");
-            }))
-            ->orderBy('student_name')
-            ->get();
+        $attempts = $this->journalAttempts($request, $selected);
 
         $groups = $attempts
             ->groupBy(fn (FanTestiAttempt $attempt) => $attempt->group_name ?: 'Guruhsiz')
@@ -818,6 +807,43 @@ class FanTestiController extends Controller
             ],
             'migrationPending' => false,
         ]);
+    }
+
+    /** Test jurnali Excelda: sahifadagi filtrlar (guruh, talaba) bilan. */
+    public function journalExport(Request $request)
+    {
+        $this->teacher();
+        abort_unless(Schema::hasTable('fan_testi_attempts'), 404);
+
+        $selected = $this->collectionsFor()->firstWhere('id', (int) $request->integer('test_id'));
+        abort_unless($selected, 404);
+
+        $attempts = $this->journalAttempts($request, $selected)
+            ->sortBy(fn (FanTestiAttempt $a) => [$a->group_name ?: 'Guruhsiz', $a->student_name])
+            ->values();
+
+        $name = trim(preg_replace('/[^\pL\pN]+/u', '_', $selected->name), '_') ?: 'test';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\FanTestiJournalExport($selected, $attempts),
+            'test_jurnali_' . $name . '_' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }
+
+    private function journalAttempts(Request $request, FanTesti $selected)
+    {
+        $search = trim((string) $request->input('student'));
+
+        return FanTestiAttempt::query()
+            ->with('answers')
+            ->where('fan_testi_id', $selected->id)
+            ->when($request->filled('group'), fn ($query) => $query->where('group_name', $request->string('group')))
+            ->when($search !== '', fn ($query) => $query->where(function ($inner) use ($search) {
+                $inner->where('student_name', 'like', "%{$search}%")
+                    ->orWhere('student_id_number', 'like', "%{$search}%");
+            }))
+            ->orderBy('student_name')
+            ->get();
     }
 
     private function teacher()

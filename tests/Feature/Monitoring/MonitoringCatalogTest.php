@@ -82,3 +82,13 @@ test('eski katalogli serverda migratsiya D-1 ni yoqadi va Q-1 ni vedomost tekshi
     expect(MonitoringDetector::where('code', 'D-1')->value('enabled'))->toBeTruthy()
         ->and(MonitoringDetector::where('code', 'Q-1')->first()->params['check_against'])->toBe('vedomost');
 });
+
+test('F-6 yoqilgan va ogohlantirish rejimida; eski katalogli serverda migratsiya shunday qiladi', function () {
+    $f6 = MonitoringDetector::where('code', 'F-6')->first();
+    expect($f6->enabled)->toBeTrue()->and($f6->warning_mode)->toBeTrue()->and($f6->isImplemented())->toBeTrue();
+
+    $f6->update(['warning_mode' => false]);
+    (require base_path('database/migrations/2026_10_17_100000_enable_monitoring_contract_payment.php'))->up();
+
+    expect($f6->fresh()->warning_mode)->toBeTrue()->and($f6->fresh()->params['education_year'])->toBe('2026-2027');
+});

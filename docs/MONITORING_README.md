@@ -1,21 +1,21 @@
 # Monitoring moduli — o'rnatish va ishga tushirish
 
 Registrator ofisi nazorat detektorlari (TZ: `docs/MONITORING_TZ.md`, katalog: `docs/detectors.yaml`).
-1-bosqich (pilot): yadro + 5 detektor — **D-2, Q-1, A-5, E-1, E-7**; qo'shimcha **D-1** (xavf zonasi, 30–74 soat).
+1-bosqich (pilot): yadro + 5 detektor — **D-2, Q-1, A-5, E-1, E-7**; qo'shimcha **D-1** (xavf zonasi, 30–74 soat) va **F-6** (kontrakt to'lovi bosqichlari).
 
 ## 1. Serverga chiqarish
 
 ```bash
 composer install --no-dev          # symfony/yaml endi prod bog'liqligi
-php artisan migrate                # 7 ta migratsiya: jadvallar, manba reyestrlari,
+php artisan migrate                # 8 ta migratsiya: jadvallar, manba reyestrlari,
                                    # hemis_exam_grades ga kiritilgan sana, katalog seed'i,
                                    # buyurtmachi qarorlari (16.10.2026), registrator taqsimoti,
-                                   # Q-1 vedomost tekshiruvi va D-1
+                                   # Q-1 vedomost tekshiruvi va D-1, F-6
 php artisan config:cache
 ```
 
 Chiqarishdan oldin zaxira nusxa oling (`./backup_db.sh`). Staging yo'q, orqaga qaytarish:
-`php artisan migrate:rollback --step=7` (birinchi chiqarishda; avvalroq bajarilgan migratsiyalar bo'lsa — mos ravishda kamroq).
+`php artisan migrate:rollback --step=8` (birinchi chiqarishda; avvalroq bajarilgan migratsiyalar bo'lsa — mos ravishda kamroq).
 Migratsiya katalogni o'qiy olmasa (masalan `symfony/yaml` o'rnatilmagan), xato logga yoziladi:
 `composer install --no-dev` dan keyin `php artisan monitoring:sync-catalog` ni bajaring.
 
@@ -52,6 +52,10 @@ Migratsiya:
    - **Q-1** standart holatda (`check_against: vedomost`) vedomost YN sanasidan 3 ish kunida mark'ka yuklanganini
      tekshiradi (Vedomost topshirish jarayoni muddati). HEMIS'ga kiritish tekshiruvi — `check_against: hemis`
      (yakuniy natijalar HEMIS'ga kiritiladigan davrda yoqiladi).
+   - **F-6** muddatlarni **Sozlamalar → «Kontrakt to'lov muddatlari — kurs kesimida»** dan oladi: superkontrakt
+     (tanlangan HEMIS kontrakt turlari) → kurs jadvali → umumiy jadval («Kontrakt to'lov muddatlari»). Bu blokni
+     admin, registrator ofisi, buxgalteriya va monitoring administratori o'zgartiradi; YN oldi qaydnoma avvalgidek
+     umumiy jadvalni ishlatadi. O'quv yili boshidan (1-avgust) oldingi sanalar hisobga olinmaydi.
 3. **Importlar** sahifasida:
    - buyruqlar reyestrini yuklash (HEMIS'dan eksport yoki shablon);
    - kontrakt bo'yicha tavsiya etilganlar ro'yxatini yuklash (mandat shabloni, skani dalil sifatida).
@@ -81,7 +85,7 @@ Mavjud migratsiyalar MySQL'ga xos SQL ishlatadi, shuning uchun testlar alohida b
 ```bash
 cp .env.testing.example .env.testing   # DB_* ni to'ldiring, APP_KEY: php artisan key:generate --env=testing
 mysql -e "CREATE DATABASE lms_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-php artisan test tests/Feature/Monitoring     # 90 test
+php artisan test tests/Feature/Monitoring     # 98 test
 ```
 
 Test ma'lumotlari faqat soxta: Faker yoki «Sinov ...» nomlari ishlatiladi.

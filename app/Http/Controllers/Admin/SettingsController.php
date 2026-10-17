@@ -6,14 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Deadline;
 use App\Models\MarkingSystemScore;
 use App\Models\Setting;
+use App\Services\ContractCutoffs;
 use App\Services\MissedGradeAccess;
 use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
 use App\Services\HemisService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SettingsController extends Controller
 {
+    /** Kurs kesimidagi kontrakt muddatlarini o'zgartira oladiganlar (umumiy sozlama — har bir xodim emas). */
+    private const CONTRACT_SCHEDULE_ROLES = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'buxgalteriya', 'monitoring_admin'];
+
     public function index(Request $request)
     {
         $data = [];
@@ -72,6 +77,18 @@ class SettingsController extends Controller
             ['deadline' => '2026-05-01', 'percent' => 100],
         ]);
         $data['contractCutoffs'] = json_decode(Setting::get('contract_cutoffs', $defaultCutoffs), true);
+
+        // Kontrakt to'lov muddatlari — kurs kesimida (monitoring F-6)
+        $data['canEditContractSchedule'] = $this->canEditContractSchedule();
+        if ($data['canEditContractSchedule']) {
+            $data['contractCutoffsByCourse'] = ContractCutoffs::byCourse();
+            $data['contractTypes'] = DB::table('contract_list')
+                ->whereNotNull('edu_contract_type_code')
+                ->select('edu_contract_type_code as code', 'edu_contract_type_name as name')
+                ->distinct()
+                ->orderBy('edu_contract_type_name')
+                ->get();
+        }
 
         return view('admin.settings.index', $data);
     }
@@ -329,6 +346,45 @@ class SettingsController extends Controller
 
         return redirect()->route('admin.settings', ['tab' => 'sinov-test-permissions'])
             ->with('success', 'Sinov (test) baholari ruxsati yangilandi.');
+    }
+
+    public function updateContractCutoffsByCourse(Request $request)
+    {
+        abort_unless($this->canEditContractSchedule(), 403);
+
+        // Bo'sh qoldirilgan qatorlar (muddat ham, foiz ham kiritilmagan) e'tiborga olinmaydi.
+        $filled = fn ($rows) => array_values(array_filter((array) $rows, fn ($r) => is_array($r) && (($r['deadline'] ?? '') !== '' || ($r['percent'] ?? '') !== '')));
+        $request->merge([
+            'courses' => array_map($filled, (array) $request->input('courses', [])),
+            'super' => $filled($request->input('super', [])),
+        ]);
+
+        $request->validate([
+            'courses' => 'nullable|array',
+            'courses.*' => 'nullable|array',
+            'courses.*.*.deadline' => 'required|date',
+            'courses.*.*.percent' => 'required|integer|min:1|max:100',
+            'super' => 'nullable|array',
+            'super.*.deadline' => 'required|date',
+            'super.*.percent' => 'required|integer|min:1|max:100',
+            'super_types' => 'nullable|array',
+            'super_types.*' => 'string|max:20',
+        ]);
+
+        $courses = [];
+        foreach (ContractCutoffs::COURSES as $course) {
+            $courses[$course] = array_values((array) $request->input("courses.{$course}", []));
+        }
+        ContractCutoffs::saveByCourse($courses, array_values((array) $request->input('super', [])), (array) $request->input('super_types', []));
+
+        return redirect()->route('admin.settings')->with('success', "Kurs kesimidagi kontrakt to'lov muddatlari saqlandi.");
+    }
+
+    private function canEditContractSchedule(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && method_exists($user, 'hasAnyRole') && $user->hasAnyRole(self::CONTRACT_SCHEDULE_ROLES);
     }
 
     public function updateContractCutoffs(Request $request)

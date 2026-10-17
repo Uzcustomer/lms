@@ -915,6 +915,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/settings/password', [SettingsController::class, 'updatePassword'])->name('settings.update.password');
         Route::post('/settings/telegram', [SettingsController::class, 'updateTelegram'])->name('settings.update.telegram');
         Route::post('/settings/contract-cutoffs', [SettingsController::class, 'updateContractCutoffs'])->name('settings.update.contract-cutoffs');
+        Route::post('/settings/contract-cutoffs-by-course', [SettingsController::class, 'updateContractCutoffsByCourse'])->name('settings.update.contract-cutoffs-by-course');
         Route::post('/settings/exam-date-roles', [SettingsController::class, 'updateExamDateRoles'])->name('settings.update.exam-date-roles');
         Route::post('/settings/test-center-permissions', [SettingsController::class, 'updateTestCenterPermissions'])->name('settings.update.test-center-permissions');
         Route::post('/settings/exam-date-policy', [SettingsController::class, 'updateExamDatePolicy'])->name('settings.update.exam-date-policy');

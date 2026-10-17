@@ -2765,10 +2765,21 @@ class TimetableController extends Controller
         $cycleCards = [];
         foreach ($groups as $g) {
             $rk = $rowKey($g);
-            // Ichki jadvalda guruhcha qatori oqimning joylashuvidan foydalanadi.
+            // Ichki jadvalda guruhcha qatori oqimning joylashuvidan foydalanadi. Guruhchaning
+            // o'z joylashuvi bo'lsa (tashqi jadval "Guruh bo'yicha" ko'rinishida joylangan) —
+            // fan+tur bo'yicha u ustuvor; aks holda bunday bloklar ichki jadvalda yo'qolardi.
             $placeGroup = $cycleSubRows ? (string) ($g['parent'] ?? $g['name']) : (string) $g['name'];
             $placeKey = (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . $placeGroup;
-            $savedBlocks = collect($savedByRow[$placeKey] ?? [])->sortBy('start_index');
+            $rowPlacements = [];
+            $placementGroupOf = [];   // fan|tur => joylashuv saqlangan qator nomi
+            foreach ([$placeKey => $placeGroup, $rk => (string) $g['name']] as $savedKey => $savedGroup) {
+                foreach ($savedByRow[$savedKey] ?? [] as $placement) {
+                    $typeKey = $placement->subject_name . '|' . ($placement->training_type ?: 'practice');
+                    $rowPlacements[$typeKey] = $placement;
+                    $placementGroupOf[$typeKey] = $savedGroup;
+                }
+            }
+            $savedBlocks = collect(array_values($rowPlacements))->sortBy('start_index');
             $blocks = [];
             foreach ($savedBlocks as $placement) {
                 if (!array_key_exists($placement->subject_name, $g['subs'])) {
@@ -2883,7 +2894,7 @@ class TimetableController extends Controller
                         'key' => $subjectKey($g, $subject) . '|' . $cardType,
                         'row_key' => $rk,
                         'group' => $g['name'],
-                        'placement_group' => $placeGroup,
+                        'placement_group' => $placementGroupOf[$subject . '|' . $cardType] ?? $placeGroup,
                         'specialty' => $g['specialty'],
                         'course' => $g['course'],
                         'subject' => $subject,

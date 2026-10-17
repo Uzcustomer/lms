@@ -2482,6 +2482,12 @@ class TimetableController extends Controller
             $cycleSimple = true;
             $cycleMark = true;
         }
+        // Ichki jadval har guruhcha (d1/d22-01a, -01b ...) uchun alohida qator: o'qituvchi
+        // va xona guruhchaga biriktiriladi. Joylashuv (sana) esa oqimnikidan olinadi.
+        $cycleSubRows = $cycleLayer === 'internal';
+        if ($cycleSubRows) {
+            $cycleView = 'group';
+        }
         $cycleCanEdit = $this->cycleLayerEditable($cycleRole, $cycleLayer);
         if ($request->boolean('clear') && !$cycleCanEdit) {
             return $this->cycleLayerDenied($cycleLayer);
@@ -2598,6 +2604,8 @@ class TimetableController extends Controller
                     $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
                     if (!isset($byFlow[$flowKey])) {
                         $byFlow[$flowKey] = ['name' => $flow, 'subs' => [], 'members' => [], 'req' => [],
+                            // Guruhcha qatori uchun: joylashuv saqlangan oqim nomi.
+                            'parent' => $this->cycleFlowName($c, $member),
                             'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
                     }
                     $byFlow[$flowKey]['subs'][$c->subject_name] = $cycleKey[$ck];
@@ -2757,7 +2765,10 @@ class TimetableController extends Controller
         $cycleCards = [];
         foreach ($groups as $g) {
             $rk = $rowKey($g);
-            $savedBlocks = collect($savedByRow[$rk] ?? [])->sortBy('start_index');
+            // Ichki jadvalda guruhcha qatori oqimning joylashuvidan foydalanadi.
+            $placeGroup = $cycleSubRows ? (string) ($g['parent'] ?? $g['name']) : (string) $g['name'];
+            $placeKey = (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . $placeGroup;
+            $savedBlocks = collect($savedByRow[$placeKey] ?? [])->sortBy('start_index');
             $blocks = [];
             foreach ($savedBlocks as $placement) {
                 if (!array_key_exists($placement->subject_name, $g['subs'])) {
@@ -2839,7 +2850,9 @@ class TimetableController extends Controller
                                 ?? $ktrDayPlans[$this->cycleKtrKey((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name)]
                                 ?? null,
                             $hrs, (int) $days, $from, $workIndices,
-                            $hasLectureSlots ? (array) (($placement->lecture_slots ?? [])['starts'] ?? []) : [],
+                            $hasLectureSlots ? (array) ($cycleSubRows
+                                ? ((($placement->lecture_slots ?? [])['starts_g'][(string) $g['name']] ?? null) ?? (($placement->lecture_slots ?? [])['starts'] ?? []))
+                                : (($placement->lecture_slots ?? [])['starts'] ?? [])) : [],
                             6
                         )
                         : null,
@@ -2870,6 +2883,7 @@ class TimetableController extends Controller
                         'key' => $subjectKey($g, $subject) . '|' . $cardType,
                         'row_key' => $rk,
                         'group' => $g['name'],
+                        'placement_group' => $placeGroup,
                         'specialty' => $g['specialty'],
                         'course' => $g['course'],
                         'subject' => $subject,
@@ -2917,6 +2931,8 @@ class TimetableController extends Controller
             'pairs'      => $cycleSimple ? 1 : $pairsPerDay,
             'simple'     => $cycleSimple,
             'layer'      => $cycleLayer,
+            'view'       => $cycleView,
+            'sub_rows'   => $cycleSubRows,
             'can_edit'   => $cycleCanEdit,
             'mark_mode'  => $cycleMark,
             'day_edit'   => $cycleMark && $cycleCanEdit,
@@ -2941,6 +2957,7 @@ class TimetableController extends Controller
             'specialty_name' => 'required|string|max:255',
             'course'         => 'required|integer|min:1|max:7',
             'group_name'     => 'required|string|max:255',
+            'placement_group' => 'nullable|string|max:255',
             'subject_name'   => 'required|string|max:255',
             'training_type'  => 'nullable|in:lecture,practice',
             'view'           => 'nullable|in:flow,group',
@@ -3020,6 +3037,7 @@ class TimetableController extends Controller
             'specialty_name'  => 'required|string|max:255',
             'course'          => 'required|integer|min:1|max:7',
             'group_name'      => 'required|string|max:255',
+            'placement_group' => 'nullable|string|max:255',
             'subject_name'    => 'required|string|max:255',
             'training_type'   => 'nullable|in:lecture,practice',
             'view'            => 'nullable|in:flow,group',
@@ -3090,10 +3108,12 @@ class TimetableController extends Controller
     /** Joylashuvni identifikatsiya bo'yicha topadi. */
     private function findCyclePlacement(TimetableBoard $board, array $data): ?TimetableCyclePlacement
     {
+        // Ichki jadvalda guruhcha qatori oqim joylashuvidan foydalanadi (placement_group).
+        $placementGroup = trim((string) ($data['placement_group'] ?? '')) ?: $data['group_name'];
         return TimetableCyclePlacement::where('board_id', $board->id)
             ->where('specialty_name', $data['specialty_name'])
             ->where('course', (int) $data['course'])
-            ->where('group_name', $data['group_name'])
+            ->where('group_name', $placementGroup)
             ->where('subject_name', $data['subject_name'])
             ->when(!empty($data['training_type']), fn ($q) => $q
                 ->where(fn ($w) => $w->where('training_type', $data['training_type'])->orWhereNull('training_type')))
@@ -3616,6 +3636,7 @@ class TimetableController extends Controller
             'specialty_name' => 'required|string|max:255',
             'course'         => 'required|integer|min:1|max:7',
             'group_name'     => 'required|string|max:255',
+            'placement_group' => 'nullable|string|max:255',
             'subject_name'   => 'required|string|max:255',
             'training_type'  => 'nullable|in:lecture,practice',
             'view'           => 'nullable|in:flow,group',
@@ -3625,6 +3646,8 @@ class TimetableController extends Controller
             // Ichki jadval: bitta sikl kunining darslari boshlanadigan soat (1..12).
             'day_index'      => 'nullable|integer|min:0|max:200',
             'start_hour'     => 'nullable|integer|min:1|max:12',
+            // Ichki jadval: guruhcha (d1/d22-01a ...) — har biri o'z vaqtiga ega bo'lishi mumkin.
+            'sub_group'      => 'nullable|string|max:255',
         ]);
 
         // Ma'ruza kataklari — ichki jadval: faqat kafedra mudiri (o'z kafedrasi fani) yoki admin.
@@ -3645,7 +3668,9 @@ class TimetableController extends Controller
         if (array_key_exists('day_index', $data) && $data['day_index'] !== null) {
             // Yangi format: {"starts": {kunIndeksi: boshlanishSoati}} — eski belgilar bilan aralashmaydi.
             $current = (array) ($placement->lecture_slots ?? []);
-            $starts = (array) ($current['starts'] ?? []);
+            $sub = trim((string) ($data['sub_group'] ?? ''));
+            $byGroup = (array) ($current['starts_g'] ?? []);
+            $starts = $sub !== '' ? (array) ($byGroup[$sub] ?? []) : (array) ($current['starts'] ?? []);
             $k = (string) (int) $data['day_index'];
             $hour = (int) ($data['start_hour'] ?? 1);
             if ($hour <= 1) {
@@ -3653,7 +3678,20 @@ class TimetableController extends Controller
             } else {
                 $starts[$k] = $hour;
             }
-            $placement->update(['lecture_slots' => ['starts' => $starts]]);
+            if ($sub !== '') {
+                if ($starts) {
+                    $byGroup[$sub] = $starts;
+                } else {
+                    unset($byGroup[$sub]);
+                }
+                $current['starts_g'] = $byGroup;
+            } else {
+                $current['starts'] = $starts;
+            }
+            $placement->update(['lecture_slots' => [
+                'starts' => (array) ($current['starts'] ?? []),
+                'starts_g' => (array) ($current['starts_g'] ?? []),
+            ]]);
 
             return response()->json(['ok' => true, 'starts' => $starts]);
         }

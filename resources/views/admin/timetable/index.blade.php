@@ -3534,11 +3534,11 @@
             let cycleBandsResize = null;  // kun chiziqlarini qayta chizuvchi resize ishlovchisi
             let cycleDayGeometry = [];    // kun ustunlari o'lchovi: [{left, width}]
             // Dam olish (yakshanba/bayram) ustunlarini yashirish — faqat ko'rinish.
-            // Kafedra belgilash rejimida ishlatilmaydi: u yerda blok ichida har kun alohida katak.
+            // Ichki (kafedra) jadvalda ham ishlaydi: blok ichidagi kun to'ri yashirilgan kunlarni o'tkazib yuboradi.
             let cycleHideOff = false;
             try { cycleHideOff = localStorage.getItem('lms:cycle-hide-off') === '1'; } catch (e) { }
             function cycleHidingOff() {
-                return cycleHideOff && !(cyclePlanData && cyclePlanData.mark_mode);
+                return cycleHideOff;
             }
             function cycleColHidden(index) {
                 const d = cyclePlanData && cyclePlanData.dates ? cyclePlanData.dates[index] : null;
@@ -4135,13 +4135,17 @@
                                 const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
                                 const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
                                 // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
-                                const compact = spanCols <= 6;
+                                // Blok ichida ko'rinadigan kunlar (yashirilgan dam olish/bayram ustunlarisiz).
+                                const visDays = [];
+                                for (let d = 0; d < spanCols; d++) if (!cycleColHidden(rect.from + d)) visDays.push(d);
+                                if (!visDays.length) for (let d = 0; d < spanCols; d++) visDays.push(d);
+                                const compact = visDays.length <= 6;
                                 // Blokni kataklar to'liq qoplaydi va ularning o'z title'i bor — td title'i
                                 // hech qachon chiqmaydi. Shuning uchun tor blokda ma'lumot katak title'iga qo'shiladi.
                                 const blockTip = compact ? ' — ' + block.subject + (req ? ' · ' + req : '') + ' · ' + sumLabel : '';
                                 let inner = '';
                                 for (let hour = 1; hour <= dayHours; hour++) {
-                                    for (let d = 0; d < spanCols; d++) {
+                                    for (const d of visDays) {
                                         const dayIndex = rect.from + d;
                                         const date = dates[dayIndex];
                                         const off = date && (date.sunday || date.holiday || date.off);
@@ -4168,7 +4172,7 @@
                                 }
                                 cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<div class="cyc-mk">' +
-                                    '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
+                                    '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + visDays.length + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
                                     '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '" style="' + cycTitlePosStyle(block, plan, dayHours) + '">' +
                                     // O'qituvchi biriktirilmagan fan: kulrang fon, qizil uzuq hoshiya va belgi.

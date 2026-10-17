@@ -6512,8 +6512,10 @@
                     const bell = boardSchedule().filter(it => it.type === 'pair');
                     const tm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
                     const hm = v => String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
-                    const d0 = bell.length ? (tm(bell[0].end) - tm(bell[0].start)) : 80;
-                    const hpp = d0 >= 60 ? 2 : 1;
+                    // Para necha soatligi ekrandagidek — barcha paralar o'rtacha davomiyligidan
+                    // (birinchi para 0.5-para bo'lishi mumkin, faqat unga qarash noto'g'ri).
+                    const durs = bell.map(it => { const a = tm(it.start), e = tm(it.end); return a != null && e != null && e > a ? e - a : null; }).filter(v => v != null);
+                    const hpp = (durs.length ? durs.reduce((x, y) => x + y, 0) / durs.length : 80) >= 60 ? 2 : 1;
                     push([{ t: isGroupView ? 'Guruh' : 'Oqim', b: 1, bg: '#dbe4f0' }, { t: 'Para', b: 1, bg: '#dbe4f0' }, { t: 'Vaqt', b: 1, bg: '#dbe4f0' }]
                         .concat(vis.map(i => ({ t: dates[i].d + '\n' + (WD[dates[i].dow] || ''), b: 1, bg: offBg(dates[i]) || '#dbe4f0' }))), 26);
                     rows.forEach(row => {

@@ -2468,6 +2468,9 @@ class TimetableController extends Controller
             $cycleSimple = false;
         }
         $cycleCanEdit = $this->cycleLayerEditable($cycleRole, $cycleLayer);
+        if ($request->boolean('clear') && !$cycleCanEdit) {
+            return $this->cycleLayerDenied($cycleLayer);
+        }
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
             if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
@@ -2732,7 +2735,9 @@ class TimetableController extends Controller
                 if ($to === null) {
                     continue;
                 }
-                $blockPair = max(1, (int) ($placement->pair ?: 1));
+                // Sodda rejimda bitta qator bor: tashqi jadvalda amaliy yozuv 2-parada
+                // saqlansa ham, blok 1-qatorda ko'rinsin (aks holda klient uni tashlab ketadi).
+                $blockPair = $cycleSimple ? 1 : max(1, (int) ($placement->pair ?: 1));
                 // Kunlik para egallashi (6 soat modeli): amaliy blok ma'ruzali
                 // davrda 2, keyin 3 para; ma'ruza 1 para. Klient shu maydonlar
                 // bilan 2-3-paradagi davom segmentlarini chizadi.
@@ -3377,9 +3382,7 @@ class TimetableController extends Controller
         $placeRole = $this->timetableActiveRole($request);
         $placeLayer = $data['layer'] ?? $this->cycleDefaultLayer($placeRole);
         if (!$this->cycleLayerEditable($placeRole, $placeLayer)) {
-            return response()->json(['error' => $placeLayer === 'external'
-                ? 'Tashqi dars jadvalini faqat o‘quv bo‘limi tahrirlaydi.'
-                : 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.'], 403);
+            return $this->cycleLayerDenied($placeLayer);
         }
         // Tashqi jadvalda fan bitta blok: amaliy blok ko'chsa yoki olinsa,
         // ma'ruza yozuvi ham u bilan birga yuradi (ichki jadval shu asosda quriladi).
@@ -4810,6 +4813,13 @@ class TimetableController extends Controller
         return $layer === 'external'
             ? $this->isOquvBolimiRole($role)
             : $role === 'kafedra_mudiri';
+    }
+
+    private function cycleLayerDenied(string $layer)
+    {
+        return response()->json(['error' => $layer === 'external'
+            ? 'Tashqi dars jadvalini faqat o‘quv bo‘limi tahrirlaydi.'
+            : 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.'], 403);
     }
 
     private function timetableActiveRole(Request $request): string

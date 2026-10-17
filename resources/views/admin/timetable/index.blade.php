@@ -2982,6 +2982,11 @@
             $('unplaceBtn').onclick = async function () {
                 if (!board || !curSpec) return;
                 if (viewMode === 'cycle') {
+                    // Bu qatlam faqat ko'rish uchun — server ham rad etadi (403)
+                    if (cyclePlanData && cyclePlanData.can_edit === false) {
+                        alert('Bu qatlamdagi sikl bloklarini bo‘shatish huquqingiz yo‘q.');
+                        return;
+                    }
                     if (!confirm('Tanlangan guruhlarning sikl bloklari panelga qaytarilsinmi?')) return;
                     this.disabled = true;
                     $('autoMsg').textContent = 'Sikl bloklari bo‘shatilmoqda...';

@@ -4504,14 +4504,16 @@ class TimetableController extends Controller
     private function whereDepartmentTeacher($q, array $context): void
     {
         $deptId = (int) $context['department_hemis_id'];
-        $year = DB::table('semesters')->where('current', true)->max('education_year');
-        $load = DB::table('curriculum_subject_teachers')
-            ->where('department_id', $deptId)
-            ->where('active', true)
-            ->when($year, fn ($w) => $w->where('education_year_id', $year));
-
         // Kafedra bo'lingan bo'lsa — eski kafedra o'qituvchilari ham (config/kafedra.php)
         $deptIds = array_values(array_unique(array_merge([$deptId], array_map('intval', config('kafedra.predecessors.' . $deptId, [])))));
+
+        // HEMIS yuklamasi: shu (va eski) kafedra fanlaridan joriy yoki o'tgan o'quv yilida dars bergan
+        // (yangi yil yuklamasi hali kiritilmagan bo'lishi mumkin; dekan/o'rindoshlar HEMIS da boshqa bo'limda)
+        $year = (int) DB::table('semesters')->where('current', true)->max('education_year');
+        $load = DB::table('curriculum_subject_teachers')
+            ->whereIn('department_id', $deptIds)
+            ->where('active', true)
+            ->when($year, fn ($w) => $w->where('education_year_id', '>=', $year - 1));
 
         $q->where(function ($w) use ($deptId, $deptIds, $context, $load) {
             $w->whereIn('department_hemis_id', $deptIds)

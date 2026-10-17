@@ -2469,7 +2469,7 @@ class TimetableController extends Controller
         $cycleView = $data['view'] ?? 'flow';
         // "Faqat meniki": o'qituvchi faqat o'zi biriktirilgan fan bloklarini ko'radi.
         $mineTeacherId = !empty($data['mine']) ? $this->timetableTeacherId($request) : null;
-        $mineFlowSubjects = [];   // flowKey => [subject => true]
+        $mineFlowSubjects = [];   // flowKey => [subject => [training_type => true]]
         // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
         // para qatorlari yo'q — faqat fan nomi, kunlar va joylash qoidalari.
         // Kafedra mudiri xuddi shu bitta kartani ko'radi, lekin uni ko'chira
@@ -2624,7 +2624,7 @@ class TimetableController extends Controller
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
                     if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
-                        $mineFlowSubjects[$flowKey][$c->subject_name] = true;
+                        $mineFlowSubjects[$flowKey][$c->subject_name][(string) $c->training_type] = true;
                     }
                 }
             }
@@ -2653,7 +2653,7 @@ class TimetableController extends Controller
                         $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
                     }
                     if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
-                        $mineFlowSubjects[$flowKey][$c->subject_name] = true;
+                        $mineFlowSubjects[$flowKey][$c->subject_name][(string) $c->training_type] = true;
                     }
                     if ($c->teacher_name) {
                         $byFlow[$flowKey]['req'][$reqKey]['teachers'][$c->teacher_name] = true;
@@ -2670,6 +2670,8 @@ class TimetableController extends Controller
             foreach ($byFlow as $flowKey => $g) {
                 $keep = $mineFlowSubjects[$flowKey] ?? [];
                 $byFlow[$flowKey]['subs'] = array_intersect_key($g['subs'], $keep);
+                // Batafsil ko'rinishda mashg'ulot turi ham filtrlanadi (mas. faqat ma'ruza o'qituvchisi).
+                $byFlow[$flowKey]['mine'] = $keep;
                 if (!$byFlow[$flowKey]['subs']) {
                     unset($byFlow[$flowKey]);
                 }
@@ -2774,6 +2776,11 @@ class TimetableController extends Controller
                 if ($cycleSimple && $blockType === 'lecture') {
                     continue;
                 }
+                // "Faqat meniki": batafsil ko'rinishda faqat o'ziga biriktirilgan turdagi blok
+                // (sodda ko'rinishda amaliy blok butun fanni bildiradi — fan bo'yicha yetarli).
+                if (!$cycleSimple && isset($g['mine']) && !isset($g['mine'][$placement->subject_name][$blockType])) {
+                    continue;
+                }
                 $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name, $g['faculty'] ?? null);
                 // Kun = 6 soat: ma'ruza o'z soatidan (2 soat/kun), amaliy to'liq sikl.
                 $days = $cycleSimple
@@ -2844,6 +2851,9 @@ class TimetableController extends Controller
                 // Sodda rejimda fanga bitta karta (ma'ruza+amaliy birga).
                 $cardTypes = $cycleSimple ? ['practice'] : ['lecture', 'practice'];
                 foreach ($cardTypes as $cardType) {
+                    if (!$cycleSimple && isset($g['mine']) && !isset($g['mine'][$subject][$cardType])) {
+                        continue;
+                    }
                     $typeDays = $cycleSimple
                         ? (int) $days
                         : $this->cycleTypeDays((int) $days, $hrs, $cardType);

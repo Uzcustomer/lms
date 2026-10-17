@@ -17,7 +17,8 @@
     $timetableReadOnly = $timetableActiveRole === 'oqituvchi';
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead || $timetableReadOnly;
     $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
-    $timetableCanUseManager = $timetableAssignmentOnly;
+    // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchiga yopiq.
+    $timetableCanUseManager = $timetableAssignmentOnly && !$timetableReadOnly;
 @endphp
 
     <x-slot name="header">

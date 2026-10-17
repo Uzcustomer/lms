@@ -20,6 +20,16 @@ class TimetableAssignmentAccess
             $activeRole = $userRoles[0];
         }
 
+        // Route'dagi RoleMiddleware foydalanuvchining ISTALGAN roliga qaraydi, quyidagi
+        // cheklovlar esa FAOL rolga. Faol rol ro'yxatda bo'lmasa (mas. faol rol — dekan,
+        // lekin oqituvchi roli ham bor) cheklovsiz to'liq kirishga tushib qolmasin.
+        // Ro'yxat routes/web.php dagi dars-jadvali-tuzish guruhi bilan bir xil.
+        $timetableRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi',
+            'oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri', 'oqituvchi'];
+        if ($user && !in_array($activeRole, $timetableRoles, true)) {
+            abort(403, 'Dars jadvaliga kirish uchun mos rolni tanlang.');
+        }
+
         // Sinov (faqat admin) doskasi — boshqa rollarga yopiq
         if (!in_array($activeRole, ['superadmin', 'admin'], true)) {
             $board = $request->route('board');

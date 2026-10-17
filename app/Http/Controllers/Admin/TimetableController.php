@@ -2528,8 +2528,12 @@ class TimetableController extends Controller
         $holidays = array_keys($holSet);
         sort($holidays);
 
-        // Semestr sanasi va bayramlarni sozlamaga saqlaymiz (keyingi safar eslab qolish uchun)
-        if (($set['semester_start'] ?? null) !== $startC->toDateString() || ($set['holidays'] ?? []) !== $holidays) {
+        // Semestr sanasi va bayramlarni sozlamaga saqlaymiz (keyingi safar eslab qolish uchun).
+        // Faqat sikl jadvalini tahrirlay oladigan rollar: o'qituvchi (faqat ko'rish) va
+        // boshqalar butun doska kalendarini o'zgartirib yubormasin.
+        $canSaveCalendar = $this->cycleLayerEditable($cycleRole, 'external') || $this->cycleLayerEditable($cycleRole, 'internal');
+        if ($canSaveCalendar
+            && (($set['semester_start'] ?? null) !== $startC->toDateString() || ($set['holidays'] ?? []) !== $holidays)) {
             $set['semester_start'] = $startC->toDateString();
             $set['holidays'] = $holidays;
             $board->update(['settings' => $set]);

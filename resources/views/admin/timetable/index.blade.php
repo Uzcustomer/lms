@@ -1213,7 +1213,8 @@
         #cycleGrid col.cyc-col-hidden { visibility: collapse; }
         #cycleGrid th.cyc-col-hidden { padding: 0; border: 0; font-size: 0; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
-        #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
+        #cycleGrid .cyc-block { text-align: center; font-size: 11.5px; line-height: 1.25; overflow: hidden; white-space: normal;
+            overflow-wrap: anywhere; vertical-align: middle; color: #1e293b; }
         #cycleGrid .cyc-block { position: relative; }
         #cycleGrid .cyc-shift-actions { position: absolute; top: 2px; left: 3px; right: 3px; z-index: 3; display: flex;
             justify-content: space-between; opacity: 0; pointer-events: none; transition: opacity .12s; }
@@ -1254,7 +1255,9 @@
             box-shadow: inset 0 0 0 2px #dc2626; background: rgba(239, 68, 68, .24);
         }
         #cycleGrid tbody td { position: relative; }
-        #cycleGrid .cyc-lbl { display: inline-block; padding: 0 4px; font-weight: 600; }
+        #cycleGrid .cyc-lbl { display: inline-block; max-width: 100%; padding: 2px 4px; font-weight: 500; }
+        #cycleGrid .cyc-subj { font-weight: 800; }
+        #cycleGrid .cyc-days { font-weight: 600; color: #334155; white-space: nowrap; }
         #cycleGrid .cyc-pcol { width: 52px; min-width: 52px; padding: 1px 3px; background: #f1f5f9; color: #64748b;
             font-size: 9px; font-weight: 700; text-align: center; border: 1px solid #e2e8f0; }
         #cycleGrid .cyc-pname { font-size: 9.5px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
@@ -1263,7 +1266,9 @@
             border-radius: 4px; font-size: 8px; font-weight: 800; color: #fff; vertical-align: middle; }
         #cycleGrid .cyc-type.lecture { background: #4f46e5; }
         #cycleGrid .cyc-type.practice { background: #0d9488; }
-        #cycleGrid .cyc-hrs { margin-left: 3px; font-style: normal; font-weight: 700; font-size: 8.5px; color: #475569; }
+        #cycleGrid .cyc-hrs { display: inline-block; margin-left: 3px; padding: 0 4px; border-radius: 4px; font-style: normal;
+            font-weight: 800; font-size: 10px; line-height: 15px; white-space: nowrap; color: #b45309; background: rgba(255, 247, 237, .95);
+            border: 1px solid rgba(217, 119, 6, .35); }
         .cycle-pn-type { display: inline-block; margin-right: 4px; padding: 1px 5px; border-radius: 4px;
             font-size: 8.5px; font-weight: 800; color: #fff; }
         .cycle-pn-type.lecture { background: #4f46e5; }
@@ -3423,7 +3428,7 @@
                         while (col < b.from) { h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '"></td>'; col++; }
                         const c = subjColor(b.subject);
                         h += '<td class="cyc-cell cyc-block" colspan="' + (b.to - b.from + 1) + '" style="background:' + c.bg + ';border-color:' + c.border + ';" title="' + esc(b.subject) + ' — ' + b.days + ' kun">' +
-                            '<span class="cyc-lbl">' + esc(b.subject) + ' <b>' + b.days + '</b></span></td>';
+                            '<span class="cyc-lbl"><b class="cyc-subj">' + esc(b.subject) + '</b> <span class="cyc-days">(' + b.days + ')</span></span></td>';
                         col = b.to + 1;
                     });
                     while (col < dates.length) { h += '<td class="cyc-cell' + (dates[col] && (dates[col].sunday || dates[col].holiday) ? ' cyc-off' : '') + '"></td>'; col++; }
@@ -3806,7 +3811,7 @@
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
                                     '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="1" aria-label="Bir o\'quv kuni oldinga">&#8594;</button>' +
-                                    '</span><span class="cyc-lbl">' + typeChip + esc(block.subject) + ' <b>' + block.days + '</b>' + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
+                                    '</span><span class="cyc-lbl">' + typeChip + '<b class="cyc-subj">' + esc(block.subject) + '</b> <span class="cyc-days">(' + block.days + ')</span>' + (block.hours ? '<i class="cyc-hrs">' + block.hours + ' s</i>' : '') + '</span>' +
                                     reqHtml +
                                     '</td>';
                             } else {

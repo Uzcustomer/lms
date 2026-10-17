@@ -191,6 +191,24 @@
     .jr-flag.is-bad { background: #fee2e2; color: #b91c1c; }
     .jr-flag.is-warn { background: #fef3c7; color: #a35a06; }
     .jr-sid { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+    .jr-try {
+        display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px;
+        background: #eef2f8; color: var(--ink-soft); font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
+    }
+    .jr-try.is-retake { background: #e8eef7; color: var(--navy-soft); }
+    .jr-flag.is-ok { background: var(--ok-bg); color: var(--ok); }
+    .jr-flash.is-error { border-color: #e8c3c0; border-left-color: var(--bad); background: var(--bad-bg); color: #8f1d17; }
+
+    /* Qayta topshirish tugmasi */
+    .jr-retake-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; }
+    .jr-retake {
+        padding: 4px 11px; border: 1px solid #c9d5e4; border-radius: 4px; background: #fff;
+        color: var(--navy); font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+        transition: background .16s, border-color .16s;
+    }
+    .jr-retake:hover { background: #e8eef7; border-color: #b7c7dc; }
+    .jr-retake.is-cancel { border-color: transparent; color: var(--bad); font-weight: 500; }
+    .jr-retake.is-cancel:hover { background: var(--bad-bg); }
 
     .jr-pill {
         display: inline-flex; padding: 3px 11px; border-radius: 3px;
@@ -346,6 +364,9 @@
             @if(session('success'))
                 <div class="jr-flash">{{ session('success') }}</div>
             @endif
+            @if(session('error'))
+                <div class="jr-flash is-error">{{ session('error') }}</div>
+            @endif
 
             <div class="jr-head">
                 <div class="jr-eyebrow">Test moduli</div>
@@ -460,7 +481,7 @@
                             <summary class="jr-group-head">
                                 <span class="jr-group-title">
                                     <b>{{ $group['name'] }}</b>
-                                    <span class="jr-group-count">{{ $group['attempts']->count() }} talaba</span>
+                                    <span class="jr-group-count">{{ $group['student_count'] ?? $group['attempts']->count() }} talaba</span>
                                 </span>
                                 <div class="jr-tags">
                                     <span class="jr-group-rate">
@@ -492,6 +513,8 @@
                                         <td>
                                             <span class="jr-student">{{ $attempt->student_name }}</span>
                                             <span class="jr-sid">{{ $attempt->student_id_number }}</span>
+                                            @php $attemptNo = max(1, (int) ($attempt->attempt_no ?? 1)); @endphp
+                                            <span class="jr-try {{ $attemptNo > 1 ? 'is-retake' : '' }}">{{ $attemptNo }}-urinish</span>
                                         </td>
                                         <td>
                                             @if($attempt->status === 'in_progress')
@@ -520,6 +543,33 @@
                                                 <span class="jr-flag is-bad" title="O'qituvchi ochib berishini kutmoqda">Qulflangan</span>
                                             @elseif((int) ($attempt->lock_count ?? 0) === 1)
                                                 <span class="jr-flag is-warn" title="Chalg'igani uchun bir marta qulflangan va o'qituvchi ochib bergan">1 marta qulflangan</span>
+                                            @endif
+
+                                            {{-- Qayta topshirish: faqat talabaning oxirgi, tugagan urinishida --}}
+                                            @if(($retakeReady ?? false) && $attempt->status !== 'in_progress')
+                                                @php
+                                                    $isLatest = $group['attempts']
+                                                        ->where('student_id', $attempt->student_id)
+                                                        ->max(fn ($a) => (int) ($a->attempt_no ?? 1)) === $attemptNo;
+                                                @endphp
+                                                @if($isLatest)
+                                                    @php
+                                                        $confirmText = $attempt->retake_allowed_at
+                                                            ? 'Qayta topshirish ruxsati bekor qilinsinmi?'
+                                                            : $attempt->student_name . ' uchun ' . ($attemptNo + 1) . '-urinishga ruxsat berilsinmi?';
+                                                    @endphp
+                                                    <form method="POST" class="jr-retake-form"
+                                                          action="{{ route('teacher.fan-testlari.attempts.retake', [$selected, $attempt, 'group' => request('group'), 'student' => request('student')]) }}"
+                                                          onsubmit="return confirm({{ \Illuminate\Support\Js::from($confirmText) }})">
+                                                        @csrf
+                                                        @if($attempt->retake_allowed_at)
+                                                            <span class="jr-flag is-ok" title="{{ $attempt->retake_allowed_by }} ruxsat bergan, {{ $attempt->retake_allowed_at->format('d.m.Y H:i') }}">{{ $attemptNo + 1 }}-urinishga ruxsat berilgan</span>
+                                                            <button type="submit" class="jr-retake is-cancel">bekor qilish</button>
+                                                        @else
+                                                            <button type="submit" class="jr-retake">Qayta topshirish</button>
+                                                        @endif
+                                                    </form>
+                                                @endif
                                             @endif
                                         </td>
                                         <td><span class="jr-num">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</span></td>

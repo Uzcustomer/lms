@@ -72,7 +72,7 @@ class FanTestiJournalExport implements WithMultipleSheets
 
 class FanTestiJournalResultsSheet implements FromArray, WithEvents, WithTitle, WithStrictNullComparison
 {
-    private const HEAD = ['№', 'Guruh', 'F.I.Sh.', 'Talaba ID', 'Fakultet', "Yo'nalish", 'Holat', 'Ball',
+    private const HEAD = ['№', 'Guruh', 'F.I.Sh.', 'Talaba ID', 'Urinish', 'Fakultet', "Yo'nalish", 'Holat', 'Ball',
         'Maks. ball', 'Foiz', "To'g'ri javoblar", 'Savollar soni', 'Boshlagan vaqti', 'Topshirgan vaqti',
         'Davomiyligi (daq.)', 'Izoh'];
 
@@ -95,6 +95,7 @@ class FanTestiJournalResultsSheet implements FromArray, WithEvents, WithTitle, W
                 $a->group_name ?: 'Guruhsiz',
                 $a->student_name,
                 (string) $a->student_id_number,
+                $a->attemptLabel(),
                 $a->faculty_name,
                 $a->specialty_name,
                 FanTestiJournalExport::status($a),
@@ -139,14 +140,14 @@ class FanTestiJournalResultsSheet implements FromArray, WithEvents, WithTitle, W
     {
         return [AfterSheet::class => function (AfterSheet $event) {
             FanTestiJournalExport::style($event, count(self::HEAD), $this->lastRow,
-                [5, 16, 34, 16, 24, 24, 18, 8, 10, 8, 10, 10, 17, 17, 12, 40]);
+                [5, 16, 34, 16, 10, 24, 24, 18, 8, 10, 8, 10, 10, 17, 17, 12, 40]);
         }];
     }
 }
 
 class FanTestiJournalAnswersSheet implements FromArray, WithEvents, WithTitle, WithStrictNullComparison
 {
-    private const HEAD = ['Guruh', 'F.I.Sh.', 'Talaba ID', 'Savol №', 'Savol', 'Talaba javobi', "To'g'ri javob", 'Natija', 'Ball'];
+    private const HEAD = ['Guruh', 'F.I.Sh.', 'Talaba ID', 'Urinish', 'Savol №', 'Savol', 'Talaba javobi', "To'g'ri javob", 'Natija', 'Ball'];
 
     private int $lastRow = 2;
 
@@ -168,6 +169,7 @@ class FanTestiJournalAnswersSheet implements FromArray, WithEvents, WithTitle, W
                     $a->group_name ?: 'Guruhsiz',
                     $a->student_name,
                     (string) $a->student_id_number,
+                    $a->attemptLabel(),
                     $ans->question_index + 1,
                     $ans->question_prompt,
                     $given ?: '—',
@@ -186,7 +188,7 @@ class FanTestiJournalAnswersSheet implements FromArray, WithEvents, WithTitle, W
     {
         return [AfterSheet::class => function (AfterSheet $event) {
             FanTestiJournalExport::style($event, count(self::HEAD), $this->lastRow,
-                [16, 34, 16, 8, 60, 34, 34, 11, 7]);
+                [16, 34, 16, 10, 8, 60, 34, 34, 11, 7]);
         }];
     }
 }

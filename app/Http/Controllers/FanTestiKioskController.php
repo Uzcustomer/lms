@@ -478,13 +478,10 @@ class FanTestiKioskController extends Controller
 
         // Har bir talaba testni bir marta topshiradi. Yarim qolgan urinish
         // (kompyuter o'chib qolgan) esa yuz tekshiruvidan keyin davom etadi.
-        $finished = FanTestiAttempt::query()
-            ->where('fan_testi_id', $fanTesti->id)
-            ->where('student_id', $student->id)
-            ->where('status', '!=', 'in_progress')
-            ->exists();
-        if ($finished) {
-            $fail("Bu talaba testni allaqachon topshirgan. Har bir talaba testni faqat bir marta topshiradi.");
+        // O'qituvchi jurnalda "Qayta topshirish" bergan bo'lsa — yangi urinish ochiladi.
+        $latest = FanTestiAttempt::latestFor($fanTesti->id, $student->id);
+        if ($latest && $latest->isFinished() && !$latest->retakeAllowed()) {
+            $fail("Bu talaba testni allaqachon topshirgan. Qayta topshirish uchun o'qituvchi jurnalda ruxsat berishi kerak.");
         }
 
         if ($this->activeQuestions($fanTesti)->isEmpty()) {
@@ -526,15 +523,15 @@ class FanTestiKioskController extends Controller
      */
     private function enterAttempt(Request $request, FanTesti $fanTesti, Student $student): string
     {
-        $attempt = FanTestiAttempt::query()
-            ->where('fan_testi_id', $fanTesti->id)
-            ->where('student_id', $student->id)
-            ->first();
+        $attempt = FanTestiAttempt::latestFor($fanTesti->id, $student->id);
 
-        if (!$attempt) {
+        // Yo'q bo'lsa — 1-urinish; tugagan va qayta topshirishga ruxsat berilgan
+        // bo'lsa — keyingi raqamli yangi urinish (oldingisi jurnalda qoladi).
+        if (!$attempt || $attempt->retakeAllowed()) {
             $attempt = FanTestiAttempt::create(FanTestiAttempts::freshFields($fanTesti, FanTestiAttempts::questionSnapshot($fanTesti)) + [
                 'fan_testi_id' => $fanTesti->id,
                 'student_id' => $student->id,
+                'attempt_no' => $attempt ? (int) $attempt->attempt_no + 1 : 1,
                 'student_hemis_id' => $student->hemis_id,
                 'student_name' => $student->full_name,
                 'student_id_number' => $student->student_id_number,

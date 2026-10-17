@@ -765,27 +765,35 @@ class FanTestiController extends Controller
 
         $attempts = $this->journalAttempts($request, $selected);
 
+        // Statistika talaba bo'yicha: qayta topshirgan talaba ikki marta sanalmasin —
+        // faqat oxirgi urinishi hisobga olinadi. Ro'yxatda esa hamma urinishlar turadi.
+        $latestOf = fn ($rows) => $rows->groupBy('student_id')
+            ->map(fn ($r) => $r->sortByDesc(fn ($a) => [(int) ($a->attempt_no ?? 1), $a->id])->first());
+
         $groups = $attempts
             ->groupBy(fn (FanTestiAttempt $attempt) => $attempt->group_name ?: 'Guruhsiz')
-            ->map(function ($rows, $name) {
-                $submitted = $rows->where('status', '!=', 'in_progress')->count();
-                $passed = $rows->where('is_passed', true)->count();
+            ->map(function ($rows, $name) use ($latestOf) {
+                $latest = $latestOf($rows);
+                $submitted = $latest->where('status', '!=', 'in_progress')->count();
+                $passed = $latest->where('is_passed', true)->count();
 
                 return [
                     'name' => $name,
-                    'attempts' => $rows,
+                    'attempts' => $rows->sortBy(fn ($a) => [$a->student_name, (int) ($a->attempt_no ?? 1)])->values(),
+                    'student_count' => $latest->count(),
                     'submitted_count' => $submitted,
-                    'in_progress_count' => $rows->where('status', 'in_progress')->count(),
+                    'in_progress_count' => $latest->where('status', 'in_progress')->count(),
                     'passed_count' => $passed,
                     // O'tganlar ulushi — topshirib bo'lganlar ichida
                     'pass_rate' => $submitted > 0 ? (int) round($passed * 100 / $submitted) : 0,
-                    'average_percent' => round((float) $rows->where('status', '!=', 'in_progress')->avg('percent'), 1),
+                    'average_percent' => round((float) $latest->where('status', '!=', 'in_progress')->avg('percent'), 1),
                 ];
             })
             ->sortKeys()
             ->values();
 
-        $finished = $attempts->where('status', '!=', 'in_progress');
+        $latestAll = $latestOf($attempts);
+        $finished = $latestAll->where('status', '!=', 'in_progress');
 
         return view('teacher.fan-testlari.journal', [
             'collections' => $visibleCollections,
@@ -799,14 +807,57 @@ class FanTestiController extends Controller
                 ->orderBy('group_name')
                 ->pluck('group_name'),
             'summary' => [
-                'total' => $attempts->count(),
+                'total' => $latestAll->count(),
                 'submitted' => $finished->count(),
-                'in_progress' => $attempts->where('status', 'in_progress')->count(),
-                'passed' => $attempts->where('is_passed', true)->count(),
+                'in_progress' => $latestAll->where('status', 'in_progress')->count(),
+                'passed' => $latestAll->where('is_passed', true)->count(),
                 'average_percent' => round((float) $finished->avg('percent'), 1),
             ],
+            'retakeReady' => Schema::hasColumn('fan_testi_attempts', 'attempt_no'),
             'migrationPending' => false,
         ]);
+    }
+
+    /**
+     * Qayta topshirishga ruxsat (jurnaldagi tugma). Talaba kioskda ID sini
+     * kiritganda yangi — keyingi raqamli — urinish ochiladi, eskisi jurnalda qoladi.
+     * Qayta bosilsa ruxsat bekor bo'ladi (talaba hali boshlamagan bo'lsa).
+     */
+    public function allowRetake(FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $attempt->fan_testi_id === (int) $fanTesti->id, 404);
+        abort_unless(Schema::hasColumn('fan_testi_attempts', 'attempt_no'), 409, 'php artisan migrate ni ishga tushiring.');
+
+        $back = redirect()->route('teacher.fan-testlari.journal', array_filter([
+            'test_id' => $fanTesti->id,
+            'group' => request('group'),
+            'student' => request('student'),
+        ]));
+
+        if (!$attempt->isFinished()) {
+            return $back->with('error', $attempt->student_name . ': test hali tugamagan — qayta topshirishga ruxsat berib bo\'lmaydi.');
+        }
+
+        $latest = FanTestiAttempt::latestFor($attempt->fan_testi_id, $attempt->student_id);
+        if ($latest && $latest->id !== $attempt->id) {
+            return $back->with('error', $attempt->student_name . ': talaba allaqachon ' . $latest->attemptLabel() . ' ochgan.');
+        }
+
+        $teacher = $this->teacher();
+        if ($attempt->retake_allowed_at) {
+            $attempt->update(['retake_allowed_at' => null, 'retake_allowed_by' => null]);
+
+            return $back->with('success', $attempt->student_name . ': qayta topshirish ruxsati bekor qilindi.');
+        }
+
+        $attempt->update([
+            'retake_allowed_at' => now(),
+            'retake_allowed_by' => mb_substr($teacher->short_name ?: $teacher->full_name, 0, 120),
+        ]);
+
+        return $back->with('success', $attempt->student_name . ': ' . ((int) $attempt->attempt_no + 1)
+            . "-urinishga ruxsat berildi. Talaba kioskda ID sini kiritib testni qaytadan topshiradi.");
     }
 
     /** Test jurnali Excelda: sahifadagi filtrlar (guruh, talaba) bilan. */
@@ -819,7 +870,7 @@ class FanTestiController extends Controller
         abort_unless($selected, 404);
 
         $attempts = $this->journalAttempts($request, $selected)
-            ->sortBy(fn (FanTestiAttempt $a) => [$a->group_name ?: 'Guruhsiz', $a->student_name])
+            ->sortBy(fn (FanTestiAttempt $a) => [$a->group_name ?: 'Guruhsiz', $a->student_name, (int) ($a->attempt_no ?? 1)])
             ->values();
 
         $name = trim(preg_replace('/[^\pL\pN]+/u', '_', $selected->name), '_') ?: 'test';

@@ -44,8 +44,8 @@ class FanTestiAttempts
 
     /**
      * Urinishni boshidan boshlaydi: javoblar o'chiriladi, savollar qaytadan
-     * olinadi va vaqt yangidan hisoblanadi. Urinish (id) o'sha-o'sha qoladi —
-     * talaba bitta testni bir marta ishlaydi (fan_testi_id + student_id noyob).
+     * olinadi va vaqt yangidan hisoblanadi. Urinish (id va raqami) o'sha-o'sha
+     * qoladi — bu qayta topshirish emas, yarim qolgan ishni boshidan boshlash.
      */
     public static function restart(FanTestiAttempt $attempt): void
     {

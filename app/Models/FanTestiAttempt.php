@@ -9,7 +9,7 @@ class FanTestiAttempt extends Model
     protected $table = 'fan_testi_attempts';
 
     protected $fillable = [
-        'fan_testi_id', 'student_id', 'student_hemis_id',
+        'fan_testi_id', 'student_id', 'attempt_no', 'student_hemis_id',
         'student_name', 'student_id_number', 'group_id', 'group_name',
         'faculty_name', 'specialty_name',
         'status', 'started_at', 'expires_at', 'submitted_at', 'duration_seconds',
@@ -18,12 +18,15 @@ class FanTestiAttempt extends Model
         'face_checks', 'face_mismatches', 'away_count',
         'away_streak', 'lock_count', 'locked_at', 'ended_reason', 'face_bypass_by',
         'questions_snapshot', 'ip_address',
+        'retake_allowed_at', 'retake_allowed_by',
     ];
 
     protected $casts = [
         'fan_testi_id' => 'integer',
         'student_id' => 'integer',
+        'attempt_no' => 'integer',
         'started_at' => 'datetime',
+        'retake_allowed_at' => 'datetime',
         'expires_at' => 'datetime',
         'submitted_at' => 'datetime',
         'questions_count' => 'integer',
@@ -84,6 +87,29 @@ class FanTestiAttempt extends Model
         }
 
         return max(0, now()->diffInSeconds($this->expires_at, false));
+    }
+
+    /** "1-urinish", "2-urinish" ... (ustun bo'lmasa — 1). */
+    public function attemptLabel(): string
+    {
+        return max(1, (int) ($this->attempt_no ?? 1)) . '-urinish';
+    }
+
+    /** O'qituvchi qayta topshirishga ruxsat bergan va u hali ishlatilmagan. */
+    public function retakeAllowed(): bool
+    {
+        return $this->retake_allowed_at !== null && $this->isFinished();
+    }
+
+    /** Talabaning shu testdagi oxirgi (eng katta raqamli) urinishi. */
+    public static function latestFor(int $testId, int $studentId): ?self
+    {
+        return static::query()
+            ->where('fan_testi_id', $testId)
+            ->where('student_id', $studentId)
+            ->orderByDesc('attempt_no')
+            ->orderByDesc('id')
+            ->first();
     }
 
     public function statusLabel(): string

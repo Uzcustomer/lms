@@ -194,6 +194,9 @@
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sig'masa, bir fanning turli oqimlardagi sikllari ko'rsatilgan o'quv kunigacha kesishishi mumkin">
+                            <input type="checkbox" id="cycleAllowOverlap" class="rounded border-gray-300"> Kesishishga ruxsat
+                            <input type="number" id="cycleOverlapDays" min="1" max="60" value="1" class="w-14 rounded border-gray-300 text-xs py-0.5" disabled> kun</label>
                         <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Ko'rinish rejimi">
                             <button type="button" id="cycViewFlow" class="px-2 py-1 bg-blue-600 font-semibold text-white">Oqim bo'yicha</button>
                             <button type="button" id="cycViewGroup" class="px-2 py-1 bg-white text-gray-500">Guruh bo'yicha</button>
@@ -3275,6 +3278,7 @@
             }
             async function loadCyclePlan(options = {}) {
                 if (!board) return;
+                loadCycleOverlapUi();
                 const body = scopeBody();
                if ($('cycleStart').value) body.start_date = $('cycleStart').value;
                 body.holidays = cycleHolidays;
@@ -3398,6 +3402,7 @@
                 if (!card) return;
                 try {
                     await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                        ...cycleOverlapParams(),
                         action: 'place', specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject, start_index: index,
                         training_type: card.type || 'practice', pair: pair || 1, view: cycleViewMode,
@@ -3970,6 +3975,7 @@
                     }
                     try {
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                        ...cycleOverlapParams(),
                             action: 'place', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject, start_index: index,
                             training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleViewMode,
@@ -4014,6 +4020,7 @@
                         shiftBtn.disabled = true;
                         try {
                             const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                        ...cycleOverlapParams(),
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
                                 training_type: card.type || 'practice', pair: card.pair || 1, view: cycleViewMode,
@@ -4117,6 +4124,7 @@
                     if (!card || !card.placed) return;
                     try {
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
+                        ...cycleOverlapParams(),
                             action: 'remove', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject,
                             training_type: card.type || 'practice', view: cycleViewMode,
@@ -4199,6 +4207,31 @@
             if ($('cycViewGroup')) $('cycViewGroup').onclick = () => setCycleViewMode('group');
             if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
             // Bayram qo'shish
+            // Sikl kesishishiga ruxsat (doska bo'yicha brauzerda eslab qolinadi)
+            function cycleOverlapKey() { return board ? 'lms:cycle-overlap:' + board.id : ''; }
+            function cycleOverlapParams() {
+                const on = !!($('cycleAllowOverlap') && $('cycleAllowOverlap').checked);
+                const days = Math.max(1, parseInt(($('cycleOverlapDays') || {}).value, 10) || 1);
+                return on ? { allow_overlap: 1, overlap_days: days } : { allow_overlap: 0 };
+            }
+            function syncCycleOverlapUi() {
+                if (!$('cycleAllowOverlap')) return;
+                $('cycleOverlapDays').disabled = !$('cycleAllowOverlap').checked;
+                try { localStorage.setItem(cycleOverlapKey(), JSON.stringify(cycleOverlapParams())); } catch (e) { }
+            }
+            function loadCycleOverlapUi() {
+                if (!$('cycleAllowOverlap')) return;
+                let saved = null;
+                try { saved = JSON.parse(localStorage.getItem(cycleOverlapKey()) || 'null'); } catch (e) { }
+                $('cycleAllowOverlap').checked = !!(saved && saved.allow_overlap);
+                if (saved && saved.overlap_days) $('cycleOverlapDays').value = saved.overlap_days;
+                $('cycleOverlapDays').disabled = !$('cycleAllowOverlap').checked;
+            }
+            if ($('cycleAllowOverlap')) {
+                $('cycleAllowOverlap').onchange = syncCycleOverlapUi;
+                $('cycleOverlapDays').onchange = syncCycleOverlapUi;
+            }
+
             if ($('cycleHolAddBtn')) $('cycleHolAddBtn').onclick = () => {
                 const d = $('cycleHolAdd').value;
                 if (!d || cycleHolidays.includes(d)) return;

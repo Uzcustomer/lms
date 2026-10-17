@@ -3232,6 +3232,9 @@ class ReportController extends Controller
             $weekOrder = array_keys($weekDates);
             usort($weekOrder, fn ($x, $y) => strcmp($weekFirstDate[$x], $weekFirstDate[$y]) ?: ($x <=> $y));
 
+            // Jami satri uchun: qatorlarda KO'RSATILGAN KTR soatlari yig'indisi (dars turi bo'yicha)
+            $shownKtr = [];
+
             foreach ($weekOrder as $k => $rowWeek) {
                 $rowDate = implode(', ', array_filter(array_map($fmtDate, $weekDates[$rowWeek])));
                 $darsLabel = ($k + 1) . '-dars' . ($rowDate ? ' (' . $rowDate . ')' : '');
@@ -3292,7 +3295,10 @@ class ReportController extends Controller
                             }
                             $rowFarqSum += $diff;
                         }
-                        if (is_numeric($kt)) $rowKtrSum += $kt;
+                        if (is_numeric($kt)) {
+                            $rowKtrSum += $kt;
+                            $shownKtr[$code] = ($shownKtr[$code] ?? 0) + $kt;
+                        }
                     } else {
                         $sheet->setCellValue([$col + 3, $excelRow], '-');
                     }
@@ -3337,8 +3343,9 @@ class ReportController extends Controller
             foreach ($globalTtCodes as $code) {
                 $td = $ttData[$code] ?? null;
                 $h = $td ? array_sum(array_column($td['weeks'], 'hemis')) : 0;
-                // KTR jami: total_ktr (to'liq yig'indi) ishlatiladi
-                $kt = ($td && $ktrExists) ? (int) ($td['total_ktr'] ?? 0) : 0;
+                // KTR jami: Excel qatorlarida ko'rsatilgan KTR soatlari yig'indisi
+                // (HEMIS'da darsi bo'lmagan haftalarning KTR soati qatorga chiqmaydi — jamiga ham qo'shilmaydi)
+                $kt = ($td && $ktrExists) ? (int) ($shownKtr[$code] ?? 0) : 0;
                 $mk = $td ? array_sum(array_column($td['weeks'], 'marked')) : 0;
                 $f = $ktrExists ? round($kt - $h, 1) : 0;
                 $sheet->setCellValue([$col, $excelRow], $h);

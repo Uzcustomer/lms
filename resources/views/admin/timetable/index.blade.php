@@ -3868,6 +3868,15 @@
                                 const plan = block.day_plan || {};
                                 let sumLec = 0, sumPrc = 0;
                                 Object.values(plan).forEach(dp => { sumLec += +dp.lec || 0; sumPrc += +dp.prc || 0; });
+                                const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
+                                const sumBad = (lecTotal != null && sumLec !== +lecTotal) || (prcTotal != null && sumPrc !== +prcTotal);
+                                const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
+                                // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
+                                const compact = spanCols <= 6;
+                                const shortSum = 'M ' + sumLec + ' · A ' + sumPrc + ' s';
+                                // Blokni kataklar to'liq qoplaydi va ularning o'z title'i bor — td title'i
+                                // hech qachon chiqmaydi. Shuning uchun tor blokda ma'lumot katak title'iga qo'shiladi.
+                                const blockTip = compact ? ' — ' + block.subject + (req ? ' · ' + req : '') + ' · ' + sumLabel : '';
                                 let inner = '';
                                 for (let hour = 1; hour <= dayHours; hour++) {
                                     for (let d = 0; d < spanCols; d++) {
@@ -3892,15 +3901,9 @@
                                             + ' data-mk-day="' + offset + '" data-mk-hour="' + hour + '"'
                                             + (offLabel ? ' data-off-label="' + offLabel + '"' : '')
                                             + (off ? ' disabled' : '')
-                                            + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + '"></button>';
+                                            + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + esc(blockTip) + '"></button>';
                                     }
                                 }
-                                const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
-                                const sumBad = (lecTotal != null && sumLec !== +lecTotal) || (prcTotal != null && sumPrc !== +prcTotal);
-                                const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
-                                // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
-                                const compact = spanCols <= 6;
-                                const shortSum = 'M ' + sumLec + ' · A ' + sumPrc + ' s';
                                 cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +

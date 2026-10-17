@@ -15,6 +15,8 @@
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
     // O'qituvchi: faqat ko'rish (hech qanday tahrirlash tugmasi yo'q)
     $timetableReadOnly = $timetableActiveRole === 'oqituvchi';
+    // O'qituvchi identifikatori (o'qituvchi/kafedra mudiri — teacher guard): "Faqat meniki" rejimi uchun
+    $timetableTeacherId = $timetableUser instanceof \App\Models\Teacher ? (int) $timetableUser->id : null;
     $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead || $timetableReadOnly;
     $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchiga yopiq.
@@ -172,6 +174,12 @@
                 <div class="tt-bottom-row">
                     <div class="tt-toggle-group">
                         <label class="tt-toggle-chip"><input type="checkbox" id="autoScope"><span class="tt-toggle-icon" aria-hidden="true"><img src="{{ asset('image/07_classes.png') }}" alt="" aria-hidden="true"></span>Butun doska</label>
+                        @if($timetableTeacherId)
+                        <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Butun doska yoki faqat sizga biriktirilgan darslar">
+                            <button type="button" id="mineAll" class="px-2 py-1 bg-blue-600 font-semibold text-white">Butun doska</button>
+                            <button type="button" id="mineOnly" class="px-2 py-1 bg-white text-gray-500">Faqat meniki</button>
+                        </span>
+                        @endif
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -2241,6 +2249,11 @@
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
+            const TIMETABLE_TEACHER_ID = @json($timetableTeacherId);
+            // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
+            let mineOnly = false;
+            try { mineOnly = Boolean(TIMETABLE_TEACHER_ID) && localStorage.getItem('lms:timetable-mine') === '1'; } catch (e) { }
+            let allCards = [];
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
             const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
@@ -2656,7 +2669,8 @@
                 // URLga noyob parametr — har qanday kesh (brauzer/proxy) eski kartalarni
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
-                board = j.board; cards = j.cards;
+                board = j.board; allCards = j.cards || [];
+                cards = mineOnly ? allCards.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID) : allCards;
                 missingGroups = j.missing_groups || [];
                 buildSubjectColors();
                 loadSubjectColorOverrides();
@@ -3350,6 +3364,7 @@
                 if (options.clear) body.clear = 1;
                 body.view = cycleViewMode;
                 Object.assign(body, cycleLayerParams());
+                if (mineOnly) { body.mine = 1; delete body.clear; }
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
@@ -3702,7 +3717,9 @@
                 const basePairs = Math.ceil(6 / (rowMins >= 60 ? 2 : 1));
                 let maxLaneUsed = 1;
                 rows.forEach(row => (row.blocks || []).forEach(block => {
-                    const laneTo = Math.max(1, +block.pair || 1) + Math.max(+block.span_head || 1, +block.span_tail || 0, 1) - 1;
+                    const bp = Math.max(1, +block.pair || 1);
+                    const laneTo = Math.max(bp + Math.max(+block.span_head || 1, 1) - 1,
+                        (+block.span_tail || 0) > 0 ? bp + (+block.tail_offset || 0) + (+block.span_tail) - 1 : bp);
                     if (laneTo > maxLaneUsed) maxLaneUsed = laneTo;
                 }));
                 // O'quv bo'limi ko'rinishi: ma'ruza/amaliy ajratilmaydi, para
@@ -3750,14 +3767,16 @@
                         const headDays = +block.head_days || 0;
                         const headTo = block.head_to != null ? +block.head_to : block.to;
                         const tailFrom = block.tail_from != null ? +block.tail_from : null;
+                        // Amaliy dum bo'lagi ma'ruza bo'shatgan paradan boshlanadi (tail_offset < 0).
+                        const tailOffset = +block.tail_offset || 0;
                         const rects = [];
                         if (block.type === 'practice' && spanTail > 0 && tailFrom != null && headDays > 0) {
                             // Bosh bo'lak ichki yakshanba/bayram ustunlarini ham qamrab,
                             // dum bo'lagigacha uzluksiz davom etadi.
                             rects.push({ lanes: spanHead, from: block.from, to: Math.min(tailFrom - 1, block.to), main: true });
-                            rects.push({ lanes: spanTail, from: tailFrom, to: block.to, main: false });
+                            rects.push({ lanes: spanTail, from: tailFrom, to: block.to, main: false, lane0: p + tailOffset });
                         } else if (block.type === 'practice' && spanTail > 0 && headDays < 1) {
-                            rects.push({ lanes: spanTail, from: block.from, to: block.to, main: true });
+                            rects.push({ lanes: spanTail, from: block.from, to: block.to, main: true, lane0: p + tailOffset });
                         } else {
                             rects.push({ lanes: spanHead, from: block.from, to: block.to, main: true });
                         }
@@ -3771,10 +3790,12 @@
                             : '<span class="cyc-type ' + block.type + '" title="' + (block.type === 'lecture' ? "Ma'ruza" : 'Amaliy') + '">' + (block.type === 'lecture' ? 'M' : 'A') + '</span>';
                         const twoRects = rects.length > 1;
                         rects.forEach(rect => {
-                            const lanes = Math.min(rect.lanes, pairs - p + 1);
+                            // Dum bo'lagi (ma'ruza tugagach) yuqoriroq paradan boshlanishi mumkin.
+                            const lp = Math.max(1, rect.lane0 || p);
+                            const lanes = Math.min(rect.lanes, pairs - lp + 1);
                             const to = Math.min(rect.to, cols - 1);
                             if (lanes < 1 || to < rect.from || rect.from < 0) return;
-                            if (!free(p, lanes, rect.from, to)) return; // ustma-ust yozuv jadvalni buzmasin
+                            if (!free(lp, lanes, rect.from, to)) return; // ustma-ust yozuv jadvalni buzmasin
                             const spanCols = to - rect.from + 1;
                             const joinStyle = twoRects ? (rect.main ? 'border-right:0;' : 'border-left:0;') : '';
                             let cellHtml;
@@ -3803,7 +3824,7 @@
                                             + ' title="' + (date ? esc(date.d) : '') + ' · ' + hour + '-soat"></button>';
                                     }
                                 }
-                                cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-head">' +
                                     '<div class="cyc-mk-line">' +
@@ -3819,7 +3840,7 @@
                                     inner +
                                     '</div></div></td>';
                             } else if (rect.main) {
-                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block" draggable="true" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<span class="cyc-shift-actions">' +
                                     '<button type="button" class="cyc-shift-btn" data-cycle-shift="-1" aria-label="Bir o\'quv kuni orqaga">&#8592;</button>' +
                                     '<button type="button" class="cyc-gear" draggable="false" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / vaqt / xona biriktirish">&#9881;</button>' +
@@ -3828,10 +3849,10 @@
                                     reqHtml +
                                     '</td>';
                             } else {
-                                cellHtml = '<td class="cyc-cell cyc-block cyc-cont" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + p + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + '"></td>';
+                                cellHtml = '<td class="cyc-cell cyc-block cyc-cont" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + '"></td>';
                             }
-                            cellAt[p][rect.from] = { html: cellHtml, next: to + 1 };
-                            mark(p, lanes, rect.from, to);
+                            cellAt[lp][rect.from] = { html: cellHtml, next: to + 1 };
+                            mark(lp, lanes, rect.from, to);
                         });
                     });
                     for (let pair = 1; pair <= pairs; pair++) {
@@ -4284,6 +4305,22 @@
                 loadCyclePlan();
             }
             if ($('cycLayerExternal')) $('cycLayerExternal').onclick = () => setCycleLayer('external');
+            function renderMineUi() {
+                [['mineAll', false], ['mineOnly', true]].forEach(([id, on]) => {
+                    const b = $(id);
+                    if (b) b.className = 'px-2 py-1 ' + (mineOnly === on ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
+                });
+            }
+            function setMineOnly(on) {
+                if (mineOnly === on) return;
+                mineOnly = on;
+                try { localStorage.setItem('lms:timetable-mine', on ? '1' : '0'); } catch (e) { }
+                renderMineUi();
+                cards = mineOnly ? allCards.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID) : allCards;
+                if (typeof renderAll === 'function') renderAll();
+                if (viewMode === 'cycle') loadCyclePlan();
+            }
+            if ($('mineAll')) { $('mineAll').onclick = () => setMineOnly(false); $('mineOnly').onclick = () => setMineOnly(true); renderMineUi(); }
             if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
             // Dam olish kunlarini yashirish (brauzerda eslab qolinadi)
             if ($('cycleHideOff')) {

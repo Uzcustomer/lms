@@ -1163,12 +1163,9 @@
         /* Tor blok (≤ 6 kun): faqat fan nomi va soat — o'qituvchi/xona sichqoncha ustiga borganda */
         #cycleGrid .cyc-mk-over.is-compact { gap: 1px; left: 2px; right: 2px; }
         #cycleGrid .cyc-mk-over.is-compact .cyc-mk-title { padding: 1px 4px; font-size: 10.5px; }
-        #cycleGrid .cyc-mk-over.is-compact .cyc-mk-count { font-size: 9px; padding: 0 3px; white-space: nowrap;
-            max-width: 100%; overflow: hidden; }
         #cycleGrid .cyc-mk-over .cyc-mk-title:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .55); }
         #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .6);
             font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #cycleGrid .cyc-mk-over .cyc-mk-count { pointer-events: none; }
         #cycleGrid .cyc-mk-gear { position: absolute; top: 2px; right: 2px; z-index: 3; }
         #cycleGrid .cyc-block.is-mark { padding: 0; overflow: visible; }
         #cycleGrid .cyc-mk {
@@ -3989,13 +3986,9 @@
                                 let sumLec = 0, sumPrc = 0;
                                 Object.values(plan).forEach(dp => { sumLec += +dp.lec || 0; sumPrc += +dp.prc || 0; });
                                 const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
-                                const sumBad = (lecTotal != null && sumLec !== +lecTotal) || (prcTotal != null && sumPrc !== +prcTotal);
                                 const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
                                 // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
                                 const compact = spanCols <= 6;
-                                // 1–2 ustunli (30–60px) blokda "M 2 · A 4 s" ham sig'maydi — "2+4"
-                                // (to'liq hisob katak title'ida va fan oynasida).
-                                const shortSum = spanCols <= 2 ? sumLec + '+' + sumPrc : 'M ' + sumLec + ' · A ' + sumPrc + ' s';
                                 // Blokni kataklar to'liq qoplaydi va ularning o'z title'i bor — td title'i
                                 // hech qachon chiqmaydi. Shuning uchun tor blokda ma'lumot katak title'iga qo'shiladi.
                                 const blockTip = compact ? ' — ' + block.subject + (req ? ' · ' + req : '') + ' · ' + sumLabel : '';

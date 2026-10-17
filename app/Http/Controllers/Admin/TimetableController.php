@@ -4608,7 +4608,10 @@ class TimetableController extends Controller
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Dars jadvali');
+        // Varaq nomi (Excel cheklovi: 31 belgi, []:*?/\ taqiqlangan).
+        $sheetTitle = trim(preg_replace('/[\[\]:*?\/\\\\]+/u', ' ', (string) ($payload['sheet_title'] ?? '')));
+        $sheet->setTitle($sheetTitle !== '' ? mb_substr($sheetTitle, 0, 31) : 'Dars jadvali');
+        $leftCells = [];  // chapga tekislanadigan kataklar (umumiy markazlashdan keyin qo'llanadi)
 
         $firstRow = 1;
         if ($title !== '') {
@@ -4670,7 +4673,8 @@ class TimetableController extends Controller
                 }
                 $bg = $this->argbColor($cell['bg'] ?? null);
                 $bold = !empty($cell['b']);
-                if ($bg !== null || $bold) {
+                $fc = $this->argbColor($cell['fc'] ?? null);
+                if ($bg !== null || $bold || $fc !== null) {
                     $style = $sheet->getStyle($cs > 1 || $rs > 1 ? $from . ':' . $to : $from);
                     if ($bg !== null) {
                         $style->getFill()
@@ -4680,6 +4684,12 @@ class TimetableController extends Controller
                     if ($bold) {
                         $style->getFont()->setBold(true);
                     }
+                    if ($fc !== null) {
+                        $style->getFont()->getColor()->setARGB($fc);
+                    }
+                }
+                if (($cell['al'] ?? '') === 'l') {
+                    $leftCells[] = $cs > 1 || $rs > 1 ? $from . ':' . $to : $from;
                 }
 
                 for ($i = 0; $i < $cs; $i++) {
@@ -4703,17 +4713,40 @@ class TimetableController extends Controller
             ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER)
             ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
             ->setWrapText(true);
-        $sheet->getStyle($dim)->getFont()->setSize(8);
+        $fontSize = (float) ($payload['font_size'] ?? 8);
+        $sheet->getStyle($dim)->getFont()->setSize($fontSize >= 6 && $fontSize <= 14 ? $fontSize : 8);
+        foreach ($leftCells as $range) {
+            $sheet->getStyle($range)->getAlignment()
+                ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT)
+                ->setIndent(1);
+        }
 
+        // Klient qator balandligini aniq bergan bo'lsa (masalan, sikl jadvalining
+        // tor sana ustunlari) — taxminiy hisob o'rniga o'shani ishlatamiz.
+        foreach ((array) ($payload['row_heights'] ?? []) as $r => $height) {
+            if (is_numeric($r) && is_numeric($height)) {
+                $rowHeights[$firstRow + (int) $r] = max(6, min(400, (float) $height));
+            }
+        }
         // Ikkinchi va keyingi fanlar yashirinib qolmasligi uchun qatorlar
         // katak ichidagi barcha matnga mos balandlikda ochiladi.
         foreach ($rowHeights as $rowNumber => $height) {
             $sheet->getRowDimension($rowNumber)->setRowHeight($height);
         }
 
+        $colWidths = array_values((array) ($payload['col_widths'] ?? []));
         for ($i = 1; $i <= $maxCol; $i++) {
+            $w = $colWidths[$i - 1] ?? null;
             $sheet->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i))
-                ->setWidth($i <= 2 ? 7 : 16);
+                ->setWidth(is_numeric($w) ? max(2, min(80, (float) $w)) : ($i <= 2 ? 7 : 16));
+        }
+
+        if (!empty($payload['landscape'])) {
+            $sheet->getPageSetup()
+                ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+                ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A3)
+                ->setFitToWidth(1)
+                ->setFitToHeight(0);
         }
 
         // Sarlavha qatorlari va chap ustunlarni qotirish (skrollda ko'rinib tursin)

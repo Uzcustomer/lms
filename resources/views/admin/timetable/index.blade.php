@@ -205,6 +205,7 @@
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <button type="button" id="cycleExcel" class="asc-tool text-xs py-1" title="Ekrandagi sikl jadvalini (tashqi yoki ichki) Excelga yuklash">Excel</button>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Yakshanba va bayram ustunlarini jadvaldan yashiradi (ma'lumot o'zgarmaydi)">
                             <input type="checkbox" id="cycleHideOff" class="rounded border-gray-300"> Dam olish kunlarini yashirish</label>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sig'masa, bir fanning turli oqimlardagi sikllari ko'rsatilgan o'quv kunigacha kesishishi mumkin">
@@ -6445,7 +6446,10 @@
                     (curWeek ? ' · ' + curWeek + '-hafta' : '');
                 const base = (board.name || 'dars-jadvali').replace(/[^\w\-]+/g, '_') +
                     (curWeek ? '_' + curWeek + '-hafta' : '');
-                const btn = $('excelViewBtn');
+                await sendExcelExport(cellData, title, base, $('excelViewBtn'));
+            }
+            // Katak ma'lumotini serverga yuborib, tayyor .xlsx ni yuklab oladi.
+            async function sendExcelExport(cellData, title, base, btn) {
                 const btnHtml = btn ? btn.innerHTML : null;
                 if (btn) { btn.disabled = true; btn.textContent = 'Tayyorlanmoqda…'; }
                 try {
@@ -6477,6 +6481,153 @@
                     if (btn && btnHtml !== null) { btn.disabled = false; btn.innerHTML = btnHtml; }
                 }
             }
+            // ── Sikl jadvalini Excelga yuklash (tashqi yoki ichki — ekranda qaysi bo'lsa) ──
+            // Bloklar ekranda ustma-ust (overlay) chizilgani uchun DOM emas,
+            // yuklangan reja (cyclePlanData) dan katak ma'lumoti tuziladi.
+            function cycleExportPayload(j) {
+                const dates = j.dates || [];
+                const rows = cycleRowFilter ? (j.rows || []).filter(r => r.row_key === cycleRowFilter) : (j.rows || []);
+                if (!rows.length || !dates.length) return null;
+                const WD = ['', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
+                const OFF_BG = '#e2e8f0', HOL_BG = '#fecaca';
+                const offBg = d => d && d.holiday ? HOL_BG : (d && d.off ? OFF_BG : null);
+                const vis = [];
+                dates.forEach((d, i) => { if (!cycleColHidden(i)) vis.push(i); });
+                const visCount = (a, b) => vis.filter(i => i >= a && i <= b).length;
+                const blockText = (b, extra) => {
+                    const parts = [b.subject + ' (' + b.days + ' kun)'];
+                    if (extra) parts.push(...extra.filter(Boolean));
+                    return parts.join('\n');
+                };
+                const groupLabel = row => (j.view || cycleViewMode) === 'group' || !(row.subgroups || []).length
+                    ? row.group
+                    : row.group + '\n' + row.subgroups.join(', ');
+                const isGroupView = (j.view || cycleViewMode) === 'group';
+                const out = [], heights = {};
+                const push = (cells, h) => { if (h) heights[out.length] = h; out.push(cells); };
+
+                if (j.mark_mode) {
+                    // ── Ichki: har guruhcha — fan qatori + kunlik yarim-para qatorlari ──
+                    const dayHours = Math.max(1, +j.day_hours || 6);
+                    const bell = boardSchedule().filter(it => it.type === 'pair');
+                    const tm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+                    const hm = v => String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
+                    const d0 = bell.length ? (tm(bell[0].end) - tm(bell[0].start)) : 80;
+                    const hpp = d0 >= 60 ? 2 : 1;
+                    push([{ t: isGroupView ? 'Guruh' : 'Oqim', b: 1, bg: '#dbe4f0' }, { t: 'Para', b: 1, bg: '#dbe4f0' }, { t: 'Vaqt', b: 1, bg: '#dbe4f0' }]
+                        .concat(vis.map(i => ({ t: dates[i].d + '\n' + (WD[dates[i].dow] || ''), b: 1, bg: offBg(dates[i]) || '#dbe4f0' }))), 26);
+                    rows.forEach(row => {
+                        // Ustma-ust tushgan blok chizilmaydi (ekrandagidek).
+                        const owner = new Array(dates.length).fill(null);
+                        (row.blocks || []).forEach(b => {
+                            if (b.from == null || b.to == null) return;
+                            for (let c = b.from; c <= b.to && c < dates.length; c++) if (owner[c]) return;
+                            for (let c = b.from; c <= b.to && c < dates.length; c++) owner[c] = b;
+                        });
+                        // Fan qatori
+                        const head = [{ t: groupLabel(row), rs: dayHours + 1, b: 1, al: 'l' }, { t: 'Fan', cs: 2, b: 1, bg: '#f1f5f9' }];
+                        for (let v = 0; v < vis.length; v++) {
+                            const b = owner[vis[v]];
+                            if (!b) { head.push({ t: '', bg: offBg(dates[vis[v]]) }); continue; }
+                            let n = 1;
+                            while (v + n < vis.length && owner[vis[v + n]] === b) n++;
+                            const plan = Object.values(b.day_plan || {});
+                            const sl = plan.reduce((a, d) => a + (+d.lec || 0), 0), sp = plan.reduce((a, d) => a + (+d.prc || 0), 0);
+                            const req = [b.teacher_name, b.auditorium_name || b.auditorium_code].filter(Boolean).join(' · ');
+                            head.push({
+                                t: blockText(b, [req, 'M ' + sl + (b.lecture_hours != null ? '/' + b.lecture_hours : '') + ' · A ' + sp + (b.practice_hours != null ? '/' + b.practice_hours : '') + ' soat']),
+                                cs: n, b: 1, bg: subjColor(b.subject).bg,
+                            });
+                            v += n - 1;
+                        }
+                        push(head, 40);
+                        // Soat (yarim para) qatorlari
+                        for (let hour = 1; hour <= dayHours; hour++) {
+                            const pt = bell[Math.ceil(hour / hpp) - 1];
+                            const part = (hour - 1) % hpp;
+                            const cells = [];
+                            if (part === 0) {
+                                const abbr = pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr : (pt.name || Math.ceil(hour / hpp))) : Math.ceil(hour / hpp);
+                                cells.push({ t: abbr + '\npara', rs: Math.min(hpp, dayHours - hour + 1), b: 1, bg: '#e8eef6' });
+                            }
+                            const a = pt ? tm(pt.start) : null, e = pt ? tm(pt.end) : null;
+                            cells.push({ t: a != null && e != null ? hm(Math.round(a + (e - a) / hpp * part)) + '–' + hm(Math.round(a + (e - a) / hpp * (part + 1))) : '' });
+                            vis.forEach(i => {
+                                const d = dates[i], b = owner[i];
+                                if (d.off) { cells.push({ t: '', bg: offBg(d) }); return; }
+                                if (!b) { cells.push({ t: '' }); return; }
+                                const dp = (b.day_plan || {})[i - b.from];
+                                const st = dp ? (+dp.start || 1) : 0, l = dp ? (+dp.lec || 0) : 0, p = dp ? (+dp.prc || 0) : 0;
+                                if (dp && hour >= st && hour < st + l) cells.push({ t: 'M', b: 1, bg: '#facc15', fc: '#713f12' });
+                                else if (dp && hour >= st + l && hour < st + l + p) cells.push({ t: 'A', b: 1, bg: '#c9e8e5', fc: '#0f766e' });
+                                else cells.push({ t: '', bg: subjColor(b.subject).bg });
+                            });
+                            push(cells, 13);
+                        }
+                    });
+                    return {
+                        rows: out, row_heights: heights, freeze_rows: 1, freeze_cols: 3, font_size: 8, landscape: 1,
+                        sheet_title: 'Ichki jadval', col_widths: [22, 6, 10].concat(vis.map(() => 4.6)),
+                    };
+                }
+
+                // ── Tashqi: har qator — oqim/guruh, bloklar sanalar bo'ylab birlashgan ──
+                push([{ t: isGroupView ? 'Guruh' : 'Oqim', b: 1, bg: '#dbe4f0' }]
+                    .concat(vis.map(i => ({ t: dates[i].d + '\n' + (WD[dates[i].dow] || ''), b: 1, bg: offBg(dates[i]) || '#dbe4f0' }))), 26);
+                rows.forEach(row => {
+                    // Kesishgan bloklar alohida qatorchaga (lane) tushadi — hech biri yo'qolmaydi.
+                    const lanes = [];
+                    [...(row.blocks || [])].filter(b => b.from != null && b.to != null)
+                        .sort((x, y) => x.from - y.from || (+x.pair || 1) - (+y.pair || 1))
+                        .forEach(b => {
+                            const to = Math.min(b.to, dates.length - 1);
+                            if (visCount(b.from, to) < 1) return;
+                            let lane = lanes.find(l => l.every(o => o.to < b.from || o.from > to));
+                            if (!lane) { lane = []; lanes.push(lane); }
+                            lane.push({ from: b.from, to: to, b: b });
+                        });
+                    if (!lanes.length) lanes.push([]);
+                    const labelLines = (groupLabel(row).match(/\n/g) || []).length + 1 + Math.floor(groupLabel(row).length / 40);
+                    const laneH = Math.max(36, Math.ceil(labelLines * 11 / lanes.length) + 4);
+                    lanes.forEach((lane, li) => {
+                        const cells = li === 0 ? [{ t: groupLabel(row), rs: lanes.length, b: 1, al: 'l' }] : [];
+                        const at = {};
+                        lane.forEach(o => { at[vis.find(i => i >= o.from && i <= o.to)] = o; });
+                        for (let v = 0; v < vis.length; v++) {
+                            const o = at[vis[v]];
+                            if (!o) { cells.push({ t: '', bg: offBg(dates[vis[v]]) }); continue; }
+                            const n = visCount(o.from, o.to);
+                            const b = o.b;
+                            cells.push({
+                                t: (j.simple ? '' : (b.type === 'lecture' ? '[M] ' : '[A] ')) + blockText(b, [b.hours ? b.hours + ' soat' : '']),
+                                cs: n, b: 1, bg: subjColor(b.subject).bg,
+                            });
+                            v += n - 1;
+                        }
+                        push(cells, laneH);
+                    });
+                });
+                return {
+                    rows: out, row_heights: heights, freeze_rows: 1, freeze_cols: 1, font_size: 8, landscape: 1,
+                    sheet_title: 'Tashqi jadval', col_widths: [26].concat(vis.map(() => 6.5)),
+                };
+            }
+            async function downloadCycleExcel() {
+                const j = cyclePlanData;
+                const payload = j ? cycleExportPayload(j) : null;
+                if (!payload) { alert('Yuklab olish uchun sikl jadvali yo\'q.'); return; }
+                const internal = Boolean(j.mark_mode);
+                const label = internal ? 'Ichki' : 'Tashqi';
+                const start = j.start_date ? j.start_date.split('-').reverse().join('.') : '';
+                const filterLabel = cycleRowFilter ? (cycleRowLabels(j.rows || [])[cycleRowFilter] || '') : '';
+                const title = (board.institution_name ? board.institution_name + ' — ' : '') + (board.name || 'Dars jadvali') +
+                    ' · Sikl jadvali (' + label.toLowerCase() + ')' + (filterLabel ? ' · ' + filterLabel : '') +
+                    (start ? ' · semestr boshi ' + start : '');
+                const base = ((board.name || 'dars-jadvali') + '_sikl_' + label.toLowerCase() + (filterLabel ? '_' + filterLabel : ''))
+                    .replace(/[^\w\-]+/g, '_');
+                await sendExcelExport(payload, title, base, $('cycleExcel'));
+            }
+            if ($('cycleExcel')) $('cycleExcel').onclick = () => downloadCycleExcel();
             document.querySelectorAll('.ex-mode').forEach(b => b.onclick = () => {
                 excelMode = b.dataset.mode;
                 document.querySelectorAll('.ex-mode').forEach(x => x.classList.toggle('active', x === b));

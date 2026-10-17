@@ -46,7 +46,9 @@ class TimetableAssignmentAccess
 
         // O'qituvchi: dars jadvalini faqat ko'radi (tashqi/ichki almashtirgich bilan).
         if ($user && $activeRole === 'oqituvchi') {
-            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.cycle-plan'])) {
+            // Excelga yuklash faqat klient yuborgan (o'zi ko'rib turgan) panjarani
+            // faylga yozadi — yangi ma'lumot ochmaydi, shuning uchun ruxsat.
+            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.cycle-plan', 'admin.timetable.boards.excel-export'])) {
                 abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
             }
 
@@ -64,6 +66,8 @@ class TimetableAssignmentAccess
             $allowed = [
                 'admin.timetable.index',
                 'admin.timetable.boards.data',
+                // Ekrandagi jadvalni Excelga yuklash (faqat klient panjarasini yozadi)
+                'admin.timetable.boards.excel-export',
             ];
 
             if (in_array($activeRole, $auditoriumAssignmentRoles, true)) {

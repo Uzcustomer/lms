@@ -1169,6 +1169,9 @@
         /* Tor blok (≤ 6 kun): faqat fan nomi va soat — o'qituvchi/xona sichqoncha ustiga borganda */
         #cycleGrid .cyc-mk-over.is-compact { gap: 1px; max-width: calc(100% - 4px); }
         #cycleGrid .cyc-mk-over.is-compact .cyc-mk-title { padding: 1px 4px; font-size: 10.5px; }
+        /* O'qituvchi biriktirilmagan fan nomi — kulrang, qizil uzuq hoshiya, belgili */
+        #cycleGrid .cyc-mk-over .cyc-mk-title.is-noteacher { background: rgba(229, 231, 235, .92); border: 1.5px dashed #dc2626; color: #475569; }
+        #cycleGrid .cyc-mk-over .cyc-mk-title.is-noteacher i { color: #dc2626; font-size: 1.05em; }
         #cycleGrid .cyc-mk-over .cyc-mk-title:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .55); }
         #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .6);
             font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4162,7 +4165,12 @@
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
                                     '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '" style="' + cycTitlePosStyle(block, plan, dayHours) + '">' +
-                                    '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Bosing — fan haqida (soatlar, o\'qituvchi, xona). Ushlab blok ichida siljiting; ikki marta bosing — markazga qaytadi." style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
+                                    // O'qituvchi biriktirilmagan fan: kulrang fon, qizil uzuq hoshiya va belgi.
+                                    (block.teacher_name
+                                        ? '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Bosing — fan haqida (soatlar, o\'qituvchi, xona). Ushlab blok ichida siljiting; ikki marta bosing — markazga qaytadi." style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">'
+                                        : '<span class="cyc-mk-title is-noteacher" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="O\'qituvchi biriktirilmagan — ⚙ orqali biriktiring. Bosing — fan haqida; ushlab siljiting; ikki marta bosing — markazga qaytadi.">'
+                                            + '<i class="bi bi-person-fill-exclamation" aria-label="O\'qituvchi biriktirilmagan"></i> ') +
+                                    esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     // O'qituvchi/xona doskada yozilmaydi — fan nomi bosilganda oynada chiqadi.
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +

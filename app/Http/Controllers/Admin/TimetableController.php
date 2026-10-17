@@ -3086,16 +3086,6 @@ class TimetableController extends Controller
             ->values();
     }
 
-    /**
-     * Berilgan blok sanalari bilan kesishadigan BOSHQA sikl bloklari band
-     * qilgan xonalar: [auditorium_code => fan nomi]. Har blokning xonasi o'z
-     * oqim kartalaridan olinadi.
-     */
-    /**
-     * Sikl fanlarining reja soatlari (ishchi rejadan): ma'ruza va amaliy
-     * (amaliy = amaliy + laboratoriya + seminar). Ma'lumotlar tabidagi
-     * "Fanlar" ro'yxati bilan bitta manba va bitta hisob.
-     */
     /** Sikl soatlari: avval fakultet bo'yicha, topilmasa yo'nalish bo'yicha. */
     private function cycleHoursLookup(array $map, ?string $faculty, string $spec, int $course, string $subject): ?array
     {
@@ -3122,6 +3112,11 @@ class TimetableController extends Controller
         return null;
     }
 
+    /**
+     * Sikl fanlarining reja soatlari (ishchi rejadan): ma'ruza va amaliy
+     * (amaliy = amaliy + laboratoriya + seminar). Ma'lumotlar tabidagi
+     * "Fanlar" ro'yxati bilan bitta manba va bitta hisob.
+     */
     private function cycleSubjectHoursMap(TimetableBoard $board): array
     {
         $start = (int) substr($board->academic_year, 0, 4);
@@ -3247,6 +3242,11 @@ class TimetableController extends Controller
         return (array_sum($mins) / count($mins)) >= 60 ? 2 : 1;
     }
 
+    /**
+     * Berilgan blok sanalari bilan kesishadigan BOSHQA sikl bloklari band
+     * qilgan xonalar: [auditorium_code => fan nomi]. Har blokning xonasi o'z
+     * oqim kartalaridan olinadi.
+     */
     private function cycleOverlappingRoomCodes(TimetableBoard $board, TimetableCyclePlacement $placement, array $data): array
     {
         $set = (array) ($board->settings ?? []);

@@ -34,6 +34,15 @@ class TimetableAssignmentAccess
             }
         }
 
+        // O'qituvchi: dars jadvalini faqat ko'radi (tashqi/ichki almashtirgich bilan).
+        if ($user && $activeRole === 'oqituvchi') {
+            if (!$request->routeIs(['admin.timetable.index', 'admin.timetable.boards.data', 'admin.timetable.cycle-plan'])) {
+                abort(403, 'O\'qituvchi dars jadvalini faqat ko\'ra oladi.');
+            }
+
+            return $next($request);
+        }
+
         // Kafedra mudiri va o'quv bo'limi ruxsatlari bir xil: joylashtirish
         // (haftalik + sikl) hamda o'qituvchi/auditoriya biriktirish hammasiga.
         $auditoriumAssignmentRoles = ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'];

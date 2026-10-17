@@ -13,7 +13,9 @@
     }
     $timetableAuditoriumAssignmentOnly = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
     $timetableDepartmentHead = $timetableActiveRole === 'kafedra_mudiri';
-    $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead;
+    // O'qituvchi: faqat ko'rish (hech qanday tahrirlash tugmasi yo'q)
+    $timetableReadOnly = $timetableActiveRole === 'oqituvchi';
+    $timetableAssignmentOnly = $timetableAuditoriumAssignmentOnly || $timetableDepartmentHead || $timetableReadOnly;
     $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
     $timetableCanUseManager = $timetableAssignmentOnly;
 @endphp
@@ -2237,6 +2239,7 @@
             const TIMETABLE_ASSIGNMENT_ONLY = @json($timetableAssignmentOnly);
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
+            const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
             const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
@@ -2330,6 +2333,15 @@
                     el.title = 'Bu amal faqat jadval administratoriga ochiq';
                 });
 
+                if (TIMETABLE_READ_ONLY) {
+                    ['assignBtn', 'unplacedExportBtn', 'subjectColorsBtn', 'cycleAllowOverlap'].forEach(id => {
+                        const el = $(id);
+                        if (!el) return;
+                        el.disabled = true;
+                        (el.closest('label') || el).classList.add('hidden');
+                    });
+                    return;
+                }
                 const assignButton = $('assignBtn');
                 if (assignButton) {
                     assignButton.disabled = false;

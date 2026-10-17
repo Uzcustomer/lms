@@ -3277,7 +3277,7 @@
             }
 
             let cyclePlanData = null;
-            let cycleViewMode = 'flow';
+            let cycleViewMode = 'flow';   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             // Sikl jadvali qatlami: null — rol bo'yicha server tanlaydi
             // (o'quv bo'limi — tashqi, kafedra/o'qituvchi — ichki), keyin tugma bilan almashtiriladi.
             let cycleLayer = null;
@@ -3291,10 +3291,10 @@
                     b.className = 'px-2 py-1 ' + (on ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
                 if ($('cycLayerRo')) $('cycLayerRo').classList.toggle('hidden', !(j && j.can_edit === false));
-            }   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
+            }
             let cyclePairsShown = null;   // ko'rinadigan para qatorlari (sukut: sikl kuni = 6 soat)
             let cycleBandsResize = null;  // kun chiziqlarini qayta chizuvchi resize ishlovchisi
-            let cycleDayGeometry = [];
+            let cycleDayGeometry = [];    // kun ustunlari o'lchovi: [{left, width}]
             // Dam olish (yakshanba/bayram) ustunlarini yashirish — faqat ko'rinish.
             // Kafedra belgilash rejimida ishlatilmaydi: u yerda blok ichida har kun alohida katak.
             let cycleHideOff = false;
@@ -3312,7 +3312,7 @@
                 for (let i = from; i < from + span; i++) if (!cycleColHidden(i)) out.push(i);
                 if (!out.length) for (let i = from; i < from + span; i++) out.push(i);
                 return out;
-            }    // kun ustunlari o'lchovi: [{left, width}]
+            }
             let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
             // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
@@ -4027,7 +4027,7 @@
                     }
                     try {
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                        ...cycleOverlapParams(), ...cycleLayerParams(),
+                            ...cycleOverlapParams(), ...cycleLayerParams(),
                             action: 'place', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject, start_index: index,
                             training_type: card.type || 'practice', pair: +cell.dataset.cyclePair || 1, view: cycleViewMode,
@@ -4072,7 +4072,7 @@
                         shiftBtn.disabled = true;
                         try {
                             const result = await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                        ...cycleOverlapParams(), ...cycleLayerParams(),
+                                ...cycleOverlapParams(), ...cycleLayerParams(),
                                 action: 'shift', specialty_name: card.specialty, course: card.course,
                                 group_name: card.group, subject_name: card.subject, start_index: card.start_index,
                                 training_type: card.type || 'practice', pair: card.pair || 1, view: cycleViewMode,
@@ -4176,7 +4176,7 @@
                     if (!card || !card.placed) return;
                     try {
                         await api(BASE + '/boards/' + board.id + '/cycle-place', 'POST', {
-                        ...cycleOverlapParams(), ...cycleLayerParams(),
+                            ...cycleOverlapParams(), ...cycleLayerParams(),
                             action: 'remove', specialty_name: card.specialty, course: card.course,
                             group_name: card.group, subject_name: card.subject,
                             training_type: card.type || 'practice', view: cycleViewMode,
@@ -4256,6 +4256,9 @@
                 loadCyclePlan();
             }
             if ($('cycViewFlow')) $('cycViewFlow').onclick = () => setCycleViewMode('flow');
+            if ($('cycViewGroup')) $('cycViewGroup').onclick = () => setCycleViewMode('group');
+            if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
+            // Qatlam: tashqi / ichki
             function setCycleLayer(layer) {
                 if (cycleLayer === layer) return;
                 cycleLayer = layer;
@@ -4263,6 +4266,8 @@
                 loadCyclePlan();
             }
             if ($('cycLayerExternal')) $('cycLayerExternal').onclick = () => setCycleLayer('external');
+            if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
+            // Dam olish kunlarini yashirish (brauzerda eslab qolinadi)
             if ($('cycleHideOff')) {
                 $('cycleHideOff').checked = cycleHideOff;
                 $('cycleHideOff').onchange = () => {
@@ -4271,10 +4276,6 @@
                     if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
                 };
             }
-            if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
-            if ($('cycViewGroup')) $('cycViewGroup').onclick = () => setCycleViewMode('group');
-            if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;
-            // Bayram qo'shish
             // Sikl kesishishiga ruxsat (doska bo'yicha brauzerda eslab qolinadi)
             function cycleOverlapKey() { return board ? 'lms:cycle-overlap:' + board.id : ''; }
             function cycleOverlapParams() {
@@ -4300,6 +4301,7 @@
                 $('cycleOverlapDays').onchange = syncCycleOverlapUi;
             }
 
+            // Bayram qo'shish
             if ($('cycleHolAddBtn')) $('cycleHolAddBtn').onclick = () => {
                 const d = $('cycleHolAdd').value;
                 if (!d || cycleHolidays.includes(d)) return;

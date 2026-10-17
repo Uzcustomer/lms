@@ -2652,8 +2652,8 @@ class TimetableController extends Controller
         $pairsPerDay = max(1, (int) $board->pairs_per_day);
         // Reja soatlari: ma'ruza bloki uzunligi va kartadagi soat yozuvi uchun.
         $cycleHours = !empty($cycleKey) ? $this->cycleSubjectHoursMap($board) : [];
-        $hoursFor = fn(string $spec, int $course, string $subject): ?array =>
-            $cycleHours[$this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject)] ?? null;
+        $hoursFor = fn(string $spec, int $course, string $subject, ?string $faculty = null): ?array =>
+            $this->cycleHoursLookup($cycleHours, $faculty, $spec, $course, $subject);
         $fmtHours = fn(?float $v) => $v === null ? null : (fmod($v, 1.0) == 0.0 ? (int) $v : round($v, 1));
         $rowHours = $this->cycleRowHours($board);
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
@@ -2720,7 +2720,7 @@ class TimetableController extends Controller
                 if ($cycleSimple && $blockType === 'lecture') {
                     continue;
                 }
-                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name);
+                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name, $g['faculty'] ?? null);
                 // Kun = 6 soat: ma'ruza o'z soatidan (2 soat/kun), amaliy to'liq sikl.
                 $days = $cycleSimple
                     ? max(1, (int) ($g['subs'][$placement->subject_name] ?? 1))
@@ -2782,7 +2782,7 @@ class TimetableController extends Controller
             }
             $placedSubjects = collect($blocks)->keyBy(fn ($b) => $b['subject'] . '|' . $b['type']);
             foreach ($g['subs'] as $subject => $days) {
-                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $subject);
+                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $subject, $g['faculty'] ?? null);
                 // Sodda rejimda fanga bitta karta (ma'ruza+amaliy birga).
                 $cardTypes = $cycleSimple ? ['practice'] : ['lecture', 'practice'];
                 foreach ($cardTypes as $cardType) {
@@ -3076,6 +3076,32 @@ class TimetableController extends Controller
      * (amaliy = amaliy + laboratoriya + seminar). Ma'lumotlar tabidagi
      * "Fanlar" ro'yxati bilan bitta manba va bitta hisob.
      */
+    /** Sikl soatlari: avval fakultet bo'yicha, topilmasa yo'nalish bo'yicha. */
+    private function cycleHoursLookup(array $map, ?string $faculty, string $spec, int $course, string $subject): ?array
+    {
+        $key = $this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject);
+        if ($faculty !== null && $faculty !== '' && isset($map[$this->specKey($faculty) . '|' . $key])) {
+            return $map[$this->specKey($faculty) . '|' . $key];
+        }
+        return $map[$key] ?? null;
+    }
+
+    /** Sikl qatori nomidan ("1-son davolash / 1-oqim / rus") fakultetni ajratadi. */
+    private function cycleRowFaculty(string $groupName, $cards = null): ?string
+    {
+        if (str_contains($groupName, ' / ')) {
+            return trim(explode(' / ', $groupName)[0]);
+        }
+        if ($cards) {
+            $card = collect($cards)->first(fn($c) => (string) $c->group_name === $groupName
+                || in_array($groupName, (array) ($c->group_names ?? []), true));
+            if ($card) {
+                return (string) $card->faculty_name;
+            }
+        }
+        return null;
+    }
+
     private function cycleSubjectHoursMap(TimetableBoard $board): array
     {
         $start = (int) substr($board->academic_year, 0, 4);
@@ -3094,16 +3120,27 @@ class TimetableController extends Controller
             ->get());
 
         $map = [];
-        foreach ($rows as $r) {
-            $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
-            $key = $this->specKey((string) $r->specialty_name) . '|' . $course . '|' . $this->normSubject((string) $r->subject_name);
-            $lecture = (float) $r->lecture;
-            $practice = (float) $r->practice + (float) $r->laboratory + (float) $r->seminar;
+        $put = function (string $key, float $lecture, float $practice) use (&$map) {
             if (!isset($map[$key])) {
                 $map[$key] = ['lecture' => $lecture, 'practice' => $practice];
             } else {
                 $map[$key]['lecture'] = max($map[$key]['lecture'], $lecture);
                 $map[$key]['practice'] = max($map[$key]['practice'], $practice);
+            }
+        };
+        foreach ($rows as $r) {
+            $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
+            $lecture = (float) $r->lecture;
+            $practice = (float) $r->practice + (float) $r->laboratory + (float) $r->seminar;
+            // "1-son Davolash ishi" kabi reja nomlari kartochkada fakultet + sof
+            // yo'nalish bo'lib turadi — kalitni alias bo'yicha quramiz. Fakultetli
+            // kalit ham saqlanadi: 1-son, 2-son va boshqa fakultetlarda bir xil
+            // nomli fanning soatlari farq qilsa, aynan o'z fakulteti olinadi.
+            [$facAlias, $specAlias] = $this->curriculumScopeAlias((string) $r->specialty_name);
+            $key = $this->specKey($specAlias) . '|' . $course . '|' . $this->normSubject((string) $r->subject_name);
+            $put($key, $lecture, $practice);
+            if ($facAlias !== null) {
+                $put($this->specKey($facAlias) . '|' . $key, $lecture, $practice);
             }
         }
 
@@ -3237,7 +3274,8 @@ class TimetableController extends Controller
         $cycleHours = $this->cycleSubjectHoursMap($board);
         $daysOf = function ($item) use ($cycleDays, $cycleHours): int {
             $settingDays = (int) ($cycleDays[mb_strtolower(trim($item->specialty_name)) . '|' . (int) $item->course . '|' . mb_strtolower(trim($item->subject_name))] ?? 1);
-            $hours = $cycleHours[$this->specKey((string) $item->specialty_name) . '|' . (int) $item->course . '|' . $this->normSubject((string) $item->subject_name)] ?? null;
+            $hours = $this->cycleHoursLookup($cycleHours, $this->cycleRowFaculty((string) ($item->group_name ?? '')),
+                (string) $item->specialty_name, (int) $item->course, (string) $item->subject_name);
             return max(1, $this->cycleTypeDays(max(1, $settingDays), $hours, (string) ($item->training_type ?: 'practice')));
         };
 
@@ -3405,8 +3443,13 @@ class TimetableController extends Controller
         $reqPair = max(1, min(24, (int) ($data['pair'] ?? 1)));
         $cycleView = $data['view'] ?? 'flow';
         $cycleHours = $this->cycleSubjectHoursMap($board);
-        $hoursFor = fn(string $spec, int $course, string $subject): ?array =>
-            $cycleHours[$this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject)] ?? null;
+        $placeFaculty = $this->cycleRowFaculty(
+            (string) $data['group_name'],
+            TimetableCard::where('board_id', $board->id)->where('course', (int) $data['course'])
+                ->where('specialty_name', $data['specialty_name'])->get(['group_name', 'group_names', 'faculty_name'])
+        );
+        $hoursFor = fn(string $spec, int $course, string $subject, ?string $faculty = null): ?array =>
+            $this->cycleHoursLookup($cycleHours, $faculty ?? $placeFaculty, $spec, $course, $subject);
         $rowHours = $this->cycleRowHours($board);
         if ($syncLecture) {
             // Tashqi jadvalda amaliy blok ma'ruzadan keyingi paralarda turadi

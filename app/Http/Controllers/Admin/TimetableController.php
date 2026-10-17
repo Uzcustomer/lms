@@ -3120,12 +3120,16 @@ class TimetableController extends Controller
             ->get());
 
         $map = [];
-        $put = function (string $key, float $lecture, float $practice) use (&$map) {
-            if (!isset($map[$key])) {
-                $map[$key] = ['lecture' => $lecture, 'practice' => $practice];
+        // Alias rejalarining fakultetsiz kaliti — faqat zaxira: sof "Davolash ishi"
+        // rejasi (mas. Xalqaro ta'lim) o'z soatini 1-son/2-son soatlari bilan
+        // max qilinmasdan olishi kerak.
+        $aliasFallback = [];
+        $put = function (array &$target, string $key, float $lecture, float $practice) {
+            if (!isset($target[$key])) {
+                $target[$key] = ['lecture' => $lecture, 'practice' => $practice];
             } else {
-                $map[$key]['lecture'] = max($map[$key]['lecture'], $lecture);
-                $map[$key]['practice'] = max($map[$key]['practice'], $practice);
+                $target[$key]['lecture'] = max($target[$key]['lecture'], $lecture);
+                $target[$key]['practice'] = max($target[$key]['practice'], $practice);
             }
         };
         foreach ($rows as $r) {
@@ -3138,13 +3142,15 @@ class TimetableController extends Controller
             // nomli fanning soatlari farq qilsa, aynan o'z fakulteti olinadi.
             [$facAlias, $specAlias] = $this->curriculumScopeAlias((string) $r->specialty_name);
             $key = $this->specKey($specAlias) . '|' . $course . '|' . $this->normSubject((string) $r->subject_name);
-            $put($key, $lecture, $practice);
-            if ($facAlias !== null) {
-                $put($this->specKey($facAlias) . '|' . $key, $lecture, $practice);
+            if ($facAlias === null) {
+                $put($map, $key, $lecture, $practice);
+            } else {
+                $put($map, $this->specKey($facAlias) . '|' . $key, $lecture, $practice);
+                $put($aliasFallback, $key, $lecture, $practice);
             }
         }
 
-        return $map;
+        return $map + $aliasFallback;
     }
 
     /**

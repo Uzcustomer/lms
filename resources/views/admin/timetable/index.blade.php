@@ -3683,6 +3683,11 @@
                     $('cycAssignRoom').innerHTML = '<option value="">— Tanlanmagan —</option>' +
                         (j.rooms || []).map(r => '<option value="' + esc(r.code) + '">' + esc(r.name) + (r.volume ? ' (' + r.volume + ' o\u2018rin)' : '') + '</option>').join('');
 
+                    // "A + B" kabi umumiy karta: o'qituvchi/xona boshqa guruhchalarga ham tegadi.
+                    if (j.shared_with && j.shared_with.length) {
+                        $('cycAssignMeta').textContent = card.group + ' · ' + card.days + ' kun · umumiy karta: '
+                            + j.shared_with.join(', ') + ' bilan birga (o‘zgarish ularga ham tegadi)';
+                    }
                     const current = j.current || {};
                     if (current.teacher_id) $('cycAssignTeacher').value = String(current.teacher_id);
                     if (current.auditorium_code) $('cycAssignRoom').value = current.auditorium_code;

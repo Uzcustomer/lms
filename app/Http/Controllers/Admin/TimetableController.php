@@ -3673,12 +3673,40 @@ class TimetableController extends Controller
         // Blok egallaydigan paralar oralig'i [lo, hi]: amaliy dum bo'lagi ma'ruza
         // parasidan boshlanadi (tail_offset), shuning uchun pastki chegara ham hisoblanadi.
         $laneRange = function (int $pair, array $sp): array {
-            $off = (int) ($sp['tail_offset'] ?? 0);
-            $lo = (int) $sp['tail_span'] > 0 ? max(1, min($pair, $pair + $off)) : $pair;
-            $hi = max($pair + max(1, (int) $sp['head_span']) - 1,
-                (int) $sp['tail_span'] > 0 ? $pair + $off + (int) $sp['tail_span'] - 1 : $pair);
-            return [$lo, $hi];
+            $headHi = $pair + max(1, (int) $sp['head_span']) - 1;
+            if ((int) $sp['tail_span'] <= 0) {
+                return [$pair, $headHi];
+            }
+            // Klient bilan bir xil: dum bo'lagi 1-paradan yuqoriga chiqmaydi.
+            $tailLo = max(1, $pair + (int) ($sp['tail_offset'] ?? 0));
+            return [min($pair, $tailLo), max($headHi, $tailLo + (int) $sp['tail_span'] - 1)];
         };
+        // Blokning kun × para bo'laklari: [[pozFrom, pozTo, paraLo, paraHi], ...] (o'quv kuni
+        // pozitsiyalarida). Amaliy: bosh (ma'ruzali kunlar) va dum (ma'ruza tugagach).
+        $laneSegments = function (int $startPos, int $days, int $pair, array $sp): array {
+            $headDays = min($days, max(0, (int) ($sp['head_days'] ?? $days)));
+            $headLanes = [$pair, $pair + max(1, (int) $sp['head_span']) - 1];
+            if ((int) $sp['tail_span'] <= 0 || $headDays >= $days) {
+                return [[$startPos, $startPos + $days - 1, ...$headLanes]];
+            }
+            $tailLo = max(1, $pair + (int) ($sp['tail_offset'] ?? 0));
+            $segments = $headDays > 0 ? [[$startPos, $startPos + $headDays - 1, ...$headLanes]] : [];
+            $segments[] = [$startPos + $headDays, $startPos + $days - 1, $tailLo, $tailLo + (int) $sp['tail_span'] - 1];
+            return $segments;
+        };
+        $segmentsCollide = function (array $a, array $b): bool {
+            foreach ($a as [$aFrom, $aTo, $aLo, $aHi]) {
+                foreach ($b as [$bFrom, $bTo, $bLo, $bHi]) {
+                    if ($aFrom <= $bTo && $bFrom <= $aTo && $aLo <= $bHi && $bLo <= $aHi) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        $pairOverlapError = fn(string $subject) => response()->json(['error' => '"' . $subject
+            . '" fanining ma\'ruza va amaliy bloklari bir kunning bir parasida ustma-ust tushadi. '
+            . 'Ma\'ruzani amaliy bilan bir kunda boshlang yoki ikkalasini birga siljiting.'], 422);
         [$reqLaneFrom, $reqLaneTo] = $laneRange($reqPair, $reqSpan);
         $bellPairTotal = collect((array) ($board->bell_schedule ?? []))
             ->filter(fn($it) => (is_array($it) ? ($it['type'] ?? '') : ($it->type ?? '')) === 'pair')
@@ -3823,11 +3851,12 @@ class TimetableController extends Controller
             if ($hasCyclePlacements) {
                 // Kaskad faqat lane (para) oralig'i kesishgan bloklarda —
                 // boshqa paralardagi bloklar joyida qoladi.
-                $placements = TimetableCyclePlacement::where('board_id', $board->id)
+                $rowPlacements = TimetableCyclePlacement::where('board_id', $board->id)
                     ->where('specialty_name', $data['specialty_name'])
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
-                    ->orderBy('start_index')->get()
+                    ->orderBy('start_index')->get();
+                $placements = $rowPlacements
                     ->filter(function ($p) use ($data, $norm, $cycleSettings, $hoursFor, $laneRange, $reqLaneFrom, $reqLaneTo, $rowHours) {
                         $pSetting = $cycleSettings->get(
                             $norm($data['specialty_name']) . '|' . (int) $data['course'] . '|' . $norm($p->subject_name)
@@ -3842,12 +3871,11 @@ class TimetableController extends Controller
                         return $hi >= $reqLaneFrom && $lo <= $reqLaneTo;
                     })->values();
                 $toShift = [];
-                $targetFound = false;
+                $targetFound = $placements->contains($isTarget);
                 foreach ($placements as $placement) {
-                    if (!$targetFound) {
-                        if (!$isTarget($placement)) continue;
-                        $targetFound = true;
-                    }
+                    // Nishon va undan keyingi bloklar; nishon bilan bir kunda boshlanganlar ham
+                    // (mas. bir fanning ma'ruza + amaliy juftligi) — ular ajralib qolmasin.
+                    if (!$targetFound || (int) $placement->start_index < $currentStart) continue;
                     $newStart = $shiftedStart($placement);
                     if ($newStart === null) {
                         return response()->json(['error' => 'Sikl kartasini bu tomonga siljitib bo\'lmaydi.'], 422);
@@ -3864,6 +3892,43 @@ class TimetableController extends Controller
                 }
                 if (!$targetFound) {
                     return response()->json(['error' => 'Siljitiladigan sikl kartasi topilmadi.'], 422);
+                }
+                // Siljigandan keyin bir fanning ma'ruza va amaliy bloklari ustma-ust tushmasin
+                // (biri zanjirda, ikkinchisi joyida qolgan bo'lishi mumkin). Tashqi jadvalda
+                // ma'ruza amaliy bilan birga ko'chadi — tekshirish shart emas.
+                if (!$syncLecture) {
+                    $newStarts = [];
+                    foreach ($toShift as [$placement, $newStart]) {
+                        $newStarts[$placement->id] = $newStart;
+                    }
+                    $segmentsOf = function ($p) use ($newStarts, $cycleSettings, $norm, $data, $hoursFor, $positionFor, $rowHours, $laneSegments): ?array {
+                        $pSetting = $cycleSettings->get(
+                            $norm($data['specialty_name']) . '|' . (int) $data['course'] . '|' . $norm($p->subject_name)
+                        );
+                        $cycleDays = max(1, (int) ($pSetting->cycle_days ?? 1));
+                        $hrs = $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $p->subject_name);
+                        $type = (string) ($p->training_type ?: 'practice');
+                        $startPos = $positionFor($newStarts[$p->id] ?? (int) $p->start_index);
+                        if ($startPos === null) {
+                            return null;
+                        }
+                        return $laneSegments($startPos, max(1, $this->cycleTypeDays($cycleDays, $hrs, $type)),
+                            max(1, (int) ($p->pair ?? 1)), $this->cycleLaneSpan($type, $hrs, $cycleDays, $rowHours));
+                    };
+                    foreach ($toShift as [$placement]) {
+                        foreach ($rowPlacements as $partner) {
+                            if ($partner->id === $placement->id
+                                || $norm($partner->subject_name) !== $norm($placement->subject_name)
+                                || $norm($partner->training_type ?: 'practice') === $norm($placement->training_type ?: 'practice')) {
+                                continue;
+                            }
+                            $a = $segmentsOf($placement);
+                            $b = $segmentsOf($partner);
+                            if ($a !== null && $b !== null && $segmentsCollide($a, $b)) {
+                                return $pairOverlapError((string) $placement->subject_name);
+                            }
+                        }
+                    }
                 }
                 DB::transaction(function () use ($toShift, &$shifted, $syncLecture, $board, $data) {
                     $movedIds = [];
@@ -3978,9 +4043,11 @@ class TimetableController extends Controller
             );
             [$otherLo, $otherHi] = $laneRange(max(1, (int) ($other->pair ?? 1)), $otherSpan);
             if ($otherHi < $reqLaneFrom || $otherLo > $reqLaneTo) continue;
-            // Bir fanning ma'ruza va amaliy bloklari bir-birini to'sib qo'ymaydi
-            // (amaliy dum bo'lagi ma'ruza tugagan kunlardan boshlanadi).
-            if ($norm($other->subject_name) === $norm($data['subject_name'])) continue;
+            $sameSubject = $norm($other->subject_name) === $norm($data['subject_name']);
+            // Shu blokning o'zi (qayta joylanmoqda) yoki tashqi jadvalda amaliy bilan
+            // birga ko'chadigan ma'ruza yozuvi — tekshirilmaydi.
+            if ($sameSubject && ($syncLecture
+                || $norm($other->training_type ?: 'practice') === $norm($data['training_type']))) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);
             if ($otherStartPosition === null) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
@@ -3990,6 +4057,18 @@ class TimetableController extends Controller
                 (string) ($other->training_type ?: 'practice')
             ));
             $otherEndPosition = $otherStartPosition + $otherDays - 1;
+            if ($sameSubject) {
+                // Bir fanning ma'ruza va amaliy bloklari: oraliq talab qilinmaydi, faqat
+                // kun × para bo'yicha ustma-ust tushmasin (amaliy dumi ma'ruza tugagach
+                // I-paradan boshlanadi — ma'ruza kechroq boshlansa, ular to'qnashadi).
+                if ($segmentsCollide(
+                    $laneSegments($startPosition, $requiredDays, $reqPair, $reqSpan),
+                    $laneSegments($otherStartPosition, $otherDays, max(1, (int) ($other->pair ?? 1)), $otherSpan)
+                )) {
+                    return $pairOverlapError((string) $data['subject_name']);
+                }
+                continue;
+            }
 
             if ($startPosition <= $otherEndPosition && $otherStartPosition <= $endPosition) {
                 return response()->json(['error' => 'Bu sana oralig‘ida "' . $other->subject_name

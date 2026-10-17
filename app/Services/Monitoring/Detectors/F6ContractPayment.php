@@ -67,11 +67,13 @@ class F6ContractPayment implements Detector
                 continue; // birinchi bosqich muddati hali kelmagan
             }
 
+            // Summa bo'yicha solishtiriladi (yaxlitlangan foiz 24,96 % ni 25 % deb o'tkazib yubormasin).
             $paid = (float) $contract->paid_credit_amount;
-            $paidPercent = round($paid / $sum * 100, 1);
-            if ($paidPercent >= $stage['percent']) {
+            $required = $sum * $stage['percent'] / 100;
+            if ($paid >= $required - 0.005) {
                 continue;
             }
+            $paidPercent = round($paid / $sum * 100, 1);
 
             $result->add(new Finding(
                 fingerprint: "F-6:{$hemisId}:{$year}",
@@ -86,7 +88,7 @@ class F6ContractPayment implements Detector
                     'muddat' => $stage['deadline'],
                     'talab_foizi' => $stage['percent'],
                     'tolov_foizi' => $paidPercent,
-                    'yetishmaydi_summa' => round(max(0, $sum * $stage['percent'] / 100 - $paid), 2),
+                    'yetishmaydi_summa' => round($required - $paid, 2),
                     'kutilgan_harakat' => "To'lov, direktor buyrug'i bilan muddat uzaytirilishi yoki chetlashtirish (E-10)",
                 ],
                 scopeKey: $year,

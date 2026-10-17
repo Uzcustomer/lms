@@ -43,3 +43,13 @@ test('sozlamalar sahifasida kurs kesimidagi blok administratorga ko\'rinadi', fu
     $this->actingAs(monUser(['admin']), 'web')->get(route('admin.settings'))
         ->assertOk()->assertSee('Kontrakt to\'lov muddatlari — kurs kesimida', false);
 });
+
+test('keyingi bosqichda kamroq foiz kiritilsa saqlanmaydi', function () {
+    $registrar = monTeacher(['registrator_ofisi']);
+
+    $this->actingAs($registrar, 'teacher')->post(route('admin.settings.update.contract-cutoffs-by-course'), [
+        'courses' => [2 => [['deadline' => '2026-10-01', 'percent' => 25], ['deadline' => '2027-01-01', 'percent' => 20]]],
+    ])->assertRedirect()->assertSessionHas('error');
+
+    expect(ContractCutoffs::byCourse()['courses'][2])->toBe([]);
+});

@@ -375,6 +375,16 @@ class SettingsController extends Controller
         foreach (ContractCutoffs::COURSES as $course) {
             $courses[$course] = array_values((array) $request->input("courses.{$course}", []));
         }
+
+        // Keyingi bosqich oldingisidan kam foiz talab qilmasin (aks holda ochiq qarzdorliklar yopilib ketadi).
+        $groups = collect($courses)->mapWithKeys(fn ($rows, $course) => ["{$course}-kurs" => $rows])->put('Superkontrakt', (array) $request->input('super', []));
+        foreach ($groups as $label => $rows) {
+            $percents = collect($rows)->sortBy('deadline')->pluck('percent')->map(fn ($p) => (int) $p)->values();
+            if ($percents->zip($percents->slice(1)->values())->contains(fn ($pair) => $pair[1] !== null && $pair[1] < $pair[0])) {
+                return back()->withInput()->with('error', "{$label}: keyingi muddatdagi foiz oldingisidan kam bo'lmasligi kerak.");
+            }
+        }
+
         ContractCutoffs::saveByCourse($courses, array_values((array) $request->input('super', [])), (array) $request->input('super_types', []));
 
         return redirect()->route('admin.settings')->with('success', "Kurs kesimidagi kontrakt to'lov muddatlari saqlandi.");

@@ -89,3 +89,14 @@ test('to\'lov qilinsa istisno yopiladi', function () {
 
     expect(MonitoringIstisno::sole()->status)->toBe('yopildi');
 });
+
+test('foiz yaxlitlanmasdan solishtiriladi: 24,96 % — 25 % talabni bajarmaydi', function () {
+    $student = monStudent();
+    f6Contract($student, 2, 24.96);
+
+    app(DetectorRunner::class)->run($this->detector);
+
+    $istisno = MonitoringIstisno::sole();
+    expect($istisno->details['tolov_foizi'])->toEqual(25)
+        ->and($istisno->details['yetishmaydi_summa'])->toEqual(8000);
+});

@@ -1379,20 +1379,21 @@ class TimetableController extends Controller
         // va sof yo'nalish ("Davolash ishi") bo'lib turadi — kalitni alias bo'yicha quramiz,
         // aks holda bunday yo'nalishlardagi kartalar hech qachon yangilanmaydi.
         // Fakultetli kalit ustuvor (1-son va 2-son nomlari bir-birini bosib ketmasin).
+        // Alias rejalarining fakultetsiz kaliti faqat zaxira: sof "Davolash ishi"
+        // rejasi (mas. Xalqaro ta'lim) kartalari 1-son/2-son nomini olmasin.
+        $aliasFallback = [];
         foreach ($subjects as $s) {
             $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
             [$facAlias, $specAlias] = $this->curriculumScopeAlias((string) $s->specialty_name);
             $key = $this->specKey($specAlias) . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
-            if ($facAlias !== null) {
-                $facKey = $this->specKey($facAlias) . '|' . $key;
-                if (!isset($map[$facKey])) {
-                    $map[$facKey] = $s->subject_name;
-                }
-            }
-            if (!isset($map[$key])) {
-                $map[$key] = $s->subject_name;
+            if ($facAlias === null) {
+                $map[$key] ??= $s->subject_name;
+            } else {
+                $map[$this->specKey($facAlias) . '|' . $key] ??= $s->subject_name;
+                $aliasFallback[$key] ??= $s->subject_name;
             }
         }
+        $map += $aliasFallback;
 
         // Kafedra ham qayta hisoblanadi (barcha kartalarda — nom o'zgarmagan bo'lsa ham:
         // HEMIS da kafedra o'zgargan / bo'lingan bo'lsa joylashuvlarni yo'qotmasdan to'g'rilansin)
@@ -2671,8 +2672,8 @@ class TimetableController extends Controller
         $pairsPerDay = max(1, (int) $board->pairs_per_day);
         // Reja soatlari: ma'ruza bloki uzunligi va kartadagi soat yozuvi uchun.
         $cycleHours = !empty($cycleKey) ? $this->cycleSubjectHoursMap($board) : [];
-        $hoursFor = fn(string $spec, int $course, string $subject): ?array =>
-            $cycleHours[$this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject)] ?? null;
+        $hoursFor = fn(string $spec, int $course, string $subject, ?string $faculty = null): ?array =>
+            $this->cycleHoursLookup($cycleHours, $faculty, $spec, $course, $subject);
         $fmtHours = fn(?float $v) => $v === null ? null : (fmod($v, 1.0) == 0.0 ? (int) $v : round($v, 1));
         $rowHours = $this->cycleRowHours($board);
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
@@ -2739,7 +2740,7 @@ class TimetableController extends Controller
                 if ($cycleSimple && $blockType === 'lecture') {
                     continue;
                 }
-                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name);
+                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name, $g['faculty'] ?? null);
                 // Kun = 6 soat: ma'ruza o'z soatidan (2 soat/kun), amaliy to'liq sikl.
                 $days = $cycleSimple
                     ? max(1, (int) ($g['subs'][$placement->subject_name] ?? 1))
@@ -2801,7 +2802,7 @@ class TimetableController extends Controller
             }
             $placedSubjects = collect($blocks)->keyBy(fn ($b) => $b['subject'] . '|' . $b['type']);
             foreach ($g['subs'] as $subject => $days) {
-                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $subject);
+                $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $subject, $g['faculty'] ?? null);
                 // Sodda rejimda fanga bitta karta (ma'ruza+amaliy birga).
                 $cardTypes = $cycleSimple ? ['practice'] : ['lecture', 'practice'];
                 foreach ($cardTypes as $cardType) {
@@ -3085,11 +3086,45 @@ class TimetableController extends Controller
             ->values();
     }
 
+    /** Sikl soatlari: avval fakultet bo'yicha, topilmasa yo'nalish bo'yicha. */
+    private function cycleHoursLookup(array $map, ?string $faculty, string $spec, int $course, string $subject): ?array
+    {
+        $key = $this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject);
+        if ($faculty !== null && $faculty !== '' && isset($map[$this->specKey($faculty) . '|' . $key])) {
+            return $map[$this->specKey($faculty) . '|' . $key];
+        }
+        return $map[$key] ?? null;
+    }
+
+    /** Sikl qatori nomidan ("1-son davolash / 1-oqim / rus") fakultetni ajratadi. */
+    private function cycleRowFaculty(string $groupName, $cards = null): ?string
+    {
+        if (str_contains($groupName, ' / ')) {
+            return trim(explode(' / ', $groupName)[0]);
+        }
+        if ($cards) {
+            $card = collect($cards)->first(fn($c) => in_array($groupName, $this->cycleCardRowNames($c), true));
+            if ($card) {
+                return (string) $card->faculty_name;
+            }
+        }
+        return null;
+    }
+
     /**
-     * Berilgan blok sanalari bilan kesishadigan BOSHQA sikl bloklari band
-     * qilgan xonalar: [auditorium_code => fan nomi]. Har blokning xonasi o'z
-     * oqim kartalaridan olinadi.
+     * Karta qaysi sikl qatorlarida ko'rinadi: guruh rejimida subguruh ("A + B"
+     * bo'laklari ham), oqim rejimida oqim nomi (oqim_label'siz — asosiy guruh).
      */
+    private function cycleCardRowNames(TimetableCard $card): array
+    {
+        $names = [];
+        foreach ($this->cycleCardGroups($card) as $member) {
+            $names[] = $member;
+            $names[] = $this->cycleFlowName($card, $member);
+        }
+        return array_values(array_unique($names));
+    }
+
     /**
      * Sikl fanlarining reja soatlari (ishchi rejadan): ma'ruza va amaliy
      * (amaliy = amaliy + laboratoriya + seminar). Ma'lumotlar tabidagi
@@ -3113,20 +3148,37 @@ class TimetableController extends Controller
             ->get());
 
         $map = [];
+        // Alias rejalarining fakultetsiz kaliti — faqat zaxira: sof "Davolash ishi"
+        // rejasi (mas. Xalqaro ta'lim) o'z soatini 1-son/2-son soatlari bilan
+        // max qilinmasdan olishi kerak.
+        $aliasFallback = [];
+        $put = function (array &$target, string $key, float $lecture, float $practice) {
+            if (!isset($target[$key])) {
+                $target[$key] = ['lecture' => $lecture, 'practice' => $practice];
+            } else {
+                $target[$key]['lecture'] = max($target[$key]['lecture'], $lecture);
+                $target[$key]['practice'] = max($target[$key]['practice'], $practice);
+            }
+        };
         foreach ($rows as $r) {
             $course = (int) $r->level_code >= 11 ? (int) $r->level_code - 10 : (int) $r->level_code;
-            $key = $this->specKey((string) $r->specialty_name) . '|' . $course . '|' . $this->normSubject((string) $r->subject_name);
             $lecture = (float) $r->lecture;
             $practice = (float) $r->practice + (float) $r->laboratory + (float) $r->seminar;
-            if (!isset($map[$key])) {
-                $map[$key] = ['lecture' => $lecture, 'practice' => $practice];
+            // "1-son Davolash ishi" kabi reja nomlari kartochkada fakultet + sof
+            // yo'nalish bo'lib turadi — kalitni alias bo'yicha quramiz. Fakultetli
+            // kalit ham saqlanadi: 1-son, 2-son va boshqa fakultetlarda bir xil
+            // nomli fanning soatlari farq qilsa, aynan o'z fakulteti olinadi.
+            [$facAlias, $specAlias] = $this->curriculumScopeAlias((string) $r->specialty_name);
+            $key = $this->specKey($specAlias) . '|' . $course . '|' . $this->normSubject((string) $r->subject_name);
+            if ($facAlias === null) {
+                $put($map, $key, $lecture, $practice);
             } else {
-                $map[$key]['lecture'] = max($map[$key]['lecture'], $lecture);
-                $map[$key]['practice'] = max($map[$key]['practice'], $practice);
+                $put($map, $this->specKey($facAlias) . '|' . $key, $lecture, $practice);
+                $put($aliasFallback, $key, $lecture, $practice);
             }
         }
 
-        return $map;
+        return $map + $aliasFallback;
     }
 
     /**
@@ -3203,6 +3255,11 @@ class TimetableController extends Controller
         return (array_sum($mins) / count($mins)) >= 60 ? 2 : 1;
     }
 
+    /**
+     * Berilgan blok sanalari bilan kesishadigan BOSHQA sikl bloklari band
+     * qilgan xonalar: [auditorium_code => fan nomi]. Har blokning xonasi o'z
+     * oqim kartalaridan olinadi.
+     */
     private function cycleOverlappingRoomCodes(TimetableBoard $board, TimetableCyclePlacement $placement, array $data): array
     {
         $set = (array) ($board->settings ?? []);
@@ -3254,9 +3311,25 @@ class TimetableController extends Controller
             $cycleDays[$key] = max(1, (int) $setting->cycle_days);
         }
         $cycleHours = $this->cycleSubjectHoursMap($board);
-        $daysOf = function ($item) use ($cycleDays, $cycleHours): int {
+        // Guruh rejimida (yoki oqim_label'siz eski kartalarda) qator nomi oddiy
+        // subguruh — fakultet nomda yo'q, shuning uchun kartalardan olinadi.
+        $facultyByRow = [];
+        foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->get() as $card) {
+            if (!$card->faculty_name) {
+                continue;
+            }
+            $base = mb_strtolower(trim((string) $card->specialty_name)) . '|' . (int) $card->course . '|';
+            foreach ($this->cycleCardRowNames($card) as $rowName) {
+                $facultyByRow[$base . mb_strtolower(trim($rowName))] ??= (string) $card->faculty_name;
+            }
+        }
+        $daysOf = function ($item) use ($cycleDays, $cycleHours, $facultyByRow): int {
             $settingDays = (int) ($cycleDays[mb_strtolower(trim($item->specialty_name)) . '|' . (int) $item->course . '|' . mb_strtolower(trim($item->subject_name))] ?? 1);
-            $hours = $cycleHours[$this->specKey((string) $item->specialty_name) . '|' . (int) $item->course . '|' . $this->normSubject((string) $item->subject_name)] ?? null;
+            $faculty = $this->cycleRowFaculty((string) ($item->group_name ?? ''))
+                ?? ($facultyByRow[mb_strtolower(trim((string) $item->specialty_name)) . '|' . (int) $item->course . '|'
+                    . mb_strtolower(trim((string) $item->group_name))] ?? null);
+            $hours = $this->cycleHoursLookup($cycleHours, $faculty,
+                (string) $item->specialty_name, (int) $item->course, (string) $item->subject_name);
             return max(1, $this->cycleTypeDays(max(1, $settingDays), $hours, (string) ($item->training_type ?: 'practice')));
         };
 
@@ -3424,8 +3497,14 @@ class TimetableController extends Controller
         $reqPair = max(1, min(24, (int) ($data['pair'] ?? 1)));
         $cycleView = $data['view'] ?? 'flow';
         $cycleHours = $this->cycleSubjectHoursMap($board);
-        $hoursFor = fn(string $spec, int $course, string $subject): ?array =>
-            $cycleHours[$this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject)] ?? null;
+        $placeFaculty = $this->cycleRowFaculty(
+            (string) $data['group_name'],
+            TimetableCard::where('board_id', $board->id)->where('course', (int) $data['course'])
+                ->where('specialty_name', $data['specialty_name'])
+                ->get(['group_name', 'group_names', 'faculty_name', 'oqim_label', 'lang'])
+        );
+        $hoursFor = fn(string $spec, int $course, string $subject, ?string $faculty = null): ?array =>
+            $this->cycleHoursLookup($cycleHours, $faculty ?? $placeFaculty, $spec, $course, $subject);
         $rowHours = $this->cycleRowHours($board);
         if ($syncLecture) {
             // Tashqi jadvalda amaliy blok ma'ruzadan keyingi paralarda turadi

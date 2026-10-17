@@ -1155,14 +1155,19 @@
         #cycleGrid tr.cyc-markrow td { height: calc(var(--mk-rows, 6) * 22px + 12px); vertical-align: top; }
         /* Fan nomi to'r ichida, paralar ustida (kataklarni bosishga xalaqit bermaydi) */
         #cycleGrid .cyc-mk-grid { position: relative; }
-        #cycleGrid .cyc-mk-over { position: absolute; left: 4px; right: 4px; top: 50%; transform: translateY(-50%); z-index: 2;
+        /* Fan nomi sukutda M/A darslar egallagan maydon markazida (--mk-x/--mk-y);
+           ushlab blok ichida siljitiladi, ikki marta bosilsa markazga qaytadi. */
+        #cycleGrid .cyc-mk-over { position: absolute; left: var(--mk-x, 50%); top: var(--mk-y, 50%); transform: translate(-50%, -50%); z-index: 2;
+            width: max-content; max-width: calc(100% - 8px);
             display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; text-align: center; }
+        #cycleGrid .cyc-mk-over .cyc-mk-title { touch-action: none; }
+        #cycleGrid .cyc-mk-over.is-dragging .cyc-mk-title { cursor: grabbing; box-shadow: 0 0 0 2px rgba(37, 99, 235, .7), 0 4px 10px rgba(15, 23, 42, .25); }
         #cycleGrid .cyc-mk-over .cyc-mk-title { max-width: 100%; padding: 2px 7px; border-radius: 6px; background: rgba(255, 255, 255, .6);
             box-shadow: 0 1px 3px rgba(15, 23, 42, .14); pointer-events: auto; cursor: pointer; font-size: 12px; font-weight: 800; line-height: 1.2; color: #0f172a;
             white-space: normal; overflow-wrap: anywhere;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
         /* Tor blok (≤ 6 kun): faqat fan nomi va soat — o'qituvchi/xona sichqoncha ustiga borganda */
-        #cycleGrid .cyc-mk-over.is-compact { gap: 1px; left: 2px; right: 2px; }
+        #cycleGrid .cyc-mk-over.is-compact { gap: 1px; max-width: calc(100% - 4px); }
         #cycleGrid .cyc-mk-over.is-compact .cyc-mk-title { padding: 1px 4px; font-size: 10.5px; }
         #cycleGrid .cyc-mk-over .cyc-mk-title:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .55); }
         #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .6);
@@ -3895,6 +3900,91 @@
                 }
             });
 
+            // ── Fan nomining blok ichidagi joyi ──
+            // Sukut: M/A darslar egallagan soatlar oralig'ining o'rtasi (gorizontal — blok
+            // o'rtasi). Foydalanuvchi siljitgan joy shu brauzerda (doska + blok bo'yicha) saqlanadi.
+            function cycTitleStoreKey() { return board ? 'lms:cyc-title-pos:' + board.id : ''; }
+            function cycTitleStore() {
+                try { return JSON.parse(localStorage.getItem(cycTitleStoreKey()) || '{}') || {}; } catch (e) { return {}; }
+            }
+            function cycTitleSave(key, pos) {
+                try {
+                    const all = cycTitleStore();
+                    if (pos) all[key] = pos; else delete all[key];
+                    localStorage.setItem(cycTitleStoreKey(), JSON.stringify(all));
+                } catch (e) { }
+            }
+            function cycTitlePosStyle(block, plan, dayHours) {
+                const saved = cycTitleStore()[block.key];
+                if (saved && isFinite(saved[0]) && isFinite(saved[1])) {
+                    return '--mk-x:' + (+saved[0]).toFixed(2) + '%;--mk-y:' + (+saved[1]).toFixed(2) + '%';
+                }
+                let lo = Infinity, hi = -Infinity;
+                Object.values(plan || {}).forEach(dp => {
+                    const n = (+dp.lec || 0) + (+dp.prc || 0);
+                    if (n < 1) return;
+                    const st = +dp.start || 1;
+                    lo = Math.min(lo, st); hi = Math.max(hi, st + n - 1);
+                });
+                if (!isFinite(lo)) return '';
+                const y = ((lo - 1) + hi) / 2 / Math.max(1, dayHours) * 100;
+                return '--mk-y:' + y.toFixed(2) + '%';
+            }
+            // Ushlab siljitish: sichqoncha 4px dan ko'p yursa — siljitish, aks holda oddiy bosish.
+            let cycTitleDragged = false;
+            function setupCycTitleDrag() {
+                const grid = $('cycleGrid');
+                if (!grid || grid.dataset.mkDragReady) return;
+                grid.dataset.mkDragReady = '1';
+                grid.addEventListener('pointerdown', ev => {
+                    if (ev.button !== 0) return;
+                    const title = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
+                    if (!title) return;
+                    const over = title.closest('.cyc-mk-over'), area = over && over.parentElement;
+                    if (!area) return;
+                    const sx = ev.clientX, sy = ev.clientY;
+                    const ar = area.getBoundingClientRect(), or = over.getBoundingClientRect();
+                    const cx0 = or.left + or.width / 2 - ar.left, cy0 = or.top + or.height / 2 - ar.top;
+                    let moving = false, pos = null;
+                    cycTitleDragged = false;
+                    const move = e => {
+                        const dx = e.clientX - sx, dy = e.clientY - sy;
+                        if (!moving && Math.abs(dx) + Math.abs(dy) < 4) return;
+                        if (!moving) { moving = true; over.classList.add('is-dragging'); try { title.setPointerCapture(ev.pointerId); } catch (_) { } }
+                        e.preventDefault();
+                        // Blok chegarasidan chiqmasin.
+                        const hw = or.width / 2 + 2, hh = or.height / 2 + 2;
+                        const cx = Math.min(Math.max(cx0 + dx, hw), Math.max(hw, ar.width - hw));
+                        const cy = Math.min(Math.max(cy0 + dy, hh), Math.max(hh, ar.height - hh));
+                        pos = [cx / ar.width * 100, cy / ar.height * 100];
+                        over.style.setProperty('--mk-x', pos[0].toFixed(2) + '%');
+                        over.style.setProperty('--mk-y', pos[1].toFixed(2) + '%');
+                    };
+                    const up = () => {
+                        document.removeEventListener('pointermove', move);
+                        document.removeEventListener('pointerup', up);
+                        document.removeEventListener('pointercancel', up);
+                        over.classList.remove('is-dragging');
+                        if (moving) {
+                            cycTitleDragged = true;   // keyingi "click" popoverni ochmasin
+                            if (pos) cycTitleSave(title.dataset.mkSubj, [+pos[0].toFixed(2), +pos[1].toFixed(2)]);
+                        }
+                    };
+                    document.addEventListener('pointermove', move);
+                    document.addEventListener('pointerup', up);
+                    document.addEventListener('pointercancel', up);
+                });
+                // Ikki marta bosish — avtomatik (darslar markazi) joyga qaytarish.
+                grid.addEventListener('dblclick', ev => {
+                    const title = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
+                    if (!title) return;
+                    ev.preventDefault();
+                    cycTitleSave(title.dataset.mkSubj, null);
+                    closeCycDayPop();
+                    if (cyclePlanData) renderCyclePlan(cyclePlanData);
+                });
+            }
+
             function renderCyclePlan(j) {
                 if (typeof closeCycDayPop === 'function') closeCycDayPop();
                 const dates = j.dates || [], allRows = j.rows || [];
@@ -4052,8 +4142,8 @@
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
-                                    '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '">' +
-                                    '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Fan haqida: soatlar, o\'qituvchi, xona" style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
+                                    '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '" style="' + cycTitlePosStyle(block, plan, dayHours) + '">' +
+                                    '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Bosing — fan haqida (soatlar, o\'qituvchi, xona). Ushlab blok ichida siljiting; ikki marta bosing — markazga qaytadi." style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     // O'qituvchi/xona doskada yozilmaydi — fan nomi bosilganda oynada chiqadi.
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +
@@ -4146,6 +4236,7 @@
                 $('cycleGrid').innerHTML = h;
                 setupCycleGridEvents();
                 setupCycleMarking();
+                setupCycTitleDrag();
                 renderCycleCards(j);
             }
 
@@ -4347,6 +4438,7 @@
                     const subj = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
                     if (subj) {
                         ev.preventDefault();
+                        if (cycTitleDragged) { cycTitleDragged = false; return; }   // siljitish tugadi — popover ochilmaydi
                         if (cycDaySel && cycDaySel.key === subj.dataset.mkSubj && cycDaySel.offset === -1) { closeCycDayPop(); return; }
                         openCycSubjPop(subj.dataset.mkSubj, subj);
                         return;

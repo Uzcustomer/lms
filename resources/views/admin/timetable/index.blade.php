@@ -194,6 +194,8 @@
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
+                        <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Yakshanba va bayram ustunlarini jadvaldan yashiradi (ma'lumot o'zgarmaydi)">
+                            <input type="checkbox" id="cycleHideOff" class="rounded border-gray-300"> Dam olish kunlarini yashirish</label>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sig'masa, bir fanning turli oqimlardagi sikllari ko'rsatilgan o'quv kunigacha kesishishi mumkin">
                             <input type="checkbox" id="cycleAllowOverlap" class="rounded border-gray-300"> Kesishishga ruxsat
                             <input type="number" id="cycleOverlapDays" min="1" max="60" value="1" class="w-14 rounded border-gray-300 text-xs py-0.5" disabled> kun</label>
@@ -1207,6 +1209,9 @@
         #cycleGrid .cyc-addpair:hover { color: #1d4ed8; background: #dbeafe; }
         #cycleGrid .cyc-group-col { width: var(--cycle-group-width); min-width: var(--cycle-group-width); }
         #cycleGrid .cyc-date-col { width: 30px; }
+        /* "Dam olish kunlarini yashirish": ustun indekslari o'zgarmaydi, faqat ko'rinmaydi */
+        #cycleGrid col.cyc-col-hidden { visibility: collapse; }
+        #cycleGrid th.cyc-col-hidden { padding: 0; border: 0; font-size: 0; }
         #cycleGrid .cyc-wend, #cycleGrid .cyc-off { background: #eef2f7; }
         #cycleGrid .cyc-block { text-align: center; font-size: 10px; overflow: hidden; white-space: nowrap; color: #1e293b; }
         #cycleGrid .cyc-block { position: relative; }
@@ -3289,7 +3294,25 @@
             }   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             let cyclePairsShown = null;   // ko'rinadigan para qatorlari (sukut: sikl kuni = 6 soat)
             let cycleBandsResize = null;  // kun chiziqlarini qayta chizuvchi resize ishlovchisi
-            let cycleDayGeometry = [];    // kun ustunlari o'lchovi: [{left, width}]
+            let cycleDayGeometry = [];
+            // Dam olish (yakshanba/bayram) ustunlarini yashirish — faqat ko'rinish.
+            // Kafedra belgilash rejimida ishlatilmaydi: u yerda blok ichida har kun alohida katak.
+            let cycleHideOff = false;
+            try { cycleHideOff = localStorage.getItem('lms:cycle-hide-off') === '1'; } catch (e) { }
+            function cycleHidingOff() {
+                return cycleHideOff && !(cyclePlanData && cyclePlanData.mark_mode);
+            }
+            function cycleColHidden(index) {
+                const d = cyclePlanData && cyclePlanData.dates ? cyclePlanData.dates[index] : null;
+                return cycleHidingOff() && Boolean(d && d.off);
+            }
+            // [from, from+span) oralig'idagi ko'rinadigan kalendar indekslari.
+            function cycleVisibleIdx(from, span) {
+                const out = [];
+                for (let i = from; i < from + span; i++) if (!cycleColHidden(i)) out.push(i);
+                if (!out.length) for (let i = from; i < from + span; i++) out.push(i);
+                return out;
+            }    // kun ustunlari o'lchovi: [{left, width}]
             let cycleDragKey = null;
             let cycleHolidays = [];   // bayram kunlari (Y-m-d)
             // Bayram chiplarini chizadi (× bilan olib tashlash mumkin)
@@ -3526,8 +3549,10 @@
 
                 const from = +cell.dataset.cycleFrom || 0;
                 const span = Math.max(1, +cell.dataset.cycleSpan || 1);
-                const offset = Math.min(span - 1, Math.max(0, dayIndex - from));
-                const colWidth = cell.offsetWidth / span;
+                const visible = cycleVisibleIdx(from, span);
+                let offset = visible.indexOf(dayIndex);
+                if (offset < 0) offset = Math.max(0, visible.findIndex(i => i > dayIndex));
+                const colWidth = cell.offsetWidth / visible.length;
 
                 const mark = document.createElement('div');
                 mark.className = 'cyc-drop-mark' + (allowed ? '' : ' is-bad');
@@ -3674,11 +3699,11 @@
                 let h = '<colgroup><col class="cyc-group-col">'
                     + (markMode ? '<col style="width:62px">' : '')
                     + (simple ? '' : '<col style="width:52px">');
-                dates.forEach(() => h += '<col class="cyc-date-col">');
+                dates.forEach((d, i) => h += '<col class="cyc-date-col' + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '">');
                 h += '</colgroup><thead><tr><th class="cyc-gcol">' + (cycleViewMode === 'group' ? 'Guruh' : 'Oqim') + '</th>'
                     + (markMode ? '<th class="cyc-mk-side">Para</th>' : '')
                     + (simple ? '' : '<th class="cyc-pcol" title="Juftlik">Para</th>');
-                dates.forEach(d => h += '<th class="cyc-dcol' + cycleDateClass(d) + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
+                dates.forEach((d, i) => h += '<th class="cyc-dcol' + cycleDateClass(d) + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
                     // Bloklar yaxlit to'rtburchak katak bo'lib chiziladi (rowspan)
@@ -3952,10 +3977,11 @@
                 // X-koordinatasigacha nechta ustun borligi hisoblanadi.
                 const indexAt = (cell, ev) => {
                     const span = Math.max(1, +cell.dataset.cycleSpan || 1);
+                    const visible = cycleVisibleIdx(+cell.dataset.cycleFrom || 0, span);
                     const rect = cell.getBoundingClientRect();
-                    const colW = rect.width / span;
+                    const colW = rect.width / visible.length;
                     const off = colW > 0 && ev.clientX != null ? Math.floor((ev.clientX - rect.left) / colW) : 0;
-                    return (+cell.dataset.cycleFrom || 0) + Math.min(span - 1, Math.max(0, off));
+                    return visible[Math.min(visible.length - 1, Math.max(0, off))];
                 };
                 const clearDropMark = () => {
                     if (cycleDropCell) { cycleDropCell.classList.remove('cycle-drop-target'); cycleDropCell = null; }
@@ -4237,6 +4263,14 @@
                 loadCyclePlan();
             }
             if ($('cycLayerExternal')) $('cycLayerExternal').onclick = () => setCycleLayer('external');
+            if ($('cycleHideOff')) {
+                $('cycleHideOff').checked = cycleHideOff;
+                $('cycleHideOff').onchange = () => {
+                    cycleHideOff = $('cycleHideOff').checked;
+                    try { localStorage.setItem('lms:cycle-hide-off', cycleHideOff ? '1' : '0'); } catch (e) { }
+                    if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
+                };
+            }
             if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
             if ($('cycViewGroup')) $('cycViewGroup').onclick = () => setCycleViewMode('group');
             if ($('cycleStart')) $('cycleStart').onchange = loadCyclePlan;

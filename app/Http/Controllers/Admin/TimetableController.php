@@ -3103,13 +3103,26 @@ class TimetableController extends Controller
             return trim(explode(' / ', $groupName)[0]);
         }
         if ($cards) {
-            $card = collect($cards)->first(fn($c) => (string) $c->group_name === $groupName
-                || in_array($groupName, (array) ($c->group_names ?? []), true));
+            $card = collect($cards)->first(fn($c) => in_array($groupName, $this->cycleCardRowNames($c), true));
             if ($card) {
                 return (string) $card->faculty_name;
             }
         }
         return null;
+    }
+
+    /**
+     * Karta qaysi sikl qatorlarida ko'rinadi: guruh rejimida subguruh ("A + B"
+     * bo'laklari ham), oqim rejimida oqim nomi (oqim_label'siz — asosiy guruh).
+     */
+    private function cycleCardRowNames(TimetableCard $card): array
+    {
+        $names = [];
+        foreach ($this->cycleCardGroups($card) as $member) {
+            $names[] = $member;
+            $names[] = $this->cycleFlowName($card, $member);
+        }
+        return array_values(array_unique($names));
     }
 
     /**
@@ -3298,9 +3311,24 @@ class TimetableController extends Controller
             $cycleDays[$key] = max(1, (int) $setting->cycle_days);
         }
         $cycleHours = $this->cycleSubjectHoursMap($board);
-        $daysOf = function ($item) use ($cycleDays, $cycleHours): int {
+        // Guruh rejimida (yoki oqim_label'siz eski kartalarda) qator nomi oddiy
+        // subguruh — fakultet nomda yo'q, shuning uchun kartalardan olinadi.
+        $facultyByRow = [];
+        foreach (TimetableCard::where('board_id', $board->id)->where('training_type', 'practice')->get() as $card) {
+            if (!$card->faculty_name) {
+                continue;
+            }
+            $base = mb_strtolower(trim((string) $card->specialty_name)) . '|' . (int) $card->course . '|';
+            foreach ($this->cycleCardRowNames($card) as $rowName) {
+                $facultyByRow[$base . mb_strtolower(trim($rowName))] ??= (string) $card->faculty_name;
+            }
+        }
+        $daysOf = function ($item) use ($cycleDays, $cycleHours, $facultyByRow): int {
             $settingDays = (int) ($cycleDays[mb_strtolower(trim($item->specialty_name)) . '|' . (int) $item->course . '|' . mb_strtolower(trim($item->subject_name))] ?? 1);
-            $hours = $this->cycleHoursLookup($cycleHours, $this->cycleRowFaculty((string) ($item->group_name ?? '')),
+            $faculty = $this->cycleRowFaculty((string) ($item->group_name ?? ''))
+                ?? ($facultyByRow[mb_strtolower(trim((string) $item->specialty_name)) . '|' . (int) $item->course . '|'
+                    . mb_strtolower(trim((string) $item->group_name))] ?? null);
+            $hours = $this->cycleHoursLookup($cycleHours, $faculty,
                 (string) $item->specialty_name, (int) $item->course, (string) $item->subject_name);
             return max(1, $this->cycleTypeDays(max(1, $settingDays), $hours, (string) ($item->training_type ?: 'practice')));
         };
@@ -3472,7 +3500,8 @@ class TimetableController extends Controller
         $placeFaculty = $this->cycleRowFaculty(
             (string) $data['group_name'],
             TimetableCard::where('board_id', $board->id)->where('course', (int) $data['course'])
-                ->where('specialty_name', $data['specialty_name'])->get(['group_name', 'group_names', 'faculty_name'])
+                ->where('specialty_name', $data['specialty_name'])
+                ->get(['group_name', 'group_names', 'faculty_name', 'oqim_label', 'lang'])
         );
         $hoursFor = fn(string $spec, int $course, string $subject, ?string $faculty = null): ?array =>
             $this->cycleHoursLookup($cycleHours, $faculty ?? $placeFaculty, $spec, $course, $subject);

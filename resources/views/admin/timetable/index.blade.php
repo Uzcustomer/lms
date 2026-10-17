@@ -4231,7 +4231,10 @@
                 const dp = block && block.day_plan ? block.day_plan[offset] : null;
                 if (!block || !dp) return;
                 cycDaySel = { key: key, offset: +offset };
-                const cells = document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                // Faqat shu kuni qo'yilgan darslar (M + A) soatlari belgilanadi — butun kun emas.
+                const selFrom = +dp.start || 1, selTo = selFrom + (+dp.lec || 0) + (+dp.prc || 0) - 1;
+                const cells = [...document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]')]
+                    .filter(c => +c.dataset.mkHour >= selFrom && +c.dataset.mkHour <= selTo);
                 cells.forEach((c, i) => {
                     c.classList.add('is-day-sel');
                     if (i === 0) c.classList.add('is-day-top');

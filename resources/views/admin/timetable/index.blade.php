@@ -1107,12 +1107,16 @@
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
         /* Sana qatori doim ko'rinib tursin: vertikal scroll wrap ichida
            bo'ladi (sticky top overflow konteynerga nisbatan ishlaydi). */
-        #cycleGridWrap { max-height: calc(100vh - 130px); }
+        /* Sikl maydoni: jadval o'z oynasida suriladi — sanalar (sarlavha) tepada, guruh/para
+           ustunlari chapda qotib turadi. Avval tashqi #cycleArea surilardi va sarlavha ketib qolardi. */
+        #cycleArea:not(.hidden) { display: flex; flex-direction: column; overflow: hidden; }
+        #cycleArea > :not(#cycleGridWrap) { flex: none; }
+        #cycleGridWrap { flex: 1 1 auto; min-height: 0; max-height: none; }
         #cycleGrid thead th { position: sticky; top: 0; z-index: 5; }
         #cycleGrid thead .cyc-gcol { z-index: 7; }
         #cycleGrid { --cycle-group-width: 170px; border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
         #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
-        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; box-sizing: border-box; overflow: hidden;
+        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 4; box-sizing: border-box; overflow: hidden;
             width: var(--cycle-group-width); min-width: var(--cycle-group-width); max-width: var(--cycle-group-width);
             padding: 2px 6px; background: #eff6ff; text-align: left; font-size: 10px; line-height: 1.15; }
         #cycleGrid thead .cyc-gcol { background: #dbeafe; }
@@ -1159,12 +1163,9 @@
         /* Tor blok (≤ 6 kun): faqat fan nomi va soat — o'qituvchi/xona sichqoncha ustiga borganda */
         #cycleGrid .cyc-mk-over.is-compact { gap: 1px; left: 2px; right: 2px; }
         #cycleGrid .cyc-mk-over.is-compact .cyc-mk-title { padding: 1px 4px; font-size: 10.5px; }
-        #cycleGrid .cyc-mk-over.is-compact .cyc-mk-count { font-size: 9px; padding: 0 3px; white-space: nowrap;
-            max-width: 100%; overflow: hidden; }
         #cycleGrid .cyc-mk-over .cyc-mk-title:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .55); }
         #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .6);
             font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        #cycleGrid .cyc-mk-over .cyc-mk-count { pointer-events: none; }
         #cycleGrid .cyc-mk-gear { position: absolute; top: 2px; right: 2px; z-index: 3; }
         #cycleGrid .cyc-block.is-mark { padding: 0; overflow: visible; }
         #cycleGrid .cyc-mk {
@@ -1248,6 +1249,11 @@
             width: 62px; min-width: 62px; max-width: 62px; padding: 0;
             background: #f1f5f9; border: 1px solid #e2e8f0;
         }
+        /* O'ngga surilganda guruh va para (vaqt) ustunlari joyida qotib turadi */
+        #cycleGrid td.cyc-mk-side, #cycleGrid th.cyc-mk-side {
+            position: sticky; left: var(--cycle-group-width); z-index: 4; box-sizing: border-box;
+        }
+        #cycleGrid thead th.cyc-mk-side { z-index: 7; background: #f1f5f9; }
         #cycleGrid .cyc-mk-side-box { display: flex; flex-direction: column; height: 100%; }
         #cycleGrid .cyc-mk-side-gap { display: none; }
         #cycleGrid .cyc-mk-side-rows { flex: 1 1 auto; display: grid; min-height: 0; }
@@ -2280,6 +2286,48 @@
         }
 
 
+        /* ── Ixcham boshqaruv paneli: jadval uchun ko'proq joy ── */
+        .tt-top-toolbar { padding: 6px 8px; gap: 8px; flex-wrap: nowrap; align-items: center; }
+        .tt-board-select { flex: 0 1 300px; min-width: 200px; }
+        .tt-board-select select { height: 32px; font-size: 11.5px; padding-left: 34px; }
+        .tt-board-icon { width: 20px; height: 20px; left: 9px; }
+        .tt-toolbar-actions { flex: 1 1 auto; flex-wrap: nowrap; gap: 4px; justify-content: flex-end; min-width: 0; }
+        .tt-toolbar-actions .asc-tool, .tt-grid-field .asc-tool { min-height: 32px; padding: 0 7px; font-size: 11.5px; white-space: nowrap; }
+        .tt-toolbar-actions .asc-tool:hover { transform: none; }
+        /* Tor ekranda tugmalar faqat belgi (nomi — sichqoncha yo'rig'ida) */
+        @media (max-width: 1900px) {
+            .tt-toolbar-actions .asc-tool.toolbar-action { font-size: 0; gap: 0; padding: 0 6px; }
+            .tt-toolbar-actions .asc-tool.toolbar-action .toolbar-icon { margin: 0; }
+            .tt-toolbar-actions .asc-tool.toolbar-action #checkBadge,
+            .tt-toolbar-actions .asc-tool.toolbar-action #rulesBadge { font-size: 10px; }
+        }
+        .tt-work-panel { display: flex; align-items: center; flex-wrap: wrap; }
+        .tt-work-panel.mb-3 { margin-bottom: 4px; }
+        .tt-top-panel.mb-1 { margin-bottom: 4px; }
+        .tt-filters-row { padding: 6px 8px; gap: 6px; flex: 0 1 auto; align-items: center; }
+        .tt-work-panel .tt-bottom-row { flex: 1 1 auto; }
+        .tt-field > select { padding-top: 0; padding-bottom: 0; line-height: 30px; }
+        .tt-field > label { display: none; }
+        .tt-field .tt-dd-btn, .tt-field > select { height: 32px; min-width: 120px; font-size: 11.5px; }
+        .tt-bottom-row { min-height: 0; padding: 6px 8px; border-top: 0; flex-wrap: nowrap; gap: 6px; background: transparent; }
+        .tt-toggle-chip { min-height: 32px; padding: 0 9px; }
+        /* Sikl paneli: kichik oraliqlar */
+        #cycleArea > div:first-child { gap: 8px; padding-top: 4px; padding-bottom: 4px; }
+        #cycleHolBar { padding-top: 2px; padding-bottom: 2px; }
+        /* Guruh filtri ("Guruh" sarlavhasi) */
+        #cycleGrid th.cyc-gfilter-th { padding: 2px 4px; }
+        .cyc-gfilter-btn { max-width: calc(100% - 18px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #cbd5e1;
+            border-radius: 6px; background: #fff; padding: 2px 6px; font-size: 11px; font-weight: 700; color: #1e293b; cursor: pointer; }
+        .cyc-gfilter-btn.is-on { background: #dbeafe; border-color: #60a5fa; color: #1d4ed8; }
+        .cyc-gfilter-x { margin-left: 2px; border: 0; background: transparent; font-size: 15px; line-height: 1; color: #64748b; cursor: pointer; }
+        #cycRowPop { position: fixed; z-index: 60; width: 230px; max-height: 360px; display: flex; flex-direction: column; background: #fff;
+            border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 10px 30px rgba(15,23,42,.18); padding: 6px; }
+        #cycRowPop .cyc-rp-q { width: 100%; height: 30px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; font-size: 12px; margin-bottom: 4px; }
+        #cycRowPop .cyc-rp-list { overflow-y: auto; display: flex; flex-direction: column; }
+        #cycRowPop .cyc-rp-list button { text-align: left; border: 0; background: transparent; padding: 5px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+        #cycRowPop .cyc-rp-list button:hover { background: #f1f5f9; }
+        #cycRowPop .cyc-rp-list button.is-on { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+        #cycRowPop .cyc-rp-empty { padding: 6px 8px; color: #94a3b8; font-size: 12px; }
 </style>
 
     <script>
@@ -2421,6 +2469,14 @@
 
             applyTimetableAccess();
             applyAscRoleAccess();
+            // Ixcham panelda tugma nomi yashiriladi — u sichqoncha yo'rig'ida ko'rinsin.
+            document.querySelectorAll('.tt-toolbar-actions .toolbar-action').forEach(btn => {
+                const label = btn.textContent.replace(/\s+/g, ' ').trim();
+                if (!label) return;
+                if (!btn.title) btn.title = label;
+                else if (!btn.title.startsWith(label)) btn.title = label + ' — ' + btn.title;
+                btn.setAttribute('aria-label', label);
+            });
 
             // Jadvallarni sichqoncha bilan ushlab chap-o'ngga siljitish.
             document.querySelectorAll('[data-drag-scroll]').forEach(el => {
@@ -3361,6 +3417,57 @@
 
             let cyclePlanData = null;
             let cycleViewMode = 'flow';
+            // Sikl jadvalida bitta guruh/oqim bo'yicha filtr ("Guruh" sarlavhasi orqali).
+            let cycleRowFilter = null;
+            function closeCycRowPop() { const p = document.getElementById('cycRowPop'); if (p) p.remove(); }
+            function openCycRowPop(anchor) {
+                closeCycRowPop();
+                const names = ((cyclePlanData && cyclePlanData.rows) || []).map(r => r.group);
+                const pop = document.createElement('div');
+                pop.id = 'cycRowPop';
+                pop.innerHTML = '<input type="text" class="cyc-rp-q" placeholder="Qidirish: masalan 01a" autocomplete="off">'
+                    + '<div class="cyc-rp-list"></div>';
+                document.body.appendChild(pop);
+                const r = anchor.getBoundingClientRect();
+                pop.style.left = Math.max(8, r.left) + 'px';
+                pop.style.top = (r.bottom + 4) + 'px';
+                const list = pop.querySelector('.cyc-rp-list');
+                const q = pop.querySelector('.cyc-rp-q');
+                const draw = () => {
+                    const t = q.value.trim().toLowerCase();
+                    const hits = names.filter(n => !t || n.toLowerCase().includes(t));
+                    list.innerHTML = (t ? '' : '<button type="button" data-rp="" class="' + (!cycleRowFilter ? 'is-on' : '') + '">Hammasi (' + names.length + ')</button>')
+                        + hits.map(n => '<button type="button" data-rp="' + esc(n) + '" class="' + (n === cycleRowFilter ? 'is-on' : '') + '">' + esc(n) + '</button>').join('')
+                        + (hits.length ? '' : '<div class="cyc-rp-empty">Topilmadi</div>');
+                };
+                const pick = name => {
+                    cycleRowFilter = name || null;
+                    closeCycRowPop();
+                    if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
+                };
+                draw();
+                q.addEventListener('input', draw);
+                q.addEventListener('keydown', ev => {
+                    if (ev.key === 'Enter') {
+                        const first = list.querySelector('button[data-rp]:not([data-rp=""])') || list.querySelector('button[data-rp]');
+                        if (first) pick(first.dataset.rp);
+                    }
+                    if (ev.key === 'Escape') closeCycRowPop();
+                });
+                list.addEventListener('click', ev => { const b = ev.target.closest('button[data-rp]'); if (b) pick(b.dataset.rp); });
+                setTimeout(() => q.focus(), 0);
+            }
+            document.addEventListener('click', ev => {
+                const btn = ev.target.closest && ev.target.closest('#cycRowFilterBtn');
+                if (btn) { ev.preventDefault(); if (document.getElementById('cycRowPop')) closeCycRowPop(); else openCycRowPop(btn); return; }
+                const clr = ev.target.closest && ev.target.closest('#cycRowFilterClear');
+                if (clr) {
+                    ev.preventDefault(); cycleRowFilter = null; closeCycRowPop();
+                    if (cyclePlanData) { renderCyclePlan(cyclePlanData); renderCycleCards(cyclePlanData); }
+                    return;
+                }
+                if (!(ev.target.closest && ev.target.closest('#cycRowPop'))) closeCycRowPop();
+            });
             // Server ichki jadvalni guruhcha qatorlarida qaytaradi (view: group) — API so'rovlari shu bilan.
             function cycleEffView() { return (cyclePlanData && cyclePlanData.view) || cycleViewMode; }   // 'flow' — oqim bo'yicha, 'group' — har subguruh alohida qator
             // Sikl jadvali qatlami: null — rol bo'yicha server tanlaydi
@@ -3761,7 +3868,10 @@
 
             function renderCyclePlan(j) {
                 if (typeof closeCycDayPop === 'function') closeCycDayPop();
-                const dates = j.dates || [], rows = j.rows || [];
+                const dates = j.dates || [], allRows = j.rows || [];
+                // "Guruh" ustuni sarlavhasidan tanlangan bitta guruh/oqim (bo'lmasa hammasi).
+                if (cycleRowFilter && !allRows.some(r => r.group === cycleRowFilter)) cycleRowFilter = null;
+                const rows = cycleRowFilter ? allRows.filter(r => r.group === cycleRowFilter) : allRows;
                 if (!rows.length) {
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
                     renderCycleCards(j);
@@ -3797,7 +3907,12 @@
                     + (markMode ? '<col style="width:62px">' : '')
                     + (simple ? '' : '<col style="width:52px">');
                 dates.forEach((d, i) => h += '<col class="cyc-date-col' + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '">');
-                h += '</colgroup><thead><tr><th class="cyc-gcol">' + ((j.view || cycleViewMode) === 'group' ? 'Guruh' : 'Oqim') + '</th>'
+                const rowWord = (j.view || cycleViewMode) === 'group' ? 'Guruh' : 'Oqim';
+                h += '</colgroup><thead><tr><th class="cyc-gcol cyc-gfilter-th">'
+                    + '<button type="button" id="cycRowFilterBtn" class="cyc-gfilter-btn' + (cycleRowFilter ? ' is-on' : '') + '" title="' + rowWord + 'ni tanlash yoki qidirish">'
+                    + (cycleRowFilter ? esc(cycleRowFilter) : rowWord + ' (' + allRows.length + ')') + ' &#9662;</button>'
+                    + (cycleRowFilter ? '<button type="button" id="cycRowFilterClear" class="cyc-gfilter-x" title="Hammasini ko\'rsatish">&times;</button>' : '')
+                    + '</th>'
                     + (markMode ? '<th class="cyc-mk-side">Para</th>' : '')
                     + (simple ? '' : '<th class="cyc-pcol" title="Juftlik">Para</th>');
                 dates.forEach((d, i) => h += '<th class="cyc-dcol' + cycleDateClass(d) + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
@@ -3871,13 +3986,9 @@
                                 let sumLec = 0, sumPrc = 0;
                                 Object.values(plan).forEach(dp => { sumLec += +dp.lec || 0; sumPrc += +dp.prc || 0; });
                                 const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
-                                const sumBad = (lecTotal != null && sumLec !== +lecTotal) || (prcTotal != null && sumPrc !== +prcTotal);
                                 const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
                                 // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
                                 const compact = spanCols <= 6;
-                                // 1–2 ustunli (30–60px) blokda "M 2 · A 4 s" ham sig'maydi — "2+4"
-                                // (to'liq hisob katak title'ida va fan oynasida).
-                                const shortSum = spanCols <= 2 ? sumLec + '+' + sumPrc : 'M ' + sumLec + ' · A ' + sumPrc + ' s';
                                 // Blokni kataklar to'liq qoplaydi va ularning o'z title'i bor — td title'i
                                 // hech qachon chiqmaydi. Shuning uchun tor blokda ma'lumot katak title'iga qo'shiladi.
                                 const blockTip = compact ? ' — ' + block.subject + (req ? ' · ' + req : '') + ' · ' + sumLabel : '';
@@ -3915,7 +4026,6 @@
                                     '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '">' +
                                     '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Fan haqida: soatlar, o\'qituvchi, xona" style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     (req && !compact ? '<span class="cyc-mk-sub">' + esc(req) + '</span>' : '') +
-                                    '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '">' + (compact ? shortSum : sumLabel) + '</b>' +
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +
                                     '</div></div></td>';
@@ -3957,7 +4067,7 @@
                                         (firstOfPair
                                             ? '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
                                               (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '')
-                                            : '<span>' + hour + '-soat' + (pt && pt.end ? ' · ' + esc(pt.end) : '') + '</span>') +
+                                            : '') +
                                         '</div>';
                                 }
                                 h += '<td class="cyc-mk-side"><div class="cyc-mk-side-box">' +

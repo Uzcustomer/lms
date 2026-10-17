@@ -1107,7 +1107,11 @@
         /* ── Sikl (4-6 kurs) kalendar ko'rinishi ── */
         /* Sana qatori doim ko'rinib tursin: vertikal scroll wrap ichida
            bo'ladi (sticky top overflow konteynerga nisbatan ishlaydi). */
-        #cycleGridWrap { max-height: calc(100vh - 130px); }
+        /* Sikl maydoni: jadval o'z oynasida suriladi — sanalar (sarlavha) tepada, guruh/para
+           ustunlari chapda qotib turadi. Avval tashqi #cycleArea surilardi va sarlavha ketib qolardi. */
+        #cycleArea:not(.hidden) { display: flex; flex-direction: column; overflow: hidden; }
+        #cycleArea > :not(#cycleGridWrap) { flex: none; }
+        #cycleGridWrap { flex: 1 1 auto; min-height: 0; max-height: none; }
         #cycleGrid thead th { position: sticky; top: 0; z-index: 5; }
         #cycleGrid thead .cyc-gcol { z-index: 7; }
         #cycleGrid { --cycle-group-width: 170px; border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }

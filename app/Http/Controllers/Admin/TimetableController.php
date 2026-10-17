@@ -3190,6 +3190,7 @@ class TimetableController extends Controller
         };
 
         $map = [];
+        $aliasFallback = [];
         foreach ($rows as $r) {
             $plan = is_string($r->plan_data) ? json_decode($r->plan_data, true) : $r->plan_data;
             if (!is_array($plan)) continue;
@@ -3231,16 +3232,18 @@ class TimetableController extends Controller
             $level = (int) $r->level_code;
             $course = $level >= 11 ? $level - 10 : $level;
             $key = $this->cycleKtrKey($specAlias, $course, (string) $r->subject_name);
-            // Eng so'nggi tahrirlangan KTR ustuvor (orderByDesc updated_at).
-            if ($facAlias !== null && !isset($map[$this->specKey($facAlias) . '|' . $key])) {
-                $map[$this->specKey($facAlias) . '|' . $key] = $days;
-            }
-            if (!isset($map[$key])) {
-                $map[$key] = $days;
+            // Eng so'nggi tahrirlangan KTR ustuvor (orderByDesc updated_at). Alias rejalarining
+            // fakultetsiz kaliti faqat zaxira (cycleSubjectHoursMap bilan bir xil): sof
+            // "Davolash ishi" rejasi (mas. Xalqaro ta'lim) 1-son/2-son KTR'ini olmasin.
+            if ($facAlias === null) {
+                $map[$key] ??= $days;
+            } else {
+                $map[$this->specKey($facAlias) . '|' . $key] ??= $days;
+                $aliasFallback[$key] ??= $days;
             }
         }
 
-        return $cache[$board->id] = $map;
+        return $cache[$board->id] = $map + $aliasFallback;
     }
 
     /**

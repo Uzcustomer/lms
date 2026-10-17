@@ -2475,8 +2475,12 @@ class TimetableController extends Controller
         if ($cycleLayer === 'external') {
             $cycleSimple = true;
             $cycleMark = false;
-        } elseif ($this->isOquvBolimiRole($cycleRole)) {
-            $cycleSimple = false;
+        } else {
+            // Ichki jadval: fanga bitta blok, ichida kun × soat to'ri KTR bo'yicha
+            // (ma'ruza/amaliy soatlari har kun uchun). Barcha rollar uchun bir xil
+            // ko'rinish; tahrirlash (kunni surish) — faqat ichki qatlam egasi.
+            $cycleSimple = true;
+            $cycleMark = true;
         }
         $cycleCanEdit = $this->cycleLayerEditable($cycleRole, $cycleLayer);
         if ($request->boolean('clear') && !$cycleCanEdit) {
@@ -2691,6 +2695,8 @@ class TimetableController extends Controller
         $fmtHours = fn(?float $v) => $v === null ? null : (fmod($v, 1.0) == 0.0 ? (int) $v : round($v, 1));
         $rowHours = $this->cycleRowHours($board);
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
+        // Ichki jadval: KTR'dagi kunlik ma'ruza/amaliy soatlari (sikl fanida KTR "hafta" = sikl kuni).
+        $ktrDayPlans = $cycleMark ? $this->cycleKtrDayPlans($board) : [];
         $subjectKey = fn($g, $subject) => $rowKey($g) . '|' . (string) $subject;
         // Sikl joylashuvlari alohida saqlanadi: oddiy place endpointi haftalik
         // kartalarning day/pair maydonlarini buzmasligi kerak.
@@ -2826,6 +2832,17 @@ class TimetableController extends Controller
                     'lesson_time' => $placement->lesson_time ?? null,
                     'lecture_slots' => $hasLectureSlots ? (array) ($placement->lecture_slots ?? []) : [],
                     'lecture_hours' => $hrs === null ? null : $fmtHours((float) $hrs['lecture']),
+                    'practice_hours' => $hrs === null ? null : $fmtHours((float) $hrs['practice']),
+                    'day_plan' => $cycleMark
+                        ? $this->cycleDayPlan(
+                            $ktrDayPlans[($g['faculty'] ?? '') !== '' ? $this->specKey((string) $g['faculty']) . '|' . $this->cycleKtrKey((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name) : '']
+                                ?? $ktrDayPlans[$this->cycleKtrKey((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name)]
+                                ?? null,
+                            $hrs, (int) $days, $from, $workIndices,
+                            $hasLectureSlots ? (array) (($placement->lecture_slots ?? [])['starts'] ?? []) : [],
+                            6
+                        )
+                        : null,
                     'auditorium_code' => null,
                     'auditorium_name' => $audNames
                         ? ($audNames[0] . (count($audNames) > 1 ? ' +' . (count($audNames) - 1) : ''))
@@ -2902,6 +2919,7 @@ class TimetableController extends Controller
             'layer'      => $cycleLayer,
             'can_edit'   => $cycleCanEdit,
             'mark_mode'  => $cycleMark,
+            'day_edit'   => $cycleMark && $cycleCanEdit,
             'mark_ready' => $hasLectureSlots,
             'day_hours'  => 6,
             'cycle_cards' => $cycleCards,
@@ -3123,6 +3141,152 @@ class TimetableController extends Controller
                 return mb_strtolower($this->cycleFlowName($card)) === $flowLower;
             })
             ->values();
+    }
+
+    /** KTR kunlik rejasi kaliti (fakultetsiz): specKey(sof yo'nalish)|kurs|normFan. */
+    private function cycleKtrKey(string $specialty, int $course, string $subject): string
+    {
+        return $this->specKey($specialty) . '|' . $course . '|' . $this->normSubject($subject);
+    }
+
+    /**
+     * KTR (ktr_plans) dan sikl fanlari uchun kunlik soatlar:
+     * [kalit => [['lec' => soat, 'prc' => soat, 'tl' => ma'ruza mavzusi, 'tp' => amaliy mavzusi], ...]].
+     * Kalit — cycleKtrKey; 1-son/2-son kabi fakultetli rejalar uchun "specKey(fakultet)|" bilan ham.
+     * KTR "hafta" qatorlari sikl fanida sikl kunlarini bildiradi (1-qator = 1-kun).
+     */
+    private function cycleKtrDayPlans(TimetableBoard $board): array
+    {
+        static $cache = [];
+        if (isset($cache[$board->id])) {
+            return $cache[$board->id];
+        }
+        if (!Schema::hasTable('ktr_plans')) {
+            return $cache[$board->id] = [];
+        }
+        $start = (int) substr((string) $board->academic_year, 0, 4);
+        $parityRem = $board->semester_parity === 'kuzgi' ? 1 : 0;
+        $rows = DB::table('ktr_plans as kp')
+            ->join('curriculum_subjects as cs', 'cs.id', '=', 'kp.curriculum_subject_id')
+            ->join('semesters as s', function ($j) {
+                $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')->on('s.code', '=', 'cs.semester_code');
+            })
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('specialties as sp', 'sp.specialty_hemis_id', '=', 'c.specialty_hemis_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('s.education_year', (string) $start)
+            ->whereRaw('MOD(CAST(cs.semester_code AS UNSIGNED) - 10, 2) = ?', [$parityRem])
+            ->orderByDesc('kp.updated_at')
+            ->get(['kp.plan_data', 'kp.week_count', 'cs.subject_name', 'cs.subject_details',
+                'sp.name as specialty_name', 'f.name as faculty_name', 's.level_code']);
+
+        $typeOf = function (string $name): ?string {
+            $name = mb_strtolower($name);
+            foreach (['mustaqil', 'amaliyot', 'kurs ishi', 'самостоят', 'практика', 'курсов'] as $skip) {
+                if (str_contains($name, $skip)) return null;
+            }
+            if (preg_match("/ma['’ʻ`]?ruza|лекц/u", $name)) return 'lec';
+            return 'prc'; // amaliy, klinik amaliy, laboratoriya, seminar — auditoriya amaliy soati
+        };
+
+        $map = [];
+        $aliasFallback = [];
+        foreach ($rows as $r) {
+            $plan = is_string($r->plan_data) ? json_decode($r->plan_data, true) : $r->plan_data;
+            if (!is_array($plan)) continue;
+            $hours = $plan['hours'] ?? $plan;
+            $topics = $plan['topics'] ?? [];
+            $details = is_string($r->subject_details) ? json_decode($r->subject_details, true) : $r->subject_details;
+            $codeType = [];
+            foreach ((array) $details as $d) {
+                if (!is_array($d)) continue;
+                $code = (string) ($d['trainingType']['code'] ?? '');
+                $t = $typeOf((string) ($d['trainingType']['name'] ?? ''));
+                if ($code !== '' && $t !== null) $codeType[$code] = $t;
+            }
+            if (!$codeType) continue;
+            $weeks = max(0, (int) $r->week_count);
+            $days = [];
+            for ($w = 1; $w <= $weeks; $w++) {
+                $day = ['lec' => 0, 'prc' => 0, 'tl' => '', 'tp' => ''];
+                foreach ((array) ($hours[$w] ?? $hours[(string) $w] ?? []) as $code => $h) {
+                    $t = $codeType[(string) $code] ?? null;
+                    if ($t === null) continue;
+                    $day[$t] += (int) $h;
+                    $topic = trim((string) ($topics[$w][$code] ?? $topics[(string) $w][(string) $code] ?? ''));
+                    if ($topic !== '' && (int) $h > 0) {
+                        $tk = $t === 'lec' ? 'tl' : 'tp';
+                        $day[$tk] = $day[$tk] === '' ? $topic : $day[$tk] . '; ' . $topic;
+                    }
+                }
+                $days[] = $day;
+            }
+            if (!$days) continue;
+
+            // Yo'nalish nomi hemisSubjectRows bilan bir xil normallashtiriladi.
+            $spec = trim((string) preg_replace('/\(.*?\)/u', '', (string) $r->specialty_name));
+            if (preg_match('/(\d+)\s*-\s*son/u', (string) $r->faculty_name, $m) && preg_match('/^davolash\s+ishi$/iu', $spec)) {
+                $spec = $m[1] . '-son Davolash ishi';
+            }
+            [$facAlias, $specAlias] = $this->curriculumScopeAlias($spec);
+            $level = (int) $r->level_code;
+            $course = $level >= 11 ? $level - 10 : $level;
+            $key = $this->cycleKtrKey($specAlias, $course, (string) $r->subject_name);
+            // Eng so'nggi tahrirlangan KTR ustuvor (orderByDesc updated_at). Alias rejalarining
+            // fakultetsiz kaliti faqat zaxira (cycleSubjectHoursMap bilan bir xil): sof
+            // "Davolash ishi" rejasi (mas. Xalqaro ta'lim) 1-son/2-son KTR'ini olmasin.
+            if ($facAlias === null) {
+                $map[$key] ??= $days;
+            } else {
+                $map[$this->specKey($facAlias) . '|' . $key] ??= $days;
+                $aliasFallback[$key] ??= $days;
+            }
+        }
+
+        return $cache[$board->id] = $map + $aliasFallback;
+    }
+
+    /**
+     * Ichki jadval uchun blokning kunlik rejasi: kalendar siljishi (blok boshidan) =>
+     * ['k' => sikl kuni (1..), 'lec' => soat, 'prc' => soat, 'start' => boshlanish soati,
+     *  'tl' / 'tp' => mavzular, 'ktr' => KTR'dan olinganmi].
+     * KTR bo'lmasa: ma'ruzali kunlar 2+4, keyin 6 soat amaliy (reja soatidan).
+     * $starts — kafedra surgan kunlar: [sikl kuni indeksi (0..) => boshlanish soati].
+     */
+    private function cycleDayPlan(?array $ktrDays, ?array $hrs, int $days, int $from, array $workIndices, array $starts, int $dayHours): array
+    {
+        $pos = array_search($from, $workIndices, true);
+        if ($pos === false) {
+            return [];
+        }
+        $lecLeft = (int) round((float) ($hrs['lecture'] ?? 0));
+        $prcLeft = (int) round((float) ($hrs['practice'] ?? 0));
+        $out = [];
+        for ($k = 0; $k < $days; $k++) {
+            $ci = $workIndices[$pos + $k] ?? null;
+            if ($ci === null) break;
+            if ($ktrDays !== null) {
+                $d = $ktrDays[$k] ?? ['lec' => 0, 'prc' => 0, 'tl' => '', 'tp' => ''];
+                $lec = (int) $d['lec'];
+                $prc = (int) $d['prc'];
+            } else {
+                $lec = min(2, max(0, $lecLeft));
+                $prc = min($dayHours - $lec, max(0, $prcLeft));
+                $lecLeft -= $lec;
+                $prcLeft -= $prc;
+                $d = ['tl' => '', 'tp' => ''];
+            }
+            $total = $lec + $prc;
+            $start = (int) ($starts[$k] ?? $starts[(string) $k] ?? 1);
+            $start = max(1, min($start, max(1, $dayHours - $total + 1)));
+            $out[$ci - $from] = [
+                'k' => $k + 1, 'lec' => $lec, 'prc' => $prc, 'start' => $start,
+                'tl' => (string) ($d['tl'] ?? ''), 'tp' => (string) ($d['tp'] ?? ''),
+                'ktr' => $ktrDays !== null,
+            ];
+        }
+
+        return $out;
     }
 
     /** Sikl soatlari: avval fakultet bo'yicha, topilmasa yo'nalish bo'yicha. */
@@ -3458,6 +3622,9 @@ class TimetableController extends Controller
             // FormData ichma-ich obyektni yubora olmaydi, shuning uchun
             // belgilar JSON satr bo'lib keladi.
             'slots_json'     => 'nullable|string|max:20000',
+            // Ichki jadval: bitta sikl kunining darslari boshlanadigan soat (1..12).
+            'day_index'      => 'nullable|integer|min:0|max:200',
+            'start_hour'     => 'nullable|integer|min:1|max:12',
         ]);
 
         // Ma'ruza kataklari — ichki jadval: faqat kafedra mudiri (o'z kafedrasi fani) yoki admin.
@@ -3473,6 +3640,22 @@ class TimetableController extends Controller
         $placement = $this->findCyclePlacement($board, $data);
         if (!$placement) {
             return response()->json(['error' => 'Sikl bloki topilmadi.'], 404);
+        }
+
+        if (array_key_exists('day_index', $data) && $data['day_index'] !== null) {
+            // Yangi format: {"starts": {kunIndeksi: boshlanishSoati}} — eski belgilar bilan aralashmaydi.
+            $current = (array) ($placement->lecture_slots ?? []);
+            $starts = (array) ($current['starts'] ?? []);
+            $k = (string) (int) $data['day_index'];
+            $hour = (int) ($data['start_hour'] ?? 1);
+            if ($hour <= 1) {
+                unset($starts[$k]);
+            } else {
+                $starts[$k] = $hour;
+            }
+            $placement->update(['lecture_slots' => ['starts' => $starts]]);
+
+            return response()->json(['ok' => true, 'starts' => $starts]);
         }
 
         $incoming = json_decode((string) ($data['slots_json'] ?? '{}'), true);

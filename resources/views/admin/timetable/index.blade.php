@@ -1187,14 +1187,41 @@
             font-family: inherit; font-size: 10px; font-weight: 800; line-height: 1;
             color: rgba(15, 39, 72, .38);
         }
-        #cycleGrid .cyc-mk-cell::after { content: 'A'; }
-        #cycleGrid .cyc-mk-cell:hover { background: rgba(37, 99, 235, .16); }
+        #cycleGrid .cyc-mk-cell::after { content: ''; }
+        #cycleGrid .cyc-mk-cell { background: rgba(255, 255, 255, .82); }
+        #cycleGrid .cyc-mk-cell.is-practice { background: rgba(13, 148, 136, .22); color: #0f766e; }
+        #cycleGrid .cyc-mk-cell.is-practice::after { content: 'A'; }
         #cycleGrid .cyc-mk-cell.is-lecture { background: #4f46e5; color: #fff; }
         #cycleGrid .cyc-mk-cell.is-lecture::after { content: 'M'; }
-        #cycleGrid .cyc-mk-cell.is-lecture:hover { background: #4338ca; }
-        #cycleGrid .cyc-mk-cell.is-off { background: rgba(148, 163, 184, .30); cursor: not-allowed; }
-        #cycleGrid .cyc-mk-cell.is-off::after { content: ''; }
-        #cycleGrid .cyc-mk-cell.is-off:hover { background: rgba(148, 163, 184, .30); }
+        #cycleGrid .cyc-mk-cell:hover { outline: 2px solid rgba(37, 99, 235, .45); outline-offset: -2px; }
+        /* Blok ichidagi dam olish/bayram kuni: ustun yuqoridan pastgacha chiziqli — soat emas */
+        #cycleGrid .cyc-mk-cell.is-off { cursor: default; color: #64748b; font-size: 8px; font-weight: 700;
+            background: repeating-linear-gradient(135deg, rgba(148, 163, 184, .38) 0 4px, rgba(241, 245, 249, .9) 4px 8px); }
+        #cycleGrid .cyc-mk-cell.is-off.is-holiday {
+            background: repeating-linear-gradient(135deg, rgba(248, 113, 113, .35) 0 4px, rgba(254, 242, 242, .9) 4px 8px); }
+        #cycleGrid .cyc-mk-cell.is-off:hover { outline: 0; }
+        #cycleGrid .cyc-mk-cell.is-off[data-off-label]::after { content: attr(data-off-label); }
+        /* Tanlangan kun ustuni */
+        #cycleGrid .cyc-mk-cell.is-day-sel { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b; }
+        #cycleGrid .cyc-mk-cell.is-day-sel.is-day-top { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b, inset 0 2px 0 #f59e0b; }
+        #cycleGrid .cyc-mk-cell.is-day-sel.is-day-bottom { box-shadow: inset 2px 0 0 #f59e0b, inset -2px 0 0 #f59e0b, inset 0 -2px 0 #f59e0b; }
+        #cycDayPop { position: fixed; z-index: 60; width: 280px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, .18); padding: 10px 12px; font-size: 12px; color: #1e293b; }
+        #cycDayPop .dp-head { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
+        #cycDayPop .dp-title { font-weight: 800; line-height: 1.25; }
+        #cycDayPop .dp-sub { color: #64748b; font-size: 11px; font-weight: 600; }
+        #cycDayPop .dp-close { margin-left: auto; border: 0; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; color: #64748b; }
+        #cycDayPop .dp-row { display: flex; gap: 6px; align-items: baseline; margin: 4px 0; }
+        #cycDayPop .dp-tag { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px;
+            font-size: 10px; font-weight: 800; color: #fff; }
+        #cycDayPop .dp-tag.l { background: #4f46e5; }
+        #cycDayPop .dp-tag.p { background: #0d9488; }
+        #cycDayPop .dp-topic { color: #475569; font-size: 11px; }
+        #cycDayPop .dp-note { margin-top: 6px; color: #b45309; font-size: 11px; }
+        #cycDayPop .dp-actions { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+        #cycDayPop .dp-actions button { border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; padding: 3px 9px;
+            font-weight: 800; cursor: pointer; }
+        #cycDayPop .dp-actions button:disabled { opacity: .4; cursor: not-allowed; }
         /* Har 2-soatdan keyin (para chegarasi) to'qroq chiziq */
         #cycleGrid .cyc-mk-cell.is-pair-end { border-bottom-color: rgba(15, 39, 72, .36); }
 
@@ -3705,6 +3732,7 @@
             });
 
             function renderCyclePlan(j) {
+                if (typeof closeCycDayPop === 'function') closeCycDayPop();
                 const dates = j.dates || [], rows = j.rows || [];
                 if (!rows.length) {
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
@@ -3809,37 +3837,51 @@
                                 // Kafedra mudiri: blok ichida kun × soat to'ri.
                                 // Ustunlar — blokning kalendar kunlari, qatorlar
                                 // — kunlik soatlar; ma'ruza kataklari bo'yaladi.
-                                const slots = block.lecture_slots || {};
-                                let marked = 0;
+                                // Ichki jadval: har kun KTR bo'yicha — ma'ruza (M), amaliy (A),
+                                // bo'sh soat; blok ichidagi dam olish/bayram ustuni chiziqli.
+                                const plan = block.day_plan || {};
+                                let sumLec = 0, sumPrc = 0;
+                                Object.values(plan).forEach(dp => { sumLec += +dp.lec || 0; sumPrc += +dp.prc || 0; });
                                 let inner = '';
                                 for (let hour = 1; hour <= dayHours; hour++) {
                                     for (let d = 0; d < spanCols; d++) {
                                         const dayIndex = rect.from + d;
                                         const date = dates[dayIndex];
-                                        const off = date && (date.sunday || date.holiday);
+                                        const off = date && (date.sunday || date.holiday || date.off);
                                         const offset = dayIndex - block.from;
-                                        const on = Array.isArray(slots[offset]) && slots[offset].includes(hour);
-                                        if (on && !off) marked++;
+                                        const dp = plan[offset];
+                                        let kind = '';
+                                        if (!off && dp) {
+                                            const st = +dp.start || 1;
+                                            if (hour >= st && hour < st + (+dp.lec || 0)) kind = ' is-lecture';
+                                            else if (hour >= st + (+dp.lec || 0) && hour < st + (+dp.lec || 0) + (+dp.prc || 0)) kind = ' is-practice';
+                                        }
+                                        const offLabel = off && hour === Math.ceil(dayHours / 2) ? (date.holiday ? 'bayram' : 'dam') : '';
                                         inner += '<button type="button" class="cyc-mk-cell'
-                                            + (off ? ' is-off' : '')
-                                            + (on ? ' is-lecture' : '')
+                                            + (off ? ' is-off' + (date.holiday ? ' is-holiday' : '') : '')
+                                            + kind
                                             + (hour % 2 === 0 ? ' is-pair-end' : '')
+                                            + (hour === 1 ? ' is-first' : '') + (hour === dayHours ? ' is-last' : '')
                                             + '" data-mk-key="' + esc(block.key) + '"'
                                             + ' data-mk-day="' + offset + '" data-mk-hour="' + hour + '"'
+                                            + (offLabel ? ' data-off-label="' + offLabel + '"' : '')
                                             + (off ? ' disabled' : '')
-                                            + ' title="' + (date ? esc(date.d) : '') + ' · ' + hour + '-soat"></button>';
+                                            + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + '"></button>';
                                     }
                                 }
+                                const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
+                                const sumBad = (lecTotal != null && sumLec !== +lecTotal) || (prcTotal != null && sumPrc !== +prcTotal);
+                                const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
                                 cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-head">' +
                                     '<div class="cyc-mk-line">' +
-                                    '<span class="cyc-mk-name">' + esc(block.subject) + '</span>' +
+                                    '<span class="cyc-mk-name">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     '<button type="button" class="cyc-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish" style="position:static;margin-left:auto">&#9881;</button>' +
                                     '</div>' +
                                     '<div class="cyc-mk-line">' +
                                     (req ? '<i>' + esc(req) + '</i>' : '') +
-                                    '<b class="cyc-mk-count" data-mk-count="' + esc(block.key) + '"' + ' data-mk-total="' + (block.lecture_hours != null ? block.lecture_hours : '') + '" style="margin-left:auto">' + markCountLabel(marked, block.lecture_hours) + '</b>' +
+                                    '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '" title="KTR bo\'yicha jami / reja soati" style="margin-left:auto">' + sumLabel + '</b>' +
                                     '</div>' +
                                     '</div>' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
@@ -3980,36 +4022,102 @@
                 }
             }
 
+            // Ichki jadval: kun ustunini tanlash, kun oynasi va soatni surish.
+            let cycDaySel = null;   // {key, offset}
+            function cycBlockByKey(key) {
+                return (cyclePlanData && cyclePlanData.rows || []).flatMap(row => row.blocks || []).find(b => b.key === key) || null;
+            }
+            function closeCycDayPop() {
+                const pop = document.getElementById('cycDayPop');
+                if (pop) pop.remove();
+                document.querySelectorAll('#cycleGrid .cyc-mk-cell.is-day-sel')
+                    .forEach(c => c.classList.remove('is-day-sel', 'is-day-top', 'is-day-bottom'));
+                cycDaySel = null;
+            }
+            function openCycDayPop(key, offset, anchor) {
+                closeCycDayPop();
+                const block = cycBlockByKey(key);
+                const dp = block && block.day_plan ? block.day_plan[offset] : null;
+                if (!block || !dp) return;
+                cycDaySel = { key: key, offset: +offset };
+                const cells = document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                cells.forEach((c, i) => {
+                    c.classList.add('is-day-sel');
+                    if (i === 0) c.classList.add('is-day-top');
+                    if (i === cells.length - 1) c.classList.add('is-day-bottom');
+                });
+                const dates = cyclePlanData.dates || [];
+                const date = dates[block.from + (+offset)];
+                const dayHours = Math.max(1, +cyclePlanData.day_hours || 6);
+                const total = (+dp.lec || 0) + (+dp.prc || 0);
+                const st = +dp.start || 1;
+                const range = (a, n) => n > 0 ? a + (n > 1 ? '–' + (a + n - 1) : '') + '-soat' : '';
+                const canEdit = Boolean(cyclePlanData.day_edit);
+                const pop = document.createElement('div');
+                pop.id = 'cycDayPop';
+                pop.innerHTML =
+                    '<div class="dp-head"><div><div class="dp-title">' + esc(block.subject) + '</div>' +
+                    '<div class="dp-sub">' + dp.k + '-kun' + (date ? ' · ' + esc(date.d) : '') + ' · jami ' + total + ' soat</div></div>' +
+                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div>' +
+                    (dp.lec > 0 ? '<div class="dp-row"><span class="dp-tag l">M</span><div><b>Ma\'ruza ' + dp.lec + ' s</b> <span class="dp-sub">' + range(st, +dp.lec) + '</span>' +
+                        (dp.tl ? '<div class="dp-topic">' + esc(dp.tl) + '</div>' : '') + '</div></div>' : '') +
+                    (dp.prc > 0 ? '<div class="dp-row"><span class="dp-tag p">A</span><div><b>Amaliy ' + dp.prc + ' s</b> <span class="dp-sub">' + range(st + (+dp.lec || 0), +dp.prc) + '</span>' +
+                        (dp.tp ? '<div class="dp-topic">' + esc(dp.tp) + '</div>' : '') + '</div></div>' : '') +
+                    (total === 0 ? '<div class="dp-sub">Bu kuni KTR bo\'yicha dars yo\'q.</div>' : '') +
+                    (dp.ktr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
+                    (canEdit && total > 0
+                        ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (st <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
+                          '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (st + total - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
+                          '<span class="dp-sub">Darslar ' + st + '-soatdan boshlanadi</span></div>'
+                        : '');
+                document.body.appendChild(pop);
+                const r = anchor.getBoundingClientRect();
+                const left = Math.min(window.innerWidth - pop.offsetWidth - 8, r.right + 8);
+                const top = Math.min(window.innerHeight - pop.offsetHeight - 8, Math.max(8, r.top - 20));
+                pop.style.left = Math.max(8, left) + 'px';
+                pop.style.top = top + 'px';
+                pop.querySelector('.dp-close').onclick = closeCycDayPop;
+                pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => moveCycDay(key, +offset, st + (+btn.dataset.dpMove)));
+            }
+            async function moveCycDay(key, offset, newStart) {
+                const card = (cyclePlanData && cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                const block = cycBlockByKey(key);
+                const dp = block && block.day_plan ? block.day_plan[offset] : null;
+                if (!card || !dp) return;
+                try {
+                    await api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', {
+                        specialty_name: card.specialty, course: card.course,
+                        group_name: card.group, subject_name: card.subject,
+                        training_type: card.type || 'practice', view: cycleViewMode,
+                        day_index: dp.k - 1, start_hour: newStart,
+                    });
+                    await loadCyclePlan();
+                    const cell = document.querySelector('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                    if (cell) openCycDayPop(key, offset, cell);
+                } catch (e) {
+                    alert('Kun soatini o\'zgartirib bo\'lmadi: ' + e.message);
+                }
+            }
+
             function setupCycleMarking() {
                 const grid = $('cycleGrid');
                 if (!grid || grid.dataset.mkReady) return;
                 grid.dataset.mkReady = '1';
-
-                grid.addEventListener('mousedown', ev => {
+                grid.addEventListener('click', ev => {
                     const cell = ev.target.closest ? ev.target.closest('.cyc-mk-cell') : null;
                     if (!cell || cell.disabled) return;
                     ev.preventDefault();
-                    // Birinchi katak holatini teskarisiga o'giramiz, sudrash
-                    // davomida qolganlari ham shu yo'nalishda o'zgaradi.
-                    const turnOn = !cell.classList.contains('is-lecture');
-                    cell.classList.toggle('is-lecture', turnOn);
-                    mkDrag = { key: cell.dataset.mkKey, turnOn: turnOn };
-                    refreshMarkCount(mkDrag.key);
+                    if (cycDaySel && cycDaySel.key === cell.dataset.mkKey && cycDaySel.offset === +cell.dataset.mkDay) {
+                        closeCycDayPop();
+                        return;
+                    }
+                    openCycDayPop(cell.dataset.mkKey, cell.dataset.mkDay, cell);
                 });
-
-                grid.addEventListener('mouseover', ev => {
-                    if (!mkDrag) return;
-                    const cell = ev.target.closest ? ev.target.closest('.cyc-mk-cell') : null;
-                    if (!cell || cell.disabled || cell.dataset.mkKey !== mkDrag.key) return;
-                    cell.classList.toggle('is-lecture', mkDrag.turnOn);
-                    refreshMarkCount(mkDrag.key);
-                });
-
-                document.addEventListener('mouseup', () => {
-                    if (!mkDrag) return;
-                    const key = mkDrag.key;
-                    mkDrag = null;
-                    saveLectureSlots(key);
+                document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeCycDayPop(); });
+                document.addEventListener('mousedown', ev => {
+                    if (!cycDaySel) return;
+                    if (ev.target.closest && (ev.target.closest('#cycDayPop') || ev.target.closest('.cyc-mk-cell'))) return;
+                    closeCycDayPop();
                 });
             }
 

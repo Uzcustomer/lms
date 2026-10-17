@@ -1112,7 +1112,7 @@
         #cycleGrid thead .cyc-gcol { z-index: 7; }
         #cycleGrid { --cycle-group-width: 170px; border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
         #cycleGrid th, #cycleGrid td { border: 1px solid #d1d5db; }
-        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 2; box-sizing: border-box; overflow: hidden;
+        #cycleGrid .cyc-gcol { position: sticky; left: 0; z-index: 4; box-sizing: border-box; overflow: hidden;
             width: var(--cycle-group-width); min-width: var(--cycle-group-width); max-width: var(--cycle-group-width);
             padding: 2px 6px; background: #eff6ff; text-align: left; font-size: 10px; line-height: 1.15; }
         #cycleGrid thead .cyc-gcol { background: #dbeafe; }

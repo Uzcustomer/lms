@@ -3018,6 +3018,12 @@
             // Ko'rinayotgan qamrovdagi barcha joylashuvlarni bo'shatish (panelga qaytarish)
             $('unplaceBtn').onclick = async function () {
                 if (!board || !curSpec) return;
+                // "Faqat meniki" ko'rinishi to'liq emas, bo'shatish esa butun qamrovga
+                // (boshqalarning darslariga ham) ta'sir qiladi — bu rejimda o'chirilgan.
+                if (mineOnly) {
+                    alert('"Faqat meniki" rejimida bo‘shatish o‘chirilgan. Avval "Butun doska" ga qayting.');
+                    return;
+                }
                 if (viewMode === 'cycle') {
                     // Bu qatlam faqat ko'rish uchun — server ham rad etadi (403)
                     if (cyclePlanData && cyclePlanData.can_edit === false) {

@@ -2311,6 +2311,17 @@
         .tt-field .tt-dd-btn, .tt-field > select { height: 32px; min-width: 120px; font-size: 11.5px; }
         .tt-bottom-row { min-height: 0; padding: 6px 8px; border-top: 0; flex-wrap: nowrap; gap: 6px; background: transparent; }
         .tt-toggle-chip { min-height: 32px; padding: 0 9px; }
+        /* Tor ekranda yuqoridagi nowrap avvalgi moslashuvchan joylashuvni bosib ketmasin:
+           aks holda flex-end + nowrap tugmalarni chap chetdan ekran tashqarisiga chiqarardi. */
+        @media (max-width: 1450px) {
+            .tt-top-toolbar, .tt-bottom-row { flex-wrap: wrap; }
+            .tt-toolbar-actions { flex-wrap: wrap; justify-content: flex-start; }
+        }
+        @media (max-width: 900px) {
+            .tt-board-select, .tt-toolbar-actions { flex: 1 1 100%; max-width: none; }
+            /* Tugmalar faqat belgi — eski 145px'lik keng tugma qoidasi ularni ko'p qatorga yoyardi */
+            .tt-toolbar-actions .asc-tool { flex: 0 0 auto; }
+        }
         /* Sikl paneli: kichik oraliqlar */
         #cycleArea > div:first-child { gap: 8px; padding-top: 4px; padding-bottom: 4px; }
         #cycleHolBar { padding-top: 2px; padding-bottom: 2px; }
@@ -3418,11 +3429,23 @@
             let cyclePlanData = null;
             let cycleViewMode = 'flow';
             // Sikl jadvalida bitta guruh/oqim bo'yicha filtr ("Guruh" sarlavhasi orqali).
+            // Qiymat — qatorning noyob row_key'i: qamrovda bir xil nomli guruh boshqa
+            // yo'nalish/kursda ham bo'lishi mumkin.
             let cycleRowFilter = null;
+            // Qator yorlig'i — guruh nomi; bir xil nomli qatorlarga yo'nalish va kurs qo'shiladi.
+            function cycleRowLabels(rows) {
+                const count = {};
+                rows.forEach(r => { count[r.group] = (count[r.group] || 0) + 1; });
+                const labels = {};
+                rows.forEach(r => { labels[r.row_key] = count[r.group] > 1 ? r.group + ' · ' + r.specialty + ', ' + r.course + '-kurs' : r.group; });
+                return labels;
+            }
             function closeCycRowPop() { const p = document.getElementById('cycRowPop'); if (p) p.remove(); }
             function openCycRowPop(anchor) {
                 closeCycRowPop();
-                const names = ((cyclePlanData && cyclePlanData.rows) || []).map(r => r.group);
+                const planRows = (cyclePlanData && cyclePlanData.rows) || [];
+                const labels = cycleRowLabels(planRows);
+                const names = planRows.map(r => ({ key: r.row_key, label: labels[r.row_key] }));
                 const pop = document.createElement('div');
                 pop.id = 'cycRowPop';
                 pop.innerHTML = '<input type="text" class="cyc-rp-q" placeholder="Qidirish: masalan 01a" autocomplete="off">'
@@ -3435,9 +3458,9 @@
                 const q = pop.querySelector('.cyc-rp-q');
                 const draw = () => {
                     const t = q.value.trim().toLowerCase();
-                    const hits = names.filter(n => !t || n.toLowerCase().includes(t));
+                    const hits = names.filter(n => !t || n.label.toLowerCase().includes(t));
                     list.innerHTML = (t ? '' : '<button type="button" data-rp="" class="' + (!cycleRowFilter ? 'is-on' : '') + '">Hammasi (' + names.length + ')</button>')
-                        + hits.map(n => '<button type="button" data-rp="' + esc(n) + '" class="' + (n === cycleRowFilter ? 'is-on' : '') + '">' + esc(n) + '</button>').join('')
+                        + hits.map(n => '<button type="button" data-rp="' + esc(n.key) + '" class="' + (n.key === cycleRowFilter ? 'is-on' : '') + '">' + esc(n.label) + '</button>').join('')
                         + (hits.length ? '' : '<div class="cyc-rp-empty">Topilmadi</div>');
                 };
                 const pick = name => {
@@ -3870,8 +3893,8 @@
                 if (typeof closeCycDayPop === 'function') closeCycDayPop();
                 const dates = j.dates || [], allRows = j.rows || [];
                 // "Guruh" ustuni sarlavhasidan tanlangan bitta guruh/oqim (bo'lmasa hammasi).
-                if (cycleRowFilter && !allRows.some(r => r.group === cycleRowFilter)) cycleRowFilter = null;
-                const rows = cycleRowFilter ? allRows.filter(r => r.group === cycleRowFilter) : allRows;
+                if (cycleRowFilter && !allRows.some(r => r.row_key === cycleRowFilter)) cycleRowFilter = null;
+                const rows = cycleRowFilter ? allRows.filter(r => r.row_key === cycleRowFilter) : allRows;
                 if (!rows.length) {
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
                     renderCycleCards(j);
@@ -3910,7 +3933,7 @@
                 const rowWord = (j.view || cycleViewMode) === 'group' ? 'Guruh' : 'Oqim';
                 h += '</colgroup><thead><tr><th class="cyc-gcol cyc-gfilter-th">'
                     + '<button type="button" id="cycRowFilterBtn" class="cyc-gfilter-btn' + (cycleRowFilter ? ' is-on' : '') + '" title="' + rowWord + 'ni tanlash yoki qidirish">'
-                    + (cycleRowFilter ? esc(cycleRowFilter) : rowWord + ' (' + allRows.length + ')') + ' &#9662;</button>'
+                    + (cycleRowFilter ? esc(cycleRowLabels(allRows)[cycleRowFilter] || '') : rowWord + ' (' + allRows.length + ')') + ' &#9662;</button>'
                     + (cycleRowFilter ? '<button type="button" id="cycRowFilterClear" class="cyc-gfilter-x" title="Hammasini ko\'rsatish">&times;</button>' : '')
                     + '</th>'
                     + (markMode ? '<th class="cyc-mk-side">Para</th>' : '')

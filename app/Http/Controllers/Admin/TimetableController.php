@@ -2702,6 +2702,11 @@ class TimetableController extends Controller
             $this->cycleHoursLookup($cycleHours, $faculty, $spec, $course, $subject);
         $fmtHours = fn(?float $v) => $v === null ? null : (fmod($v, 1.0) == 0.0 ? (int) $v : round($v, 1));
         $rowHours = $this->cycleRowHours($board);
+        // Ichki jadval to'ri butun kunni qamraydi: qo'ng'iroq jadvalidagi paralar × para soati
+        // (to'liq parada 1 para = 2 akademik soat → 6 para = 12 qator, 08:30–17:50).
+        $bellPairCount = collect((array) ($board->bell_schedule ?? []))
+            ->filter(fn($it) => (is_array($it) ? ($it['type'] ?? '') : ($it->type ?? '')) === 'pair')->count();
+        $cycleGridHours = max(6, ($bellPairCount ?: max(1, (int) $board->pairs_per_day)) * $rowHours);
         $rowKey = fn($g) => (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . (string) $g['name'];
         // Ichki jadval: KTR'dagi kunlik ma'ruza/amaliy soatlari (sikl fanida KTR "hafta" = sikl kuni).
         $ktrDayPlans = $cycleMark ? $this->cycleKtrDayPlans($board) : [];
@@ -2867,7 +2872,8 @@ class TimetableController extends Controller
                                 (array) (($placement->lecture_slots ?? [])['starts'] ?? []),
                                 $cycleSubRows ? (array) ((($placement->lecture_slots ?? [])['starts_g'] ?? [])[(string) $g['name']] ?? []) : []
                             ) : [],
-                            6
+                            6,
+                            $cycleGridHours
                         )
                         : null,
                     'auditorium_code' => null,
@@ -2951,7 +2957,8 @@ class TimetableController extends Controller
             'mark_mode'  => $cycleMark,
             'day_edit'   => $cycleMark && $cycleCanEdit,
             'mark_ready' => $hasLectureSlots,
-            'day_hours'  => 6,
+            'day_hours'  => $cycleMark ? $cycleGridHours : 6,
+            'day_load'   => 6,
             'cycle_cards' => $cycleCards,
         ]);
     }
@@ -3319,8 +3326,12 @@ class TimetableController extends Controller
      * KTR bo'lmasa: ma'ruzali kunlar 2+4, keyin 6 soat amaliy (reja soatidan).
      * $starts — kafedra surgan kunlar: [sikl kuni indeksi (0..) => boshlanish soati].
      */
-    private function cycleDayPlan(?array $ktrDays, ?array $hrs, int $days, int $from, array $workIndices, array $starts, int $dayHours): array
+    private function cycleDayPlan(?array $ktrDays, ?array $hrs, int $days, int $from, array $workIndices, array $starts, int $dayHours, ?int $gridHours = null): array
     {
+        // $dayHours — sikl kunining o'quv yuklamasi (6 soat, KTR bo'lmasa taxmin uchun);
+        // $gridHours — kun to'ridagi qatorlar soni (butun kun, masalan 6 para × 2 = 12):
+        // darsni shu oraliqda surish mumkin.
+        $gridHours = max($dayHours, (int) ($gridHours ?? $dayHours));
         $pos = array_search($from, $workIndices, true);
         if ($pos === false) {
             return [];
@@ -3344,7 +3355,7 @@ class TimetableController extends Controller
             }
             $total = $lec + $prc;
             $start = (int) ($starts[$k] ?? $starts[(string) $k] ?? 1);
-            $start = max(1, min($start, max(1, $dayHours - $total + 1)));
+            $start = max(1, min($start, max(1, $gridHours - $total + 1)));
             $out[$ci - $from] = [
                 'k' => $k + 1, 'lec' => $lec, 'prc' => $prc, 'start' => $start,
                 'tl' => (string) ($d['tl'] ?? ''), 'tp' => (string) ($d['tp'] ?? ''),
@@ -3691,7 +3702,7 @@ class TimetableController extends Controller
             'slots_json'     => 'nullable|string|max:20000',
             // Ichki jadval: bitta sikl kunining darslari boshlanadigan soat (1..12).
             'day_index'      => 'nullable|integer|min:0|max:200',
-            'start_hour'     => 'nullable|integer|min:1|max:12',
+            'start_hour'     => 'nullable|integer|min:1|max:24',
             // Ichki jadval: guruhcha (d1/d22-01a ...) — har biri o'z vaqtiga ega bo'lishi mumkin.
             'sub_group'      => 'nullable|string|max:255',
         ]);

@@ -1151,7 +1151,7 @@
         /* Dam olish kunlari: katak ichidagi ustunlar ranglanadi */
         #cycleGrid td.cyc-cell.has-off { background-repeat: no-repeat, repeat; }
         /* ── Kafedra mudiri: blok ichida ma'ruza soatlarini belgilash ── */
-        #cycleGrid tr.cyc-markrow td { height: 156px; vertical-align: top; }
+        #cycleGrid tr.cyc-markrow td { height: calc(var(--mk-rows, 6) * 22px + 12px); vertical-align: top; }
         /* Fan nomi to'r ichida, paralar ustida (kataklarni bosishga xalaqit bermaydi) */
         #cycleGrid .cyc-mk-grid { position: relative; }
         #cycleGrid .cyc-mk-over { position: absolute; left: 4px; right: 4px; top: 50%; transform: translateY(-50%); z-index: 2;
@@ -4069,7 +4069,7 @@
                         });
                     });
                     for (let pair = 1; pair <= pairs; pair++) {
-                        h += markMode ? '<tr class="cyc-markrow">' : '<tr>';
+                        h += markMode ? '<tr class="cyc-markrow" style="--mk-rows:' + dayHours + '">' : '<tr>';
                         if (pair === 1) {
                             // Guruh rejimida qator — bitta guruh: nomi to'g'ridan-to'g'ri.
                             const groupLabel = (j.view || cycleViewMode) === 'group'
@@ -4083,14 +4083,21 @@
                                 // Qator — akademik soat. To'liq paralik jadvalda bitta para
                                 // 2 soat: 1–2-soat — I-para, 3–4 — II-para, 5–6 — III-para.
                                 const hpp = rowMins >= 60 ? 2 : 1;
+                                // Har qator — yarim para (40 daqiqa): vaqti para boshidan/oxiridan hisoblanadi.
+                                const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+                                const toHm = v => String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0');
                                 for (let hour = 1; hour <= dayHours; hour++) {
                                     const pt = bellPairs[Math.ceil(hour / hpp) - 1];
-                                    const firstOfPair = (hour - 1) % hpp === 0;
+                                    const part = (hour - 1) % hpp;           // para ichidagi yarim (0 yoki 1)
+                                    const a = pt ? toMin(pt.start) : null, b = pt ? toMin(pt.end) : null;
+                                    let span = '';
+                                    if (a != null && b != null) {
+                                        const step = (b - a) / hpp;
+                                        span = toHm(Math.round(a + step * part)) + '–' + toHm(Math.round(a + step * (part + 1)));
+                                    }
                                     sideRows += '<div class="cyc-mk-side-row' + (hour % hpp === 0 ? ' is-pair-end' : '') + '">' +
-                                        (firstOfPair
-                                            ? '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
-                                              (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '')
-                                            : '') +
+                                        (part === 0 ? '<b>' + esc(pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr + '-para' : (pt.name || hour)) : (hour + '-soat')) + '</b>' : '') +
+                                        (span ? '<span>' + span + '</span>' : '') +
                                         '</div>';
                                 }
                                 h += '<td class="cyc-mk-side"><div class="cyc-mk-side-box">' +

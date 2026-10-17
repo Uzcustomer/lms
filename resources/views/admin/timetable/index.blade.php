@@ -1154,7 +1154,12 @@
             display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; text-align: center; }
         #cycleGrid .cyc-mk-over .cyc-mk-title { max-width: 100%; padding: 2px 7px; border-radius: 6px; background: rgba(255, 255, 255, .9);
             box-shadow: 0 1px 3px rgba(15, 23, 42, .18); font-size: 12px; font-weight: 800; line-height: 1.2; color: #0f172a;
-            white-space: normal; overflow-wrap: anywhere; }
+            white-space: normal; overflow-wrap: anywhere;
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        /* Tor blok (≤ 6 kun): faqat fan nomi va soat — o'qituvchi/xona sichqoncha ustiga borganda */
+        #cycleGrid .cyc-mk-over.is-compact { gap: 1px; left: 2px; right: 2px; }
+        #cycleGrid .cyc-mk-over.is-compact .cyc-mk-title { padding: 1px 4px; font-size: 10.5px; }
+        #cycleGrid .cyc-mk-over.is-compact .cyc-mk-count { font-size: 9px; padding: 0 4px; white-space: nowrap; }
         #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .85);
             font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #cycleGrid .cyc-mk-over .cyc-mk-count { pointer-events: none; }
@@ -3863,6 +3868,15 @@
                                 const plan = block.day_plan || {};
                                 let sumLec = 0, sumPrc = 0;
                                 Object.values(plan).forEach(dp => { sumLec += +dp.lec || 0; sumPrc += +dp.prc || 0; });
+                                const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
+                                const sumBad = (lecTotal != null && sumLec !== +lecTotal) || (prcTotal != null && sumPrc !== +prcTotal);
+                                const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
+                                // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
+                                const compact = spanCols <= 6;
+                                const shortSum = 'M ' + sumLec + ' · A ' + sumPrc + ' s';
+                                // Blokni kataklar to'liq qoplaydi va ularning o'z title'i bor — td title'i
+                                // hech qachon chiqmaydi. Shuning uchun tor blokda ma'lumot katak title'iga qo'shiladi.
+                                const blockTip = compact ? ' — ' + block.subject + (req ? ' · ' + req : '') + ' · ' + sumLabel : '';
                                 let inner = '';
                                 for (let hour = 1; hour <= dayHours; hour++) {
                                     for (let d = 0; d < spanCols; d++) {
@@ -3887,20 +3901,17 @@
                                             + ' data-mk-day="' + offset + '" data-mk-hour="' + hour + '"'
                                             + (offLabel ? ' data-off-label="' + offLabel + '"' : '')
                                             + (off ? ' disabled' : '')
-                                            + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + '"></button>';
+                                            + ' title="' + (date ? esc(date.d) : '') + (off ? (date.holiday ? ' · bayram' : ' · dam olish kuni') : (dp ? ' · ' + dp.k + '-kun · ' + hour + '-soat' : ' · ' + hour + '-soat')) + esc(blockTip) + '"></button>';
                                     }
                                 }
-                                const lecTotal = block.lecture_hours, prcTotal = block.practice_hours;
-                                const sumBad = (lecTotal != null && sumLec !== +lecTotal) || (prcTotal != null && sumPrc !== +prcTotal);
-                                const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
-                                cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun' + (block.hours ? ' · ' + block.hours + ' soat' : '') + '">' +
+                                cellHtml = '<td class="cyc-cell cyc-block is-mark" rowspan="' + lanes + '" colspan="' + spanCols + '" data-cycle-row="' + esc(row.row_key) + '" data-cycle-pair="' + lp + '" data-cycle-from="' + rect.from + '" data-cycle-span="' + spanCols + '" data-cycle-key="' + esc(block.key) + '" style="background:' + color.bg + ';border-color:' + color.border + ';' + joinStyle + '" title="' + esc(block.subject) + ' — ' + block.days + ' kun · ' + esc(sumLabel) + (req ? ' · ' + esc(req) : '') + '">' +
                                     '<div class="cyc-mk">' +
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
-                                    '<div class="cyc-mk-over">' +
+                                    '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '">' +
                                     '<span class="cyc-mk-title">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
-                                    (req ? '<span class="cyc-mk-sub">' + esc(req) + '</span>' : '') +
-                                    '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '" title="KTR bo\'yicha jami / reja soati">' + sumLabel + '</b>' +
+                                    (req && !compact ? '<span class="cyc-mk-sub">' + esc(req) + '</span>' : '') +
+                                    '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '">' + (compact ? shortSum : sumLabel) + '</b>' +
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +
                                     '</div></div></td>';

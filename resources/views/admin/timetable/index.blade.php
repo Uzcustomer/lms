@@ -3915,11 +3915,17 @@
                                 // Karta ichidagi soat qatorlari bilan bir tekis
                                 // turadigan yonbosh yorliqlar (qo'ng'iroq jadvalidan).
                                 let sideRows = '';
+                                // Qator — akademik soat. To'liq paralik jadvalda bitta para
+                                // 2 soat: 1–2-soat — I-para, 3–4 — II-para, 5–6 — III-para.
+                                const hpp = rowMins >= 60 ? 2 : 1;
                                 for (let hour = 1; hour <= dayHours; hour++) {
-                                    const pt = bellPairs[hour - 1];
-                                    sideRows += '<div class="cyc-mk-side-row' + (hour % 2 === 0 ? ' is-pair-end' : '') + '">' +
-                                        '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
-                                        (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '') +
+                                    const pt = bellPairs[Math.ceil(hour / hpp) - 1];
+                                    const firstOfPair = (hour - 1) % hpp === 0;
+                                    sideRows += '<div class="cyc-mk-side-row' + (hour % hpp === 0 ? ' is-pair-end' : '') + '">' +
+                                        (firstOfPair
+                                            ? '<b>' + esc(pt ? (pt.name || pt.abbr || hour) : (hour + '-soat')) + '</b>' +
+                                              (pt && pt.start ? '<span>' + esc(pt.start) + '</span>' : '')
+                                            : '<span>' + hour + '-soat' + (pt && pt.end ? ' · ' + esc(pt.end) : '') + '</span>') +
                                         '</div>';
                                 }
                                 h += '<td class="cyc-mk-side"><div class="cyc-mk-side-box">' +
@@ -4051,7 +4057,19 @@
                 const dayHours = Math.max(1, +cyclePlanData.day_hours || 6);
                 const total = (+dp.lec || 0) + (+dp.prc || 0);
                 const st = +dp.start || 1;
-                const range = (a, n) => n > 0 ? a + (n > 1 ? '–' + (a + n - 1) : '') + '-soat' : '';
+                // Soatlar oralig'i va qaysi paralarga to'g'ri kelishi (to'liq parada 1 para = 2 soat).
+                const bell = boardSchedule().filter(it => it.type === 'pair');
+                const pm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+                const d0 = bell.length ? (pm(bell[0].end) - pm(bell[0].start)) : 80;
+                const hpp = d0 >= 60 ? 2 : 1;
+                const pairName = h => { const pt = bell[Math.ceil(h / hpp) - 1]; return pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr : (pt.name || '')) : ''; };
+                const range = (a, n) => {
+                    if (n <= 0) return '';
+                    const b = a + n - 1;
+                    const p1 = pairName(a), p2 = pairName(b);
+                    const paras = p1 ? (p1 === p2 ? p1 + '-para' : p1 + '–' + p2 + ' para') : '';
+                    return a + (n > 1 ? '–' + b : '') + '-soat' + (paras ? ' (' + paras + ')' : '');
+                };
                 const canEdit = Boolean(cyclePlanData.day_edit);
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';

@@ -290,21 +290,8 @@ class TimetableController extends Controller
             return 15;
         }
 
-        // Tibbiy amaliyot fanlari ("Pedagogikada hamshiralik ishi" kabi) nomida gumanitar
-        // so'z bo'lsa ham gumanitar emas — oddiy amaliy guruh
-        foreach (['hamshira', 'shifokor', 'bemor', 'parvarish', 'tibbiy yordam'] as $kw) {
-            if (str_contains($t, $kw)) {
-                return 15;
-            }
-        }
-
-        foreach (['ijtimoiy', 'gumanitar', 'tarix', 'falsafa', 'din', 'huquq', 'iqtisod', 'pedagog',
-                  'psixolog', 'jismoniy', 'sport', 'madaniyat', 'siyosat'] as $kw) {
-            if (str_contains($t, $kw)) {
-                return 30;
-            }
-        }
-
+        // Qolgan barcha fanlar (gumanitar fanlar ham) — guruhlar birlashtirilmaydi,
+        // har biriga alohida o'qituvchi va xona
         return 15;
     }
 

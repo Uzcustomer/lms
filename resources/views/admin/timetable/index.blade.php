@@ -1246,7 +1246,7 @@
 
         /* Yonbosh yorliqlar: karta ichidagi soat qatorlari bilan bir tekis */
         #cycleGrid td.cyc-mk-side {
-            width: 62px; min-width: 62px; max-width: 62px; padding: 0;
+            width: 84px; min-width: 84px; max-width: 84px; padding: 0;
             background: #f1f5f9; border: 1px solid #e2e8f0;
         }
         /* O'ngga surilganda guruh va para (vaqt) ustunlari joyida qotib turadi */
@@ -1256,14 +1256,19 @@
         #cycleGrid thead th.cyc-mk-side { z-index: 7; background: #f1f5f9; }
         #cycleGrid .cyc-mk-side-box { display: flex; flex-direction: column; height: 100%; }
         #cycleGrid .cyc-mk-side-gap { display: none; }
-        #cycleGrid .cyc-mk-side-rows { flex: 1 1 auto; display: grid; min-height: 0; }
+        #cycleGrid .cyc-mk-side-rows { flex: 1 1 auto; display: grid; min-height: 0; grid-template-columns: 26px 1fr; }
+        /* Para nomi ikkala yarim para qatorini birga qamraydi (chapda), vaqtlar — o'ngda har qatorda */
+        #cycleGrid .cyc-mk-side-para { display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-right: 1px solid rgba(15, 39, 72, .14); border-bottom: 1px solid rgba(15, 39, 72, .32); background: #e8eef6; line-height: 1; }
+        #cycleGrid .cyc-mk-side-para b { color: #1e293b; font-size: 12px; font-weight: 900; }
+        #cycleGrid .cyc-mk-side-para i { font-style: normal; color: #64748b; font-size: 7px; font-weight: 700; margin-top: 2px; }
         #cycleGrid .cyc-mk-side-row {
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             border-bottom: 1px solid rgba(15, 39, 72, .12); line-height: 1.15;
         }
         #cycleGrid .cyc-mk-side-row.is-pair-end { border-bottom-color: rgba(15, 39, 72, .32); }
         #cycleGrid .cyc-mk-side-row b { color: #1e293b; font-size: 9.5px; font-weight: 800; white-space: nowrap; }
-        #cycleGrid .cyc-mk-side-row span { color: #64748b; font-size: 7.5px; font-weight: 700; }
+        #cycleGrid .cyc-mk-side-row span { color: #475569; font-size: 8.5px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-addrow td { height: 18px; }
         #cycleGrid .cyc-addcell { background: #f8fafc; }
         #cycleGrid .cyc-addpair { width: 100%; height: 16px; padding: 0; border: 0; background: transparent;
@@ -3927,7 +3932,7 @@
                 if (!simple) cyclePairsShown = pairs;
                 const showAddPair = !simple && pairs < totalPairs;
                 let h = '<colgroup><col class="cyc-group-col">'
-                    + (markMode ? '<col style="width:62px">' : '')
+                    + (markMode ? '<col style="width:84px">' : '')
                     + (simple ? '' : '<col style="width:52px">');
                 dates.forEach((d, i) => h += '<col class="cyc-date-col' + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '">');
                 const rowWord = (j.view || cycleViewMode) === 'group' ? 'Guruh' : 'Oqim';
@@ -4095,8 +4100,16 @@
                                         const step = (b - a) / hpp;
                                         span = toHm(Math.round(a + step * part)) + '–' + toHm(Math.round(a + step * (part + 1)));
                                     }
-                                    sideRows += '<div class="cyc-mk-side-row' + (hour % hpp === 0 ? ' is-pair-end' : '') + '">' +
-                                        (part === 0 ? '<b>' + esc(pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr + '-para' : (pt.name || hour)) : (hour + '-soat')) + '</b>' : '') +
+                                    const pairNo = Math.ceil(hour / hpp);
+                                    if (part === 0) {
+                                        // Para nomi — shu paraning barcha yarim qatorlarini qamraydi.
+                                        const rowsInPair = Math.min(hpp, dayHours - hour + 1);
+                                        const abbr = pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr : (pt.name || pairNo)) : pairNo;
+                                        sideRows += '<div class="cyc-mk-side-para" style="grid-column:1;grid-row:' + hour + ' / span ' + rowsInPair + '"'
+                                            + ' title="' + esc(pt ? (pt.name || '') + ' ' + (pt.start || '') + '–' + (pt.end || '') : '') + '">'
+                                            + '<b>' + esc(abbr) + '</b><i>para</i></div>';
+                                    }
+                                    sideRows += '<div class="cyc-mk-side-row' + (hour % hpp === 0 ? ' is-pair-end' : '') + '" style="grid-column:2;grid-row:' + hour + '">' +
                                         (span ? '<span>' + span + '</span>' : '') +
                                         '</div>';
                                 }

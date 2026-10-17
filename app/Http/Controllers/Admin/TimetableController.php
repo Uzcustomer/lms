@@ -2528,8 +2528,12 @@ class TimetableController extends Controller
         $holidays = array_keys($holSet);
         sort($holidays);
 
-        // Semestr sanasi va bayramlarni sozlamaga saqlaymiz (keyingi safar eslab qolish uchun)
-        if (($set['semester_start'] ?? null) !== $startC->toDateString() || ($set['holidays'] ?? []) !== $holidays) {
+        // Semestr sanasi va bayramlarni sozlamaga saqlaymiz (keyingi safar eslab qolish uchun).
+        // Faqat sikl jadvalini tahrirlay oladigan rollar: o'qituvchi (faqat ko'rish) va
+        // boshqalar butun doska kalendarini o'zgartirib yubormasin.
+        $canSaveCalendar = $this->cycleLayerEditable($cycleRole, 'external') || $this->cycleLayerEditable($cycleRole, 'internal');
+        if ($canSaveCalendar
+            && (($set['semester_start'] ?? null) !== $startC->toDateString() || ($set['holidays'] ?? []) !== $holidays)) {
             $set['semester_start'] = $startC->toDateString();
             $set['holidays'] = $holidays;
             $board->update(['settings' => $set]);
@@ -2690,15 +2694,21 @@ class TimetableController extends Controller
                 'course'    => $g['course'],
                 'group'     => $g['name'],
             ], $groups);
+            // Kafedra mudiri faqat o'z kafedrasi fanlarini bo'shatadi.
+            $ownFor = fn ($row) => $this->ownKafedraCycleSubjects($request, $board, (string) $row['specialty'], (int) $row['course']);
 
             if ($hasCyclePlacements) {
-                DB::transaction(function () use ($scopeRows, $board) {
+                DB::transaction(function () use ($scopeRows, $board, $ownFor) {
                     foreach ($scopeRows as $row) {
-                        TimetableCyclePlacement::where('board_id', $board->id)
+                        $own = $ownFor($row);
+                        $q = TimetableCyclePlacement::where('board_id', $board->id)
                             ->where('specialty_name', $row['specialty'])
                             ->where('course', $row['course'])
-                            ->where('group_name', $row['group'])
-                            ->delete();
+                            ->where('group_name', $row['group']);
+                        if ($own !== null) {
+                            $q->whereIn('subject_name', array_values($own) ?: ['__none__']);
+                        }
+                        $q->delete();
                     }
                 });
             } else {
@@ -2706,9 +2716,11 @@ class TimetableController extends Controller
                 // bo'lguncha joylashuvlar doska settings JSONida saqlanadi.
                 $fallback = collect($set['cycle_placements'] ?? []);
                 foreach ($scopeRows as $row) {
+                    $own = $ownFor($row);
                     $fallback = $fallback->reject(fn($item) => ($item['specialty_name'] ?? '') === $row['specialty']
                         && (int) ($item['course'] ?? 0) === (int) $row['course']
-                        && ($item['group_name'] ?? '') === $row['group'])->values();
+                        && ($item['group_name'] ?? '') === $row['group']
+                        && ($own === null || isset($own[mb_strtolower(trim((string) ($item['subject_name'] ?? '')))])))->values();
                 }
                 $set['cycle_placements'] = $fallback->values()->all();
                 $board->update(['settings' => $set]);
@@ -2767,7 +2779,10 @@ class TimetableController extends Controller
                 $headDays = min((int) $span['head_days'], (int) $days);
                 $headTo = $headDays > 0 ? $endIndexFor($from, $headDays) : null;
                 $tailFrom = $headDays >= $days ? null : ($headDays > 0 ? $endIndexFor($from, $headDays + 1) : $from);
-                $req = $g['req'][$placement->subject_name . '|' . $blockType] ?? ['teachers' => [], 'auds' => []];
+                // Tashqi jadval tavsiyaviy: o'qituvchi va xona ko'rsatilmaydi (ular ichki jadvalda).
+                $req = $cycleLayer === 'external'
+                    ? ['teachers' => [], 'auds' => []]
+                    : ($g['req'][$placement->subject_name . '|' . $blockType] ?? ['teachers' => [], 'auds' => []]);
                 $teacherNames = array_keys($req['teachers']);
                 $audNames = array_keys($req['auds']);
 
@@ -2985,6 +3000,10 @@ class TimetableController extends Controller
         $flowCards = $this->cycleFlowCards($board, $data['specialty_name'], (int) $data['course'], $data['subject_name'], $data['group_name'], $data['training_type'] ?? null, $data['view'] ?? 'flow');
         if ($flowCards->isEmpty()) {
             return response()->json(['error' => 'Bu oqim uchun fan kartalari topilmadi.'], 422);
+        }
+        // Kafedra mudiri faqat o'z kafedrasi fanlariga o'qituvchi/xona biriktiradi.
+        if ($denied = $this->denyForeignKafedra($request, $flowCards)) {
+            return $denied;
         }
 
         $teacherName = null;
@@ -3410,6 +3429,16 @@ class TimetableController extends Controller
             'slots_json'     => 'nullable|string|max:20000',
         ]);
 
+        // Ma'ruza kataklari — ichki jadval: faqat kafedra mudiri (o'z kafedrasi fani) yoki admin.
+        $slotRole = $this->timetableActiveRole($request);
+        if (!$this->cycleLayerEditable($slotRole, 'internal')) {
+            return $this->cycleLayerDenied('internal');
+        }
+        $ownSubjects = $this->ownKafedraCycleSubjects($request, $board, (string) $data['specialty_name'], (int) $data['course']);
+        if ($ownSubjects !== null && !isset($ownSubjects[mb_strtolower(trim((string) $data['subject_name']))])) {
+            return response()->json(['error' => 'Bu fan sizning kafedrangizga tegishli emas.'], 403);
+        }
+
         $placement = $this->findCyclePlacement($board, $data);
         if (!$placement) {
             return response()->json(['error' => 'Sikl bloki topilmadi.'], 404);
@@ -3479,6 +3508,11 @@ class TimetableController extends Controller
         // Tashqi jadvalda fan bitta blok: amaliy blok ko'chsa yoki olinsa,
         // ma'ruza yozuvi ham u bilan birga yuradi (ichki jadval shu asosda quriladi).
         $syncLecture = $placeLayer === 'external' && $data['training_type'] === 'practice';
+        // Kafedra mudiri ichki jadvalda faqat o'z kafedrasi fanlarini o'zgartiradi.
+        $ownCycleSubjects = $this->ownKafedraCycleSubjects($request, $board, (string) $data['specialty_name'], (int) $data['course']);
+        if ($ownCycleSubjects !== null && !isset($ownCycleSubjects[mb_strtolower(trim((string) $data['subject_name']))])) {
+            return response()->json(['error' => 'Bu fan sizning kafedrangizga tegishli emas.'], 403);
+        }
         // Bir fanning turli oqimlardagi sikllari kesishishiga ruxsat (sig'masa):
         // ruxsat berilsa, kesishish overlap_days o'quv kunidan oshmasligi kerak.
         $allowedOverlapDays = !empty($data['allow_overlap']) ? (int) ($data['overlap_days'] ?? 0) : 0;
@@ -3777,6 +3811,11 @@ class TimetableController extends Controller
                     }
                     if ($placementConflicts($placement, $newStart)) {
                         return response()->json(['error' => 'Bu fan shu sanalarda boshqa oqimga joylangan.'], 422);
+                    }
+                    if ($ownCycleSubjects !== null
+                        && !isset($ownCycleSubjects[mb_strtolower(trim((string) $placement->subject_name))])) {
+                        return response()->json(['error' => 'Siljitish boshqa kafedraning "' . $placement->subject_name
+                            . '" sikliga ham ta\'sir qiladi. Uni o\'quv bo\'limi yoki o\'sha kafedra siljitsin.'], 422);
                     }
                     $toShift[] = [$placement, $newStart];
                 }
@@ -5452,6 +5491,30 @@ class TimetableController extends Controller
         };
 
         return $norm($a) !== '' && $norm($a) === $norm($b);
+    }
+
+    /**
+     * Kafedra mudiri uchun: shu yo'nalish+kurs bo'yicha o'z kafedrasiga tegishli sikl fanlari
+     * [mb_strtolower(trim(nom)) => asl nom]. Boshqa rollar uchun null (cheklov yo'q).
+     */
+    private function ownKafedraCycleSubjects(Request $request, TimetableBoard $board, string $specialty, int $course): ?array
+    {
+        $ownKafedra = $this->departmentHeadKafedra($request);
+        if ($ownKafedra === null) {
+            return null;
+        }
+        $own = [];
+        TimetableCard::where('board_id', $board->id)
+            ->where('specialty_name', $specialty)
+            ->where('course', $course)
+            ->get(['subject_name', 'kafedra_name'])
+            ->each(function ($card) use (&$own, $ownKafedra) {
+                if ($this->sameKafedra($card->kafedra_name, $ownKafedra)) {
+                    $own[mb_strtolower(trim((string) $card->subject_name))] = (string) $card->subject_name;
+                }
+            });
+
+        return $own;
     }
 
     /** Kafedra mudiri boshqa kafedraning darsiga biriktira olmasin. */

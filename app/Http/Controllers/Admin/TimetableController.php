@@ -3365,7 +3365,12 @@ class TimetableController extends Controller
             'start_date' => 'nullable|date',
             'holidays' => 'nullable|array',
             'holidays.*' => 'nullable|date',
+            'allow_overlap' => 'nullable|boolean',
+            'overlap_days' => 'nullable|integer|min:0|max:60',
         ]);
+        // Bir fanning turli oqimlardagi sikllari kesishishiga ruxsat (sig'masa):
+        // ruxsat berilsa, kesishish overlap_days o'quv kunidan oshmasligi kerak.
+        $allowedOverlapDays = !empty($data['allow_overlap']) ? (int) ($data['overlap_days'] ?? 0) : 0;
 
         $norm = fn($value) => mb_strtolower(trim((string) $value));
         $setting = TimetableSubjectSetting::where('board_id', $board->id)
@@ -3513,7 +3518,7 @@ class TimetableController extends Controller
             ? TimetableCyclePlacement::where('board_id', $board->id)->get()
             : collect($set['cycle_placements'] ?? [])->map(fn($item) => (object) $item);
         $hasFlowSubjectConflict = function (string $subject, string $flow, int $from, int $days) use (
-            $allCyclePlacements, $activeFlows, $data, $norm, $endIndexFor
+            $allCyclePlacements, $activeFlows, $data, $norm, $endIndexFor, $workIndices, $allowedOverlapDays
         ): bool {
             $to = $endIndexFor($from, $days);
             if ($to === null) {
@@ -3531,7 +3536,16 @@ class TimetableController extends Controller
                 $otherFrom = (int) data_get($placement, 'start_index');
                 $otherTo = $endIndexFor($otherFrom, $days);
                 if ($otherTo !== null && $from <= $otherTo && $otherFrom <= $to) {
-                    return true;
+                    if ($allowedOverlapDays <= 0) {
+                        return true;
+                    }
+                    // Kesishgan o'quv kunlari soni (bayram/yakshanbalar hisobga olinmaydi)
+                    $lo = max($from, $otherFrom);
+                    $hi = min($to, $otherTo);
+                    $overlap = count(array_filter($workIndices, fn($i) => $i >= $lo && $i <= $hi));
+                    if ($overlap > $allowedOverlapDays) {
+                        return true;
+                    }
                 }
             }
             return false;

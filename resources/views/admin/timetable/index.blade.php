@@ -1152,15 +1152,17 @@
         #cycleGrid .cyc-mk-grid { position: relative; }
         #cycleGrid .cyc-mk-over { position: absolute; left: 4px; right: 4px; top: 50%; transform: translateY(-50%); z-index: 2;
             display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; text-align: center; }
-        #cycleGrid .cyc-mk-over .cyc-mk-title { max-width: 100%; padding: 2px 7px; border-radius: 6px; background: rgba(255, 255, 255, .9);
-            box-shadow: 0 1px 3px rgba(15, 23, 42, .18); font-size: 12px; font-weight: 800; line-height: 1.2; color: #0f172a;
+        #cycleGrid .cyc-mk-over .cyc-mk-title { max-width: 100%; padding: 2px 7px; border-radius: 6px; background: rgba(255, 255, 255, .6);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .14); pointer-events: auto; cursor: pointer; font-size: 12px; font-weight: 800; line-height: 1.2; color: #0f172a;
             white-space: normal; overflow-wrap: anywhere;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
         /* Tor blok (≤ 6 kun): faqat fan nomi va soat — o'qituvchi/xona sichqoncha ustiga borganda */
         #cycleGrid .cyc-mk-over.is-compact { gap: 1px; left: 2px; right: 2px; }
         #cycleGrid .cyc-mk-over.is-compact .cyc-mk-title { padding: 1px 4px; font-size: 10.5px; }
-        #cycleGrid .cyc-mk-over.is-compact .cyc-mk-count { font-size: 9px; padding: 0 4px; white-space: nowrap; }
-        #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .85);
+        #cycleGrid .cyc-mk-over.is-compact .cyc-mk-count { font-size: 9px; padding: 0 3px; white-space: nowrap;
+            max-width: 100%; overflow: hidden; }
+        #cycleGrid .cyc-mk-over .cyc-mk-title:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .55); }
+        #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .6);
             font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #cycleGrid .cyc-mk-over .cyc-mk-count { pointer-events: none; }
         #cycleGrid .cyc-mk-gear { position: absolute; top: 2px; right: 2px; z-index: 3; }
@@ -3873,7 +3875,9 @@
                                 const sumLabel = 'M ' + sumLec + (lecTotal != null ? '/' + lecTotal : '') + ' · A ' + sumPrc + (prcTotal != null ? '/' + prcTotal : '') + ' s';
                                 // Tor blokda yorliq sig'maydi: o'qituvchi/xona faqat sichqoncha ustiga borganda.
                                 const compact = spanCols <= 6;
-                                const shortSum = 'M ' + sumLec + ' · A ' + sumPrc + ' s';
+                                // 1–2 ustunli (30–60px) blokda "M 2 · A 4 s" ham sig'maydi — "2+4"
+                                // (to'liq hisob katak title'ida va fan oynasida).
+                                const shortSum = spanCols <= 2 ? sumLec + '+' + sumPrc : 'M ' + sumLec + ' · A ' + sumPrc + ' s';
                                 // Blokni kataklar to'liq qoplaydi va ularning o'z title'i bor — td title'i
                                 // hech qachon chiqmaydi. Shuning uchun tor blokda ma'lumot katak title'iga qo'shiladi.
                                 const blockTip = compact ? ' — ' + block.subject + (req ? ' · ' + req : '') + ' · ' + sumLabel : '';
@@ -3909,7 +3913,7 @@
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
                                     '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '">' +
-                                    '<span class="cyc-mk-title">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
+                                    '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Fan haqida: soatlar, o\'qituvchi, xona" style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     (req && !compact ? '<span class="cyc-mk-sub">' + esc(req) + '</span>' : '') +
                                     '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '">' + (compact ? shortSum : sumLabel) + '</b>' +
                                     '</div>' +
@@ -4125,6 +4129,38 @@
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
                 pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => moveCycDay(key, +offset, st + (+btn.dataset.dpMove)));
             }
+            // Fan nomi bosilganda: blok bo'yicha jami soatlar, sanalar, o'qituvchi va xona.
+            function openCycSubjPop(key, anchor) {
+                closeCycDayPop();
+                const block = cycBlockByKey(key);
+                if (!block) return;
+                cycDaySel = { key: key, offset: -1 };
+                const plan = Object.values(block.day_plan || {});
+                const sumLec = plan.reduce((a, d) => a + (+d.lec || 0), 0);
+                const sumPrc = plan.reduce((a, d) => a + (+d.prc || 0), 0);
+                const hasKtr = plan.some(d => d.ktr);
+                const dates = cyclePlanData.dates || [];
+                const d1 = dates[block.from], d2 = dates[block.to];
+                const cmp = (got, plan) => plan == null ? got + ' s' : got + ' / ' + plan + ' s' + (+got !== +plan ? ' <b style="color:#b91c1c">(farq ' + (got - plan) + ')</b>' : '');
+                const pop = document.createElement('div');
+                pop.id = 'cycDayPop';
+                pop.innerHTML =
+                    '<div class="dp-head"><div><div class="dp-title">' + esc(block.subject) + '</div>' +
+                    '<div class="dp-sub">' + block.days + ' kun' + (d1 && d2 ? ' · ' + esc(d1.d) + ' – ' + esc(d2.d) : '') + '</div></div>' +
+                    '<button type="button" class="dp-close" aria-label="Yopish">&times;</button></div>' +
+                    '<div class="dp-row"><span class="dp-tag l">M</span><div><b>Ma\'ruza</b> <span class="dp-sub">' + cmp(sumLec, block.lecture_hours) + '</span></div></div>' +
+                    '<div class="dp-row"><span class="dp-tag p">A</span><div><b>Amaliy</b> <span class="dp-sub">' + cmp(sumPrc, block.practice_hours) + '</span></div></div>' +
+                    '<div class="dp-row"><span style="width:16px;text-align:center">&#128100;</span><div><b>O\'qituvchi:</b> ' + (block.teacher_name ? esc(block.teacher_name) : '<span class="dp-sub">biriktirilmagan</span>') + '</div></div>' +
+                    '<div class="dp-row"><span style="width:16px;text-align:center">&#127979;</span><div><b>Xona:</b> ' + (block.auditorium_name || block.auditorium_code ? esc(block.auditorium_name || block.auditorium_code) : '<span class="dp-sub">biriktirilmagan</span>') + '</div></div>' +
+                    (hasKtr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
+                    '<div class="dp-actions"><span class="dp-sub">Kun bo\'yicha ma\'lumot uchun M / A katagini bosing.</span></div>';
+                document.body.appendChild(pop);
+                const r = anchor.getBoundingClientRect();
+                pop.style.left = Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)) + 'px';
+                pop.style.top = Math.max(8, Math.min(window.innerHeight - pop.offsetHeight - 8, r.bottom + 6)) + 'px';
+                pop.querySelector('.dp-close').onclick = closeCycDayPop;
+            }
+
             async function moveCycDay(key, offset, newStart) {
                 const card = (cyclePlanData && cyclePlanData.cycle_cards || []).find(item => item.key === key);
                 const block = cycBlockByKey(key);
@@ -4151,6 +4187,13 @@
                 if (!grid || grid.dataset.mkReady) return;
                 grid.dataset.mkReady = '1';
                 grid.addEventListener('click', ev => {
+                    const subj = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
+                    if (subj) {
+                        ev.preventDefault();
+                        if (cycDaySel && cycDaySel.key === subj.dataset.mkSubj && cycDaySel.offset === -1) { closeCycDayPop(); return; }
+                        openCycSubjPop(subj.dataset.mkSubj, subj);
+                        return;
+                    }
                     const cell = ev.target.closest ? ev.target.closest('.cyc-mk-cell') : null;
                     if (!cell || cell.disabled) return;
                     ev.preventDefault();
@@ -4161,9 +4204,17 @@
                     openCycDayPop(cell.dataset.mkKey, cell.dataset.mkDay, cell);
                 });
                 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeCycDayPop(); });
+                // Fan nomi (role=button) klaviaturadan ham ochiladi: Enter / Space.
+                grid.addEventListener('keydown', ev => {
+                    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                    const subj = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
+                    if (!subj) return;
+                    ev.preventDefault();
+                    subj.click();
+                });
                 document.addEventListener('mousedown', ev => {
                     if (!cycDaySel) return;
-                    if (ev.target.closest && (ev.target.closest('#cycDayPop') || ev.target.closest('.cyc-mk-cell'))) return;
+                    if (ev.target.closest && (ev.target.closest('#cycDayPop') || ev.target.closest('.cyc-mk-cell') || ev.target.closest('.cyc-mk-title'))) return;
                     closeCycDayPop();
                 });
             }

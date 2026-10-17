@@ -2462,6 +2462,7 @@ class TimetableController extends Controller
             'courses.*'         => 'integer|min:1|max:7',
             'clear'             => 'nullable|boolean',
             'view'              => 'nullable|in:flow,group',
+            'layer'             => 'nullable|in:external,internal',
         ]);
         $cycleView = $data['view'] ?? 'flow';
         // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
@@ -2475,6 +2476,20 @@ class TimetableController extends Controller
         $hasLectureSlots = Schema::hasTable('timetable_cycle_placements')
             && Schema::hasColumn('timetable_cycle_placements', 'lecture_slots');
         $cycleSimple = $cycleMark || in_array($cycleRole, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+        // Tashqi (o'quv bo'limi, tavsiyaviy) / ichki (kafedra, KTR bo'yicha) jadval.
+        // Tashqi: fanga bitta blok, ma'ruza/amaliy ajratilmaydi (sodda ko'rinish).
+        // Ichki: ma'ruza/amaliy alohida; kafedra mudiri uchun belgilash rejimi.
+        $cycleLayer = $data['layer'] ?? $this->cycleDefaultLayer($cycleRole);
+        if ($cycleLayer === 'external') {
+            $cycleSimple = true;
+            $cycleMark = false;
+        } elseif ($this->isOquvBolimiRole($cycleRole)) {
+            $cycleSimple = false;
+        }
+        $cycleCanEdit = $this->cycleLayerEditable($cycleRole, $cycleLayer);
+        if ($request->boolean('clear') && !$cycleCanEdit) {
+            return $this->cycleLayerDenied($cycleLayer);
+        }
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
         $inScope = function ($c) use ($facSet, $specSet, $courseSet) {
             if ($facSet !== null && !isset($facSet[(string) ($c->faculty_name ?? '')])) return false;
@@ -2739,7 +2754,9 @@ class TimetableController extends Controller
                 if ($to === null) {
                     continue;
                 }
-                $blockPair = max(1, (int) ($placement->pair ?: 1));
+                // Sodda rejimda bitta qator bor: tashqi jadvalda amaliy yozuv 2-parada
+                // saqlansa ham, blok 1-qatorda ko'rinsin (aks holda klient uni tashlab ketadi).
+                $blockPair = $cycleSimple ? 1 : max(1, (int) ($placement->pair ?: 1));
                 // Kunlik para egallashi (6 soat modeli): amaliy blok ma'ruzali
                 // davrda 2, keyin 3 para; ma'ruza 1 para. Klient shu maydonlar
                 // bilan 2-3-paradagi davom segmentlarini chizadi.
@@ -2762,7 +2779,9 @@ class TimetableController extends Controller
                     'to' => $to,
                     'days' => (int) $days,
                     'hours' => $fmtHours($hrs === null ? null
-                        : (float) ($blockType === 'lecture' ? $hrs['lecture'] : $hrs['practice'])),
+                        : (float) ($cycleSimple
+                            ? ($hrs['lecture'] + $hrs['practice'])
+                            : ($blockType === 'lecture' ? $hrs['lecture'] : $hrs['practice']))),
                     'span_head' => (int) $span['head_span'],
                     'span_tail' => (int) $span['tail_span'],
                     'head_days' => $headDays,
@@ -2844,6 +2863,8 @@ class TimetableController extends Controller
             'rows'       => $rows,
             'pairs'      => $cycleSimple ? 1 : $pairsPerDay,
             'simple'     => $cycleSimple,
+            'layer'      => $cycleLayer,
+            'can_edit'   => $cycleCanEdit,
             'mark_mode'  => $cycleMark,
             'mark_ready' => $hasLectureSlots,
             'day_hours'  => 6,
@@ -3375,7 +3396,16 @@ class TimetableController extends Controller
             'holidays.*' => 'nullable|date',
             'allow_overlap' => 'nullable|boolean',
             'overlap_days' => 'nullable|integer|min:0|max:60',
+            'layer' => 'nullable|in:external,internal',
         ]);
+        $placeRole = $this->timetableActiveRole($request);
+        $placeLayer = $data['layer'] ?? $this->cycleDefaultLayer($placeRole);
+        if (!$this->cycleLayerEditable($placeRole, $placeLayer)) {
+            return $this->cycleLayerDenied($placeLayer);
+        }
+        // Tashqi jadvalda fan bitta blok: amaliy blok ko'chsa yoki olinsa,
+        // ma'ruza yozuvi ham u bilan birga yuradi (ichki jadval shu asosda quriladi).
+        $syncLecture = $placeLayer === 'external' && $data['training_type'] === 'practice';
         // Bir fanning turli oqimlardagi sikllari kesishishiga ruxsat (sig'masa):
         // ruxsat berilsa, kesishish overlap_days o'quv kunidan oshmasligi kerak.
         $allowedOverlapDays = !empty($data['allow_overlap']) ? (int) ($data['overlap_days'] ?? 0) : 0;
@@ -3397,6 +3427,16 @@ class TimetableController extends Controller
         $hoursFor = fn(string $spec, int $course, string $subject): ?array =>
             $cycleHours[$this->specKey($spec) . '|' . $course . '|' . $this->normSubject($subject)] ?? null;
         $rowHours = $this->cycleRowHours($board);
+        if ($syncLecture) {
+            // Tashqi jadvalda amaliy blok ma'ruzadan keyingi paralarda turadi
+            // (ma'ruza — 1-para), shunda ichki jadvalga o'tganda ular ustma-ust tushmaydi.
+            $hasLectureDays = $this->cycleTypeDays(
+                max(1, (int) $setting->cycle_days),
+                $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $data['subject_name']),
+                'lecture'
+            ) >= 1;
+            $reqPair = $hasLectureDays ? 2 : 1;
+        }
         $scopeCards = TimetableCard::where('board_id', $board->id)
             ->where('course', (int) $data['course'])
             ->where('specialty_name', $data['specialty_name'])
@@ -3664,10 +3704,27 @@ class TimetableController extends Controller
                 if (!$targetFound) {
                     return response()->json(['error' => 'Siljitiladigan sikl kartasi topilmadi.'], 422);
                 }
-                DB::transaction(function () use ($toShift, &$shifted) {
+                DB::transaction(function () use ($toShift, &$shifted, $syncLecture, $board, $data) {
+                    $movedIds = [];
                     foreach ($toShift as [$placement, $newStart]) {
                         $placement->update(['start_index' => $newStart]);
+                        $movedIds[] = $placement->id;
                         $shifted++;
+                    }
+                    if (!$syncLecture) {
+                        return;
+                    }
+                    // Tashqi jadval: siljigan amaliy bloklarning ma'ruza yozuvi ham birga siljiydi.
+                    foreach ($toShift as [$placement, $newStart]) {
+                        if (($placement->training_type ?: 'practice') !== 'practice') continue;
+                        TimetableCyclePlacement::where('board_id', $board->id)
+                            ->where('specialty_name', $placement->specialty_name)
+                            ->where('course', (int) $placement->course)
+                            ->where('group_name', $placement->group_name)
+                            ->where('subject_name', $placement->subject_name)
+                            ->where('training_type', 'lecture')
+                            ->whereNotIn('id', $movedIds)
+                            ->update(['start_index' => $newStart]);
                     }
                 });
             } else {
@@ -3704,7 +3761,9 @@ class TimetableController extends Controller
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
                     ->where('subject_name', $data['subject_name'])
-                    ->where(fn ($q) => $q->where('training_type', $data['training_type'])->orWhereNull('training_type'))
+                    ->where(fn ($q) => $syncLecture
+                        ? $q->whereIn('training_type', ['practice', 'lecture'])->orWhereNull('training_type')
+                        : $q->where('training_type', $data['training_type'])->orWhereNull('training_type'))
                     ->delete();
             } else {
                 $set['cycle_placements'] = collect($set['cycle_placements'] ?? [])
@@ -3796,6 +3855,19 @@ class TimetableController extends Controller
                 'subject_name' => $data['subject_name'],
                 'training_type' => $data['training_type'],
             ], ['start_index' => $from, 'pair' => $reqPair]);
+            if ($syncLecture) {
+                $lecHours = $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $data['subject_name']);
+                if ($this->cycleTypeDays(max(1, (int) $setting->cycle_days), $lecHours, 'lecture') >= 1) {
+                    TimetableCyclePlacement::updateOrCreate([
+                        'board_id' => $board->id,
+                        'specialty_name' => $data['specialty_name'],
+                        'course' => (int) $data['course'],
+                        'group_name' => $data['group_name'],
+                        'subject_name' => $data['subject_name'],
+                        'training_type' => 'lecture',
+                    ], ['start_index' => $from, 'pair' => 1]);
+                }
+            }
         } else {
             $fallback = collect($set['cycle_placements'] ?? [])
                 ->reject(fn($item) => ($item['specialty_name'] ?? '') === $data['specialty_name']
@@ -4740,6 +4812,38 @@ class TimetableController extends Controller
         return $request->user()
             ?? Auth::guard('teacher')->user()
             ?? Auth::guard('web')->user();
+    }
+
+    private function isOquvBolimiRole(string $role): bool
+    {
+        return in_array($role, ['oquv_bolimi', 'oquv_bolimi_boshligi'], true);
+    }
+
+    /** Rol bo'yicha sikl jadvalining boshlang'ich qatlami: o'quv bo'limi — tashqi, qolganlar — ichki. */
+    private function cycleDefaultLayer(string $role): string
+    {
+        return $this->isOquvBolimiRole($role) ? 'external' : 'internal';
+    }
+
+    /**
+     * Qatlamni kim tahrirlaydi: tashqi — o'quv bo'limi, ichki — kafedra mudiri,
+     * admin/superadmin — ikkalasini. Boshqalar faqat ko'radi.
+     */
+    private function cycleLayerEditable(string $role, string $layer): bool
+    {
+        if (in_array($role, ['admin', 'superadmin'], true)) {
+            return true;
+        }
+        return $layer === 'external'
+            ? $this->isOquvBolimiRole($role)
+            : $role === 'kafedra_mudiri';
+    }
+
+    private function cycleLayerDenied(string $layer)
+    {
+        return response()->json(['error' => $layer === 'external'
+            ? 'Tashqi dars jadvalini faqat o‘quv bo‘limi tahrirlaydi.'
+            : 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.'], 403);
     }
 
     private function timetableActiveRole(Request $request): string

@@ -2997,6 +2997,10 @@ class TimetableController extends Controller
         if ($flowCards->isEmpty()) {
             return response()->json(['error' => 'Bu oqim uchun fan kartalari topilmadi.'], 422);
         }
+        // Kafedra mudiri faqat o'z kafedrasi fanlariga o'qituvchi/xona biriktiradi.
+        if ($denied = $this->denyForeignKafedra($request, $flowCards)) {
+            return $denied;
+        }
 
         $teacherName = null;
         if (!empty($data['teacher_id'])) {
@@ -3420,6 +3424,16 @@ class TimetableController extends Controller
             // belgilar JSON satr bo'lib keladi.
             'slots_json'     => 'nullable|string|max:20000',
         ]);
+
+        // Ma'ruza kataklari — ichki jadval: faqat kafedra mudiri (o'z kafedrasi fani) yoki admin.
+        $slotRole = $this->timetableActiveRole($request);
+        if (!$this->cycleLayerEditable($slotRole, 'internal')) {
+            return $this->cycleLayerDenied('internal');
+        }
+        $ownSubjects = $this->ownKafedraCycleSubjects($request, $board, (string) $data['specialty_name'], (int) $data['course']);
+        if ($ownSubjects !== null && !isset($ownSubjects[mb_strtolower(trim((string) $data['subject_name']))])) {
+            return response()->json(['error' => 'Bu fan sizning kafedrangizga tegishli emas.'], 403);
+        }
 
         $placement = $this->findCyclePlacement($board, $data);
         if (!$placement) {

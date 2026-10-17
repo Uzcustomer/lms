@@ -3913,7 +3913,7 @@
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
                                     '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '">' +
-                                    '<span class="cyc-mk-title" data-mk-subj="' + esc(block.key) + '" title="Fan haqida: soatlar, o\'qituvchi, xona" style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
+                                    '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Fan haqida: soatlar, o\'qituvchi, xona" style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     (req && !compact ? '<span class="cyc-mk-sub">' + esc(req) + '</span>' : '') +
                                     '<b class="cyc-mk-count' + (sumBad ? ' is-over' : ' is-done') + '">' + (compact ? shortSum : sumLabel) + '</b>' +
                                     '</div>' +
@@ -4204,6 +4204,14 @@
                     openCycDayPop(cell.dataset.mkKey, cell.dataset.mkDay, cell);
                 });
                 document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeCycDayPop(); });
+                // Fan nomi (role=button) klaviaturadan ham ochiladi: Enter / Space.
+                grid.addEventListener('keydown', ev => {
+                    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                    const subj = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
+                    if (!subj) return;
+                    ev.preventDefault();
+                    subj.click();
+                });
                 document.addEventListener('mousedown', ev => {
                     if (!cycDaySel) return;
                     if (ev.target.closest && (ev.target.closest('#cycDayPop') || ev.target.closest('.cyc-mk-cell') || ev.target.closest('.cyc-mk-title'))) return;

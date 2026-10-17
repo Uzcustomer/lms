@@ -199,16 +199,25 @@
     .jr-flag.is-ok { background: var(--ok-bg); color: var(--ok); }
     .jr-flash.is-error { border-color: #e8c3c0; border-left-color: var(--bad); background: var(--bad-bg); color: #8f1d17; }
 
-    /* Qayta topshirish tugmasi */
-    .jr-retake-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; }
+    /* Qayta topshirish tugmasi — alohida oxirgi ustunda, yashil */
+    .jr-retake-cell { white-space: nowrap; }
+    .jr-retake-form { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
     .jr-retake {
-        padding: 4px 11px; border: 1px solid #c9d5e4; border-radius: 4px; background: #fff;
-        color: var(--navy); font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
-        transition: background .16s, border-color .16s;
+        display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px;
+        border: 0; border-radius: 7px; background: linear-gradient(165deg, #159a67, var(--ok));
+        color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; letter-spacing: .02em;
+        cursor: pointer; box-shadow: 0 3px 9px rgba(15, 122, 82, .25);
+        transition: box-shadow .16s, transform .16s;
     }
-    .jr-retake:hover { background: #e8eef7; border-color: #b7c7dc; }
-    .jr-retake.is-cancel { border-color: transparent; color: var(--bad); font-weight: 500; }
-    .jr-retake.is-cancel:hover { background: var(--bad-bg); }
+    .jr-retake::before { content: '↻'; font-size: 14px; line-height: 1; }
+    .jr-retake:hover { box-shadow: 0 5px 14px rgba(15, 122, 82, .34); transform: translateY(-1px); }
+    .jr-retake:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px; }
+    .jr-retake.is-cancel {
+        height: auto; padding: 2px 6px; background: none; box-shadow: none;
+        color: var(--bad); font-size: 11px; font-weight: 500;
+    }
+    .jr-retake.is-cancel::before { content: none; }
+    .jr-retake.is-cancel:hover { background: var(--bad-bg); transform: none; }
 
     .jr-pill {
         display: inline-flex; padding: 3px 11px; border-radius: 3px;
@@ -504,6 +513,7 @@
                                     <th style="width:8%">Foiz</th>
                                     <th style="width:14%">Topshirgan vaqti</th>
                                     <th>Javoblari</th>
+                                    <th style="width:170px">Qayta topshirish</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -544,33 +554,6 @@
                                             @elseif((int) ($attempt->lock_count ?? 0) === 1)
                                                 <span class="jr-flag is-warn" title="Chalg'igani uchun bir marta qulflangan va o'qituvchi ochib bergan">1 marta qulflangan</span>
                                             @endif
-
-                                            {{-- Qayta topshirish: faqat talabaning oxirgi, tugagan urinishida --}}
-                                            @if(($retakeReady ?? false) && $attempt->status !== 'in_progress')
-                                                @php
-                                                    $isLatest = $group['attempts']
-                                                        ->where('student_id', $attempt->student_id)
-                                                        ->max(fn ($a) => (int) ($a->attempt_no ?? 1)) === $attemptNo;
-                                                @endphp
-                                                @if($isLatest)
-                                                    @php
-                                                        $confirmText = $attempt->retake_allowed_at
-                                                            ? 'Qayta topshirish ruxsati bekor qilinsinmi?'
-                                                            : $attempt->student_name . ' uchun ' . ($attemptNo + 1) . '-urinishga ruxsat berilsinmi?';
-                                                    @endphp
-                                                    <form method="POST" class="jr-retake-form"
-                                                          action="{{ route('teacher.fan-testlari.attempts.retake', [$selected, $attempt, 'group' => request('group'), 'student' => request('student')]) }}"
-                                                          onsubmit="return confirm({{ \Illuminate\Support\Js::from($confirmText) }})">
-                                                        @csrf
-                                                        @if($attempt->retake_allowed_at)
-                                                            <span class="jr-flag is-ok" title="{{ $attempt->retake_allowed_by }} ruxsat bergan, {{ $attempt->retake_allowed_at->format('d.m.Y H:i') }}">{{ $attemptNo + 1 }}-urinishga ruxsat berilgan</span>
-                                                            <button type="submit" class="jr-retake is-cancel">bekor qilish</button>
-                                                        @else
-                                                            <button type="submit" class="jr-retake">Qayta topshirish</button>
-                                                        @endif
-                                                    </form>
-                                                @endif
-                                            @endif
                                         </td>
                                         <td><span class="jr-num">{{ (int) $attempt->score }} / {{ $attempt->total_points }}</span></td>
                                         <td>
@@ -610,6 +593,34 @@
                                                         @endforeach
                                                     </div>
                                                 </details>
+                                            @endif
+                                        </td>
+                                        <td class="jr-retake-cell">
+                                            {{-- Qayta topshirish: faqat talabaning oxirgi, tugagan urinishida --}}
+                                            @if(($retakeReady ?? false) && $attempt->status !== 'in_progress')
+                                                @php
+                                                    $isLatest = $group['attempts']
+                                                        ->where('student_id', $attempt->student_id)
+                                                        ->max(fn ($a) => (int) ($a->attempt_no ?? 1)) === $attemptNo;
+                                                @endphp
+                                                @if($isLatest)
+                                                    @php
+                                                        $confirmText = $attempt->retake_allowed_at
+                                                            ? 'Qayta topshirish ruxsati bekor qilinsinmi?'
+                                                            : $attempt->student_name . ' uchun ' . ($attemptNo + 1) . '-urinishga ruxsat berilsinmi?';
+                                                    @endphp
+                                                    <form method="POST" class="jr-retake-form"
+                                                          action="{{ route('teacher.fan-testlari.attempts.retake', [$selected, $attempt, 'group' => request('group'), 'student' => request('student')]) }}"
+                                                          onsubmit="return confirm({{ \Illuminate\Support\Js::from($confirmText) }})">
+                                                        @csrf
+                                                        @if($attempt->retake_allowed_at)
+                                                            <span class="jr-flag is-ok" title="{{ $attempt->retake_allowed_by }} ruxsat bergan, {{ $attempt->retake_allowed_at->format('d.m.Y H:i') }}">{{ $attemptNo + 1 }}-urinishga ruxsat berilgan</span>
+                                                            <button type="submit" class="jr-retake is-cancel">bekor qilish</button>
+                                                        @else
+                                                            <button type="submit" class="jr-retake">Qayta topshirish</button>
+                                                        @endif
+                                                    </form>
+                                                @endif
                                             @endif
                                         </td>
                                     </tr>

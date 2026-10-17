@@ -11,7 +11,8 @@
         'buyruq_sanasi' => 'Buyruq sanasi', 'turi' => 'Turi', 'xabar_berilmagan' => 'Xabar berilmagan',
         'kechikib_xabar_berilgan' => 'Kechikib xabar berilgan', 'turar_joy' => 'Turar joy', 'kelgan_sana' => 'Kelgan sana',
         'yetishmaydi' => 'Yetishmaydi', 'shakl' => 'Vedomost shakli', 'vedomost_holati' => 'Vedomost holati',
-        'yuklangan' => 'Yuklangan', 'kafedra_mudiri' => 'Kafedra mudiri', 'guruhchalar' => 'Guruhchalar', 'chetlashtirishgacha' => 'Chegaragacha qolgan soat',
+        'yuklangan' => 'Yuklangan', 'kafedra_mudiri' => 'Kafedra mudiri', 'guruhchalar' => 'Guruhchalar', 'kurs' => 'Kurs', 'jadval' => "To'lov jadvali",
+        'yetishmaydi_summa' => "Yetishmayotgan summa (so'm)", 'chetlashtirishgacha' => 'Chegaragacha qolgan soat',
     ];
 @endphp
 <dl class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-sm">

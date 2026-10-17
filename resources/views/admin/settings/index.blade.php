@@ -914,6 +914,96 @@
                 }
             </script>
 
+            {{-- SECTION: KONTRAKT TO'LOV MUDDATLARI — KURS KESIMIDA (monitoring F-6) --}}
+            @if($canEditContractSchedule ?? false)
+            @php
+                $byCourse = $contractCutoffsByCourse;
+                $scheduleGroups = collect($byCourse['courses'])->mapWithKeys(fn ($v, $k) => [(string) $k => $v])->all() + ['super' => $byCourse['super']];
+                $academicStart = (now()->month >= 8 ? now()->year : now()->year - 1) . '-08-01';
+                $generalStale = collect($contractCutoffs ?? [])->max('deadline') < $academicStart;
+            @endphp
+            <div x-data="contractByCourseApp()" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fff7ed, #ffedd5); border: none; cursor: pointer; border-bottom: 1px solid #fdba74;">
+                    <div style="text-align: left;">
+                        <div style="font-size: 17px; font-weight: 700; color: #9a3412;">Kontrakt to'lov muddatlari — kurs kesimida</div>
+                        <div style="font-size: 13px; color: #c2410c; margin-top: 2px;">Monitoring (F-6) shu jadvallar bo'yicha tekshiradi. YN oldi qaydnomaga ta'sir qilmaydi — u yuqoridagi umumiy jadvalni ishlatadi.</div>
+                    </div>
+                    <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #c2410c; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div x-show="open" x-transition style="padding: 24px;">
+                    <div style="background: #fff7ed; border-radius: 10px; padding: 14px; margin-bottom: 16px; border: 1px solid #fed7aa; font-size: 12px; color: #9a3412; line-height: 1.7;">
+                        <b>Qanday ishlaydi:</b> talabaga avval <b>Superkontrakt</b> jadvali (kontrakt turi quyida belgilangan bo'lsa), keyin <b>kursi</b> jadvali,
+                        ular bo'sh bo'lsa — yuqoridagi <b>umumiy jadval</b> qo'llanadi. Bosqich muddati o'tgach, shu bosqich foizi to'lanmagan bo'lsa monitoringda istisno ochiladi.
+                        O'quv yili boshlanishidan (1-avgust) oldingi sanalar hisobga olinmaydi.
+                        @if($generalStale)
+                            <div style="margin-top: 6px; color: #b91c1c;"><b>Diqqat:</b> umumiy jadval sanalari o'tgan o'quv yiliga tegishli — joriy o'quv yili uchun yangilang.</div>
+                        @endif
+                    </div>
+
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;">
+                        <template x-for="key in keys" :key="key">
+                            <button type="button" @click="active = key" x-text="label(key) + (groups[key].length ? ' ✓' : '')"
+                                :style="active === key ? 'background:#ea580c;color:#fff;border-color:#ea580c' : 'background:#fff;color:#9a3412'"
+                                style="padding: 6px 14px; border: 2px solid #fdba74; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;"></button>
+                        </template>
+                    </div>
+
+                    <form method="POST" action="{{ route('admin.settings.update.contract-cutoffs-by-course') }}">
+                        @csrf
+                        <template x-for="key in keys" :key="'g' + key">
+                            <div x-show="active === key">
+                                <div x-show="groups[key].length === 0" style="font-size: 13px; color: #78350f; margin-bottom: 10px;">Jadval kiritilmagan — umumiy jadval qo'llanadi.</div>
+                                <template x-for="(cutoff, index) in groups[key]" :key="key + '-' + index">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr 40px; gap: 10px; margin-bottom: 8px;">
+                                        <input type="date" :name="fieldName(key, index, 'deadline')" x-model="cutoff.deadline"
+                                            style="padding: 10px 14px; border: 2px solid #fdba74; border-radius: 10px; font-size: 14px; font-weight: 600; color: #9a3412; background: #fffbf5;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <input type="number" :name="fieldName(key, index, 'percent')" x-model="cutoff.percent" min="1" max="100"
+                                                style="width: 80px; padding: 10px 14px; border: 2px solid #fdba74; border-radius: 10px; font-size: 18px; font-weight: 800; color: #9a3412; text-align: center; background: #fffbf5;">
+                                            <span style="font-size: 16px; font-weight: 700; color: #9a3412;">%</span>
+                                        </div>
+                                        <button type="button" @click="groups[key].splice(index, 1)" title="O'chirish"
+                                            style="width: 36px; height: 36px; border: none; background: #fef2f2; border-radius: 8px; cursor: pointer; color: #dc2626; align-self: center;">✕</button>
+                                    </div>
+                                </template>
+                                <button type="button" @click="groups[key].push({ deadline: '', percent: '' })"
+                                    style="padding: 8px 16px; background: #fff7ed; color: #c2410c; font-size: 13px; font-weight: 600; border-radius: 8px; border: 2px dashed #fdba74; cursor: pointer; margin-bottom: 12px;">+ Muddat qo'shish</button>
+                            </div>
+                        </template>
+
+                        <div x-show="active === 'super'" style="margin: 8px 0 16px;">
+                            <div style="font-size: 12px; font-weight: 700; color: #78350f; text-transform: uppercase; margin-bottom: 6px;">Superkontrakt hisoblanadigan kontrakt turlari (HEMIS)</div>
+                            @forelse($contractTypes as $type)
+                                <label style="display: block; font-size: 13px; color: #431407;">
+                                    <input type="checkbox" name="super_types[]" value="{{ $type->code }}" @checked(in_array((string) $type->code, $byCourse['super_types'], true))>
+                                    {{ $type->name }} <span style="color: #9ca3af;">({{ $type->code }})</span>
+                                </label>
+                            @empty
+                                <div style="font-size: 13px; color: #78350f;">HEMIS'dan kontrakt turlari hali yuklanmagan.</div>
+                            @endforelse
+                        </div>
+
+                        <button type="submit" style="padding: 10px 28px; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer;">Saqlash</button>
+                    </form>
+                </div>
+            </div>
+            <script>
+                function contractByCourseApp() {
+                    return {
+                        open: true,
+                        active: '1',
+                        keys: ['1', '2', '3', '4', '5', '6', 'super'],
+                        groups: @json((object) $scheduleGroups),
+                        label(key) { return key === 'super' ? 'Superkontrakt' : key + '-kurs'; },
+                        fieldName(key, index, field) {
+                            return (key === 'super' ? 'super' : 'courses[' + key + ']') + '[' + index + '][' + field + ']';
+                        },
+                    };
+                }
+            </script>
+            @endif
+
             {{-- SECTION 3: SINXRONIZATSIYA --}}
             <div x-data="{ open: true }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                 <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: none; cursor: pointer; border-bottom: 1px solid #6ee7b7;">

@@ -402,6 +402,11 @@ detectors:
     status: "✏️"
     pilot: false
     enabled: true
+    warning_mode: true               # buyurtmachi (17.10.2026): muddatlar Sozlamalarda kurs kesimida; natijani tekshirib o'chiring
+    default_owner_role: "registrator_ofisi"
+    params:
+      education_year: "2026-2027"    # contract_list.edu_year; muddatlar — Sozlamalar → «Kontrakt to'lov muddatlari — kurs kesimida»
+      registrar_office: back_office  # mas'ul — talaba kursining registratori (front_office / back_office / bo'sh)
   - code: F-7
     group: "MOLIYA"
     rule: "Qo'shimcha/tabaqalashtirilgan kontrakt: birinchi yilning ≥50% i to'langach qabul buyrug'i"

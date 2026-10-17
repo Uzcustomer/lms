@@ -24,6 +24,7 @@ return [
         'A-5' => \App\Services\Monitoring\Detectors\A5ContractAdmission::class,
         'E-1' => \App\Services\Monitoring\Detectors\E1OrderNotice::class,
         'E-7' => \App\Services\Monitoring\Detectors\E7TransferFile::class,
+        'F-6' => \App\Services\Monitoring\Detectors\F6ContractPayment::class,
     ],
 
     // Istisnoga javob berish muddati (detektorda due_workdays berilmagan bo'lsa).

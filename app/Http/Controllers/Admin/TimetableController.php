@@ -1379,20 +1379,21 @@ class TimetableController extends Controller
         // va sof yo'nalish ("Davolash ishi") bo'lib turadi — kalitni alias bo'yicha quramiz,
         // aks holda bunday yo'nalishlardagi kartalar hech qachon yangilanmaydi.
         // Fakultetli kalit ustuvor (1-son va 2-son nomlari bir-birini bosib ketmasin).
+        // Alias rejalarining fakultetsiz kaliti faqat zaxira: sof "Davolash ishi"
+        // rejasi (mas. Xalqaro ta'lim) kartalari 1-son/2-son nomini olmasin.
+        $aliasFallback = [];
         foreach ($subjects as $s) {
             $course = (int) $s->level_code >= 11 ? (int) $s->level_code - 10 : (int) $s->level_code;
             [$facAlias, $specAlias] = $this->curriculumScopeAlias((string) $s->specialty_name);
             $key = $this->specKey($specAlias) . '|' . $course . '|' . $this->normSubject((string) $s->subject_name);
-            if ($facAlias !== null) {
-                $facKey = $this->specKey($facAlias) . '|' . $key;
-                if (!isset($map[$facKey])) {
-                    $map[$facKey] = $s->subject_name;
-                }
-            }
-            if (!isset($map[$key])) {
-                $map[$key] = $s->subject_name;
+            if ($facAlias === null) {
+                $map[$key] ??= $s->subject_name;
+            } else {
+                $map[$this->specKey($facAlias) . '|' . $key] ??= $s->subject_name;
+                $aliasFallback[$key] ??= $s->subject_name;
             }
         }
+        $map += $aliasFallback;
 
         // Kafedra ham qayta hisoblanadi (barcha kartalarda — nom o'zgarmagan bo'lsa ham:
         // HEMIS da kafedra o'zgargan / bo'lingan bo'lsa joylashuvlarni yo'qotmasdan to'g'rilansin)

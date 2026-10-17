@@ -4510,8 +4510,11 @@ class TimetableController extends Controller
             ->where('active', true)
             ->when($year, fn ($w) => $w->where('education_year_id', $year));
 
-        $q->where(function ($w) use ($deptId, $context, $load) {
-            $w->where('department_hemis_id', $deptId)
+        // Kafedra bo'lingan bo'lsa — eski kafedra o'qituvchilari ham (config/kafedra.php)
+        $deptIds = array_values(array_unique(array_merge([$deptId], array_map('intval', config('kafedra.predecessors.' . $deptId, [])))));
+
+        $q->where(function ($w) use ($deptId, $deptIds, $context, $load) {
+            $w->whereIn('department_hemis_id', $deptIds)
                 ->orWhere('head_department_hemis_id', $deptId)
                 ->orWhere('id', $context['actor_id'])
                 ->orWhereIn('hemis_id', (clone $load)->whereNotNull('employee_id')->select('employee_id'))

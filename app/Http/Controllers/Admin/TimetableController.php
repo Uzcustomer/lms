@@ -2451,8 +2451,12 @@ class TimetableController extends Controller
             'clear'             => 'nullable|boolean',
             'view'              => 'nullable|in:flow,group',
             'layer'             => 'nullable|in:external,internal',
+            'mine'              => 'nullable|boolean',
         ]);
         $cycleView = $data['view'] ?? 'flow';
+        // "Faqat meniki": o'qituvchi faqat o'zi biriktirilgan fan bloklarini ko'radi.
+        $mineTeacherId = !empty($data['mine']) ? $this->timetableTeacherId($request) : null;
+        $mineFlowSubjects = [];   // flowKey => [subject => [training_type => true]]
         // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
         // para qatorlari yo'q — faqat fan nomi, kunlar va joylash qoidalari.
         // Kafedra mudiri xuddi shu bitta kartani ko'radi, lekin uni ko'chira
@@ -2606,6 +2610,9 @@ class TimetableController extends Controller
                     if ($c->auditorium_name || $c->auditorium_code) {
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
+                    if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
+                        $mineFlowSubjects[$flowKey][$c->subject_name][(string) $c->training_type] = true;
+                    }
                 }
             }
         }
@@ -2632,12 +2639,28 @@ class TimetableController extends Controller
                     if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
                         $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
                     }
+                    if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
+                        $mineFlowSubjects[$flowKey][$c->subject_name][(string) $c->training_type] = true;
+                    }
                     if ($c->teacher_name) {
                         $byFlow[$flowKey]['req'][$reqKey]['teachers'][$c->teacher_name] = true;
                     }
                     if ($c->auditorium_name || $c->auditorium_code) {
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
+                }
+            }
+        }
+
+        // "Faqat meniki": o'qituvchi dars bermaydigan fanlar va oqimlar olib tashlanadi.
+        if ($mineTeacherId !== null) {
+            foreach ($byFlow as $flowKey => $g) {
+                $keep = $mineFlowSubjects[$flowKey] ?? [];
+                $byFlow[$flowKey]['subs'] = array_intersect_key($g['subs'], $keep);
+                // Batafsil ko'rinishda mashg'ulot turi ham filtrlanadi (mas. faqat ma'ruza o'qituvchisi).
+                $byFlow[$flowKey]['mine'] = $keep;
+                if (!$byFlow[$flowKey]['subs']) {
+                    unset($byFlow[$flowKey]);
                 }
             }
         }
@@ -2675,7 +2698,8 @@ class TimetableController extends Controller
 
         // "Bo'shatish": qamrovdagi oqimlarning sikl bloklari panelga qaytariladi.
         // Bloklar faqat qo'lda (cyclePlace) joylanadi — avtomatik joylash yo'q.
-        if ($request->boolean('clear')) {
+        // "Faqat meniki" ko'rinishida bo'shatish yo'q — qamrov to'liq emas.
+        if ($request->boolean('clear') && $mineTeacherId === null) {
             $scopeRows = array_map(fn ($g) => [
                 'specialty' => $g['specialty'],
                 'course'    => $g['course'],
@@ -2739,6 +2763,11 @@ class TimetableController extends Controller
                 if ($cycleSimple && $blockType === 'lecture') {
                     continue;
                 }
+                // "Faqat meniki": batafsil ko'rinishda faqat o'ziga biriktirilgan turdagi blok
+                // (sodda ko'rinishda amaliy blok butun fanni bildiradi — fan bo'yicha yetarli).
+                if (!$cycleSimple && isset($g['mine']) && !isset($g['mine'][$placement->subject_name][$blockType])) {
+                    continue;
+                }
                 $hrs = $hoursFor((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name, $g['faculty'] ?? null);
                 // Kun = 6 soat: ma'ruza o'z soatidan (2 soat/kun), amaliy to'liq sikl.
                 $days = $cycleSimple
@@ -2787,6 +2816,7 @@ class TimetableController extends Controller
                             : ($blockType === 'lecture' ? $hrs['lecture'] : $hrs['practice']))),
                     'span_head' => (int) $span['head_span'],
                     'span_tail' => (int) $span['tail_span'],
+                    'tail_offset' => (int) ($span['tail_offset'] ?? 0),
                     'head_days' => $headDays,
                     'head_to' => $headTo,
                     'tail_from' => $tailFrom,
@@ -2808,6 +2838,9 @@ class TimetableController extends Controller
                 // Sodda rejimda fanga bitta karta (ma'ruza+amaliy birga).
                 $cardTypes = $cycleSimple ? ['practice'] : ['lecture', 'practice'];
                 foreach ($cardTypes as $cardType) {
+                    if (!$cycleSimple && isset($g['mine']) && !isset($g['mine'][$subject][$cardType])) {
+                        continue;
+                    }
                     $typeDays = $cycleSimple
                         ? (int) $days
                         : $this->cycleTypeDays((int) $days, $hrs, $cardType);
@@ -3205,11 +3238,16 @@ class TimetableController extends Controller
     }
 
     /**
-     * Blok kunlik nechta para (lane) egallashini beradi: ma'ruza kuniga
-     * 2 soat (to'liq bitta para), amaliy butun sikl davomida kuniga
-     * 4 soat (2 para) — ma'ruza tugagandan keyin ham shu hajmda qoladi.
+     * Blok kunlik nechta para (lane) egallashini beradi. Sikl kuni 6 soat:
+     *  - ma'ruza kuniga 2 soat (1 para, ma'ruza soati / 2 kun);
+     *  - amaliy ma'ruzali kunlarda 4 soat (2 para, ma'ruzadan keyingi paralarda),
+     *    ma'ruza tugagach 6 soat (3 para) — kunning boshidan.
+     *    Masalan Pediatriya (6 s ma'ruza, 24 s amaliy, 5 kun): 1–3-kunlar 2+4,
+     *    4–5-kunlar 6 soat amaliy; 3×4 + 2×6 = 24.
+     * head_days — blok boshidan nechta O'QUV kuni head rejimida ekani;
+     * tail_offset — dum bo'lagi blok parasiga nisbatan nechta para yuqoridan
+     * boshlanishi (amaliy uchun ma'ruza egallagan paralar soni, manfiy).
      * Reja soatlari topilmasa eski bir-lane xulqi saqlanadi.
-     * head_days — blok boshidan nechta O'QUV kuni head rejimida ekani.
      */
     private function cycleLaneSpan(string $type, ?array $hours, int $cycleDays, int $rowHours = 2): array
     {
@@ -3222,11 +3260,17 @@ class TimetableController extends Controller
             // Ma'ruza kuniga 2 soat = to'liq bitta para.
             return ['head_span' => (int) ceil(2 / $rowHours), 'tail_span' => 0, 'head_days' => $cycleDays];
         }
-        // Amaliy bir tekis: butun blok kuniga 4 soat (2 para).
+        $lectureHours = (float) ($hours['lecture'] ?? 0);
+        if ($lectureHours <= 0) {
+            // Ma'ruzasiz fan: amaliy butun sikl kuniga 6 soat.
+            return ['head_span' => (int) ceil(6 / $rowHours), 'tail_span' => 0, 'head_days' => $cycleDays, 'tail_offset' => 0];
+        }
+        $lectureDays = min($cycleDays, (int) ceil($lectureHours / 2));
         return [
             'head_span' => (int) ceil(4 / $rowHours),
-            'tail_span' => 0,
-            'head_days' => $cycleDays,
+            'tail_span' => $lectureDays < $cycleDays ? (int) ceil(6 / $rowHours) : 0,
+            'head_days' => $lectureDays,
+            'tail_offset' => -(int) ceil(2 / $rowHours),
         ];
     }
 
@@ -3623,7 +3667,44 @@ class TimetableController extends Controller
             $rowHours
         );
         $laneMaxSpan = fn(array $sp): int => max(1, (int) $sp['head_span'], (int) $sp['tail_span']);
-        $reqLaneTo = $reqPair + $laneMaxSpan($reqSpan) - 1;
+        // Blok egallaydigan paralar oralig'i [lo, hi]: amaliy dum bo'lagi ma'ruza
+        // parasidan boshlanadi (tail_offset), shuning uchun pastki chegara ham hisoblanadi.
+        $laneRange = function (int $pair, array $sp): array {
+            $headHi = $pair + max(1, (int) $sp['head_span']) - 1;
+            if ((int) $sp['tail_span'] <= 0) {
+                return [$pair, $headHi];
+            }
+            // Klient bilan bir xil: dum bo'lagi 1-paradan yuqoriga chiqmaydi.
+            $tailLo = max(1, $pair + (int) ($sp['tail_offset'] ?? 0));
+            return [min($pair, $tailLo), max($headHi, $tailLo + (int) $sp['tail_span'] - 1)];
+        };
+        // Blokning kun × para bo'laklari: [[pozFrom, pozTo, paraLo, paraHi], ...] (o'quv kuni
+        // pozitsiyalarida). Amaliy: bosh (ma'ruzali kunlar) va dum (ma'ruza tugagach).
+        $laneSegments = function (int $startPos, int $days, int $pair, array $sp): array {
+            $headDays = min($days, max(0, (int) ($sp['head_days'] ?? $days)));
+            $headLanes = [$pair, $pair + max(1, (int) $sp['head_span']) - 1];
+            if ((int) $sp['tail_span'] <= 0 || $headDays >= $days) {
+                return [[$startPos, $startPos + $days - 1, ...$headLanes]];
+            }
+            $tailLo = max(1, $pair + (int) ($sp['tail_offset'] ?? 0));
+            $segments = $headDays > 0 ? [[$startPos, $startPos + $headDays - 1, ...$headLanes]] : [];
+            $segments[] = [$startPos + $headDays, $startPos + $days - 1, $tailLo, $tailLo + (int) $sp['tail_span'] - 1];
+            return $segments;
+        };
+        $segmentsCollide = function (array $a, array $b): bool {
+            foreach ($a as [$aFrom, $aTo, $aLo, $aHi]) {
+                foreach ($b as [$bFrom, $bTo, $bLo, $bHi]) {
+                    if ($aFrom <= $bTo && $bFrom <= $aTo && $aLo <= $bHi && $bLo <= $aHi) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        $pairOverlapError = fn(string $subject) => response()->json(['error' => '"' . $subject
+            . '" fanining ma\'ruza va amaliy bloklari bir kunning bir parasida ustma-ust tushadi. '
+            . 'Ma\'ruzani amaliy bilan bir kunda boshlang yoki ikkalasini birga siljiting.'], 422);
+        [$reqLaneFrom, $reqLaneTo] = $laneRange($reqPair, $reqSpan);
         $bellPairTotal = collect((array) ($board->bell_schedule ?? []))
             ->filter(fn($it) => (is_array($it) ? ($it['type'] ?? '') : ($it->type ?? '')) === 'pair')
             ->count();
@@ -3767,12 +3848,13 @@ class TimetableController extends Controller
             if ($hasCyclePlacements) {
                 // Kaskad faqat lane (para) oralig'i kesishgan bloklarda —
                 // boshqa paralardagi bloklar joyida qoladi.
-                $placements = TimetableCyclePlacement::where('board_id', $board->id)
+                $rowPlacements = TimetableCyclePlacement::where('board_id', $board->id)
                     ->where('specialty_name', $data['specialty_name'])
                     ->where('course', (int) $data['course'])
                     ->where('group_name', $data['group_name'])
-                    ->orderBy('start_index')->get()
-                    ->filter(function ($p) use ($data, $norm, $cycleSettings, $hoursFor, $laneMaxSpan, $reqPair, $reqLaneTo, $rowHours) {
+                    ->orderBy('start_index')->get();
+                $placements = $rowPlacements
+                    ->filter(function ($p) use ($data, $norm, $cycleSettings, $hoursFor, $laneRange, $reqLaneFrom, $reqLaneTo, $rowHours) {
                         $pSetting = $cycleSettings->get(
                             $norm($data['specialty_name']) . '|' . (int) $data['course'] . '|' . $norm($p->subject_name)
                         );
@@ -3782,16 +3864,15 @@ class TimetableController extends Controller
                             max(1, (int) ($pSetting->cycle_days ?? 1)),
                             $rowHours
                         );
-                        $pairNo = max(1, (int) ($p->pair ?? 1));
-                        return $pairNo + $laneMaxSpan($span) - 1 >= $reqPair && $pairNo <= $reqLaneTo;
+                        [$lo, $hi] = $laneRange(max(1, (int) ($p->pair ?? 1)), $span);
+                        return $hi >= $reqLaneFrom && $lo <= $reqLaneTo;
                     })->values();
                 $toShift = [];
-                $targetFound = false;
+                $targetFound = $placements->contains($isTarget);
                 foreach ($placements as $placement) {
-                    if (!$targetFound) {
-                        if (!$isTarget($placement)) continue;
-                        $targetFound = true;
-                    }
+                    // Nishon va undan keyingi bloklar; nishon bilan bir kunda boshlanganlar ham
+                    // (mas. bir fanning ma'ruza + amaliy juftligi) — ular ajralib qolmasin.
+                    if (!$targetFound || (int) $placement->start_index < $currentStart) continue;
                     $newStart = $shiftedStart($placement);
                     if ($newStart === null) {
                         return response()->json(['error' => 'Sikl kartasini bu tomonga siljitib bo\'lmaydi.'], 422);
@@ -3808,6 +3889,43 @@ class TimetableController extends Controller
                 }
                 if (!$targetFound) {
                     return response()->json(['error' => 'Siljitiladigan sikl kartasi topilmadi.'], 422);
+                }
+                // Siljigandan keyin bir fanning ma'ruza va amaliy bloklari ustma-ust tushmasin
+                // (biri zanjirda, ikkinchisi joyida qolgan bo'lishi mumkin). Tashqi jadvalda
+                // ma'ruza amaliy bilan birga ko'chadi — tekshirish shart emas.
+                if (!$syncLecture) {
+                    $newStarts = [];
+                    foreach ($toShift as [$placement, $newStart]) {
+                        $newStarts[$placement->id] = $newStart;
+                    }
+                    $segmentsOf = function ($p) use ($newStarts, $cycleSettings, $norm, $data, $hoursFor, $positionFor, $rowHours, $laneSegments): ?array {
+                        $pSetting = $cycleSettings->get(
+                            $norm($data['specialty_name']) . '|' . (int) $data['course'] . '|' . $norm($p->subject_name)
+                        );
+                        $cycleDays = max(1, (int) ($pSetting->cycle_days ?? 1));
+                        $hrs = $hoursFor((string) $data['specialty_name'], (int) $data['course'], (string) $p->subject_name);
+                        $type = (string) ($p->training_type ?: 'practice');
+                        $startPos = $positionFor($newStarts[$p->id] ?? (int) $p->start_index);
+                        if ($startPos === null) {
+                            return null;
+                        }
+                        return $laneSegments($startPos, max(1, $this->cycleTypeDays($cycleDays, $hrs, $type)),
+                            max(1, (int) ($p->pair ?? 1)), $this->cycleLaneSpan($type, $hrs, $cycleDays, $rowHours));
+                    };
+                    foreach ($toShift as [$placement]) {
+                        foreach ($rowPlacements as $partner) {
+                            if ($partner->id === $placement->id
+                                || $norm($partner->subject_name) !== $norm($placement->subject_name)
+                                || $norm($partner->training_type ?: 'practice') === $norm($placement->training_type ?: 'practice')) {
+                                continue;
+                            }
+                            $a = $segmentsOf($placement);
+                            $b = $segmentsOf($partner);
+                            if ($a !== null && $b !== null && $segmentsCollide($a, $b)) {
+                                return $pairOverlapError((string) $placement->subject_name);
+                            }
+                        }
+                    }
                 }
                 DB::transaction(function () use ($toShift, &$shifted, $syncLecture, $board, $data) {
                     $movedIds = [];
@@ -3920,10 +4038,13 @@ class TimetableController extends Controller
                 max(1, (int) ($otherSpanSetting->cycle_days ?? 1)),
                 $rowHours
             );
-            $otherPairNo = max(1, (int) ($other->pair ?? 1));
-            if ($otherPairNo + $laneMaxSpan($otherSpan) - 1 < $reqPair || $otherPairNo > $reqLaneTo) continue;
-            if ($norm($other->subject_name) === $norm($data['subject_name'])
-                && $norm($other->training_type ?? 'practice') === $norm($data['training_type'])) continue;
+            [$otherLo, $otherHi] = $laneRange(max(1, (int) ($other->pair ?? 1)), $otherSpan);
+            if ($otherHi < $reqLaneFrom || $otherLo > $reqLaneTo) continue;
+            $sameSubject = $norm($other->subject_name) === $norm($data['subject_name']);
+            // Shu blokning o'zi (qayta joylanmoqda) yoki tashqi jadvalda amaliy bilan
+            // birga ko'chadigan ma'ruza yozuvi — tekshirilmaydi.
+            if ($sameSubject && ($syncLecture
+                || $norm($other->training_type ?: 'practice') === $norm($data['training_type']))) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);
             if ($otherStartPosition === null) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
@@ -3933,6 +4054,18 @@ class TimetableController extends Controller
                 (string) ($other->training_type ?: 'practice')
             ));
             $otherEndPosition = $otherStartPosition + $otherDays - 1;
+            if ($sameSubject) {
+                // Bir fanning ma'ruza va amaliy bloklari: oraliq talab qilinmaydi, faqat
+                // kun × para bo'yicha ustma-ust tushmasin (amaliy dumi ma'ruza tugagach
+                // I-paradan boshlanadi — ma'ruza kechroq boshlansa, ular to'qnashadi).
+                if ($segmentsCollide(
+                    $laneSegments($startPosition, $requiredDays, $reqPair, $reqSpan),
+                    $laneSegments($otherStartPosition, $otherDays, max(1, (int) ($other->pair ?? 1)), $otherSpan)
+                )) {
+                    return $pairOverlapError((string) $data['subject_name']);
+                }
+                continue;
+            }
 
             if ($startPosition <= $otherEndPosition && $otherStartPosition <= $endPosition) {
                 return response()->json(['error' => 'Bu sana oralig‘ida "' . $other->subject_name
@@ -4917,6 +5050,18 @@ class TimetableController extends Controller
         return $request->user()
             ?? Auth::guard('teacher')->user()
             ?? Auth::guard('web')->user();
+    }
+
+    /** Joriy foydalanuvchining o'qituvchi (teachers.id) identifikatori, bo'lmasa -1 (hech narsa mos kelmaydi). */
+    private function timetableTeacherId(Request $request): int
+    {
+        $actor = $this->timetableActor($request);
+        if ($actor instanceof Teacher) {
+            return (int) $actor->id;
+        }
+        $teacherId = $actor ? (int) ($actor->teacher_id ?? 0) : 0;
+
+        return $teacherId > 0 ? $teacherId : -1;
     }
 
     private function isOquvBolimiRole(string $role): bool

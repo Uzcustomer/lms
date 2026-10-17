@@ -205,7 +205,7 @@
                             <input type="date" id="cycleHolAdd" class="rounded border-gray-300 text-xs py-0.5"></label>
                         <button type="button" id="cycleHolAddBtn" class="asc-tool text-xs py-1">+ qo'shish</button>
                         <button type="button" id="cycleRefresh" class="asc-tool text-xs py-1">Yangilash</button>
-                        <button type="button" id="cycleExcel" class="asc-tool text-xs py-1" title="Ekrandagi sikl jadvalini (tashqi yoki ichki) Excelga yuklash">Excel</button>
+                        <button type="button" id="cycleExcel" class="asc-tool text-xs py-1 cyc-excel-btn" title="Ekrandagi sikl jadvalini (tashqi yoki ichki) Excelga yuklash"><i class="bi bi-file-earmark-excel-fill" aria-hidden="true"></i> Excel</button>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Yakshanba va bayram ustunlarini jadvaldan yashiradi (ma'lumot o'zgarmaydi)">
                             <input type="checkbox" id="cycleHideOff" class="rounded border-gray-300"> Dam olish kunlarini yashirish</label>
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sig'masa, bir fanning turli oqimlardagi sikllari ko'rsatilgan o'quv kunigacha kesishishi mumkin">
@@ -1169,6 +1169,9 @@
         /* Tor blok (≤ 6 kun): faqat fan nomi va soat — o'qituvchi/xona sichqoncha ustiga borganda */
         #cycleGrid .cyc-mk-over.is-compact { gap: 1px; max-width: calc(100% - 4px); }
         #cycleGrid .cyc-mk-over.is-compact .cyc-mk-title { padding: 1px 4px; font-size: 10.5px; }
+        /* O'qituvchi biriktirilmagan fan nomi — kulrang, qizil uzuq hoshiya, belgili */
+        #cycleGrid .cyc-mk-over .cyc-mk-title.is-noteacher { background: rgba(229, 231, 235, .92); border: 1.5px dashed #dc2626; color: #475569; }
+        #cycleGrid .cyc-mk-over .cyc-mk-title.is-noteacher i { color: #dc2626; font-size: 1.05em; }
         #cycleGrid .cyc-mk-over .cyc-mk-title:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .55); }
         #cycleGrid .cyc-mk-over .cyc-mk-sub { max-width: 100%; padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, .6);
             font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1213,6 +1216,12 @@
             color: rgba(15, 39, 72, .38);
         }
         #cycleGrid .cyc-mk-cell::after { content: ''; }
+        /* Sikl paneli: Excel tugmasi yashil — boshqa tugmalardan ajralib tursin */
+        #cycleArea .cyc-excel-btn { display: inline-flex; align-items: center; gap: 4px;
+            background: #1d6f42; border-color: #185c37; color: #fff; font-weight: 600; }
+        #cycleArea .cyc-excel-btn:hover:not(:disabled) { background: #185c37; color: #fff; }
+        #cycleArea .cyc-excel-btn i { font-size: 13px; line-height: 1; }
+        #cycleArea .cyc-excel-btn:disabled { opacity: .7; cursor: wait; }
         #cycleGrid .cyc-mk-cell { background: rgba(255, 255, 255, .82); }
         #cycleGrid .cyc-mk-cell.is-practice { background: rgba(13, 148, 136, .22); color: #0f766e; }
         #cycleGrid .cyc-mk-cell.is-practice::after { content: 'A'; }
@@ -4162,7 +4171,12 @@
                                     '<div class="cyc-mk-grid" style="grid-template-columns:repeat(' + spanCols + ',1fr);grid-template-rows:repeat(' + dayHours + ',1fr)">' +
                                     inner +
                                     '<div class="cyc-mk-over' + (compact ? ' is-compact' : '') + '" style="' + cycTitlePosStyle(block, plan, dayHours) + '">' +
-                                    '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Bosing — fan haqida (soatlar, o\'qituvchi, xona). Ushlab blok ichida siljiting; ikki marta bosing — markazga qaytadi." style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">' + esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
+                                    // O'qituvchi biriktirilmagan fan: kulrang fon, qizil uzuq hoshiya va belgi.
+                                    (block.teacher_name
+                                        ? '<span class="cyc-mk-title" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="Bosing — fan haqida (soatlar, o\'qituvchi, xona). Ushlab blok ichida siljiting; ikki marta bosing — markazga qaytadi." style="background:color-mix(in srgb, ' + color.bg + ' 62%, transparent);border:1px solid ' + color.border + '">'
+                                        : '<span class="cyc-mk-title is-noteacher" role="button" tabindex="0" data-mk-subj="' + esc(block.key) + '" title="O\'qituvchi biriktirilmagan — ⚙ orqali biriktiring. Bosing — fan haqida; ushlab siljiting; ikki marta bosing — markazga qaytadi.">'
+                                            + '<i class="bi bi-person-fill-exclamation" aria-label="O\'qituvchi biriktirilmagan"></i> ') +
+                                    esc(block.subject) + ' <span class="cyc-days">(' + block.days + ')</span></span>' +
                                     // O'qituvchi/xona doskada yozilmaydi — fan nomi bosilganda oynada chiqadi.
                                     '</div>' +
                                     '<button type="button" class="cyc-gear cyc-mk-gear" data-cycle-gear="' + esc(block.key) + '" title="O\'qituvchi / xona biriktirish">&#9881;</button>' +

@@ -4336,9 +4336,10 @@ class TimetableController extends Controller
                 || $norm($other->training_type ?: 'practice') === $norm($data['training_type']))) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);
             if ($otherStartPosition === null) continue;
+            // Nomi har xil, bazasi bir xil — demak kamida bittasi "(a)" bo'lagi. Qaysi biri
+            // oldin joylanganidan qat'i nazar (Fan + Fan (a) ham, Fan (a) + Fan ham) bitta blok.
             if (!$sameSubject && $otherStartPosition === $startPosition
-                && $variantBase($other->subject_name) === $variantBase($data['subject_name'])
-                && $variantBase($data['subject_name']) !== $norm($data['subject_name'])) continue;
+                && $variantBase($other->subject_name) === $variantBase($data['subject_name'])) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
             $otherDays = max(1, $this->cycleTypeDays(
                 max(1, (int) ($otherSetting->cycle_days ?? 1)),

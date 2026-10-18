@@ -3634,6 +3634,18 @@
             // Tor ustunlarda faqat oqim (va til) bo'lagi ko'rsatiladi.
             // Bo'lakli fan qatori yorlig'i: "(a) bo'lak" belgisi + oqim, fan nomi va
             // bo'lak qaysi guruhchalardan yig'ilgani (pastda, alohida yorliqlar).
+            // Guruhcha qatnashadigan bo'lak qatorlari: a'zolari orasida shu guruhcha bor.
+            function cycleVariantRowsOf(allRows, row) {
+                if (row.variant) return [];
+                const key = v => String(v || '').trim().toLowerCase();
+                return allRows.filter(v => v.variant && (v.subgroups || []).some(m => key(m) === key(row.group)));
+            }
+            // Filtr qo'llangan qatorlar — ekran ham, Excel ham shundan oladi.
+            function cycleVisibleRows(allRows) {
+                return cycleRowFilter
+                    ? allRows.filter(r => r.row_key === cycleRowFilter).flatMap(r => [r, ...cycleVariantRowsOf(allRows, r)])
+                    : allRows;
+            }
             function cycleVariantLabelHtml(row) {
                 const letter = (/\((\p{L})\)\s*$/u.exec(row.variant || '') || [])[1] || '?';
                 const subject = String(row.variant || '').replace(/\s*\(\p{L}\)\s*$/u, '');
@@ -4058,13 +4070,7 @@
                 // "Guruh" ustuni sarlavhasidan tanlangan bitta guruh/oqim (bo'lmasa hammasi).
                 if (cycleRowFilter && !allRows.some(r => r.row_key === cycleRowFilter)) cycleRowFilter = null;
                 // Guruhcha tanlanganda u qatnashadigan bo'lak qatorlari (Fan (a)/(b)/(c)) ham ko'rinadi.
-                const memberKey = v => String(v || '').trim().toLowerCase();
-                const variantRowsOf = r => r.variant ? [] : allRows.filter(v => v.variant
-                    && (v.subgroups || []).some(m => memberKey(m) === memberKey(r.group)));
-                const rows = cycleRowFilter
-                    ? allRows.filter(r => r.row_key === cycleRowFilter)
-                        .flatMap(r => [r, ...variantRowsOf(r)])
-                    : allRows;
+                const rows = cycleVisibleRows(allRows);
                 if (!rows.length) {
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
                     renderCycleCards(j);
@@ -4113,7 +4119,7 @@
                 rows.forEach(row => {
                     // Guruhcha qatorida u qatnashadigan bo'lak bloklari "ishora" sifatida chiziladi:
                     // sikl bor, lekin dars bo'lak qatorida — bosilsa o'sha qator ochiladi.
-                    const ghostBlocks = j.mark_mode ? variantRowsOf(row).flatMap(v => (v.blocks || [])
+                    const ghostBlocks = j.mark_mode ? cycleVariantRowsOf(allRows, row).flatMap(v => (v.blocks || [])
                         .filter(b => b.from != null && b.to != null)
                         .map(b => ({ ...b, ghost: true, ghost_row: v.row_key,
                             ghost_letter: (/\((\p{L})\)\s*$/u.exec(v.variant || '') || [])[1] || '' }))) : [];
@@ -6700,7 +6706,8 @@
             // yuklangan reja (cyclePlanData) dan katak ma'lumoti tuziladi.
             function cycleExportPayload(j) {
                 const dates = j.dates || [];
-                const rows = cycleRowFilter ? (j.rows || []).filter(r => r.row_key === cycleRowFilter) : (j.rows || []);
+                // Ekrandagi qatorlar bilan bir xil (guruhcha tanlansa — uning bo'lak qatorlari ham).
+                const rows = cycleVisibleRows(j.rows || []);
                 if (!rows.length || !dates.length) return null;
                 const WD = ['', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
                 const OFF_BG = '#e2e8f0', HOL_BG = '#fecaca';

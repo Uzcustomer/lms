@@ -1226,8 +1226,10 @@
         #cycleArea .cyc-excel-btn:disabled { opacity: .7; cursor: wait; }
         /* Bo'lakli fan qatori (Fan (a)/(b)/(c)) yorlig'i */
         /* Guruhcha qatorida bo'lak sikli ishorasi (dars bo'lak qatorida) */
-        #cycleGrid td.cyc-ghost { padding: 4px; vertical-align: middle !important;
-            background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--gc, #ede9fe) 55%, transparent) 0 8px, rgba(255, 255, 255, .7) 8px 16px);
+        /* Bo'sh katak kun-chiziqlari (td.cyc-cell:not(.cyc-block)) ustidan yozilishi uchun !important;
+           ishora tugmasi dars soatlari (yuqori qism) ro'parasida turadi. */
+        #cycleGrid td.cyc-ghost { padding: 64px 4px 4px; vertical-align: top !important;
+            background: repeating-linear-gradient(135deg, rgba(167, 139, 250, .28) 0 8px, rgba(245, 243, 255, .85) 8px 16px) !important;
             border: 2px dashed #8b5cf6; }
         #cycleGrid .cyc-ghost-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: 0 auto; padding: 4px 9px;
             border-radius: 8px; background: #fff; border: 1px solid #c4b5fd; box-shadow: 0 1px 3px rgba(15, 23, 42, .15); cursor: pointer; text-align: left; }

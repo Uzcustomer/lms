@@ -1224,6 +1224,9 @@
         #cycleArea .cyc-excel-btn:hover:not(:disabled) { background: #185c37; color: #fff; }
         #cycleArea .cyc-excel-btn i { font-size: 13px; line-height: 1; }
         #cycleArea .cyc-excel-btn:disabled { opacity: .7; cursor: wait; }
+        /* Bo'lakli fan qatori (Fan (a)/(b)/(c)) yorlig'i */
+        #cycleGrid .cyc-variant-row { border-left: 3px solid #7c3aed; padding-left: 4px; }
+        #cycleGrid .cyc-variant-row .cyc-variant-sub { font-size: 10px; color: #64748b; white-space: normal; }
         #cycleGrid .cyc-mk-cell { background: rgba(255, 255, 255, .82); }
         #cycleGrid .cyc-mk-cell.is-practice { background: rgba(13, 148, 136, .22); color: #0f766e; }
         #cycleGrid .cyc-mk-cell.is-practice::after { content: 'A'; }
@@ -4207,7 +4210,13 @@
                         h += markMode ? '<tr class="cyc-markrow" style="--mk-rows:' + dayHours + '">' : '<tr>';
                         if (pair === 1) {
                             // Guruh rejimida qator — bitta guruh: nomi to'g'ridan-to'g'ri.
-                            const groupLabel = (j.view || cycleViewMode) === 'group'
+                            // Bo'lakli fan qatori ("Fan (c)"): bo'lak nomi + oqim + qaysi guruhchalardan.
+                            const groupLabel = row.variant
+                                ? '<div class="cyc-members cyc-variant-row" title="' + esc(row.variant + ' — ' + (row.subgroups || []).join(', ')) + '">'
+                                    + '<div class="cyc-member-row"><b>' + esc((/\((\p{L})\)\s*$/u.exec(row.variant) || [])[1] ? '(' + /\((\p{L})\)\s*$/u.exec(row.variant)[1] + ') bo\'lak' : row.variant) + '</b> · ' + esc(cycleFlowShort(row.flow || '')) + '</div>'
+                                    + '<div class="cyc-member-row cyc-variant-sub">' + esc(row.variant.replace(/\s*\(\p{L}\)\s*$/u, '')) + '</div>'
+                                    + '<div class="cyc-member-row cyc-variant-sub">' + esc((row.subgroups || []).map(s => s.replace(/\s*\(.*\)$/, '')).join(', ')) + '</div></div>'
+                                : (j.view || cycleViewMode) === 'group'
                                 ? '<div class="cyc-members"><div class="cyc-member-row"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div></div>'
                                 : cycleMembersHtml(row.group, row.subgroups);
                             h += '<td class="cyc-gcol" rowspan="' + (pairs + (showAddPair ? 1 : 0)) + '">' + groupLabel + '</td>';

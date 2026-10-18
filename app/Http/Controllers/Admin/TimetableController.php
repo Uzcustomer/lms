@@ -2589,6 +2589,7 @@ class TimetableController extends Controller
         // Oqimlar va ularning sikl fanlari kartalardan yig'iladi. Har bir qator
         // shu oqim tarkibidagi barcha amaliy guruhlarni birga qamrab oladi.
         $byFlow = [];
+        $variantFirst = [];   // norm(spec|kurs|asosiy nom) => birinchi bo'lak nomi (soatlar uchun)
         if (!empty($cycleKey)) {
             foreach (TimetableCard::where('board_id', $board->id)->get() as $c) {
                 if ($c->training_type !== 'practice' || !$c->group_name || !$inScope($c)) {
@@ -2598,21 +2599,42 @@ class TimetableController extends Controller
                 if (!isset($cycleKey[$ck])) {
                     continue;
                 }
-                foreach ($this->cycleCardGroups($c) as $member) {
+                // Bo'lakli fan ("Fan (a)/(b)/(c)" — HEMIS'da guruhcha hajmi uchun sun'iy bo'lingan):
+                // tashqi jadvalda asosiy nomi bilan bitta fan; ichki jadvalda har bo'lak alohida
+                // qator (u — haqiqiy o'quv guruhchasi: o'qituvchi/xona shunga biriktiriladi).
+                $variantBase = $this->cycleSubjectVariantBase((string) $c->subject_name);
+                $rowSubject = ($variantBase !== null && !$cycleSubRows) ? $variantBase : (string) $c->subject_name;
+                if ($variantBase !== null && !$cycleSubRows) {
+                    $variantFirst[$normKey($c->specialty_name, $c->course, $variantBase)] ??= (string) $c->subject_name;
+                }
+                $cardMembers = $this->cycleCardGroups($c);
+                $rowTargets = ($variantBase !== null && $cycleSubRows && $cardMembers)
+                    ? [[$this->cycleFlowName($c, $cardMembers[0]) . ' · ' . $c->subject_name, $cardMembers[0], true]]
+                    : array_map(fn ($m) => [null, $m, false], $cardMembers);
+                foreach ($rowTargets as [$variantRow, $member, $isVariantRow]) {
                     // Guruh rejimida har subguruh o'z qatori; oqim rejimida oqim nomi.
-                    $flow = $cycleView === 'group' ? $member : $this->cycleFlowName($c, $member);
+                    $flow = $variantRow ?? ($cycleView === 'group' ? $member : $this->cycleFlowName($c, $member));
                     $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
                     if (!isset($byFlow[$flowKey])) {
                         $byFlow[$flowKey] = ['name' => $flow, 'subs' => [], 'members' => [], 'req' => [],
                             // Guruhcha qatori uchun: joylashuv saqlangan oqim nomi.
                             'parent' => $this->cycleFlowName($c, $member),
+                            'variant' => $isVariantRow ? (string) $c->subject_name : null,
                             'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
                     }
-                    $byFlow[$flowKey]['subs'][$c->subject_name] = $cycleKey[$ck];
-                    $byFlow[$flowKey]['members'][$member] = true;
+                    // Bo'laklar bitta blok: uzunligi eng uzun bo'lakniki (bo'laklar to'qnashuvda
+                    // o'z kunlari bilan hisoblanadi — blok ularning hammasini qoplasin).
+                    $byFlow[$flowKey]['subs'][$rowSubject] = max($byFlow[$flowKey]['subs'][$rowSubject] ?? 0, $cycleKey[$ck]);
+                    if ($isVariantRow) {
+                        foreach ($cardMembers as $vm) {
+                            $byFlow[$flowKey]['members'][$vm] = true;
+                        }
+                    } else {
+                        $byFlow[$flowKey]['members'][$member] = true;
+                    }
 
                     // Rekvizitlar kartalardan: Biriktirish tabi bilan bitta manba.
-                    $reqKey = $c->subject_name . '|practice';
+                    $reqKey = $rowSubject . '|practice';
                     if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
                         $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
                     }
@@ -2623,7 +2645,7 @@ class TimetableController extends Controller
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
                     if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
-                        $mineFlowSubjects[$flowKey][$c->subject_name][(string) $c->training_type] = true;
+                        $mineFlowSubjects[$flowKey][$rowSubject][(string) $c->training_type] = true;
                     }
                 }
             }
@@ -2639,20 +2661,23 @@ class TimetableController extends Controller
                 if (!isset($cycleKey[$ck])) {
                     continue;
                 }
-                $lectureRows = $cycleView === 'group'
-                    ? $this->cycleCardGroups($c)
-                    : [$this->cycleFlowName($c)];
+                $lecVariantBase = $this->cycleSubjectVariantBase((string) $c->subject_name);
+                $lecSubject = ($lecVariantBase !== null && !$cycleSubRows) ? $lecVariantBase : (string) $c->subject_name;
+                $lecMembers = $this->cycleCardGroups($c);
+                $lectureRows = ($lecVariantBase !== null && $cycleSubRows && $lecMembers)
+                    ? [$this->cycleFlowName($c, $lecMembers[0]) . ' · ' . $c->subject_name]
+                    : ($cycleView === 'group' ? $lecMembers : [$this->cycleFlowName($c)]);
                 foreach ($lectureRows as $flow) {
                     $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
                     if (!isset($byFlow[$flowKey])) {
                         continue;
                     }
-                    $reqKey = $c->subject_name . '|lecture';
+                    $reqKey = $lecSubject . '|lecture';
                     if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
                         $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
                     }
                     if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
-                        $mineFlowSubjects[$flowKey][$c->subject_name][(string) $c->training_type] = true;
+                        $mineFlowSubjects[$flowKey][$lecSubject][(string) $c->training_type] = true;
                     }
                     if ($c->teacher_name) {
                         $byFlow[$flowKey]['req'][$reqKey]['teachers'][$c->teacher_name] = true;
@@ -2699,7 +2724,11 @@ class TimetableController extends Controller
         // Reja soatlari: ma'ruza bloki uzunligi va kartadagi soat yozuvi uchun.
         $cycleHours = !empty($cycleKey) ? $this->cycleSubjectHoursMap($board) : [];
         $hoursFor = fn(string $spec, int $course, string $subject, ?string $faculty = null): ?array =>
-            $this->cycleHoursLookup($cycleHours, $faculty, $spec, $course, $subject);
+            $this->cycleHoursLookup($cycleHours, $faculty, $spec, $course, $subject)
+            // Bo'lakli fanning asosiy nomi: soatlar birinchi bo'lakdan (har bo'lak to'liq soat o'qiydi).
+            ?? (isset($variantFirst[$normKey($spec, $course, $subject)])
+                ? $this->cycleHoursLookup($cycleHours, $faculty, $spec, $course, $variantFirst[$normKey($spec, $course, $subject)])
+                : null);
         $fmtHours = fn(?float $v) => $v === null ? null : (fmod($v, 1.0) == 0.0 ? (int) $v : round($v, 1));
         $rowHours = $this->cycleRowHours($board);
         // Ichki jadval to'ri butun kunni qamraydi: qo'ng'iroq jadvalidagi paralar × para soati
@@ -2779,6 +2808,12 @@ class TimetableController extends Controller
             $placementGroupOf = [];   // fan|tur => joylashuv saqlangan qator nomi
             foreach ([$placeKey => $placeGroup, $rk => (string) $g['name']] as $savedKey => $savedGroup) {
                 foreach ($savedByRow[$savedKey] ?? [] as $placement) {
+                    // Tashqi jadval: bo'lak joylashuvi asosiy nomli bitta blok bo'lib ko'rinadi.
+                    $placementBase = !$cycleSubRows ? $this->cycleSubjectVariantBase((string) $placement->subject_name) : null;
+                    if ($placementBase !== null && array_key_exists($placementBase, $g['subs'])) {
+                        $placement = clone $placement;
+                        $placement->subject_name = $placementBase;
+                    }
                     $typeKey = $placement->subject_name . '|' . ($placement->training_type ?: 'practice');
                     $rowPlacements[$typeKey] = $placement;
                     $placementGroupOf[$typeKey] = $savedGroup;
@@ -2864,7 +2899,11 @@ class TimetableController extends Controller
                         ? $this->cycleDayPlan(
                             $ktrDayPlans[($g['faculty'] ?? '') !== '' ? $this->specKey((string) $g['faculty']) . '|' . $this->cycleKtrKey((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name) : '']
                                 ?? $ktrDayPlans[$this->cycleKtrKey((string) $g['specialty'], (int) $g['course'], (string) $placement->subject_name)]
-                                ?? null,
+                                // Bo'lakli fan KTR'i asosiy nom bilan kiritilgan bo'lishi mumkin.
+                                ?? (($ktrBase = $this->cycleSubjectVariantBase((string) $placement->subject_name)) !== null
+                                    ? ($ktrDayPlans[($g['faculty'] ?? '') !== '' ? $this->specKey((string) $g['faculty']) . '|' . $this->cycleKtrKey((string) $g['specialty'], (int) $g['course'], $ktrBase) : '']
+                                        ?? $ktrDayPlans[$this->cycleKtrKey((string) $g['specialty'], (int) $g['course'], $ktrBase)] ?? null)
+                                    : null),
                             $hrs, (int) $days, $from, $workIndices,
                             // Guruhcha qiymatlari oqimnikiga kun bo'yicha ustma-ust qo'yiladi
                             // (bitta kun surilsa, qolgan kunlar oqimdan meros qoladi).
@@ -2902,7 +2941,8 @@ class TimetableController extends Controller
                     $cycleCards[] = [
                         'key' => $subjectKey($g, $subject) . '|' . $cardType,
                         'row_key' => $rk,
-                        'group' => $g['name'],
+                        // Bo'lak qatori API'ga oqim nomi bilan murojaat qiladi (joylashuv oqimda).
+                        'group' => !empty($g['variant']) ? (string) $g['parent'] : $g['name'],
                         'placement_group' => $placementGroupOf[$subject . '|' . $cardType] ?? $placeGroup,
                         'specialty' => $g['specialty'],
                         'course' => $g['course'],
@@ -2923,6 +2963,9 @@ class TimetableController extends Controller
             $rows[] = [
                 'row_key' => $rk,
                 'group' => $g['name'],
+                // Ichki jadval: bo'lakli fan qatori ("Fan (c)": 02a dan 5 + 02b dan 5 talaba).
+                'variant' => $g['variant'] ?? null,
+                'flow' => !empty($g['variant']) ? (string) $g['parent'] : null,
                 'subgroups' => $members,
                 'faculty' => $g['faculty'],
                 'specialty' => $g['specialty'],
@@ -3163,14 +3206,17 @@ class TimetableController extends Controller
     {
         // Ichki jadvalda guruhcha qatori oqim joylashuvidan foydalanadi (placement_group).
         $placementGroup = trim((string) ($data['placement_group'] ?? '')) ?: $data['group_name'];
-        return TimetableCyclePlacement::where('board_id', $board->id)
+        $query = fn () => TimetableCyclePlacement::where('board_id', $board->id)
             ->where('specialty_name', $data['specialty_name'])
             ->where('course', (int) $data['course'])
             ->where('group_name', $placementGroup)
-            ->where('subject_name', $data['subject_name'])
             ->when(!empty($data['training_type']), fn ($q) => $q
-                ->where(fn ($w) => $w->where('training_type', $data['training_type'])->orWhereNull('training_type')))
-            ->first();
+                ->where(fn ($w) => $w->where('training_type', $data['training_type'])->orWhereNull('training_type')));
+
+        // Tashqi jadvalda bo'lakli fan asosiy nomi bilan keladi — bo'laklardan birining joylashuvi.
+        return $query()->where('subject_name', $data['subject_name'])->first()
+            ?? $query()->where('subject_name', 'like', addcslashes(trim((string) $data['subject_name']), '%_\\') . ' (_)')
+                ->orderBy('subject_name')->first();
     }
 
     /** Oqimga tegishli fan kartalari (ma'ruza ham, amaliyot ham). */
@@ -3187,13 +3233,17 @@ class TimetableController extends Controller
                 if ($type !== null && $card->training_type !== $type) {
                     return false;
                 }
-                if (mb_strtolower(trim((string) $card->subject_name)) !== $subjectLower) {
+                if (mb_strtolower(trim((string) $card->subject_name)) !== $subjectLower
+                    // Asosiy nom bo'lakli fanning barcha bo'laklarini qamraydi.
+                    && mb_strtolower((string) $this->cycleSubjectVariantBase((string) $card->subject_name)) !== $subjectLower) {
                     return false;
                 }
 
                 if ($view === 'group') {
                     foreach ($this->cycleCardGroups($card) as $member) {
-                        if (mb_strtolower(trim($member)) === $flowLower) {
+                        if (mb_strtolower(trim($member)) === $flowLower
+                            // Ichki jadvalda bo'lakli fan ("Fan (a)") qatori oqim nomi bilan keladi.
+                            || mb_strtolower($this->cycleFlowName($card, $member)) === $flowLower) {
                             return true;
                         }
                     }
@@ -3794,6 +3844,91 @@ class TimetableController extends Controller
      */
     public function cyclePlace(Request $request, TimetableBoard $board)
     {
+        // Tashqi jadvalda bo'lakli fan ("Fan (a)/(b)/(c)") bitta karta bo'lib, asosiy nomi
+        // bilan keladi: shu oqimdagi barcha bo'laklar bitta tranzaksiyada joylanadi/ko'chadi.
+        $variants = $this->cycleRequestVariants($request, $board);
+        if (!$variants) {
+            return $this->cyclePlaceOne($request, $board);
+        }
+        $baseName = (string) $request->input('subject_name');
+        $last = null;
+        $failed = null;
+        try {
+            DB::transaction(function () use ($variants, $request, $board, &$last, &$failed) {
+                foreach ($variants as $variant) {
+                    $request->merge(['subject_name' => $variant]);
+                    $response = $this->cyclePlaceOne($request, $board);
+                    $payload = $response->getData(true);
+                    if ($response->getStatusCode() >= 400) {
+                        if (($payload['code'] ?? null) === 'no_card') {
+                            continue;   // bu bo'lak shu oqimda o'qitilmaydi
+                        }
+                        $failed = response()->json(array_merge($payload, [
+                            'error' => $variant . ': ' . ($payload['error'] ?? $payload['message'] ?? 'xatolik'),
+                        ]), $response->getStatusCode());
+                        throw new \RuntimeException('cycle-variant-failed');
+                    }
+                    $last = $response;
+                    // Siljitish kaskad: nishon bilan bir kunda boshlangan qardosh bo'laklar ham
+                    // birga suriladi. Ularni qayta siljitish eski kunida topolmay xato beradi.
+                    if ($request->input('action') === 'shift') {
+                        break;
+                    }
+                }
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() !== 'cycle-variant-failed') {
+                throw $e;
+            }
+        } finally {
+            $request->merge(['subject_name' => $baseName]);
+        }
+        if ($failed) {
+            return $failed;
+        }
+
+        return $last ?? response()->json(['error' => 'Tanlangan oqimda bu fanning bo\'laklari topilmadi.'], 422);
+    }
+
+    /** Fan nomi "Asosiy nom (a)" ko'rinishida bo'lsa — asosiy nomi, aks holda null. */
+    private function cycleSubjectVariantBase(string $subject): ?string
+    {
+        return preg_match('/^(.*\S)\s*\(\p{L}\)\s*$/u', trim($subject), $m) ? trim($m[1]) : null;
+    }
+
+    /**
+     * So'rovdagi fan nomi bo'lakli fanning asosiy nomi bo'lsa (o'zining sikl sozlamasi yo'q,
+     * "Nom (a)", "Nom (b)"... sozlamalari bor) — shu bo'laklar nomlari; aks holda bo'sh.
+     */
+    private function cycleRequestVariants(Request $request, TimetableBoard $board): array
+    {
+        $subject = mb_strtolower(trim((string) $request->input('subject_name')));
+        $specialty = mb_strtolower(trim((string) $request->input('specialty_name')));
+        $course = (int) $request->input('course');
+        if ($subject === '' || $specialty === '' || $course < 1 || !Schema::hasTable('timetable_subject_settings')) {
+            return [];
+        }
+        $variants = [];
+        foreach (TimetableSubjectSetting::where('board_id', $board->id)->where('course', $course)->where('mode', 'cycle')->get() as $s) {
+            if (mb_strtolower(trim((string) $s->specialty_name)) !== $specialty) {
+                continue;
+            }
+            $name = trim((string) $s->subject_name);
+            if (mb_strtolower($name) === $subject) {
+                return [];   // asosiy nomning o'z sozlamasi bor — oddiy fan
+            }
+            $base = $this->cycleSubjectVariantBase($name);
+            if ($base !== null && mb_strtolower($base) === $subject) {
+                $variants[] = $name;
+            }
+        }
+        sort($variants, SORT_NATURAL);
+
+        return $variants;
+    }
+
+    private function cyclePlaceOne(Request $request, TimetableBoard $board)
+    {
         $hasCyclePlacements = Schema::hasTable('timetable_cycle_placements');
 
         $data = $request->validate([
@@ -3913,7 +4048,7 @@ class TimetableController extends Controller
             $known = collect(array_keys($activeFlows))->take(8)->implode(', ');
 
             return response()->json(['error' => 'Tanlangan oqim va fan kartasi topilmadi. So\'ralgan oqim: "'
-                . $data['group_name'] . '"' . ($known !== '' ? '; mavjud oqimlar: ' . $known : '')], 422);
+                . $data['group_name'] . '"' . ($known !== '' ? '; mavjud oqimlar: ' . $known : ''), 'code' => 'no_card'], 422);
         }
 
         $set = $board->settings ?? [];
@@ -4343,12 +4478,11 @@ class TimetableController extends Controller
                 (string) ($other->training_type ?: 'practice')
             ));
             $otherEndPosition = $otherStartPosition + $otherDays - 1;
-            // Nomi har xil, bazasi bir xil — demak kamida bittasi "(a)" bo'lagi. Qaysi biri
-            // oldin joylanganidan qat'i nazar (Fan + Fan (a) ham, Fan (a) + Fan ham) bitta blok —
-            // lekin faqat sanalari aynan bir xil bo'lsa: uzunligi farq qilsa, jadvalda bitta
-            // qatorga sig'maydi (ikkinchisi chizilmay qoladi), shuning uchun odatdagi to'qnashuv.
-            if (!$sameSubject && $otherStartPosition === $startPosition && $otherEndPosition === $endPosition
-                && $variantBase($other->subject_name) === $variantBase($data['subject_name'])) continue;
+            // Bir fanning bo'laklari ("Fan (a)", "Fan (b)"...) — bitta sikl: tashqi jadvalda ular
+            // birga joylanadi va birga ko'chadi (cyclePlace hammasini ketma-ket yozadi), shuning
+            // uchun bir-biriga to'qnashuv sifatida qaralmaydi.
+            if (!$sameSubject && $variantBase($other->subject_name) === $variantBase($data['subject_name'])
+                && $this->cycleSubjectVariantBase((string) $other->subject_name) !== null) continue;
             if ($sameSubject) {
                 // Bir fanning ma'ruza va amaliy bloklari: oraliq talab qilinmaydi, faqat
                 // kun × para bo'yicha ustma-ust tushmasin (amaliy dumi ma'ruza tugagach

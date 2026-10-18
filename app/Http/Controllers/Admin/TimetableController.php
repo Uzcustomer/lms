@@ -2625,6 +2625,10 @@ class TimetableController extends Controller
                     // Bo'laklar bitta blok: uzunligi eng uzun bo'lakniki (bo'laklar to'qnashuvda
                     // o'z kunlari bilan hisoblanadi — blok ularning hammasini qoplasin).
                     $byFlow[$flowKey]['subs'][$rowSubject] = max($byFlow[$flowKey]['subs'][$rowSubject] ?? 0, $cycleKey[$ck]);
+                    if ($variantBase !== null && !$cycleSubRows) {
+                        // Shu qatorda o'qitiladigan bo'laklar: karta faqat hammasi joylansa "joylangan".
+                        $byFlow[$flowKey]['vsubs'][$rowSubject][(string) $c->subject_name] = true;
+                    }
                     if ($isVariantRow) {
                         foreach ($cardMembers as $vm) {
                             $byFlow[$flowKey]['members'][$vm] = true;
@@ -2806,11 +2810,15 @@ class TimetableController extends Controller
             $placeKey = (string) $g['specialty'] . '|' . (int) $g['course'] . '|' . $placeGroup;
             $rowPlacements = [];
             $placementGroupOf = [];   // fan|tur => joylashuv saqlangan qator nomi
+            $variantPlaced = [];      // asosiy nom => [bo'lak => true] (amaliy yozuvlar)
             foreach ([$placeKey => $placeGroup, $rk => (string) $g['name']] as $savedKey => $savedGroup) {
                 foreach ($savedByRow[$savedKey] ?? [] as $placement) {
                     // Tashqi jadval: bo'lak joylashuvi asosiy nomli bitta blok bo'lib ko'rinadi.
                     $placementBase = !$cycleSubRows ? $this->cycleSubjectVariantBase((string) $placement->subject_name) : null;
                     if ($placementBase !== null && array_key_exists($placementBase, $g['subs'])) {
+                        if (($placement->training_type ?: 'practice') === 'practice') {
+                            $variantPlaced[$placementBase][(string) $placement->subject_name] = true;
+                        }
                         $placement = clone $placement;
                         $placement->subject_name = $placementBase;
                     }
@@ -2952,7 +2960,9 @@ class TimetableController extends Controller
                         'hours' => $fmtHours($hrs === null ? null : (float) ($cycleSimple
                             ? ($hrs['lecture'] + $hrs['practice'])
                             : ($cardType === 'lecture' ? $hrs['lecture'] : $hrs['practice']))),
-                        'placed' => (bool) $block,
+                        // Bo'lakli fan: blok bor, lekin ba'zi bo'laklar joylanmagan bo'lsa — karta
+                        // "joylanmagan" bo'lib qoladi; uni qayta qo'yish qolgan bo'laklarni ham joylaydi.
+                        'placed' => (bool) $block && !array_diff_key($g['vsubs'][$subject] ?? [], $variantPlaced[$subject] ?? []),
                         'pair' => $block['pair'] ?? null,
                         'start_index' => $block['from'] ?? null,
                     ];

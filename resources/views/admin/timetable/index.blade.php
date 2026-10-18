@@ -1225,8 +1225,18 @@
         #cycleArea .cyc-excel-btn i { font-size: 13px; line-height: 1; }
         #cycleArea .cyc-excel-btn:disabled { opacity: .7; cursor: wait; }
         /* Bo'lakli fan qatori (Fan (a)/(b)/(c)) yorlig'i */
-        #cycleGrid .cyc-variant-row { border-left: 3px solid #7c3aed; padding-left: 4px; }
-        #cycleGrid .cyc-variant-row .cyc-variant-sub { font-size: 10px; color: #64748b; white-space: normal; }
+        #cycleGrid .cyc-vrow { display: flex; flex-direction: column; gap: 3px; padding: 5px 6px; border-radius: 6px;
+            background: #f5f3ff; border: 1px solid #ddd6fe; border-left: 4px solid #7c3aed; text-align: left; }
+        #cycleGrid .cyc-vrow-head { display: flex; align-items: center; gap: 5px; }
+        #cycleGrid .cyc-vrow-tag { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+            background: #7c3aed; color: #fff; font-size: 12px; font-weight: 800; line-height: 1; }
+        #cycleGrid .cyc-vrow-kind { color: #5b21b6; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+        #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
+        #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        #cycleGrid .cyc-vrow-members { display: flex; flex-wrap: wrap; gap: 3px; }
+        #cycleGrid .cyc-vrow-members span { padding: 1px 5px; border-radius: 4px; background: #fff; border: 1px solid #c4b5fd;
+            color: #4c1d95; font-size: 9.5px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-mk-cell { background: rgba(255, 255, 255, .82); }
         #cycleGrid .cyc-mk-cell.is-practice { background: rgba(13, 148, 136, .22); color: #0f766e; }
         #cycleGrid .cyc-mk-cell.is-practice::after { content: 'A'; }
@@ -3611,6 +3621,19 @@
 
             // Oqim to'liq nomi "Fakultet / 1-oqim / ru" ko'rinishida saqlanadi.
             // Tor ustunlarda faqat oqim (va til) bo'lagi ko'rsatiladi.
+            // Bo'lakli fan qatori yorlig'i: "(a) bo'lak" belgisi + oqim, fan nomi va
+            // bo'lak qaysi guruhchalardan yig'ilgani (pastda, alohida yorliqlar).
+            function cycleVariantLabelHtml(row) {
+                const letter = (/\((\p{L})\)\s*$/u.exec(row.variant || '') || [])[1] || '?';
+                const subject = String(row.variant || '').replace(/\s*\(\p{L}\)\s*$/u, '');
+                const members = (row.subgroups || []).map(s => String(s).replace(/\s*\(.*\)$/, ''));
+                return '<div class="cyc-vrow" title="' + esc(row.variant + '\n' + (row.flow || '') + '\nGuruhchalar: ' + members.join(', ')) + '">'
+                    + '<div class="cyc-vrow-head"><span class="cyc-vrow-tag">' + esc(letter) + '</span>'
+                    + '<span class="cyc-vrow-kind">bo\'lak</span><span class="cyc-vrow-flow">' + esc(cycleFlowShort(row.flow || '')) + '</span></div>'
+                    + '<div class="cyc-vrow-subj">' + esc(subject) + '</div>'
+                    + '<div class="cyc-vrow-members">' + members.map(m => '<span>' + esc(m) + '</span>').join('') + '</div>'
+                    + '</div>';
+            }
             function cycleFlowShort(flow) {
                 const name = String(flow || '').trim();
                 const parts = name.split(' / ');
@@ -4212,10 +4235,7 @@
                             // Guruh rejimida qator — bitta guruh: nomi to'g'ridan-to'g'ri.
                             // Bo'lakli fan qatori ("Fan (c)"): bo'lak nomi + oqim + qaysi guruhchalardan.
                             const groupLabel = row.variant
-                                ? '<div class="cyc-members cyc-variant-row" title="' + esc(row.variant + ' — ' + (row.subgroups || []).join(', ')) + '">'
-                                    + '<div class="cyc-member-row"><b>' + esc((/\((\p{L})\)\s*$/u.exec(row.variant) || [])[1] ? '(' + /\((\p{L})\)\s*$/u.exec(row.variant)[1] + ') bo\'lak' : row.variant) + '</b> · ' + esc(cycleFlowShort(row.flow || '')) + '</div>'
-                                    + '<div class="cyc-member-row cyc-variant-sub">' + esc(row.variant.replace(/\s*\(\p{L}\)\s*$/u, '')) + '</div>'
-                                    + '<div class="cyc-member-row cyc-variant-sub">' + esc((row.subgroups || []).map(s => s.replace(/\s*\(.*\)$/, '')).join(', ')) + '</div></div>'
+                                ? cycleVariantLabelHtml(row)
                                 : (j.view || cycleViewMode) === 'group'
                                 ? '<div class="cyc-members"><div class="cyc-member-row"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div></div>'
                                 : cycleMembersHtml(row.group, row.subgroups);

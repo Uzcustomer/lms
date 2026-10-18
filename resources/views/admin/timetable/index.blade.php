@@ -6747,6 +6747,13 @@
                             for (let c = b.from; c <= b.to && c < dates.length; c++) if (owner[c]) return;
                             for (let c = b.from; c <= b.to && c < dates.length; c++) owner[c] = b;
                         });
+                        // Guruhcha bo'lak qatori orqali o'qiydigan sikl — ekrandagidek ishora (sanalar bo'sh bo'lsa).
+                        cycleVariantRowsOf(j.rows || [], row).forEach(v => (v.blocks || []).forEach(b => {
+                            if (b.from == null || b.to == null) return;
+                            for (let c = b.from; c <= b.to && c < dates.length; c++) if (owner[c]) return;
+                            const ghost = { ...b, ghost: true, ghost_letter: (/\((\p{L})\)\s*$/u.exec(v.variant || '') || [])[1] || '' };
+                            for (let c = b.from; c <= b.to && c < dates.length; c++) owner[c] = ghost;
+                        }));
                         // Fan qatori
                         const head = [{ t: groupLabel(row), rs: dayHours + 1, b: 1, al: 'l' }, { t: 'Fan', cs: 2, b: 1, bg: '#f1f5f9' }];
                         for (let v = 0; v < vis.length; v++) {
@@ -6754,6 +6761,12 @@
                             if (!b) { head.push({ t: '', bg: offBg(dates[vis[v]]) }); continue; }
                             let n = 1;
                             while (v + n < vis.length && owner[vis[v + n]] === b) n++;
+                            if (b.ghost) {
+                                head.push({ t: String(b.subject).replace(/\s*\(\p{L}\)\s*$/u, '') + '\n(' + b.ghost_letter + ") bo'lakda · " + b.days + ' kun',
+                                    cs: n, b: 1, bg: '#ede9fe', fc: '#6d28d9' });
+                                v += n - 1;
+                                continue;
+                            }
                             const plan = Object.values(b.day_plan || {});
                             const sl = plan.reduce((a, d) => a + (+d.lec || 0), 0), sp = plan.reduce((a, d) => a + (+d.prc || 0), 0);
                             const req = [b.teacher_name, b.auditorium_name || b.auditorium_code].filter(Boolean).join(' · ');
@@ -6779,6 +6792,7 @@
                                 const d = dates[i], b = owner[i];
                                 if (d.off) { cells.push({ t: '', bg: offBg(d) }); return; }
                                 if (!b) { cells.push({ t: '' }); return; }
+                                if (b.ghost) { cells.push({ t: '', bg: '#f5f3ff' }); return; }   // dars bo'lak qatorida
                                 const dp = (b.day_plan || {})[i - b.from];
                                 const st = dp ? (+dp.start || 1) : 0, l = dp ? (+dp.lec || 0) : 0, p = dp ? (+dp.prc || 0) : 0;
                                 if (dp && hour >= st && hour < st + l) cells.push({ t: 'M', b: 1, bg: '#facc15', fc: '#713f12' });

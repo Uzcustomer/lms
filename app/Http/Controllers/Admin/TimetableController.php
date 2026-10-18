@@ -2608,8 +2608,13 @@ class TimetableController extends Controller
                     $variantFirst[$normKey($c->specialty_name, $c->course, $variantBase)] ??= (string) $c->subject_name;
                 }
                 $cardMembers = $this->cycleCardGroups($c);
+                // Ichki jadval: bo'lakning har bir o'quv guruhi (karta guruhlari to'plami) alohida
+                // qator — "Fan (a)" 02a va 03a da alohida o'qitilsa, ikkita qator (o'qituvchilari
+                // har xil); 02a + 03a dan aralash bitta guruh bo'lsa — bitta qator.
+                $unitMembers = $cardMembers;
+                sort($unitMembers, SORT_NATURAL | SORT_FLAG_CASE);
                 $rowTargets = ($variantBase !== null && $cycleSubRows && $cardMembers)
-                    ? [[$this->cycleFlowName($c, $cardMembers[0]) . ' · ' . $c->subject_name, $cardMembers[0], true]]
+                    ? [[$this->cycleFlowName($c, $cardMembers[0]) . ' · ' . $c->subject_name . ' · ' . implode(' + ', $unitMembers), $cardMembers[0], true]]
                     : array_map(fn ($m) => [null, $m, false], $cardMembers);
                 foreach ($rowTargets as [$variantRow, $member, $isVariantRow]) {
                     // Guruh rejimida har subguruh o'z qatori; oqim rejimida oqim nomi.
@@ -2620,6 +2625,9 @@ class TimetableController extends Controller
                             // Guruhcha qatori uchun: joylashuv saqlangan oqim nomi.
                             'parent' => $this->cycleFlowName($c, $member),
                             'variant' => $isVariantRow ? (string) $c->subject_name : null,
+                            // Bo'lak guruhi API'ga qanday nom bilan murojaat qiladi: bitta guruhcha —
+                            // o'sha guruhcha (kun soatlari/o'qituvchi shu guruhga), aralash — oqim nomi.
+                            'unit' => $isVariantRow ? (count($cardMembers) === 1 ? (string) $cardMembers[0] : $this->cycleFlowName($c, $member)) : null,
                             'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
                     }
                     // Bo'laklar bitta blok: uzunligi eng uzun bo'lakniki (bo'laklar to'qnashuvda
@@ -2669,7 +2677,12 @@ class TimetableController extends Controller
                 $lecSubject = ($lecVariantBase !== null && !$cycleSubRows) ? $lecVariantBase : (string) $c->subject_name;
                 $lecMembers = $this->cycleCardGroups($c);
                 $lectureRows = ($lecVariantBase !== null && $cycleSubRows && $lecMembers)
-                    ? [$this->cycleFlowName($c, $lecMembers[0]) . ' · ' . $c->subject_name]
+                    // Bo'lak ma'ruzasi: shu oqimdagi shu bo'lakning barcha guruh qatorlari.
+                    ? array_values(array_map(fn ($g) => (string) $g['name'], array_filter($byFlow, fn ($g) =>
+                        ($g['variant'] ?? null) === (string) $c->subject_name
+                        && mb_strtolower((string) $g['parent']) === mb_strtolower($this->cycleFlowName($c, $lecMembers[0]))
+                        && mb_strtolower((string) $g['specialty']) === mb_strtolower((string) $c->specialty_name)
+                        && (int) $g['course'] === (int) $c->course)))
                     : ($cycleView === 'group' ? $lecMembers : [$this->cycleFlowName($c)]);
                 foreach ($lectureRows as $flow) {
                     $flowKey = mb_strtolower(trim((string) $c->specialty_name)) . '|' . (int) $c->course . '|' . mb_strtolower($flow);
@@ -2924,7 +2937,7 @@ class TimetableController extends Controller
                             // (bitta kun surilsa, qolgan kunlar oqimdan meros qoladi).
                             $hasLectureSlots ? array_replace(
                                 (array) (($placement->lecture_slots ?? [])['starts'] ?? []),
-                                $cycleSubRows ? (array) ((($placement->lecture_slots ?? [])['starts_g'] ?? [])[(string) $g['name']] ?? []) : []
+                                $cycleSubRows ? (array) ((($placement->lecture_slots ?? [])['starts_g'] ?? [])[(string) ($g['unit'] ?? $g['name'])] ?? []) : []
                             ) : [],
                             6,
                             $cycleGridHours
@@ -2957,7 +2970,7 @@ class TimetableController extends Controller
                         'key' => $subjectKey($g, $subject) . '|' . $cardType,
                         'row_key' => $rk,
                         // Bo'lak qatori API'ga oqim nomi bilan murojaat qiladi (joylashuv oqimda).
-                        'group' => !empty($g['variant']) ? (string) $g['parent'] : $g['name'],
+                        'group' => !empty($g['variant']) ? (string) ($g['unit'] ?? $g['parent']) : $g['name'],
                         'placement_group' => $placementGroupOf[$subject . '|' . $cardType] ?? $placeGroup,
                         'specialty' => $g['specialty'],
                         'course' => $g['course'],

@@ -4336,10 +4336,6 @@ class TimetableController extends Controller
                 || $norm($other->training_type ?: 'practice') === $norm($data['training_type']))) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);
             if ($otherStartPosition === null) continue;
-            // Nomi har xil, bazasi bir xil — demak kamida bittasi "(a)" bo'lagi. Qaysi biri
-            // oldin joylanganidan qat'i nazar (Fan + Fan (a) ham, Fan (a) + Fan ham) bitta blok.
-            if (!$sameSubject && $otherStartPosition === $startPosition
-                && $variantBase($other->subject_name) === $variantBase($data['subject_name'])) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
             $otherDays = max(1, $this->cycleTypeDays(
                 max(1, (int) ($otherSetting->cycle_days ?? 1)),
@@ -4347,6 +4343,12 @@ class TimetableController extends Controller
                 (string) ($other->training_type ?: 'practice')
             ));
             $otherEndPosition = $otherStartPosition + $otherDays - 1;
+            // Nomi har xil, bazasi bir xil — demak kamida bittasi "(a)" bo'lagi. Qaysi biri
+            // oldin joylanganidan qat'i nazar (Fan + Fan (a) ham, Fan (a) + Fan ham) bitta blok —
+            // lekin faqat sanalari aynan bir xil bo'lsa: uzunligi farq qilsa, jadvalda bitta
+            // qatorga sig'maydi (ikkinchisi chizilmay qoladi), shuning uchun odatdagi to'qnashuv.
+            if (!$sameSubject && $otherStartPosition === $startPosition && $otherEndPosition === $endPosition
+                && $variantBase($other->subject_name) === $variantBase($data['subject_name'])) continue;
             if ($sameSubject) {
                 // Bir fanning ma'ruza va amaliy bloklari: oraliq talab qilinmaydi, faqat
                 // kun × para bo'yicha ustma-ust tushmasin (amaliy dumi ma'ruza tugagach

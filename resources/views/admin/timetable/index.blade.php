@@ -3638,7 +3638,10 @@
             function cycleVariantRowsOf(allRows, row) {
                 if (row.variant) return [];
                 const key = v => String(v || '').trim().toLowerCase();
-                return allRows.filter(v => v.variant && (v.subgroups || []).some(m => key(m) === key(row.group)));
+                // Bir xil nomli guruhcha boshqa fakultet/yo'nalish/kursda ham bo'lishi mumkin (row_key kabi).
+                const sameCurriculum = v => key(v.specialty) === key(row.specialty) && +v.course === +row.course
+                    && key(v.faculty) === key(row.faculty);
+                return allRows.filter(v => v.variant && sameCurriculum(v) && (v.subgroups || []).some(m => key(m) === key(row.group)));
             }
             // Filtr qo'llangan qatorlar — ekran ham, Excel ham shundan oladi.
             function cycleVisibleRows(allRows) {

@@ -3867,6 +3867,11 @@ class TimetableController extends Controller
                         throw new \RuntimeException('cycle-variant-failed');
                     }
                     $last = $response;
+                    // Siljitish kaskad: nishon bilan bir kunda boshlangan qardosh bo'laklar ham
+                    // birga suriladi. Ularni qayta siljitish eski kunida topolmay xato beradi.
+                    if ($request->input('action') === 'shift') {
+                        break;
+                    }
                 }
             });
         } catch (\RuntimeException $e) {

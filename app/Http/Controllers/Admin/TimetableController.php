@@ -3812,6 +3812,7 @@ class TimetableController extends Controller
             'holidays.*' => 'nullable|date',
             'allow_overlap' => 'nullable|boolean',
             'overlap_days' => 'nullable|integer|min:0|max:60',
+            'ignore_gap' => 'nullable|boolean',
             'layer' => 'nullable|in:external,internal',
         ]);
         $placeRole = $this->timetableActiveRole($request);
@@ -4306,7 +4307,12 @@ class TimetableController extends Controller
         // surilmaydi. Qo'shni sikl bilan to'qnashsa yoki oraliq yetmasa, xato
         // qaytariladi va foydalanuvchi boshqa kun tanlaydi.
         $startPosition = (int) $positionFor($from);
-        $cycleGapDays = 2;
+        // Sikllar orasidagi majburiy bo'sh kunlar; "Oraliqsiz" belgilansa (rasmiy
+        // jadvalda sikllar ketma-ket bo'lsa) talab qilinmaydi.
+        $cycleGapDays = !empty($data['ignore_gap']) ? 0 : 2;
+        // Bir fanning guruhcha bo'laklari — "Fan (a)", "Fan (b)"... HEMIS'da alohida fan,
+        // aslida bitta sikl: aynan bir kundan boshlansa, bitta blok sifatida qabul qilinadi.
+        $variantBase = fn($value) => preg_replace('/\s*\(\p{L}\)\s*$/u', '', $norm($value));
         $to = $endIndexFor($from, $requiredDays);
         if ($to === null) {
             return response()->json(['error' => 'Fan bloki semestr kalendariga sig\'maydi.'], 422);
@@ -4330,6 +4336,9 @@ class TimetableController extends Controller
                 || $norm($other->training_type ?: 'practice') === $norm($data['training_type']))) continue;
             $otherStartPosition = $positionFor((int) $other->start_index);
             if ($otherStartPosition === null) continue;
+            if (!$sameSubject && $otherStartPosition === $startPosition
+                && $variantBase($other->subject_name) === $variantBase($data['subject_name'])
+                && $variantBase($data['subject_name']) !== $norm($data['subject_name'])) continue;
             $otherSetting = $settings->get($norm($data['specialty_name']) . '|' . $norm($other->subject_name));
             $otherDays = max(1, $this->cycleTypeDays(
                 max(1, (int) ($otherSetting->cycle_days ?? 1)),

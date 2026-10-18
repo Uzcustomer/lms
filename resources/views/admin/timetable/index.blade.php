@@ -211,6 +211,8 @@
                         <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sig'masa, bir fanning turli oqimlardagi sikllari ko'rsatilgan o'quv kunigacha kesishishi mumkin">
                             <input type="checkbox" id="cycleAllowOverlap" class="rounded border-gray-300"> Kesishishga ruxsat
                             <input type="number" id="cycleOverlapDays" min="1" max="60" value="1" class="w-14 rounded border-gray-300 text-xs py-0.5" disabled> kun</label>
+                        <label class="text-[11px] text-gray-500 flex items-center gap-1" title="Sikllar orasida 2 o'quv kuni bo'sh qolishi talab qilinmaydi (rasmiy jadvalda sikllar ketma-ket bo'lsa)">
+                            <input type="checkbox" id="cycleIgnoreGap" class="rounded border-gray-300"> Oraliqsiz</label>
                         <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Tashqi — o'quv bo'limining umumiy (tavsiyaviy) jadvali; Ichki — kafedraning KTR bo'yicha ishchi jadvali">
                             <button type="button" id="cycLayerExternal" class="px-2 py-1 bg-white text-gray-500">Tashqi</button>
                             <button type="button" id="cycLayerInternal" class="px-2 py-1 bg-white text-gray-500">Ichki</button>
@@ -2472,7 +2474,7 @@
                 });
 
                 if (TIMETABLE_READ_ONLY) {
-                    ['assignBtn', 'unplacedExportBtn', 'subjectColorsBtn', 'cycleAllowOverlap'].forEach(id => {
+                    ['assignBtn', 'unplacedExportBtn', 'subjectColorsBtn', 'cycleAllowOverlap', 'cycleIgnoreGap'].forEach(id => {
                         const el = $(id);
                         if (!el) return;
                         el.disabled = true;
@@ -4835,7 +4837,8 @@
             function cycleOverlapParams() {
                 const on = !!($('cycleAllowOverlap') && $('cycleAllowOverlap').checked);
                 const days = Math.max(1, parseInt(($('cycleOverlapDays') || {}).value, 10) || 1);
-                return on ? { allow_overlap: 1, overlap_days: days } : { allow_overlap: 0 };
+                const gap = { ignore_gap: $('cycleIgnoreGap') && $('cycleIgnoreGap').checked ? 1 : 0 };
+                return on ? { allow_overlap: 1, overlap_days: days, ...gap } : { allow_overlap: 0, ...gap };
             }
             function syncCycleOverlapUi() {
                 if (!$('cycleAllowOverlap')) return;
@@ -4848,11 +4851,13 @@
                 try { saved = JSON.parse(localStorage.getItem(cycleOverlapKey()) || 'null'); } catch (e) { }
                 $('cycleAllowOverlap').checked = !!(saved && saved.allow_overlap);
                 if (saved && saved.overlap_days) $('cycleOverlapDays').value = saved.overlap_days;
+                if ($('cycleIgnoreGap')) $('cycleIgnoreGap').checked = !!(saved && saved.ignore_gap);
                 $('cycleOverlapDays').disabled = !$('cycleAllowOverlap').checked;
             }
             if ($('cycleAllowOverlap')) {
                 $('cycleAllowOverlap').onchange = syncCycleOverlapUi;
                 $('cycleOverlapDays').onchange = syncCycleOverlapUi;
+                if ($('cycleIgnoreGap')) $('cycleIgnoreGap').onchange = syncCycleOverlapUi;
             }
 
             // Bayram qo'shish
@@ -6709,7 +6714,11 @@
                 rows.forEach(row => {
                     // Kesishgan bloklar alohida qatorchaga (lane) tushadi — hech biri yo'qolmaydi.
                     const lanes = [];
+                    // "Fan (a)/(b)/(c)" — bitta sikl bo'laklari: bir xil sanalarda bitta blok.
+                    const vBase = n => String(n || '').replace(/\s*\(\p{L}\)\s*$/u, '').trim().toLowerCase();
+                    const seenVar = new Set();
                     [...(row.blocks || [])].filter(b => b.from != null && b.to != null)
+                        .filter(b => { const k = vBase(b.subject) + '|' + b.from + '|' + b.to; if (seenVar.has(k)) return false; seenVar.add(k); return true; })
                         .sort((x, y) => x.from - y.from || (+x.pair || 1) - (+y.pair || 1))
                         .forEach(b => {
                             const to = Math.min(b.to, dates.length - 1);

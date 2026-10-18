@@ -2627,7 +2627,7 @@ class TimetableController extends Controller
                     $byFlow[$flowKey]['subs'][$rowSubject] = max($byFlow[$flowKey]['subs'][$rowSubject] ?? 0, $cycleKey[$ck]);
                     if ($variantBase !== null && !$cycleSubRows) {
                         // Shu qatorda o'qitiladigan bo'laklar: karta faqat hammasi joylansa "joylangan".
-                        $byFlow[$flowKey]['vsubs'][$rowSubject][(string) $c->subject_name] = true;
+                        $byFlow[$flowKey]['vsubs'][$rowSubject][mb_strtolower(trim((string) $c->subject_name))] = true;
                     }
                     if ($isVariantRow) {
                         foreach ($cardMembers as $vm) {
@@ -2811,16 +2811,23 @@ class TimetableController extends Controller
             $rowPlacements = [];
             $placementGroupOf = [];   // fan|tur => joylashuv saqlangan qator nomi
             $variantPlaced = [];      // asosiy nom => [bo'lak => true] (amaliy yozuvlar)
+            // Bo'lak joylashuvi sozlama (o'quv reja) nomi bilan yoziladi — karta nomidan harf
+            // registri/bo'shliq bilan farq qilishi mumkin, shuning uchun normallashgan moslash.
+            $subsByNorm = [];
+            foreach (array_keys($g['subs']) as $subsName) {
+                $subsByNorm[mb_strtolower(trim((string) $subsName))] = $subsName;
+            }
             foreach ([$placeKey => $placeGroup, $rk => (string) $g['name']] as $savedKey => $savedGroup) {
                 foreach ($savedByRow[$savedKey] ?? [] as $placement) {
                     // Tashqi jadval: bo'lak joylashuvi asosiy nomli bitta blok bo'lib ko'rinadi.
                     $placementBase = !$cycleSubRows ? $this->cycleSubjectVariantBase((string) $placement->subject_name) : null;
-                    if ($placementBase !== null && array_key_exists($placementBase, $g['subs'])) {
+                    $baseSubject = $placementBase !== null ? ($subsByNorm[mb_strtolower($placementBase)] ?? null) : null;
+                    if ($baseSubject !== null) {
                         if (($placement->training_type ?: 'practice') === 'practice') {
-                            $variantPlaced[$placementBase][(string) $placement->subject_name] = true;
+                            $variantPlaced[$baseSubject][mb_strtolower(trim((string) $placement->subject_name))] = true;
                         }
                         $placement = clone $placement;
-                        $placement->subject_name = $placementBase;
+                        $placement->subject_name = $baseSubject;
                     }
                     $typeKey = $placement->subject_name . '|' . ($placement->training_type ?: 'practice');
                     $rowPlacements[$typeKey] = $placement;

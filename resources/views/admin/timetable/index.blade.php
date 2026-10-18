@@ -1225,6 +1225,17 @@
         #cycleArea .cyc-excel-btn i { font-size: 13px; line-height: 1; }
         #cycleArea .cyc-excel-btn:disabled { opacity: .7; cursor: wait; }
         /* Bo'lakli fan qatori (Fan (a)/(b)/(c)) yorlig'i */
+        /* Guruhcha qatorida bo'lak sikli ishorasi (dars bo'lak qatorida) */
+        #cycleGrid td.cyc-ghost { padding: 4px; vertical-align: middle !important;
+            background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--gc, #ede9fe) 55%, transparent) 0 8px, rgba(255, 255, 255, .7) 8px 16px);
+            border: 2px dashed #8b5cf6; }
+        #cycleGrid .cyc-ghost-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: 0 auto; padding: 4px 9px;
+            border-radius: 8px; background: #fff; border: 1px solid #c4b5fd; box-shadow: 0 1px 3px rgba(15, 23, 42, .15); cursor: pointer; text-align: left; }
+        #cycleGrid .cyc-ghost-btn:hover { box-shadow: 0 0 0 2px rgba(124, 58, 237, .45); }
+        #cycleGrid .cyc-ghost-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+        #cycleGrid .cyc-ghost-txt b { color: #1e293b; font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #cycleGrid .cyc-ghost-txt i { color: #6d28d9; font-size: 10px; font-style: normal; font-weight: 700; white-space: nowrap; }
+        #cycleGrid td.cyc-ghost { text-align: center; }
         #cycleGrid .cyc-vrow { display: flex; flex-direction: column; gap: 3px; padding: 5px 6px; border-radius: 6px;
             background: #f5f3ff; border: 1px solid #ddd6fe; border-left: 4px solid #7c3aed; text-align: left; }
         #cycleGrid .cyc-vrow-head { display: flex; align-items: center; gap: 5px; }
@@ -4046,7 +4057,14 @@
                 const dates = j.dates || [], allRows = j.rows || [];
                 // "Guruh" ustuni sarlavhasidan tanlangan bitta guruh/oqim (bo'lmasa hammasi).
                 if (cycleRowFilter && !allRows.some(r => r.row_key === cycleRowFilter)) cycleRowFilter = null;
-                const rows = cycleRowFilter ? allRows.filter(r => r.row_key === cycleRowFilter) : allRows;
+                // Guruhcha tanlanganda u qatnashadigan bo'lak qatorlari (Fan (a)/(b)/(c)) ham ko'rinadi.
+                const memberKey = v => String(v || '').trim().toLowerCase();
+                const variantRowsOf = r => r.variant ? [] : allRows.filter(v => v.variant
+                    && (v.subgroups || []).some(m => memberKey(m) === memberKey(r.group)));
+                const rows = cycleRowFilter
+                    ? allRows.filter(r => r.row_key === cycleRowFilter)
+                        .flatMap(r => [r, ...variantRowsOf(r)])
+                    : allRows;
                 if (!rows.length) {
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
                     renderCycleCards(j);
@@ -4093,6 +4111,12 @@
                 dates.forEach((d, i) => h += '<th class="cyc-dcol' + cycleDateClass(d) + (cycleColHidden(i) ? ' cyc-col-hidden' : '') + '" title="' + (d.sunday ? 'Yakshanba' : (d.holiday ? 'Bayram kuni' : '')) + '">' + esc(d.d) + '</th>');
                 h += '</tr></thead><tbody>';
                 rows.forEach(row => {
+                    // Guruhcha qatorida u qatnashadigan bo'lak bloklari "ishora" sifatida chiziladi:
+                    // sikl bor, lekin dars bo'lak qatorida — bosilsa o'sha qator ochiladi.
+                    const ghostBlocks = j.mark_mode ? variantRowsOf(row).flatMap(v => (v.blocks || [])
+                        .filter(b => b.from != null && b.to != null)
+                        .map(b => ({ ...b, ghost: true, ghost_row: v.row_key,
+                            ghost_letter: (/\((\p{L})\)\s*$/u.exec(v.variant || '') || [])[1] || '' }))) : [];
                     // Bloklar yaxlit to'rtburchak katak bo'lib chiziladi (rowspan)
                     // — ichki chiziqlar yo'q: ma'ruza 1 para, amaliy butun sikl
                     // davomida kuniga 4 soat (2 para). Bo'sh kataklar colspan bilan
@@ -4111,7 +4135,25 @@
                             for (let c = from; c <= to && c < cols; c++) if (covered[l][c]) return false;
                         return true;
                     };
-                    (row.blocks || []).forEach(block => {
+                    [...(row.blocks || []), ...ghostBlocks].forEach(block => {
+                        if (block.ghost) {
+                            const gTo = Math.min(block.to, cols - 1);
+                            if (block.from >= cols || gTo < block.from || !free(1, pairs, block.from, gTo)) return;
+                            const gc = subjColor(String(block.subject).replace(/\s*\(\p{L}\)\s*$/u, ''));
+                            const gSubj = String(block.subject).replace(/\s*\(\p{L}\)\s*$/u, '');
+                            cellAt[1][block.from] = {
+                                html: '<td class="cyc-cell cyc-ghost" rowspan="' + pairs + '" colspan="' + (gTo - block.from + 1) + '"'
+                                    + ' style="--gc:' + gc.bg + ';--gb:' + gc.border + '"'
+                                    + ' title="' + esc(block.subject) + ' — bu guruhcha \'' + esc(block.ghost_letter) + '\' bo\'lagida o\'qiydi. Bosing: bo\'lak qatorini ochish">'
+                                    + '<button type="button" class="cyc-ghost-btn" data-ghost-row="' + esc(block.ghost_row) + '">'
+                                    + '<span class="cyc-vrow-tag">' + esc(block.ghost_letter) + '</span>'
+                                    + '<span class="cyc-ghost-txt"><b>' + esc(gSubj) + '</b><i>(' + esc(block.ghost_letter) + ') bo\'lakda · ' + block.days + ' kun &rarr;</i></span>'
+                                    + '</button></td>',
+                                next: gTo + 1,
+                            };
+                            mark(1, pairs, block.from, gTo);
+                            return;
+                        }
                         const p = Math.max(1, +block.pair || 1);
                         if (p > pairs || block.from >= cols) return;
                         const spanHead = Math.max(1, +block.span_head || 1);
@@ -4504,6 +4546,14 @@
                 if (!grid || grid.dataset.mkReady) return;
                 grid.dataset.mkReady = '1';
                 grid.addEventListener('click', ev => {
+                    // Guruhcha qatoridagi bo'lak ishorasi: o'sha bo'lak qatorini ochadi.
+                    const ghost = ev.target.closest ? ev.target.closest('.cyc-ghost-btn[data-ghost-row]') : null;
+                    if (ghost) {
+                        ev.preventDefault();
+                        cycleRowFilter = ghost.dataset.ghostRow;
+                        if (cyclePlanData) renderCyclePlan(cyclePlanData);
+                        return;
+                    }
                     const subj = ev.target.closest ? ev.target.closest('.cyc-mk-title[data-mk-subj]') : null;
                     if (subj) {
                         ev.preventDefault();

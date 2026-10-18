@@ -4347,7 +4347,11 @@ class TimetableController extends Controller
             // oldin joylanganidan qat'i nazar (Fan + Fan (a) ham, Fan (a) + Fan ham) bitta blok —
             // lekin faqat sanalari aynan bir xil bo'lsa: uzunligi farq qilsa, jadvalda bitta
             // qatorga sig'maydi (ikkinchisi chizilmay qoladi), shuning uchun odatdagi to'qnashuv.
-            if (!$sameSubject && $otherStartPosition === $startPosition && $otherEndPosition === $endPosition
+            // Tashqi jadvalda amaliy bilan birga yuradigan ma'ruza yozuvi qisqaroq (ma'ruza kunlari
+            // kamroq) — u bo'lak blokining bir qismi, uzunligi bo'yicha solishtirilmaydi.
+            $otherIsSyncedLecture = $syncLecture && $norm($other->training_type ?: 'practice') === 'lecture';
+            if (!$sameSubject && $otherStartPosition === $startPosition
+                && ($otherEndPosition === $endPosition || $otherIsSyncedLecture)
                 && $variantBase($other->subject_name) === $variantBase($data['subject_name'])) continue;
             if ($sameSubject) {
                 // Bir fanning ma'ruza va amaliy bloklari: oraliq talab qilinmaydi, faqat

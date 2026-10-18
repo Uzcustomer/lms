@@ -2625,9 +2625,10 @@ class TimetableController extends Controller
                             // Guruhcha qatori uchun: joylashuv saqlangan oqim nomi.
                             'parent' => $this->cycleFlowName($c, $member),
                             'variant' => $isVariantRow ? (string) $c->subject_name : null,
-                            // Bo'lak guruhi API'ga qanday nom bilan murojaat qiladi: bitta guruhcha —
-                            // o'sha guruhcha (kun soatlari/o'qituvchi shu guruhga), aralash — oqim nomi.
-                            'unit' => $isVariantRow ? (count($cardMembers) === 1 ? (string) $cardMembers[0] : $this->cycleFlowName($c, $member)) : null,
+                            // Bo'lak guruhi API'ga o'z a'zolari to'plami bilan murojaat qiladi ("02a" yoki
+                            // "02a + 02b"): o'qituvchi/xona va kun soatlari (starts_g) faqat shu guruhga —
+                            // oqim nomi bo'lsa, shu oqimdagi bo'lakning boshqa guruhlariga ham tegardi.
+                            'unit' => $isVariantRow ? implode(' + ', $unitMembers) : null,
                             'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
                     }
                     // Bo'laklar bitta blok: uzunligi eng uzun bo'lakniki (bo'laklar to'qnashuvda
@@ -3270,15 +3271,17 @@ class TimetableController extends Controller
                 }
 
                 if ($view === 'group') {
-                    foreach ($this->cycleCardGroups($card) as $member) {
-                        if (mb_strtolower(trim($member)) === $flowLower
-                            // Ichki jadvalda bo'lakli fan ("Fan (a)") qatori oqim nomi bilan keladi.
-                            || mb_strtolower($this->cycleFlowName($card, $member)) === $flowLower) {
+                    $members = $this->cycleCardGroups($card);
+                    foreach ($members as $member) {
+                        if (mb_strtolower(trim($member)) === $flowLower) {
                             return true;
                         }
                     }
+                    // Ichki jadvalda bo'lakli fan ("Fan (a)") guruhi a'zolari to'plami bilan keladi
+                    // ("02a + 02b", cyclePlan dagi 'unit' bilan bir xil tartibda).
+                    sort($members, SORT_NATURAL | SORT_FLAG_CASE);
 
-                    return false;
+                    return mb_strtolower(implode(' + ', $members)) === $flowLower;
                 }
 
                 if ($card->training_type === 'practice') {

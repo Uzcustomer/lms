@@ -2622,7 +2622,9 @@ class TimetableController extends Controller
                             'variant' => $isVariantRow ? (string) $c->subject_name : null,
                             'faculty' => $c->faculty_name, 'specialty' => $c->specialty_name, 'course' => (int) $c->course];
                     }
-                    $byFlow[$flowKey]['subs'][$rowSubject] = $cycleKey[$ck];
+                    // Bo'laklar bitta blok: uzunligi eng uzun bo'lakniki (bo'laklar to'qnashuvda
+                    // o'z kunlari bilan hisoblanadi — blok ularning hammasini qoplasin).
+                    $byFlow[$flowKey]['subs'][$rowSubject] = max($byFlow[$flowKey]['subs'][$rowSubject] ?? 0, $cycleKey[$ck]);
                     if ($isVariantRow) {
                         foreach ($cardMembers as $vm) {
                             $byFlow[$flowKey]['members'][$vm] = true;

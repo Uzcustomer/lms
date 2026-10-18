@@ -3812,6 +3812,7 @@ class TimetableController extends Controller
             'holidays.*' => 'nullable|date',
             'allow_overlap' => 'nullable|boolean',
             'overlap_days' => 'nullable|integer|min:0|max:60',
+            'ignore_gap' => 'nullable|boolean',
             'layer' => 'nullable|in:external,internal',
         ]);
         $placeRole = $this->timetableActiveRole($request);
@@ -4306,7 +4307,12 @@ class TimetableController extends Controller
         // surilmaydi. Qo'shni sikl bilan to'qnashsa yoki oraliq yetmasa, xato
         // qaytariladi va foydalanuvchi boshqa kun tanlaydi.
         $startPosition = (int) $positionFor($from);
-        $cycleGapDays = 2;
+        // Sikllar orasidagi majburiy bo'sh kunlar; "Oraliqsiz" belgilansa (rasmiy
+        // jadvalda sikllar ketma-ket bo'lsa) talab qilinmaydi.
+        $cycleGapDays = !empty($data['ignore_gap']) ? 0 : 2;
+        // Bir fanning guruhcha bo'laklari — "Fan (a)", "Fan (b)"... HEMIS'da alohida fan,
+        // aslida bitta sikl: aynan bir kundan boshlansa, bitta blok sifatida qabul qilinadi.
+        $variantBase = fn($value) => preg_replace('/\s*\(\p{L}\)\s*$/u', '', $norm($value));
         $to = $endIndexFor($from, $requiredDays);
         if ($to === null) {
             return response()->json(['error' => 'Fan bloki semestr kalendariga sig\'maydi.'], 422);
@@ -4337,6 +4343,12 @@ class TimetableController extends Controller
                 (string) ($other->training_type ?: 'practice')
             ));
             $otherEndPosition = $otherStartPosition + $otherDays - 1;
+            // Nomi har xil, bazasi bir xil — demak kamida bittasi "(a)" bo'lagi. Qaysi biri
+            // oldin joylanganidan qat'i nazar (Fan + Fan (a) ham, Fan (a) + Fan ham) bitta blok —
+            // lekin faqat sanalari aynan bir xil bo'lsa: uzunligi farq qilsa, jadvalda bitta
+            // qatorga sig'maydi (ikkinchisi chizilmay qoladi), shuning uchun odatdagi to'qnashuv.
+            if (!$sameSubject && $otherStartPosition === $startPosition && $otherEndPosition === $endPosition
+                && $variantBase($other->subject_name) === $variantBase($data['subject_name'])) continue;
             if ($sameSubject) {
                 // Bir fanning ma'ruza va amaliy bloklari: oraliq talab qilinmaydi, faqat
                 // kun × para bo'yicha ustma-ust tushmasin (amaliy dumi ma'ruza tugagach

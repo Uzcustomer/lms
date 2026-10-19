@@ -401,7 +401,7 @@ class RegistratorFaceCheckController extends Controller
             return null;
         }
 
-        return StudentPhoto::create([
+        $photo = StudentPhoto::create([
             'student_id_number' => $student->student_id_number,
             'full_name'         => $student->full_name,
             'group_name'        => $student->group_name,
@@ -419,8 +419,49 @@ class RegistratorFaceCheckController extends Controller
             'similarity_hemis'  => $simHemis,
             'similarity_mark'   => $simMark,
             'captured_by_user_id' => $registratorUserId,
-            'face_embedding'    => array_map('floatval', $descriptor),
-            'embedding_extracted_at' => now(),
+            // face-api.js descriptori (128) Moodle uchun; ArcFace cache (512) esa
+            // pastda Python xizmatidan alohida hisoblanadi — avval shu yerga 128 lik
+            // yozilib, /identify cache'da "shape mismatch" bilan tushib qolardi.
+            'face_embedding'    => null,
+            'embedding_extracted_at' => null,
         ]);
+
+        $this->extractArcFaceEmbedding($photo);
+
+        return $photo;
+    }
+
+    /**
+     * ArcFace (512) embeddingni hisoblab yozish va Python cache'ga qo'shish —
+     * rasm tasdiqlash hook'i (StudentPhotoReportController) bilan bir xil.
+     * Xato bo'lsa yozuv embedding'siz qoladi; `faceid:rebuild-embeddings --only-missing` to'ldiradi.
+     */
+    private function extractArcFaceEmbedding(StudentPhoto $photo): void
+    {
+        try {
+            $embedding = FaceIdService::extractEmbedding(asset($photo->photo_path));
+            if (!$embedding) {
+                Log::warning('[FaceID] Registrator: ArcFace embedding hisoblanmadi', [
+                    'photo_id' => $photo->id,
+                    'student_id_number' => $photo->student_id_number,
+                ]);
+                return;
+            }
+
+            $photo->face_embedding = $embedding;
+            $photo->embedding_extracted_at = now();
+            $photo->saveQuietly();
+
+            FaceIdService::refreshArcFaceCache([[
+                'student_id_number' => $photo->student_id_number,
+                'full_name'         => $photo->full_name,
+                'embedding'         => $embedding,
+            ]], false);
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Registrator: embedding xato', [
+                'photo_id' => $photo->id,
+                'error'    => $e->getMessage(),
+            ]);
+        }
     }
 }

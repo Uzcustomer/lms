@@ -10,20 +10,32 @@ class RebuildFaceEmbeddings extends Command
 {
     protected $signature = 'faceid:rebuild-embeddings
         {--only-missing : Faqat embedding yoq yozuvlarni qayta ishlash}
+        {--bad-shape : Faqat embeddingi 512 olchamli bolmagan (buzilgan) yozuvlar}
         {--limit=0 : Maksimum nechta yozuv (0 = chegarasiz)}
         {--push-cache : Tayyor bolgach Python /refresh-cache ga yuborish}';
 
     protected $description = 'Tasdiqlangan student_photos rasmlari uchun ArcFace embedding\'larini hisoblab DB ga yozadi';
 
+    /** ArcFace embedding o'lchami — Python xizmati boshqa o'lchamdagilarni cache'ga olmaydi */
+    private const EMB_DIM = 512;
+
     public function handle(): int
     {
         $onlyMissing = (bool) $this->option('only-missing');
+        $badShape = (bool) $this->option('bad-shape');
         $limit = (int) $this->option('limit');
         $pushCache = (bool) $this->option('push-cache');
 
         $query = StudentPhoto::where('status', StudentPhoto::STATUS_APPROVED);
-        if ($onlyMissing) {
+        if ($onlyMissing && $badShape) {
+            // Yo'q yoki buzilgan (masalan registrator sahifasi yozgan 128 lik face-api descriptori)
+            $query->where(fn ($q) => $q->whereNull('face_embedding')
+                ->orWhereRaw('JSON_LENGTH(face_embedding) <> ?', [self::EMB_DIM]));
+        } elseif ($onlyMissing) {
             $query->whereNull('face_embedding');
+        } elseif ($badShape) {
+            $query->whereNotNull('face_embedding')
+                ->whereRaw('JSON_LENGTH(face_embedding) <> ?', [self::EMB_DIM]);
         }
 
         $availableTotal = (clone $query)->count();

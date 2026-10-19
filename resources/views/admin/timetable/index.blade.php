@@ -3692,12 +3692,15 @@
                 if (!list) return '';
                 if (!list.length) return '<div class="cyc-vrow-stu is-empty">HEMIS\'da talaba biriktirilmagan</div>';
                 const tail = g => (/(\d+\p{L}*)\s*$/u.exec(String(g)) || [])[1] || String(g);
+                // Tor ustunga sig'ishi uchun: "FAMILIYA I. O." (to'liq ism — tooltipda).
+                const short = n => { const p = String(n || '').trim().split(/\s+/u);
+                    return p.length < 2 ? p.join(' ') : p[0] + ' ' + p.slice(1, 3).map(x => x.charAt(0) + '.').join(' '); };
                 const per = {};
                 list.forEach(s => { per[s.group] = (per[s.group] || 0) + 1; });
                 const multi = Object.keys(per).length > 1;
                 return '<details class="cyc-vrow-stu" open><summary>' + list.length + ' talaba'
                     + (multi ? ' <i>(' + Object.entries(per).map(([g, n]) => esc(tail(g)) + ': ' + n).join(', ') + ')</i>' : '')
-                    + '</summary><ol>' + list.map(s => '<li title="' + esc(s.group) + '">' + esc(s.name)
+                    + '</summary><ol>' + list.map(s => '<li title="' + esc(s.name + ' — ' + s.group) + '">' + esc(short(s.name))
                         + (multi ? ' <b>' + esc(tail(s.group)) + '</b>' : '') + '</li>').join('') + '</ol></details>';
             }
             function cycleFlowShort(flow) {

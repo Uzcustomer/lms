@@ -4129,7 +4129,12 @@
                 // Guruhcha tanlanganda u qatnashadigan bo'lak qatorlari (Fan (a)/(b)/(c)) ham ko'rinadi.
                 const rows = cycleVisibleRows(allRows);
                 if (!rows.length) {
-                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.</td></tr></tbody>';
+                    // "Faqat meniki": jadvalda sikl bor, lekin shu o'qituvchiga biriktirilgani yo'q —
+                    // sozlama haqidagi xabar chalg'itadi.
+                    const emptyMsg = mineOnly
+                        ? 'Tanlangan qamrovda sizga biriktirilgan sikl darsi yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
+                        : 'Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.';
+                    $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">' + emptyMsg + '</td></tr></tbody>';
                     renderCycleCards(j);
                     return;
                 }

@@ -666,11 +666,22 @@
     .mn-public b { color: #047857; }
     .mn-public.off { border-color: var(--line); background: #f8fafc; color: var(--muted); }
     .mn-elist { display: grid; gap: 8px; }
-    .mn-entry { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .mn-entry { display: grid; gap: 9px; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .mn-ehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .mn-eprog { display: grid; gap: 7px; }
+    .mn-entry .mn-acts:empty { display: none; }
     .mn-entry.pending { border-left-color: #d97706; background: #fffbeb; }
     .mn-entry.approved { border-left-color: #0f7a52; }
-    .mn-entry.used { border-left-color: #2563eb; opacity: .8; }
+    .mn-entry.used { border-left-color: #2563eb; }
     .mn-entry.rejected, .mn-entry.expired { border-left-color: #94a3b8; opacity: .7; }
+    /* Testga kirganidan keyingi jonli bosqich — kompyuter kartochkasi ranglari */
+    .mn-entry.st-take { border-left-color: #2563eb; }
+    .mn-entry.st-take .mn-stage { background: #dbeafe; color: #1e40af; }
+    .mn-entry.st-result { border-left-color: #0f7a52; }
+    .mn-entry.st-result .mn-stage { background: #dcfce7; color: #166534; }
+    .mn-entry.st-offline { border-left-color: #94a3b8; background: #fbfcfd; }
+    .mn-entry.st-locked, .mn-entry.st-ended_away { border-color: #fca5a5; border-left-color: #dc2626; background: #fef2f2; }
+    .mn-entry.st-locked .mn-stage, .mn-entry.st-ended_away .mn-stage { background: #dc2626; color: #fff; }
     .mn-emeta { display: grid; gap: 3px; justify-items: end; text-align: right; }
     .mn-ewhen { color: var(--muted); font-size: 11.5px; }
     .mn-epill { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -680,7 +691,7 @@
     .mn-epill.rejected { background: #fee2e2; color: #991b1b; }
     .bl-btn-ok { background: #0f7a52; color: #fff; }
     .bl-btn-ok:hover { background: #0c6443; }
-    @media (max-width: 640px) { .lm-modes { grid-template-columns: 1fr; } .mn-entry { grid-template-columns: 1fr; } .mn-emeta { justify-items: start; text-align: left; } }
+    @media (max-width: 640px) { .lm-modes { grid-template-columns: 1fr; } .mn-ehead { flex-direction: column; align-items: flex-start; } .mn-emeta { justify-items: start; text-align: left; } }
 
     /* ---- Kompyuterlar (jonli kuzatuv) oynasi ---- */
     .bl-btn-monitor { background: #0f766e; color: #fff; box-shadow: 0 4px 12px rgba(15, 118, 110, .22); }
@@ -1479,7 +1490,39 @@
             entriesBox.style.display = name === 'entries' ? '' : 'none';
         }
 
+        // Testga kirgan talabaning jonli jarayoni — kompyuter kartochkasi bilan bir xil ko'rinish
+        function entryProgress(e) {
+            const a = e.attempt;
+            if (!a || !e.stage) return '';
+            let meta = '';
+            if (e.stage === 'take' && !a.finished) {
+                const answered = e.answered ?? 0;
+                const pct = a.questions ? Math.round(answered * 100 / a.questions) : 0;
+                meta += '<div class="mn-meta"><span>Javob: <b>' + answered + ' / ' + a.questions + '</b></span><span>Qoldi: <b>' + clock(a.seconds_left) + '</b></span></div>'
+                    + '<div class="mn-bar" role="img" aria-label="' + pct + '% javob berilgan"><i style="width:' + pct + '%"></i></div>';
+            } else if (a.finished && a.percent !== null) {
+                meta += '<div class="mn-meta"><span>Natija: <b class="' + (a.passed ? 'ok' : 'bad') + '">' + a.percent + '%</b></span><span class="' + (a.passed ? 'ok' : 'bad') + '">' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
+            } else if (e.stage === 'offline') {
+                meta += '<div class="mn-meta"><span>Qoldi: <b>' + clock(a.seconds_left) + '</b></span><span class="warn">Sahifa yopilgan yoki aloqa uzilgan</span></div>';
+            }
+            if (e.stage === 'locked') {
+                meta += '<div class="mn-lock">' + a.away_limit + " marta chalg'igani uchun test to'xtatildi. Javoblari topshirilmagan — ochib berish faqat bir marta mumkin.</div>";
+            } else if (e.stage === 'ended_away') {
+                meta += '<div class="mn-lock">' + "Ikkinchi marta chalg'idi — test yakunlandi, javoblari saqlandi.</div>";
+            }
+            if (e.stop_requested && !a.finished) {
+                meta += '<div class="mn-lock" style="background:#fef3c7;color:#92400e">' + "To'xtatish buyrug'i yuborildi — sahifa javoblarini topshirishi kutilmoqda.</div>";
+            }
+            const flags = [];
+            if (a.face_bypassed) flags.push('<span class="warn">Yuz tekshiruvisiz kirgan</span>');
+            if (a.away > 0) flags.push('<span class="warn">Chalg\'idi: ' + a.away + '</span>');
+            if (a.face_mismatches > 0) flags.push('<span class="bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
+            if (flags.length) meta += '<div class="mn-meta">' + flags.join('') + '</div>';
+            return meta;
+        }
+
         function entryRow(e) {
+            const live = e.stage ? '<span class="mn-stage">' + esc(e.stage_label) + '</span>' : '';
             const pill = '<span class="mn-epill ' + esc(e.status) + '">' + esc(e.status_label) + '</span>';
             const who = '<div class="mn-student"><b>' + esc(e.student) + '</b><span>' + esc(e.student_id)
                 + (e.group ? ' · ' + esc(e.group) : '') + (e.faculty ? ' · ' + esc(e.faculty) : '') + '</span></div>';
@@ -1489,8 +1532,15 @@
                 ? '<button type="button" class="bl-btn bl-btn-ok bl-btn-sm" data-act="approve" data-url="' + esc(e.approve_url) + '" data-student="' + esc(e.student) + '">Ruxsat</button>' : '';
             const reject = e.reject_url
                 ? '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="reject" data-url="' + esc(e.reject_url) + '" data-student="' + esc(e.student) + '">Rad etish</button>' : '';
-            return '<div class="mn-entry ' + esc(e.status) + '">' + who + '<div class="mn-emeta">' + pill + when + '</div>'
-                + '<div class="mn-acts">' + approve + reject + '</div></div>';
+            const stop = e.stop_url
+                ? '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="stop-entry" data-url="' + esc(e.stop_url) + '" data-student="' + esc(e.student) + '">To\'xtatish</button>' : '';
+            const unlock = e.unlock_url
+                ? '<button type="button" class="bl-btn bl-btn-unlock bl-btn-sm" data-act="unlock" data-url="' + esc(e.unlock_url) + '" data-student="' + esc(e.student) + '">Ochib berish</button>' : '';
+            const progress = entryProgress(e);
+            return '<div class="mn-entry ' + esc(e.status) + (e.stage ? ' st-' + esc(e.stage) : '') + '">'
+                + '<div class="mn-ehead">' + who + '<div class="mn-emeta">' + (live || pill) + when + '</div></div>'
+                + (progress ? '<div class="mn-eprog">' + progress + '</div>' : '')
+                + '<div class="mn-acts">' + approve + reject + stop + unlock + '</div></div>';
         }
 
         function renderEntries(list, pub) {
@@ -1584,6 +1634,8 @@
                 ? null // ruxsat — tasdiq so'ralmaydi, talaba kutib turibdi
                 : btn.dataset.act === 'reject'
                 ? btn.dataset.student + ' uchun kirish rad etilsinmi?'
+                : btn.dataset.act === 'stop-entry'
+                ? btn.dataset.student + " uchun test to'xtatilsinmi? Belgilangan javoblari topshiriladi."
                 : btn.dataset.act === 'bypass'
                 ? (btn.dataset.on
                     ? btn.dataset.name + ' kompyuteridagi yuz tekshiruvisiz kirish ruxsati bekor qilinsinmi?'

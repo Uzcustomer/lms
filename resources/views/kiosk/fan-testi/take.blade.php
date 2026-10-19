@@ -540,6 +540,38 @@
     });
 })();
 </script>
+@if(($publicEntry ?? false) && !($preview ?? false))
+<script>
+// Umumiy rejim (ro'yxatdagi kompyuter emas): jarayon o'qituvchining "Kirish
+// so'rovlari" oynasiga yuboriladi; o'qituvchi to'xtatsa javoblar topshiriladi.
+(() => {
+    const url = @json(route('kiosk.fan-testi.progress', [$test, $attempt]));
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    let leaving = false;
+
+    async function beat() {
+        if (leaving) return;
+        let d;
+        try {
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
+                body: JSON.stringify({ answered: typeof window.kioskAnswered === 'function' ? window.kioskAnswered() : 0 }),
+            });
+            if (!r.ok) return;
+            d = await r.json();
+        } catch (e) { return; }
+        if (d && d.stop) {
+            leaving = true;
+            window.dispatchEvent(new CustomEvent('kiosk-stop'));
+        }
+    }
+
+    beat();
+    setInterval(beat, 4000);
+})();
+</script>
+@endif
 @unless($preview ?? false)
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script>

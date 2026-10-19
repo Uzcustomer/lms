@@ -117,6 +117,8 @@ Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')
     Route::post('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'submit'])->name('submit');
     Route::get('/attempt/{attempt}/natija', [\App\Http\Controllers\FanTestiKioskController::class, 'result'])->name('result');
     Route::post('/attempt/{attempt}/face', [\App\Http\Controllers\FanTestiKioskController::class, 'monitorFace'])->name('face');
+    // Umumiy rejim: jarayon (javoblar soni) va o'qituvchining to'xtatish buyrug'i
+    Route::post('/attempt/{attempt}/progress', [\App\Http\Controllers\FanTestiKioskController::class, 'progress'])->name('progress');
 });
 
 // Sababli ariza tekshirish (QR kod orqali, public)
@@ -1943,6 +1945,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::post('/{fanTesti}/launch-public', [FanTestiController::class, 'launchPublic'])->name('launch-public');
                 Route::post('/{fanTesti}/entries/{entry}/approve', [FanTestiController::class, 'approveEntry'])->name('entries.approve');
                 Route::post('/{fanTesti}/entries/{entry}/reject', [FanTestiController::class, 'rejectEntry'])->name('entries.reject');
+                Route::post('/{fanTesti}/entries/{entry}/stop', [FanTestiController::class, 'stopEntry'])->name('entries.stop');
                 Route::post('/{fanTesti}/stop', [FanTestiController::class, 'stopLaunch'])->name('stop');
                 // "Kompyuterlar" oynasi: jonli holat va bitta kompyuterni boshqarish
                 Route::get('/{fanTesti}/devices', [FanTestiController::class, 'liveDevices'])->name('devices');

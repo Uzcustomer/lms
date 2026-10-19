@@ -115,6 +115,38 @@ class FanTestiKioskController extends Controller
     }
 
     /**
+     * Umumiy rejimdagi test sahifasi har bir necha soniyada yuboradi: nechta
+     * savolga javob berilgan. O'qituvchi "To'xtatish" bosgan bo'lsa sahifaga
+     * aytiladi — u belgilangan javoblarni topshiradi (javoblar brauzerda turadi,
+     * serverda to'xtatib bo'lmaydi).
+     */
+    public function progress(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return response()->json(['message' => 'Sessiya topilmadi.'], 403);
+        }
+        if (!Schema::hasColumn('fan_testi_entry_requests', 'progress_at')) {
+            return response()->json(['ok' => true]);
+        }
+
+        $entry = FanTestiEntryRequest::where('attempt_id', $attempt->id)->latest('id')->first();
+        if (!$entry) {
+            return response()->json(['ok' => true]);
+        }
+
+        $entry->forceFill([
+            'progress_answered' => min(65535, max(0, (int) $request->input('answered', 0))),
+            'progress_at' => now(),
+        ])->save();
+
+        return response()->json([
+            'ok' => true,
+            'stop' => $entry->stop_requested_at !== null && !$attempt->isFinished(),
+        ]);
+    }
+
+    /**
      * Umumiy ochilgan testda, ro'yxatdagi (shu testga berilgan) kompyuterdan
      * bo'lmasa — o'qituvchi ruxsati kerak.
      */
@@ -275,6 +307,8 @@ class FanTestiKioskController extends Controller
             'awayLimit' => FanTestiAttempt::AWAY_LIMIT,
             // Yuz tekshiruvisiz (o'qituvchi ruxsati) — test davomida jim yuz solishtirilmaydi
             'faceBypass' => !empty($attempt->face_bypass_by),
+            // Umumiy rejim: jarayon o'qituvchining "Kirish so'rovlari" oynasiga yuboriladi
+            'publicEntry' => $this->needsTeacherApproval($fanTesti),
         ] + $this->follow('take'));
     }
 

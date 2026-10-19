@@ -22,12 +22,28 @@ class FanTestiEntryRequest extends Model
     protected $fillable = [
         'fan_testi_id', 'student_id', 'student_name', 'student_id_number', 'group_name', 'faculty_name',
         'token', 'status', 'decided_by', 'decided_at', 'used_at', 'attempt_id', 'ip_address',
+        'progress_answered', 'progress_at', 'stop_requested_at',
     ];
+
+    /** Shuncha soniya ichida jarayon kelmasa — talabaning sahifasi bilan aloqa yo'q. */
+    public const ONLINE_SECONDS = 30;
 
     protected $casts = [
         'decided_at' => 'datetime',
         'used_at' => 'datetime',
+        'progress_at' => 'datetime',
+        'stop_requested_at' => 'datetime',
     ];
+
+    public function attempt()
+    {
+        return $this->belongsTo(FanTestiAttempt::class, 'attempt_id');
+    }
+
+    public function isOnline(): bool
+    {
+        return $this->progress_at !== null && $this->progress_at->gt(now()->subSeconds(self::ONLINE_SECONDS));
+    }
 
     protected $hidden = ['token'];
 

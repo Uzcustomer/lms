@@ -3630,7 +3630,6 @@ class TimetableController extends Controller
                 ->orderBy('subject_name')->first();
     }
 
-    /** Oqimga tegishli fan kartalari (ma'ruza ham, amaliyot ham). */
     /**
      * Tasdiq so'rovi uchun: o'zgarish tegishli bo'lgan kartalar (guruhlar, o'qituvchilar —
      * xabar yuborish uchun). TimetableChangeApproval chaqiradi.
@@ -3684,6 +3683,7 @@ class TimetableController extends Controller
         return $this->cycleCardGroups($card);
     }
 
+    /** Oqimga tegishli fan kartalari (ma'ruza ham, amaliyot ham). */
     private function cycleFlowCards(TimetableBoard $board, string $specialty, int $course, string $subject, string $flow, ?string $type = null, string $view = 'flow')
     {
         $subjectLower = mb_strtolower(trim($subject));
@@ -6530,7 +6530,6 @@ class TimetableController extends Controller
         return array_values(array_unique($names));
     }
 
-    /** Kafedra nomi berilgan nom(lar)dan biriga mosmi (katta-kichik harf, bo'shliq, "kafedrasi" so'zi hisobga olinmaydi). */
     /** departmentHeadKafedra, lekin kafedra aniqlanmasa so'rovni yiqitmaydi (null). */
     private function departmentHeadKafedraSafe(Request $request): ?array
     {
@@ -6541,6 +6540,7 @@ class TimetableController extends Controller
         }
     }
 
+    /** Kafedra nomi berilgan nom(lar)dan biriga mosmi (katta-kichik harf, bo'shliq, "kafedrasi" so'zi hisobga olinmaydi). */
     private function sameKafedra(?string $a, string|array|null $b): bool
     {
         if (is_array($b)) {

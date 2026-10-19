@@ -184,7 +184,6 @@ it('sahifa registrator va kafedra mudiri uchun "So\'rovlar" tugmasi bilan ochila
 
     $html = asRole($reg, 'registrator_ofisi')->get(route('admin.timetable.index'))->assertOk()->getContent();
     expect($html)->toContain('id="changeReqBtn"')->toContain('const TIMETABLE_CAN_APPROVE = true');
-    @file_put_contents(sys_get_temp_dir() . '/tt_reg.html', $html);
 });
 
 it('kafedra mudiri sahifasida "So\'rovlar" va "Kafedraniki" bor, tasdiqlash huquqi yo\'q', function () {
@@ -192,7 +191,6 @@ it('kafedra mudiri sahifasida "So\'rovlar" va "Kafedraniki" bor, tasdiqlash huqu
 
     $html = asRole($head, 'kafedra_mudiri')->get(route('admin.timetable.index'))->assertOk()->getContent();
     expect($html)->toContain('id="changeReqBtn"')->toContain('id="mineKafedra"')->toContain('const TIMETABLE_CAN_APPROVE = false');
-    @file_put_contents(sys_get_temp_dir() . '/tt_head.html', $html);
 });
 
 it('tasdiqsiz o\'zgarishlar tarixda qoladi, xato amal yozilmaydi', function () {

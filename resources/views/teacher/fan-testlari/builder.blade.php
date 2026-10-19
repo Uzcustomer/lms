@@ -809,6 +809,39 @@
     .mn-foot .mn-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 0; }
     .mn-foot .mn-acts.one { grid-template-columns: 1fr; }
     .mn-foot .mn-acts .bl-btn { width: 100%; height: auto; min-height: 36px; padding: 7px 10px; white-space: normal; line-height: 1.25; text-align: center; font-size: 12px; }
+
+    /* Amal tugmalari — har biri o'z rangida: --b (asosiy), --bt (och fon), --bb (hoshiya) */
+    .mn-acts .bl-btn[data-act] {
+        --b: #475569; --bt: #f1f5f9; --bb: #cbd5e1;
+        border: 1px solid var(--bb); background: var(--bt); color: var(--b);
+        font-weight: 700; box-shadow: none;
+        transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+    }
+    .mn-acts .bl-btn[data-act]:not([disabled]):hover { background: var(--b); border-color: var(--b); color: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .15); }
+    .mn-acts .bl-btn[data-act]:focus-visible { outline: 2px solid var(--b); outline-offset: 2px; }
+    .mn-acts .bl-btn[data-act="stop"], .mn-acts .bl-btn[data-act="stop-entry"], .mn-acts .bl-btn[data-act="reject"] { --b: #dc2626; --bt: #fef2f2; --bb: #fca5a5; }
+    .mn-acts .bl-btn[data-act="restart"] { --b: #2563eb; --bt: #eff6ff; --bb: #93c5fd; }
+    .mn-acts .bl-btn[data-act="bypass"] { --b: #7c3aed; --bt: #f5f3ff; --bb: #c4b5fd; }
+    /* Faol holatdagilar — to'liq rangli */
+    .mn-acts .bl-btn[data-act="bypass"][data-on="1"] { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    .mn-acts .bl-btn[data-act="unlock"], .mn-acts .bl-btn[data-act="approve"] { --b: #15803d; --bt: #16a34a; --bb: #16a34a; color: #fff; box-shadow: 0 3px 10px rgba(22, 163, 74, .28); }
+    .mn-acts .bl-btn[data-act][disabled] { --b: #94a3b8; --bt: #f8fafc; --bb: #e2e8f0; opacity: 1; color: #a3b0c2; }
+
+    /* Tablar — katta, rangli: Kompyuterlar ko'k, Kirish so'rovlari moviy-yashil */
+    .mn-tabs, .mn-tabs[class] { gap: 10px; padding: 14px 24px; border-bottom: 1px solid var(--line-soft); background: #fff; }
+    .mn-tab, .mn-tab[class] {
+        --c: #2563eb; --ct: #eff6ff;
+        gap: 9px; padding: 11px 22px; border: 2px solid var(--ct); border-radius: 11px;
+        background: var(--ct); color: var(--c); font-size: 15px; font-weight: 800;
+        transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+    }
+    .mn-tab[data-tab="entries"] { --c: #0f766e; --ct: #ecfdf5; }
+    .mn-tab[class]:hover { border-color: var(--c); color: var(--c); }
+    .mn-tab[class].is-on { background: var(--c); border-color: var(--c); color: #fff; box-shadow: 0 6px 16px rgba(15, 23, 42, .16); }
+    .mn-tab:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+    .mn-tab svg { width: 18px; height: 18px; flex: none; }
+    .mn-tab .mn-badge { min-width: 22px; height: 22px; font-size: 12px; }
+    .mn-tab.is-on .mn-badge { background: #fff; color: #dc2626; }
 </style>
 
 @php
@@ -1447,8 +1480,8 @@
                 </div>
             </div>
             <div class="mn-tabs">
-                <button type="button" class="mn-tab is-on" data-tab="devices">Kompyuterlar</button>
-                <button type="button" class="mn-tab" data-tab="entries">Kirish so'rovlari <span class="mn-badge" id="monitorEntryCount" style="display:none">0</span></button>
+                <button type="button" class="mn-tab is-on" data-tab="devices"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kompyuterlar</button>
+                <button type="button" class="mn-tab" data-tab="entries"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>Kirish so'rovlari <span class="mn-badge" id="monitorEntryCount" style="display:none">0</span></button>
             </div>
             <div class="mn-sum" id="monitorSum"></div>
             <div class="mn-body" id="monitorBody"><div class="lm-empty">Yuklanmoqda...</div></div>

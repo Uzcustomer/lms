@@ -742,6 +742,73 @@
     .mn-acts .bl-btn[disabled] { opacity: .45; cursor: not-allowed; }
     .mn-toast { margin-right: auto; color: var(--ink-soft); font-size: 12.5px; }
     .mn-toast.bad { color: #b3261e; }
+
+    /* ============================================================
+       "Kompyuterlar" oynasi — kattaroq oyna, rangli kartochkalar.
+       Har bosqich o'z rangini --c (asosiy), --t (fon), --s/--sc (belgi) orqali beradi.
+       ============================================================ */
+    .mn-box { width: min(1600px, calc(100vw - 32px)); height: calc(100vh - 32px); max-height: none; }
+    .mn-body { padding: 18px 24px 22px; gap: 22px; align-content: start; background: #f6f8fb; }
+    .mn-room-title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 15px; }
+    .mn-room-title small { margin-left: 0; }
+    .mn-grid { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+
+    .mn-sum { gap: 8px; padding: 12px 24px; }
+    .mn-chip { padding: 6px 12px; font-size: 12.5px; font-weight: 600; }
+    .mn-chip b { font-size: 15px; }
+    .mn-chip.take { background: #dbeafe; color: #1e40af; } .mn-chip.take b { color: #1d4ed8; }
+    .mn-chip.done { background: #d1fae5; color: #065f46; } .mn-chip.done b { color: #047857; }
+    .mn-chip.wait { background: #fef3c7; color: #92400e; } .mn-chip.wait b { color: #b45309; }
+    .mn-chip.off { background: #eef2f6; color: #64748b; }
+
+    .mn-card, .mn-card[class] {
+        --c: #94a3b8; --t: #f8fafc; --s: #e2e8f0; --sc: #475569;
+        min-width: 0; gap: 0; padding: 0; overflow: hidden;
+        border: 1px solid #e2e8f0; border-top: 4px solid var(--c); border-radius: 12px;
+        background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+    }
+    .mn-card.take { --c: #2563eb; --t: #eff6ff; --s: #dbeafe; --sc: #1e40af; }
+    .mn-card.face, .mn-card.start, .mn-card.wait, .mn-card.restarting { --c: #d97706; --t: #fffbeb; --s: #fde68a; --sc: #92400e; }
+    .mn-card.result { --c: #059669; --t: #ecfdf5; --s: #a7f3d0; --sc: #065f46; }
+    .mn-card.offline, .mn-card.closed { --c: #94a3b8; --t: #f1f5f9; --s: #e2e8f0; --sc: #475569; }
+    .mn-card.stopped { --c: #b91c1c; --t: #fef2f2; --s: #fecaca; --sc: #991b1b; }
+    .mn-card.locked, .mn-card.ended_away { --c: #dc2626; --t: #fee2e2; --s: #dc2626; --sc: #fff; border-color: #fca5a5; border-top-color: var(--c); box-shadow: 0 0 0 2px #fecaca; }
+
+    /* Sarlavha: nom + kod chapda, bosqich o'ngda — sig'masa bosqich pastki qatorga tushadi */
+    .mn-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 11px 14px; background: var(--t); border-bottom: 1px solid rgba(15, 23, 42, .06); }
+    .mn-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; color: var(--ink); font-size: 15.5px; font-weight: 800; }
+    .mn-pc { white-space: nowrap; }
+    .mn-name .lm-code { margin-left: 0; }
+    .mn-card .mn-stage, .mn-card[class] .mn-stage { flex: none; max-width: 100%; padding: 4px 11px; border-radius: 999px; background: var(--s); color: var(--sc); font-size: 11.5px; font-weight: 800; white-space: normal; text-align: center; line-height: 1.25; }
+
+    .mn-cbody { flex: 1; display: grid; align-content: start; gap: 10px; padding: 13px 14px; }
+    .mn-student b { font-size: 14.5px; overflow-wrap: anywhere; }
+    .mn-student span { overflow-wrap: anywhere; }
+    .mn-student.none { padding: 6px 0; }
+    .mn-meta { gap: 6px 14px; font-size: 12.5px; }
+    .mn-meta span { overflow-wrap: anywhere; }
+    .mn-bar { height: 7px; }
+    .mn-bar i { background: linear-gradient(90deg, #60a5fa, #2563eb); }
+    .mn-lock { overflow-wrap: anywhere; }
+
+    /* Natija — katta, rangli */
+    .mn-result { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 10px; }
+    .mn-result b { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .mn-result span { font-size: 13px; font-weight: 800; letter-spacing: .02em; }
+    .mn-result.ok { background: #d1fae5; color: #047857; }
+    .mn-result.bad { background: #fee2e2; color: #b91c1c; }
+
+    /* Belgilar — kichik rangli yorliqlar */
+    .mn-flags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mn-flag { padding: 3px 9px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 11.5px; font-weight: 700; }
+    .mn-flag.warn { background: #fef3c7; color: #92400e; }
+    .mn-flag.bad { background: #fee2e2; color: #b91c1c; }
+
+    /* Tugmalar — 2 ustunli to'r, matn sig'masa qatorga o'raladi */
+    .mn-foot { display: grid; gap: 8px; padding: 11px 14px 13px; border-top: 1px solid #eef2f6; background: #fafbfd; }
+    .mn-foot .mn-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 0; }
+    .mn-foot .mn-acts.one { grid-template-columns: 1fr; }
+    .mn-foot .mn-acts .bl-btn { width: 100%; height: auto; min-height: 36px; padding: 7px 10px; white-space: normal; line-height: 1.25; text-align: center; font-size: 12px; }
 </style>
 
 @php
@@ -1420,7 +1487,7 @@
                 meta += '<div class="mn-meta"><span>Javob: <b>' + answered + ' / ' + a.questions + '</b></span><span>Qoldi: <b>' + clock(a.seconds_left) + '</b></span></div>'
                     + '<div class="mn-bar" role="img" aria-label="' + pct + '% javob berilgan"><i style="width:' + pct + '%"></i></div>';
             } else if (a && a.finished && a.percent !== null) {
-                meta += '<div class="mn-meta"><span>Natija: <b class="' + (a.passed ? 'ok' : 'bad') + '">' + a.percent + '%</b></span><span class="' + (a.passed ? 'ok' : 'bad') + '">' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
+                meta += '<div class="mn-result ' + (a.passed ? 'ok' : 'bad') + '"><b>' + a.percent + '%</b><span>' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
             }
             if (d.stage === 'locked') {
                 meta += '<div class="mn-lock">' + a.away_limit + " marta chalg'igani uchun test to'xtatildi. Javoblari topshirilmagan — ochib berish faqat bir marta mumkin.</div>";
@@ -1431,11 +1498,11 @@
                 meta += '<div class="mn-lock" style="background:#e0f2fe;color:#075985">' + "Yuz tekshiruvisiz kirish ruxsati berilgan — keyingi talaba faqat ID bilan kiradi (bir marta).</div>";
             }
             const flags = [];
-            if (a && a.face_bypassed) flags.push('<span class="warn">Yuz tekshiruvisiz kirgan</span>');
-            if (a && a.away > 0) flags.push('<span class="warn">Chalg\'idi: ' + a.away + '</span>');
-            if (a && a.face_mismatches > 0) flags.push('<span class="bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
-            if (d.stage_since && d.stage !== 'offline') flags.push('<span>' + esc(d.stage_since) + '</span>');
-            if (flags.length) meta += '<div class="mn-meta">' + flags.join('') + '</div>';
+            if (a && a.face_bypassed) flags.push('<span class="mn-flag warn">Yuz tekshiruvisiz kirgan</span>');
+            if (a && a.away > 0) flags.push('<span class="mn-flag warn">Chalg\'idi: ' + a.away + '</span>');
+            if (a && a.face_mismatches > 0) flags.push('<span class="mn-flag bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
+            if (d.stage_since && d.stage !== 'offline') flags.push('<span class="mn-flag">' + esc(d.stage_since) + '</span>');
+            if (flags.length) meta += '<div class="mn-flags">' + flags.join('') + '</div>';
 
             const stopBtn = '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="stop" data-url="' + esc(d.stop_url || '') + '" data-name="' + esc(d.name) + '"' + (d.stop_url ? '' : ' disabled') + ">To'xtatish</button>";
             const restartTitle = a && a.lock_count > 0 ? "Chalg'ish sababli qulflangan testni qayta boshlab bo'lmaydi" : "Qayta boshlash uchun kompyuterda talaba bo'lishi kerak";
@@ -1450,13 +1517,13 @@
                 : '';
 
             return '<div class="mn-card ' + esc(d.stage) + '">'
-                + '<div class="mn-top"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + esc(d.name)
+                + '<div class="mn-head"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i><span class="mn-pc">' + esc(d.name) + '</span>'
                 + (d.code ? '<em class="lm-code" title="Tiklash kodi: brauzer tozalanib ketsa kutish ekranida shu kod kiritiladi">kod ' + esc(d.code) + '</em>' : '')
                 + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
-                + student + meta
-                + '<div class="mn-acts">' + stopBtn + restartBtn + '</div>'
-                + (bypassBtn ? '<div class="mn-acts">' + bypassBtn + '</div>' : '')
-                + '</div>';
+                + '<div class="mn-cbody">' + student + meta + '</div>'
+                + '<div class="mn-foot"><div class="mn-acts">' + stopBtn + restartBtn + '</div>'
+                + (bypassBtn ? '<div class="mn-acts one">' + bypassBtn + '</div>' : '')
+                + '</div></div>';
         }
 
         function render(list) {
@@ -1465,7 +1532,7 @@
                 + '<span class="mn-chip take"><b>' + count((d) => d.stage === 'take') + '</b> ishlamoqda</span>'
                 + '<span class="mn-chip done"><b>' + count((d) => d.stage === 'result') + '</b> topshirdi</span>'
                 + (count((d) => d.stage === 'locked') ? '<span class="mn-chip" style="background:#fee2e2;color:#991b1b"><b style="color:#dc2626">' + count((d) => d.stage === 'locked') + '</b> qulflangan</span>' : '')
-                + '<span class="mn-chip"><b>' + count((d) => ['start', 'face', 'wait'].includes(d.stage)) + '</b> kutmoqda</span>'
+                + '<span class="mn-chip wait"><b>' + count((d) => ['start', 'face', 'wait'].includes(d.stage)) + '</b> kutmoqda</span>'
                 + '<span class="mn-chip off"><b>' + count((d) => d.stage === 'offline' || d.stage === 'stopped') + '</b> oflayn / to\'xtatilgan</span>'
                 + '<span class="mn-live">Har 3 soniyada yangilanadi</span>';
             if (!list.length) {

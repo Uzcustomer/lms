@@ -6770,9 +6770,11 @@ class TimetableController extends Controller
             'pairs_per_day'    => $pairsPerDay,
             'day_names'        => array_values(array_slice($data['day_names'] ?? TimetableBoard::DEFAULT_DAY_NAMES, 0, $data['days'])),
             'bell_schedule'    => $schedule,
-            // Tasdiq rejimi alohida (registrator) boshqariladi — umumiy sozlamalar saqlanganda yo'qolmasin.
+            // Oynada faqat dam olish kunlari va ikki belgi bor — qolgan kalitlar (fan ranglari,
+            // semestr boshi, bayramlar, tasdiq rejimi) saqlanganda yo'qolmasin. Tasdiq rejimi
+            // alohida (registrator) boshqariladi, shu yerdan o'zgartirilmaydi.
             'settings'         => isset($data['settings'])
-                ? $data['settings'] + array_intersect_key($board->settings ?: [], ['approval_required' => true])
+                ? array_diff_key($data['settings'], ['approval_required' => true]) + ['days_off' => []] + ($board->settings ?: [])
                 : $board->settings,
         ]);
 

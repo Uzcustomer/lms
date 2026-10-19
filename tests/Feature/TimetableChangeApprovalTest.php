@@ -189,3 +189,25 @@ it('kafedra mudiri sahifasida "So\'rovlar" va "Kafedraniki" bor, tasdiqlash huqu
     expect($html)->toContain('id="changeReqBtn"')->toContain('id="mineKafedra"')->toContain('const TIMETABLE_CAN_APPROVE = false');
     @file_put_contents(sys_get_temp_dir() . '/tt_head.html', $html);
 });
+
+it('doska sozlamalari saqlanganda tasdiq rejimi, ranglar va bayramlar yo\'qolmaydi', function () {
+    ['reg' => $reg, 'board' => $board] = approvalSetup();
+    $board->update(['settings' => [
+        'approval_required' => true, 'subject_colors' => ['gigiyena' => '#ff0000'],
+        'holidays' => ['2026-11-01'], 'days_off' => ['Yakshanba'],
+    ]]);
+
+    asRole($reg, 'registrator_ofisi')->post(route('admin.timetable.settings.save', $board), [
+        'days' => 6,
+        'bell_schedule' => [['type' => 'pair', 'name' => '1-para']],
+        // days_off yuborilmadi — hammasi olib tashlangan
+        'settings' => ['allow_zero' => 1, 'show_day_number' => 0, 'approval_required' => 0],
+    ])->assertOk();
+
+    $settings = $board->fresh()->settings;
+    expect($settings['approval_required'])->toBeTrue()
+        ->and($settings['subject_colors'])->toBe(['gigiyena' => '#ff0000'])
+        ->and($settings['holidays'])->toBe(['2026-11-01'])
+        ->and($settings['days_off'])->toBe([])
+        ->and((int) $settings['allow_zero'])->toBe(1);
+});

@@ -532,25 +532,42 @@ class TimetableController extends Controller
         return $cache[$cacheKey] = array_map(fn ($byGroup) => array_map('count', $byGroup), $counts);
     }
 
-    /** Guruh nomi (asosiy, qavssiz) => o'quv reja (groups jadvalidan; faollari oxirida — eski nofaolni ustidan yozadi). */
-    private function groupCurriculaByBase(): array
+    /**
+     * Guruhning o'quv rejasi (groups jadvalidan). Guruh nomi fakultetlararo takrorlanishi mumkin,
+     * shuning uchun avval qatorning fakulteti (groups.department_name — kartadagi faculty_name ham
+     * shundan) bo'yicha; nom yagona bo'lsa — o'sha; aks holda oxirgi faol guruhniki (eski xatti).
+     */
+    private function groupCurriculum(string $groupName, ?string $faculty = null): ?int
     {
         static $map = null;
         if ($map === null) {
             $map = [];
-            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id']) as $g) {
-                $map[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name))] = (int) $g->curriculum_hemis_id;
+            // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi.
+            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')
+                ->get(['name', 'department_name', 'curriculum_hemis_id']) as $g) {
+                $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name));
+                $map[$k]['fac'][mb_strtolower(trim((string) $g->department_name))] = (int) $g->curriculum_hemis_id;
+                $map[$k]['last'] = (int) $g->curriculum_hemis_id;
             }
         }
+        $entry = $map[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $groupName))] ?? null;
+        if ($entry === null) {
+            return null;
+        }
+        $fac = mb_strtolower(trim((string) $faculty));
+        if ($fac !== '' && isset($entry['fac'][$fac])) {
+            return $entry['fac'][$fac];
+        }
+        $distinct = array_values(array_unique($entry['fac']));
 
-        return $map;
+        return count($distinct) === 1 ? $distinct[0] : $entry['last'];
     }
 
     /**
      * Guruhdagi faol talabalar soni (students, status 11). Guruh nomi fakultetlararo takrorlanishi
      * mumkin, shuning uchun guruhning o'z o'quv rejasi bo'yicha; reja mos kelmasa — nom bo'yicha jami.
      */
-    private function activeStudentCountFor(string $groupName): int
+    private function activeStudentCountFor(string $groupName, ?string $faculty = null): int
     {
         static $counts = null;
         if ($counts === null) {
@@ -564,7 +581,7 @@ class TimetableController extends Controller
             }
         }
         $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $groupName));
-        $cur = $this->groupCurriculaByBase()[$k] ?? null;
+        $cur = $this->groupCurriculum($groupName, $faculty);
 
         return (int) (($cur !== null ? ($counts[$k][$cur] ?? null) : null) ?? array_sum($counts[$k] ?? []));
     }
@@ -605,13 +622,12 @@ class TimetableController extends Controller
      * (guruh nomi fakultetlararo takrorlanishi mumkin — variantStudentCounts dagi kabi).
      * [['name' => .., 'group' => ..], ...]
      */
-    private function variantStudentList(array $rowsBySubject, string $subjectName, array $groupNames): array
+    private function variantStudentList(array $rowsBySubject, string $subjectName, array $groupNames, ?string $faculty = null): array
     {
-        $groupCurricula = $this->groupCurriculaByBase();
         $want = [];
         foreach ($groupNames as $g) {
             $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g));
-            $want[$gk] = $groupCurricula[$gk] ?? null;
+            $want[$gk] = $this->groupCurriculum((string) $g, $faculty);
         }
         $out = [];
         foreach ($rowsBySubject[mb_strtolower(trim($subjectName))] ?? [] as $r) {
@@ -3335,16 +3351,16 @@ class TimetableController extends Controller
                 'flow' => !empty($g['variant']) ? (string) $g['parent'] : null,
                 // Bo'lak qatori: shu bo'lakka HEMIS'da biriktirilgan talabalar (chap ustunda ro'yxat).
                 'students' => !empty($g['variant'])
-                    ? $this->variantStudentList($variantStudentRows, (string) $g['variant'], $members)
+                    ? $this->variantStudentList($variantStudentRows, (string) $g['variant'], $members, $g['faculty'] ?? null)
                     : null,
                 'subgroups' => $members,
                 // Oddiy (bo'lak bo'lmagan) qator: har guruhchadagi faol talabalar soni.
                 'member_students' => empty($g['variant'])
-                    ? (function () use ($members) {
+                    ? (function () use ($members, $g) {
                         $out = [];
                         foreach ($members as $m) {
                             foreach (preg_split('/\s+\+\s+/u', (string) $m) as $part) {
-                                $out[$part] = $this->activeStudentCountFor($part);
+                                $out[$part] = $this->activeStudentCountFor($part, $g['faculty'] ?? null);
                             }
                         }
                         return $out;

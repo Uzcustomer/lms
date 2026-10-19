@@ -64,7 +64,13 @@ function approvalSetup(bool $approval = true): array
     DB::table('students')->insert([
         'hemis_id' => 9001, 'full_name' => 'TALABA BIR', 'short_name' => 'TALABA B.', 'first_name' => 'B', 'second_name' => 'T',
         'third_name' => 'X', 'student_id_number' => '9001', 'group_name' => 'd/d25-01a', 'student_status_code' => 11,
-        'department_id' => 77, 'created_at' => now(), 'updated_at' => now(),
+        'department_id' => 77, 'department_name' => 'F1', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    // Boshqa fakultetdagi bir xil nomli guruh talabasi — unga xabar bormasligi kerak.
+    DB::table('students')->insert([
+        'hemis_id' => 9002, 'full_name' => 'TALABA IKKI', 'short_name' => 'TALABA I.', 'first_name' => 'I', 'second_name' => 'T',
+        'third_name' => 'X', 'student_id_number' => '9002', 'group_name' => 'd/d25-01a', 'student_status_code' => 11,
+        'department_id' => 78, 'department_name' => 'F2', 'created_at' => now(), 'updated_at' => now(),
     ]);
 
     return compact('head', 'reg', 'teacher', 'board', 'card');
@@ -86,6 +92,8 @@ it('kafedra mudiri o\'zgarishi so\'rov bo\'ladi, registrator tasdiqlagach qo\'ll
     $req = TimetableChangeRequest::sole();
     expect($req->status)->toBe('pending')
         ->and($req->summary)->toContain('Gigiyena')
+        // Sinov bajarish kartani xotirada ko'chiradi — tavsifda baribir eski joy turadi.
+        ->and($req->summary)->toContain('Dushanba, 1-para → Seshanba, 3-para')
         ->and($req->details['groups'])->toContain('d/d25-01a (o\'z)');
     expect(TeacherNotification::where('teacher_id', $reg->id)->count())->toBe(1);
 
@@ -96,6 +104,7 @@ it('kafedra mudiri o\'zgarishi so\'rov bo\'ladi, registrator tasdiqlagach qo\'ll
     expect(TimetableChangeRequest::where('status', 'pending')->count())->toBe(1)
         ->and(TimetableChangeRequest::where('status', 'cancelled')->count())->toBe(1);
     $req = TimetableChangeRequest::where('status', 'pending')->sole();
+    expect($req->summary)->toContain('Dushanba, 1-para → Chorshanba, 5-para');
 
     // Kafedra mudiri tasdiqlay olmaydi
     asRole($head, 'kafedra_mudiri')
@@ -107,7 +116,8 @@ it('kafedra mudiri o\'zgarishi so\'rov bo\'ladi, registrator tasdiqlagach qo\'ll
 
     expect($card->fresh()->only(['day', 'pair']))->toBe(['day' => 3, 'pair' => 5])
         ->and($req->fresh()->status)->toBe('approved')
-        ->and(StudentNotification::where('type', 'timetable_change')->count())->toBe(1)
+        ->and(StudentNotification::where('type', 'timetable_change')->pluck('student_id')->all())
+        ->toBe([DB::table('students')->where('hemis_id', 9001)->value('id')])
         ->and(TeacherNotification::where('teacher_id', $teacher->id)->where('type', 'timetable_change')->count())->toBe(1)
         ->and(TeacherNotification::where('teacher_id', $head->id)->count())->toBe(1);
 });

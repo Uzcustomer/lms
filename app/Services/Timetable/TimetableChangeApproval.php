@@ -227,12 +227,12 @@ class TimetableChangeApproval
 
     private function routeCard(Request $request): ?TimetableCard
     {
+        // Bazadan qayta o'qiladi: sinov bajarish route'dagi kartani xotirada o'zgartirib
+        // qo'yadi (rollback faqat bazani tiklaydi) — tavsifda eski joy ko'rinsin.
         $card = $request->route('card');
-        if ($card instanceof TimetableCard) {
-            return $card;
-        }
+        $id = $card instanceof TimetableCard ? $card->getKey() : $card;
 
-        return $card ? TimetableCard::find($card) : null;
+        return $id ? TimetableCard::find($id) : null;
     }
 
     private function affectedCards(TimetableBoard $board, string $route, array $p, ?TimetableCard $card)
@@ -411,7 +411,7 @@ class TimetableChangeApproval
         ])->each(fn (Teacher $t) => $send($t));
 
         // Guruh talabalari
-        $students = $this->studentsOfGroups((array) ($details['groups'] ?? []));
+        $students = $this->studentsOfGroups((array) ($details['groups'] ?? []), (array) ($details['faculties'] ?? []));
         $facultyIds = $students->pluck('department_id')->filter()->map(fn ($v) => (int) $v)->unique()->all();
         // Dekanat — talabalar fakultetining dekani
         if ($facultyIds) {
@@ -450,7 +450,11 @@ class TimetableChangeApproval
         return $existing ? Teacher::role($existing)->where('status', true)->get() : collect();
     }
 
-    private function studentsOfGroups(array $groups)
+    /**
+     * Guruhlarning faol talabalari. Bir xil nomli guruh boshqa fakultetda ham bo'lishi
+     * mumkin — kartaning fakulteti ma'lum bo'lsa, shu fakultet talabalari olinadi.
+     */
+    private function studentsOfGroups(array $groups, array $faculties = [])
     {
         $bases = [];
         foreach ($groups as $g) {
@@ -463,13 +467,18 @@ class TimetableChangeApproval
             return collect();
         }
 
-        return Student::where('student_status_code', 11)
+        $query = Student::where('student_status_code', 11)
             ->where(function ($q) use ($bases) {
                 foreach (array_keys($bases) as $b) {
                     $q->orWhere('group_name', $b)->orWhere('group_name', 'like', $b . ' (%');
                 }
-            })
-            ->get(['id', 'department_id', 'telegram_chat_id', 'telegram_verified_at', 'group_name']);
+            });
+        $faculties = array_values(array_filter($faculties, fn ($f) => trim((string) $f) !== ''));
+        if ($faculties) {
+            $query->whereIn('department_name', $faculties);
+        }
+
+        return $query->get(['id', 'department_id', 'telegram_chat_id', 'telegram_verified_at', 'group_name']);
     }
 
     public function sendToTeacher(Teacher $teacher, string $title, string $message, TimetableChangeRequest $req): void

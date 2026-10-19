@@ -768,7 +768,7 @@
         background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
     }
     .mn-card.take { --c: #2563eb; --t: #eff6ff; --s: #dbeafe; --sc: #1e40af; }
-    .mn-card.face, .mn-card.start, .mn-card.wait, .mn-card.restarting { --c: #d97706; --t: #fffbeb; --s: #fde68a; --sc: #92400e; }
+    .mn-card.face, .mn-card.start, .mn-card.wait, .mn-card.restarting, .mn-card.idle { --c: #d97706; --t: #fffbeb; --s: #fde68a; --sc: #92400e; }
     .mn-card.result { --c: #059669; --t: #ecfdf5; --s: #a7f3d0; --sc: #065f46; }
     .mn-card.offline, .mn-card.closed { --c: #94a3b8; --t: #f1f5f9; --s: #e2e8f0; --sc: #475569; }
     .mn-card.stopped { --c: #b91c1c; --t: #fef2f2; --s: #fecaca; --sc: #991b1b; }
@@ -1559,13 +1559,13 @@
                 + '</div></div>';
         }
 
-        function render(list) {
+        function render(list, finishedTotal) {
             const count = (fn) => list.filter(fn).length;
             sum.innerHTML = '<span class="mn-chip"><b>' + count((d) => d.running) + '</b> kompyuterda</span>'
                 + '<span class="mn-chip take"><b>' + count((d) => d.stage === 'take') + '</b> ishlamoqda</span>'
-                + '<span class="mn-chip done"><b>' + count((d) => d.stage === 'result') + '</b> topshirdi</span>'
+                + '<span class="mn-chip done"><b>' + (finishedTotal ?? 0) + '</b> topshirdi</span>'
                 + (count((d) => d.stage === 'locked') ? '<span class="mn-chip" style="background:#fee2e2;color:#991b1b"><b style="color:#dc2626">' + count((d) => d.stage === 'locked') + '</b> qulflangan</span>' : '')
-                + '<span class="mn-chip wait"><b>' + count((d) => ['start', 'face', 'wait'].includes(d.stage)) + '</b> kutmoqda</span>'
+                + '<span class="mn-chip wait"><b>' + count((d) => ['start', 'face', 'wait', 'idle'].includes(d.stage)) + '</b> kutmoqda</span>'
                 + '<span class="mn-chip off"><b>' + count((d) => d.stage === 'offline' || d.stage === 'stopped') + '</b> oflayn / to\'xtatilgan</span>'
                 + '<span class="mn-live">Har 3 soniyada yangilanadi</span>';
             if (!list.length) {
@@ -1676,7 +1676,7 @@
                 if (!r.ok) throw new Error();
                 const j = await r.json();
                 if (j.migrate) { body.innerHTML = '<div class="lm-empty">Server yangilanmagan: php artisan migrate ni ishga tushiring.</div>'; return; }
-                render(j.devices || []);
+                render(j.devices || [], j.finished_total);
                 renderEntries(j.entries || [], j.public || null);
             } catch (e) {
                 toast.className = 'mn-toast bad';

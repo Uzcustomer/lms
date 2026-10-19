@@ -407,7 +407,15 @@ class FanTestiController extends Controller
             $online = $d->isOnline();
             $attempt = $attempts->get((int) $d->current_attempt_id)
                 ?? (!$running ? $attempts->get((int) $d->released_attempt_id) : null);
+            // Faqat jonli holat: topshirib ketgan talabaning natijasi kartochkada
+            // qolmaydi (u jurnalda) — kompyuter keyingi talabani kutayotgan bo'ladi
+            if ($attempt && $attempt->isFinished()) {
+                $attempt = null;
+            }
             $stage = !$running ? 'stopped' : (!$online ? 'offline' : ($d->kiosk_stage ?: 'wait'));
+            if ($stage === 'result' && !$attempt) {
+                $stage = 'idle';
+            }
             // Yangi qayta boshlangan, lekin kompyuter hali so'ramagan
             if ($running && $d->pending_command === 'restart') {
                 $stage = 'restarting';
@@ -462,6 +470,8 @@ class FanTestiController extends Controller
 
         return response()->json([
             'devices' => $rows,
+            // Kartochkalarda natija ko'rinmagani uchun — shu testni topshirganlar soni alohida
+            'finished_total' => FanTestiAttempt::where('fan_testi_id', $fanTesti->id)->where('status', '!=', 'in_progress')->count(),
             'public' => [
                 'open' => $this->hasPublicColumns() && $fanTesti->isPublicOpen(),
                 'url' => route('kiosk.fan-testi.show', $fanTesti),
@@ -701,6 +711,7 @@ class FanTestiController extends Controller
         'take' => 'Test ishlanmoqda',
         'result' => 'Topshirdi',
         'closed' => 'Test yopiq',
+        'idle' => 'Keyingi talaba kutilmoqda',
         'offline' => 'Oflayn',
         'stopped' => "To'xtatilgan",
         'restarting' => 'Qayta boshlanmoqda',

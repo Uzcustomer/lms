@@ -533,6 +533,71 @@ class TimetableController extends Controller
     }
 
     /**
+     * Bo'lak fanlariga (HEMIS student_subjects) biriktirilgan faol talabalar — barcha fanlar uchun
+     * BITTA so'rov (cyclePlan har ochilishda chaqiriladi; har qatorga alohida so'rov jadvalni
+     * qayta-qayta to'liq o'qirdi). [kichik harfli fan nomi => [['id', 'name', 'group', 'cur'], ...]]
+     */
+    private function variantStudentRows(array $subjectNames, int $yearStart): array
+    {
+        $names = array_values(array_unique(array_filter(array_map(fn ($n) => mb_strtolower(trim((string) $n)), $subjectNames))));
+        if (!$names || !Schema::hasTable('student_subjects')) {
+            return [];
+        }
+        $query = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->leftJoin('curriculum_subjects as cs', 'cs.curriculum_subject_hemis_id', '=', 'ss.curriculum_subject_hemis_id')
+            ->whereRaw('LOWER(TRIM(ss.subject_name)) IN (' . implode(',', array_fill(0, count($names), '?')) . ')', $names)
+            ->where('st.student_status_code', 11);
+        if ($yearStart > 0 && Schema::hasColumn('student_subjects', 'education_year')) {
+            $query->where('ss.education_year', 'like', $yearStart . '%');
+        }
+        $out = [];
+        foreach ($query->get(['ss.subject_name', 'st.hemis_id', 'st.full_name', 'st.group_name', 'cs.curricula_hemis_id']) as $r) {
+            $out[mb_strtolower(trim((string) $r->subject_name))][] = [
+                'id' => (string) $r->hemis_id, 'name' => trim((string) $r->full_name),
+                'group' => trim((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name)),
+                'cur' => (int) $r->curricula_hemis_id,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Bo'lak qatori talabalari: shu qator guruhlaridan, har guruh o'z o'quv rejasi bo'yicha
+     * (guruh nomi fakultetlararo takrorlanishi mumkin — variantStudentCounts dagi kabi).
+     * [['name' => .., 'group' => ..], ...]
+     */
+    private function variantStudentList(array $rowsBySubject, string $subjectName, array $groupNames): array
+    {
+        static $groupCurricula = null;
+        if ($groupCurricula === null) {
+            $groupCurricula = [];
+            // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi (assembleRows kabi).
+            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id']) as $g) {
+                $groupCurricula[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name))] = (int) $g->curriculum_hemis_id;
+            }
+        }
+        $want = [];
+        foreach ($groupNames as $g) {
+            $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g));
+            $want[$gk] = $groupCurricula[$gk] ?? null;
+        }
+        $out = [];
+        foreach ($rowsBySubject[mb_strtolower(trim($subjectName))] ?? [] as $r) {
+            $gk = $this->groupNameKey($r['group']);
+            if (!array_key_exists($gk, $want) || ($want[$gk] !== null && $r['cur'] !== $want[$gk])) {
+                continue;
+            }
+            $out[$r['id']] = ['name' => $r['name'], 'group' => $r['group']];
+        }
+        $out = array_values($out);
+        usort($out, fn ($a, $b) => strnatcasecmp($a['group'], $b['group']) ?: strcasecmp($a['name'], $b['name']));
+
+        return $out;
+    }
+
+    /**
      * Guruh qatoridan shu bo'lakka biriktirilgan talabalar soni: guruhning o'z o'quv rejasi
      * bo'yicha (hemisGroupsFor dagi kabi); rejasi noma'lum bo'lsa — fanning rejalari bo'yicha.
      */
@@ -1219,10 +1284,11 @@ class TimetableController extends Controller
         foreach (TimetableCard::where('board_id', $board->id)->get() as $card) {
             $existing[$keyOf($card->getAttributes() + ['group_names' => $card->getRawOriginal('group_names')])][] = $card;
         }
-        // Joylashgan / biriktirilgan kartalar birinchi saqlansin.
+        // Joylashgan / biriktirilgan (o'qituvchi yoki xona) kartalar birinchi saqlansin — reja
+        // bunday kartalar sonini kamaytirsa, bo'sh karta qolib, xonasi bori o'chib ketmasin.
         foreach ($existing as &$bucket) {
-            usort($bucket, fn ($a, $b) => [(int) !($a->day && $a->pair), (int) !$a->teacher_id, $a->id]
-                <=> [(int) !($b->day && $b->pair), (int) !$b->teacher_id, $b->id]);
+            usort($bucket, fn ($a, $b) => [(int) !($a->day && $a->pair), (int) !$a->teacher_id, (int) !$a->auditorium_code, $a->id]
+                <=> [(int) !($b->day && $b->pair), (int) !$b->teacher_id, (int) !$b->auditorium_code, $b->id]);
         }
         unset($bucket);
 
@@ -2955,6 +3021,11 @@ class TimetableController extends Controller
             }
         }
 
+        // Bo'lak qatorlari talabalari — barcha bo'lak fanlari uchun bitta so'rov.
+        $variantStudentRows = $cycleSubRows
+            ? $this->variantStudentRows(array_map(fn ($g) => $g['variant'] ?? null, $byFlow), (int) substr((string) $board->academic_year, 0, 4))
+            : [];
+
         // Fanlar global tartibi (nomi bo'yicha) — rotatsiya uchun
         $allSubs = [];
         foreach ($byFlow as $g) {
@@ -3232,6 +3303,10 @@ class TimetableController extends Controller
                 // Ichki jadval: bo'lakli fan qatori ("Fan (c)": 02a dan 5 + 02b dan 5 talaba).
                 'variant' => $g['variant'] ?? null,
                 'flow' => !empty($g['variant']) ? (string) $g['parent'] : null,
+                // Bo'lak qatori: shu bo'lakka HEMIS'da biriktirilgan talabalar (chap ustunda ro'yxat).
+                'students' => !empty($g['variant'])
+                    ? $this->variantStudentList($variantStudentRows, (string) $g['variant'], $members)
+                    : null,
                 'subgroups' => $members,
                 'faculty' => $g['faculty'],
                 'specialty' => $g['specialty'],

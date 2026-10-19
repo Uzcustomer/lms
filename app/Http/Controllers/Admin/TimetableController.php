@@ -493,40 +493,64 @@ class TimetableController extends Controller
     }
 
     /**
-     * Bo'lakli fan ("Fan (a)"): HEMIS'da shu fanga biriktirilgan (o'qiyotgan) talabalar soni
-     * akademik guruh bo'yicha — [asosiy guruh kaliti => soni]. Ma'lumot student_subjects
-     * (import:student-subjects) dan; bo'sh bo'lsa — [] (eski harf qoidasi ishlatiladi).
+     * Bo'lakli fan ("Fan (a)"): HEMIS'da shu fanga biriktirilgan (o'qiyotgan) talabalar soni —
+     * [o'quv reja => [asosiy guruh kaliti => soni]]. Guruh nomi fakultetlararo takrorlanishi
+     * mumkin, shuning uchun biriktiruv o'z rejasi (curriculum_subjects) bilan olinadi; faqat
+     * doskaning o'quv yili — yili yozilmagan qator olinmaydi: oldindan rejalashtirilayotgan
+     * yilda bitta shunday qator oqimni "biriktirilgan" qilib, qolgan bo'laklarni yo'qotardi.
+     * Ma'lumot student_subjects (import:student-subjects) dan; bo'sh bo'lsa — [].
      */
-    private function variantStudentCounts(string $subjectName): array
+    private function variantStudentCounts(string $subjectName, int $yearStart = 0): array
     {
         static $cache = [];
         $key = mb_strtolower(trim($subjectName));
-        if (array_key_exists($key, $cache)) {
-            return $cache[$key];
+        $cacheKey = $key . '|' . $yearStart;
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
         }
         if (!Schema::hasTable('student_subjects')) {
-            return $cache[$key] = [];
+            return $cache[$cacheKey] = [];
         }
-        $rows = DB::table('student_subjects as ss')
+        $query = DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->leftJoin('curriculum_subjects as cs', 'cs.curriculum_subject_hemis_id', '=', 'ss.curriculum_subject_hemis_id')
             ->whereRaw('LOWER(TRIM(ss.subject_name)) = ?', [$key])
-            ->where('st.student_status_code', 11)
-            ->get(['st.hemis_id', 'st.group_name', 'ss.education_year']);
-        // Faqat eng so'nggi o'quv yili biriktiruvlari (eski yillar qayta o'qish va h.k.).
-        $year = $rows->max('education_year');
+            ->where('st.student_status_code', 11);
+        if ($yearStart > 0 && Schema::hasColumn('student_subjects', 'education_year')) {
+            // "2026" yoki "2026-2027" — HEMIS qanday yozgan bo'lsa.
+            $query->where('ss.education_year', 'like', $yearStart . '%');
+        }
         $counts = [];
-        foreach ($rows as $r) {
-            if ($year !== null && (string) $r->education_year !== (string) $year) {
-                continue;
-            }
+        foreach ($query->get(['st.hemis_id', 'st.group_name', 'cs.curricula_hemis_id']) as $r) {
             $g = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name));
             if ($g === '') {
                 continue;
             }
-            $counts[$g][(string) $r->hemis_id] = true;
+            $counts[(int) $r->curricula_hemis_id][$g][(string) $r->hemis_id] = true;
         }
 
-        return $cache[$key] = array_map('count', $counts);
+        return $cache[$cacheKey] = array_map(fn ($byGroup) => array_map('count', $byGroup), $counts);
+    }
+
+    /**
+     * Guruh qatoridan shu bo'lakka biriktirilgan talabalar soni: guruhning o'z o'quv rejasi
+     * bo'yicha (hemisGroupsFor dagi kabi); rejasi noma'lum bo'lsa — fanning rejalari bo'yicha.
+     */
+    private function variantAssignedCount(array $byCurriculum, $subject, array $row, array $groupCurricula): int
+    {
+        $name = trim((string) ($row['name'] ?? ''));
+        $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $name));
+        $cur = $groupCurricula[$this->groupNameKey($name)] ?? $groupCurricula['base:' . $gk] ?? null;
+        if ($cur) {
+            return (int) ($byCurriculum[(int) $cur][$gk] ?? 0);
+        }
+        $curricula = array_keys($subject->curricula ?? []) ?: array_keys($byCurriculum);
+        $sum = 0;
+        foreach ($curricula as $c) {
+            $sum += (int) ($byCurriculum[(int) $c][$gk] ?? 0);
+        }
+
+        return $sum;
     }
 
     /**
@@ -852,7 +876,8 @@ class TimetableController extends Controller
                             $useAssignments = false;
                             if ($hemisBoard && $this->variantLetter((string) $s->subject_name) !== null) {
                                 $vCandidates = $this->hemisGroupsFor($s, $oqRows, $groupCurricula, false);
-                                $vCounts = $this->variantStudentCounts((string) $s->subject_name);
+                                $vYear = (int) substr((string) $board->academic_year, 0, 4);
+                                $vCounts = $this->variantStudentCounts((string) $s->subject_name, $vYear);
                                 // Biriktiruv HEMIS'ga hali hamma oqim uchun kiritilmagan bo'lishi mumkin:
                                 // shu oqim guruhlari fanning birorta bo'lagiga ham biriktirilmagan bo'lsa —
                                 // ma'lumot yo'q, eski harf qoidasi (oqim kartasiz qolib ketmasin).
@@ -862,9 +887,9 @@ class TimetableController extends Controller
                                     if ($vBase === '' || mb_strtolower((string) $this->cycleSubjectVariantBase((string) $sibling->subject_name)) !== $vBase) {
                                         continue;
                                     }
-                                    $siblingCounts = $this->variantStudentCounts((string) $sibling->subject_name);
+                                    $siblingCounts = $this->variantStudentCounts((string) $sibling->subject_name, $vYear);
                                     foreach ($vCandidates as $r) {
-                                        if (!empty($siblingCounts[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) ($r['name'] ?? '')))])) {
+                                        if ($this->variantAssignedCount($siblingCounts, $sibling, $r, $groupCurricula) > 0) {
                                             $flowAssigned = true;
                                             break 2;
                                         }
@@ -875,13 +900,13 @@ class TimetableController extends Controller
                             if ($useAssignments) {
                                 $vRows = [];
                                 foreach ($vCandidates as $r) {
-                                    $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) ($r['name'] ?? '')));
-                                    if (empty($vCounts[$gk])) {
+                                    $assigned = $this->variantAssignedCount($vCounts, $s, $r, $groupCurricula);
+                                    if ($assigned < 1) {
                                         continue;
                                     }
                                     $groupTotal = max(1, (int) ($r['count'] ?? 0));
-                                    $r['partial'] = $vCounts[$gk] * 2 < $groupTotal;
-                                    $r['count'] = $vCounts[$gk];
+                                    $r['partial'] = $assigned * 2 < $groupTotal;
+                                    $r['count'] = $assigned;
                                     $vRows[] = $r;
                                 }
                                 if (!$vRows) {

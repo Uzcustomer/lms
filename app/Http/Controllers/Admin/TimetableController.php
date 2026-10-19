@@ -1140,7 +1140,7 @@ class TimetableController extends Controller
      * Kartochkalarni yaratish: tasdiqlangan oqim + ishchi reja fanlari.
      * Mavjud kartochkalar o'chirilib qaytadan yaratiladi (joylashuvlar yo'qoladi).
      */
-    public function generateCards(TimetableBoard $board)
+    public function generateCards(Request $request, TimetableBoard $board)
     {
         $specsFound = [];
         $rows = $this->assembleRows($board, null, null, $specsFound);
@@ -1149,6 +1149,12 @@ class TimetableController extends Controller
                 . ($board->kind === 'plan' ? "kelasi yil (reja) oqimini" : "joriy oqimni") . " tasdiqlang."], 422);
         }
         $rows = $this->stripUnsupportedColumns($rows);
+
+        // Sinxronlash (sukut): mavjud kartalar joyida qoladi, faqat endi kerak bo'lmaganlari
+        // o'chiriladi va yangilari qo'shiladi. "full" — hammasini qaytadan yaratish (eski xatti-harakat).
+        if ($request->input('mode', 'sync') !== 'full') {
+            return response()->json($this->syncCards($board, $rows, $specsFound));
+        }
 
         // O'qituvchi/xona biriktirishlari dars birligi bo'yicha saqlab qolinadi
         // (kafedra mudirlari biriktirgani qayta yaratishda yo'qolmasin): kartalardagi
@@ -1178,6 +1184,108 @@ class TimetableController extends Controller
         $restored = $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $kept);
 
         return response()->json(['ok' => true, 'created' => count($rows)] + $restored);
+    }
+
+    /**
+     * Kartalarni tasdiqlangan oqim/rejaga moslab SINXRONLAYDI: har karta kalit bo'yicha
+     * (yo'nalish, kurs, oqim, til, tur, guruh(lar), fan, soat, hafta) solishtiriladi.
+     *  - mos kelganlari saqlanadi (joylashuv, hafta istisnolari, o'qituvchi/xona bilan);
+     *    faqat talabalar soni va kafedra yangilanadi;
+     *  - endi rejada yo'qlari o'chiriladi;
+     *  - yangilari joylashtirilmagan holda qo'shiladi.
+     */
+    private function syncCards(TimetableBoard $board, array $rows, array $specsFound): array
+    {
+        $norm = fn ($v) => mb_strtolower(trim((string) $v));
+        $groupsOf = function ($v): string {
+            if (is_string($v)) {
+                $v = json_decode($v, true);
+            }
+            $list = array_map(fn ($g) => trim((string) $g), (array) ($v ?: []));
+            sort($list, SORT_NATURAL | SORT_FLAG_CASE);
+
+            return implode('+', $list);
+        };
+        // Fakultet kalitga kirmaydi: yangi qatorlarda u keyin (backfill) to'ldiriladi,
+        // guruh nomlari esa fakultetlararo takrorlanmaydi.
+        $keyOf = fn ($c) => implode('¦', [
+            $norm($c['specialty_name'] ?? ''), (int) ($c['course'] ?? 0),
+            $norm($c['oqim_label'] ?? ''), $norm($c['lang'] ?? ''), (string) ($c['training_type'] ?? ''),
+            $norm($c['group_name'] ?? ''), $norm($groupsOf($c['group_names'] ?? null)),
+            $norm($c['subject_name'] ?? ''), (int) ($c['len_half'] ?? 0), (int) ($c['weeks'] ?? 0),
+        ]);
+
+        $existing = [];
+        foreach (TimetableCard::where('board_id', $board->id)->get() as $card) {
+            $existing[$keyOf($card->getAttributes() + ['group_names' => $card->getRawOriginal('group_names')])][] = $card;
+        }
+        // Joylashgan / biriktirilgan kartalar birinchi saqlansin.
+        foreach ($existing as &$bucket) {
+            usort($bucket, fn ($a, $b) => [(int) !($a->day && $a->pair), (int) !$a->teacher_id, $a->id]
+                <=> [(int) !($b->day && $b->pair), (int) !$b->teacher_id, $b->id]);
+        }
+        unset($bucket);
+
+        $kept = [];
+        $toInsert = [];
+        $updates = [];
+        foreach ($rows as $row) {
+            $k = $keyOf($row);
+            if (!empty($existing[$k])) {
+                $card = array_shift($existing[$k]);
+                $kept[] = $card->id;
+                $changes = [];
+                foreach (['students', 'kafedra_name'] as $col) {
+                    if (array_key_exists($col, $row) && (string) $card->{$col} !== (string) $row[$col]) {
+                        $changes[$col] = $row[$col];
+                    }
+                }
+                if ($changes) {
+                    $updates[$card->id] = $changes;
+                }
+                continue;
+            }
+            $toInsert[] = $row;
+        }
+        $removeIds = [];
+        foreach ($existing as $bucket) {
+            foreach ($bucket as $card) {
+                $removeIds[] = $card->id;
+            }
+        }
+        $removedPlaced = TimetableCard::whereIn('id', $removeIds ?: [0])
+            ->whereNotNull('day')->whereNotNull('pair')->count();
+
+        // O'chiriladigan kartalarning o'qituvchi/xonasi dars birligi bo'yicha saqlanadi —
+        // yangi kartaga (masalan guruh tarkibi o'zgargan) qaytarish uchun.
+        $assignments = $this->assignmentsByUnit($board);
+        $this->storeUnitAssignments($board, $assignments);
+
+        DB::transaction(function () use ($board, $removeIds, $toInsert, $updates, $specsFound) {
+            foreach (array_chunk($removeIds, 500) as $chunk) {
+                if (Schema::hasTable('timetable_card_overrides')) {
+                    DB::table('timetable_card_overrides')->whereIn('card_id', $chunk)->delete();
+                }
+                TimetableCard::whereIn('id', $chunk)->delete();
+            }
+            foreach ($updates as $id => $changes) {
+                TimetableCard::where('id', $id)->update($changes);
+            }
+            foreach (array_chunk($toInsert, 500) as $chunk) {
+                TimetableCard::insert($chunk);
+            }
+            $this->ensureGridSettings($board, $specsFound);
+        });
+
+        // Yangi kartalar uchun hafta istisnolari (mavjudlariga tegmaydi), fakultet va biriktirishlar.
+        $this->assignCardWeeks($board);
+        $this->backfillFacultyNames($board);
+        $restored = $toInsert
+            ? $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $assignments, $kept)
+            : ['restored_units' => 0, 'restored_cards' => 0];
+
+        return ['ok' => true, 'mode' => 'sync', 'created' => count($toInsert), 'kept' => count($kept),
+            'removed' => count($removeIds), 'removed_placed' => $removedPlaced, 'updated' => count($updates)] + $restored;
     }
 
     /** Biriktirishni saqlash kaliti: fakultet + yo'nalish + kurs + fan (normallashtirilgan) + tur + oqim/guruh. */
@@ -1234,16 +1342,23 @@ class TimetableController extends Controller
     }
 
     /** Saqlangan biriktirishlarni yangi kartalarga qaytaradi. */
-    private function restoreAssignments(TimetableBoard $board, array $kept): array
+    private function restoreAssignments(TimetableBoard $board, array $kept, array $skipIds = []): array
     {
         if ($kept === []) {
             return ['restored_units' => 0, 'restored_cards' => 0];
         }
+        // $skipIds — sinxronlashda saqlangan kartalar: ularning o'z o'qituvchi/xonasi
+        // (birlik ichida har xil bo'lishi ham mumkin) qayta yozilmaydi, faqat yangilariga.
+        $skip = array_flip($skipIds);
         $byKey = [];
+        $present = [];
         foreach (TimetableCard::where('board_id', $board->id)->get(['id', 'faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'oqim_label', 'group_name']) as $c) {
             $k = $this->unitKeyHash($c);
             if (isset($kept[$k])) {
-                $byKey[$k][] = $c->id;
+                $present[$k] = true;
+                if (!isset($skip[$c->id])) {
+                    $byKey[$k][] = $c->id;
+                }
             }
         }
         $cardsUpdated = 0;
@@ -1259,7 +1374,7 @@ class TimetableController extends Controller
             }
         });
 
-        return ['restored_units' => count($byKey), 'restored_cards' => $cardsUpdated, 'lost_units' => count($kept) - count($byKey)];
+        return ['restored_units' => count($byKey), 'restored_cards' => $cardsUpdated, 'lost_units' => count($kept) - count($present)];
     }
 
     /**

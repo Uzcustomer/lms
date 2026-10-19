@@ -642,6 +642,46 @@
     .lm-count { margin-right: auto; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
     .lm-empty { padding: 26px 10px; color: var(--muted); font-size: 13.5px; text-align: center; }
 
+    /* Boshlash rejimi: kompyuterlar / umumiy havola */
+    .lm-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px 22px 0; }
+    .lm-mode { display: grid; gap: 3px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; text-align: left; font-family: inherit; cursor: pointer; transition: border-color .16s, background .16s; }
+    .lm-mode b { color: var(--navy); font-size: 13.5px; }
+    .lm-mode span { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+    .lm-mode:hover { border-color: #93c5fd; }
+    .lm-mode.is-on { border-color: #1d4ed8; background: #eff6ff; box-shadow: inset 0 0 0 1px #1d4ed8; }
+    .lm-public p { margin: 0; color: var(--ink-soft); font-size: 13.5px; line-height: 1.6; }
+    .lm-public .lm-note { color: var(--muted); font-size: 12px; }
+    .lm-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+    .lm-link span { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .lm-link code { padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: #f8fafc; color: var(--navy); font-size: 13px; word-break: break-all; }
+    .bl-run-badge.is-public { background: #ecfdf5; color: #047857; }
+
+    /* Kompyuterlar oynasi: tablar va kirish so'rovlari */
+    .mn-tabs { display: flex; gap: 4px; padding: 10px 22px 0; border-bottom: 1px solid var(--line-soft); background: #fafcfe; }
+    .mn-tab { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-soft); font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+    .mn-tab:hover { color: var(--navy); }
+    .mn-tab.is-on { color: #1d4ed8; border-bottom-color: #1d4ed8; }
+    .mn-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; }
+    .mn-public { padding: 12px 14px; border: 1px solid #a7f3d0; border-radius: 10px; background: #ecfdf5; color: #065f46; font-size: 13px; }
+    .mn-public b { color: #047857; }
+    .mn-public.off { border-color: var(--line); background: #f8fafc; color: var(--muted); }
+    .mn-elist { display: grid; gap: 8px; }
+    .mn-entry { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .mn-entry.pending { border-left-color: #d97706; background: #fffbeb; }
+    .mn-entry.approved { border-left-color: #0f7a52; }
+    .mn-entry.used { border-left-color: #2563eb; opacity: .8; }
+    .mn-entry.rejected, .mn-entry.expired { border-left-color: #94a3b8; opacity: .7; }
+    .mn-emeta { display: grid; gap: 3px; justify-items: end; text-align: right; }
+    .mn-ewhen { color: var(--muted); font-size: 11.5px; }
+    .mn-epill { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .mn-epill.pending { background: #fef3c7; color: #92400e; }
+    .mn-epill.approved { background: #dcfce7; color: #166534; }
+    .mn-epill.used { background: #dbeafe; color: #1e40af; }
+    .mn-epill.rejected { background: #fee2e2; color: #991b1b; }
+    .bl-btn-ok { background: #0f7a52; color: #fff; }
+    .bl-btn-ok:hover { background: #0c6443; }
+    @media (max-width: 640px) { .lm-modes { grid-template-columns: 1fr; } .mn-entry { grid-template-columns: 1fr; } .mn-emeta { justify-items: start; text-align: left; } }
+
     /* ---- Kompyuterlar (jonli kuzatuv) oynasi ---- */
     .bl-btn-monitor { background: #0f766e; color: #fff; box-shadow: 0 4px 12px rgba(15, 118, 110, .22); }
     .bl-btn-monitor:hover { background: #115e59; }
@@ -1030,6 +1070,9 @@
                                         @if($runCount > 0)
                                             <div><span class="bl-run-badge">{{ $runCount }} ta kompyuterda</span></div>
                                         @endif
+                                        @if($item->isPublicOpen())
+                                            <div><span class="bl-run-badge is-public" title="Havola orqali istalgan kompyuterda ochiladi, talaba o'qituvchi ruxsati bilan kiradi">Umumiy ochiq</span></div>
+                                        @endif
                                     @endif
                                 </td>
                                 <td style="text-align:right">
@@ -1040,19 +1083,22 @@
                                                     data-attach-id="{{ $item->id }}"
                                                     data-attach-name="{{ $item->name }}"
                                                     data-attach-url="{{ route('teacher.fan-testlari.attach-subject', $item) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Biriktirish</button>
-                                        @elseif($runningHere > 0)
+                                        @elseif($runningHere > 0 || $item->isPublicOpen())
                                             <button type="button" class="bl-btn bl-btn-monitor bl-btn-sm mn-open"
                                                     data-test-id="{{ $item->id }}"
                                                     data-test-name="{{ $item->name }}"
                                                     data-devices-url="{{ route('teacher.fan-testlari.devices', $item) }}"
                                                     data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
-                                                    title="Har bir kompyuterda test qanday ketayotganini ko'rish va boshqarish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="7" rx="1.5"/><rect x="13" y="3" width="9" height="7" rx="1.5"/><rect x="2" y="14" width="9" height="7" rx="1.5"/><rect x="13" y="14" width="9" height="7" rx="1.5"/></svg>Kompyuterlar ({{ $runningHere }})</button>
+                                                    data-public-url="{{ route('teacher.fan-testlari.launch-public', $item) }}"
+                                                    data-public-open="{{ $item->isPublicOpen() ? '1' : '' }}"
+                                                    title="Kompyuterlardagi holat va umumiy kirish so'rovlari"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="7" rx="1.5"/><rect x="13" y="3" width="9" height="7" rx="1.5"/><rect x="2" y="14" width="9" height="7" rx="1.5"/><rect x="13" y="14" width="9" height="7" rx="1.5"/></svg>{{ $runningHere > 0 ? "Kompyuterlar ({$runningHere})" : "Kirish so'rovlari" }}</button>
                                         @elseif($item->questionCount() > 0)
                                             <button type="button" class="bl-btn bl-btn-launch bl-btn-sm lm-open"
                                                     data-test-id="{{ $item->id }}"
                                                     data-test-name="{{ $item->name }}"
                                                     data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
-                                                    title="Xonadagi kompyuterlarni tanlab testni boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kompyuterlarda boshlash</button>
+                                                    data-public-url="{{ route('teacher.fan-testlari.launch-public', $item) }}"
+                                                    title="Kompyuterlarni tanlab yoki umumiy havola bilan testni boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Testni boshlash</button>
                                         @endif
                                         @if(!$isDraft && ($runningHere > 0 || $item->is_active))
                                             <form method="POST" action="{{ route('teacher.fan-testlari.stop', $item) }}" onsubmit="return confirm('Test to\'xtatilsinmi? Kompyuterlar kutish ekraniga qaytadi va test talabalar uchun yopiladi.')">
@@ -1163,13 +1209,28 @@
                     <p id="launchTestName"></p>
                 </div>
             </div>
+            <div class="lm-modes">
+                <button type="button" class="lm-mode is-on" data-mode="devices">
+                    <b>Ro'yxatdagi kompyuterlar</b><span>Xonadagi kompyuterlarni tanlaysiz — kutish ekrani testni o'zi ochadi</span>
+                </button>
+                <button type="button" class="lm-mode" data-mode="public">
+                    <b>Umumiy ochish</b><span>Bitta havola, istalgan kompyuter — talaba ID kiritadi, siz ruxsat berasiz</span>
+                </button>
+            </div>
             <div class="lm-body" id="launchRooms"></div>
+            <div class="lm-body lm-public" id="launchPublic" style="display:none">
+                <p>Test <b>umumiy havola</b> orqali ochiladi — ro'yxatdan o'tgan kompyuter shart emas. Talaba havolani ochib ID raqamini kiritadi; so'rovi sizning <b>"Kirish so'rovlari"</b> oynangizga tushadi. <b>Ruxsat</b> bersangiz talabaga yuz tekshiruvi ochiladi, <b>Rad etsangiz</b> — kirmaydi.</p>
+                <div class="lm-link"><span>Havola:</span><code id="launchPublicLink"></code></div>
+                <p class="lm-note">Havola faqat universitet tarmog'idan ochiladi. "To'xtatish" bosilganda umumiy kirish yopiladi va kutayotgan so'rovlar bekor bo'ladi.</p>
+            </div>
             <div class="bl-modal-foot">
                 <span class="lm-count" id="launchCount">0 ta kompyuter tanlandi</span>
                 <button type="button" class="bl-btn bl-btn-ghost" id="launchCancel">Bekor qilish</button>
                 <button type="submit" class="bl-btn bl-btn-launch" id="launchSubmit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Boshlash</button>
+                <button type="button" class="bl-btn bl-btn-launch" id="launchPublicSubmit" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Umumiy ochish</button>
             </div>
         </form>
+        <form method="POST" action="" id="launchPublicForm" style="display:none">@csrf</form>
     </div>
 
     <script>
@@ -1226,20 +1287,52 @@
             }).join('');
         }
 
+        // Ikki rejim: ro'yxatdagi kompyuterlar yoki umumiy havola
+        const publicForm = document.getElementById('launchPublicForm');
+        const publicBox = document.getElementById('launchPublic');
+        const publicSubmit = document.getElementById('launchPublicSubmit');
+        let publicUrl = '';
+
+        function setMode(mode) {
+            modal.querySelectorAll('.lm-mode').forEach((b) => b.classList.toggle('is-on', b.dataset.mode === mode));
+            const isPublic = mode === 'public';
+            box.style.display = isPublic ? 'none' : '';
+            publicBox.style.display = isPublic ? '' : 'none';
+            submit.style.display = isPublic ? 'none' : '';
+            countEl.style.display = isPublic ? 'none' : '';
+            publicSubmit.style.display = isPublic ? '' : 'none';
+        }
+
         document.addEventListener('click', (ev) => {
             const open = ev.target.closest ? ev.target.closest('.lm-open') : null;
             if (open) {
                 const testId = parseInt(open.dataset.testId, 10);
                 form.action = open.dataset.launchUrl;
+                publicUrl = open.dataset.publicUrl || '';
+                publicForm.action = publicUrl;
+                publicSubmit.disabled = !publicUrl;
+                // Kiosk havolasi: /test/{id}
+                document.getElementById('launchPublicLink').textContent = @json(url('/test')) + '/' + testId;
                 document.getElementById('launchTestName').textContent = open.dataset.testName || '';
                 render(testId);
                 refresh();
+                // Kompyuter ro'yxati bo'sh bo'lsa umumiy rejim qulayroq
+                setMode(DEVICES.length ? 'devices' : 'public');
                 modal.classList.add('is-open');
                 return;
             }
+            const modeBtn = ev.target.closest ? ev.target.closest('.lm-mode') : null;
+            if (modeBtn) { setMode(modeBtn.dataset.mode); return; }
             if (ev.target === modal || ev.target.id === 'launchCancel') {
                 modal.classList.remove('is-open');
             }
+        });
+
+        publicSubmit.addEventListener('click', () => {
+            if (!publicUrl) return;
+            publicSubmit.disabled = true;
+            publicSubmit.lastChild.textContent = 'Ochilmoqda...';
+            publicForm.submit();
         });
 
         // Xona belgisi — xonadagi barcha bo'sh kompyuterlarni tanlash/olib tashlash
@@ -1272,8 +1365,13 @@
                     <p id="monitorTestName"></p>
                 </div>
             </div>
+            <div class="mn-tabs">
+                <button type="button" class="mn-tab is-on" data-tab="devices">Kompyuterlar</button>
+                <button type="button" class="mn-tab" data-tab="entries">Kirish so'rovlari <span class="mn-badge" id="monitorEntryCount" style="display:none">0</span></button>
+            </div>
             <div class="mn-sum" id="monitorSum"></div>
             <div class="mn-body" id="monitorBody"><div class="lm-empty">Yuklanmoqda...</div></div>
+            <div class="mn-body" id="monitorEntries" style="display:none"><div class="lm-empty">Yuklanmoqda...</div></div>
             <div class="bl-modal-foot">
                 <span class="mn-toast" id="monitorToast" aria-live="polite"></span>
                 <button type="button" class="bl-btn bl-btn-launch lm-open" id="monitorAdd">Kompyuter qo'shish</button>
@@ -1367,6 +1465,55 @@
             }).join('');
         }
 
+        // ---- "Kirish so'rovlari" tabi (umumiy ochilgan test) ----
+        const entriesBox = document.getElementById('monitorEntries');
+        const entryCount = document.getElementById('monitorEntryCount');
+        let tab = 'devices';
+        let lastPending = 0;
+
+        function setTab(name) {
+            tab = name;
+            modal.querySelectorAll('.mn-tab').forEach((b) => b.classList.toggle('is-on', b.dataset.tab === name));
+            body.style.display = name === 'devices' ? '' : 'none';
+            sum.style.display = name === 'devices' ? '' : 'none';
+            entriesBox.style.display = name === 'entries' ? '' : 'none';
+        }
+
+        function entryRow(e) {
+            const pill = '<span class="mn-epill ' + esc(e.status) + '">' + esc(e.status_label) + '</span>';
+            const who = '<div class="mn-student"><b>' + esc(e.student) + '</b><span>' + esc(e.student_id)
+                + (e.group ? ' · ' + esc(e.group) : '') + (e.faculty ? ' · ' + esc(e.faculty) : '') + '</span></div>';
+            const when = '<span class="mn-ewhen">' + esc(e.requested || '') + (e.ago ? ' · ' + esc(e.ago) + ' oldin' : '') + '</span>'
+                + (e.decided_by && e.status !== 'pending' ? '<span class="mn-ewhen">' + esc(e.decided_by) + '</span>' : '');
+            const approve = e.approve_url
+                ? '<button type="button" class="bl-btn bl-btn-ok bl-btn-sm" data-act="approve" data-url="' + esc(e.approve_url) + '" data-student="' + esc(e.student) + '">Ruxsat</button>' : '';
+            const reject = e.reject_url
+                ? '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="reject" data-url="' + esc(e.reject_url) + '" data-student="' + esc(e.student) + '">Rad etish</button>' : '';
+            return '<div class="mn-entry ' + esc(e.status) + '">' + who + '<div class="mn-emeta">' + pill + when + '</div>'
+                + '<div class="mn-acts">' + approve + reject + '</div></div>';
+        }
+
+        function renderEntries(list, pub) {
+            const pending = list.filter((e) => e.status === 'pending').length;
+            entryCount.textContent = pending;
+            entryCount.style.display = pending ? '' : 'none';
+            // Yangi so'rov kelganda tab o'zi ochiladi — o'qituvchi sezsin
+            if (pending > lastPending && tab !== 'entries') setTab('entries');
+            lastPending = pending;
+
+            let head = '';
+            if (pub && pub.open) {
+                head = '<div class="mn-public"><b>Umumiy ochiq</b>' + (pub.since ? ' · ' + esc(pub.since) + ' dan' : '') + (pub.by ? ' · ' + esc(pub.by) : '')
+                    + '<div class="lm-link"><span>Havola:</span><code>' + esc(pub.url) + '</code><button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" data-copy="' + esc(pub.url) + '">Nusxalash</button></div></div>';
+            } else {
+                head = '<div class="mn-public off">Test umumiy ochilmagan. "Kompyuter qo\'shish" → "Umumiy ochish" orqali havola bilan oching.</div>';
+            }
+            const rows = list.length
+                ? list.map(entryRow).join('')
+                : '<div class="lm-empty">Hali so\'rov yo\'q. Talaba havolani ochib ID sini kiritganda shu yerda chiqadi.</div>';
+            entriesBox.innerHTML = head + '<div class="mn-elist">' + rows + '</div>';
+        }
+
         async function load() {
             if (!url || busy) return;
             try {
@@ -1375,6 +1522,7 @@
                 const j = await r.json();
                 if (j.migrate) { body.innerHTML = '<div class="lm-empty">Server yangilanmagan: php artisan migrate ni ishga tushiring.</div>'; return; }
                 render(j.devices || []);
+                renderEntries(j.entries || [], j.public || null);
             } catch (e) {
                 toast.className = 'mn-toast bad';
                 toast.textContent = "Server bilan aloqa yo'q — qayta urinilmoqda";
@@ -1388,14 +1536,28 @@
             addBtn.dataset.testId = btn.dataset.testId;
             addBtn.dataset.testName = btn.dataset.testName;
             addBtn.dataset.launchUrl = btn.dataset.launchUrl;
+            addBtn.dataset.publicUrl = btn.dataset.publicUrl || '';
             toast.textContent = '';
             changed = false;
+            lastPending = 0;
             body.innerHTML = '<div class="lm-empty">Yuklanmoqda...</div>';
+            entriesBox.innerHTML = '<div class="lm-empty">Yuklanmoqda...</div>';
+            // Umumiy ochilgan test — so'rovlar tabi birinchi
+            setTab(btn.dataset.publicOpen ? 'entries' : 'devices');
             modal.classList.add('is-open');
             load();
             clearInterval(timer);
             timer = setInterval(load, 3000);
         }
+
+        modal.addEventListener('click', (ev) => {
+            const t = ev.target.closest ? ev.target.closest('.mn-tab') : null;
+            if (t) setTab(t.dataset.tab);
+            const copy = ev.target.closest ? ev.target.closest('[data-copy]') : null;
+            if (copy && navigator.clipboard) {
+                navigator.clipboard.writeText(copy.dataset.copy).then(() => { copy.textContent = 'Nusxalandi'; setTimeout(() => { copy.textContent = 'Nusxalash'; }, 1500); });
+            }
+        });
 
         function close() {
             modal.classList.remove('is-open');
@@ -1415,10 +1577,14 @@
             if (ev.key === 'Escape' && modal.classList.contains('is-open')) close();
         });
 
-        body.addEventListener('click', async (ev) => {
+        modal.addEventListener('click', async (ev) => {
             const btn = ev.target.closest('button[data-act]');
             if (!btn || btn.disabled || !btn.dataset.url) return;
-            const question = btn.dataset.act === 'bypass'
+            const question = btn.dataset.act === 'approve'
+                ? null // ruxsat — tasdiq so'ralmaydi, talaba kutib turibdi
+                : btn.dataset.act === 'reject'
+                ? btn.dataset.student + ' uchun kirish rad etilsinmi?'
+                : btn.dataset.act === 'bypass'
                 ? (btn.dataset.on
                     ? btn.dataset.name + ' kompyuteridagi yuz tekshiruvisiz kirish ruxsati bekor qilinsinmi?'
                     : btn.dataset.name + " kompyuterida keyingi talaba yuz tekshiruvisiz, faqat ID bilan kirsinmi? Ruxsat bir marta ishlaydi — yuzi tanilmayotgan talaba o'tirganiga ishonch hosil qiling.")
@@ -1427,7 +1593,7 @@
                 : btn.dataset.act === 'unlock'
                     ? btn.dataset.student + " uchun test qayta ochilsinmi? Bu faqat bir marta mumkin — yana chalg'isa test yakunlanadi."
                     : btn.dataset.name + ' kompyuterida test ' + btn.dataset.student + " uchun boshidan boshlansinmi? Hozirgi javoblari o'chiriladi.";
-            if (!confirm(question)) return;
+            if (question && !confirm(question)) return;
             btn.disabled = true;
             busy = true;
             try {

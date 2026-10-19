@@ -9,6 +9,7 @@ use App\Models\FanTesti;
 use App\Models\Group;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
+use App\Models\FanTestiEntryRequest;
 use App\Models\TestKioskDevice;
 use App\Services\FanTestiAttempts;
 use App\Services\FanTestiGroups;
@@ -227,6 +228,87 @@ class FanTestiController extends Controller
     }
 
     /**
+     * Umumiy ochish: test bitta havola orqali istalgan kompyuterda ochiladi.
+     * Talaba ID sini kiritgach so'rovi "Kirish so'rovlari" oynasiga tushadi;
+     * o'qituvchi ruxsat bersa talabaga yuz tekshiruvi ochiladi.
+     */
+    public function launchPublic(FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        if (!$fanTesti->curriculum_subject_id) {
+            return back()->with('error', "Avval to'plamga fan biriktiring.");
+        }
+        if ($this->previewQuestions($fanTesti)->isEmpty()) {
+            return back()->with('error', "Bu to'plamda hali savol yo'q.");
+        }
+        if (!$this->hasPublicColumns()) {
+            return back()->with('error', "Server yangilanmagan: php artisan migrate ni ishga tushiring.");
+        }
+
+        $teacher = $this->teacher();
+        $fanTesti->update([
+            'is_active' => true,
+            'public_open_at' => now(),
+            'public_open_by' => mb_substr($teacher->short_name ?: $teacher->full_name, 0, 120),
+            'updated_by' => $teacher->id,
+        ]);
+
+        return back()->with('success', "Test umumiy ochildi. Havola: " . route('kiosk.fan-testi.show', $fanTesti)
+            . " — talabalar ID sini kiritgach, \"Kompyuterlar\" oynasidagi \"Kirish so'rovlari\" bo'limida ruxsat bering.");
+    }
+
+    /** Umumiy ochilgan testga kirish so'roviga ruxsat (yoki rad etilganini qaytarish). */
+    public function approveEntry(FanTesti $fanTesti, FanTestiEntryRequest $entry)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $entry->fan_testi_id === (int) $fanTesti->id, 404);
+
+        if ($entry->used_at) {
+            return response()->json(['message' => $entry->student_name . ' allaqachon testga kirgan.'], 422);
+        }
+        if (!$fanTesti->isPublicOpen()) {
+            return response()->json(['message' => "Test umumiy ochilmagan — avval \"Umumiy ochish\"ni bosing."], 422);
+        }
+
+        $teacher = $this->teacher();
+        $entry->forceFill([
+            'status' => 'approved',
+            'decided_by' => mb_substr($teacher->short_name ?: $teacher->full_name, 0, 120),
+            'decided_at' => now(),
+        ])->save();
+
+        return response()->json(['message' => $entry->student_name . ": ruxsat berildi — talabaga yuz tekshiruvi ochiladi ("
+            . FanTestiEntryRequest::APPROVAL_MINUTES . " daqiqa ichida kirishi kerak)."]);
+    }
+
+    public function rejectEntry(FanTesti $fanTesti, FanTestiEntryRequest $entry)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $entry->fan_testi_id === (int) $fanTesti->id, 404);
+
+        if ($entry->used_at) {
+            return response()->json(['message' => $entry->student_name . " allaqachon testga kirgan — rad etib bo'lmaydi."], 422);
+        }
+
+        $teacher = $this->teacher();
+        $entry->forceFill([
+            'status' => 'rejected',
+            'decided_by' => mb_substr($teacher->short_name ?: $teacher->full_name, 0, 120),
+            'decided_at' => now(),
+        ])->save();
+
+        return response()->json(['message' => $entry->student_name . ': kirish rad etildi.']);
+    }
+
+    private function hasPublicColumns(): bool
+    {
+        static $has = null;
+
+        return $has ??= Schema::hasColumn('fan_testlari', 'public_open_at') && Schema::hasTable('fan_testi_entry_requests');
+    }
+
+    /**
      * Testni to'xtatadi: berilgan kompyuterlar bo'shab kutish ekraniga qaytadi
      * va test talabalar uchun yopiladi (havola orqali ham ochilmaydi).
      * Boshlangan urinishlar o'z vaqtida topshiriladi.
@@ -235,8 +317,15 @@ class FanTestiController extends Controller
     {
         $this->authorizeCollection($fanTesti);
 
-        if ($fanTesti->is_active) {
-            $fanTesti->update(['is_active' => false, 'updated_by' => $this->teacher()->id]);
+        $closing = ['is_active' => false, 'updated_by' => $this->teacher()->id];
+        if ($this->hasPublicColumns()) {
+            $closing += ['public_open_at' => null, 'public_open_by' => null];
+            // Kutayotgan so'rovlar yopiq testga ruxsat olmasin
+            FanTestiEntryRequest::where('fan_testi_id', $fanTesti->id)->where('status', 'pending')
+                ->update(['status' => 'rejected', 'decided_by' => 'Test to\'xtatildi', 'decided_at' => now()]);
+        }
+        if ($fanTesti->is_active || !empty($fanTesti->getAttributes()['public_open_at'] ?? null)) {
+            $fanTesti->update($closing);
         }
 
         $count = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
@@ -342,7 +431,47 @@ class FanTestiController extends Controller
             ->filter(fn ($row) => $row['running'] || $row['attempt'] !== null)
             ->values();
 
-        return response()->json(['devices' => $rows]);
+        return response()->json([
+            'devices' => $rows,
+            'public' => [
+                'open' => $this->hasPublicColumns() && $fanTesti->isPublicOpen(),
+                'url' => route('kiosk.fan-testi.show', $fanTesti),
+                'since' => $fanTesti->public_open_at?->format('H:i'),
+                'by' => $fanTesti->public_open_by,
+            ],
+            'entries' => $this->entryRows($fanTesti),
+        ]);
+    }
+
+    /** "Kirish so'rovlari" tabi: kutilayotganlar tepada, keyin yaqinda hal qilinganlar. */
+    private function entryRows(FanTesti $fanTesti): array
+    {
+        if (!$this->hasPublicColumns()) {
+            return [];
+        }
+
+        return FanTestiEntryRequest::query()
+            ->where('fan_testi_id', $fanTesti->id)
+            ->where('created_at', '>', now()->subHours(FanTestiEntryRequest::LIST_HOURS))
+            ->orderByRaw("status = 'pending' DESC")
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (FanTestiEntryRequest $e) => [
+                'id' => $e->id,
+                'student' => $e->student_name,
+                'student_id' => $e->student_id_number,
+                'group' => $e->group_name,
+                'faculty' => $e->faculty_name,
+                'status' => $e->used_at ? 'used' : ($e->status === 'approved' && !$e->isUsable() ? 'expired' : $e->status),
+                'status_label' => $e->statusLabel(),
+                'requested' => $e->created_at?->format('H:i'),
+                'ago' => $e->created_at?->diffForHumans(null, true),
+                'decided_by' => $e->decided_by,
+                'approve_url' => !$e->used_at && $e->status !== 'approved' ? route('teacher.fan-testlari.entries.approve', [$fanTesti, $e]) : null,
+                'reject_url' => !$e->used_at && $e->status !== 'rejected' ? route('teacher.fan-testlari.entries.reject', [$fanTesti, $e]) : null,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

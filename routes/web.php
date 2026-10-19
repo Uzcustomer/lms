@@ -110,6 +110,8 @@ Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')
     ->group(function () {
     Route::get('/', [\App\Http\Controllers\FanTestiKioskController::class, 'show'])->name('show');
     Route::post('/check', [\App\Http\Controllers\FanTestiKioskController::class, 'check'])->name('check');
+    // Umumiy ochilgan test: o'qituvchi ruxsatini kutish
+    Route::get('/entry/{token}', [\App\Http\Controllers\FanTestiKioskController::class, 'entryStatus'])->name('entry');
     Route::post('/start', [\App\Http\Controllers\FanTestiKioskController::class, 'start'])->name('start');
     Route::get('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'take'])->name('take');
     Route::post('/attempt/{attempt}', [\App\Http\Controllers\FanTestiKioskController::class, 'submit'])->name('submit');
@@ -1937,6 +1939,10 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
                 Route::delete('/{fanTesti}/questions/{question}', [FanTestiController::class, 'destroyQuestion'])->name('questions.destroy');
                 Route::post('/{fanTesti}/toggle-active', [FanTestiController::class, 'toggleActive'])->name('toggle-active');
                 Route::post('/{fanTesti}/launch', [FanTestiController::class, 'launch'])->name('launch');
+                // Umumiy ochish: bitta havola, talaba o'qituvchi ruxsati bilan kiradi
+                Route::post('/{fanTesti}/launch-public', [FanTestiController::class, 'launchPublic'])->name('launch-public');
+                Route::post('/{fanTesti}/entries/{entry}/approve', [FanTestiController::class, 'approveEntry'])->name('entries.approve');
+                Route::post('/{fanTesti}/entries/{entry}/reject', [FanTestiController::class, 'rejectEntry'])->name('entries.reject');
                 Route::post('/{fanTesti}/stop', [FanTestiController::class, 'stopLaunch'])->name('stop');
                 // "Kompyuterlar" oynasi: jonli holat va bitta kompyuterni boshqarish
                 Route::get('/{fanTesti}/devices', [FanTestiController::class, 'liveDevices'])->name('devices');

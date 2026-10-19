@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FanTesti;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
+use App\Models\FanTestiEntryRequest;
 use App\Models\Student;
 use App\Services\FaceIdService;
 use App\Services\FanTestiAttempts;
@@ -71,9 +72,82 @@ class FanTestiKioskController extends Controller
 
         // O'qituvchi shu kompyuterga yuz tekshiruvisiz kirish ruxsatini bergan bo'lsa
         $bypass = $this->faceBypassDevice($fanTesti) !== null;
-        $this->eligibleStudent($fanTesti, $data['student_id_number'], $bypass);
+        $student = $this->eligibleStudent($fanTesti, $data['student_id_number'], $bypass);
+
+        // Umumiy ochilgan test (ro'yxatdagi kompyuter emas): so'rov o'qituvchiga
+        // tushadi, talaba "ruxsat kutilmoqda" ekranida kutadi.
+        if ($this->needsTeacherApproval($fanTesti)) {
+            $entry = FanTestiEntryRequest::openFor($fanTesti, $student, $request->ip());
+
+            return response()->json([
+                'photo_found' => true,
+                'face_bypass' => false,
+                'entry' => $entry->isUsable() ? 'approved' : 'pending',
+                'entry_token' => $entry->token,
+            ]);
+        }
 
         return response()->json(['photo_found' => true, 'face_bypass' => $bypass]);
+    }
+
+    /** Kutish ekrani so'raydi: o'qituvchi ruxsat berdimi. */
+    public function entryStatus(FanTesti $fanTesti, string $token)
+    {
+        $entry = FanTestiEntryRequest::query()
+            ->where('fan_testi_id', $fanTesti->id)
+            ->where('token', $token)
+            ->first();
+
+        if (!$entry) {
+            return response()->json(['status' => 'gone', 'message' => "So'rov topilmadi. ID raqamingizni qayta kiriting."], 404);
+        }
+        if ($entry->used_at) {
+            return response()->json(['status' => 'used', 'message' => "Bu ruxsat ishlatib bo'lingan. ID raqamingizni qayta kiriting."]);
+        }
+        if ($entry->status === 'rejected') {
+            return response()->json(['status' => 'rejected', 'message' => "O'qituvchi kirishni rad etdi" . ($entry->decided_by ? " ({$entry->decided_by})" : '') . '.']);
+        }
+        if ($entry->status === 'approved' && !$entry->isUsable()) {
+            return response()->json(['status' => 'expired', 'message' => "Ruxsat muddati o'tdi. ID raqamingizni qayta kiriting."]);
+        }
+
+        return response()->json(['status' => $entry->status]);
+    }
+
+    /**
+     * Umumiy ochilgan testda, ro'yxatdagi (shu testga berilgan) kompyuterdan
+     * bo'lmasa — o'qituvchi ruxsati kerak.
+     */
+    private function needsTeacherApproval(FanTesti $fanTesti): bool
+    {
+        if (!$fanTesti->isPublicOpen() || !Schema::hasTable('fan_testi_entry_requests')) {
+            return false;
+        }
+
+        $device = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
+            ? TestDeviceToken::resolve(request())
+            : null;
+
+        return !($device && (int) $device->assigned_fan_testi_id === (int) $fanTesti->id);
+    }
+
+    /** Ruxsat berilgan so'rov (shu brauzer belgisi va shu talaba uchun), bo'lmasa 422. */
+    private function approvedEntry(Request $request, FanTesti $fanTesti, Student $student): FanTestiEntryRequest
+    {
+        $token = (string) $request->input('entry_token', '');
+        $entry = $token !== ''
+            ? FanTestiEntryRequest::query()
+                ->where('fan_testi_id', $fanTesti->id)
+                ->where('student_id', $student->id)
+                ->where('token', $token)
+                ->first()
+            : null;
+
+        if (!$entry || !$entry->isUsable()) {
+            throw ValidationException::withMessages(['student_id_number' => "O'qituvchi ruxsati yo'q yoki muddati o'tgan. ID raqamingizni qayta kiriting va ruxsatni kuting."]);
+        }
+
+        return $entry;
     }
 
     /**
@@ -98,6 +172,7 @@ class FanTestiKioskController extends Controller
         ], [], ['student_id_number' => 'Talaba ID', 'snapshot' => 'Yuz surati']);
 
         $student = $this->eligibleStudent($fanTesti, $data['student_id_number']);
+        $entry = $this->needsTeacherApproval($fanTesti) ? $this->approvedEntry($request, $fanTesti, $student) : null;
 
         $log = [
             'attempt_type' => 'fan_test',
@@ -151,7 +226,17 @@ class FanTestiKioskController extends Controller
             'snapshot' => $data['snapshot'],
         ]);
 
-        return response()->json(['redirect' => $this->enterAttempt($request, $fanTesti, $student)]);
+        $redirect = $this->enterAttempt($request, $fanTesti, $student);
+
+        // Ruxsat bir marta ishlaydi — o'qituvchi oynasida "Testga kirdi" bo'ladi
+        if ($entry) {
+            $entry->forceFill([
+                'used_at' => now(),
+                'attempt_id' => (int) $request->session()->get(self::SESSION_KEY) ?: null,
+            ])->save();
+        }
+
+        return response()->json(['redirect' => $redirect]);
     }
 
     public function take(FanTesti $fanTesti, FanTestiAttempt $attempt)

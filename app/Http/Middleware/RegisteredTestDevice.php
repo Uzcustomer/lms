@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\FanTesti;
+use App\Models\FanTestiAttempt;
 use App\Services\TestDeviceToken;
 use Closure;
 use Illuminate\Http\Request;
@@ -21,6 +23,12 @@ class RegisteredTestDevice
     public function handle(Request $request, Closure $next): Response
     {
         if (!config('services.fan_test.require_device')) {
+            return $next($request);
+        }
+
+        // "Umumiy ochish" rejimida kompyuter ro'yxati shart emas — talaba
+        // o'qituvchining jonli ruxsati bilan kiradi (FanTestiKioskController).
+        if ($this->testOf($request)?->isPublicOpen()) {
             return $next($request);
         }
 
@@ -81,5 +89,18 @@ class RegisteredTestDevice
         }
 
         return $response;
+    }
+
+    /** Marshrutdagi test (to'g'ridan yoki urinish orqali). */
+    private function testOf(Request $request): ?FanTesti
+    {
+        $test = $request->route('fanTesti');
+        if ($test instanceof FanTesti) {
+            return $test;
+        }
+
+        $attempt = $request->route('attempt');
+
+        return $attempt instanceof FanTestiAttempt ? $attempt->test : null;
     }
 }

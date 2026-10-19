@@ -18,6 +18,8 @@ class FanTesti extends Model
         'questions_per_attempt',
         'show_result_after_submit',
         'is_active',
+        'public_open_at',
+        'public_open_by',
         'questions',
         'created_by',
         'updated_by',
@@ -28,8 +30,24 @@ class FanTesti extends Model
         'questions_per_attempt' => 'integer',
         'show_result_after_submit' => 'boolean',
         'is_active' => 'boolean',
+        'public_open_at' => 'datetime',
         'questions' => 'array',
     ];
+
+    /**
+     * "Umumiy ochish" rejimi: test bitta havola orqali istalgan kompyuterda
+     * ochiladi, talaba o'qituvchi ruxsati bilan kiradi. Ustun bo'lmasa
+     * (migratsiya qilinmagan) — yopiq.
+     */
+    public function isPublicOpen(): bool
+    {
+        return $this->is_active && !empty($this->getAttributes()['public_open_at'] ?? null);
+    }
+
+    public function entryRequests()
+    {
+        return $this->hasMany(FanTestiEntryRequest::class, 'fan_testi_id');
+    }
 
     public function subject()
     {

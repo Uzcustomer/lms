@@ -1254,6 +1254,8 @@
         #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        #cycleGrid .cyc-just-changed { animation: cycJustChanged 2.4s ease-out; }
+        @keyframes cycJustChanged { 0%, 35% { box-shadow: inset 0 0 0 2px #f59e0b; background-color: #fef3c7; } 100% { box-shadow: inset 0 0 0 0 transparent; } }
         #cycleGrid .cyc-vrow-stu { margin-top: 2px; font-size: 10px; color: #334155; }
         #cycleGrid .cyc-vrow-stu.is-empty { color: #b91c1c; font-weight: 700; }
         #cycleGrid .cyc-vrow-stu summary { cursor: pointer; font-weight: 800; color: #5b21b6; list-style: revert; }
@@ -3651,6 +3653,9 @@
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
+                    // Qayta chizishda jadval joyidan siljimasin (o'zgartirilgan joy ko'z oldida qolsin).
+                    const gw = $('cycleGridWrap');
+                    const keep = gw ? { top: gw.scrollTop, left: gw.scrollLeft, page: window.scrollY } : null;
                     cyclePlanData = j;
                     renderCycleLayerUi(j);
                     if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
@@ -3658,6 +3663,10 @@
                     renderHolChips();
                     renderCyclePlan(j);
                     renderCycleCards(j);
+                    if (keep && !options.resetScroll) {
+                        const restore = () => { gw.scrollTop = keep.top; gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
+                        restore(); requestAnimationFrame(restore);
+                    }
                     $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
                         ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
                     $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ((j.view || cycleViewMode) === 'group' ? ' guruh · ' : ' oqim · ') + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
@@ -4629,7 +4638,11 @@
                         day_index: dp.k - 1, start_hour: newStart,
                     });
                     await loadCyclePlan();
-                    const cell = document.querySelector('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                    const cells = document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                    // O'zgargan kun ustuni bir necha soniya yonib turadi — nima o'zgargani ko'rinsin.
+                    cells.forEach(c => { c.classList.remove('cyc-just-changed'); void c.offsetWidth; c.classList.add('cyc-just-changed'); });
+                    setTimeout(() => cells.forEach(c => c.classList.remove('cyc-just-changed')), 2600);
+                    const cell = cells[0];
                     if (cell) openCycDayPop(key, offset, cell);
                 } catch (e) {
                     alert('Kun soatini o\'zgartirib bo\'lmadi: ' + e.message);

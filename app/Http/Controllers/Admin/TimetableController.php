@@ -533,6 +533,40 @@ class TimetableController extends Controller
     }
 
     /**
+     * Bo'lakka (HEMIS student_subjects) biriktirilgan faol talabalar ro'yxati — faqat berilgan
+     * guruhlardan (ichki jadvaldagi bo'lak qatori guruhlari). [['name' => .., 'group' => ..], ...]
+     */
+    private function variantStudentList(string $subjectName, int $yearStart, array $groupNames): array
+    {
+        if (!Schema::hasTable('student_subjects') || !$groupNames) {
+            return [];
+        }
+        $want = [];
+        foreach ($groupNames as $g) {
+            $want[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g))] = true;
+        }
+        $query = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereRaw('LOWER(TRIM(ss.subject_name)) = ?', [mb_strtolower(trim($subjectName))])
+            ->where('st.student_status_code', 11);
+        if ($yearStart > 0 && Schema::hasColumn('student_subjects', 'education_year')) {
+            $query->where('ss.education_year', 'like', $yearStart . '%');
+        }
+        $out = [];
+        foreach ($query->get(['st.hemis_id', 'st.full_name', 'st.group_name']) as $r) {
+            $group = trim((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name));
+            if (!isset($want[$this->groupNameKey($group)])) {
+                continue;
+            }
+            $out[(string) $r->hemis_id] = ['name' => trim((string) $r->full_name), 'group' => $group];
+        }
+        $out = array_values($out);
+        usort($out, fn ($a, $b) => strnatcasecmp($a['group'], $b['group']) ?: strcasecmp($a['name'], $b['name']));
+
+        return $out;
+    }
+
+    /**
      * Guruh qatoridan shu bo'lakka biriktirilgan talabalar soni: guruhning o'z o'quv rejasi
      * bo'yicha (hemisGroupsFor dagi kabi); rejasi noma'lum bo'lsa — fanning rejalari bo'yicha.
      */
@@ -3232,6 +3266,10 @@ class TimetableController extends Controller
                 // Ichki jadval: bo'lakli fan qatori ("Fan (c)": 02a dan 5 + 02b dan 5 talaba).
                 'variant' => $g['variant'] ?? null,
                 'flow' => !empty($g['variant']) ? (string) $g['parent'] : null,
+                // Bo'lak qatori: shu bo'lakka HEMIS'da biriktirilgan talabalar (chap ustunda ro'yxat).
+                'students' => !empty($g['variant'])
+                    ? $this->variantStudentList((string) $g['variant'], (int) substr((string) $board->academic_year, 0, 4), $members)
+                    : null,
                 'subgroups' => $members,
                 'faculty' => $g['faculty'],
                 'specialty' => $g['specialty'],

@@ -1247,6 +1247,14 @@
         #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        #cycleGrid .cyc-vrow-stu { margin-top: 2px; font-size: 10px; color: #334155; }
+        #cycleGrid .cyc-vrow-stu.is-empty { color: #b91c1c; font-weight: 700; }
+        #cycleGrid .cyc-vrow-stu summary { cursor: pointer; font-weight: 800; color: #5b21b6; list-style: revert; }
+        #cycleGrid .cyc-vrow-stu summary i { font-style: normal; font-weight: 600; color: #475569; }
+        #cycleGrid .cyc-vrow-stu ol { margin: 3px 0 0; padding: 4px 4px 4px 22px; max-height: 150px; overflow-y: auto;
+            background: #fff; border: 1px solid #ddd6fe; border-radius: 5px; line-height: 1.35; }
+        #cycleGrid .cyc-vrow-stu li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #cycleGrid .cyc-vrow-stu li b { color: #7c3aed; font-weight: 700; margin-left: 2px; }
         #cycleGrid .cyc-vrow-members { display: flex; flex-wrap: wrap; gap: 3px; }
         #cycleGrid .cyc-vrow-members span { padding: 1px 5px; border-radius: 4px; background: #fff; border: 1px solid #c4b5fd;
             color: #4c1d95; font-size: 9.5px; font-weight: 700; white-space: nowrap; }
@@ -3675,7 +3683,22 @@
                     + '<span class="cyc-vrow-kind">bo\'lak</span><span class="cyc-vrow-flow">' + esc(cycleFlowShort(row.flow || '')) + '</span></div>'
                     + '<div class="cyc-vrow-subj">' + esc(subject) + '</div>'
                     + '<div class="cyc-vrow-members">' + members.map(m => '<span>' + esc(m) + '</span>').join('') + '</div>'
+                    + cycleVariantStudentsHtml(row, members)
                     + '</div>';
+            }
+            // Bo'lakka HEMIS'da biriktirilgan talabalar: guruh bo'yicha soni va ro'yxat.
+            function cycleVariantStudentsHtml(row, members) {
+                const list = Array.isArray(row.students) ? row.students : null;
+                if (!list) return '';
+                if (!list.length) return '<div class="cyc-vrow-stu is-empty">HEMIS\'da talaba biriktirilmagan</div>';
+                const tail = g => (/(\d+\p{L}*)\s*$/u.exec(String(g)) || [])[1] || String(g);
+                const per = {};
+                list.forEach(s => { per[s.group] = (per[s.group] || 0) + 1; });
+                const multi = Object.keys(per).length > 1;
+                return '<details class="cyc-vrow-stu" open><summary>' + list.length + ' talaba'
+                    + (multi ? ' <i>(' + Object.entries(per).map(([g, n]) => esc(tail(g)) + ': ' + n).join(', ') + ')</i>' : '')
+                    + '</summary><ol>' + list.map(s => '<li title="' + esc(s.group) + '">' + esc(s.name)
+                        + (multi ? ' <b>' + esc(tail(s.group)) + '</b>' : '') + '</li>').join('') + '</ol></details>';
             }
             function cycleFlowShort(flow) {
                 const name = String(flow || '').trim();

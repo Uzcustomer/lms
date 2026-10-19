@@ -2124,6 +2124,8 @@ class TimetableController extends Controller
             'subject_settings' => $this->subjectSettingsFor($board),
             // Rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             'missing_groups' => $this->missingGroupSpecs($board),
+            // Kafedra mudiri: "Kafedraniki" filtri uchun o'z kafedrasi nomlari.
+            'my_kafedras' => $this->departmentHeadKafedraSafe(request()),
         ])
             // Doska ma'lumoti tez-tez o'zgaradi (kartalar qayta yaratiladi, joylashadi).
             // Brauzer eski GET javobini keshdan bermasin — aks holda yangi kartalar
@@ -2799,10 +2801,20 @@ class TimetableController extends Controller
             'view'              => 'nullable|in:flow,group',
             'layer'             => 'nullable|in:external,internal',
             'mine'              => 'nullable|boolean',
+            'kafedra'           => 'nullable|boolean',
         ]);
         $cycleView = $data['view'] ?? 'flow';
         // "Faqat meniki": o'qituvchi faqat o'zi biriktirilgan fan bloklarini ko'radi.
         $mineTeacherId = !empty($data['mine']) ? $this->timetableTeacherId($request) : null;
+        // "Kafedraniki" (kafedra mudiri): faqat o'z kafedrasi fanlari bloklari.
+        $scopeKafedra = null;
+        if ($mineTeacherId === null && !empty($data['kafedra']) && $this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $scopeKafedra = $this->departmentHeadKafedraSafe($request) ?: null;
+        }
+        $scoped = $mineTeacherId !== null || $scopeKafedra !== null;
+        $inMyScope = fn ($c) => $mineTeacherId !== null
+            ? (int) $c->teacher_id === $mineTeacherId
+            : ($scopeKafedra !== null && $this->sameKafedra($c->kafedra_name, $scopeKafedra));
         $mineFlowSubjects = [];   // flowKey => [subject => [training_type => true]]
         // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
         // para qatorlari yo'q — faqat fan nomi, kunlar va joylash qoidalari.
@@ -3004,7 +3016,7 @@ class TimetableController extends Controller
                     if ($c->auditorium_name || $c->auditorium_code) {
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
-                    if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
+                    if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$rowSubject][(string) $c->training_type] = true;
                     }
                 }
@@ -3041,7 +3053,7 @@ class TimetableController extends Controller
                     if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
                         $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
                     }
-                    if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
+                    if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$lecSubject][(string) $c->training_type] = true;
                     }
                     if ($c->teacher_name) {
@@ -3055,7 +3067,7 @@ class TimetableController extends Controller
         }
 
         // "Faqat meniki": o'qituvchi dars bermaydigan fanlar va oqimlar olib tashlanadi.
-        if ($mineTeacherId !== null) {
+        if ($scoped) {
             foreach ($byFlow as $flowKey => $g) {
                 $keep = $mineFlowSubjects[$flowKey] ?? [];
                 $byFlow[$flowKey]['subs'] = array_intersect_key($g['subs'], $keep);
@@ -3117,7 +3129,7 @@ class TimetableController extends Controller
         // "Bo'shatish": qamrovdagi oqimlarning sikl bloklari panelga qaytariladi.
         // Bloklar faqat qo'lda (cyclePlace) joylanadi — avtomatik joylash yo'q.
         // "Faqat meniki" ko'rinishida bo'shatish yo'q — qamrov to'liq emas.
-        if ($request->boolean('clear') && $mineTeacherId === null) {
+        if ($request->boolean('clear') && !$scoped) {
             $scopeRows = array_map(fn ($g) => [
                 'specialty' => $g['specialty'],
                 'course'    => $g['course'],
@@ -3616,6 +3628,59 @@ class TimetableController extends Controller
         return $query()->where('subject_name', $data['subject_name'])->first()
             ?? $query()->where('subject_name', 'like', addcslashes(trim((string) $data['subject_name']), '%_\\') . ' (_)')
                 ->orderBy('subject_name')->first();
+    }
+
+    /**
+     * Tasdiq so'rovi uchun: o'zgarish tegishli bo'lgan kartalar (guruhlar, o'qituvchilar —
+     * xabar yuborish uchun). TimetableChangeApproval chaqiradi.
+     */
+    public function changeRequestCards(TimetableBoard $board, string $route, array $p)
+    {
+        $spec = (string) ($p['specialty_name'] ?? '');
+        $course = (int) ($p['course'] ?? 0);
+        $subject = (string) ($p['subject_name'] ?? '');
+        if ($spec === '' || !$course || $subject === '') {
+            return collect();
+        }
+        $type = $p['training_type'] ?? null;
+        if (str_starts_with($route, 'admin.timetable.cycle-')) {
+            $flow = (string) ($p['sub_group'] ?? '') ?: (string) ($p['group_name'] ?? '');
+            $cards = $this->cycleFlowCards($board, $spec, $course, $subject, $flow, $type, $p['view'] ?? 'flow');
+            if ($cards->isEmpty() && !empty($p['placement_group'])) {
+                $cards = $this->cycleFlowCards($board, $spec, $course, $subject, (string) $p['placement_group'], $type, 'flow');
+            }
+
+            return $cards->values();
+        }
+
+        $subjectLower = mb_strtolower(trim($subject));
+        $group = mb_strtolower(trim((string) ($p['group_name'] ?? '')));
+        $oqim = mb_strtolower(trim((string) ($p['oqim_label'] ?? '')));
+        $faculty = mb_strtolower(trim((string) ($p['faculty_name'] ?? '')));
+
+        return TimetableCard::where('board_id', $board->id)
+            ->where('specialty_name', $spec)->where('course', $course)
+            ->when($type, fn ($q) => $q->where('training_type', $type))
+            ->get()
+            ->filter(function (TimetableCard $c) use ($subjectLower, $group, $oqim, $faculty) {
+                if (mb_strtolower(trim((string) $c->subject_name)) !== $subjectLower) {
+                    return false;
+                }
+                if ($faculty !== '' && $c->faculty_name && mb_strtolower(trim((string) $c->faculty_name)) !== $faculty) {
+                    return false;
+                }
+                if ($group !== '') {
+                    return mb_strtolower(trim((string) $c->group_name)) === $group;
+                }
+
+                return $oqim === '' || mb_strtolower(trim((string) $c->oqim_label)) === $oqim;
+            })->values();
+    }
+
+    /** Kartaning guruhlari (amaliy — o'z guruhi, ma'ruza — oqim guruhlari). */
+    public function changeRequestCardGroups(TimetableCard $card): array
+    {
+        return $this->cycleCardGroups($card);
     }
 
     /** Oqimga tegishli fan kartalari (ma'ruza ham, amaliyot ham). */
@@ -6465,6 +6530,16 @@ class TimetableController extends Controller
         return array_values(array_unique($names));
     }
 
+    /** departmentHeadKafedra, lekin kafedra aniqlanmasa so'rovni yiqitmaydi (null). */
+    private function departmentHeadKafedraSafe(Request $request): ?array
+    {
+        try {
+            return $this->departmentHeadKafedra($request);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return null;
+        }
+    }
+
     /** Kafedra nomi berilgan nom(lar)dan biriga mosmi (katta-kichik harf, bo'shliq, "kafedrasi" so'zi hisobga olinmaydi). */
     private function sameKafedra(?string $a, string|array|null $b): bool
     {
@@ -6695,7 +6770,12 @@ class TimetableController extends Controller
             'pairs_per_day'    => $pairsPerDay,
             'day_names'        => array_values(array_slice($data['day_names'] ?? TimetableBoard::DEFAULT_DAY_NAMES, 0, $data['days'])),
             'bell_schedule'    => $schedule,
-            'settings'         => $data['settings'] ?? $board->settings,
+            // Oynada faqat dam olish kunlari va ikki belgi bor — qolgan kalitlar (fan ranglari,
+            // semestr boshi, bayramlar, tasdiq rejimi) saqlanganda yo'qolmasin. Tasdiq rejimi
+            // alohida (registrator) boshqariladi, shu yerdan o'zgartirilmaydi.
+            'settings'         => isset($data['settings'])
+                ? array_diff_key($data['settings'], ['approval_required' => true]) + ['days_off' => []] + ($board->settings ?: [])
+                : $board->settings,
         ]);
 
         // Yangi o'lchamdan tashqarida qolgan joylashuvlarni bo'shatamiz

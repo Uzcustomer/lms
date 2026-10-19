@@ -1260,6 +1260,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/cycle-assign-options', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignOptions'])->name('cycle-assign-options');
                 Route::post('/boards/{board}/cycle-assign', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleAssignSave'])->name('cycle-assign');
                 Route::post('/boards/{board}/cycle-lecture-slots', [\App\Http\Controllers\Admin\TimetableController::class, 'cycleLectureSlots'])->name('cycle-lecture-slots');
+                // Jadval o'zgarishlari — registrator ofisi tasdig'i
+                Route::get('/boards/{board}/change-requests', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'index'])->name('change-requests.index');
+                Route::post('/boards/{board}/change-requests/mode', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'setMode'])->name('change-requests.mode');
+                Route::post('/change-requests/{changeRequest}/approve', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'approve'])->name('change-requests.approve');
+                Route::post('/change-requests/{changeRequest}/reject', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'reject'])->name('change-requests.reject');
+                Route::post('/change-requests/{changeRequest}/cancel', [\App\Http\Controllers\Admin\TimetableChangeRequestController::class, 'cancel'])->name('change-requests.cancel');
                 // Qoidalar (aSc "Взаимосвязи" uslubida)
                 Route::get('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'rules'])->name('rules');
                 Route::post('/boards/{board}/rules', [\App\Http\Controllers\Admin\TimetableController::class, 'saveRule'])->name('rules.save');

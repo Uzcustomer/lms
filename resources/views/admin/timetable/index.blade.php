@@ -21,6 +21,11 @@
     $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchiga yopiq.
     $timetableCanUseManager = $timetableAssignmentOnly && !$timetableReadOnly;
+    // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
+    // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
+    $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
+    $timetableUsesChangeRequests = $timetableCanApprove
+        || in_array($timetableActiveRole, ['kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
 
     <x-slot name="header">
@@ -61,6 +66,9 @@
                         <button type="button" id="checkBtn" data-asc-toolbar class="hidden asc-tool toolbar-action tt-check-btn"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/03_tekshirish.png') }}" alt="" aria-hidden="true"></span>Tekshiruv <span id="checkBadge" class="hidden"></span></button>
                         <button type="button" id="rulesBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" title="Jadval qoidalari (bir kunda bo'lmasin, ketma-ket kelsin va h.k.)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Qoidalar <span id="rulesBadge" class="hidden"></span></button>
                         <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
+                        @if($timetableUsesChangeRequests)
+                        <button type="button" id="changeReqBtn" class="hidden asc-tool toolbar-action" title="Jadval o'zgarishlari: tarix va registrator ofisi tasdig'i"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>O'zgarishlar <span id="changeReqBadge" class="hidden tt-req-badge"></span></button>
+                        @endif
                         <span id="boardMsg" class="text-xs"></span>
                     </div>
                 </div>
@@ -177,6 +185,9 @@
                         @if($timetableTeacherId)
                         <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Butun doska yoki faqat sizga biriktirilgan darslar">
                             <button type="button" id="mineAll" class="px-2 py-1 bg-blue-600 font-semibold text-white">Butun doska</button>
+                            @if($timetableDepartmentHead)
+                            <button type="button" id="mineKafedra" class="px-2 py-1 bg-white text-gray-500" title="Faqat o'z kafedrangiz fanlari">Kafedraniki</button>
+                            @endif
                             <button type="button" id="mineOnly" class="px-2 py-1 bg-white text-gray-500">Faqat meniki</button>
                         </span>
                         @endif
@@ -228,6 +239,7 @@
                         <span class="text-[11px] text-amber-700 font-medium">Bayram kunlari:</span>
                         <span id="cycleHolList" class="flex flex-wrap items-center gap-1"></span>
                     </div>
+                    <div id="cyclePendingBar" class="hidden"></div>
                     <div id="cycleGridWrap" class="overflow-auto"><table id="cycleGrid" class="border-collapse text-[11px]"></table><div id="cycleOverlay"></div></div>
                 </div>
 
@@ -1251,6 +1263,55 @@
         #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+        .tt-req-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; border-radius: 8px;
+            background: #f59e0b; color: #fff; font-size: 10px; font-weight: 800; }
+        .tt-req-badge.hidden { display: none; }
+        .tt-pending-chg { outline: 2px dashed #f59e0b !important; outline-offset: -2px; position: relative; }
+        .tt-pending-chg::after { content: '\23F3'; position: absolute; right: 2px; top: 1px; font-size: 10px; }
+        #cyclePendingBar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 5px 12px; font-size: 11px;
+            background: #fffbeb; border-bottom: 1px solid #fde68a; color: #78350f; }
+        #cyclePendingBar.hidden { display: none; }
+        #cyclePendingBar span { padding: 1px 6px; border-radius: 4px; background: #fef3c7; }
+        #cyclePendingBar button { margin-left: auto; padding: 2px 10px; border-radius: 5px; border: 1px solid #f59e0b; background: #fff; color: #92400e; font-weight: 700; }
+        #cycDayPop .dp-pending { margin: 4px 0; padding: 4px 6px; border-radius: 5px; background: #fef3c7; color: #92400e; font-size: 11px; }
+        #ttToastBox { position: fixed; right: 16px; bottom: 16px; z-index: 10050; display: flex; flex-direction: column; gap: 8px; max-width: min(380px, calc(100vw - 32px)); }
+        .tt-toast { padding: 10px 12px; border-radius: 8px; background: #1e293b; color: #fff; font-size: 12px; line-height: 1.35;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .25); transition: opacity .35s, transform .35s; }
+        .tt-toast.warn { background: #92400e; }
+        .tt-toast.ok { background: #047857; }
+        .tt-toast.out { opacity: 0; transform: translateY(8px); }
+        .tt-toast .tt-toast-sub { margin-top: 3px; opacity: .85; font-size: 11px; }
+        #crModal { position: fixed; inset: 0; z-index: 10040; display: none; align-items: flex-start; justify-content: center;
+            padding: 40px 16px; background: rgba(15, 23, 42, .45); }
+        #crModal.open { display: flex; }
+        #crModal .cr-box { width: min(1080px, 100%); max-height: calc(100vh - 80px); display: flex; flex-direction: column; overflow: hidden;
+            border-radius: 12px; background: #fff; box-shadow: 0 20px 50px rgba(15, 23, 42, .3); }
+        #crModal .cr-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+        #crModal .cr-x { font-size: 22px; line-height: 1; color: #64748b; }
+        #crModal .cr-body { padding: 12px 16px; overflow: auto; font-size: 12px; }
+        #crModal .cr-mode { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 10px; border-radius: 8px; background: #eff6ff; font-weight: 600; color: #1e3a8a; }
+        #crModal .cr-mode-info { padding: 8px 10px; margin-bottom: 10px; border-radius: 8px; background: #f1f5f9; color: #334155; }
+        #crModal .cr-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+        #crModal .cr-tabs button { padding: 4px 10px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #475569; }
+        #crModal .cr-tabs button.on { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 700; }
+        #crModal .cr-table { width: 100%; border-collapse: collapse; }
+        #crModal .cr-table th { position: sticky; top: 0; background: #f8fafc; text-align: left; padding: 6px 8px; font-size: 11px; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+        #crModal .cr-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        #crModal .cr-when { white-space: nowrap; color: #64748b; }
+        #crModal .cr-who { font-weight: 700; color: #1e293b; }
+        #crModal .cr-sub { color: #64748b; font-size: 11px; }
+        #crModal .cr-err { margin-top: 3px; color: #b91c1c; }
+        #crModal .cr-note { margin-top: 3px; color: #475569; font-style: italic; }
+        #crModal .cr-st { display: inline-block; padding: 1px 8px; border-radius: 10px; font-weight: 700; font-size: 11px; white-space: nowrap; }
+        #crModal .cr-acts { white-space: nowrap; text-align: right; }
+        #crModal .cr-acts button { padding: 3px 10px; margin-left: 4px; border-radius: 6px; font-weight: 700; font-size: 11px; }
+        #crModal .cr-ok { background: #059669; color: #fff; }
+        #crModal .cr-no { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; }
+        #crModal .cr-empty { padding: 18px; text-align: center; color: #94a3b8; }
+        #crModal .cr-more { padding: 10px 0 2px; text-align: center; }
+        #crModal .cr-more button { padding: 4px 14px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #334155; font-weight: 600; }
+        #cycleGrid .cyc-just-changed { animation: cycJustChanged 2.4s ease-out; }
+        @keyframes cycJustChanged { 0%, 35% { box-shadow: inset 0 0 0 2px #f59e0b; background-color: #fef3c7; } 100% { box-shadow: inset 0 0 0 0 transparent; } }
         #cycleGrid .cyc-vrow-stu { margin-top: 2px; font-size: 10px; color: #334155; }
         #cycleGrid .cyc-vrow-stu.is-empty { color: #b91c1c; font-weight: 700; }
         #cycleGrid .cyc-vrow-stu summary { cursor: pointer; font-weight: 800; color: #5b21b6; list-style: revert; }
@@ -2413,12 +2474,30 @@
             const TIMETABLE_AUDITORIUM_ASSIGNMENT_ONLY = @json($timetableAuditoriumAssignmentOnly);
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
+            const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
             const TIMETABLE_TEACHER_ID = @json($timetableTeacherId);
-            // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
-            let mineOnly = false;
-            try { mineOnly = Boolean(TIMETABLE_TEACHER_ID) && localStorage.getItem('lms:timetable-mine') === '1'; } catch (e) { }
-            let allCards = [];
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
+            // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
+            // Ko'rinish qamrovi: 'all' — butun doska, 'kafedra' — kafedra mudirining o'z kafedrasi
+            // fanlari, 'mine' — faqat o'ziga biriktirilganlar. mineOnly = qamrov toraytirilgan.
+            let scopeMode = 'all';
+            try {
+                const saved = localStorage.getItem('lms:timetable-mine');
+                if (TIMETABLE_TEACHER_ID && saved === '1') scopeMode = 'mine';
+                else if (TIMETABLE_DEPARTMENT_HEAD && saved === 'kafedra') scopeMode = 'kafedra';
+            } catch (e) { }
+            let mineOnly = scopeMode !== 'all';
+            let myKafedras = [];
+            const kafedraNorm = v => String(v || '').toLowerCase().trim().replace(/\s*kafedra(si)?\s*$/u, '').replace(/[^\p{L}\p{N}]+/gu, '');
+            function scopeCards(list) {
+                if (scopeMode === 'mine') return list.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID);
+                if (scopeMode === 'kafedra') {
+                    const keys = new Set(myKafedras.map(kafedraNorm).filter(Boolean));
+                    return list.filter(c => keys.has(kafedraNorm(c.kafedra_name)));
+                }
+                return list;
+            }
+            let allCards = [];
             const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
@@ -2681,8 +2760,187 @@
                 const r = await fetch(url, opt);
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
+                if (j && j.pending_approval) onPendingApproval(j);
                 return j;
             }
+
+            // ===== Jadval o'zgarishlari: tarix va registrator ofisi tasdig'i =====
+            // Kafedra mudiri o'zgartirganda server o'zgarishni qo'llamaydi, so'rov qilib saqlaydi
+            // (pending_approval). Ekrandagi "oldindan" ko'chirilgan holat serverdan qayta yuklanadi.
+            // Tasdiqsiz qo'llangan o'zgarishlar ham serverda yoziladi — "Tarix" bo'limi o'chmaydi.
+            let changeReqs = { requests: [], approval_required: false, can_approve: false };
+            let changeHistory = { rows: [], more: false, loading: false };
+            let changeReqFilter = 'pending';
+            let pendingReloadTimer = null;
+            const CR_STATUS = { pending: ['Kutilmoqda', '#b45309', '#fef3c7'], approved: ['Tasdiqlandi', '#047857', '#d1fae5'],
+                rejected: ['Rad etildi', '#b91c1c', '#fee2e2'], failed: ['Qo\'llanmadi', '#b91c1c', '#fee2e2'], cancelled: ['Bekor qilindi', '#475569', '#e2e8f0'],
+                applied: ['Kiritildi', '#1d4ed8', '#dbeafe'] };
+            function ttToast(html, tone) {
+                let box = document.getElementById('ttToastBox');
+                if (!box) { box = document.createElement('div'); box.id = 'ttToastBox'; document.body.appendChild(box); }
+                const t = document.createElement('div');
+                t.className = 'tt-toast ' + (tone || '');
+                t.innerHTML = html;
+                box.appendChild(t);
+                setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 6500);
+            }
+            function onPendingApproval(j) {
+                ttToast('<b>&#9203; Tasdiqqa yuborildi</b><div>' + esc(j.summary || '') + '</div><div class="tt-toast-sub">' + esc(j.message || '') + '</div>', 'warn');
+                clearTimeout(pendingReloadTimer);
+                pendingReloadTimer = setTimeout(async () => {
+                    if (!board) return;
+                    await loadChangeRequests();
+                    try {
+                        if (viewMode === 'cycle') await loadCyclePlan();
+                        else await loadBoard(board.id);
+                    } catch (e) { }
+                }, 300);
+            }
+            function pendingReqs() { return (changeReqs.requests || []).filter(r => r.status === 'pending'); }
+            async function loadChangeRequests() {
+                if (!board || !$('changeReqBtn')) return;
+                try { changeReqs = await api(BASE + '/boards/' + board.id + '/change-requests?status=pending&_=' + Date.now()); }
+                catch (e) { return; }
+                const n = pendingReqs().length;
+                const badge = $('changeReqBadge');
+                badge.textContent = n; badge.classList.toggle('hidden', !n);
+                markPendingChanges();
+                renderCyclePendingBar();
+                if (document.getElementById('crModal') && document.getElementById('crModal').classList.contains('open')) renderChangeReqModal();
+            }
+            // Tarix sahifalab yuklanadi (eng yangisidan): reset — boshidan.
+            async function loadChangeHistory(reset) {
+                if (!board || changeHistory.loading) return;
+                const last = reset ? null : changeHistory.rows[changeHistory.rows.length - 1];
+                changeHistory.loading = true;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/change-requests?status=history' + (last ? '&before_id=' + last.id : '') + '&_=' + Date.now());
+                    changeHistory.rows = (reset ? [] : changeHistory.rows).concat(j.requests || []);
+                    changeHistory.more = Boolean(j.has_more);
+                } catch (e) { }
+                changeHistory.loading = false;
+                renderChangeReqModal();
+            }
+            function markPendingChanges() {
+                const ids = new Set();
+                pendingReqs().forEach(r => { if (/\.cards\./.test(r.route)) (r.card_ids || []).forEach(id => ids.add(+id)); });
+                document.querySelectorAll('[data-chip], .pn-card[data-id]').forEach(el => {
+                    const on = ids.has(+(el.dataset.chip || el.dataset.id));
+                    el.classList.toggle('tt-pending-chg', on);
+                    if (on && !/Tasdiq kutilmoqda/.test(el.title)) el.title = '⏳ Tasdiq kutilmoqda · ' + el.title;
+                });
+            }
+            function renderCyclePendingBar() {
+                const bar = $('cyclePendingBar');
+                if (!bar) return;
+                const list = pendingReqs().filter(r => !/\.cards\./.test(r.route));
+                bar.classList.toggle('hidden', !list.length);
+                if (!list.length) { bar.innerHTML = ''; return; }
+                bar.innerHTML = '<b>&#9203; Tasdiq kutilmoqda (' + list.length + '):</b> ' +
+                    list.slice(0, 3).map(r => '<span>' + esc(r.summary) + '</span>').join('') +
+                    (list.length > 3 ? '<span>… yana ' + (list.length - 3) + ' ta</span>' : '') +
+                    ' <button type="button" data-cr-open>Ko\'rish</button>';
+                bar.querySelector('[data-cr-open]').onclick = openChangeReqModal;
+            }
+            // Sikl kun oynasi: shu kun bo'yicha kutilayotgan soat so'rovi (bo'lsa).
+            function pendingDaySlot(card, dayIndex) {
+                if (!card) return null;
+                return pendingReqs().find(r => r.route === 'admin.timetable.cycle-lecture-slots' && r.payload
+                    && r.payload.subject_name === card.subject && r.payload.group_name === card.group
+                    && String(r.payload.day_index) === String(dayIndex) && r.payload.start_hour) || null;
+            }
+            function openChangeReqModal() {
+                let m = document.getElementById('crModal');
+                if (!m) {
+                    m = document.createElement('div');
+                    m.id = 'crModal';
+                    m.innerHTML = '<div class="cr-box"><div class="cr-head"><b>Jadval o\'zgarishlari</b><button type="button" class="cr-x" aria-label="Yopish">&times;</button></div><div class="cr-body"></div></div>';
+                    document.body.appendChild(m);
+                    m.querySelector('.cr-x').onclick = () => m.classList.remove('open');
+                    m.addEventListener('click', ev => { if (ev.target === m) m.classList.remove('open'); });
+                }
+                m.classList.add('open');
+                renderChangeReqModal();
+                loadChangeRequests();
+                if (changeReqFilter === 'history') loadChangeHistory(true);
+            }
+            function renderChangeReqModal() {
+                const m = document.getElementById('crModal');
+                if (!m) return;
+                const body = m.querySelector('.cr-body');
+                const pending = pendingReqs();
+                const history = changeReqFilter === 'history';
+                const list = history ? changeHistory.rows : pending;
+                const approver = Boolean(changeReqs.can_approve);
+                const modeHtml = approver
+                    ? '<label class="cr-mode"><input type="checkbox" id="crModeChk"' + (changeReqs.approval_required ? ' checked' : '') + '> ' +
+                      'Kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tsin</label>'
+                    : '<div class="cr-mode-info">' + (TIMETABLE_DEPARTMENT_HEAD
+                        ? (changeReqs.approval_required
+                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi.'
+                            : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')
+                        : (changeReqs.approval_required
+                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi.'
+                            : 'Bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')) + '</div>';
+                const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
+                    .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
+                const rows = list.length ? list.map(r => {
+                    const st = CR_STATUS[r.status] || [r.status, '#334155', '#e2e8f0'];
+                    const acts = r.status !== 'pending' ? '' : approver
+                        ? '<button type="button" class="cr-ok" data-cr-approve="' + r.id + '">Tasdiqlash</button><button type="button" class="cr-no" data-cr-reject="' + r.id + '">Rad etish</button>'
+                        : r.mine ? '<button type="button" class="cr-no" data-cr-cancel="' + r.id + '">Bekor qilish</button>' : '';
+                    const note = r.error ? '<div class="cr-err">' + esc(r.error) + '</div>' : (r.review_note && r.status !== 'pending' ? '<div class="cr-note">' + esc(r.review_note) + '</div>' : '');
+                    return '<tr><td class="cr-when">' + esc(r.created_at || '') + '</td>' +
+                        '<td><div class="cr-who">' + esc(r.kafedra_name || r.requester_role || '') + '</div><div class="cr-sub">' + esc(r.requester_name || '') +
+                        (r.requester_role && r.kafedra_name ? ' · ' + esc(r.requester_role) : '') + '</div></td>' +
+                        '<td>' + esc(r.summary) + (r.groups && r.groups.length ? '<div class="cr-sub">Guruhlar: ' + esc(r.groups.slice(0, 8).join(', ')) + (r.groups.length > 8 ? '…' : '') + '</div>' : '') + note + '</td>' +
+                        '<td><span class="cr-st" style="color:' + st[1] + ';background:' + st[2] + '">' + st[0] + '</span>' +
+                        (r.reviewer_name && r.status !== 'pending' ? '<div class="cr-sub">' + esc(r.reviewer_name) + (r.reviewed_at ? ' · ' + esc(r.reviewed_at) : '') + '</div>' : '') + '</td>' +
+                        '<td class="cr-acts">' + acts + '</td></tr>';
+                }).join('') : '<tr><td colspan="5" class="cr-empty">' + (history
+                    ? (changeHistory.loading ? 'Yuklanmoqda...' : 'O\'zgarishlar tarixi bo\'sh.')
+                    : 'Kutilayotgan so\'rovlar yo\'q.') + '</td></tr>';
+                const more = history && changeHistory.more
+                    ? '<div class="cr-more"><button type="button" data-cr-more' + (changeHistory.loading ? ' disabled' : '') + '>Yana yuklash</button></div>' : '';
+                body.innerHTML = modeHtml + tabs + '<div class="cr-table-wrap"><table class="cr-table"><thead><tr><th>Sana</th><th>Kim</th><th>O\'zgarish</th><th>Holat</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' + more;
+                body.querySelectorAll('[data-cr-tab]').forEach(b => b.onclick = () => {
+                    changeReqFilter = b.dataset.crTab;
+                    renderChangeReqModal();
+                    if (changeReqFilter === 'history') loadChangeHistory(true);
+                });
+                const moreBtn = body.querySelector('[data-cr-more]');
+                if (moreBtn) moreBtn.onclick = () => loadChangeHistory(false);
+                const chk = body.querySelector('#crModeChk');
+                if (chk) chk.onchange = async () => {
+                    try {
+                        await api(BASE + '/boards/' + board.id + '/change-requests/mode', 'POST', { approval_required: chk.checked ? 1 : 0 });
+                        ttToast(chk.checked ? 'Tasdiq rejimi yoqildi: kafedra o\'zgarishlari endi so\'rov bo\'lib keladi.' : 'Tasdiq rejimi o\'chirildi.', 'ok');
+                        await loadChangeRequests();
+                    } catch (e) { chk.checked = !chk.checked; alert('Xatolik: ' + e.message); }
+                };
+                const act = async (btn, url, body, okMsg) => {
+                    btn.disabled = true;
+                    try {
+                        await api(url, 'POST', body);
+                        ttToast(okMsg, 'ok');
+                        await loadChangeRequests();
+                        if (changeReqFilter === 'history') await loadChangeHistory(true);
+                        if (viewMode === 'cycle') await loadCyclePlan(); else await loadBoard(board.id);
+                    } catch (e) { alert('Xatolik: ' + e.message); btn.disabled = false; await loadChangeRequests(); }
+                };
+                body.querySelectorAll('[data-cr-approve]').forEach(b => b.onclick = () =>
+                    act(b, BASE + '/change-requests/' + b.dataset.crApprove + '/approve', {}, 'Tasdiqlandi — jadvalga qo\'llandi, tegishlilarga xabar yuborilmoqda.'));
+                body.querySelectorAll('[data-cr-reject]').forEach(b => b.onclick = () => {
+                    const note = prompt('Rad etish sababi (kafedra mudiriga boradi):', '');
+                    if (note === null) return;
+                    act(b, BASE + '/change-requests/' + b.dataset.crReject + '/reject', { note }, 'Rad etildi.');
+                });
+                body.querySelectorAll('[data-cr-cancel]').forEach(b => b.onclick = () => {
+                    if (!confirm('So\'rov bekor qilinsinmi?')) return;
+                    act(b, BASE + '/change-requests/' + b.dataset.crCancel + '/cancel', {}, 'So\'rov bekor qilindi.');
+                });
+            }
+            if ($('changeReqBtn')) $('changeReqBtn').onclick = openChangeReqModal;
 
             // ===== Doska =====
             $('newBoardBtn').onclick = () => $('newBoardForm').classList.toggle('hidden');
@@ -2857,7 +3115,8 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
-                cards = mineOnly ? allCards.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID) : allCards;
+                myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
+                cards = scopeCards(allCards);
                 missingGroups = j.missing_groups || [];
                 buildSubjectColors();
                 loadSubjectColorOverrides();
@@ -2893,6 +3152,7 @@
                 applyPendingView();
                 $('boardSel').value = String(board.id);
                 $('genBtn').classList.remove('hidden');
+                if ($('changeReqBtn')) { $('changeReqBtn').classList.remove('hidden'); loadChangeRequests(); }
                 $('refreshNamesBtn').classList.remove('hidden');
                 $('reloadBoardBtn').classList.remove('hidden');
                 $('delBoardBtn').classList.remove('hidden');
@@ -3208,7 +3468,7 @@
                 // "Faqat meniki" ko'rinishi to'liq emas, bo'shatish esa butun qamrovga
                 // (boshqalarning darslariga ham) ta'sir qiladi — bu rejimda o'chirilgan.
                 if (mineOnly) {
-                    alert('"Faqat meniki" rejimida bo‘shatish o‘chirilgan. Avval "Butun doska" ga qayting.');
+                    alert('"' + (scopeMode === 'kafedra' ? 'Kafedraniki' : 'Faqat meniki') + '" rejimida bo‘shatish o‘chirilgan. Avval "Butun doska" ga qayting.');
                     return;
                 }
                 if (viewMode === 'cycle') {
@@ -3625,10 +3885,14 @@
                 if (options.clear) body.clear = 1;
                 body.view = cycleViewMode;
                 Object.assign(body, cycleLayerParams());
-                if (mineOnly) { body.mine = 1; delete body.clear; }
+                if (scopeMode === 'mine') { body.mine = 1; delete body.clear; }
+                else if (scopeMode === 'kafedra') { body.kafedra = 1; delete body.clear; }
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
+                    // Qayta chizishda jadval joyidan siljimasin (o'zgartirilgan joy ko'z oldida qolsin).
+                    const gw = $('cycleGridWrap');
+                    const keep = gw ? { top: gw.scrollTop, left: gw.scrollLeft, page: window.scrollY } : null;
                     cyclePlanData = j;
                     renderCycleLayerUi(j);
                     if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
@@ -3636,6 +3900,10 @@
                     renderHolChips();
                     renderCyclePlan(j);
                     renderCycleCards(j);
+                    if (keep && !options.resetScroll) {
+                        const restore = () => { gw.scrollTop = keep.top; gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
+                        restore(); requestAnimationFrame(restore);
+                    }
                     $('cycleMsg').textContent = 'Sikl jadvali: ' + (j.rows ? j.rows.length : 0) + ' oqim, ' +
                         ((j.cycle_cards || []).filter(card => card.placed).length) + '/' + ((j.cycle_cards || []).length) + ' joylashgan';
                     $('cycleMsg').textContent = (j.rows ? j.rows.length : 0) + ((j.view || cycleViewMode) === 'group' ? ' guruh · ' : ' oqim · ') + (j.subjects ? j.subjects.length : 0) + ' sikl fani' +
@@ -4131,7 +4399,9 @@
                 if (!rows.length) {
                     // "Faqat meniki": jadvalda sikl bor, lekin shu o'qituvchiga biriktirilgani yo'q —
                     // sozlama haqidagi xabar chalg'itadi.
-                    const emptyMsg = mineOnly
+                    const emptyMsg = scopeMode === 'kafedra'
+                        ? 'Tanlangan qamrovda kafedrangizga tegishli sikl fani yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
+                        : mineOnly
                         ? 'Tanlangan qamrovda sizga biriktirilgan sikl darsi yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
                         : 'Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.';
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">' + emptyMsg + '</td></tr></tbody>';
@@ -4533,6 +4803,11 @@
                     return a + (n > 1 ? '–' + b : '') + '-soat' + (paras ? ' (' + paras + ')' : '');
                 };
                 const canEdit = Boolean(cyclePlanData.day_edit);
+                const dayCard = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
+                const pendingSlot = pendingDaySlot(dayCard, dp.k - 1);
+                // Tasdiq kutilayotgan bo'lsa, keyingi ↑/↓ shu so'ralgan soatdan hisoblanadi.
+                // Faqat o'z so'rovi: registrator/o'quv bo'limi boshqaning so'rovidan emas, joriy soatdan siljitadi.
+                const baseSt = pendingSlot && pendingSlot.mine ? +pendingSlot.payload.start_hour : st;
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML =
@@ -4545,9 +4820,10 @@
                         (dp.tp ? '<div class="dp-topic">' + esc(dp.tp) + '</div>' : '') + '</div></div>' : '') +
                     (total === 0 ? '<div class="dp-sub">Bu kuni KTR bo\'yicha dars yo\'q.</div>' : '') +
                     (dp.ktr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
+                    (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: darslar <b>' + (+pendingSlot.payload.start_hour) + '-soatdan</b> — registrator tasdig\'i kutilmoqda</div>' : '') +
                     (canEdit && total > 0
-                        ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (st <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
-                          '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (st + total - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
+                        ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (baseSt <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
+                          '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (baseSt + total - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +
                           '<span class="dp-sub">Darslar ' + st + '-soatdan boshlanadi</span></div>'
                         : '');
                 document.body.appendChild(pop);
@@ -4557,7 +4833,8 @@
                 pop.style.left = Math.max(8, left) + 'px';
                 pop.style.top = top + 'px';
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
-                pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => moveCycDay(key, +offset, st + (+btn.dataset.dpMove)));
+                pop.querySelectorAll('[data-dp-move]').forEach(btn => btn.onclick = () => moveCycDay(key, +offset, baseSt + (+btn.dataset.dpMove),
+                    (date ? date.d + ' (' + dp.k + '-kun)' : dp.k + '-kun') + ': ' + st + '-soatdan → ' + (baseSt + (+btn.dataset.dpMove)) + '-soatdan'));
             }
             // Fan nomi bosilganda: blok bo'yicha jami soatlar, sanalar, o'qituvchi va xona.
             function openCycSubjPop(key, anchor) {
@@ -4591,21 +4868,31 @@
                 pop.querySelector('.dp-close').onclick = closeCycDayPop;
             }
 
-            async function moveCycDay(key, offset, newStart) {
+            async function moveCycDay(key, offset, newStart, hint) {
                 const card = (cyclePlanData && cyclePlanData.cycle_cards || []).find(item => item.key === key);
                 const block = cycBlockByKey(key);
                 const dp = block && block.day_plan ? block.day_plan[offset] : null;
                 if (!card || !dp) return;
                 try {
-                    await api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', {
+                    const res = await api(BASE + '/boards/' + board.id + '/cycle-lecture-slots', 'POST', {
                         specialty_name: card.specialty, course: card.course,
                         group_name: card.group, subject_name: card.subject,
                         training_type: card.type || 'practice', view: cycleEffView(), placement_group: (card && card.placement_group) || undefined,
                         sub_group: card.placement_group && card.placement_group !== card.group ? card.group : undefined,
                         day_index: dp.k - 1, start_hour: newStart,
+                        _change_hint: hint || undefined,
                     });
+                    if (res && res.pending_approval) {
+                        // So'rov bo'ldi: umumiy qayta yuklash o'rniga shu yerda — oyna so'ralgan soat bilan qayta ochiladi.
+                        clearTimeout(pendingReloadTimer);
+                        await loadChangeRequests();
+                    }
                     await loadCyclePlan();
-                    const cell = document.querySelector('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                    const cells = document.querySelectorAll('#cycleGrid .cyc-mk-cell[data-mk-key="' + CSS.escape(key) + '"][data-mk-day="' + offset + '"]');
+                    // O'zgargan kun ustuni bir necha soniya yonib turadi — nima o'zgargani ko'rinsin.
+                    cells.forEach(c => { c.classList.remove('cyc-just-changed'); void c.offsetWidth; c.classList.add('cyc-just-changed'); });
+                    setTimeout(() => cells.forEach(c => c.classList.remove('cyc-just-changed')), 2600);
+                    const cell = cells[0];
                     if (cell) openCycDayPop(key, offset, cell);
                 } catch (e) {
                     alert('Kun soatini o\'zgartirib bo\'lmadi: ' + e.message);
@@ -4957,21 +5244,27 @@
             }
             if ($('cycLayerExternal')) $('cycLayerExternal').onclick = () => setCycleLayer('external');
             function renderMineUi() {
-                [['mineAll', false], ['mineOnly', true]].forEach(([id, on]) => {
+                [['mineAll', 'all'], ['mineKafedra', 'kafedra'], ['mineOnly', 'mine']].forEach(([id, mode]) => {
                     const b = $(id);
-                    if (b) b.className = 'px-2 py-1 ' + (mineOnly === on ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
+                    if (b) b.className = 'px-2 py-1 ' + (scopeMode === mode ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
             }
-            function setMineOnly(on) {
-                if (mineOnly === on) return;
-                mineOnly = on;
-                try { localStorage.setItem('lms:timetable-mine', on ? '1' : '0'); } catch (e) { }
+            function setScopeMode(mode) {
+                if (scopeMode === mode) return;
+                scopeMode = mode;
+                mineOnly = mode !== 'all';
+                try { localStorage.setItem('lms:timetable-mine', mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : '0'); } catch (e) { }
                 renderMineUi();
-                cards = mineOnly ? allCards.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID) : allCards;
+                cards = scopeCards(allCards);
                 if (typeof renderAll === 'function') renderAll();
                 if (viewMode === 'cycle') loadCyclePlan();
             }
-            if ($('mineAll')) { $('mineAll').onclick = () => setMineOnly(false); $('mineOnly').onclick = () => setMineOnly(true); renderMineUi(); }
+            if ($('mineAll')) {
+                $('mineAll').onclick = () => setScopeMode('all');
+                $('mineOnly').onclick = () => setScopeMode('mine');
+                if ($('mineKafedra')) $('mineKafedra').onclick = () => setScopeMode('kafedra');
+                renderMineUi();
+            }
             if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
             // Dam olish kunlarini yashirish (brauzerda eslab qolinadi)
             if ($('cycleHideOff')) {
@@ -5389,7 +5682,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); }
+            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda

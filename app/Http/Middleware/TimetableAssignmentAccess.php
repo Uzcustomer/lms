@@ -2,8 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Timetable\TimetableChangeApproval;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TimetableAssignmentAccess
 {
@@ -66,6 +69,9 @@ class TimetableAssignmentAccess
             $allowed = [
                 'admin.timetable.index',
                 'admin.timetable.boards.data',
+                // O'zgarish so'rovlari: o'z so'rovlarini ko'rish / bekor qilish
+                'admin.timetable.change-requests.index',
+                'admin.timetable.change-requests.cancel',
                 // Ekrandagi jadvalni Excelga yuklash (faqat klient panjarasini yozadi)
                 'admin.timetable.boards.excel-export',
             ];
@@ -110,6 +116,78 @@ class TimetableAssignmentAccess
             }
         }
 
-        return $next($request);
+        return $this->withHistory($request, $next, $user, $activeRole);
+    }
+
+    /**
+     * Jadvalni o'zgartiradigan amal tarixga yoziladi. Doskada "tasdiq talab qilinadi" yoqilgan
+     * bo'lsa, kafedra mudirining amali darhol bajarilmaydi — registrator ofisiga so'rov bo'lib boradi.
+     */
+    private function withHistory(Request $request, Closure $next, $user, string $activeRole)
+    {
+        if (!TimetableChangeApproval::isChange($request)) {
+            return $next($request);
+        }
+        $board = $this->routeBoard($request);
+        $approval = app(TimetableChangeApproval::class);
+
+        if (TimetableChangeApproval::shouldIntercept($request, $activeRole, $board)) {
+            $draft = $approval->draft($request, $user, $board, $activeRole);
+            // Sinov bajarish: amal hozir o'tadimi (kafedra, to'qnashuv va h.k. tekshiruvlari)?
+            // Natija bekor qilinadi (rollback) — xato bo'lsa, so'rov yaratilmaydi, xato darhol ko'rinadi.
+            DB::beginTransaction();
+            try {
+                $trial = $next($request);
+            } finally {
+                DB::rollBack();
+            }
+            if (!TimetableChangeApproval::succeeded($trial)) {
+                return $trial;
+            }
+
+            $changeRequest = $approval->submit($draft);
+
+            return response()->json([
+                'ok' => true,
+                'pending_approval' => true,
+                'change_request_id' => $changeRequest->id,
+                'message' => 'O\'zgarish registrator ofisiga tasdiqlash uchun yuborildi. Tasdiqlangach jadvalga tushadi.',
+                'summary' => $changeRequest->summary,
+            ]);
+        }
+
+        // Tarix yordamchi: yozib bo'lmasa ham amalning o'zi to'xtamaydi.
+        $draft = null;
+        if ($board) {
+            try {
+                $draft = $approval->draft($request, $user, $board, $activeRole);
+            } catch (\Throwable $e) {
+                Log::warning('[TimetableChange] history draft: ' . $e->getMessage());
+            }
+        }
+        $response = $next($request);
+        if ($draft && TimetableChangeApproval::succeeded($response)) {
+            try {
+                $approval->record($draft);
+            } catch (\Throwable $e) {
+                Log::warning('[TimetableChange] history record: ' . $e->getMessage());
+            }
+        }
+
+        return $response;
+    }
+
+    private function routeBoard(Request $request): ?\App\Models\TimetableBoard
+    {
+        $board = $request->route('board');
+        if (!$board && ($card = $request->route('card'))) {
+            $card = is_object($card) ? $card : \App\Models\TimetableCard::find($card);
+            $board = $card ? \App\Models\TimetableBoard::find($card->board_id) : null;
+        }
+        if ($board && !is_object($board)) {
+            $board = \App\Models\TimetableBoard::find($board);
+        }
+
+        return $board ?: null;
     }
 }

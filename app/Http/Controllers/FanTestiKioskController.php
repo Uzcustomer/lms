@@ -332,12 +332,12 @@ class FanTestiKioskController extends Controller
         return [
             'tickMs' => (int) ($num('fan_test_tick_seconds', 5) * 1000),
             // Boshqa tomonga qarash / yonida odam — shuncha soniya uzluksiz bo'lsa to'xtaydi
-            'awayMs' => (int) ($num('fan_test_away_seconds', 12) * 1000),
+            'awayMs' => (int) ($num('fan_test_away_seconds', 10) * 1000),
             // Yuz umuman ko'rinmasa (bosh egib o'qish, yorug'lik) — bundan ham uzoqroq kutiladi
-            'noFaceMs' => (int) ($num('fan_test_noface_seconds', 20) * 1000),
+            'noFaceMs' => (int) ($num('fan_test_noface_seconds', 10) * 1000),
             'backMs' => 500,
             'yawLimit' => $num('fan_test_yaw_limit', 0.5),
-            'otherFaceRatio' => $num('fan_test_other_face_ratio', 0.6),
+            'otherFaceRatio' => $num('fan_test_other_face_ratio', 0.5),
             'mismatchesToPause' => (int) $num('fan_test_mismatches_to_pause', 3),
             'recheckMs' => 8000,
             'detectorScore' => $num('fan_test_detector_score', 0.35),

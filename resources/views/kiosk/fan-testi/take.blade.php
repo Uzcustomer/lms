@@ -669,10 +669,10 @@
         tickMs: MON.tickMs || 5000,            // kadr tekshirish oralig'i (oddiy holatda)
         pausedTickMs: 1000,                    // test to'xtab turganda — talaba qayta qarashi bilan tez davom etsin
         yawLimit: MON.yawLimit || 0.5,         // shundan ko'p burilsa — "boshqa tomonga qaradi" (yozish, o'ylash uchun burilish mumkin)
-        awayMs: MON.awayMs || 12000,           // shuncha vaqt uzluksiz qaramasa test to'xtaydi (qisqa burilishlar hisobga olinmaydi)
-        noFaceMs: MON.noFaceMs || 20000,       // yuz umuman ko'rinmasa (bosh egib o'qish) — uzoqroq kutiladi
+        awayMs: MON.awayMs || 10000,           // shuncha vaqt uzluksiz qaramasa test to'xtaydi (qisqa burilishlar hisobga olinmaydi)
+        noFaceMs: MON.noFaceMs || 10000,       // yuz umuman ko'rinmasa (bosh egib o'qish) — uzoqroq kutiladi
         backMs: MON.backMs || 500,             // shuncha vaqt to'g'ri qarasa test davom etadi
-        otherFaceRatio: MON.otherFaceRatio || 0.6, // ikkinchi yuz asosiy yuzning shuncha ulushidan katta bo'lsagina hisoblanadi
+        otherFaceRatio: MON.otherFaceRatio || 0.5, // ikkinchi yuz asosiy yuzning shuncha ulushidan katta bo'lsagina hisoblanadi
                                                // (orqadan o'tgan odam kichik ko'rinadi — test to'xtamaydi)
         mismatchesToPause: MON.mismatchesToPause || 3, // jim yuz tekshiruvi ketma-ket shuncha marta mos kelmasa to'xtaydi
         detectorScore: MON.detectorScore || 0.35, // yuz aniqlash ishonchi (pastroq — yomon yorug'likda ham topadi)

@@ -48,11 +48,8 @@ class FanTestiAttempt extends Model
         'draft_saved_at' => 'datetime',
     ];
 
-    /**
-     * Shuncha marta ketma-ket chalg'isa test qulflanadi (ikkinchi marta — yakunlanadi).
-     * 2026-10: 3 → 5 — sinfda parda tez-tez tushib, o'qituvchi ochib berishiga to'g'ri kelardi.
-     */
-    public const AWAY_LIMIT = 5;
+    /** Shuncha marta ketma-ket chalg'isa test qulflanadi (ikkinchi marta — yakunlanadi). */
+    public const AWAY_LIMIT = 3;
 
     public function test()
     {

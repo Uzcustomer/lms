@@ -3537,6 +3537,9 @@
             const multiSpec = () => selectedDirs.size > 1;
             // Sikl rejimidagi fan — haftalik panjaraga tushmaydi (faqat sikl kalendarida).
             const isCycleCard = c => (subjectSettings[subjModeKey(c.specialty_name, c.course, c.subject_name)] || {}).mode === 'cycle';
+            // Bo'lakli fan ("Fan (a)") sozlamasi asosiy nom bilan saqlangan bo'lishi mumkin.
+            const isCycleCardAny = c => isCycleCard(c)
+                || isCycleCard(Object.assign({}, c, { subject_name: String(c.subject_name || '').replace(/\s*\(\p{L}\)\s*$/u, '') }));
             const specCards = () => cards.filter(c =>
                 selectedFaculties.has(c.faculty_name || '') &&
                 selectedDirs.has(c.specialty_name) &&
@@ -3926,6 +3929,7 @@
                     renderHolChips();
                     renderCyclePlan(j);
                     renderCycleCards(j);
+                    if (typeof renderStats === 'function') renderStats();
                     if (keep && !options.resetScroll) {
                         const restore = () => { gw.scrollTop = keep.top; gw.scrollLeft = keep.left; window.scrollTo(window.scrollX, keep.page); };
                         restore(); requestAnimationFrame(restore);
@@ -5715,13 +5719,19 @@
                 // ular "joylashmagan" bo'lib ko'rinib qolardi.
                 const sc = weekActiveCards();
                 const placed = sc.filter(c => effPlace(c)).length;
-                const boardCards = cards.filter(c => !weekCancelled(c));
+                // Sikl (4-6 kurs) kartalari haftalik panjaraga (kun/para) emas, sikl kalendariga
+                // joylanadi — haftalik hisobga qo'shilsa, doim "joylanmagan" bo'lib ko'rinadi.
+                const boardCards = cards.filter(c => !weekCancelled(c) && !isCycleCardAny(c));
                 const totPlaced = boardCards.filter(c => effPlace(c)).length;
                 const typeLbl = { all: '', lecture: ' · faqat ma\'ruza', practice: ' · faqat amaliy' }[typeFilter];
                 const weekLbl = curWeek ? ' · ' + curWeek + '-hafta' : '';
-                $('statChips').innerHTML =
-                    '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>' +
-                    '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600">Doska bo\'yicha: <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
+                const cyc = (viewMode === 'cycle' && cyclePlanData && Array.isArray(cyclePlanData.cycle_cards)) ? cyclePlanData.cycle_cards : null;
+                const first = cyc
+                    ? '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700" title="Tanlangan qamrovdagi sikl bloklari (fan × oqim/guruh × mashg\'ulot turi)">Sikl bloklari: <b>' +
+                        cyc.filter(c => c.placed).length + '/' + cyc.length + '</b></span>'
+                    : '<span class="rounded-md px-2 py-1 bg-green-50 text-green-700">Joylashgan: <b>' + placed + '/' + sc.length + '</b>' + typeLbl + weekLbl + '</span>';
+                $('statChips').innerHTML = first +
+                    '<span class="rounded-md px-2 py-1 bg-gray-100 text-gray-600" title="Haftalik jadval kartalari (sikl fanlari bundan tashqari — ular sikl kalendarida)">Doska bo\'yicha (haftalik): <b>' + totPlaced + '/' + boardCards.length + '</b></span>';
                 $('unplacedCount').textContent = (sc.length - placed) + ' ta';
                 $('unplacedExportBtn').classList.toggle('hidden', !sc.some(c => !effPlace(c)));
                 $('weekHint').classList.toggle('hidden', !curWeek);

@@ -3631,6 +3631,59 @@ class TimetableController extends Controller
     }
 
     /** Oqimga tegishli fan kartalari (ma'ruza ham, amaliyot ham). */
+    /**
+     * Tasdiq so'rovi uchun: o'zgarish tegishli bo'lgan kartalar (guruhlar, o'qituvchilar —
+     * xabar yuborish uchun). TimetableChangeApproval chaqiradi.
+     */
+    public function changeRequestCards(TimetableBoard $board, string $route, array $p)
+    {
+        $spec = (string) ($p['specialty_name'] ?? '');
+        $course = (int) ($p['course'] ?? 0);
+        $subject = (string) ($p['subject_name'] ?? '');
+        if ($spec === '' || !$course || $subject === '') {
+            return collect();
+        }
+        $type = $p['training_type'] ?? null;
+        if (str_starts_with($route, 'admin.timetable.cycle-')) {
+            $flow = (string) ($p['sub_group'] ?? '') ?: (string) ($p['group_name'] ?? '');
+            $cards = $this->cycleFlowCards($board, $spec, $course, $subject, $flow, $type, $p['view'] ?? 'flow');
+            if ($cards->isEmpty() && !empty($p['placement_group'])) {
+                $cards = $this->cycleFlowCards($board, $spec, $course, $subject, (string) $p['placement_group'], $type, 'flow');
+            }
+
+            return $cards->values();
+        }
+
+        $subjectLower = mb_strtolower(trim($subject));
+        $group = mb_strtolower(trim((string) ($p['group_name'] ?? '')));
+        $oqim = mb_strtolower(trim((string) ($p['oqim_label'] ?? '')));
+        $faculty = mb_strtolower(trim((string) ($p['faculty_name'] ?? '')));
+
+        return TimetableCard::where('board_id', $board->id)
+            ->where('specialty_name', $spec)->where('course', $course)
+            ->when($type, fn ($q) => $q->where('training_type', $type))
+            ->get()
+            ->filter(function (TimetableCard $c) use ($subjectLower, $group, $oqim, $faculty) {
+                if (mb_strtolower(trim((string) $c->subject_name)) !== $subjectLower) {
+                    return false;
+                }
+                if ($faculty !== '' && $c->faculty_name && mb_strtolower(trim((string) $c->faculty_name)) !== $faculty) {
+                    return false;
+                }
+                if ($group !== '') {
+                    return mb_strtolower(trim((string) $c->group_name)) === $group;
+                }
+
+                return $oqim === '' || mb_strtolower(trim((string) $c->oqim_label)) === $oqim;
+            })->values();
+    }
+
+    /** Kartaning guruhlari (amaliy — o'z guruhi, ma'ruza — oqim guruhlari). */
+    public function changeRequestCardGroups(TimetableCard $card): array
+    {
+        return $this->cycleCardGroups($card);
+    }
+
     private function cycleFlowCards(TimetableBoard $board, string $specialty, int $course, string $subject, string $flow, ?string $type = null, string $view = 'flow')
     {
         $subjectLower = mb_strtolower(trim($subject));
@@ -6717,7 +6770,10 @@ class TimetableController extends Controller
             'pairs_per_day'    => $pairsPerDay,
             'day_names'        => array_values(array_slice($data['day_names'] ?? TimetableBoard::DEFAULT_DAY_NAMES, 0, $data['days'])),
             'bell_schedule'    => $schedule,
-            'settings'         => $data['settings'] ?? $board->settings,
+            // Tasdiq rejimi alohida (registrator) boshqariladi — umumiy sozlamalar saqlanganda yo'qolmasin.
+            'settings'         => isset($data['settings'])
+                ? $data['settings'] + array_intersect_key($board->settings ?: [], ['approval_required' => true])
+                : $board->settings,
         ]);
 
         // Yangi o'lchamdan tashqarida qolgan joylashuvlarni bo'shatamiz

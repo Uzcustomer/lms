@@ -1281,7 +1281,7 @@ class TimetableController extends Controller
         $this->assignCardWeeks($board);
         $this->backfillFacultyNames($board);
         $restored = $toInsert
-            ? $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $assignments)
+            ? $this->restoreAssignments($board, $this->storedUnitAssignments($board) + $assignments, $kept)
             : ['restored_units' => 0, 'restored_cards' => 0];
 
         return ['ok' => true, 'mode' => 'sync', 'created' => count($toInsert), 'kept' => count($kept),
@@ -1342,16 +1342,23 @@ class TimetableController extends Controller
     }
 
     /** Saqlangan biriktirishlarni yangi kartalarga qaytaradi. */
-    private function restoreAssignments(TimetableBoard $board, array $kept): array
+    private function restoreAssignments(TimetableBoard $board, array $kept, array $skipIds = []): array
     {
         if ($kept === []) {
             return ['restored_units' => 0, 'restored_cards' => 0];
         }
+        // $skipIds — sinxronlashda saqlangan kartalar: ularning o'z o'qituvchi/xonasi
+        // (birlik ichida har xil bo'lishi ham mumkin) qayta yozilmaydi, faqat yangilariga.
+        $skip = array_flip($skipIds);
         $byKey = [];
+        $present = [];
         foreach (TimetableCard::where('board_id', $board->id)->get(['id', 'faculty_name', 'specialty_name', 'course', 'subject_name', 'training_type', 'oqim_label', 'group_name']) as $c) {
             $k = $this->unitKeyHash($c);
             if (isset($kept[$k])) {
-                $byKey[$k][] = $c->id;
+                $present[$k] = true;
+                if (!isset($skip[$c->id])) {
+                    $byKey[$k][] = $c->id;
+                }
             }
         }
         $cardsUpdated = 0;
@@ -1367,7 +1374,7 @@ class TimetableController extends Controller
             }
         });
 
-        return ['restored_units' => count($byKey), 'restored_cards' => $cardsUpdated, 'lost_units' => count($kept) - count($byKey)];
+        return ['restored_units' => count($byKey), 'restored_cards' => $cardsUpdated, 'lost_units' => count($kept) - count($present)];
     }
 
     /**

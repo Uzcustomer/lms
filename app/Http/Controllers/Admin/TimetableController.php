@@ -532,23 +532,41 @@ class TimetableController extends Controller
         return $cache[$cacheKey] = array_map(fn ($byGroup) => array_map('count', $byGroup), $counts);
     }
 
-    /** Guruh bo'yicha faol talabalar soni (students, status 11): groupNameKey(asosiy nom) => son. */
-    private function activeStudentCountsByGroup(): array
+    /** Guruh nomi (asosiy, qavssiz) => o'quv reja (groups jadvalidan; faollari oxirida — eski nofaolni ustidan yozadi). */
+    private function groupCurriculaByBase(): array
     {
-        static $counts = null;
-        if ($counts !== null) {
-            return $counts;
-        }
-        $counts = [];
-        foreach (DB::table('students')->where('student_status_code', 11)
-            ->selectRaw('group_name, COUNT(*) as n')->groupBy('group_name')->get() as $r) {
-            $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name));
-            if ($k !== '') {
-                $counts[$k] = ($counts[$k] ?? 0) + (int) $r->n;
+        static $map = null;
+        if ($map === null) {
+            $map = [];
+            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id']) as $g) {
+                $map[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name))] = (int) $g->curriculum_hemis_id;
             }
         }
 
-        return $counts;
+        return $map;
+    }
+
+    /**
+     * Guruhdagi faol talabalar soni (students, status 11). Guruh nomi fakultetlararo takrorlanishi
+     * mumkin, shuning uchun guruhning o'z o'quv rejasi bo'yicha; reja mos kelmasa — nom bo'yicha jami.
+     */
+    private function activeStudentCountFor(string $groupName): int
+    {
+        static $counts = null;
+        if ($counts === null) {
+            $counts = [];
+            foreach (DB::table('students')->where('student_status_code', 11)
+                ->selectRaw('group_name, curriculum_id, COUNT(*) as n')->groupBy('group_name', 'curriculum_id')->get() as $r) {
+                $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name));
+                if ($k !== '') {
+                    $counts[$k][(int) $r->curriculum_id] = ($counts[$k][(int) $r->curriculum_id] ?? 0) + (int) $r->n;
+                }
+            }
+        }
+        $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $groupName));
+        $cur = $this->groupCurriculaByBase()[$k] ?? null;
+
+        return (int) (($cur !== null ? ($counts[$k][$cur] ?? null) : null) ?? array_sum($counts[$k] ?? []));
     }
 
     /**
@@ -589,14 +607,7 @@ class TimetableController extends Controller
      */
     private function variantStudentList(array $rowsBySubject, string $subjectName, array $groupNames): array
     {
-        static $groupCurricula = null;
-        if ($groupCurricula === null) {
-            $groupCurricula = [];
-            // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi (assembleRows kabi).
-            foreach (DB::table('groups')->whereNotNull('curriculum_hemis_id')->orderBy('active')->orderBy('id')->get(['name', 'curriculum_hemis_id']) as $g) {
-                $groupCurricula[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g->name))] = (int) $g->curriculum_hemis_id;
-            }
-        }
+        $groupCurricula = $this->groupCurriculaByBase();
         $want = [];
         foreach ($groupNames as $g) {
             $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g));
@@ -3330,12 +3341,10 @@ class TimetableController extends Controller
                 // Oddiy (bo'lak bo'lmagan) qator: har guruhchadagi faol talabalar soni.
                 'member_students' => empty($g['variant'])
                     ? (function () use ($members) {
-                        $all = $this->activeStudentCountsByGroup();
                         $out = [];
                         foreach ($members as $m) {
                             foreach (preg_split('/\s+\+\s+/u', (string) $m) as $part) {
-                                $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $part));
-                                $out[$part] = $all[$k] ?? 0;
+                                $out[$part] = $this->activeStudentCountFor($part);
                             }
                         }
                         return $out;

@@ -1134,6 +1134,10 @@
             overflow: hidden; border: 1px solid #93c5fd; border-radius: 3px; background: #eff6ff; }
         #cycleGrid .cyc-member-row span { overflow: hidden; padding: 4px 6px; color: #1e3a8a; font-size: 10px;
             font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+        #cycleGrid .cyc-member-single { grid-template-columns: minmax(0, 1fr); }
+        #cycleGrid .cyc-stu-count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #059669;
+            color: #fff; font-size: 10px; font-weight: 800; font-style: normal; line-height: 16px; text-align: center; vertical-align: middle; }
+        #cycleGrid .cyc-stu-line { display: flex; align-items: center; gap: 4px; padding: 1px 2px; color: #065f46; font-size: 10px; font-weight: 700; }
         #cycleGrid .cyc-member-row b { display: flex; align-items: center; box-sizing: border-box; width: 48px; min-width: 48px; padding: 4px 6px;
             border-left: 1px solid #60a5fa; background: #0ea5e9; color: #fff; font-size: 10px; justify-content: center; }
         #cycleGrid .cyc-dcol { width: 30px; min-width: 30px; max-width: 30px; font-size: 9.5px; writing-mode: vertical-rl; text-orientation: mixed;
@@ -3692,12 +3696,15 @@
                 if (!list) return '';
                 if (!list.length) return '<div class="cyc-vrow-stu is-empty">HEMIS\'da talaba biriktirilmagan</div>';
                 const tail = g => (/(\d+\p{L}*)\s*$/u.exec(String(g)) || [])[1] || String(g);
+                // Tor ustunga sig'ishi uchun: "FAMILIYA I. O." (to'liq ism — tooltipda).
+                const short = n => { const p = String(n || '').trim().split(/\s+/u);
+                    return p.length < 2 ? p.join(' ') : p[0] + ' ' + p.slice(1, 3).map(x => x.charAt(0) + '.').join(' '); };
                 const per = {};
                 list.forEach(s => { per[s.group] = (per[s.group] || 0) + 1; });
                 const multi = Object.keys(per).length > 1;
                 return '<details class="cyc-vrow-stu" open><summary>' + list.length + ' talaba'
                     + (multi ? ' <i>(' + Object.entries(per).map(([g, n]) => esc(tail(g)) + ': ' + n).join(', ') + ')</i>' : '')
-                    + '</summary><ol>' + list.map(s => '<li title="' + esc(s.group) + '">' + esc(s.name)
+                    + '</summary><ol>' + list.map(s => '<li title="' + esc(s.name + ' — ' + s.group) + '">' + esc(short(s.name))
                         + (multi ? ' <b>' + esc(tail(s.group)) + '</b>' : '') + '</li>').join('') + '</ol></details>';
             }
             function cycleFlowShort(flow) {
@@ -3709,14 +3716,20 @@
 
             // Chap ustun: bitta qator = bitta OQIM. Sarlavhada oqim nomi, ostida
             // shu oqim tarkibidagi guruhlar (guruhcha harflari bilan).
-            function cycleMembersHtml(flow, members) {
-                const grouped = new Map();
+            // Faol talabalar soni nishoni (FISH emas — faqat son).
+            function cycleStuCountHtml(n, title) {
+                return '<em class="cyc-stu-count" title="' + esc(title || (n + ' ta faol talaba')) + '">' + n + '</em>';
+            }
+            function cycleMembersHtml(flow, members, counts) {
+                const grouped = new Map(), perBase = new Map();
                 (members || []).flatMap(name => String(name).split(/\s+\+\s+/u)).forEach(name => {
                     const part = cycleMemberParts(name);
                     const base = part.base || flow;
                     if (!grouped.has(base)) grouped.set(base, new Set());
                     if (part.letter) grouped.get(base).add(part.letter);
+                    if (counts && counts[name] != null) perBase.set(base, (perBase.get(base) || 0) + (+counts[name] || 0));
                 });
+                const total = Array.from(perBase.values()).reduce((a, b) => a + b, 0);
 
                 // Oqim nomi guruh nomining o'zi bo'lsa (label'siz eski kartalar),
                 // sarlavha takrorlanmasin — faqat guruh qatorlari ko'rsatiladi.
@@ -3728,7 +3741,7 @@
                 const head = isFlowLabel
                     ? '<div class="cyc-flow-head" title="' + esc(flowName) + '">' +
                       '<span>' + esc(shortName) + '</span>' +
-                      '<i>' + grouped.size + ' guruh</i></div>'
+                      '<i>' + grouped.size + ' guruh' + (counts ? ' · ' + total + ' talaba' : '') + '</i></div>'
                     : '';
 
                 if (!grouped.size) grouped.set(flowName, new Set());
@@ -3736,7 +3749,8 @@
                 return '<div class="cyc-members">' + head +
                     Array.from(grouped.entries()).map(([base, letters]) => {
                         const suffixes = Array.from(letters).sort().join(',');
-                        return '<div class="cyc-member-row"><span>' + esc(base) + '</span>' +
+                        return '<div class="cyc-member-row"><span>' + esc(base)
+                            + (perBase.has(base) ? ' ' + cycleStuCountHtml(perBase.get(base)) : '') + '</span>' +
                             '<b>' + esc(suffixes || '—') + '</b></div>';
                     }).join('') + '</div>';
             }
@@ -4328,8 +4342,11 @@
                             const groupLabel = row.variant
                                 ? cycleVariantLabelHtml(row)
                                 : (j.view || cycleViewMode) === 'group'
-                                ? '<div class="cyc-members"><div class="cyc-member-row"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div></div>'
-                                : cycleMembersHtml(row.group, row.subgroups);
+                                ? '<div class="cyc-members"><div class="cyc-member-row cyc-member-single"><span title="' + esc(row.group) + '">' + esc(row.group) + '</span></div>'
+                                    + (row.member_students ? '<div class="cyc-stu-line">' + cycleStuCountHtml(
+                                        Object.values(row.member_students).reduce((a, b) => a + (+b || 0), 0)) + ' talaba</div>' : '')
+                                    + '</div>'
+                                : cycleMembersHtml(row.group, row.subgroups, row.member_students);
                             h += '<td class="cyc-gcol" rowspan="' + (pairs + (showAddPair ? 1 : 0)) + '">' + groupLabel + '</td>';
                             if (markMode) {
                                 // Karta ichidagi soat qatorlari bilan bir tekis

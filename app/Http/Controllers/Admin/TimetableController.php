@@ -2124,6 +2124,8 @@ class TimetableController extends Controller
             'subject_settings' => $this->subjectSettingsFor($board),
             // Rejada fani bor, lekin guruh proyeksiyasi yo'q yo'nalish+kurslar
             'missing_groups' => $this->missingGroupSpecs($board),
+            // Kafedra mudiri: "Kafedraniki" filtri uchun o'z kafedrasi nomlari.
+            'my_kafedras' => $this->departmentHeadKafedraSafe(request()),
         ])
             // Doska ma'lumoti tez-tez o'zgaradi (kartalar qayta yaratiladi, joylashadi).
             // Brauzer eski GET javobini keshdan bermasin — aks holda yangi kartalar
@@ -2799,10 +2801,20 @@ class TimetableController extends Controller
             'view'              => 'nullable|in:flow,group',
             'layer'             => 'nullable|in:external,internal',
             'mine'              => 'nullable|boolean',
+            'kafedra'           => 'nullable|boolean',
         ]);
         $cycleView = $data['view'] ?? 'flow';
         // "Faqat meniki": o'qituvchi faqat o'zi biriktirilgan fan bloklarini ko'radi.
         $mineTeacherId = !empty($data['mine']) ? $this->timetableTeacherId($request) : null;
+        // "Kafedraniki" (kafedra mudiri): faqat o'z kafedrasi fanlari bloklari.
+        $scopeKafedra = null;
+        if ($mineTeacherId === null && !empty($data['kafedra']) && $this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $scopeKafedra = $this->departmentHeadKafedraSafe($request) ?: null;
+        }
+        $scoped = $mineTeacherId !== null || $scopeKafedra !== null;
+        $inMyScope = fn ($c) => $mineTeacherId !== null
+            ? (int) $c->teacher_id === $mineTeacherId
+            : ($scopeKafedra !== null && $this->sameKafedra($c->kafedra_name, $scopeKafedra));
         $mineFlowSubjects = [];   // flowKey => [subject => [training_type => true]]
         // O'quv bo'limi uchun sodda ko'rinish: ma'ruza/amaliy ajratilmaydi,
         // para qatorlari yo'q — faqat fan nomi, kunlar va joylash qoidalari.
@@ -3004,7 +3016,7 @@ class TimetableController extends Controller
                     if ($c->auditorium_name || $c->auditorium_code) {
                         $byFlow[$flowKey]['req'][$reqKey]['auds'][$c->auditorium_name ?: $c->auditorium_code] = true;
                     }
-                    if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
+                    if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$rowSubject][(string) $c->training_type] = true;
                     }
                 }
@@ -3041,7 +3053,7 @@ class TimetableController extends Controller
                     if (!isset($byFlow[$flowKey]['req'][$reqKey])) {
                         $byFlow[$flowKey]['req'][$reqKey] = ['teachers' => [], 'auds' => []];
                     }
-                    if ($mineTeacherId !== null && (int) $c->teacher_id === $mineTeacherId) {
+                    if ($scoped && $inMyScope($c)) {
                         $mineFlowSubjects[$flowKey][$lecSubject][(string) $c->training_type] = true;
                     }
                     if ($c->teacher_name) {
@@ -3055,7 +3067,7 @@ class TimetableController extends Controller
         }
 
         // "Faqat meniki": o'qituvchi dars bermaydigan fanlar va oqimlar olib tashlanadi.
-        if ($mineTeacherId !== null) {
+        if ($scoped) {
             foreach ($byFlow as $flowKey => $g) {
                 $keep = $mineFlowSubjects[$flowKey] ?? [];
                 $byFlow[$flowKey]['subs'] = array_intersect_key($g['subs'], $keep);
@@ -3117,7 +3129,7 @@ class TimetableController extends Controller
         // "Bo'shatish": qamrovdagi oqimlarning sikl bloklari panelga qaytariladi.
         // Bloklar faqat qo'lda (cyclePlace) joylanadi — avtomatik joylash yo'q.
         // "Faqat meniki" ko'rinishida bo'shatish yo'q — qamrov to'liq emas.
-        if ($request->boolean('clear') && $mineTeacherId === null) {
+        if ($request->boolean('clear') && !$scoped) {
             $scopeRows = array_map(fn ($g) => [
                 'specialty' => $g['specialty'],
                 'course'    => $g['course'],
@@ -6466,6 +6478,16 @@ class TimetableController extends Controller
     }
 
     /** Kafedra nomi berilgan nom(lar)dan biriga mosmi (katta-kichik harf, bo'shliq, "kafedrasi" so'zi hisobga olinmaydi). */
+    /** departmentHeadKafedra, lekin kafedra aniqlanmasa so'rovni yiqitmaydi (null). */
+    private function departmentHeadKafedraSafe(Request $request): ?array
+    {
+        try {
+            return $this->departmentHeadKafedra($request);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            return null;
+        }
+    }
+
     private function sameKafedra(?string $a, string|array|null $b): bool
     {
         if (is_array($b)) {

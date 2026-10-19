@@ -177,6 +177,9 @@
                         @if($timetableTeacherId)
                         <span class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Butun doska yoki faqat sizga biriktirilgan darslar">
                             <button type="button" id="mineAll" class="px-2 py-1 bg-blue-600 font-semibold text-white">Butun doska</button>
+                            @if($timetableDepartmentHead)
+                            <button type="button" id="mineKafedra" class="px-2 py-1 bg-white text-gray-500" title="Faqat o'z kafedrangiz fanlari">Kafedraniki</button>
+                            @endif
                             <button type="button" id="mineOnly" class="px-2 py-1 bg-white text-gray-500">Faqat meniki</button>
                         </span>
                         @endif
@@ -2414,11 +2417,28 @@
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_TEACHER_ID = @json($timetableTeacherId);
-            // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
-            let mineOnly = false;
-            try { mineOnly = Boolean(TIMETABLE_TEACHER_ID) && localStorage.getItem('lms:timetable-mine') === '1'; } catch (e) { }
-            let allCards = [];
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
+            // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
+            // Ko'rinish qamrovi: 'all' — butun doska, 'kafedra' — kafedra mudirining o'z kafedrasi
+            // fanlari, 'mine' — faqat o'ziga biriktirilganlar. mineOnly = qamrov toraytirilgan.
+            let scopeMode = 'all';
+            try {
+                const saved = localStorage.getItem('lms:timetable-mine');
+                if (TIMETABLE_TEACHER_ID && saved === '1') scopeMode = 'mine';
+                else if (TIMETABLE_DEPARTMENT_HEAD && saved === 'kafedra') scopeMode = 'kafedra';
+            } catch (e) { }
+            let mineOnly = scopeMode !== 'all';
+            let myKafedras = [];
+            const kafedraNorm = v => String(v || '').toLowerCase().trim().replace(/\s*kafedra(si)?\s*$/u, '').replace(/[^\p{L}\p{N}]+/gu, '');
+            function scopeCards(list) {
+                if (scopeMode === 'mine') return list.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID);
+                if (scopeMode === 'kafedra') {
+                    const keys = new Set(myKafedras.map(kafedraNorm).filter(Boolean));
+                    return list.filter(c => keys.has(kafedraNorm(c.kafedra_name)));
+                }
+                return list;
+            }
+            let allCards = [];
             const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
@@ -2857,7 +2877,8 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
-                cards = mineOnly ? allCards.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID) : allCards;
+                myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
+                cards = scopeCards(allCards);
                 missingGroups = j.missing_groups || [];
                 buildSubjectColors();
                 loadSubjectColorOverrides();
@@ -3208,7 +3229,7 @@
                 // "Faqat meniki" ko'rinishi to'liq emas, bo'shatish esa butun qamrovga
                 // (boshqalarning darslariga ham) ta'sir qiladi — bu rejimda o'chirilgan.
                 if (mineOnly) {
-                    alert('"Faqat meniki" rejimida bo‘shatish o‘chirilgan. Avval "Butun doska" ga qayting.');
+                    alert('"' + (scopeMode === 'kafedra' ? 'Kafedraniki' : 'Faqat meniki') + '" rejimida bo‘shatish o‘chirilgan. Avval "Butun doska" ga qayting.');
                     return;
                 }
                 if (viewMode === 'cycle') {
@@ -3625,7 +3646,8 @@
                 if (options.clear) body.clear = 1;
                 body.view = cycleViewMode;
                 Object.assign(body, cycleLayerParams());
-                if (mineOnly) { body.mine = 1; delete body.clear; }
+                if (scopeMode === 'mine') { body.mine = 1; delete body.clear; }
+                else if (scopeMode === 'kafedra') { body.kafedra = 1; delete body.clear; }
                 $('cycleMsg').textContent = 'Yuklanmoqda...';
                 try {
                     const j = await api(BASE + '/boards/' + board.id + '/cycle-plan', 'POST', body);
@@ -4131,7 +4153,9 @@
                 if (!rows.length) {
                     // "Faqat meniki": jadvalda sikl bor, lekin shu o'qituvchiga biriktirilgani yo'q —
                     // sozlama haqidagi xabar chalg'itadi.
-                    const emptyMsg = mineOnly
+                    const emptyMsg = scopeMode === 'kafedra'
+                        ? 'Tanlangan qamrovda kafedrangizga tegishli sikl fani yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
+                        : mineOnly
                         ? 'Tanlangan qamrovda sizga biriktirilgan sikl darsi yo\'q. Barcha darslarni ko\'rish uchun <b>Butun doska</b> ni tanlang.'
                         : 'Sikl rejimidagi fan yoki oqim topilmadi. Avval fan sozlamasida <b>Sikl</b> rejimi va kun sonini kiriting.';
                     $('cycleGrid').innerHTML = '<tbody><tr><td class="p-4 text-sm text-gray-400">' + emptyMsg + '</td></tr></tbody>';
@@ -4957,21 +4981,27 @@
             }
             if ($('cycLayerExternal')) $('cycLayerExternal').onclick = () => setCycleLayer('external');
             function renderMineUi() {
-                [['mineAll', false], ['mineOnly', true]].forEach(([id, on]) => {
+                [['mineAll', 'all'], ['mineKafedra', 'kafedra'], ['mineOnly', 'mine']].forEach(([id, mode]) => {
                     const b = $(id);
-                    if (b) b.className = 'px-2 py-1 ' + (mineOnly === on ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
+                    if (b) b.className = 'px-2 py-1 ' + (scopeMode === mode ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
                 });
             }
-            function setMineOnly(on) {
-                if (mineOnly === on) return;
-                mineOnly = on;
-                try { localStorage.setItem('lms:timetable-mine', on ? '1' : '0'); } catch (e) { }
+            function setScopeMode(mode) {
+                if (scopeMode === mode) return;
+                scopeMode = mode;
+                mineOnly = mode !== 'all';
+                try { localStorage.setItem('lms:timetable-mine', mode === 'mine' ? '1' : mode === 'kafedra' ? 'kafedra' : '0'); } catch (e) { }
                 renderMineUi();
-                cards = mineOnly ? allCards.filter(c => +c.teacher_id === +TIMETABLE_TEACHER_ID) : allCards;
+                cards = scopeCards(allCards);
                 if (typeof renderAll === 'function') renderAll();
                 if (viewMode === 'cycle') loadCyclePlan();
             }
-            if ($('mineAll')) { $('mineAll').onclick = () => setMineOnly(false); $('mineOnly').onclick = () => setMineOnly(true); renderMineUi(); }
+            if ($('mineAll')) {
+                $('mineAll').onclick = () => setScopeMode('all');
+                $('mineOnly').onclick = () => setScopeMode('mine');
+                if ($('mineKafedra')) $('mineKafedra').onclick = () => setScopeMode('kafedra');
+                renderMineUi();
+            }
             if ($('cycLayerInternal')) $('cycLayerInternal').onclick = () => setCycleLayer('internal');
             // Dam olish kunlarini yashirish (brauzerda eslab qolinadi)
             if ($('cycleHideOff')) {

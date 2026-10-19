@@ -152,7 +152,12 @@ it('tasdiq rejimi o\'chiq bo\'lsa o\'zgarish darhol qo\'llanadi', function () {
     asRole($head, 'kafedra_mudiri')
         ->postJson(route('admin.timetable.cards.place', $card), ['day' => 2, 'pair' => 3])
         ->assertOk()->assertJsonMissing(['pending_approval' => true]);
-    expect($card->fresh()->day)->toBe(2)->and(TimetableChangeRequest::count())->toBe(0);
+    // So'rov emas — tarix uchun "applied" yozuvi.
+    $row = TimetableChangeRequest::sole();
+    expect($card->fresh()->day)->toBe(2)
+        ->and($row->status)->toBe('applied')
+        ->and($row->requester_role)->toBe('kafedra_mudiri')
+        ->and($row->summary)->toContain('Dushanba, 1-para → Seshanba, 3-para');
 });
 
 it('kafedra mudiri o\'z so\'rovini bekor qiladi, registrator rejimni yoqadi', function () {
@@ -188,6 +193,61 @@ it('kafedra mudiri sahifasida "So\'rovlar" va "Kafedraniki" bor, tasdiqlash huqu
     $html = asRole($head, 'kafedra_mudiri')->get(route('admin.timetable.index'))->assertOk()->getContent();
     expect($html)->toContain('id="changeReqBtn"')->toContain('id="mineKafedra"')->toContain('const TIMETABLE_CAN_APPROVE = false');
     @file_put_contents(sys_get_temp_dir() . '/tt_head.html', $html);
+});
+
+it('tasdiqsiz o\'zgarishlar tarixda qoladi, xato amal yozilmaydi', function () {
+    ['card' => $card] = approvalSetup();
+    $oquv = new Teacher();
+    $oquv->forceFill([
+        'hemis_id' => 777001, 'full_name' => 'OQUV BOLIMI', 'short_name' => 'OQUV', 'first_name' => 'O', 'second_name' => 'B',
+        'employee_id_number' => '777001', 'birth_date' => '1980-01-01', 'year_of_enter' => 2010,
+        'gender' => 'm', 'department' => 'O\'quv bo\'limi', 'employment_form' => 'x', 'employment_staff' => 'x', 'staff_position' => 'x',
+        'employee_status' => 'x', 'employee_type' => 'x', 'contract_number' => '1', 'decree_number' => '1',
+        'contract_date' => '2020-01-01', 'decree_date' => '2020-01-01',
+        'status' => true, 'login' => 'oquv777001', 'password' => bcrypt('x'),
+    ])->save();
+    $oquv->assignRole('oquv_bolimi');
+
+    // Doskada tasdiq rejimi yoqilgan, lekin o'quv bo'limi uchun u amal qilmaydi — darhol qo'llanadi.
+    asRole($oquv, 'oquv_bolimi')
+        ->postJson(route('admin.timetable.cards.place', $card), ['day' => 4, 'pair' => 2])
+        ->assertOk()->assertJsonMissing(['pending_approval' => true]);
+    asRole($oquv, 'oquv_bolimi')
+        ->postJson(route('admin.timetable.cards.place', $card), ['day' => 99, 'pair' => 2])
+        ->assertStatus(422);
+
+    $row = TimetableChangeRequest::sole();
+    expect($card->fresh()->only(['day', 'pair']))->toBe(['day' => 4, 'pair' => 2])
+        ->and($row->status)->toBe('applied')
+        ->and($row->requester_name)->toBe('OQUV BOLIMI')
+        ->and($row->summary)->toContain('Dushanba, 1-para → Payshanba, 2-para')
+        // Tasdiqsiz o'zgarish registratorga xabar yubormaydi.
+        ->and(TeacherNotification::count())->toBe(0);
+});
+
+it('tarixni o\'quv bo\'limi to\'liq, kafedra mudiri faqat o\'zinikini sahifalab ko\'radi', function () {
+    ['head' => $head, 'reg' => $reg, 'board' => $board, 'card' => $card] = approvalSetup(false);
+
+    foreach ([2, 3, 4] as $day) {
+        asRole($head, 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $card), ['day' => $day, 'pair' => 1])->assertOk();
+    }
+    // Registratorning (boshqa foydalanuvchining) o'zgarishi
+    asRole($reg, 'registrator_ofisi')->postJson(route('admin.timetable.cards.place', $card), ['day' => 5, 'pair' => 1])->assertOk();
+    expect(TimetableChangeRequest::where('status', 'applied')->count())->toBe(4);
+
+    $all = asRole($reg, 'registrator_ofisi')->getJson(route('admin.timetable.change-requests.index', $board))->assertOk();
+    expect($all->json('requests'))->toHaveCount(4)->and($all->json('has_more'))->toBeFalse()
+        ->and($all->json('requests.0.summary'))->toContain('Payshanba, 1-para → Juma, 1-para');
+
+    $own = asRole($head, 'kafedra_mudiri')->getJson(route('admin.timetable.change-requests.index', $board))->assertOk();
+    expect(collect($own->json('requests'))->pluck('requester_name')->unique()->all())->toBe(['KAFEDRA MUDIRI'])
+        ->and($own->json('requests'))->toHaveCount(3)
+        ->and($own->json('requests.0.mine'))->toBeTrue();
+
+    $older = asRole($head, 'kafedra_mudiri')
+        ->getJson(route('admin.timetable.change-requests.index', ['board' => $board, 'before_id' => $own->json('requests.1.id')]))->assertOk();
+    expect($older->json('requests'))->toHaveCount(1)
+        ->and($older->json('requests.0.id'))->toBe($own->json('requests.2.id'));
 });
 
 it('doska sozlamalari saqlanganda tasdiq rejimi, ranglar va bayramlar yo\'qolmaydi', function () {

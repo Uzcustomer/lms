@@ -5,9 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /*
- * Dars jadvali o'zgarish so'rovlari: doskada "tasdiq talab qilinadi" yoqilgan bo'lsa,
+ * Dars jadvali o'zgarishlari: doskada "tasdiq talab qilinadi" yoqilgan bo'lsa,
  * kafedra mudirining o'zgarishi darhol qo'llanmaydi — registrator ofisi tasdiqlagach
- * qo'llanadi va tegishli talaba/o'qituvchi/bo'limlarga xabar boradi.
+ * qo'llanadi va tegishli talaba/o'qituvchi/bo'limlarga xabar boradi. Tasdiqsiz
+ * qo'llangan o'zgarishlar ham tarix uchun "applied" holatida yoziladi.
  */
 return new class extends Migration
 {
@@ -16,8 +17,10 @@ return new class extends Migration
         Schema::create('timetable_change_requests', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('board_id')->index();
-            $table->unsignedBigInteger('requester_id')->nullable()->index();   // teachers.id
+            $table->unsignedBigInteger('requester_id')->nullable()->index();   // teachers.id yoki users.id
+            $table->string('requester_type')->nullable();                     // Teacher | User (morph)
             $table->string('requester_name')->nullable();
+            $table->string('requester_role', 40)->nullable();                 // o'zgartirgan paytdagi faol rol
             $table->string('kafedra_name')->nullable();
             $table->string('route_name', 100);
             $table->string('target_key', 191)->index();   // bir xil joyga qayta so'rov — eskisini almashtiradi
@@ -27,7 +30,7 @@ return new class extends Migration
             $table->string('subject_name')->nullable();
             $table->text('summary');                       // odam o'qiydigan tavsif
             $table->json('details')->nullable();           // guruhlar, fakultet, o'qituvchi ...
-            $table->string('status', 20)->default('pending')->index();   // pending|approved|rejected|failed|cancelled
+            $table->string('status', 20)->default('pending')->index();   // pending|approved|rejected|failed|cancelled|applied
             $table->unsignedBigInteger('reviewer_id')->nullable();
             $table->string('reviewer_name')->nullable();
             $table->text('review_note')->nullable();

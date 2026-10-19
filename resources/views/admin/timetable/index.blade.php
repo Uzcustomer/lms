@@ -21,9 +21,11 @@
     $timetableCanPlace = in_array($timetableActiveRole, ['oquv_bolimi', 'oquv_bolimi_boshligi', 'kafedra_mudiri'], true);
     // Fanlar menejeri subjects/subject-setting.save ni chaqiradi — o'qituvchiga yopiq.
     $timetableCanUseManager = $timetableAssignmentOnly && !$timetableReadOnly;
-    // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi) va so'rov yuboruvchi (kafedra mudiri)
+    // Jadval o'zgarishlarini tasdiqlovchi (registrator ofisi), so'rov yuboruvchi (kafedra mudiri)
+    // va o'zgarishlar tarixini ko'ruvchilar (o'quv bo'limi, kichik admin)
     $timetableCanApprove = in_array($timetableActiveRole, ['superadmin', 'admin', 'registrator_ofisi'], true);
-    $timetableUsesChangeRequests = $timetableCanApprove || $timetableActiveRole === 'kafedra_mudiri';
+    $timetableUsesChangeRequests = $timetableCanApprove
+        || in_array($timetableActiveRole, ['kafedra_mudiri', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'], true);
 @endphp
 
     <x-slot name="header">
@@ -65,7 +67,7 @@
                         <button type="button" id="rulesBtn" data-asc-toolbar class="hidden asc-tool toolbar-action" title="Jadval qoidalari (bir kunda bo'lmasin, ketma-ket kelsin va h.k.)"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/04_settings.png') }}" alt="" aria-hidden="true"></span>Qoidalar <span id="rulesBadge" class="hidden"></span></button>
                         <button type="button" id="assignBtn" data-asc-toolbar class="hidden asc-tool toolbar-action"><span class="toolbar-icon" aria-hidden="true"><img src="{{ asset('image/01_biriktirish_hujjatlari.png') }}" alt="" aria-hidden="true"></span>Biriktirish</button>
                         @if($timetableUsesChangeRequests)
-                        <button type="button" id="changeReqBtn" class="hidden asc-tool toolbar-action" title="Jadval o'zgarishlari — registrator ofisi tasdig'i"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>So'rovlar <span id="changeReqBadge" class="hidden tt-req-badge"></span></button>
+                        <button type="button" id="changeReqBtn" class="hidden asc-tool toolbar-action" title="Jadval o'zgarishlari: tarix va registrator ofisi tasdig'i"><span class="toolbar-icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>O'zgarishlar <span id="changeReqBadge" class="hidden tt-req-badge"></span></button>
                         @endif
                         <span id="boardMsg" class="text-xs"></span>
                     </div>
@@ -1306,6 +1308,8 @@
         #crModal .cr-ok { background: #059669; color: #fff; }
         #crModal .cr-no { background: #fff; color: #b91c1c; border: 1px solid #fca5a5; }
         #crModal .cr-empty { padding: 18px; text-align: center; color: #94a3b8; }
+        #crModal .cr-more { padding: 10px 0 2px; text-align: center; }
+        #crModal .cr-more button { padding: 4px 14px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; color: #334155; font-weight: 600; }
         #cycleGrid .cyc-just-changed { animation: cycJustChanged 2.4s ease-out; }
         @keyframes cycJustChanged { 0%, 35% { box-shadow: inset 0 0 0 2px #f59e0b; background-color: #fef3c7; } 100% { box-shadow: inset 0 0 0 0 transparent; } }
         #cycleGrid .cyc-vrow-stu { margin-top: 2px; font-size: 10px; color: #334155; }
@@ -2760,14 +2764,17 @@
                 return j;
             }
 
-            // ===== Jadval o'zgarishlari: registrator ofisi tasdig'i =====
+            // ===== Jadval o'zgarishlari: tarix va registrator ofisi tasdig'i =====
             // Kafedra mudiri o'zgartirganda server o'zgarishni qo'llamaydi, so'rov qilib saqlaydi
             // (pending_approval). Ekrandagi "oldindan" ko'chirilgan holat serverdan qayta yuklanadi.
+            // Tasdiqsiz qo'llangan o'zgarishlar ham serverda yoziladi — "Tarix" bo'limi o'chmaydi.
             let changeReqs = { requests: [], approval_required: false, can_approve: false };
+            let changeHistory = { rows: [], more: false, loading: false };
             let changeReqFilter = 'pending';
             let pendingReloadTimer = null;
             const CR_STATUS = { pending: ['Kutilmoqda', '#b45309', '#fef3c7'], approved: ['Tasdiqlandi', '#047857', '#d1fae5'],
-                rejected: ['Rad etildi', '#b91c1c', '#fee2e2'], failed: ['Qo\'llanmadi', '#b91c1c', '#fee2e2'], cancelled: ['Bekor qilindi', '#475569', '#e2e8f0'] };
+                rejected: ['Rad etildi', '#b91c1c', '#fee2e2'], failed: ['Qo\'llanmadi', '#b91c1c', '#fee2e2'], cancelled: ['Bekor qilindi', '#475569', '#e2e8f0'],
+                applied: ['Kiritildi', '#1d4ed8', '#dbeafe'] };
             function ttToast(html, tone) {
                 let box = document.getElementById('ttToastBox');
                 if (!box) { box = document.createElement('div'); box.id = 'ttToastBox'; document.body.appendChild(box); }
@@ -2792,7 +2799,7 @@
             function pendingReqs() { return (changeReqs.requests || []).filter(r => r.status === 'pending'); }
             async function loadChangeRequests() {
                 if (!board || !$('changeReqBtn')) return;
-                try { changeReqs = await api(BASE + '/boards/' + board.id + '/change-requests?_=' + Date.now()); }
+                try { changeReqs = await api(BASE + '/boards/' + board.id + '/change-requests?status=pending&_=' + Date.now()); }
                 catch (e) { return; }
                 const n = pendingReqs().length;
                 const badge = $('changeReqBadge');
@@ -2800,6 +2807,19 @@
                 markPendingChanges();
                 renderCyclePendingBar();
                 if (document.getElementById('crModal') && document.getElementById('crModal').classList.contains('open')) renderChangeReqModal();
+            }
+            // Tarix sahifalab yuklanadi (eng yangisidan): reset — boshidan.
+            async function loadChangeHistory(reset) {
+                if (!board || changeHistory.loading) return;
+                const last = reset ? null : changeHistory.rows[changeHistory.rows.length - 1];
+                changeHistory.loading = true;
+                try {
+                    const j = await api(BASE + '/boards/' + board.id + '/change-requests?status=history' + (last ? '&before_id=' + last.id : '') + '&_=' + Date.now());
+                    changeHistory.rows = (reset ? [] : changeHistory.rows).concat(j.requests || []);
+                    changeHistory.more = Boolean(j.has_more);
+                } catch (e) { }
+                changeHistory.loading = false;
+                renderChangeReqModal();
             }
             function markPendingChanges() {
                 const ids = new Set();
@@ -2842,37 +2862,54 @@
                 m.classList.add('open');
                 renderChangeReqModal();
                 loadChangeRequests();
+                if (changeReqFilter === 'history') loadChangeHistory(true);
             }
             function renderChangeReqModal() {
                 const m = document.getElementById('crModal');
                 if (!m) return;
                 const body = m.querySelector('.cr-body');
-                const all = changeReqs.requests || [];
-                const list = changeReqFilter === 'pending' ? all.filter(r => r.status === 'pending') : all;
+                const pending = pendingReqs();
+                const history = changeReqFilter === 'history';
+                const list = history ? changeHistory.rows : pending;
                 const approver = Boolean(changeReqs.can_approve);
                 const modeHtml = approver
                     ? '<label class="cr-mode"><input type="checkbox" id="crModeChk"' + (changeReqs.approval_required ? ' checked' : '') + '> ' +
                       'Kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tsin</label>'
-                    : '<div class="cr-mode-info">' + (changeReqs.approval_required
-                        ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi.'
-                        : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.') + '</div>';
-                const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + all.filter(r => r.status === 'pending').length + ')'], ['all', 'Barchasi (30 kun)']]
+                    : '<div class="cr-mode-info">' + (TIMETABLE_DEPARTMENT_HEAD
+                        ? (changeReqs.approval_required
+                            ? 'Bu doskada o\'zgarishlaringiz registrator ofisi tasdiqlagandan keyin jadvalga tushadi.'
+                            : 'Hozir bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')
+                        : (changeReqs.approval_required
+                            ? 'Bu doskada kafedra mudirlari o\'zgarishlari registrator ofisi tasdig\'idan o\'tadi.'
+                            : 'Bu doskada o\'zgarishlar tasdiqsiz, darhol qo\'llanadi.')) + '</div>';
+                const tabs = '<div class="cr-tabs">' + [['pending', 'Kutilayotgan (' + pending.length + ')'], ['history', 'Tarix']]
                     .map(([k, l]) => '<button type="button" data-cr-tab="' + k + '" class="' + (changeReqFilter === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>';
                 const rows = list.length ? list.map(r => {
                     const st = CR_STATUS[r.status] || [r.status, '#334155', '#e2e8f0'];
                     const acts = r.status !== 'pending' ? '' : approver
                         ? '<button type="button" class="cr-ok" data-cr-approve="' + r.id + '">Tasdiqlash</button><button type="button" class="cr-no" data-cr-reject="' + r.id + '">Rad etish</button>'
-                        : '<button type="button" class="cr-no" data-cr-cancel="' + r.id + '">Bekor qilish</button>';
+                        : r.mine ? '<button type="button" class="cr-no" data-cr-cancel="' + r.id + '">Bekor qilish</button>' : '';
                     const note = r.error ? '<div class="cr-err">' + esc(r.error) + '</div>' : (r.review_note && r.status !== 'pending' ? '<div class="cr-note">' + esc(r.review_note) + '</div>' : '');
                     return '<tr><td class="cr-when">' + esc(r.created_at || '') + '</td>' +
-                        '<td><div class="cr-who">' + esc(r.kafedra_name || '') + '</div><div class="cr-sub">' + esc(r.requester_name || '') + '</div></td>' +
+                        '<td><div class="cr-who">' + esc(r.kafedra_name || r.requester_role || '') + '</div><div class="cr-sub">' + esc(r.requester_name || '') +
+                        (r.requester_role && r.kafedra_name ? ' · ' + esc(r.requester_role) : '') + '</div></td>' +
                         '<td>' + esc(r.summary) + (r.groups && r.groups.length ? '<div class="cr-sub">Guruhlar: ' + esc(r.groups.slice(0, 8).join(', ')) + (r.groups.length > 8 ? '…' : '') + '</div>' : '') + note + '</td>' +
                         '<td><span class="cr-st" style="color:' + st[1] + ';background:' + st[2] + '">' + st[0] + '</span>' +
                         (r.reviewer_name && r.status !== 'pending' ? '<div class="cr-sub">' + esc(r.reviewer_name) + (r.reviewed_at ? ' · ' + esc(r.reviewed_at) : '') + '</div>' : '') + '</td>' +
                         '<td class="cr-acts">' + acts + '</td></tr>';
-                }).join('') : '<tr><td colspan="5" class="cr-empty">So\'rovlar yo\'q.</td></tr>';
-                body.innerHTML = modeHtml + tabs + '<div class="cr-table-wrap"><table class="cr-table"><thead><tr><th>Sana</th><th>Kafedra</th><th>O\'zgarish</th><th>Holat</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-                body.querySelectorAll('[data-cr-tab]').forEach(b => b.onclick = () => { changeReqFilter = b.dataset.crTab; renderChangeReqModal(); });
+                }).join('') : '<tr><td colspan="5" class="cr-empty">' + (history
+                    ? (changeHistory.loading ? 'Yuklanmoqda...' : 'O\'zgarishlar tarixi bo\'sh.')
+                    : 'Kutilayotgan so\'rovlar yo\'q.') + '</td></tr>';
+                const more = history && changeHistory.more
+                    ? '<div class="cr-more"><button type="button" data-cr-more' + (changeHistory.loading ? ' disabled' : '') + '>Yana yuklash</button></div>' : '';
+                body.innerHTML = modeHtml + tabs + '<div class="cr-table-wrap"><table class="cr-table"><thead><tr><th>Sana</th><th>Kim</th><th>O\'zgarish</th><th>Holat</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' + more;
+                body.querySelectorAll('[data-cr-tab]').forEach(b => b.onclick = () => {
+                    changeReqFilter = b.dataset.crTab;
+                    renderChangeReqModal();
+                    if (changeReqFilter === 'history') loadChangeHistory(true);
+                });
+                const moreBtn = body.querySelector('[data-cr-more]');
+                if (moreBtn) moreBtn.onclick = () => loadChangeHistory(false);
                 const chk = body.querySelector('#crModeChk');
                 if (chk) chk.onchange = async () => {
                     try {
@@ -2887,6 +2924,7 @@
                         await api(url, 'POST', body);
                         ttToast(okMsg, 'ok');
                         await loadChangeRequests();
+                        if (changeReqFilter === 'history') await loadChangeHistory(true);
                         if (viewMode === 'cycle') await loadCyclePlan(); else await loadBoard(board.id);
                     } catch (e) { alert('Xatolik: ' + e.message); btn.disabled = false; await loadChangeRequests(); }
                 };
@@ -4768,7 +4806,8 @@
                 const dayCard = (cyclePlanData.cycle_cards || []).find(item => item.key === key);
                 const pendingSlot = pendingDaySlot(dayCard, dp.k - 1);
                 // Tasdiq kutilayotgan bo'lsa, keyingi ↑/↓ shu so'ralgan soatdan hisoblanadi.
-                const baseSt = pendingSlot ? +pendingSlot.payload.start_hour : st;
+                // Faqat o'z so'rovi: registrator/o'quv bo'limi boshqaning so'rovidan emas, joriy soatdan siljitadi.
+                const baseSt = pendingSlot && pendingSlot.mine ? +pendingSlot.payload.start_hour : st;
                 const pop = document.createElement('div');
                 pop.id = 'cycDayPop';
                 pop.innerHTML =
@@ -4781,7 +4820,7 @@
                         (dp.tp ? '<div class="dp-topic">' + esc(dp.tp) + '</div>' : '') + '</div></div>' : '') +
                     (total === 0 ? '<div class="dp-sub">Bu kuni KTR bo\'yicha dars yo\'q.</div>' : '') +
                     (dp.ktr ? '' : '<div class="dp-note">KTR kiritilmagan — soatlar reja bo\'yicha taxminiy.</div>') +
-                    (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: darslar <b>' + baseSt + '-soatdan</b> — registrator tasdig\'i kutilmoqda</div>' : '') +
+                    (pendingSlot ? '<div class="dp-pending">&#9203; So\'rov: darslar <b>' + (+pendingSlot.payload.start_hour) + '-soatdan</b> — registrator tasdig\'i kutilmoqda</div>' : '') +
                     (canEdit && total > 0
                         ? '<div class="dp-actions"><button type="button" data-dp-move="-1" title="Bir soat oldinga (yuqoriga)"' + (baseSt <= 1 ? ' disabled' : '') + '>&#8593;</button>' +
                           '<button type="button" data-dp-move="1" title="Bir soat keyinga (pastga)"' + (baseSt + total - 1 >= dayHours ? ' disabled' : '') + '>&#8595;</button>' +

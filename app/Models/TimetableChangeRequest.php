@@ -11,9 +11,11 @@ class TimetableChangeRequest extends Model
     public const REJECTED = 'rejected';
     public const FAILED = 'failed';
     public const CANCELLED = 'cancelled';
+    /** Tasdiqsiz, darhol qo'llangan o'zgarish (faqat tarix uchun). */
+    public const APPLIED = 'applied';
 
     protected $fillable = [
-        'board_id', 'requester_id', 'requester_name', 'kafedra_name', 'route_name', 'target_key',
+        'board_id', 'requester_id', 'requester_type', 'requester_name', 'requester_role', 'kafedra_name', 'route_name', 'target_key',
         'params', 'payload', 'kind', 'subject_name', 'summary', 'details', 'status',
         'reviewer_id', 'reviewer_name', 'review_note', 'error', 'reviewed_at',
     ];
@@ -30,8 +32,15 @@ class TimetableChangeRequest extends Model
         return $this->belongsTo(TimetableBoard::class, 'board_id');
     }
 
+    /** O'zgarishni kiritgan foydalanuvchi: odatda Teacher, admin — User. */
     public function requester()
     {
-        return $this->belongsTo(Teacher::class, 'requester_id');
+        return $this->morphTo();
+    }
+
+    public function isBy($actor): bool
+    {
+        return $actor && $this->requester_type === $actor->getMorphClass()
+            && (int) $this->requester_id === (int) $actor->getKey();
     }
 }

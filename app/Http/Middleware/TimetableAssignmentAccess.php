@@ -2,8 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Timetable\TimetableChangeApproval;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TimetableAssignmentAccess
 {
@@ -111,37 +114,67 @@ class TimetableAssignmentAccess
             if (!$request->routeIs($allowed)) {
                 abort(403, 'Bu amal uchun ruxsat berilmagan.');
             }
+        }
 
-            // Doskada "tasdiq talab qilinadi" yoqilgan bo'lsa, kafedra mudirining jadvalni
-            // o'zgartiradigan amali darhol bajarilmaydi — registrator ofisiga so'rov bo'lib boradi.
-            $board = $this->routeBoard($request);
-            if (\App\Services\Timetable\TimetableChangeApproval::shouldIntercept($request, $activeRole, $board)) {
-                // Sinov bajarish: amal hozir o'tadimi (kafedra, to'qnashuv va h.k. tekshiruvlari)?
-                // Natija bekor qilinadi (rollback) — xato bo'lsa, so'rov yaratilmaydi, xato darhol ko'rinadi.
-                \Illuminate\Support\Facades\DB::beginTransaction();
-                try {
-                    $trial = $next($request);
-                } finally {
-                    \Illuminate\Support\Facades\DB::rollBack();
-                }
-                $trialData = $trial instanceof \Illuminate\Http\JsonResponse ? $trial->getData(true) : [];
-                if ($trial->getStatusCode() >= 400 || !empty($trialData['error'])) {
-                    return $trial;
-                }
+        return $this->withHistory($request, $next, $user, $activeRole);
+    }
 
-                $changeRequest = app(\App\Services\Timetable\TimetableChangeApproval::class)->capture($request, $user, $board);
+    /**
+     * Jadvalni o'zgartiradigan amal tarixga yoziladi. Doskada "tasdiq talab qilinadi" yoqilgan
+     * bo'lsa, kafedra mudirining amali darhol bajarilmaydi — registrator ofisiga so'rov bo'lib boradi.
+     */
+    private function withHistory(Request $request, Closure $next, $user, string $activeRole)
+    {
+        if (!TimetableChangeApproval::isChange($request)) {
+            return $next($request);
+        }
+        $board = $this->routeBoard($request);
+        $approval = app(TimetableChangeApproval::class);
 
-                return response()->json([
-                    'ok' => true,
-                    'pending_approval' => true,
-                    'change_request_id' => $changeRequest->id,
-                    'message' => 'O\'zgarish registrator ofisiga tasdiqlash uchun yuborildi. Tasdiqlangach jadvalga tushadi.',
-                    'summary' => $changeRequest->summary,
-                ]);
+        if (TimetableChangeApproval::shouldIntercept($request, $activeRole, $board)) {
+            $draft = $approval->draft($request, $user, $board, $activeRole);
+            // Sinov bajarish: amal hozir o'tadimi (kafedra, to'qnashuv va h.k. tekshiruvlari)?
+            // Natija bekor qilinadi (rollback) — xato bo'lsa, so'rov yaratilmaydi, xato darhol ko'rinadi.
+            DB::beginTransaction();
+            try {
+                $trial = $next($request);
+            } finally {
+                DB::rollBack();
+            }
+            if (!TimetableChangeApproval::succeeded($trial)) {
+                return $trial;
+            }
+
+            $changeRequest = $approval->submit($draft);
+
+            return response()->json([
+                'ok' => true,
+                'pending_approval' => true,
+                'change_request_id' => $changeRequest->id,
+                'message' => 'O\'zgarish registrator ofisiga tasdiqlash uchun yuborildi. Tasdiqlangach jadvalga tushadi.',
+                'summary' => $changeRequest->summary,
+            ]);
+        }
+
+        // Tarix yordamchi: yozib bo'lmasa ham amalning o'zi to'xtamaydi.
+        $draft = null;
+        if ($board) {
+            try {
+                $draft = $approval->draft($request, $user, $board, $activeRole);
+            } catch (\Throwable $e) {
+                Log::warning('[TimetableChange] history draft: ' . $e->getMessage());
+            }
+        }
+        $response = $next($request);
+        if ($draft && TimetableChangeApproval::succeeded($response)) {
+            try {
+                $approval->record($draft);
+            } catch (\Throwable $e) {
+                Log::warning('[TimetableChange] history record: ' . $e->getMessage());
             }
         }
 
-        return $next($request);
+        return $response;
     }
 
     private function routeBoard(Request $request): ?\App\Models\TimetableBoard

@@ -28,6 +28,9 @@ use Illuminate\Validation\ValidationException;
  * bajarilmaydi — `timetable_change_requests` ga yoziladi. Registrator tasdiqlaganda
  * asl so'rov kafedra mudiri nomidan qayta bajariladi (barcha tekshiruvlar bilan), so'ng
  * guruh talabalari, o'qituvchi, o'quv bo'limi, dekanat va kafedra mudiriga xabar boradi.
+ *
+ * Tasdiqsiz qo'llangan o'zgarishlar (o'quv bo'limi, admin, rejim o'chiq doska) ham shu
+ * jadvalga "applied" holatida yoziladi — doskaning o'zgarishlar tarixi o'chirilmaydi.
  */
 class TimetableChangeApproval
 {
@@ -44,8 +47,16 @@ class TimetableChangeApproval
         'admin.timetable.assign-room'         => ['assignUnitRoom', 'board', 'room'],
     ];
 
+    /** Tarixga yoziladigan amallar: tasdiq talab qilinadiganlar + kartani tahrirlash (admin). */
+    public const LOGGED = self::GATED + [
+        'admin.timetable.cards.update'        => ['updateCard', 'card', 'card'],
+    ];
+
     /** Tasdiqlay oladigan rollar. */
     public const APPROVER_ROLES = ['superadmin', 'admin', 'registrator_ofisi'];
+
+    /** Doskaning butun o'zgarishlar tarixini ko'radigan (lekin tasdiqlamaydigan) rollar. */
+    public const HISTORY_ROLES = ['kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
 
     /** Tasdiqdan o'tishi kerak bo'lgan rollar. */
     public const GATED_ROLES = ['kafedra_mudiri'];
@@ -62,14 +73,11 @@ class TimetableChangeApproval
         return $board && self::tableReady() && !empty(($board->settings ?? [])['approval_required']);
     }
 
-    /** Shu so'rov tasdiqqa yuborilishi kerakmi (o'zgartiradigan amal + gated rol + doska rejimi). */
-    public static function shouldIntercept(Request $request, string $activeRole, ?TimetableBoard $board): bool
+    /** So'rov jadvalni o'zgartiradimi (tarixga yoziladigan amal). */
+    public static function isChange(Request $request): bool
     {
-        if (!in_array($activeRole, self::GATED_ROLES, true) || !self::boardRequiresApproval($board)) {
-            return false;
-        }
         $route = (string) optional($request->route())->getName();
-        if (!isset(self::GATED[$route])) {
+        if (!isset(self::LOGGED[$route]) || !self::tableReady()) {
             return false;
         }
         // Sikl rejasi faqat "Bo'shatish" (clear=1) bo'lganda o'zgartiradi; filtrli ko'rinishda clear yo'q.
@@ -80,11 +88,34 @@ class TimetableChangeApproval
         return true;
     }
 
-    /** So'rovni yozib qo'yadi (bir xil joyga oldingi kutilayotgan so'rov bo'lsa — almashtiradi). */
-    public function capture(Request $request, $requester, TimetableBoard $board): TimetableChangeRequest
+    /** Shu so'rov tasdiqqa yuborilishi kerakmi (o'zgartiradigan amal + gated rol + doska rejimi). */
+    public static function shouldIntercept(Request $request, string $activeRole, ?TimetableBoard $board): bool
+    {
+        return in_array($activeRole, self::GATED_ROLES, true)
+            && isset(self::GATED[(string) optional($request->route())->getName()])
+            && self::isChange($request)
+            && self::boardRequiresApproval($board);
+    }
+
+    /** Amal muvaffaqiyatli bajarildimi (xato yoki tasdiqqa yuborilgan javob emas). */
+    public static function succeeded($response): bool
+    {
+        if (!$response instanceof \Symfony\Component\HttpFoundation\Response || $response->getStatusCode() >= 400) {
+            return false;
+        }
+        $data = $response instanceof JsonResponse ? $response->getData(true) : [];
+
+        return !is_array($data) || (empty($data['error']) && empty($data['pending_approval']));
+    }
+
+    /**
+     * O'zgarish yozuvi (TimetableChangeRequest atributlari). Amal bajarilishidan OLDIN
+     * olinadi — keyin karta allaqachon ko'chgan bo'ladi va "qayerdan" yo'qoladi.
+     */
+    public function draft(Request $request, $actor, TimetableBoard $board, string $role = ''): array
     {
         $route = (string) $request->route()->getName();
-        [, $param, $kind] = self::GATED[$route];
+        [, $param, $kind] = self::LOGGED[$route];
         $payload = collect($request->except(['_token', '_method']))->all();
         $hint = trim((string) ($payload['_change_hint'] ?? ''));
         unset($payload['_change_hint']);
@@ -95,43 +126,52 @@ class TimetableChangeApproval
         $cards = $this->affectedCards($board, $route, $payload, $card);
         $details = $this->detailsFromCards($cards);
         [$subject, $core] = $this->describe($board, $route, $payload, $card, $cards);
-        if ($route === 'admin.timetable.cycle-assign' || $route === 'admin.timetable.assign-teacher') {
-            if (!empty($payload['teacher_id'])) {
-                $details['new_teacher_id'] = (int) $payload['teacher_id'];
-            }
+        if (in_array($route, ['admin.timetable.cycle-assign', 'admin.timetable.assign-teacher', 'admin.timetable.cards.update'], true)
+            && !empty($payload['teacher_id'])) {
+            $details['new_teacher_id'] = (int) $payload['teacher_id'];
         }
 
-        $targetKey = $this->targetKey($route, $payload, $card, $board);
-        $kafedra = $this->requesterKafedra($requester);
+        return [
+            'board_id' => $board->id,
+            'requester_id' => $actor?->getKey(),
+            'requester_type' => $actor?->getMorphClass(),
+            'requester_name' => $actor?->full_name ?? $actor?->name,
+            'requester_role' => $role !== '' ? $role : null,
+            'kafedra_name' => $this->requesterKafedra($actor),
+            'route_name' => $route,
+            'target_key' => $this->targetKey($route, $payload, $card, $board),
+            'params' => $params,
+            'payload' => $payload,
+            'kind' => $kind,
+            'subject_name' => $subject,
+            'summary' => $core . ($hint !== '' ? ' — ' . mb_substr($hint, 0, 300) : ''),
+            'details' => $details,
+        ];
+    }
 
-        return DB::transaction(function () use ($board, $requester, $route, $targetKey, $params, $payload, $kind, $subject, $core, $hint, $details, $kafedra) {
-            // Shu kafedra mudirining shu joy bo'yicha kutilayotgan so'rovi — yangisi bilan almashtiriladi.
-            TimetableChangeRequest::where('board_id', $board->id)
-                ->where('requester_id', $requester?->id)
-                ->where('target_key', $targetKey)
+    /** Tasdiq so'rovini yozadi (shu foydalanuvchining shu joy bo'yicha kutilayotgan so'rovi — almashtiriladi). */
+    public function submit(array $draft): TimetableChangeRequest
+    {
+        return DB::transaction(function () use ($draft) {
+            TimetableChangeRequest::where('board_id', $draft['board_id'])
+                ->where('requester_type', $draft['requester_type'])
+                ->where('requester_id', $draft['requester_id'])
+                ->where('target_key', $draft['target_key'])
                 ->where('status', TimetableChangeRequest::PENDING)
                 ->update(['status' => TimetableChangeRequest::CANCELLED, 'review_note' => 'Yangi so\'rov bilan almashtirildi', 'reviewed_at' => now()]);
 
-            $req = TimetableChangeRequest::create([
-                'board_id' => $board->id,
-                'requester_id' => $requester?->id,
-                'requester_name' => $requester?->full_name ?? $requester?->name,
-                'kafedra_name' => $kafedra,
-                'route_name' => $route,
-                'target_key' => $targetKey,
-                'params' => $params,
-                'payload' => $payload,
-                'kind' => $kind,
-                'subject_name' => $subject,
-                'summary' => $core . ($hint !== '' ? ' — ' . mb_substr($hint, 0, 300) : ''),
-                'details' => $details,
-                'status' => TimetableChangeRequest::PENDING,
-            ]);
+            $req = TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::PENDING]);
 
             $this->notifyRegistrars($req);
 
             return $req;
         });
+    }
+
+    /** Tasdiqsiz, darhol qo'llangan o'zgarish — tarix uchun yoziladi. */
+    public function record(array $draft): TimetableChangeRequest
+    {
+        return TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::APPLIED]);
     }
 
     /**
@@ -204,7 +244,7 @@ class TimetableChangeApproval
             'review_note' => $note,
             'reviewed_at' => now(),
         ]);
-        if ($req->requester) {
+        if ($req->requester instanceof Teacher) {
             $this->sendToTeacher($req->requester, 'Dars jadvali o\'zgarishi rad etildi',
                 $req->summary . ($note ? "\nIzoh: " . $note : ''), $req);
         }
@@ -325,6 +365,19 @@ class TimetableChangeApproval
             case 'admin.timetable.assign-room':
                 $text = $head . ': xona → ' . (!empty($p['auditorium_code']) ? $p['auditorium_code'] : 'olib tashlanadi');
                 break;
+            case 'admin.timetable.cards.update':
+                $parts = [];
+                if (array_key_exists('teacher_id', $p)) {
+                    $parts[] = 'o\'qituvchi → ' . (!empty($p['teacher_id']) ? (Teacher::find($p['teacher_id'])?->full_name ?? ('#' . $p['teacher_id'])) : 'olib tashlanadi');
+                }
+                if (array_key_exists('auditorium_code', $p)) {
+                    $parts[] = 'xona → ' . (!empty($p['auditorium_code']) ? $p['auditorium_code'] : 'olib tashlanadi');
+                }
+                if (!empty($p['len_half'])) {
+                    $parts[] = 'davomiyligi → ' . ((int) $p['len_half'] / 2) . ' para';
+                }
+                $text = $head . ': ' . ($parts ? implode('; ', $parts) : 'kartochka tahrirlandi');
+                break;
             default:
                 $scope = trim(implode(', ', array_filter([
                     implode('/', (array) ($p['faculty_names'] ?? [])),
@@ -341,7 +394,7 @@ class TimetableChangeApproval
     {
         $pick = fn (array $keys) => implode('|', array_map(fn ($k) => mb_strtolower(trim((string) (is_array($p[$k] ?? null) ? implode(',', $p[$k]) : ($p[$k] ?? '')))), $keys));
         $short = match ($route) {
-            'admin.timetable.cards.place' => 'card:' . $card?->id,
+            'admin.timetable.cards.place', 'admin.timetable.cards.update' => 'card:' . $card?->id,
             'admin.timetable.cards.week-override' => 'card:' . $card?->id . ':w' . ($p['week'] ?? ''),
             'admin.timetable.cycle-lecture-slots' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'placement_group', 'sub_group', 'training_type', 'day_index']),
             'admin.timetable.cycle-place', 'admin.timetable.cycle-assign' => $pick(['specialty_name', 'course', 'subject_name', 'group_name', 'training_type']),
@@ -396,7 +449,7 @@ class TimetableChangeApproval
         };
 
         // Kafedra mudiri — natija
-        if ($req->requester) {
+        if ($req->requester instanceof Teacher) {
             $send($req->requester, 'Dars jadvali o\'zgarishi tasdiqlandi');
         }
         // O'qituvchi(lar)

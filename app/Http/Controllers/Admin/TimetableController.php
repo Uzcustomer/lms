@@ -847,10 +847,34 @@ class TimetableController extends Controller
                             // (student_subjects). Guruhning katta qismi (≥ yarmi) — o'z amaliy guruhi;
                             // kichik qismlar ("02a dan 5 + 02b dan 5") bitta aralash guruhga yig'iladi.
                             $variantUnits = null;
-                            if ($hemisBoard && $this->variantLetter((string) $s->subject_name) !== null
-                                && ($vCounts = $this->variantStudentCounts((string) $s->subject_name))) {
+                            $vCandidates = [];
+                            $vCounts = [];
+                            $useAssignments = false;
+                            if ($hemisBoard && $this->variantLetter((string) $s->subject_name) !== null) {
+                                $vCandidates = $this->hemisGroupsFor($s, $oqRows, $groupCurricula, false);
+                                $vCounts = $this->variantStudentCounts((string) $s->subject_name);
+                                // Biriktiruv HEMIS'ga hali hamma oqim uchun kiritilmagan bo'lishi mumkin:
+                                // shu oqim guruhlari fanning birorta bo'lagiga ham biriktirilmagan bo'lsa —
+                                // ma'lumot yo'q, eski harf qoidasi (oqim kartasiz qolib ketmasin).
+                                $vBase = mb_strtolower((string) $this->cycleSubjectVariantBase((string) $s->subject_name));
+                                $flowAssigned = false;
+                                foreach ($subs as $sibling) {
+                                    if ($vBase === '' || mb_strtolower((string) $this->cycleSubjectVariantBase((string) $sibling->subject_name)) !== $vBase) {
+                                        continue;
+                                    }
+                                    $siblingCounts = $this->variantStudentCounts((string) $sibling->subject_name);
+                                    foreach ($vCandidates as $r) {
+                                        if (!empty($siblingCounts[$this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) ($r['name'] ?? '')))])) {
+                                            $flowAssigned = true;
+                                            break 2;
+                                        }
+                                    }
+                                }
+                                $useAssignments = $flowAssigned;
+                            }
+                            if ($useAssignments) {
                                 $vRows = [];
-                                foreach ($this->hemisGroupsFor($s, $oqRows, $groupCurricula, false) as $r) {
+                                foreach ($vCandidates as $r) {
                                     $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) ($r['name'] ?? '')));
                                     if (empty($vCounts[$gk])) {
                                         continue;

@@ -15,12 +15,24 @@ class FanTestiAttempts
 {
     private const TZ = 'Asia/Tashkent';
 
-    /** Faol savollar; to'plamda belgilangan bo'lsa aralashtiriladi. */
+    /**
+     * Faol savollar; to'plamda chegara (questions_per_attempt) bo'lsa va faol
+     * savollar undan ko'p bo'lsa — har urinishda tasodifiy shuncha savol
+     * tanlanadi (har talabaga, har safar boshqa to'plam). Keyin, belgilangan
+     * bo'lsa, tartib ham aralashtiriladi.
+     */
     public static function questionSnapshot(FanTesti $fanTesti): array
     {
         $snapshot = collect($fanTesti->questions ?? [])
             ->filter(fn ($question) => ($question['is_active'] ?? true) !== false)
             ->values();
+
+        $limit = (int) ($fanTesti->questions_per_attempt ?? 0);
+        if ($limit > 0 && $snapshot->count() > $limit) {
+            // Tasodifiy tanlab, asl tartibni saqlaymiz; aralashtirish alohida bayroq bilan
+            $picked = $snapshot->keys()->shuffle()->take($limit)->sort()->values();
+            $snapshot = $picked->map(fn ($i) => $snapshot[$i])->values();
+        }
 
         if ($fanTesti->shuffle_questions) {
             $snapshot = $snapshot->shuffle()->values();

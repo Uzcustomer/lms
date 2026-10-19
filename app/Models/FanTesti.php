@@ -15,6 +15,7 @@ class FanTesti extends Model
         'duration_minutes',
         'pass_percent',
         'shuffle_questions',
+        'questions_per_attempt',
         'show_result_after_submit',
         'is_active',
         'questions',
@@ -24,6 +25,7 @@ class FanTesti extends Model
 
     protected $casts = [
         'shuffle_questions' => 'boolean',
+        'questions_per_attempt' => 'integer',
         'show_result_after_submit' => 'boolean',
         'is_active' => 'boolean',
         'questions' => 'array',
@@ -47,5 +49,22 @@ class FanTesti extends Model
     public function questionCount(): int
     {
         return count($this->questions ?? []);
+    }
+
+    /** Faol savollar soni (talabaga beriladiganlar shulardan tanlanadi). */
+    public function activeQuestionCount(): int
+    {
+        return collect($this->questions ?? [])
+            ->filter(fn ($q) => ($q['is_active'] ?? true) !== false)
+            ->count();
+    }
+
+    /** Bitta urinishda talabaga nechta savol tushadi (chegara va faol savollar soni kichigi). */
+    public function questionsPerAttempt(): int
+    {
+        $active = $this->activeQuestionCount();
+        $limit = (int) ($this->questions_per_attempt ?? 0);
+
+        return $limit > 0 ? min($limit, $active) : $active;
     }
 }

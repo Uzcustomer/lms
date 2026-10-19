@@ -87,6 +87,7 @@
     /* ---- Maydonlar ---- */
     .bl-grid { display: grid; gap: 18px; }
     .bl-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bl-hint { display: block; margin-top: 5px; color: var(--muted, #8798b1); font-size: 11.5px; line-height: 1.45; }
     .bl-span { grid-column: 1 / -1; }
     .bl-field { min-width: 0; }
     .bl-field > label, .bl-label {
@@ -814,6 +815,12 @@
                         <label for="pass_percent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg> O'tish foizi</label>
                         <input id="pass_percent" type="number" name="pass_percent" min="1" max="100" value="{{ old('pass_percent', $collection?->pass_percent ?? 60) }}">
                     </div>
+                    <div class="bl-field">
+                        <label for="questions_per_attempt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h5"/></svg> Talabaga beriladigan savollar</label>
+                        <input id="questions_per_attempt" type="number" name="questions_per_attempt" min="1" max="500" placeholder="hammasi"
+                               value="{{ old('questions_per_attempt', $collection ? $collection->questions_per_attempt : 25) }}">
+                        <span class="bl-hint">To'plamda bundan ko'p savol bo'lsa, har talabaga tasodifiy shuncha savol tushadi (har safar boshqacha). Bo'sh — hammasi.</span>
+                    </div>
                 </div>
 
                 <div class="bl-field bl-span">
@@ -1007,7 +1014,12 @@
                                         <span class="bl-t-sub">{{ collect([$item->subject?->semester_name, $item->subject?->curriculum_label ?? null])->filter()->implode(' · ') ?: '-' }}</span>
                                     @endif
                                 </td>
-                                <td style="text-align:center"><span class="bl-num">{{ $item->questionCount() }}</span></td>
+                                <td style="text-align:center">
+                                    <span class="bl-num">{{ $item->questionCount() }}</span>
+                                    @if($item->questionsPerAttempt() < $item->activeQuestionCount())
+                                        <span class="bl-t-sub" title="Har talabaga tasodifiy shuncha savol tushadi">talabaga {{ $item->questionsPerAttempt() }} ta</span>
+                                    @endif
+                                </td>
                                 <td style="text-align:center">{{ $item->duration_minutes }} daqiqa</td>
                                 <td>
                                     @if($isDraft)

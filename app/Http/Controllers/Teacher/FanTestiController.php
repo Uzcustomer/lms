@@ -1106,6 +1106,8 @@ class FanTestiController extends Controller
             'description' => ['nullable', 'string'],
             'duration_minutes' => ['required', 'integer', 'min:1', 'max:300'],
             'pass_percent' => ['nullable', 'integer', 'min:1', 'max:100'],
+            // Bo'sh qoldirilsa — barcha savollar beriladi
+            'questions_per_attempt' => ['nullable', 'integer', 'min:1', 'max:500'],
         ]);
     }
 

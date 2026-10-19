@@ -2697,15 +2697,30 @@
                     body: (() => { const f = new FormData(); f.append('_token', CSRF); f.append('_method', 'DELETE'); return f; })() });
                 location.href = location.pathname;
             };
-            $('genBtn').onclick = async function () {
+            // Kartochkalar: odatda SINXRONLASH (joylashuvlar saqlanadi, faqat noaktual kartalar
+            // o'chadi, yangilari taqsimlanmagan holda qo'shiladi). Shift+bosish — to'liq qayta yaratish.
+            $('genBtn').title = 'Tasdiqlangan oqim bilan sinxronlash. Shift+bosish — hammasini qayta yaratish';
+            $('genBtn').onclick = async function (ev) {
                 if (!board) return;
-                if (cards.length && !confirm('Mavjud kartochkalar (joylashuvlari bilan) o\'chirilib QAYTA yaratiladi. O\'qituvchi va xona biriktirishlari saqlanib qoladi. Davom etamizmi?')) return;
-                this.disabled = true; $('boardMsg').textContent = 'Yaratilmoqda...';
+                const full = !!(ev && ev.shiftKey) && cards.length > 0;
+                if (full) {
+                    if (!confirm('TO\'LIQ QAYTA YARATISH: mavjud kartochkalar (joylashuvlari bilan) o\'chirilib qayta yaratiladi. O\'qituvchi va xona biriktirishlari saqlanib qoladi. Davom etamizmi?')) return;
+                } else if (cards.length && !confirm('Kartochkalar tasdiqlangan oqim bilan sinxronlanadi:\n'
+                    + '• mavjud kartochkalar va ularning joylashuvi saqlanadi;\n'
+                    + '• rejada endi yo\'q kartochkalar o\'chiriladi;\n'
+                    + '• yangilari pastda (taqsimlanmagan) qo\'shiladi.\nDavom etamizmi?')) return;
+                this.disabled = true; $('boardMsg').textContent = full ? 'Qayta yaratilmoqda...' : 'Sinxronlanmoqda...';
                 try {
-                    const j = await api(BASE + '/boards/' + board.id + '/generate', 'POST', {});
-                    $('boardMsg').textContent = j.created + ' ta kartochka yaratildi'
-                        + (j.restored_units ? ' · ' + j.restored_units + ' ta dars birligining o\'qituvchi/xona biriktirishi tiklandi' : '')
-                        + (j.lost_units ? ' · ' + j.lost_units + ' ta birlik endi rejada yo\'q' : '');
+                    const j = await api(BASE + '/boards/' + board.id + '/generate', 'POST', { mode: full ? 'full' : 'sync' });
+                    const parts = [];
+                    if (j.mode === 'sync') {
+                        parts.push((j.kept || 0) + ' ta saqlandi', (j.created || 0) + ' ta yangi qo\'shildi',
+                            (j.removed || 0) + ' ta o\'chirildi' + (j.removed_placed ? ' (' + j.removed_placed + ' tasi joylangan edi)' : ''));
+                        if (j.updated) parts.push(j.updated + ' ta yangilandi');
+                    } else parts.push((j.created || 0) + ' ta kartochka yaratildi');
+                    if (j.restored_units) parts.push(j.restored_units + ' ta dars birligining o\'qituvchi/xona biriktirishi tiklandi');
+                    if (j.lost_units) parts.push(j.lost_units + ' ta birlik endi rejada yo\'q');
+                    $('boardMsg').textContent = parts.join(' · ');
                     await loadBoard(board.id);
                 } catch (e) { $('boardMsg').textContent = ''; alert('Xatolik: ' + e.message); }
                 this.disabled = false;

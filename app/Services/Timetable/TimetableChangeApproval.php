@@ -174,11 +174,83 @@ class TimetableChangeApproval
         return TimetableChangeRequest::create($draft + ['status' => TimetableChangeRequest::APPLIED]);
     }
 
+    public const ALREADY_REVIEWED = 'Bu so\'rov allaqachon ko\'rib chiqilgan.';
+
     /**
      * Tasdiqlash: asl so'rov kafedra mudiri nomidan qayta bajariladi.
-     * @return array{ok: bool, error: ?string}
+     * So'rov endi kutilmayotgan bo'lsa (parallel tasdiq/rad/bekor) — hech narsa qilinmaydi, stale=true.
+     * @return array{ok: bool, error: ?string, stale?: bool}
      */
     public function apply(TimetableChangeRequest $req, $approver): array
+    {
+        $result = $this->whilePending($req, fn (TimetableChangeRequest $locked) => $this->applyLocked($locked, $approver));
+        if ($result === null) {
+            return ['ok' => false, 'error' => self::ALREADY_REVIEWED, 'stale' => true];
+        }
+        if ($result['ok']) {
+            $id = $req->id;
+            dispatch(function () use ($id) {
+                $fresh = TimetableChangeRequest::find($id);
+                if ($fresh) {
+                    app(self::class)->notifyApproved($fresh);
+                }
+            })->afterResponse();
+        }
+
+        return $result;
+    }
+
+    /** Rad etish; so'rov endi kutilmayotgan bo'lsa false. */
+    public function reject(TimetableChangeRequest $req, $approver, ?string $note): bool
+    {
+        $done = $this->whilePending($req, function (TimetableChangeRequest $locked) use ($approver, $note) {
+            $locked->update([
+                'status' => TimetableChangeRequest::REJECTED,
+                'reviewer_id' => $approver?->id,
+                'reviewer_name' => $approver?->full_name ?? $approver?->name,
+                'review_note' => $note,
+                'reviewed_at' => now(),
+            ]);
+
+            return $locked;
+        });
+        if (!$done) {
+            return false;
+        }
+        if ($done->requester instanceof Teacher) {
+            $this->sendToTeacher($done->requester, 'Dars jadvali o\'zgarishi rad etildi',
+                $done->summary . ($note ? "\nIzoh: " . $note : ''), $done);
+        }
+
+        return true;
+    }
+
+    /** Yuboruvchi so'rovni qaytarib oladi; so'rov endi kutilmayotgan bo'lsa false. */
+    public function cancel(TimetableChangeRequest $req): bool
+    {
+        return (bool) $this->whilePending($req, fn (TimetableChangeRequest $locked) => $locked->update([
+            'status' => TimetableChangeRequest::CANCELLED,
+            'review_note' => 'Yuboruvchi bekor qildi',
+            'reviewed_at' => now(),
+        ]));
+    }
+
+    /**
+     * So'rov qatori qulflanadi va hali kutilayotgan bo'lsagina $fn bajariladi — ikki registrator
+     * bir vaqtda tasdiqlasa yoki tasdiqlash paytida bekor qilinsa, amal ikki marta yoki
+     * bekor qilingandan keyin bajarilmaydi. Kutilmayotgan bo'lsa null.
+     */
+    private function whilePending(TimetableChangeRequest $req, callable $fn)
+    {
+        return DB::transaction(function () use ($req, $fn) {
+            $locked = TimetableChangeRequest::whereKey($req->getKey())->lockForUpdate()->first();
+
+            return $locked && $locked->status === TimetableChangeRequest::PENDING ? $fn($locked) : null;
+        });
+    }
+
+    /** @return array{ok: bool, error: ?string} */
+    private function applyLocked(TimetableChangeRequest $req, $approver): array
     {
         [$method, $param] = self::GATED[$req->route_name] ?? [null, null];
         $requester = $req->requester;
@@ -221,33 +293,7 @@ class TimetableChangeApproval
             session(['active_role' => $prevRole]);
         }
 
-        $result = $this->finish($req, $approver, $error === null, $error);
-        if ($result['ok']) {
-            $id = $req->id;
-            dispatch(function () use ($id) {
-                $fresh = TimetableChangeRequest::find($id);
-                if ($fresh) {
-                    app(self::class)->notifyApproved($fresh);
-                }
-            })->afterResponse();
-        }
-
-        return $result;
-    }
-
-    public function reject(TimetableChangeRequest $req, $approver, ?string $note): void
-    {
-        $req->update([
-            'status' => TimetableChangeRequest::REJECTED,
-            'reviewer_id' => $approver?->id,
-            'reviewer_name' => $approver?->full_name ?? $approver?->name,
-            'review_note' => $note,
-            'reviewed_at' => now(),
-        ]);
-        if ($req->requester instanceof Teacher) {
-            $this->sendToTeacher($req->requester, 'Dars jadvali o\'zgarishi rad etildi',
-                $req->summary . ($note ? "\nIzoh: " . $note : ''), $req);
-        }
+        return $this->finish($req, $approver, $error === null, $error);
     }
 
     private function finish(TimetableChangeRequest $req, $approver, bool $ok, ?string $error): array

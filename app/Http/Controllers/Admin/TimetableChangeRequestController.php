@@ -75,44 +75,33 @@ class TimetableChangeRequestController extends Controller
     public function approve(Request $request, TimetableChangeRequest $changeRequest, TimetableChangeApproval $svc)
     {
         $this->ensureApprover($request);
-        if ($changeRequest->status !== TimetableChangeRequest::PENDING) {
-            return response()->json(['error' => 'Bu so\'rov allaqachon ko\'rib chiqilgan.'], 422);
-        }
         $result = $svc->apply($changeRequest, $this->actor($request));
 
         return $result['ok']
             ? response()->json(['ok' => true])
-            : response()->json(['error' => 'Qo\'llab bo\'lmadi: ' . $result['error']], 422);
+            : response()->json(['error' => !empty($result['stale']) ? $result['error'] : 'Qo\'llab bo\'lmadi: ' . $result['error']], 422);
     }
 
     public function reject(Request $request, TimetableChangeRequest $changeRequest, TimetableChangeApproval $svc)
     {
         $this->ensureApprover($request);
         $data = $request->validate(['note' => 'nullable|string|max:1000']);
-        if ($changeRequest->status !== TimetableChangeRequest::PENDING) {
-            return response()->json(['error' => 'Bu so\'rov allaqachon ko\'rib chiqilgan.'], 422);
-        }
-        $svc->reject($changeRequest, $this->actor($request), $data['note'] ?? null);
 
-        return response()->json(['ok' => true]);
+        return $svc->reject($changeRequest, $this->actor($request), $data['note'] ?? null)
+            ? response()->json(['ok' => true])
+            : response()->json(['error' => TimetableChangeApproval::ALREADY_REVIEWED], 422);
     }
 
     /** Kafedra mudiri o'z kutilayotgan so'rovini qaytarib oladi. */
-    public function cancel(Request $request, TimetableChangeRequest $changeRequest)
+    public function cancel(Request $request, TimetableChangeRequest $changeRequest, TimetableChangeApproval $svc)
     {
         if (!$changeRequest->isBy($this->actor($request)) && !in_array($this->activeRole($request), TimetableChangeApproval::APPROVER_ROLES, true)) {
             abort(403, 'Faqat o\'z so\'rovingizni bekor qila olasiz.');
         }
-        if ($changeRequest->status !== TimetableChangeRequest::PENDING) {
-            return response()->json(['error' => 'Bu so\'rov allaqachon ko\'rib chiqilgan.'], 422);
-        }
-        $changeRequest->update([
-            'status' => TimetableChangeRequest::CANCELLED,
-            'review_note' => 'Yuboruvchi bekor qildi',
-            'reviewed_at' => now(),
-        ]);
 
-        return response()->json(['ok' => true]);
+        return $svc->cancel($changeRequest)
+            ? response()->json(['ok' => true])
+            : response()->json(['error' => TimetableChangeApproval::ALREADY_REVIEWED], 422);
     }
 
     /** Doska uchun "o'zgarishlar tasdiqdan o'tsin" rejimi. */

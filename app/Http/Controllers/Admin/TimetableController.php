@@ -1284,10 +1284,11 @@ class TimetableController extends Controller
         foreach (TimetableCard::where('board_id', $board->id)->get() as $card) {
             $existing[$keyOf($card->getAttributes() + ['group_names' => $card->getRawOriginal('group_names')])][] = $card;
         }
-        // Joylashgan / biriktirilgan kartalar birinchi saqlansin.
+        // Joylashgan / biriktirilgan (o'qituvchi yoki xona) kartalar birinchi saqlansin — reja
+        // bunday kartalar sonini kamaytirsa, bo'sh karta qolib, xonasi bori o'chib ketmasin.
         foreach ($existing as &$bucket) {
-            usort($bucket, fn ($a, $b) => [(int) !($a->day && $a->pair), (int) !$a->teacher_id, $a->id]
-                <=> [(int) !($b->day && $b->pair), (int) !$b->teacher_id, $b->id]);
+            usort($bucket, fn ($a, $b) => [(int) !($a->day && $a->pair), (int) !$a->teacher_id, (int) !$a->auditorium_code, $a->id]
+                <=> [(int) !($b->day && $b->pair), (int) !$b->teacher_id, (int) !$b->auditorium_code, $b->id]);
         }
         unset($bucket);
 

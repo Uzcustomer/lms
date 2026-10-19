@@ -6,6 +6,7 @@ use App\Models\FanTesti;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
 use App\Models\FanTestiEntryRequest;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Services\FaceIdService;
 use App\Services\FanTestiAttempts;
@@ -309,7 +310,114 @@ class FanTestiKioskController extends Controller
             'faceBypass' => !empty($attempt->face_bypass_by),
             // Umumiy rejim: jarayon o'qituvchining "Kirish so'rovlari" oynasiga yuboriladi
             'publicEntry' => $this->needsTeacherApproval($fanTesti),
+            // Sahifa qayta ochilganda belgilangan javoblar tiklanadi
+            'draft' => Schema::hasColumn('fan_testi_attempts', 'draft_answers') ? ($attempt->draft_answers ?? []) : [],
+            'monitor' => $this->monitorConfig(),
         ] + $this->follow('take'));
+    }
+
+    /**
+     * Test davomidagi kuzatuv chegaralari. Sozlamalar jadvalidan o'zgartirish
+     * mumkin (kod o'zgarmaydi): fan_test_away_seconds, fan_test_noface_seconds,
+     * fan_test_yaw_limit, fan_test_other_face_ratio, fan_test_mismatches_to_pause,
+     * fan_test_detector_score, fan_test_tick_seconds.
+     *
+     * 2026-10 da yumshatildi: sinfda parda tez-tez tushib turardi (o'qish uchun
+     * bosh egish, yon tomonga qarash, yorug'lik).
+     */
+    private function monitorConfig(): array
+    {
+        $num = fn (string $key, float $default) => (float) (Setting::get($key, $default) ?: $default);
+
+        return [
+            'tickMs' => (int) ($num('fan_test_tick_seconds', 5) * 1000),
+            // Boshqa tomonga qarash / yonida odam — shuncha soniya uzluksiz bo'lsa to'xtaydi
+            'awayMs' => (int) ($num('fan_test_away_seconds', 12) * 1000),
+            // Yuz umuman ko'rinmasa (bosh egib o'qish, yorug'lik) — bundan ham uzoqroq kutiladi
+            'noFaceMs' => (int) ($num('fan_test_noface_seconds', 20) * 1000),
+            'backMs' => 500,
+            'yawLimit' => $num('fan_test_yaw_limit', 0.5),
+            'otherFaceRatio' => $num('fan_test_other_face_ratio', 0.6),
+            'mismatchesToPause' => (int) $num('fan_test_mismatches_to_pause', 3),
+            'recheckMs' => 8000,
+            'detectorScore' => $num('fan_test_detector_score', 0.35),
+        ];
+    }
+
+    /**
+     * Javoblar qoralamasi: brauzer belgilangan maydonlarni [nom, qiymat]
+     * juftliklari bilan yuboradi. Sahifa yopilsa qayta kirganda tiklanadi;
+     * javoblar kelmay test yakunlansa shu qoralama baholanadi.
+     */
+    public function saveDraft(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return response()->json(['message' => 'Sessiya topilmadi.'], 403);
+        }
+        if ($attempt->isFinished()) {
+            return response()->json(['finished' => true]);
+        }
+        if (!Schema::hasColumn('fan_testi_attempts', 'draft_answers')) {
+            return response()->json(['ok' => false]);
+        }
+
+        $data = $request->validate([
+            'fields' => ['present', 'array', 'max:3000'],
+            'fields.*' => ['array', 'size:2'],
+            'fields.*.0' => ['required', 'string', 'max:80', 'regex:/^(answers\[\d+\](\[\d*\])?|order:\d+:\d+)$/'],
+            'fields.*.1' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $attempt->forceFill([
+            'draft_answers' => array_values($data['fields']),
+            'draft_saved_at' => now(),
+        ])->save();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Qoralamani submit() dagi answers[] ko'rinishiga keltiradi. */
+    private function draftAnswers(FanTestiAttempt $attempt): array
+    {
+        $pairs = [];
+        $orders = [];
+        foreach ((array) ($attempt->draft_answers ?? []) as $field) {
+            if (!is_array($field) || count($field) < 2 || !is_string($field[0])) {
+                continue;
+            }
+            [$name, $value] = $field;
+            if (str_starts_with($name, 'order:')) {
+                // order:{savol}:{bosqich} = pozitsiya (1..n)
+                $parts = explode(':', $name);
+                $pos = (int) $value;
+                if (count($parts) === 3 && $pos > 0) {
+                    $orders[(int) $parts[1]][$pos - 1] = (string) $parts[2];
+                }
+                continue;
+            }
+            if (str_starts_with($name, 'answers[')) {
+                $pairs[] = $name . '=' . rawurlencode((string) $value);
+            }
+        }
+        // Ketma-ketlik: formadagi kabi pozitsiya tartibida ro'yxat, bo'sh joylar ''
+        foreach ($orders as $q => $steps) {
+            for ($i = 0, $n = max(array_keys($steps)) + 1; $i < $n; $i++) {
+                $pairs[] = "answers[{$q}][]=" . rawurlencode($steps[$i] ?? '');
+            }
+        }
+
+        parse_str(implode('&', $pairs), $parsed);
+
+        return is_array($parsed['answers'] ?? null) ? $parsed['answers'] : [];
+    }
+
+    /** O'qituvchi oynasi uchun: sahifa bilan aloqa yo'q urinishni qoralama bilan yakunlash. */
+    public function finalizeFromDraft(FanTestiAttempt $attempt, string $status = 'submitted'): void
+    {
+        if (!$attempt->isFinished()) {
+            $this->finalize($attempt, $status);
+        }
     }
 
     public function submit(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
@@ -925,6 +1033,12 @@ class FanTestiKioskController extends Controller
 
     private function finalize(FanTestiAttempt $attempt, string $status): void
     {
+        // Javoblar kelmagan (sahifa yopilgan, vaqt tugagan, o'qituvchi to'xtatgan) —
+        // oxirgi saqlangan qoralama baholanadi, talabaning ishi yo'qolmaydi
+        if ($attempt->answers()->doesntExist() && !empty($attempt->draft_answers)) {
+            $this->gradeAnswers($attempt, $this->draftAnswers($attempt));
+        }
+
         $answers = $attempt->answers()->get();
         $score = (int) $answers->sum('points_earned');
         $total = (int) $answers->sum('points_possible') ?: (int) $attempt->total_points;

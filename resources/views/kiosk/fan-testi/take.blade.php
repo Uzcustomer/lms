@@ -538,6 +538,87 @@
     window.addEventListener('beforeunload', event => {
         if (!submitted) { event.preventDefault(); event.returnValue = ''; }
     });
+
+    // ---- Javoblar qoralamasi ----
+    // Belgilangan sari serverga saqlanadi: sahifa yopilsa / kompyuter o'chsa
+    // qayta kirganda tiklanadi, vaqt tugasa yoki o'qituvchi to'xtatsa shu
+    // qoralama baholanadi. Sinov rejimida (preview) saqlanmaydi.
+    const DRAFT = {
+        url: @json(($preview ?? false) ? null : route('kiosk.fan-testi.draft', [$test, $attempt])),
+        csrf: (document.querySelector('meta[name="csrf-token"]') || {}).content,
+        timer: null,
+        last: '',
+    };
+
+    function draftFields() {
+        const out = [];
+        Array.from(form.elements).forEach((el) => {
+            if (el.disabled) return;
+            // Ketma-ketlik tanlovi nomsiz select — savol va bosqich bo'yicha saqlanadi
+            if (el.classList.contains('q-order-pick')) {
+                const box = el.closest('.q-order');
+                if (box && el.value) out.push(['order:' + box.dataset.order + ':' + el.dataset.step, el.value]);
+                return;
+            }
+            if (!el.name || !el.name.startsWith('answers[') || el.type === 'hidden') return;
+            if (el.type === 'radio' || el.type === 'checkbox') {
+                if (el.checked) out.push([el.name, el.value]);
+                return;
+            }
+            if (String(el.value || '').trim() !== '') out.push([el.name, String(el.value)]);
+        });
+        return out;
+    }
+
+    async function saveDraft() {
+        if (!DRAFT.url || submitted) return;
+        const fields = draftFields();
+        const key = JSON.stringify(fields);
+        if (key === DRAFT.last) return;
+        try {
+            const r = await fetch(DRAFT.url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': DRAFT.csrf },
+                body: JSON.stringify({ fields }),
+            });
+            if (r.ok) DRAFT.last = key;
+        } catch (e) { /* tarmoq uzilishi — keyingi o'zgarishda yana uriniladi */ }
+    }
+
+    function scheduleDraft() {
+        clearTimeout(DRAFT.timer);
+        DRAFT.timer = setTimeout(saveDraft, 1500);
+    }
+
+    if (DRAFT.url) {
+        form.addEventListener('input', scheduleDraft);
+        form.addEventListener('change', scheduleDraft);
+        setInterval(saveDraft, 20000);
+
+        // Qayta ochilgan sahifa: saqlangan javoblarni tiklash
+        const saved = @json($draft ?? []);
+        if (Array.isArray(saved) && saved.length) {
+            saved.forEach((pair) => {
+                if (!Array.isArray(pair) || pair.length < 2) return;
+                const [name, value] = pair;
+                if (name.startsWith('order:')) {
+                    const parts = name.split(':');
+                    const pick = form.querySelector('.q-order[data-order="' + parts[1] + '"] .q-order-pick[data-step="' + parts[2] + '"]');
+                    if (pick) pick.value = value;
+                    return;
+                }
+                form.querySelectorAll('[name="' + CSS.escape(name) + '"]').forEach((el) => {
+                    if (el.type === 'radio' || el.type === 'checkbox') {
+                        if (el.value === String(value)) el.checked = true;
+                    } else if (el.type !== 'hidden') {
+                        el.value = value;
+                    }
+                });
+            });
+            DRAFT.last = JSON.stringify(draftFields());
+            refreshProgress();
+        }
+    }
 })();
 </script>
 @if(($publicEntry ?? false) && !($preview ?? false))
@@ -579,22 +660,26 @@
 // turadi; vaqti-vaqti bilan jim olingan surat serverda tasdiqlangan rasm bilan
 // solishtiriladi. Vaqt to'xtamaydi — u serverdagi tugash vaqtiga bog'langan.
 (() => {
+    // Chegaralar serverdan (sozlamalar jadvalidan o'zgartirish mumkin) — FanTestiKioskController::monitorConfig
+    const MON = @json($monitor ?? []);
     const CFG = {
         models: @json(asset('face-models')),
         faceUrl: @json(route('kiosk.fan-testi.face', [$test, $attempt])),
         csrf: document.querySelector('meta[name="csrf-token"]').content,
-        tickMs: 10000,        // kadr tekshirish oralig'i (oddiy holatda)
-        pausedTickMs: 1000,   // test to'xtab turganda — talaba qayta qarashi bilan tez davom etsin
-        yawLimit: 0.35,       // shundan ko'p burilsa — "boshqa tomonga qaradi" (yozish, o'ylash uchun burilish mumkin)
-        awayMs: 5000,         // shuncha vaqt uzluksiz qaramasa test to'xtaydi (qisqa burilishlar hisobga olinmaydi)
-        backMs: 1000,         // shuncha vaqt to'g'ri qarasa test davom etadi
-        otherFaceRatio: 0.45, // ikkinchi yuz asosiy yuzning shuncha ulushidan katta bo'lsagina hisoblanadi
-                              // (orqadan o'tgan odam kichik ko'rinadi — test to'xtamaydi)
-        mismatchesToPause: 2, // jim yuz tekshiruvi ketma-ket shuncha marta mos kelmasa to'xtaydi
+        tickMs: MON.tickMs || 5000,            // kadr tekshirish oralig'i (oddiy holatda)
+        pausedTickMs: 1000,                    // test to'xtab turganda — talaba qayta qarashi bilan tez davom etsin
+        yawLimit: MON.yawLimit || 0.5,         // shundan ko'p burilsa — "boshqa tomonga qaradi" (yozish, o'ylash uchun burilish mumkin)
+        awayMs: MON.awayMs || 12000,           // shuncha vaqt uzluksiz qaramasa test to'xtaydi (qisqa burilishlar hisobga olinmaydi)
+        noFaceMs: MON.noFaceMs || 20000,       // yuz umuman ko'rinmasa (bosh egib o'qish) — uzoqroq kutiladi
+        backMs: MON.backMs || 500,             // shuncha vaqt to'g'ri qarasa test davom etadi
+        otherFaceRatio: MON.otherFaceRatio || 0.6, // ikkinchi yuz asosiy yuzning shuncha ulushidan katta bo'lsagina hisoblanadi
+                                               // (orqadan o'tgan odam kichik ko'rinadi — test to'xtamaydi)
+        mismatchesToPause: MON.mismatchesToPause || 3, // jim yuz tekshiruvi ketma-ket shuncha marta mos kelmasa to'xtaydi
+        detectorScore: MON.detectorScore || 0.35, // yuz aniqlash ishonchi (pastroq — yomon yorug'likda ham topadi)
         firstCheckMs: 15000,  // birinchi jim tekshiruv
         checkMinMs: 45000,    // keyingi tekshiruvlar oralig'i (tasodifiy)
         checkMaxMs: 90000,
-        recheckMs: 6000,      // yuz mos kelmaganda qayta tekshirish
+        recheckMs: MON.recheckMs || 8000, // yuz mos kelmaganda qayta tekshirish
         pollMs: 4000,         // qulf paytida o'qituvchi ochib berganini tekshirish
         locked: @json($locked ?? false),
         // O'qituvchi ruxsati bilan (yuz tekshiruvisiz) kirgan — tasdiqlangan rasm bilan solishtirilmaydi
@@ -772,7 +857,7 @@
         state.busy = true;
         let faces = [];
         try {
-            faces = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })).withFaceLandmarks();
+            faces = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: CFG.detectorScore })).withFaceLandmarks();
         } catch (e) {
             state.busy = false;
             return;
@@ -795,7 +880,9 @@
         if (kind) {
             state.goodSince = null;
             state.badSince = state.badSince || now;
-            if (state.paused !== 'face' && now - state.badSince >= CFG.awayMs) {
+            // Yuz ko'rinmasligi (bosh egib o'qish, yorug'lik) burilishdan ko'ra ko'proq kechiriladi
+            const limit = kind === 'none' ? CFG.noFaceMs : CFG.awayMs;
+            if (state.paused !== 'face' && now - state.badSince >= limit) {
                 pause('away', kind);
             }
             return;

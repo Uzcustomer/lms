@@ -119,6 +119,8 @@ Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')
     Route::post('/attempt/{attempt}/face', [\App\Http\Controllers\FanTestiKioskController::class, 'monitorFace'])->name('face');
     // Umumiy rejim: jarayon (javoblar soni) va o'qituvchining to'xtatish buyrug'i
     Route::post('/attempt/{attempt}/progress', [\App\Http\Controllers\FanTestiKioskController::class, 'progress'])->name('progress');
+    // Javoblar qoralamasi (sahifa yopilsa yo'qolmasin)
+    Route::post('/attempt/{attempt}/draft', [\App\Http\Controllers\FanTestiKioskController::class, 'saveDraft'])->name('draft');
 });
 
 // Sababli ariza tekshirish (QR kod orqali, public)

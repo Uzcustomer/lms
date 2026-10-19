@@ -319,8 +319,14 @@ class FanTestiController extends Controller
 
         $entry->forceFill(['stop_requested_at' => now()])->save();
 
-        return response()->json(['message' => $entry->student_name . ": to'xtatish buyrug'i yuborildi — sahifasi bir necha soniyada javoblarini topshiradi."
-            . ($entry->isOnline() ? '' : " Hozir sahifa bilan aloqa yo'q; qayta ochilganda bajariladi.")]);
+        // Sahifa bilan aloqa yo'q (yopilgan) — kutib o'tirmay, saqlangan qoralama bilan yakunlanadi
+        if (!$entry->isOnline()) {
+            app(\App\Http\Controllers\FanTestiKioskController::class)->finalizeFromDraft($attempt);
+
+            return response()->json(['message' => $entry->student_name . ": sahifa bilan aloqa yo'q edi — test saqlangan javoblari bilan topshirildi."]);
+        }
+
+        return response()->json(['message' => $entry->student_name . ": to'xtatish buyrug'i yuborildi — sahifasi bir necha soniyada javoblarini topshiradi."]);
     }
 
     private function hasPublicColumns(): bool

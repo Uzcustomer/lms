@@ -465,9 +465,9 @@ class TimetableController extends Controller
      * shu fan bo'lsa va (variant fan bo'lsa) guruh harfi variant harfiga mos bo'lsa.
      * Rejasi yoki harfi aniqlanmagan guruh chiqarib tashlanmaydi.
      */
-    private function hemisGroupsFor($subject, array $rows, array $groupCurricula): array
+    private function hemisGroupsFor($subject, array $rows, array $groupCurricula, bool $letterRule = true): array
     {
-        $variant = $this->variantLetter((string) $subject->subject_name);
+        $variant = $letterRule ? $this->variantLetter((string) $subject->subject_name) : null;
         $curricula = $subject->curricula ?? [];
 
         return array_values(array_filter($rows, function ($r) use ($variant, $curricula, $groupCurricula) {
@@ -490,6 +490,43 @@ class TimetableController extends Controller
 
             return true;
         }));
+    }
+
+    /**
+     * Bo'lakli fan ("Fan (a)"): HEMIS'da shu fanga biriktirilgan (o'qiyotgan) talabalar soni
+     * akademik guruh bo'yicha — [asosiy guruh kaliti => soni]. Ma'lumot student_subjects
+     * (import:student-subjects) dan; bo'sh bo'lsa — [] (eski harf qoidasi ishlatiladi).
+     */
+    private function variantStudentCounts(string $subjectName): array
+    {
+        static $cache = [];
+        $key = mb_strtolower(trim($subjectName));
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+        if (!Schema::hasTable('student_subjects')) {
+            return $cache[$key] = [];
+        }
+        $rows = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereRaw('LOWER(TRIM(ss.subject_name)) = ?', [$key])
+            ->where('st.student_status_code', 11)
+            ->get(['st.hemis_id', 'st.group_name', 'ss.education_year']);
+        // Faqat eng so'nggi o'quv yili biriktiruvlari (eski yillar qayta o'qish va h.k.).
+        $year = $rows->max('education_year');
+        $counts = [];
+        foreach ($rows as $r) {
+            if ($year !== null && (string) $r->education_year !== (string) $year) {
+                continue;
+            }
+            $g = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name));
+            if ($g === '') {
+                continue;
+            }
+            $counts[$g][(string) $r->hemis_id] = true;
+        }
+
+        return $cache[$key] = array_map('count', $counts);
     }
 
     /**
@@ -806,7 +843,31 @@ class TimetableController extends Controller
                             $oqRows = $oq['rows'] ?? [];
                             $sGroupNames = $groupNames;
                             $sOqTotal = $oqTotal;
-                            if ($hemisBoard) {
+                            // Bo'lakli fan: qaysi guruhdan nechta talaba o'qishi HEMIS biriktiruvidan
+                            // (student_subjects). Guruhning katta qismi (≥ yarmi) — o'z amaliy guruhi;
+                            // kichik qismlar ("02a dan 5 + 02b dan 5") bitta aralash guruhga yig'iladi.
+                            $variantUnits = null;
+                            if ($hemisBoard && $this->variantLetter((string) $s->subject_name) !== null
+                                && ($vCounts = $this->variantStudentCounts((string) $s->subject_name))) {
+                                $vRows = [];
+                                foreach ($this->hemisGroupsFor($s, $oqRows, $groupCurricula, false) as $r) {
+                                    $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) ($r['name'] ?? '')));
+                                    if (empty($vCounts[$gk])) {
+                                        continue;
+                                    }
+                                    $groupTotal = max(1, (int) ($r['count'] ?? 0));
+                                    $r['partial'] = $vCounts[$gk] * 2 < $groupTotal;
+                                    $r['count'] = $vCounts[$gk];
+                                    $vRows[] = $r;
+                                }
+                                if (!$vRows) {
+                                    continue;   // bu oqimda bu bo'lakni hech kim o'qimaydi
+                                }
+                                $oqRows = $vRows;
+                                $variantUnits = true;
+                                $sGroupNames = array_values(array_unique(array_map(fn ($r) => trim((string) $r['name']), $oqRows)));
+                                $sOqTotal = array_sum(array_map(fn ($r) => (int) ($r['count'] ?? 0), $oqRows));
+                            } elseif ($hemisBoard) {
                                 $oqRows = $this->hemisGroupsFor($s, $oqRows, $groupCurricula);
                                 if (!$oqRows) {
                                     continue;
@@ -912,9 +973,19 @@ class TimetableController extends Controller
                                 }
 
                                 $practiceRows = array_values($practiceRowsByName);
-                                $practiceBundles = $pairPracticeGroups
-                                    ? array_chunk($practiceRows, 2)
-                                    : array_map(static fn($gr) => [$gr], $practiceRows);
+                                if ($variantUnits) {
+                                    // Bo'lak: to'liq qismlar alohida, kichik qismlar bitta aralash guruh.
+                                    $fullRows = array_values(array_filter($practiceRows, fn ($gr) => empty($gr['partial'])));
+                                    $partRows = array_values(array_filter($practiceRows, fn ($gr) => !empty($gr['partial'])));
+                                    $practiceBundles = array_map(static fn ($gr) => [$gr], $fullRows);
+                                    if ($partRows) {
+                                        $practiceBundles[] = $partRows;
+                                    }
+                                } else {
+                                    $practiceBundles = $pairPracticeGroups
+                                        ? array_chunk($practiceRows, 2)
+                                        : array_map(static fn($gr) => [$gr], $practiceRows);
+                                }
 
                                 foreach ($practiceBundles as $bundle) {
                                     $names = [];

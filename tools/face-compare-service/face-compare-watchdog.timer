@@ -1,0 +1,10 @@
+[Unit]
+Description=LMS Face Compare watchdog — har daqiqada /health tekshiradi
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

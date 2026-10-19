@@ -56,12 +56,35 @@ logger = logging.getLogger("uvicorn.error")
 
 MODEL_NAME = "ArcFace"
 DETECTOR_BACKEND = "opencv"
+EMB_DIM = 512  # ArcFace embedding o'lchami; boshqa o'lchamdagi yozuvlar cache'ga olinmaydi
 
 # ─────────────────────── In-memory identification cache ───────────────────────
 # {student_id_number: np.ndarray (512,)}
 _identify_cache: dict[str, np.ndarray] = {}
 _identify_meta: dict[str, dict] = {}
 _cache_lock = threading.Lock()
+
+# Model chaqiruvlari (verify/represent/extract_faces) navbat bilan bajariladi.
+# TF CPU da parallel inference tezlashtirmaydi, aksincha sinf bir vaqtda kirganda
+# 40 ta worker-thread hammasi modelga yopishib, xizmat qotib qolardi
+# (/health ham javob bermay qolgan). Bittadan o'tsa navbat tez tugaydi.
+_infer_lock = threading.Lock()
+
+
+def _normalized_embedding(raw) -> np.ndarray | None:
+    """JSON/list → L2-normalized (EMB_DIM,) float32; shakli noto'g'ri bo'lsa None.
+    Bitta buzilgan yozuv (boshqa model, ichma-ich list, bo'sh) butun /identify
+    ni `all input arrays must have the same shape` bilan yiqitmasin."""
+    try:
+        arr = np.asarray(raw, dtype=np.float32)
+    except Exception:
+        return None
+    if arr.ndim != 1 or arr.shape[0] != EMB_DIM:
+        return None
+    norm = float(np.linalg.norm(arr))
+    if not np.isfinite(norm) or norm < 1e-6:
+        return None
+    return arr / norm
 
 
 class CompareRequest(BaseModel):
@@ -129,6 +152,7 @@ def _load_cache_from_db() -> dict:
     new_cache: dict[str, np.ndarray] = {}
     new_meta: dict[str, dict] = {}
     failed = 0
+    bad_ids: list[str] = []
 
     conn = _db_connect()
     try:
@@ -154,19 +178,25 @@ def _load_cache_from_db() -> dict:
                     else:
                         failed += 1
                         continue
-                    arr = np.asarray(arr_list, dtype=np.float32)
-                    norm = np.linalg.norm(arr)
-                    if norm < 1e-6:
+                    arr = _normalized_embedding(arr_list)
+                    if arr is None:
                         failed += 1
+                        bad_ids.append(sid)
                         continue
-                    new_cache[sid] = arr / norm
+                    new_cache[sid] = arr
                     new_meta[sid] = {"full_name": row.get("full_name") or ""}
                 except Exception:
                     failed += 1
+                    bad_ids.append(sid)
     finally:
         conn.close()
 
     logger.info(f"DB cache yuklandi: {len(new_cache)} ta, xato {failed}")
+    if bad_ids:
+        # Qaysi talabalarning embeddingi buzilgani logda ko'rinsin — ularni
+        # admin panelda rasmni qayta tasdiqlab (embedding qayta hisoblanadi) tuzatish mumkin
+        logger.warning(f"Embedding shakli noto'g'ri ({EMB_DIM} emas), o'tkazib yuborildi: "
+                       + ", ".join(bad_ids[:30]) + (" ..." if len(bad_ids) > 30 else ""))
     return {"cache": new_cache, "meta": new_meta, "failed": failed}
 
 
@@ -221,14 +251,15 @@ def compare(req: CompareRequest):
         raise HTTPException(status_code=400, detail=f"Rasmni o'qib bo'lmadi: {e}")
 
     try:
-        result = DeepFace.verify(
-            img1_path=img1,
-            img2_path=img2,
-            model_name=MODEL_NAME,
-            detector_backend=DETECTOR_BACKEND,
-            enforce_detection=False,
-            align=True,
-        )
+        with _infer_lock:
+            result = DeepFace.verify(
+                img1_path=img1,
+                img2_path=img2,
+                model_name=MODEL_NAME,
+                detector_backend=DETECTOR_BACKEND,
+                enforce_detection=False,
+                align=True,
+            )
     except Exception as e:
         logger.exception("verify failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -257,13 +288,14 @@ def compare(req: CompareRequest):
 def _extract_embedding(src: str) -> np.ndarray | None:
     """ArcFace 512-dim embedding chiqarish. None — yuz topilmadi yoki xato."""
     try:
-        reps = DeepFace.represent(
-            img_path=src,
-            model_name=MODEL_NAME,
-            detector_backend=DETECTOR_BACKEND,
-            enforce_detection=False,
-            align=True,
-        )
+        with _infer_lock:
+            reps = DeepFace.represent(
+                img_path=src,
+                model_name=MODEL_NAME,
+                detector_backend=DETECTOR_BACKEND,
+                enforce_detection=False,
+                align=True,
+            )
     except Exception as e:
         logger.warning(f"represent failed: {e}")
         return None
@@ -273,11 +305,7 @@ def _extract_embedding(src: str) -> np.ndarray | None:
     emb = reps[0].get("embedding") if isinstance(reps, list) else None
     if not emb:
         return None
-    arr = np.asarray(emb, dtype=np.float32)
-    norm = np.linalg.norm(arr)
-    if norm < 1e-6:
-        return None
-    return arr / norm  # L2-normalized → cosine similarity = dot product
+    return _normalized_embedding(emb)  # L2-normalized → cosine similarity = dot product
 
 
 @app.post("/embed")
@@ -311,10 +339,10 @@ def refresh_cache(req: RefreshCacheRequest):
         if not sid:
             continue
         if it.embedding:
-            arr = np.asarray(it.embedding, dtype=np.float32)
-            norm = np.linalg.norm(arr)
-            if norm > 1e-6:
-                arr = arr / norm
+            arr = _normalized_embedding(it.embedding)
+            if arr is None:
+                failed.append({"student_id_number": sid, "reason": f"embedding_shape_not_{EMB_DIM}"})
+                continue
         elif it.image:
             arr = _extract_embedding(it.image)
             if arr is None:
@@ -381,9 +409,10 @@ def identify(req: IdentifyRequest):
     shuning uchun matmul yetarli).
     """
     with _cache_lock:
-        if not _identify_cache:
+        # Faqat to'g'ri shakldagi embeddinglar — bitta buzilgan yozuv np.stack ni yiqitmasin
+        ids = [i for i, v in _identify_cache.items() if v.ndim == 1 and v.shape[0] == EMB_DIM]
+        if not ids:
             raise HTTPException(status_code=503, detail="Cache bo'sh — avval /refresh-cache chaqiring")
-        ids = list(_identify_cache.keys())
         matrix = np.stack([_identify_cache[i] for i in ids], axis=0)  # (N, D)
         meta_snapshot = {i: _identify_meta.get(i, {}) for i in ids}
 
@@ -506,12 +535,13 @@ def _load_image_bgr(src: str) -> np.ndarray:
 def _detect_face_bbox(img_bgr: np.ndarray):
     """Use DeepFace to find the largest face. Returns (x, y, w, h) or None."""
     try:
-        faces = DeepFace.extract_faces(
-            img_path=img_bgr,
-            detector_backend="opencv",
-            enforce_detection=False,
-            align=False,
-        )
+        with _infer_lock:
+            faces = DeepFace.extract_faces(
+                img_path=img_bgr,
+                detector_backend="opencv",
+                enforce_detection=False,
+                align=False,
+            )
     except Exception as e:
         logger.warning(f"face detect failed: {e}")
         return None

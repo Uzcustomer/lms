@@ -1,0 +1,7 @@
+[Unit]
+Description=LMS Face Compare watchdog (qotib qolsa qayta ishga tushiradi)
+After=face-compare.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/face-compare-watchdog.sh

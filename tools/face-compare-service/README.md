@@ -62,6 +62,35 @@ Logda quyidagi qatorni izlang (DB cache yuklangani):
 identify cache restored from DB: cache_size=3500
 ```
 
+## Watchdog (qotib qolsa avtomatik restart)
+
+Jarayon "active" bo'lsa ham `/health` javob bermay qolishi mumkin (TF inference
+qotib qolgan, CPU 100%). systemd timer har daqiqada `/health` ni tekshiradi,
+10 soniyada javob bo'lmasa xizmatni qayta ishga tushiradi:
+
+```bash
+sudo cp /var/www/lmsttatf/tools/face-compare-service/face-compare-watchdog.sh /usr/local/bin/
+sudo chmod +x /usr/local/bin/face-compare-watchdog.sh
+sudo cp /var/www/lmsttatf/tools/face-compare-service/face-compare-watchdog.service \
+        /var/www/lmsttatf/tools/face-compare-service/face-compare-watchdog.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now face-compare-watchdog.timer
+systemctl list-timers face-compare-watchdog.timer   # keyingi tekshiruv vaqti
+sudo journalctl -u face-compare-watchdog -n 20      # restart qilgan bo'lsa shu yerda ko'rinadi
+```
+
+Buzilgan embedding (512 o'lchamli emas) bo'lgan talabalar cache'ga olinmaydi va
+ishga tushganda logda `Embedding shakli noto'g'ri ... o'tkazib yuborildi: <ID lar>`
+deb chiqadi — admin panelda o'sha talabaning rasmini qayta tasdiqlang (embedding
+qayta hisoblanadi) yoki SQL bilan toping:
+
+```sql
+SELECT id, student_id_number, JSON_LENGTH(face_embedding) AS dim
+FROM student_photos
+WHERE status = 'approved' AND face_embedding IS NOT NULL
+  AND JSON_LENGTH(face_embedding) <> 512;
+```
+
 The service binds to `127.0.0.1:5005` only. First startup downloads the
 ArcFace weights (~130MB) — takes 30–60s. Check the logs:
 

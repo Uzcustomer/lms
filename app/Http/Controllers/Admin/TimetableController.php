@@ -532,6 +532,25 @@ class TimetableController extends Controller
         return $cache[$cacheKey] = array_map(fn ($byGroup) => array_map('count', $byGroup), $counts);
     }
 
+    /** Guruh bo'yicha faol talabalar soni (students, status 11): groupNameKey(asosiy nom) => son. */
+    private function activeStudentCountsByGroup(): array
+    {
+        static $counts = null;
+        if ($counts !== null) {
+            return $counts;
+        }
+        $counts = [];
+        foreach (DB::table('students')->where('student_status_code', 11)
+            ->selectRaw('group_name, COUNT(*) as n')->groupBy('group_name')->get() as $r) {
+            $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $r->group_name));
+            if ($k !== '') {
+                $counts[$k] = ($counts[$k] ?? 0) + (int) $r->n;
+            }
+        }
+
+        return $counts;
+    }
+
     /**
      * Bo'lak fanlariga (HEMIS student_subjects) biriktirilgan faol talabalar — barcha fanlar uchun
      * BITTA so'rov (cyclePlan har ochilishda chaqiriladi; har qatorga alohida so'rov jadvalni
@@ -3308,6 +3327,20 @@ class TimetableController extends Controller
                     ? $this->variantStudentList($variantStudentRows, (string) $g['variant'], $members)
                     : null,
                 'subgroups' => $members,
+                // Oddiy (bo'lak bo'lmagan) qator: har guruhchadagi faol talabalar soni.
+                'member_students' => empty($g['variant'])
+                    ? (function () use ($members) {
+                        $all = $this->activeStudentCountsByGroup();
+                        $out = [];
+                        foreach ($members as $m) {
+                            foreach (preg_split('/\s+\+\s+/u', (string) $m) as $part) {
+                                $k = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $part));
+                                $out[$part] = $all[$k] ?? 0;
+                            }
+                        }
+                        return $out;
+                    })()
+                    : null,
                 'faculty' => $g['faculty'],
                 'specialty' => $g['specialty'],
                 'course' => $g['course'],

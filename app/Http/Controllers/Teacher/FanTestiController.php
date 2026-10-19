@@ -424,6 +424,7 @@ class FanTestiController extends Controller
                 'id' => $d->id,
                 'name' => $d->name,
                 'room' => $d->roomLabel(),
+                'code' => $d->recovery_code ?? null,
                 'online' => $online,
                 'running' => $running,
                 'stage' => $stage,
@@ -744,6 +745,8 @@ class FanTestiController extends Controller
                     'id' => $d->id,
                     'name' => $d->name,
                     'room' => $d->roomLabel(),
+                    // Tiklash kodi — cookie o'chib ketsa kutish ekranida kiritiladi
+                    'code' => $d->recovery_code ?? null,
                     'online' => $d->isOnline(),
                     'assigned_test_id' => $assigned ? (int) $assigned->id : null,
                     'assigned_test_name' => $assigned?->name,

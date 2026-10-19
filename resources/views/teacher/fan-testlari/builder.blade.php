@@ -638,6 +638,8 @@
     .lm-dev b { display: block; color: var(--ink); font-size: 13.5px; font-weight: 700; }
     .lm-dev span { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
     .lm-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #cbd5e1; vertical-align: 1px; }
+    /* Kompyuter tiklash kodi — o'qituvchi talabaga aytadi */
+    .lm-code { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 5px; background: #fef3c7; color: #92400e; font-size: 11px; font-style: normal; font-weight: 800; letter-spacing: .08em; vertical-align: 1px; white-space: nowrap; }
     .lm-dot.on { background: #16a34a; }
     .lm-count { margin-right: auto; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
     .lm-empty { padding: 26px 10px; color: var(--muted); font-size: 13.5px; text-align: center; }
@@ -1288,9 +1290,10 @@
                     const sub = busy
                         ? 'Band: ' + esc(d.assigned_test_name || 'boshqa test') + (d.assigned_by ? ' · ' + esc(d.assigned_by) : '')
                         : (mine ? 'Shu test ochiq' : '<i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + (d.online ? 'Kutish ekranida' : 'Oflayn'));
+                    const code = d.code ? '<em class="lm-code" title="Tiklash kodi: brauzer tozalanib ketsa kutish ekranida shu kod kiritiladi">kod ' + esc(d.code) + '</em>' : '';
                     return '<label class="lm-dev' + (busy ? ' is-busy' : '') + (mine ? ' is-mine' : '') + '">'
                         + '<input type="checkbox" name="device_ids[]" value="' + d.id + '"' + (busy ? ' disabled' : '') + (mine ? ' checked' : '') + '>'
-                        + '<div><b>' + esc(d.name) + '</b><span>' + sub + '</span></div></label>';
+                        + '<div><b>' + esc(d.name) + code + '</b><span>' + sub + '</span></div></label>';
                 }).join('');
                 return '<div class="lm-room"><div class="lm-room-head"><label><input type="checkbox" class="lm-room-all">'
                     + title + '</label><small>' + list.length + ' ta · ' + online + ' ta onlayn</small></div>'
@@ -1447,7 +1450,9 @@
                 : '';
 
             return '<div class="mn-card ' + esc(d.stage) + '">'
-                + '<div class="mn-top"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + esc(d.name) + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
+                + '<div class="mn-top"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + esc(d.name)
+                + (d.code ? '<em class="lm-code" title="Tiklash kodi: brauzer tozalanib ketsa kutish ekranida shu kod kiritiladi">kod ' + esc(d.code) + '</em>' : '')
+                + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
                 + student + meta
                 + '<div class="mn-acts">' + stopBtn + restartBtn + '</div>'
                 + (bypassBtn ? '<div class="mn-acts">' + bypassBtn + '</div>' : '')

@@ -14,6 +14,7 @@ class TestKioskDevice extends Model
     protected $fillable = [
         'name',
         'room',
+        'recovery_code',
         'token_hash',
         'previous_token_hash',
         'rotated_at',
@@ -56,6 +57,25 @@ class TestKioskDevice extends Model
     public function isActive(): bool
     {
         return $this->revoked_at === null;
+    }
+
+    /** Boshqa kompyuterda yo'q, tasodifiy 4 raqamli tiklash kodi. */
+    public static function freshRecoveryCode(): string
+    {
+        do {
+            $code = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+        } while (static::where('recovery_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * Tizim o'zi bekor qilgan (belgi nusxasi deb hisoblagan) kompyuterni kod
+     * bilan tiklash mumkin — admin bekor qilganini esa yo'q.
+     */
+    public function recoverableByCode(): bool
+    {
+        return $this->isActive() || str_starts_with((string) $this->revoked_reason, 'Belgi nusxasi');
     }
 
     /** Shu kompyuterda bir martalik yuz tekshiruvisiz kirish ruxsati hozir faolmi */

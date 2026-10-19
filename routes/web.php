@@ -103,6 +103,9 @@ Route::post('/test-kompyuter/{device}/revoke', [\App\Http\Controllers\TestDevice
 Route::post('/test-kompyuter/{device}/release', [\App\Http\Controllers\TestDeviceController::class, 'release'])->name('test-devices.release');
 // Sinf kompyuteridagi kutish ekrani: o'qituvchi test berganda o'zi ochadi
 Route::get('/test-kompyuter/kutish', [\App\Http\Controllers\TestDeviceController::class, 'wait'])->name('test-devices.wait');
+// Cookie o'chib ketgan kompyuterni 4 raqamli kod bilan qayta bog'lash (faqat universitet tarmog'idan)
+Route::post('/test-kompyuter/tiklash', [\App\Http\Controllers\TestDeviceController::class, 'recover'])
+    ->middleware(\App\Http\Middleware\UniversityNetworkOnly::class)->name('test-devices.recover');
 Route::get('/test-kompyuter/holat', [\App\Http\Controllers\TestDeviceController::class, 'status'])->name('test-devices.status');
 
 Route::prefix('test/{fanTesti}')->name('kiosk.fan-testi.')

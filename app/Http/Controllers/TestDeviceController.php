@@ -8,6 +8,8 @@ use App\Models\TestKioskDevice;
 use App\Services\TestDeviceToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -71,6 +73,7 @@ class TestDeviceController extends Controller
         $room = trim((string) preg_replace('/[\s\-]*xona$/iu', '', trim((string) ($data['room'] ?? ''))));
         $fields = ['name' => trim($data['name'])] + ($hasRooms ? ['room' => $room !== '' ? $room : trim((string) $data['room'])] : []);
 
+        $hasCode = Schema::hasColumn('test_kiosk_devices', 'recovery_code');
         if ($device && $device->isActive()) {
             $device->update($fields);
             $message = "Kompyuter ma'lumotlari yangilandi: " . $this->label($device);
@@ -78,8 +81,14 @@ class TestDeviceController extends Controller
             $device = new TestKioskDevice($fields + [
                 'registered_by_user_id' => $user?->id,
                 'registered_by_name' => $user?->name ?? $user?->full_name ?? $user?->short_name ?? $user?->email,
-            ]);
+            ] + ($hasCode ? ['recovery_code' => TestKioskDevice::freshRecoveryCode()] : []));
             $message = "Kompyuter ro'yxatdan o'tdi: " . $this->label($device);
+        }
+        if ($hasCode && !$device->recovery_code) {
+            $device->recovery_code = TestKioskDevice::freshRecoveryCode();
+        }
+        if ($hasCode) {
+            $message .= " · tiklash kodi: {$device->recovery_code}";
         }
 
         $newToken = TestDeviceToken::rotate($device);
@@ -137,7 +146,50 @@ class TestDeviceController extends Controller
     {
         $device = Schema::hasTable('test_kiosk_devices') ? TestDeviceToken::resolve($request) : null;
 
-        return view('kiosk.fan-testi.wait', ['device' => $device]);
+        return view('kiosk.fan-testi.wait', [
+            'device' => $device,
+            'canRecover' => Schema::hasColumn('test_kiosk_devices', 'recovery_code'),
+        ]);
+    }
+
+    /**
+     * Cookie o'chib ketgan kompyuterni 4 raqamli kod bilan qayta bog'lash
+     * (admin logini shart emas). Kod o'qituvchi va admin ro'yxatida ko'rinadi.
+     * Urinishlar cheklangan: bir kompyuterdan daqiqasiga 5 ta.
+     */
+    public function recover(Request $request)
+    {
+        abort_unless(Schema::hasColumn('test_kiosk_devices', 'recovery_code'), 404);
+
+        $key = 'test_device_recover:' . $request->ip();
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            return back()->withErrors(['code' => "Juda ko'p urinish. Bir daqiqadan keyin qayta kiriting."]);
+        }
+        RateLimiter::hit($key, 60);
+
+        $data = $request->validate(['code' => ['required', 'digits:4']], [], ['code' => 'Kod']);
+
+        $device = TestKioskDevice::where('recovery_code', $data['code'])->first();
+        if (!$device || !$device->recoverableByCode()) {
+            return back()->withErrors(['code' => "Bunday kodli kompyuter topilmadi. Kodni o'qituvchi yoki administratordan so'rang."]);
+        }
+
+        // Shu brauzer endi o'sha kompyuter: yangi belgi, eski (yo'qolgan) belgi bekor
+        if (!$device->isActive()) {
+            $device->forceFill(['revoked_at' => null, 'revoked_reason' => null]);
+        }
+        $newToken = TestDeviceToken::rotate($device);
+        $device->forceFill(['previous_token_hash' => null])->save();
+
+        Log::info('[FanTest] Kompyuter kod bilan tiklandi', [
+            'device_id' => $device->id,
+            'device_name' => $device->name,
+            'ip' => $request->ip(),
+        ]);
+
+        return redirect()
+            ->route('test-devices.wait')
+            ->withCookie(TestDeviceToken::cookie($request, $newToken));
     }
 
     /** Kutish ekrani va test sahifasi so'raydi: shu kompyuterga qaysi test berilgan. */

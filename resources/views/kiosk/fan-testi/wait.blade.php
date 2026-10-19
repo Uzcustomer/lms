@@ -29,6 +29,13 @@
         .w-state.ok::before { background: #16a34a; }
         .w-state.bad::before { background: #dc2626; }
         @media (prefers-reduced-motion: reduce) { .w-pulse::before, .w-pulse::after { animation: none; } }
+
+        /* Kod bilan tiklash */
+        .w-recover { display: grid; gap: 12px; max-width: 320px; margin: 22px auto 0; }
+        .w-code {
+            text-align: center; font-size: 34px; font-weight: 800; letter-spacing: .35em;
+            font-variant-numeric: tabular-nums; padding-left: .35em;
+        }
 @endsection
 
 @section('content')
@@ -47,7 +54,21 @@
                 <div class="w-state ok" id="wState" aria-live="polite">Server bilan aloqa bor</div>
             @else
                 <h1 class="w-title">Bu kompyuter ro'yxatdan o'tmagan</h1>
-                <p class="w-sub">Test kompyuteri sifatida ishlatish uchun administrator shu kompyuterda <b>/test-kompyuter</b> sahifasi orqali uni ro'yxatdan o'tkazishi kerak.</p>
+                @if($canRecover ?? false)
+                    <p class="w-sub">Kompyuter avval ro'yxatda bo'lgan bo'lsa (brauzer tozalangan), o'qituvchi yoki administrator aytgan <b>4 raqamli kodni</b> kiriting — kompyuter o'z nomi bilan qayta bog'lanadi.</p>
+                    <form method="POST" action="{{ route('test-devices.recover') }}" class="w-recover">
+                        @csrf
+                        @if($errors->has('code'))
+                            <div class="k-error" style="margin-bottom:12px"><span>&#9888;</span><span>{{ $errors->first('code') }}</span></div>
+                        @endif
+                        <input class="k-input w-code" name="code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code"
+                               placeholder="0000" autofocus required aria-label="Kompyuter kodi">
+                        <button class="k-btn k-btn-lg" type="submit">Kompyuterni tiklash</button>
+                    </form>
+                    <p class="w-sub" style="margin-top:18px;font-size:13px;color:var(--muted)">Kodi yo'q yangi kompyuterni administrator <b>/test-kompyuter</b> sahifasi orqali ro'yxatdan o'tkazadi.</p>
+                @else
+                    <p class="w-sub">Test kompyuteri sifatida ishlatish uchun administrator shu kompyuterda <b>/test-kompyuter</b> sahifasi orqali uni ro'yxatdan o'tkazishi kerak.</p>
+                @endif
             @endif
         </div>
     </div>

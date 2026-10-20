@@ -545,9 +545,12 @@ class TimetableController extends Controller
      * shuning uchun avval qatorning fakulteti (groups.department_name — kartadagi faculty_name ham
      * shundan) bo'yicha; nom yagona bo'lsa — o'sha; aks holda oxirgi faol guruhniki (eski xatti).
      */
+    /** groupCurriculum keshi — so'rov (controller) bo'yicha; funksiya ichidagi static butun jarayonda qolardi. */
+    private ?array $groupCurriculumMap = null;
+
     private function groupCurriculum(string $groupName, ?string $faculty = null): ?int
     {
-        static $map = null;
+        $map = &$this->groupCurriculumMap;
         if ($map === null) {
             $map = [];
             // Faollari oxirida — bir xil nomli eski (nofaol) guruhni ustidan yozadi.
@@ -670,6 +673,18 @@ class TimetableController extends Controller
         usort($out, fn ($a, $b) => strnatcasecmp($a['group'], $b['group']) ?: strcasecmp($a['name'], $b['name']));
 
         return $out;
+    }
+
+    /**
+     * Kartadagi guruhdan bo'lakka biriktirilgan talabalar soni (variantStudentCounts natijasidan) —
+     * guruhning o'z o'quv rejasi bo'yicha: guruh nomi fakultetlararo takrorlanadi. Rejasi noma'lum — jami.
+     */
+    private function groupAssignedCount(array $byCurriculum, string $group, ?string $faculty): int
+    {
+        $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', $group));
+        $cur = $this->groupCurriculum($group, $faculty);
+
+        return $cur ? (int) ($byCurriculum[$cur][$gk] ?? 0) : (int) array_sum(array_column($byCurriculum, $gk));
     }
 
     /**
@@ -2024,7 +2039,7 @@ class TimetableController extends Controller
             foreach ($items as [$c]) {
                 $counts = $this->variantStudentCounts((string) $c->subject_name, $year);
                 foreach ((array) $c->group_names as $g) {
-                    if (array_sum(array_column($counts, $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g)))) > 0) {
+                    if ($this->groupAssignedCount($counts, (string) $g, $c->faculty_name) > 0) {
                         return true;
                     }
                 }
@@ -2130,9 +2145,7 @@ class TimetableController extends Controller
                 $studentsOf = function (array $names) use ($counts, $card) {
                     $sum = 0;
                     foreach ($names as $n) {
-                        $gk = $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $n));
-                        $cur = $this->groupCurriculum((string) $n, $card->faculty_name);
-                        $sum += $cur ? (int) ($counts[$cur][$gk] ?? 0) : (int) array_sum(array_column($counts, $gk));
+                        $sum += $this->groupAssignedCount($counts, (string) $n, $card->faculty_name);
                     }
                     return $sum;
                 };

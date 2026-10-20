@@ -657,6 +657,24 @@
     .lm-link span { color: var(--muted); font-size: 12px; font-weight: 700; }
     .lm-link code { padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: #f8fafc; color: var(--navy); font-size: 13px; word-break: break-all; }
     .bl-run-badge.is-public { background: #ecfdf5; color: #047857; }
+    /* Yangi to'plam — accordion: sarlavha bosilganda ochiladi */
+    .bl-create > .bl-create-sum { display: block; list-style: none; cursor: pointer; border-radius: 10px; }
+    .bl-create > .bl-create-sum::-webkit-details-marker { display: none; }
+    .bl-create > .bl-create-sum:focus-visible { outline: 2px solid #1e4272; outline-offset: 3px; }
+    .bl-create > .bl-create-sum .bl-head { transition: box-shadow .15s, transform .15s; }
+    .bl-create > .bl-create-sum:hover .bl-head { box-shadow: 0 10px 26px rgba(14, 35, 66, .12); }
+    .bl-create[open] > .bl-panel, .bl-create[open] > .bl-empty { margin-top: 14px; }
+    .bl-create-toggle {
+        position: relative; z-index: 1; flex: none; display: inline-flex; align-items: center;
+        padding: 10px 18px; border-radius: 10px; background: linear-gradient(165deg, #1e4272, #0e2342);
+        color: #fff; font-size: 13.5px; font-weight: 700; box-shadow: 0 5px 14px rgba(14, 35, 66, .24);
+    }
+    .bl-create-toggle > span { display: inline-flex; align-items: center; gap: 8px; }
+    .bl-create-toggle svg { width: 16px; height: 16px; }
+    .bl-create-toggle .is-open { display: none; }
+    .bl-create[open] .bl-create-toggle { background: #fff; color: #0e2342; border: 1px solid #d8e2ee; box-shadow: none; }
+    .bl-create[open] .bl-create-toggle .is-open { display: inline-flex; }
+    .bl-create[open] .bl-create-toggle .is-closed { display: none; }
     .bl-run-badge.is-retake { background: #f5f3ff; color: #6d28d9; white-space: nowrap; }
 
     /* To'plamlar tablari: asosiy — to'q ko'k, qayta topshirish — binafsha */
@@ -917,6 +935,12 @@
             </div>
         @endif
 
+        {{-- Yangi to'plam: yig'ilgan holda turadi, sarlavha ustiga bosilganda ochiladi.
+             Xato bilan qaytsa yoki hali to'plam yo'q bo'lsa — ochiq. Tahrirlashda doim ochiq. --}}
+        @if(!$isEdit)
+            <details class="bl-create" id="blCreate" {{ ($errors->any() || ($collections ?? collect())->isEmpty()) ? 'open' : '' }}>
+            <summary class="bl-create-sum">
+        @endif
         <div class="bl-head">
             <div class="bl-head-main">
                 <span class="bl-head-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5Z"/></svg></span>
@@ -934,8 +958,16 @@
                     <b>{{ count($questions) }}</b>
                     <span>Savol tayyor</span>
                 </div>
+            @else
+                <span class="bl-create-toggle" aria-hidden="true">
+                    <span class="is-closed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Yangi to'plam yaratish</span>
+                    <span class="is-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>Yopish</span>
+                </span>
             @endif
         </div>
+        @if(!$isEdit)
+            </summary>
+        @endif
 
         {{-- 01 · Sozlamalar --}}
         <form method="POST" action="{{ $isEdit ? route('teacher.fan-testlari.update', $collection) : route('teacher.fan-testlari.store') }}" class="bl-panel">
@@ -1145,6 +1177,7 @@
                 <b>Avval test to'plamini saqlang</b>
                 <span>To'plam yaratilgach, shu sahifada savol qo'shish va sozlash oynalari ochiladi.</span>
             </div>
+            </details>
         @endif
 
         {{-- Mavjud to'plamlar --}}

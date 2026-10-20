@@ -130,3 +130,22 @@ it('qayta ko\'chirishda ichkidan olingan kartaning eski tashqi joyi tozalanadi',
     expect($s['own']->fresh()->only(['ext_day', 'ext_pair']))->toBe(['ext_day' => null, 'ext_pair' => null])
         ->and($s['foreign']->fresh()->only(['ext_day', 'ext_pair', 'day']))->toBe(['ext_day' => 1, 'ext_pair' => 1, 'day' => 1]);
 });
+
+it('joylanmagan kartalar eksporti tanlangan qatlam bo\'yicha', function () {
+    $s = layersSetup();
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_name' => 'MAXFIY O.']);   // tashqida joylashgan, ichkida yo'q
+    $s['foreign']->update(['day' => 1, 'pair' => 1]);                                       // ichkida joylashgan, tashqida yo'q
+
+    $rowsOf = function (string $layer) use ($s) {
+        $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=' . $layer)->assertOk();
+        $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+        file_put_contents($file, $res->streamedContent());
+        $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet();
+        @unlink($file);
+
+        return collect($sheet->toArray())->slice(2)->map(fn ($r) => [$r[6], $r[10]])->values()->all();
+    };
+
+    expect($rowsOf('external'))->toBe([['Anatomiya', '—']])
+        ->and($rowsOf('internal'))->toBe([['Gigiyena', 'MAXFIY O.']]);
+});

@@ -5837,6 +5837,7 @@
                     [...selectedDirs].forEach(v => params.append('specialty_names[]', v));
                     [...selectedCourses].forEach(v => params.append('courses[]', v));
                     params.set('type', typeFilter);
+                    params.set('layer', weeklyLayer);
                     if (curWeek) params.set('week', curWeek);
                     params.set('_', Date.now());
                     const response = await fetch(BASE + '/boards/' + board.id + '/unplaced-export?' + params.toString(), {

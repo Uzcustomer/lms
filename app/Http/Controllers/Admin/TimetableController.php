@@ -5346,6 +5346,10 @@ class TimetableController extends Controller
         $courses = array_values(array_filter(array_map('intval', $toArray($request->input('courses'))), static fn($v) => $v > 0));
         $type = (string) $request->input('type', 'all');
         $week = max(0, (int) $request->input('week', 0));
+        // Haftalik qatlam: tashqida joylashuv ext_day/ext_pair, o'qituvchi/xona bu qatlamda yo'q.
+        $layerInput = (string) $request->input('layer', '');
+        $external = $this->weeklyLayer($request, in_array($layerInput, ['external', 'internal'], true) ? $layerInput : null) === 'external';
+        [$dayCol, $pairCol] = $external ? ['ext_day', 'ext_pair'] : ['day', 'pair'];
 
         $query = TimetableCard::where('board_id', $board->id)
             ->orderBy('faculty_name')
@@ -5367,8 +5371,8 @@ class TimetableController extends Controller
         }
 
         if (!$week) {
-            $query->where(function ($q) {
-                $q->whereNull('day')->orWhereNull('pair');
+            $query->where(function ($q) use ($dayCol, $pairCol) {
+                $q->whereNull($dayCol)->orWhereNull($pairCol);
             });
             $cards = $query->get();
         } else {
@@ -5380,15 +5384,16 @@ class TimetableController extends Controller
                     ->get()
                     ->keyBy('card_id');
             }
-            $cards = $cards->filter(function (TimetableCard $card) use ($overrides): bool {
+            $cards = $cards->filter(function (TimetableCard $card) use ($overrides, $external, $dayCol, $pairCol): bool {
                 $override = $overrides->get($card->id);
                 if ($override && $override->cancelled) {
                     return false;
                 }
-                if ($override && $override->day && $override->pair) {
+                // Haftaga xos ko'chirishlar — ichki jadvalniki (blade'dagi effPlace kabi).
+                if (!$external && $override && $override->day && $override->pair) {
                     return false;
                 }
-                return !$card->day || !$card->pair;
+                return !$card->{$dayCol} || !$card->{$pairCol};
             })->values();
         }
 
@@ -5403,7 +5408,7 @@ class TimetableController extends Controller
             ];
             $sheet->fromArray([$headers], null, 'A1');
             $sheet->mergeCells('A1:L1');
-            $sheet->setCellValue('A1', 'Joylanmagan kartalar - ' . $board->name);
+            $sheet->setCellValue('A1', 'Joylanmagan kartalar' . ($external ? ' (tashqi jadval)' : '') . ' - ' . $board->name);
             $sheet->getStyle('A1:L1')->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 13],
                 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1D4ED8']],
@@ -5431,8 +5436,8 @@ class TimetableController extends Controller
                     $card->training_type === 'lecture' ? 'Ma\'ruza' : 'Amaliy',
                     $card->weeks !== null ? (int) $card->weeks : $board->weeks,
                     (int) $card->students,
-                    $card->teacher_name ?: 'Biriktirilmagan',
-                    $card->auditorium_name ?: 'Biriktirilmagan',
+                    $external ? '—' : ($card->teacher_name ?: 'Biriktirilmagan'),
+                    $external ? '—' : ($card->auditorium_name ?: 'Biriktirilmagan'),
                 ];
             }
             if ($rows) {

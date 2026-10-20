@@ -2712,6 +2712,49 @@ class TimetableController extends Controller
         return response()->json($this->syncCardWeeksFromKtr($board, $data, $request->boolean('dry_run')));
     }
 
+    /**
+     * Haftaning KTR soatiga teng bo'ladigan kartochkalar to'plami: soatdan oshmaydigan eng katta
+     * yig'indi (aniq teng afzal), ichida — kamroq karta, so'ng asosiy (ko'p haftali) kartalar.
+     * $cards shu ustuvorlik tartibida saralangan. Kartalar soni cheklanmaydi: yig'indi bo'yicha
+     * dinamik dasturlash (soat × karta). [card_id => true]
+     */
+    private function ktrPickCards(array $cards, int $need): array
+    {
+        if ($need <= 0 || !$cards) {
+            return [];
+        }
+        $cards = array_values($cards);
+        // $best[yig'indi] = tanlangan indekslar (o'sish tartibida). Oxirgi kartadan boshlab
+        // yig'iladi: PHP massivlarni avval soni, so'ng elementlari bo'yicha solishtiradi —
+        // kamroq karta, teng bo'lsa oldingi (asosiy) kartasi bor to'plam "kichik" (yaxshi).
+        $best = [0 => []];
+        for ($i = count($cards) - 1; $i >= 0; $i--) {
+            $len = $cards[$i]->lenHalf();
+            $next = $best;
+            foreach ($best as $sum => $set) {
+                $total = $sum + $len;
+                if ($total > $need) {
+                    continue;
+                }
+                $candidate = array_merge([$i], $set);
+                if (!isset($next[$total]) || $candidate < $next[$total]) {
+                    $next[$total] = $candidate;
+                }
+            }
+            $best = $next;
+        }
+        unset($best[0]);
+        if (!$best) {
+            return [];
+        }
+        $out = [];
+        foreach ($best[max(array_keys($best))] as $i) {
+            $out[$cards[$i]->id] = true;
+        }
+
+        return $out;
+    }
+
     private function syncCardWeeksFromKtr(TimetableBoard $board, array $scope = [], bool $dryRun = false): array
     {
         // Qamrov boshqa amallar (bo'shatish) bilan bir xil: yuborilmagan — cheklovsiz,
@@ -2786,16 +2829,8 @@ class TimetableController extends Controller
             $active = [];
             for ($w = 1; $w <= $total; $w++) {
                 $need = (int) ($plan[$w - 1][$typeKey] ?? 0);
-                $chosen = [];
-                foreach ($unitCards as $c) {
-                    if ($need <= 0) {
-                        break;
-                    }
-                    if ($c->lenHalf() <= $need) {
-                        $chosen[$c->id] = true;
-                        $need -= $c->lenHalf();
-                    }
-                }
+                $chosen = $this->ktrPickCards($unitCards, $need);
+                $need -= array_sum(array_map(fn ($c) => isset($chosen[$c->id]) ? $c->lenHalf() : 0, $unitCards));
                 if ($need > 0) {
                     $mismatch[] = $first->subject_name . ' · ' . ($first->group_name ?: $first->oqim_label) . ' · ' . $w . '-hafta: KTR '
                         . (int) ($plan[$w - 1][$typeKey] ?? 0) . ' soat, kartochkalar yetmaydi';

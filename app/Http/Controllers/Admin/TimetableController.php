@@ -1077,6 +1077,10 @@ class TimetableController extends Controller
                             // Ma'ruza — bitta oqimga BITTA karta; necha hafta o'tilishi
                             // ma'ruza soatidan (1 para = 2 soat = 1 hafta).
                             $subjKey = $this->normSubject((string) $s->subject_name);
+                            // Bo'lakli fan ("Fan (a)/(b)/(c)") ma'ruzasi bo'laklarga ajralmaydi — oqim birga
+                            // eshitadi: asosiy nom bilan bitta karta, barcha bo'laklarning guruhlari bilan.
+                            $lecSubject = $this->cycleSubjectVariantBase((string) $s->subject_name) ?? (string) $s->subject_name;
+                            $lecSubjKey = $this->normSubject($lecSubject);
                             // Bir xil ko'rinadigan oqim bir nechta snapshot blokida kelishi mumkin.
                             // Ma'ruza bunday bo'laklarga ajralmasin: fakultet+yo'nalish+kurs+
                             // oqim+til+fan bo'yicha bitta karta, guruhlar esa birlashtiriladi.
@@ -1084,19 +1088,23 @@ class TimetableController extends Controller
                             // UI ham oqimlarni til yoki snapshot bo'lagi bo'yicha ajratmaydi.
                             // Shu sababli ular ma'ruza kalitida ham alohida bo'lmasligi kerak.
                             $lecKey = ($blockFac ?? '') . '|' . $sk . '|' . $course . '|'
-                                . $flowLabel . '|' . $subjKey;
+                                . $flowLabel . '|' . $lecSubjKey;
                             if ((float) $s->lecture > 0) {
                                 foreach ($oqRows as $lectureGroup) {
                                     $lectureGroupName = trim((string) ($lectureGroup['name'] ?? ''));
                                     if ($lectureGroupName === '') {
                                         continue;
                                     }
-                                    $lectureGroupStudents[$lecKey][$lectureGroupName] = max(
-                                        (int) ($lectureGroupStudents[$lecKey][$lectureGroupName] ?? 0),
+                                    // Bo'laklar bir guruhning turli talabalari — guruh+bo'lak bo'yicha yig'iladi.
+                                    $slot = $lectureGroupName . "\0" . $s->subject_name;
+                                    $lectureGroupStudents[$lecKey][$slot] = max(
+                                        (int) ($lectureGroupStudents[$lecKey][$slot] ?? 0),
                                         (int) ($lectureGroup['count'] ?? 0)
                                     );
                                 }
-                                $mergedLectureGroups = array_keys($lectureGroupStudents[$lecKey] ?? []);
+                                $mergedLectureGroups = array_values(array_unique(array_map(
+                                    fn ($k) => explode("\0", (string) $k)[0], array_keys($lectureGroupStudents[$lecKey] ?? [])
+                                )));
                                 $mergedLectureStudents = array_sum($lectureGroupStudents[$lecKey] ?? []);
 
                                 if (!isset($madeLecture[$lecKey])) {
@@ -1107,7 +1115,7 @@ class TimetableController extends Controller
                                         'oqim_label' => $oq['label'] ?? null, 'lang' => $oq['lang'] ?? 'uz',
                                         'training_type' => 'lecture',
                                         'group_name' => null, 'group_names' => json_encode($mergedLectureGroups ?: $sGroupNames),
-                                        'subject_name' => $s->subject_name, 'kafedra_name' => $kaf,
+                                        'subject_name' => $lecSubject, 'kafedra_name' => $kaf,
                                         'students' => $mergedLectureStudents > 0 ? $mergedLectureStudents : $sOqTotal,
                                         // Ma'ruza — 2 soat (1 para). MUHIM: ustunlar to'plami
                                         // amaliy qatorlar bilan bir xil bo'lishi shart, aks holda
@@ -1964,6 +1972,68 @@ class TimetableController extends Controller
      * tashqi/ichki joylashuvi va haftalari (bekor qilingan haftalar, ko'chirishlar) bilan.
      * O'qituvchi va xona nusxalarga ko'chirilmaydi (kafedra o'zi biriktiradi).
      */
+    /**
+     * Bo'lakli fanning ma'ruzalari ("Fan (a)", "Fan (b)", "Fan (c)") bitta oqimda — bitta umumiy ma'ruza:
+     * asosiy nom bilan bitta karta qoladi (barcha guruhlar, jami talaba), qolganlari o'chiriladi.
+     * Qolgan kartaning joylashuvi va haftalari saqlanadi.
+     */
+    public function mergeVariantLectures(Request $request, TimetableBoard $board)
+    {
+        $data = $request->validate([
+            'faculty_names'     => 'nullable|array',
+            'faculty_names.*'   => 'nullable|string|max:255',
+            'specialty_names'   => 'nullable|array',
+            'specialty_names.*' => 'string|max:255',
+            'courses'           => 'nullable|array',
+            'courses.*'         => 'integer|min:1|max:7',
+            'dry_run'           => 'nullable|boolean',
+        ]);
+        if (!in_array($this->timetableActiveRole($request), ['admin', 'superadmin', 'registrator_ofisi'], true)) {
+            return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
+        }
+        [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
+        $q = TimetableCard::where('board_id', $board->id)->where('training_type', 'lecture');
+        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
+        $groups = [];
+        foreach ($q->orderBy('id')->get() as $card) {
+            $base = $this->cycleSubjectVariantBase((string) $card->subject_name);
+            if ($base === null) {
+                continue;
+            }
+            $groups[implode('|', [$card->faculty_name, $card->specialty_name, $card->course, mb_strtolower((string) $card->oqim_label), $this->normSubject($base)])][] = [$card, $base];
+        }
+        $dry = $request->boolean('dry_run');
+        $list = [];
+        $removed = 0;
+        DB::transaction(function () use ($groups, $dry, &$list, &$removed) {
+            foreach ($groups as $items) {
+                [$keep, $base] = $items[0];
+                $names = [];
+                $students = 0;
+                foreach ($items as [$c]) {
+                    foreach ((array) $c->group_names as $g) {
+                        $names[$g] = true;
+                    }
+                    $students += (int) $c->students;
+                }
+                $list[] = $base . ' · ' . $keep->oqim_label . ' · ' . count($items) . " bo'lak → 1";
+                if ($dry) {
+                    continue;
+                }
+                $keep->update(['subject_name' => $base, 'group_names' => array_keys($names), 'students' => max(1, $students)]);
+                foreach (array_slice($items, 1) as [$c]) {
+                    if (Schema::hasTable('timetable_card_overrides')) {
+                        TimetableCardOverride::where('card_id', $c->id)->delete();
+                    }
+                    $c->delete();
+                    $removed++;
+                }
+            }
+        });
+
+        return response()->json(['ok' => true, 'dry_run' => $dry, 'lectures' => count($list), 'removed' => $removed, 'list' => array_slice($list, 0, 200)]);
+    }
+
     public function splitVariantMixed(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([
@@ -2949,10 +3019,23 @@ class TimetableController extends Controller
 
         $ktr = $this->cycleKtrDayPlans($board);
         $ktrFor = function (TimetableCard $c) use ($ktr): ?array {
-            $key = $this->cycleKtrKey((string) $c->specialty_name, (int) $c->course, (string) $c->subject_name);
             $fac = trim((string) $c->faculty_name);
+            $find = function (string $subject) use ($ktr, $c, $fac): ?array {
+                $key = $this->cycleKtrKey((string) $c->specialty_name, (int) $c->course, $subject);
 
-            return ($fac !== '' ? ($ktr[$this->specKey($fac) . '|' . $key] ?? null) : null) ?? $ktr[$key] ?? null;
+                return ($fac !== '' ? ($ktr[$this->specKey($fac) . '|' . $key] ?? null) : null) ?? $ktr[$key] ?? null;
+            };
+            $plan = $find((string) $c->subject_name);
+            // Bo'lakli fanning umumiy ma'ruzasi asosiy nom bilan — KTR esa bo'lak nomlari bilan kiritilgan.
+            if ($plan === null && $c->training_type === 'lecture' && $this->variantLetter((string) $c->subject_name) === null) {
+                foreach (['a', 'b', 'c', 'а', 'б', 'с'] as $l) {
+                    if ($plan = $find($c->subject_name . ' (' . $l . ')')) {
+                        break;
+                    }
+                }
+            }
+
+            return $plan;
         };
 
         $cardQuery = TimetableCard::where('board_id', $board->id);

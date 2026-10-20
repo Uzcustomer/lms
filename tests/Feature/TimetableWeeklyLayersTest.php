@@ -273,3 +273,20 @@ it('biriktiruvi yo\'q bo\'lak talabalar ulushini asl kartadan oladi', function (
         ->and($copy->group_names)->toBe(['g-03a', 'g-03b'])
         ->and($copy->students)->toBe(20);
 });
+
+it('bo\'lakli fan ma\'ruzalari bitta umumiy ma\'ruzaga birlashadi', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half', 'weeks']) + ['training_type' => 'lecture', 'kafedra_name' => 'X', 'ext_day' => 1, 'ext_pair' => 1];
+    $a = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP (a)', 'students' => 40, 'group_names' => ['g-02a', 'g-03a']]);
+    $b = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP (b)', 'students' => 40, 'group_names' => ['g-02b', 'g-03b']]);
+    $c = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP (c)', 'students' => 20, 'group_names' => ['g-02a', 'g-02b', 'g-03a', 'g-03b']]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $a->id, 'week' => 9, 'cancelled' => true]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.merge-variant-lectures', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['lectures' => 1, 'removed' => 2]);
+    $a->refresh();
+    expect($a->subject_name)->toBe('IKP')->and($a->students)->toBe(100)
+        ->and(collect($a->group_names)->sort()->values()->all())->toBe(['g-02a', 'g-02b', 'g-03a', 'g-03b'])
+        ->and(\App\Models\TimetableCard::whereIn('id', [$b->id, $c->id])->count())->toBe(0)
+        ->and(\App\Models\TimetableCardOverride::where('card_id', $a->id)->count())->toBe(1);
+});

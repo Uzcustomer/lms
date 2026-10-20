@@ -1057,6 +1057,18 @@
            bo'linadi. Har uchburchak to'lig'icha o'z fanining rangida bo'ladi —
            kartochka ramkasi yo'q, ichida faqat fan nomi turadi. */
         #grid td.tt-cell.tt-split { position: relative; padding: 0; overflow: hidden; }
+        #grid td.tt-bolak-cell { padding: 2px 3px; vertical-align: top; }
+        .tt-bolak-head { font-size: 10px; font-weight: 700; color: #1e293b; line-height: 1.2; cursor: grab;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px dashed rgba(15,23,42,.18); padding-bottom: 2px; margin-bottom: 2px; }
+        .tt-bolak-list { display: flex; flex-direction: column; gap: 2px; }
+        .tt-bolak-item { display: flex; align-items: center; gap: 4px; font-size: 9.5px; line-height: 1.25; padding: 1px 4px; border-radius: 4px;
+            background: rgba(255,255,255,.65); border: 1px solid rgba(15,23,42,.10); cursor: grab; white-space: nowrap; overflow: hidden; }
+        .tt-bolak-item:hover { background: #fff; border-color: rgba(37,99,235,.45); }
+        .tt-bolak-item.sel { outline: 2px solid #f59e0b; }
+        .tt-bolak-item .tt-bolak-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 14px; height: 14px; border-radius: 7px;
+            background: #7c2d12; color: #fff; font-size: 9px; }
+        .tt-bolak-n { margin-left: auto; color: #475569; font-weight: 700; }
+        .tt-bolak-t { color: #64748b; max-width: 60px; overflow: hidden; text-overflow: ellipsis; }
         #grid td.tt-split .tt-chip {
             position: absolute; inset: 0; width: auto; margin: 0; padding: 3px 5px;
             border: 0; border-radius: 0; box-shadow: none; overflow: hidden;
@@ -5985,19 +5997,31 @@
                 catch (e) { alert('Konflikt: ' + e.message); }
             }
             // Birlashtirilgan (ketma-ket) blok — kartalarni ketma-ket paralarga joylaymiz
-            async function placeBlockAt(ids, d, p) {
+            // parallel — bo'lakli fan bo'laklari: hammasi bitta katakka (ketma-ket emas).
+            async function placeBlockAt(ids, d, p, parallel) {
+                // Bo'laklar birga ko'chadi: birortasi sig'masa (o'qituvchi/xona band) — hech biri
+                // ko'chirilmaydi, aks holda so'rovlar birma-bir ketib, guruh yarim ko'chgan holda qolardi.
+                if (parallel) {
+                    for (const id of ids) {
+                        const card = cards.find(x => x.id === id);
+                        const errs = card ? conflictsAt(card, d, p) : [];
+                        if (errs.length) { alert('Konflikt (' + card.subject_name + '): ' + errs.join('; ')); return; }
+                    }
+                }
                 try {
                     for (let k = 0; k < ids.length; k++) {
                         const card = cards.find(x => x.id === ids[k]);
-                        if (card) await placeOneCard(card, d, p + k);
+                        if (card) await placeOneCard(card, d, parallel ? p : p + k);
                     }
                     selected = null; renderAll();
                 } catch (e) { alert('Konflikt: ' + e.message); }
             }
             // ===== Drag-and-drop holati (blok = bir yoki bir necha ketma-ket karta) =====
             let dragCardIds = null;
-            function startDrag(ids, ev) {
+            let dragParallel = false;
+            function startDrag(ids, ev, parallel) {
                 dragCardIds = Array.isArray(ids) ? ids.slice() : [ids];
+                dragParallel = !!parallel;
                 if (ev && ev.dataTransfer) {
                     ev.dataTransfer.effectAllowed = 'move';
                     try { ev.dataTransfer.setData('text/plain', dragCardIds.join(',')); } catch (e) { /* ba'zi brauzerlar */ }
@@ -6006,6 +6030,7 @@
             // Sudrash tugagach holatni tozalash (tashlanmagan bo'lsa ham)
             document.addEventListener('dragend', () => {
                 dragCardIds = null;
+                dragParallel = false;
                 document.querySelectorAll('.drag-ok, .drag-bad').forEach(el => el.classList.remove('drag-ok', 'drag-bad'));
                 const panel = document.getElementById('cardPanel');
                 if (panel) panel.classList.remove('pn-drop');
@@ -6590,6 +6615,50 @@
                 // butun paraning ikki yarmi orasi (sukut, yupqa — qo'shimcha sinf kerak emas).
                 const rowEndCls = endP => endP === P ? ' tt-dayend' : (endP % 2 === 0 ? ' tt-paraend' : '');
                 const pGroups = paraGroups(P, pairTime);
+                // Bo'lakli fan amaliyoti ("Fan (a)/(b)/(c)") — bitta asos guruh (02a+02b) uchun bitta katak:
+                // tepada fanning asosiy nomi, pastida bo'laklar ro'yxati (harf · guruhcha · talaba).
+                // Har bo'lak alohida bosiladi/sudraladi; sarlavhani sudrasa — hamma bo'lak birga ko'chadi.
+                const bolakBaseOf = x => { const m = BOLAK_RX.exec(String(x.subject_name || '').trim()); return m ? m[1].trim() : null; };
+                const bolakLetterOf = x => { const m = BOLAK_RX.exec(String(x.subject_name || '').trim()); return m ? m[2] : ''; };
+                const shortGroup = g => String(g).replace(/\s*\(.*\)\s*$/, '').split('-').pop();
+                const bolakCell = (o, oi, gi, d, p) => {
+                    const startList = g => (cellStack[g + '|' + d + '|' + p] || []).filter(x => x.training_type !== 'lecture');
+                    const l0 = startList(o.groups[gi]);
+                    const B = l0.length ? bolakBaseOf(l0[0]) : null;
+                    // Bitta katak (rowspan) — bo'laklar uzunligi bir xil bo'lsagina: aks holda qisqasi
+                    // tugagan joydan boshlanadigan dars uzun bo'lak rowspan'i ostida yo'qolib qolardi.
+                    const L = l0.length ? cardLen(l0[0]) : 0;
+                    const fits = x => bolakBaseOf(x) === B && cardLen(x) === L;
+                    if (!B || !l0.every(fits)) return null;
+                    const bg = baseKey(gName[o.groups[gi]] || '');
+                    let span = 1;
+                    while (gi + span < o.groups.length) {
+                        const g2 = o.groups[gi + span];
+                        if (baseKey(gName[g2] || '') !== bg || vConsumed[g2 + '|' + d + '|' + p]) break;
+                        const l2 = startList(g2);
+                        if (!l2.length || !l2.every(fits)) break;
+                        span++;
+                    }
+                    const list = new Map();
+                    for (let k = 0; k < span; k++) startList(o.groups[gi + k]).forEach(x => list.set(x.id, x));
+                    const items = [...list.values()].sort((a, b) => bolakLetterOf(a).localeCompare(bolakLetterOf(b)) || a.id - b.id);
+                    const vs = L;
+                    for (let r = 1; r < vs; r++) for (let k = 0; k < span; k++) vConsumed[o.groups[gi + k] + '|' + d + '|' + (p + r)] = 1;
+                    const first = items[0];
+                    const parts = B.split(/\.\s+/).filter(Boolean);
+                    const shortB = parts.length > 1 ? parts[parts.length - 1] : B;
+                    const ids = items.map(x => x.id).join(',');
+                    const head = '<div class="tt-bolak-head" data-chip="' + first.id + '" data-parallel-ids="' + ids + '" title="' +
+                        esc(B + ' — amaliy, ' + items.length + " ta bo'lak parallel (sarlavhani sudrasangiz hammasi birga ko'chadi)") + '"><b>[A]</b> ' + esc(shortB) + '</div>';
+                    const rows = items.map(x => '<div class="tt-bolak-item' + (selected && selected.id === x.id ? ' sel' : '') + '" data-chip="' + x.id + '" title="' + esc(cardTooltip(x)) + '">' +
+                        '<b class="tt-bolak-tag">' + esc(bolakLetterOf(x)) + '</b> ' + esc(cardGroups(x).map(shortGroup).join('+')) +
+                        '<span class="tt-bolak-n">' + (x.students || '') + '</span>' +
+                        (x.teacher_name ? '<span class="tt-bolak-t">' + esc(String(x.teacher_name).split(' ')[0]) + '</span>' : '') + '</div>').join('');
+                    const cs = span > 1 ? ' colspan="' + span + '"' : '';
+                    const rs = vs > 1 ? ' rowspan="' + vs + '"' : '';
+                    return { span, html: '<td class="tt-cell tt-bolak-cell' + courseCls(o.course) + colBorder(oi, gi, o.groups) + rowEndCls(p + vs - 1) + '"' + cs + rs +
+                        ' data-day="' + d + '" data-pair="' + p + '" style="' + subjStyle(first) + '">' + head + '<div class="tt-bolak-list">' + rows + '</div></td>' };
+                };
 
                 for (let d = 1; d <= D; d++) {
                     for (let p = 1; p <= P; p++) {
@@ -6626,6 +6695,10 @@
                                 if (c) {
                                     const cPlace = effPlace(c);
                                     if (!cPlace || +cPlace.pair !== p) c = null;
+                                }
+                                if (c && c.training_type !== 'lecture') {
+                                    const bc = bolakCell(o, oi, gi, d, p);
+                                    if (bc) { h += bc.html; gi += bc.span; continue; }
                                 }
                                 if (c && c.training_type === 'lecture') {
                                     // Gorizontal birlashma: bir xil karta yoki AYNAN SHU fanning
@@ -6723,8 +6796,11 @@
                     el.setAttribute('draggable', 'true');
                     el.addEventListener('dragstart', ev => {
                         ev.stopPropagation();
-                        const ids = el.dataset.mergeIds ? el.dataset.mergeIds.split(',').map(Number) : [+el.dataset.chip];
-                        startDrag(ids, ev);
+                        // Bo'laklar sarlavhasi — hamma bo'lak bitta katakka birga ko'chadi (data-parallel-ids).
+                        const parallel = !!el.dataset.parallelIds;
+                        const list = parallel ? el.dataset.parallelIds : el.dataset.mergeIds;
+                        const ids = list ? list.split(',').map(Number) : [+el.dataset.chip];
+                        startDrag(ids, ev, parallel);
                     });
                 });
                 // Kataklarni tashlash nishoni qilamiz
@@ -6742,10 +6818,11 @@
                         ev.preventDefault();
                         td.classList.remove('drag-ok', 'drag-bad');
                         if (!dragCardIds) return;
-                        const ids = dragCardIds;
+                        const ids = dragCardIds, parallel = dragParallel;
                         const d = +td.dataset.day, p = +td.dataset.pair;
                         dragCardIds = null;
-                        placeBlockAt(ids, d, p);
+                        dragParallel = false;
+                        placeBlockAt(ids, d, p, parallel);
                     });
                 });
             }

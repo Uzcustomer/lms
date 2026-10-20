@@ -1248,6 +1248,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::post('/boards/{board}/refresh-names', [\App\Http\Controllers\Admin\TimetableController::class, 'refreshSubjectNames'])->name('boards.refresh-names');
                 Route::post('/boards/{board}/unplace', [\App\Http\Controllers\Admin\TimetableController::class, 'unplaceAll'])->name('boards.unplace');
                 Route::post('/boards/{board}/split-variant-mixed', [\App\Http\Controllers\Admin\TimetableController::class, 'splitVariantMixed'])->name('boards.split-variant-mixed');
+                Route::post('/boards/{board}/merge-variant-lectures', [\App\Http\Controllers\Admin\TimetableController::class, 'mergeVariantLectures'])->name('boards.merge-variant-lectures');
                 Route::get('/boards/{board}/data', [\App\Http\Controllers\Admin\TimetableController::class, 'data'])->name('boards.data');
                 Route::post('/boards/{board}/excel-export', [\App\Http\Controllers\Admin\TimetableController::class, 'excelExport'])->name('boards.excel-export');
                 Route::get('/boards/{board}/unplaced-export', [\App\Http\Controllers\Admin\TimetableController::class, 'unplacedExport'])->name('boards.unplaced-export');

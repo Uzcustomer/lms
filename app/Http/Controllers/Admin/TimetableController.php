@@ -1982,10 +1982,12 @@ class TimetableController extends Controller
 
             return response()->json(['ok' => true, 'unplaced' => $count, 'layer' => 'external']);
         }
-        // Kafedra mudiri faqat o'z kafedrasi kartalarini bo'shatadi.
-        if ($this->timetableActiveRole($request) === 'kafedra_mudiri' && ($own = $this->departmentHeadKafedraSafe($request))) {
+        // Kafedra mudiri faqat o'z kafedrasi kartalarini bo'shatadi (kafedra aniqlanmasa
+        // weeklyLayerDenied allaqachon rad etgan — bu yerda $own bo'sh bo'lmaydi).
+        if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $own = $this->departmentHeadKafedraSafe($request) ?? [];
             $ids = (clone $scopeQuery)->get(['id', 'kafedra_name'])
-                ->filter(fn ($c) => $this->sameKafedra($c->kafedra_name, $own))->pluck('id')->all();
+                ->filter(fn ($c) => $own && $this->sameKafedra($c->kafedra_name, $own))->pluck('id')->all();
             $scopeQuery->whereIn('id', $ids ?: [0]);
         }
 
@@ -5344,6 +5346,10 @@ class TimetableController extends Controller
         $courses = array_values(array_filter(array_map('intval', $toArray($request->input('courses'))), static fn($v) => $v > 0));
         $type = (string) $request->input('type', 'all');
         $week = max(0, (int) $request->input('week', 0));
+        // Haftalik qatlam: tashqida joylashuv ext_day/ext_pair, o'qituvchi/xona bu qatlamda yo'q.
+        $layerInput = (string) $request->input('layer', '');
+        $external = $this->weeklyLayer($request, in_array($layerInput, ['external', 'internal'], true) ? $layerInput : null) === 'external';
+        [$dayCol, $pairCol] = $external ? ['ext_day', 'ext_pair'] : ['day', 'pair'];
 
         $query = TimetableCard::where('board_id', $board->id)
             ->orderBy('faculty_name')
@@ -5365,8 +5371,8 @@ class TimetableController extends Controller
         }
 
         if (!$week) {
-            $query->where(function ($q) {
-                $q->whereNull('day')->orWhereNull('pair');
+            $query->where(function ($q) use ($dayCol, $pairCol) {
+                $q->whereNull($dayCol)->orWhereNull($pairCol);
             });
             $cards = $query->get();
         } else {
@@ -5378,15 +5384,16 @@ class TimetableController extends Controller
                     ->get()
                     ->keyBy('card_id');
             }
-            $cards = $cards->filter(function (TimetableCard $card) use ($overrides): bool {
+            $cards = $cards->filter(function (TimetableCard $card) use ($overrides, $external, $dayCol, $pairCol): bool {
                 $override = $overrides->get($card->id);
                 if ($override && $override->cancelled) {
                     return false;
                 }
-                if ($override && $override->day && $override->pair) {
+                // Haftaga xos ko'chirishlar — ichki jadvalniki (blade'dagi effPlace kabi).
+                if (!$external && $override && $override->day && $override->pair) {
                     return false;
                 }
-                return !$card->day || !$card->pair;
+                return !$card->{$dayCol} || !$card->{$pairCol};
             })->values();
         }
 
@@ -5401,7 +5408,7 @@ class TimetableController extends Controller
             ];
             $sheet->fromArray([$headers], null, 'A1');
             $sheet->mergeCells('A1:L1');
-            $sheet->setCellValue('A1', 'Joylanmagan kartalar - ' . $board->name);
+            $sheet->setCellValue('A1', 'Joylanmagan kartalar' . ($external ? ' (tashqi jadval)' : '') . ' - ' . $board->name);
             $sheet->getStyle('A1:L1')->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 13],
                 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1D4ED8']],
@@ -5429,8 +5436,8 @@ class TimetableController extends Controller
                     $card->training_type === 'lecture' ? 'Ma\'ruza' : 'Amaliy',
                     $card->weeks !== null ? (int) $card->weeks : $board->weeks,
                     (int) $card->students,
-                    $card->teacher_name ?: 'Biriktirilmagan',
-                    $card->auditorium_name ?: 'Biriktirilmagan',
+                    $external ? '—' : ($card->teacher_name ?: 'Biriktirilmagan'),
+                    $external ? '—' : ($card->auditorium_name ?: 'Biriktirilmagan'),
                 ];
             }
             if ($rows) {
@@ -5814,14 +5821,17 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
-        $q = TimetableCard::where('board_id', $board->id)->whereNotNull('day')->whereNotNull('pair');
-        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
-        $cards = $q->get(['id', 'day', 'pair']);
+        $scopeQ = TimetableCard::where('board_id', $board->id);
+        $this->applyScopeToQuery($scopeQ, $facSet, $specSet, $courseSet);
+        $cards = (clone $scopeQ)->whereNotNull('day')->whereNotNull('pair')->get(['id', 'day', 'pair']);
         $result = ['ok' => true, 'copied' => $cards->count(), 'cleared' => $request->boolean('clear_internal') ? $cards->count() : 0];
         if ($request->boolean('dry_run')) {
             return response()->json($result + ['dry_run' => true]);
         }
-        DB::transaction(function () use ($cards, $request) {
+        DB::transaction(function () use ($cards, $request, $scopeQ) {
+            // Qamrovdagi tashqi qatlam hozirgi joylashuvning nusxasi bo'ladi: ichki jadvaldan
+            // olib tashlangan kartaning eski tashqi joyi qolib ketmasin.
+            (clone $scopeQ)->whereNotNull('ext_day')->update(['ext_day' => null, 'ext_pair' => null]);
             foreach ($cards as $c) {
                 $upd = ['ext_day' => $c->day, 'ext_pair' => $c->pair];
                 if ($request->boolean('clear_internal')) {
@@ -5872,7 +5882,12 @@ class TimetableController extends Controller
         if ($role !== 'kafedra_mudiri') {
             return response()->json(['error' => 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.'], 403);
         }
-        if ($card && ($own = $this->departmentHeadKafedraSafe($request)) && !$this->sameKafedra($card->kafedra_name, $own)) {
+        // Kafedra aniqlanmasa — cheklovsiz ruxsat emas, rad etiladi.
+        $own = $this->departmentHeadKafedraSafe($request);
+        if (!$own) {
+            return response()->json(['error' => 'Kafedrangiz aniqlanmadi — profilingizdagi kafedra ma\'lumotini tekshiring.'], 403);
+        }
+        if ($card && !$this->sameKafedra($card->kafedra_name, $own)) {
             return response()->json(['error' => 'Bu fan sizning kafedrangizga tegishli emas.'], 403);
         }
 

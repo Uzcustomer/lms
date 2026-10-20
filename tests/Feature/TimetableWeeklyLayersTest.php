@@ -100,3 +100,52 @@ it('qatlamga ko\'chirish va tashqi bo\'shatish tarixga yoziladi, dry_run yozilma
         'Tashqi jadval · Joylashuvlarni bo\'shatish: 2-kurs',
     ]);
 });
+
+it('kafedrasi aniqlanmagan mudir ichki jadvalni o\'zgartira olmaydi (yopiq holat)', function () {
+    $s = layersSetup();
+    $lost = new Teacher();
+    $lost->forceFill([
+        'hemis_id' => 990001, 'full_name' => 'YOQOLGAN', 'short_name' => 'Y', 'first_name' => 'Y', 'second_name' => 'Y',
+        'employee_id_number' => '990001', 'birth_date' => '1980-01-01', 'year_of_enter' => 2010,
+        'gender' => 'm', 'department' => '', 'employment_form' => 'x', 'employment_staff' => 'x', 'staff_position' => 'x',
+        'employee_status' => 'x', 'employee_type' => 'x', 'contract_number' => '1', 'decree_number' => '1',
+        'contract_date' => '2020-01-01', 'decree_date' => '2020-01-01', 'status' => true, 'login' => 'lost990001', 'password' => bcrypt('x'),
+    ])->save();
+    $lost->assignRole('kafedra_mudiri');
+    $s['foreign']->update(['day' => 2, 'pair' => 1]);
+
+    layerAs($lost, 'kafedra_mudiri')->postJson(route('admin.timetable.cards.place', $s['foreign']), ['day' => 3, 'pair' => 1])->assertForbidden();
+    layerAs($lost, 'kafedra_mudiri')->postJson(route('admin.timetable.boards.unplace', $s['board']), ['courses' => [2], 'layer' => 'internal'])->assertForbidden();
+    expect($s['foreign']->fresh()->only(['day', 'pair']))->toBe(['day' => 2, 'pair' => 1]);
+});
+
+it('qayta ko\'chirishda ichkidan olingan kartaning eski tashqi joyi tozalanadi', function () {
+    $s = layersSetup();
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3]);            // ichkida joylashmagan
+    $s['foreign']->update(['day' => 1, 'pair' => 1]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.weekly-layer-copy', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['copied' => 1]);
+
+    expect($s['own']->fresh()->only(['ext_day', 'ext_pair']))->toBe(['ext_day' => null, 'ext_pair' => null])
+        ->and($s['foreign']->fresh()->only(['ext_day', 'ext_pair', 'day']))->toBe(['ext_day' => 1, 'ext_pair' => 1, 'day' => 1]);
+});
+
+it('joylanmagan kartalar eksporti tanlangan qatlam bo\'yicha', function () {
+    $s = layersSetup();
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3, 'teacher_name' => 'MAXFIY O.']);   // tashqida joylashgan, ichkida yo'q
+    $s['foreign']->update(['day' => 1, 'pair' => 1]);                                       // ichkida joylashgan, tashqida yo'q
+
+    $rowsOf = function (string $layer) use ($s) {
+        $res = layerAs($s['admin'], 'superadmin')->get(route('admin.timetable.boards.unplaced-export', $s['board']) . '?layer=' . $layer)->assertOk();
+        $file = tempnam(sys_get_temp_dir(), 'unp') . '.xlsx';
+        file_put_contents($file, $res->streamedContent());
+        $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet();
+        @unlink($file);
+
+        return collect($sheet->toArray())->slice(2)->map(fn ($r) => [$r[6], $r[10]])->values()->all();
+    };
+
+    expect($rowsOf('external'))->toBe([['Anatomiya', '—']])
+        ->and($rowsOf('internal'))->toBe([['Gigiyena', 'MAXFIY O.']]);
+});

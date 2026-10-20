@@ -1043,6 +1043,7 @@ class FanTestiController extends Controller
             'retakeReady' => Schema::hasColumn('fan_testi_attempts', 'attempt_no'),
             'tab' => $this->journalTab($request),
             'tabsReady' => Schema::hasColumn('fan_testi_attempts', 'is_retake'),
+            'canDeleteResults' => $this->isSuperadminImpersonating(),
             // Talabaning shu testdagi eng oxirgi urinish raqami (ikkala tab bo'yicha) —
             // "Qayta topshirish" tugmasi faqat haqiqiy oxirgi urinishda chiqsin
             'latestNo' => FanTestiAttempt::query()->where('fan_testi_id', $selected->id)
@@ -1092,6 +1093,66 @@ class FanTestiController extends Controller
 
         return $back->with('success', $attempt->student_name . ': ' . ((int) $attempt->attempt_no + 1)
             . "-urinishga ruxsat berildi. Talaba kioskda ID sini kiritib testni qaytadan topshiradi.");
+    }
+
+    /**
+     * Natijani butunlay o'chirish — faqat superadmin o'qituvchi profiliga kirganda
+     * (impersonatsiya). O'qituvchining o'zi o'chira olmaydi. Javoblari ham o'chadi
+     * (cascade), amal faoliyat jurnaliga natija ma'lumotlari bilan yoziladi.
+     */
+    public function destroyAttempt(FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $attempt->fan_testi_id === (int) $fanTesti->id, 404);
+        abort_unless($this->isSuperadminImpersonating(), 403);
+
+        $back = redirect()->route('teacher.fan-testlari.journal', array_filter([
+            'test_id' => $fanTesti->id,
+            'group' => request('group'),
+            'student' => request('student'),
+            'tab' => request('tab'),
+        ]));
+
+        if (!$attempt->isFinished() && $attempt->secondsLeft() > 0) {
+            return $back->with('error', $attempt->student_name . ": test hozir ishlanmoqda — avval to'xtating, keyin o'chiring.");
+        }
+
+        $label = $attempt->student_name . ' (' . $attempt->student_id_number . '), ' . $attempt->attemptLabel()
+            . ', ' . ($attempt->percent !== null ? rtrim(rtrim(number_format((float) $attempt->percent, 1, '.', ''), '0'), '.') . '%' : 'natijasiz');
+
+        DB::transaction(function () use ($attempt) {
+            // Unga bog'langan joylar bo'shatiladi (kompyuter kartochkasi, kirish so'rovi)
+            if (Schema::hasColumn('test_kiosk_devices', 'current_attempt_id')) {
+                TestKioskDevice::where('current_attempt_id', $attempt->id)->update(['current_attempt_id' => null]);
+                TestKioskDevice::where('released_attempt_id', $attempt->id)->update(['released_attempt_id' => null]);
+                TestKioskDevice::where('pending_attempt_id', $attempt->id)->update(['pending_attempt_id' => null, 'pending_command' => null]);
+            }
+            if (Schema::hasTable('fan_testi_entry_requests')) {
+                FanTestiEntryRequest::where('attempt_id', $attempt->id)->update(['attempt_id' => null]);
+            }
+            \App\Services\ActivityLogService::logDeleted($attempt, 'fan_testi', "Test natijasi o'chirildi (superadmin)");
+            $attempt->delete();
+        });
+
+        return $back->with('success', "Natija o'chirildi: {$label}.");
+    }
+
+    /**
+     * Superadmin o'qituvchi profiliga "kirgan" (impersonatsiya). O'qituvchini
+     * faqat superadmin impersonatsiya qila oladi, lekin ishonch uchun kirgan
+     * xodimning roli ham tekshiriladi.
+     */
+    private function isSuperadminImpersonating(): bool
+    {
+        if (!session('impersonating') || !session('impersonator_id')) {
+            return false;
+        }
+
+        $impersonator = session('impersonator_guard') === 'teacher'
+            ? \App\Models\Teacher::find(session('impersonator_id'))
+            : \App\Models\User::find(session('impersonator_id'));
+
+        return $impersonator && method_exists($impersonator, 'hasRole') && $impersonator->hasRole('superadmin');
     }
 
     /** Test jurnali Excelda: sahifadagi filtrlar (guruh, talaba) bilan. */

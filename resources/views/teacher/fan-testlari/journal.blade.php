@@ -70,6 +70,9 @@
         color: #c3ccd9; font-size: 19px; line-height: 1; cursor: pointer; transition: background .16s, color .16s;
     }
     .jr-del:hover { background: var(--bad-bg); color: var(--bad); }
+    .jr-del-cell { text-align: center; }
+    .jr-del-cell .jr-del { color: #e3a3a0; border: 1px solid #f3d0ce; }
+    .jr-del:focus-visible { outline: 2px solid var(--bad); outline-offset: 2px; }
     .jr-filters label {
         display: block; margin-bottom: 6px;
         color: var(--ink-soft); font-size: 11px; font-weight: 500; letter-spacing: .05em;
@@ -534,6 +537,7 @@
                                     <th style="width:14%">Topshirgan vaqti</th>
                                     <th>Javoblari</th>
                                     <th style="width:170px">Qayta topshirish</th>
+                                    @if($canDeleteResults ?? false)<th style="width:44px" aria-label="O'chirish"></th>@endif
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -641,6 +645,21 @@
                                                 @endif
                                             @endif
                                         </td>
+                                        @if($canDeleteResults ?? false)
+                                            {{-- Faqat superadmin o'qituvchi profiliga kirganda --}}
+                                            <td class="jr-del-cell">
+                                                @php
+                                                    $delText = $attempt->student_name . ' — ' . $attemptNo . "-urinish natijasi butunlay o'chirilsinmi? Javoblari ham o'chadi, qaytarib bo'lmaydi.";
+                                                @endphp
+                                                <form method="POST" class="jr-del-form"
+                                                      action="{{ route('teacher.fan-testlari.attempts.destroy', [$selected, $attempt, 'group' => request('group'), 'student' => request('student'), 'tab' => request('tab')]) }}"
+                                                      onsubmit="return confirm({{ \Illuminate\Support\Js::from($delText) }})">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="jr-del" title="Natijani o'chirish (superadmin)" aria-label="Natijani o'chirish">&times;</button>
+                                                </form>
+                                            </td>
+                                        @endif
                                     </tr>
                                 @endforeach
                                 </tbody>

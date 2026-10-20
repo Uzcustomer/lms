@@ -657,7 +657,7 @@
     .lm-link span { color: var(--muted); font-size: 12px; font-weight: 700; }
     .lm-link code { padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: #f8fafc; color: var(--navy); font-size: 13px; word-break: break-all; }
     .bl-run-badge.is-public { background: #ecfdf5; color: #047857; }
-    .bl-run-badge.is-retake { background: #f5f3ff; color: #6d28d9; }
+    .bl-run-badge.is-retake { background: #f5f3ff; color: #6d28d9; white-space: nowrap; }
 
     /* To'plamlar tablari: asosiy — to'q ko'k, qayta topshirish — binafsha */
     .bl-ctabs { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -1313,13 +1313,14 @@
                                     </td>
                                     <td style="text-align:right">
                                         <div class="bl-acts">
+                                            @if($retakeRunning === 0)
                                             <button type="button" class="bl-btn bl-btn-retake bl-btn-sm lm-open"
                                                     data-mode="retake"
                                                     data-test-id="{{ $item->id }}"
                                                     data-test-name="{{ $item->name }}"
                                                     data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
                                                     title="Kompyuterlarni tanlab qayta topshirish testini boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Testni boshlash</button>
-                                            @if($retakeRunning > 0)
+                                            @else
                                                 <button type="button" class="bl-btn bl-btn-monitor bl-btn-sm mn-open"
                                                         data-mode="retake"
                                                         data-test-id="{{ $item->id }}"

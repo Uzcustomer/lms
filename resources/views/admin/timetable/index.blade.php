@@ -194,6 +194,10 @@
                             <button type="button" id="mineOnly" class="px-2 py-1 bg-white text-gray-500">Faqat meniki</button>
                         </span>
                         @endif
+                        <span id="weeklyLayerBox" class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-[11px]" title="Haftalik jadval qatlami: tashqi — o'quv bo'limi (umumiy, o'qituvchi/xonasiz), ichki — kafedra (haqiqiy jadval)">
+                            <button type="button" id="wkLayerExternal" class="px-2 py-1 bg-white text-gray-500">Tashqi</button>
+                            <button type="button" id="wkLayerInternal" class="px-2 py-1 bg-white text-gray-500">Ichki</button>
+                        </span>
                     </div>
                     <span id="autoMsg" class="tt-auto-msg text-[11px] text-emerald-700 font-medium"></span>
                     <div id="statChips" class="tt-statistics"></div>
@@ -965,6 +969,14 @@
             text-align: center; white-space: nowrap; letter-spacing: .3px; position: sticky; left: 0; z-index: 4;
             width: 26px; min-width: 26px; max-width: 26px; padding: 2px 0; border-bottom: 4px solid #000 !important; }
         #grid td.tt-para { background: #f8fafc; font-weight: 700; color: #334155; text-align: center; position: sticky; left: 26px; z-index: 4; min-width: 40px; width: 40px; padding: 2px; }
+        #grid .tt-grp-count { margin-top: 2px; line-height: 1; }
+        .tt-stu-count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #059669;
+            color: #fff; font-size: 10px; font-weight: 800; font-style: normal; line-height: 16px; text-align: center; }
+        #grid td.tt-para.tt-para-roman { min-width: 28px; width: 28px; max-width: 28px; padding: 1px; background: #e8eef6; line-height: 1; }
+        #grid td.tt-para.tt-para-roman b { display: block; color: #1e293b; font-size: 12px; font-weight: 900; }
+        #grid td.tt-para.tt-para-roman i { display: block; font-style: normal; color: #64748b; font-size: 7px; font-weight: 700; margin-top: 2px; }
+        #grid td.tt-ptime { background: #f8fafc; color: #475569; font-size: 8.5px; font-weight: 700; line-height: 1.15; text-align: center;
+            white-space: nowrap; position: sticky; left: 54px; z-index: 4; min-width: 40px; width: 40px; padding: 1px 2px; }
         #grid td.tt-para .tt-para-name { font-size: 11px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
         #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 700; color: #64748b; line-height: 1.1; margin-top: 1px; }
         #grid thead th { position: sticky; top: 0; z-index: 5; }
@@ -2481,6 +2493,26 @@
             const TIMETABLE_CAN_PLACE = @json($timetableCanPlace);
             const TIMETABLE_READ_ONLY = @json($timetableReadOnly);
             const TIMETABLE_CAN_APPROVE = @json($timetableCanApprove);
+            const TIMETABLE_ROLE = @json($timetableActiveRole);
+            // Haftalik jadval qatlami (sikl kabi): tashqi — o'quv bo'limi, ichki — kafedra mudiri.
+            const WEEKLY_ADMIN = ['admin', 'superadmin', 'registrator_ofisi', 'kichik_admin'].includes(TIMETABLE_ROLE);
+            const WEEKLY_OQUV = ['oquv_bolimi', 'oquv_bolimi_boshligi'].includes(TIMETABLE_ROLE);
+            let weeklyLayer = WEEKLY_OQUV ? 'external' : 'internal';
+            try { const v = localStorage.getItem('lms:timetable-weekly-layer'); if (v === 'external' || v === 'internal') weeklyLayer = v; } catch (e) { }
+            const weeklyCanEdit = () => !TIMETABLE_READ_ONLY && (WEEKLY_ADMIN || (weeklyLayer === 'external' ? WEEKLY_OQUV : TIMETABLE_ROLE === 'kafedra_mudiri'));
+            // Kartani tanlangan qatlamga moslaydi: tashqida joylashuv ext_day/ext_pair, o'qituvchi va xona yashiriladi.
+            function applyWeeklyLayer(list) {
+                list.forEach(c => {
+                    if (!c._int) c._int = { day: c.day, pair: c.pair, teacher_id: c.teacher_id, teacher_name: c.teacher_name,
+                        auditorium_code: c.auditorium_code, auditorium_name: c.auditorium_name, auditorium_volume: c.auditorium_volume };
+                    if (weeklyLayer === 'external') {
+                        Object.assign(c, { day: c.ext_day || null, pair: c.ext_pair || null, teacher_id: null, teacher_name: null,
+                            auditorium_code: null, auditorium_name: null, auditorium_volume: null });
+                    } else {
+                        Object.assign(c, c._int);
+                    }
+                });
+            }
             const TIMETABLE_TEACHER_ID = @json($timetableTeacherId);
             const TIMETABLE_DEPARTMENT_HEAD = @json($timetableDepartmentHead);
             // "Faqat meniki": faqat o'qituvchiga biriktirilgan kartalar/sikl bloklari ko'rinadi.
@@ -2504,6 +2536,7 @@
                 return list;
             }
             let allCards = [];
+            let groupStudents = {};   // "fakultet|guruh" => faol talabalar soni (sikl jadvalidagi kabi)
             const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
@@ -3121,6 +3154,8 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
+                applyWeeklyLayer(allCards);
+                groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
                 cards = scopeCards(allCards);
                 missingGroups = j.missing_groups || [];
@@ -3417,6 +3452,7 @@
             $('viewMode').onchange = function () {
                 viewMode = this.value;
                 selected = null;
+                if (typeof renderWeeklyLayerUi === 'function') renderWeeklyLayerUi();
                 renderGrid();
                 syncUrl();
             };
@@ -3439,13 +3475,15 @@
             function effPlace(c) {
                 if (!curWeek) return c.day ? { day: c.day, pair: c.pair } : null;
                 const ov = overrides[c.id + '|' + curWeek];
+                // Tashqi qatlamda haftaga xos ko'chirishlar (ichki jadvalniki) hisobga olinmaydi, faqat o'tilmaydigan haftalar.
+                if (ov && weeklyLayer === 'external') return ov.cancelled ? null : (c.day ? { day: c.day, pair: c.pair } : null);
                 if (ov) return ov.cancelled ? null : { day: ov.day, pair: ov.pair };
                 return c.day ? { day: c.day, pair: c.pair } : null;
             }
             // Tanlangan haftada vaqt bilan birga auditoriya ham individual
             // override'dan olinadi; shablon ko'rinishida bazaviy xona qoladi.
             function effectiveCard(c) {
-                if (!curWeek) return c;
+                if (!curWeek || weeklyLayer === 'external') return c;
                 const ov = overrides[c.id + '|' + curWeek];
                 if (!ov || ov.cancelled || !ov.auditorium_code) return c;
                 return {
@@ -3521,7 +3559,7 @@
                 if (!confirm(scopeLabel + ' bo\'yicha barcha joylashuvlar bo\'shatilib, kartochkalar panelga qaytariladi. Davom etamizmi?')) return;
                 this.disabled = true; $('autoMsg').textContent = 'Bo\'shatilmoqda...';
                 try {
-                    const body = {};
+                    const body = { layer: weeklyLayer };
                     if (!whole) Object.assign(body, scopeBody());
                     if (typeFilter !== 'all') body.training_type = typeFilter;
                     const j = await api(BASE + '/boards/' + board.id + '/unplace', 'POST', body);
@@ -4673,15 +4711,22 @@
                                         span = toHm(Math.round(a + step * part)) + '–' + toHm(Math.round(a + step * (part + 1)));
                                     }
                                     const pairNo = Math.ceil(hour / hpp);
-                                    if (part === 0) {
+                                    // Qo'ng'iroq jadvali yarim paralarga bo'lingan bo'lsa (hpp=1), ketma-ket bir xil
+                                    // qisqartmali qatorlar ("I", "I") bitta para katagiga birlashadi.
+                                    const abbrAt = hh => { const t = bellPairs[Math.ceil(hh / hpp) - 1]; const a = t ? String(t.abbr || '').trim() : ''; return a && a !== '—' ? a : null; };
+                                    const sameAsPrev = hpp === 1 && hour > 1 && abbrAt(hour) && abbrAt(hour) === abbrAt(hour - 1);
+                                    let groupLen = 1;
+                                    while (hpp === 1 && abbrAt(hour) && hour + groupLen <= dayHours && abbrAt(hour + groupLen) === abbrAt(hour)) groupLen++;
+                                    if (part === 0 && !sameAsPrev) {
                                         // Para nomi — shu paraning barcha yarim qatorlarini qamraydi.
-                                        const rowsInPair = Math.min(hpp, dayHours - hour + 1);
+                                        const rowsInPair = hpp === 1 ? groupLen : Math.min(hpp, dayHours - hour + 1);
                                         const abbr = pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr : (pt.name || pairNo)) : pairNo;
                                         sideRows += '<div class="cyc-mk-side-para" style="grid-column:1;grid-row:' + hour + ' / span ' + rowsInPair + '"'
                                             + ' title="' + esc(pt ? (pt.name || '') + ' ' + (pt.start || '') + '–' + (pt.end || '') : '') + '">'
                                             + '<b>' + esc(abbr) + '</b><i>para</i></div>';
                                     }
-                                    sideRows += '<div class="cyc-mk-side-row' + (hour % hpp === 0 ? ' is-pair-end' : '') + '" style="grid-column:2;grid-row:' + hour + '">' +
+                                    const pairEnd = hpp === 1 ? !(abbrAt(hour) && hour < dayHours && abbrAt(hour + 1) === abbrAt(hour)) : hour % hpp === 0;
+                                    sideRows += '<div class="cyc-mk-side-row' + (pairEnd ? ' is-pair-end' : '') + '" style="grid-column:2;grid-row:' + hour + '">' +
                                         (span ? '<span>' + span + '</span>' : '') +
                                         '</div>';
                                 }
@@ -5289,6 +5334,27 @@
                 if (typeof renderAll === 'function') renderAll();
                 if (viewMode === 'cycle') loadCyclePlan();
             }
+            function renderWeeklyLayerUi() {
+                [['wkLayerExternal', 'external'], ['wkLayerInternal', 'internal']].forEach(([id, l]) => {
+                    const b = $(id);
+                    if (b) b.className = 'px-2 py-1 ' + (weeklyLayer === l ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-500');
+                });
+                if ($('weeklyLayerBox')) $('weeklyLayerBox').classList.toggle('hidden', viewMode === 'cycle');
+                document.body.classList.toggle('tt-weekly-external', weeklyLayer === 'external');
+            }
+            async function setWeeklyLayer(l) {
+                if (weeklyLayer === l) return;
+                weeklyLayer = l;
+                try { localStorage.setItem('lms:timetable-weekly-layer', l); } catch (e) { }
+                selected = null;
+                renderWeeklyLayerUi();
+                // Serverdan qayta yuklanadi: shu ko'rinishda joyida qilingan biriktirishlar (o'qituvchi/xona)
+                // kartaning birinchi yuklashdagi nusxasidan tiklanib, eskisi qaytib chiqmasin.
+                if (board) {
+                    try { await loadBoard(board.id); } catch (e) { alert('Xatolik: ' + e.message); }
+                }
+            }
+            if ($('wkLayerExternal')) { $('wkLayerExternal').onclick = () => setWeeklyLayer('external'); $('wkLayerInternal').onclick = () => setWeeklyLayer('internal'); renderWeeklyLayerUi(); }
             if ($('mineAll')) {
                 $('mineAll').onclick = () => setScopeMode('all');
                 $('mineOnly').onclick = () => setScopeMode('mine');
@@ -5589,6 +5655,11 @@
 
             // Karta uzunligi yarim-slot birligida (1=0.5 para, 2=1 para ...). Sukut 2.
             const cardLen = c => Math.max(1, parseInt(c.len_half) || 2);
+            // Serverdagi isSharedRoom bilan bir xil: raqamsiz va "mashg'ulot"/"umumiy" so'zli nom.
+            const isSharedRoomName = name => {
+                const n = String(name || '').trim();
+                return n !== '' && !/\d/.test(n) && /mashg|umumiy/i.test(n);
+            };
             // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha).
             // `pair` — yarim-slot indeksi; dars cardLen(card) ta yarim-slotni egallaydi,
             // shu oraliq [pair, pair+len) boshqa kartaning oralig'i bilan kesishsa — band.
@@ -5609,7 +5680,9 @@
                     const ov = cardGKeys(o).filter(k => my.includes(k));
                     if (ov.length) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
-                    if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
+                    // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
+                    if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code
+                        && !isSharedRoomName(effectiveOther.auditorium_name)) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
                 });
                 return errs;
             }
@@ -5617,10 +5690,23 @@
             // ===== Joylash (bosish yoki drag-and-drop uchun umumiy) =====
             // Kartani joyidan olib tashlash — modal tugmasi va panelga sudrash uchun umumiy.
             // Shablon ko'rinishida barcha haftalardan; hafta tanlangan bo'lsa faqat shu haftada.
+            // Qatlam almashtirilganda yo'qolmasin: joylashuv o'z qatlamining maydoniga ham yoziladi.
+            function rememberLayerPlace(card, d, p) {
+                if (weeklyLayer === 'external') { card.ext_day = d; card.ext_pair = p; }
+                else if (card._int) { card._int.day = d; card._int.pair = p; }
+            }
+            function weeklyEditGuard() {
+                if (weeklyCanEdit()) return;
+                throw new Error(weeklyLayer === 'external'
+                    ? 'Tashqi dars jadvalini o\'quv bo\'limi tahrirlaydi. Ichki jadvalga o\'ting.'
+                    : 'Ichki dars jadvalini kafedra mudiri tahrirlaydi.');
+            }
             async function unplaceOneCard(card) {
-                if (!curWeek) {
-                    await api(BASE + '/cards/' + card.id + '/place', 'POST', {});
+                weeklyEditGuard();
+                if (!curWeek || weeklyLayer === 'external') {
+                    await api(BASE + '/cards/' + card.id + '/place', 'POST', { layer: weeklyLayer });
                     card.day = null; card.pair = null;
+                    rememberLayerPlace(card, null, null);
                 } else {
                     await api(BASE + '/cards/' + card.id + '/week-override', 'POST', { week: curWeek, action: 'cancel' });
                     overrides[card.id + '|' + curWeek] = {
@@ -5630,9 +5716,11 @@
                 }
             }
             async function placeOneCard(card, d, p) {
-                if (!curWeek) {
-                    await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p });
+                weeklyEditGuard();
+                if (!curWeek || weeklyLayer === 'external') {
+                    await api(BASE + '/cards/' + card.id + '/place', 'POST', { day: d, pair: p, layer: weeklyLayer });
                     card.day = d; card.pair = p;
+                    rememberLayerPlace(card, d, p);
                 } else {
                     await api(BASE + '/cards/' + card.id + '/week-override', 'POST',
                         { week: curWeek, action: 'move', day: d, pair: p });
@@ -5712,7 +5800,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); }
+            function renderAll() { buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda
@@ -5910,7 +5998,8 @@
                     activeCell = null; return;
                 }
                 const rowEndCls = p => p === P ? ' tt-dayend' : (p % 2 === 0 ? ' tt-paraend' : '');
-                let h = '<thead><tr><th class="tt-corner px-1 py-1">Kun</th><th class="tt-corner px-1 py-1" style="left:28px">Para</th>';
+                let h = '<thead><tr><th class="tt-corner px-1 py-1">Kun</th><th class="tt-corner px-1 py-1" colspan="2" style="left:26px">Para</th>';
+                const pGroups = paraGroups(P, pairTime);
                 const roomMeta = {};
                  if (mode === 'room') placed.forEach(card => {
                      const roomKey = keyOf(card);
@@ -5936,9 +6025,7 @@
                     for (let p = 1; p <= P; p++) {
                         h += '<tr>';
                         if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
-                        const pt = pairTime[p];
-                        h += '<td class="tt-para' + rowEndCls(p) + '"><div class="tt-para-name">' + esc(pt ? (pt.name || pt.abbr || p) : p) + '</div>' +
-                            (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
+                        h += paraSideCells(p, P, pairTime, pGroups, rowEndCls);
                         cols.forEach(col => {
                             const key = col + '|' + d + '|' + p;
                             if (consumed[key]) return;
@@ -5971,6 +6058,34 @@
                 activeCell = null;
             }
 
+            // Para ustuni (sikl ichki jadvali kabi): qo'ng'iroq jadvalida ketma-ket bir xil
+            // qisqartmali yarim paralar ("I", "I") bitta para katagiga birlashadi — chapda
+            // katta rim raqami + "para", o'ngda har yarim qatorning vaqti.
+            function paraGroups(P, pairTime) {
+                const key = p => { const t = pairTime[p]; const a = t ? String(t.abbr || '').trim() : ''; return a && a !== '—' ? a : null; };
+                const out = {};
+                for (let p = 1; p <= P; p++) {
+                    const k = key(p);
+                    let n = 1;
+                    while (k && p + n <= P && key(p + n) === k) n++;
+                    out[p] = { span: n, label: k || (pairTime[p] ? (pairTime[p].name || p) : p) };
+                    for (let q = 1; q < n; q++) out[p + q] = { span: 0 };
+                    p += n - 1;
+                }
+                return out;
+            }
+            function paraSideCells(p, P, pairTime, groups, endCls) {
+                const g = groups[p], pt = pairTime[p];
+                let h = '';
+                if (g && g.span) {
+                    const last = p + g.span - 1;
+                    h += '<td class="tt-para tt-para-roman' + endCls(last) + '"' + (g.span > 1 ? ' rowspan="' + g.span + '"' : '') +
+                        ' title="' + esc(pt ? (String(pt.name || '').replace(/\s*\(\d\)\s*$/, '') + ' ' + (pt.start || '') + '–' + ((pairTime[last] || pt).end || '')) : '') + '">' +
+                        '<b>' + esc(g.label) + '</b><i>para</i></td>';
+                }
+                h += '<td class="tt-ptime' + endCls(p) + '">' + (pt && (pt.start || pt.end) ? esc(pt.start) + '<br>' + esc(pt.end) : '') + '</td>';
+                return h;
+            }
             function renderGrid() {
                 $('grid').classList.toggle('tt-cross-details', viewMode !== 'group' && viewMode !== 'cycle');
                 // Sikl ko'rinishi — alohida kalendar (sana × guruh)
@@ -6165,25 +6280,32 @@
                 // Sarlavha: Kun | Para | [fakultet] | oqim | guruhlar
                 let h = '<thead><tr>' +
                     '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="width:26px;min-width:26px;max-width:26px">Kun</th>' +
-                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="left:26px">Para</th>';
+                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" colspan="2" style="left:26px">Para</th>';
                 if (showFac) {
                     facRuns.forEach((r, ri) => h += '<th class="tt-fac px-2 py-1' + (ri > 0 ? ' sep-oqim' : '') + '" colspan="' + r.span + '">' + esc(r.faculty || '—') + '</th>');
                     h += '</tr><tr>';
                 }
                 const multiCourse = selectedCourses.size > 1;
                 const showSpec = multiSpec();
+                const grpCount = (o, gr) => groupStudents[(o.faculty || '') + '|' + (gName[gr] || '')];
                 oqimCols.forEach((o, oi) => {
                     const flowKey = (o.faculty || '') + '|' + (o.specialty || '') + '|' + o.course + '|' + (o.label || '');
-                    const studentCount = flowStudents[flowKey];
+                    const known = o.groups.map(gr => grpCount(o, gr)).filter(n => n != null);
+                    // Faol talabalar (students) bo'yicha; ma'lumot bo'lmasa — kartalardagi son.
+                    const studentCount = known.length ? known.reduce((a, b) => a + (+b || 0), 0) : flowStudents[flowKey];
                     const title = (showSpec && o.specialty ? o.specialty + ' · ' : '') +
                         (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—');
                     h += '<th class="tt-oqim px-2 py-1' + courseCls(o.course) + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
                         '<div>' + esc(title) + '</div>' +
-                        (studentCount ? '<div class="tt-oqim-count">' + studentCount + ' ta</div>' : '') +
+                        (studentCount ? '<div class="tt-oqim-count">' + o.groups.length + ' guruh · ' + studentCount + ' talaba</div>' : '') +
                     '</th>';
                 });
                 h += '</tr><tr>';
-                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') + '</th>'));
+                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => {
+                    const n = grpCount(o, gr);
+                    h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') +
+                        (n != null ? '<div class="tt-grp-count"><em class="tt-stu-count" title="' + n + ' ta faol talaba">' + n + '</em></div>' : '') + '</th>';
+                }));
                 h += '</tr></thead><tbody>';
 
                 // Para ajratuvchi chiziq darajasi: shu qatorda TUGAYDIGAN katak uchun
@@ -6191,15 +6313,13 @@
                 // qalin; juft endP — ikki butun para orasi (qalinroq); toq endP — bitta
                 // butun paraning ikki yarmi orasi (sukut, yupqa — qo'shimcha sinf kerak emas).
                 const rowEndCls = endP => endP === P ? ' tt-dayend' : (endP % 2 === 0 ? ' tt-paraend' : '');
+                const pGroups = paraGroups(P, pairTime);
 
                 for (let d = 1; d <= D; d++) {
                     for (let p = 1; p <= P; p++) {
                         h += '<tr>';
                         if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
-                        const pt = pairTime[p];
-                        const paraLabel = pt ? (pt.name || pt.abbr || p) : p;
-                        h += '<td class="tt-para' + rowEndCls(p) + '"><div class="tt-para-name">' + esc(paraLabel) + '</div>' +
-                            (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
+                        h += paraSideCells(p, P, pairTime, pGroups, rowEndCls);
                         oqimCols.forEach((o, oi) => {
                             // Har katakka kun/para — drag-and-drop tashlash nishoni uchun
                             const dp = ' data-day="' + d + '" data-pair="' + p + '"';
@@ -7048,7 +7168,8 @@
                     });
                     rows.push(cells);
                 });
-                return { rows, freeze_rows: grid.querySelectorAll('thead tr').length, freeze_cols: 2 };
+                // Chapda 3 ustun qotiriladi: kun, para (rim raqami), yarim para vaqti.
+                return { rows, freeze_rows: grid.querySelectorAll('thead tr').length, freeze_cols: 3, col_widths: [null, null, 9] };
             }
 
             // Jadvalni HAQIQIY .xlsx fayl sifatida yuklab olish (serverda PhpSpreadsheet

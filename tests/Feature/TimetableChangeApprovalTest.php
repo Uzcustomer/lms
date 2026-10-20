@@ -215,10 +215,11 @@ it('tasdiqsiz o\'zgarishlar tarixda qoladi, xato amal yozilmaydi', function () {
         ->assertStatus(422);
 
     $row = TimetableChangeRequest::sole();
-    expect($card->fresh()->only(['day', 'pair']))->toBe(['day' => 4, 'pair' => 2])
+    // O'quv bo'limi tashqi jadvalni tahrirlaydi (ext_day/ext_pair), ichki jadval o'zgarmaydi.
+    expect($card->fresh()->only(['ext_day', 'ext_pair']))->toBe(['ext_day' => 4, 'ext_pair' => 2])
         ->and($row->status)->toBe('applied')
         ->and($row->requester_name)->toBe('OQUV BOLIMI')
-        ->and($row->summary)->toContain('Dushanba, 1-para → Payshanba, 2-para')
+        ->and($row->summary)->toContain('Tashqi jadval')->toContain('→ Payshanba, 2-para')
         // Tasdiqsiz o'zgarish registratorga xabar yubormaydi.
         ->and(TeacherNotification::count())->toBe(0);
 });

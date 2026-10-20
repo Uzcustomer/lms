@@ -290,3 +290,19 @@ it('bo\'lakli fan ma\'ruzalari bitta umumiy ma\'ruzaga birlashadi', function () 
         ->and(\App\Models\TimetableCard::whereIn('id', [$b->id, $c->id])->count())->toBe(0)
         ->and(\App\Models\TimetableCardOverride::where('card_id', $a->id)->count())->toBe(1);
 });
+
+it('bo\'lakli fanning qo\'shimcha amaliysi umumiy ma\'ruzasiz haftalarga tushadi', function () {
+    $s = layersSetup();
+    $base = $s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'len_half']) + ['kafedra_name' => 'X', 'students' => 10];
+    $lec = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP', 'training_type' => 'lecture', 'group_names' => ['g-02a', 'g-02b'], 'weeks' => 5]);
+    $prc = \App\Models\TimetableCard::create($base + ['subject_name' => 'IKP (a)', 'training_type' => 'practice', 'group_name' => 'g-02a', 'weeks' => 10]);
+
+    $m = new ReflectionMethod(\App\Http\Controllers\Admin\TimetableController::class, 'assignCardWeeks');
+    $m->setAccessible(true);
+    $m->invoke(app(\App\Http\Controllers\Admin\TimetableController::class), $s['board']);
+
+    $cancelled = fn ($c) => \App\Models\TimetableCardOverride::where('card_id', $c->id)->where('cancelled', true)->orderBy('week')->pluck('week')->all();
+    $lecActive = array_values(array_diff(range(1, 15), $cancelled($lec)));
+    expect($lecActive)->toHaveCount(5)
+        ->and($cancelled($prc))->toBe($lecActive);
+});

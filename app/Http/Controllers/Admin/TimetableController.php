@@ -2771,8 +2771,10 @@ class TimetableController extends Controller
             return max(1, (int) ($gset[($c->faculty_name ?? '') . '|' . $sk . '|' . $c->course]
                 ?? $gset['|' . $sk . '|' . $c->course] ?? $boardWeeks));
         };
+        // Bo'lakli fan: umumiy ma'ruza asosiy nom bilan ("Fan"), amaliylar bo'lak nomi bilan ("Fan (a)") —
+        // qo'shimcha amaliy ma'ruzasiz haftalarga tushishi uchun ular bitta fan kaliti bilan bog'lanadi.
         $subjectKey = fn($c) => $this->specKey($c->specialty_name) . '|' . (int) $c->course
-            . '|' . $this->normSubject((string) $c->subject_name);
+            . '|' . $this->normSubject($this->cycleSubjectVariantBase((string) $c->subject_name) ?? (string) $c->subject_name);
 
         $distributionRules = Schema::hasTable('timetable_rules')
             ? TimetableRule::where('board_id', $board->id)

@@ -965,6 +965,11 @@
             text-align: center; white-space: nowrap; letter-spacing: .3px; position: sticky; left: 0; z-index: 4;
             width: 26px; min-width: 26px; max-width: 26px; padding: 2px 0; border-bottom: 4px solid #000 !important; }
         #grid td.tt-para { background: #f8fafc; font-weight: 700; color: #334155; text-align: center; position: sticky; left: 26px; z-index: 4; min-width: 40px; width: 40px; padding: 2px; }
+        #grid td.tt-para.tt-para-roman { min-width: 28px; width: 28px; max-width: 28px; padding: 1px; background: #e8eef6; line-height: 1; }
+        #grid td.tt-para.tt-para-roman b { display: block; color: #1e293b; font-size: 12px; font-weight: 900; }
+        #grid td.tt-para.tt-para-roman i { display: block; font-style: normal; color: #64748b; font-size: 7px; font-weight: 700; margin-top: 2px; }
+        #grid td.tt-ptime { background: #f8fafc; color: #475569; font-size: 8.5px; font-weight: 700; line-height: 1.15; text-align: center;
+            white-space: nowrap; position: sticky; left: 54px; z-index: 4; min-width: 40px; width: 40px; padding: 1px 2px; }
         #grid td.tt-para .tt-para-name { font-size: 11px; font-weight: 900; color: #1e293b; line-height: 1.1; white-space: nowrap; }
         #grid td.tt-para .tt-para-time { font-size: 8px; font-weight: 700; color: #64748b; line-height: 1.1; margin-top: 1px; }
         #grid thead th { position: sticky; top: 0; z-index: 5; }
@@ -4673,15 +4678,22 @@
                                         span = toHm(Math.round(a + step * part)) + '–' + toHm(Math.round(a + step * (part + 1)));
                                     }
                                     const pairNo = Math.ceil(hour / hpp);
-                                    if (part === 0) {
+                                    // Qo'ng'iroq jadvali yarim paralarga bo'lingan bo'lsa (hpp=1), ketma-ket bir xil
+                                    // qisqartmali qatorlar ("I", "I") bitta para katagiga birlashadi.
+                                    const abbrAt = hh => { const t = bellPairs[Math.ceil(hh / hpp) - 1]; const a = t ? String(t.abbr || '').trim() : ''; return a && a !== '—' ? a : null; };
+                                    const sameAsPrev = hpp === 1 && hour > 1 && abbrAt(hour) && abbrAt(hour) === abbrAt(hour - 1);
+                                    let groupLen = 1;
+                                    while (hpp === 1 && abbrAt(hour) && hour + groupLen <= dayHours && abbrAt(hour + groupLen) === abbrAt(hour)) groupLen++;
+                                    if (part === 0 && !sameAsPrev) {
                                         // Para nomi — shu paraning barcha yarim qatorlarini qamraydi.
-                                        const rowsInPair = Math.min(hpp, dayHours - hour + 1);
+                                        const rowsInPair = hpp === 1 ? groupLen : Math.min(hpp, dayHours - hour + 1);
                                         const abbr = pt ? (pt.abbr && pt.abbr !== '—' ? pt.abbr : (pt.name || pairNo)) : pairNo;
                                         sideRows += '<div class="cyc-mk-side-para" style="grid-column:1;grid-row:' + hour + ' / span ' + rowsInPair + '"'
                                             + ' title="' + esc(pt ? (pt.name || '') + ' ' + (pt.start || '') + '–' + (pt.end || '') : '') + '">'
                                             + '<b>' + esc(abbr) + '</b><i>para</i></div>';
                                     }
-                                    sideRows += '<div class="cyc-mk-side-row' + (hour % hpp === 0 ? ' is-pair-end' : '') + '" style="grid-column:2;grid-row:' + hour + '">' +
+                                    const pairEnd = hpp === 1 ? !(abbrAt(hour) && hour < dayHours && abbrAt(hour + 1) === abbrAt(hour)) : hour % hpp === 0;
+                                    sideRows += '<div class="cyc-mk-side-row' + (pairEnd ? ' is-pair-end' : '') + '" style="grid-column:2;grid-row:' + hour + '">' +
                                         (span ? '<span>' + span + '</span>' : '') +
                                         '</div>';
                                 }
@@ -5910,7 +5922,8 @@
                     activeCell = null; return;
                 }
                 const rowEndCls = p => p === P ? ' tt-dayend' : (p % 2 === 0 ? ' tt-paraend' : '');
-                let h = '<thead><tr><th class="tt-corner px-1 py-1">Kun</th><th class="tt-corner px-1 py-1" style="left:28px">Para</th>';
+                let h = '<thead><tr><th class="tt-corner px-1 py-1">Kun</th><th class="tt-corner px-1 py-1" colspan="2" style="left:26px">Para</th>';
+                const pGroups = paraGroups(P, pairTime);
                 const roomMeta = {};
                  if (mode === 'room') placed.forEach(card => {
                      const roomKey = keyOf(card);
@@ -5936,9 +5949,7 @@
                     for (let p = 1; p <= P; p++) {
                         h += '<tr>';
                         if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
-                        const pt = pairTime[p];
-                        h += '<td class="tt-para' + rowEndCls(p) + '"><div class="tt-para-name">' + esc(pt ? (pt.name || pt.abbr || p) : p) + '</div>' +
-                            (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
+                        h += paraSideCells(p, P, pairTime, pGroups, rowEndCls);
                         cols.forEach(col => {
                             const key = col + '|' + d + '|' + p;
                             if (consumed[key]) return;
@@ -5971,6 +5982,34 @@
                 activeCell = null;
             }
 
+            // Para ustuni (sikl ichki jadvali kabi): qo'ng'iroq jadvalida ketma-ket bir xil
+            // qisqartmali yarim paralar ("I", "I") bitta para katagiga birlashadi — chapda
+            // katta rim raqami + "para", o'ngda har yarim qatorning vaqti.
+            function paraGroups(P, pairTime) {
+                const key = p => { const t = pairTime[p]; const a = t ? String(t.abbr || '').trim() : ''; return a && a !== '—' ? a : null; };
+                const out = {};
+                for (let p = 1; p <= P; p++) {
+                    const k = key(p);
+                    let n = 1;
+                    while (k && p + n <= P && key(p + n) === k) n++;
+                    out[p] = { span: n, label: k || (pairTime[p] ? (pairTime[p].name || p) : p) };
+                    for (let q = 1; q < n; q++) out[p + q] = { span: 0 };
+                    p += n - 1;
+                }
+                return out;
+            }
+            function paraSideCells(p, P, pairTime, groups, endCls) {
+                const g = groups[p], pt = pairTime[p];
+                let h = '';
+                if (g && g.span) {
+                    const last = p + g.span - 1;
+                    h += '<td class="tt-para tt-para-roman' + endCls(last) + '"' + (g.span > 1 ? ' rowspan="' + g.span + '"' : '') +
+                        ' title="' + esc(pt ? (String(pt.name || '').replace(/\s*\(\d\)\s*$/, '') + ' ' + (pt.start || '') + '–' + ((pairTime[last] || pt).end || '')) : '') + '">' +
+                        '<b>' + esc(g.label) + '</b><i>para</i></td>';
+                }
+                h += '<td class="tt-ptime' + endCls(p) + '">' + (pt && (pt.start || pt.end) ? esc(pt.start) + '<br>' + esc(pt.end) : '') + '</td>';
+                return h;
+            }
             function renderGrid() {
                 $('grid').classList.toggle('tt-cross-details', viewMode !== 'group' && viewMode !== 'cycle');
                 // Sikl ko'rinishi — alohida kalendar (sana × guruh)
@@ -6165,7 +6204,7 @@
                 // Sarlavha: Kun | Para | [fakultet] | oqim | guruhlar
                 let h = '<thead><tr>' +
                     '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="width:26px;min-width:26px;max-width:26px">Kun</th>' +
-                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" style="left:26px">Para</th>';
+                    '<th class="tt-corner px-1 py-1" rowspan="' + corSpan + '" colspan="2" style="left:26px">Para</th>';
                 if (showFac) {
                     facRuns.forEach((r, ri) => h += '<th class="tt-fac px-2 py-1' + (ri > 0 ? ' sep-oqim' : '') + '" colspan="' + r.span + '">' + esc(r.faculty || '—') + '</th>');
                     h += '</tr><tr>';
@@ -6191,15 +6230,13 @@
                 // qalin; juft endP — ikki butun para orasi (qalinroq); toq endP — bitta
                 // butun paraning ikki yarmi orasi (sukut, yupqa — qo'shimcha sinf kerak emas).
                 const rowEndCls = endP => endP === P ? ' tt-dayend' : (endP % 2 === 0 ? ' tt-paraend' : '');
+                const pGroups = paraGroups(P, pairTime);
 
                 for (let d = 1; d <= D; d++) {
                     for (let p = 1; p <= P; p++) {
                         h += '<tr>';
                         if (p === 1) h += '<td class="tt-day" rowspan="' + P + '">' + esc(dayNames[d - 1] || ('Kun ' + d)) + '</td>';
-                        const pt = pairTime[p];
-                        const paraLabel = pt ? (pt.name || pt.abbr || p) : p;
-                        h += '<td class="tt-para' + rowEndCls(p) + '"><div class="tt-para-name">' + esc(paraLabel) + '</div>' +
-                            (pt && (pt.start || pt.end) ? '<div class="tt-para-time">' + esc(pt.start) + '<br>' + esc(pt.end) + '</div>' : '') + '</td>';
+                        h += paraSideCells(p, P, pairTime, pGroups, rowEndCls);
                         oqimCols.forEach((o, oi) => {
                             // Har katakka kun/para — drag-and-drop tashlash nishoni uchun
                             const dp = ' data-day="' + d + '" data-pair="' + p + '"';

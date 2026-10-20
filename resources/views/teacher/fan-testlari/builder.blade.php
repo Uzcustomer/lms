@@ -638,9 +638,62 @@
     .lm-dev b { display: block; color: var(--ink); font-size: 13.5px; font-weight: 700; }
     .lm-dev span { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
     .lm-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #cbd5e1; vertical-align: 1px; }
+    /* Kompyuter tiklash kodi — o'qituvchi talabaga aytadi */
+    .lm-code { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 5px; background: #fef3c7; color: #92400e; font-size: 11px; font-style: normal; font-weight: 800; letter-spacing: .08em; vertical-align: 1px; white-space: nowrap; }
     .lm-dot.on { background: #16a34a; }
     .lm-count { margin-right: auto; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
     .lm-empty { padding: 26px 10px; color: var(--muted); font-size: 13.5px; text-align: center; }
+
+    /* Boshlash rejimi: kompyuterlar / umumiy havola */
+    .lm-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px 22px 0; }
+    .lm-mode { display: grid; gap: 3px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; text-align: left; font-family: inherit; cursor: pointer; transition: border-color .16s, background .16s; }
+    .lm-mode b { color: var(--navy); font-size: 13.5px; }
+    .lm-mode span { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+    .lm-mode:hover { border-color: #93c5fd; }
+    .lm-mode.is-on { border-color: #1d4ed8; background: #eff6ff; box-shadow: inset 0 0 0 1px #1d4ed8; }
+    .lm-public p { margin: 0; color: var(--ink-soft); font-size: 13.5px; line-height: 1.6; }
+    .lm-public .lm-note { color: var(--muted); font-size: 12px; }
+    .lm-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+    .lm-link span { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .lm-link code { padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: #f8fafc; color: var(--navy); font-size: 13px; word-break: break-all; }
+    .bl-run-badge.is-public { background: #ecfdf5; color: #047857; }
+
+    /* Kompyuterlar oynasi: tablar va kirish so'rovlari */
+    .mn-tabs { display: flex; gap: 4px; padding: 10px 22px 0; border-bottom: 1px solid var(--line-soft); background: #fafcfe; }
+    .mn-tab { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-soft); font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+    .mn-tab:hover { color: var(--navy); }
+    .mn-tab.is-on { color: #1d4ed8; border-bottom-color: #1d4ed8; }
+    .mn-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; }
+    .mn-public { padding: 12px 14px; border: 1px solid #a7f3d0; border-radius: 10px; background: #ecfdf5; color: #065f46; font-size: 13px; }
+    .mn-public b { color: #047857; }
+    .mn-public.off { border-color: var(--line); background: #f8fafc; color: var(--muted); }
+    .mn-elist { display: grid; gap: 8px; }
+    .mn-entry { display: grid; gap: 9px; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .mn-ehead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .mn-eprog { display: grid; gap: 7px; }
+    .mn-entry .mn-acts:empty { display: none; }
+    .mn-entry.pending { border-left-color: #d97706; background: #fffbeb; }
+    .mn-entry.approved { border-left-color: #0f7a52; }
+    .mn-entry.used { border-left-color: #2563eb; }
+    .mn-entry.rejected, .mn-entry.expired { border-left-color: #94a3b8; opacity: .7; }
+    /* Testga kirganidan keyingi jonli bosqich — kompyuter kartochkasi ranglari */
+    .mn-entry.st-take { border-left-color: #2563eb; }
+    .mn-entry.st-take .mn-stage { background: #dbeafe; color: #1e40af; }
+    .mn-entry.st-result { border-left-color: #0f7a52; }
+    .mn-entry.st-result .mn-stage { background: #dcfce7; color: #166534; }
+    .mn-entry.st-offline { border-left-color: #94a3b8; background: #fbfcfd; }
+    .mn-entry.st-locked, .mn-entry.st-ended_away { border-color: #fca5a5; border-left-color: #dc2626; background: #fef2f2; }
+    .mn-entry.st-locked .mn-stage, .mn-entry.st-ended_away .mn-stage { background: #dc2626; color: #fff; }
+    .mn-emeta { display: grid; gap: 3px; justify-items: end; text-align: right; }
+    .mn-ewhen { color: var(--muted); font-size: 11.5px; }
+    .mn-epill { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .mn-epill.pending { background: #fef3c7; color: #92400e; }
+    .mn-epill.approved { background: #dcfce7; color: #166534; }
+    .mn-epill.used { background: #dbeafe; color: #1e40af; }
+    .mn-epill.rejected { background: #fee2e2; color: #991b1b; }
+    .bl-btn-ok { background: #0f7a52; color: #fff; }
+    .bl-btn-ok:hover { background: #0c6443; }
+    @media (max-width: 640px) { .lm-modes { grid-template-columns: 1fr; } .mn-ehead { flex-direction: column; align-items: flex-start; } .mn-emeta { justify-items: start; text-align: left; } }
 
     /* ---- Kompyuterlar (jonli kuzatuv) oynasi ---- */
     .bl-btn-monitor { background: #0f766e; color: #fff; box-shadow: 0 4px 12px rgba(15, 118, 110, .22); }
@@ -689,6 +742,106 @@
     .mn-acts .bl-btn[disabled] { opacity: .45; cursor: not-allowed; }
     .mn-toast { margin-right: auto; color: var(--ink-soft); font-size: 12.5px; }
     .mn-toast.bad { color: #b3261e; }
+
+    /* ============================================================
+       "Kompyuterlar" oynasi — kattaroq oyna, rangli kartochkalar.
+       Har bosqich o'z rangini --c (asosiy), --t (fon), --s/--sc (belgi) orqali beradi.
+       ============================================================ */
+    .mn-box { width: min(1600px, calc(100vw - 32px)); height: calc(100vh - 32px); max-height: none; }
+    .mn-body { padding: 18px 24px 22px; gap: 22px; align-content: start; background: #f6f8fb; }
+    .mn-room-title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 15px; }
+    .mn-room-title small { margin-left: 0; }
+    .mn-grid { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+
+    .mn-sum { gap: 8px; padding: 12px 24px; }
+    .mn-chip { padding: 6px 12px; font-size: 12.5px; font-weight: 600; }
+    .mn-chip b { font-size: 15px; }
+    .mn-chip.take { background: #dbeafe; color: #1e40af; } .mn-chip.take b { color: #1d4ed8; }
+    .mn-chip.done { background: #d1fae5; color: #065f46; } .mn-chip.done b { color: #047857; }
+    .mn-chip.wait { background: #fef3c7; color: #92400e; } .mn-chip.wait b { color: #b45309; }
+    .mn-chip.off { background: #eef2f6; color: #64748b; }
+
+    .mn-card, .mn-card[class] {
+        --c: #94a3b8; --t: #f8fafc; --s: #e2e8f0; --sc: #475569;
+        min-width: 0; gap: 0; padding: 0; overflow: hidden;
+        border: 1px solid #e2e8f0; border-top: 4px solid var(--c); border-radius: 12px;
+        background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+    }
+    .mn-card.take { --c: #2563eb; --t: #eff6ff; --s: #dbeafe; --sc: #1e40af; }
+    .mn-card.face, .mn-card.start, .mn-card.wait, .mn-card.restarting, .mn-card.idle { --c: #d97706; --t: #fffbeb; --s: #fde68a; --sc: #92400e; }
+    .mn-card.result { --c: #059669; --t: #ecfdf5; --s: #a7f3d0; --sc: #065f46; }
+    .mn-card.offline, .mn-card.closed { --c: #94a3b8; --t: #f1f5f9; --s: #e2e8f0; --sc: #475569; }
+    .mn-card.stopped { --c: #b91c1c; --t: #fef2f2; --s: #fecaca; --sc: #991b1b; }
+    .mn-card.locked, .mn-card.ended_away { --c: #dc2626; --t: #fee2e2; --s: #dc2626; --sc: #fff; border-color: #fca5a5; border-top-color: var(--c); box-shadow: 0 0 0 2px #fecaca; }
+
+    /* Sarlavha: nom + kod chapda, bosqich o'ngda — sig'masa bosqich pastki qatorga tushadi */
+    .mn-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 11px 14px; background: var(--t); border-bottom: 1px solid rgba(15, 23, 42, .06); }
+    .mn-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; color: var(--ink); font-size: 15.5px; font-weight: 800; }
+    .mn-pc { white-space: nowrap; }
+    .mn-name .lm-code { margin-left: 0; }
+    .mn-card .mn-stage, .mn-card[class] .mn-stage { flex: none; max-width: 100%; padding: 4px 11px; border-radius: 999px; background: var(--s); color: var(--sc); font-size: 11.5px; font-weight: 800; white-space: normal; text-align: center; line-height: 1.25; }
+
+    .mn-cbody { flex: 1; display: grid; align-content: start; gap: 10px; padding: 13px 14px; }
+    .mn-student b { font-size: 14.5px; overflow-wrap: anywhere; }
+    .mn-student span { overflow-wrap: anywhere; }
+    .mn-student.none { padding: 6px 0; }
+    .mn-meta { gap: 6px 14px; font-size: 12.5px; }
+    .mn-meta span { overflow-wrap: anywhere; }
+    .mn-bar { height: 7px; }
+    .mn-bar i { background: linear-gradient(90deg, #60a5fa, #2563eb); }
+    .mn-lock { overflow-wrap: anywhere; }
+
+    /* Natija — katta, rangli */
+    .mn-result { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 10px; }
+    .mn-result b { font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+    .mn-result span { font-size: 13px; font-weight: 800; letter-spacing: .02em; }
+    .mn-result.ok { background: #d1fae5; color: #047857; }
+    .mn-result.bad { background: #fee2e2; color: #b91c1c; }
+
+    /* Belgilar — kichik rangli yorliqlar */
+    .mn-flags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mn-flag { padding: 3px 9px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 11.5px; font-weight: 700; }
+    .mn-flag.warn { background: #fef3c7; color: #92400e; }
+    .mn-flag.bad { background: #fee2e2; color: #b91c1c; }
+
+    /* Tugmalar — 2 ustunli to'r, matn sig'masa qatorga o'raladi */
+    .mn-foot { display: grid; gap: 8px; padding: 11px 14px 13px; border-top: 1px solid #eef2f6; background: #fafbfd; }
+    .mn-foot .mn-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 0; }
+    .mn-foot .mn-acts.one { grid-template-columns: 1fr; }
+    .mn-foot .mn-acts .bl-btn { width: 100%; height: auto; min-height: 36px; padding: 7px 10px; white-space: normal; line-height: 1.25; text-align: center; font-size: 12px; }
+
+    /* Amal tugmalari — har biri o'z rangida: --b (asosiy), --bt (och fon), --bb (hoshiya) */
+    .mn-acts .bl-btn[data-act] {
+        --b: #475569; --bt: #f1f5f9; --bb: #cbd5e1;
+        border: 1px solid var(--bb); background: var(--bt); color: var(--b);
+        font-weight: 700; box-shadow: none;
+        transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+    }
+    .mn-acts .bl-btn[data-act]:not([disabled]):hover { background: var(--b); border-color: var(--b); color: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .15); }
+    .mn-acts .bl-btn[data-act]:focus-visible { outline: 2px solid var(--b); outline-offset: 2px; }
+    .mn-acts .bl-btn[data-act="stop"], .mn-acts .bl-btn[data-act="stop-entry"], .mn-acts .bl-btn[data-act="reject"] { --b: #dc2626; --bt: #fef2f2; --bb: #fca5a5; }
+    .mn-acts .bl-btn[data-act="restart"] { --b: #2563eb; --bt: #eff6ff; --bb: #93c5fd; }
+    .mn-acts .bl-btn[data-act="bypass"] { --b: #7c3aed; --bt: #f5f3ff; --bb: #c4b5fd; }
+    /* Faol holatdagilar — to'liq rangli */
+    .mn-acts .bl-btn[data-act="bypass"][data-on="1"] { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    .mn-acts .bl-btn[data-act="unlock"], .mn-acts .bl-btn[data-act="approve"] { --b: #15803d; --bt: #16a34a; --bb: #16a34a; color: #fff; box-shadow: 0 3px 10px rgba(22, 163, 74, .28); }
+    .mn-acts .bl-btn[data-act][disabled] { --b: #94a3b8; --bt: #f8fafc; --bb: #e2e8f0; opacity: 1; color: #a3b0c2; }
+
+    /* Tablar — katta, rangli: Kompyuterlar ko'k, Kirish so'rovlari moviy-yashil */
+    .mn-tabs, .mn-tabs[class] { gap: 10px; padding: 14px 24px; border-bottom: 1px solid var(--line-soft); background: #fff; }
+    .mn-tab, .mn-tab[class] {
+        --c: #2563eb; --ct: #eff6ff;
+        gap: 9px; padding: 11px 22px; border: 2px solid var(--ct); border-radius: 11px;
+        background: var(--ct); color: var(--c); font-size: 15px; font-weight: 800;
+        transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+    }
+    .mn-tab[data-tab="entries"] { --c: #0f766e; --ct: #ecfdf5; }
+    .mn-tab[class]:hover { border-color: var(--c); color: var(--c); }
+    .mn-tab[class].is-on { background: var(--c); border-color: var(--c); color: #fff; box-shadow: 0 6px 16px rgba(15, 23, 42, .16); }
+    .mn-tab:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+    .mn-tab svg { width: 18px; height: 18px; flex: none; }
+    .mn-tab .mn-badge { min-width: 22px; height: 22px; font-size: 12px; }
+    .mn-tab.is-on .mn-badge { background: #fff; color: #dc2626; }
 </style>
 
 @php
@@ -1030,6 +1183,9 @@
                                         @if($runCount > 0)
                                             <div><span class="bl-run-badge">{{ $runCount }} ta kompyuterda</span></div>
                                         @endif
+                                        @if($item->isPublicOpen())
+                                            <div><span class="bl-run-badge is-public" title="Havola orqali istalgan kompyuterda ochiladi, talaba o'qituvchi ruxsati bilan kiradi">Umumiy ochiq</span></div>
+                                        @endif
                                     @endif
                                 </td>
                                 <td style="text-align:right">
@@ -1040,19 +1196,22 @@
                                                     data-attach-id="{{ $item->id }}"
                                                     data-attach-name="{{ $item->name }}"
                                                     data-attach-url="{{ route('teacher.fan-testlari.attach-subject', $item) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Biriktirish</button>
-                                        @elseif($runningHere > 0)
+                                        @elseif($runningHere > 0 || $item->isPublicOpen())
                                             <button type="button" class="bl-btn bl-btn-monitor bl-btn-sm mn-open"
                                                     data-test-id="{{ $item->id }}"
                                                     data-test-name="{{ $item->name }}"
                                                     data-devices-url="{{ route('teacher.fan-testlari.devices', $item) }}"
                                                     data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
-                                                    title="Har bir kompyuterda test qanday ketayotganini ko'rish va boshqarish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="7" rx="1.5"/><rect x="13" y="3" width="9" height="7" rx="1.5"/><rect x="2" y="14" width="9" height="7" rx="1.5"/><rect x="13" y="14" width="9" height="7" rx="1.5"/></svg>Kompyuterlar ({{ $runningHere }})</button>
+                                                    data-public-url="{{ route('teacher.fan-testlari.launch-public', $item) }}"
+                                                    data-public-open="{{ $item->isPublicOpen() ? '1' : '' }}"
+                                                    title="Kompyuterlardagi holat va umumiy kirish so'rovlari"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="7" rx="1.5"/><rect x="13" y="3" width="9" height="7" rx="1.5"/><rect x="2" y="14" width="9" height="7" rx="1.5"/><rect x="13" y="14" width="9" height="7" rx="1.5"/></svg>{{ $runningHere > 0 ? "Kompyuterlar ({$runningHere})" : "Kirish so'rovlari" }}</button>
                                         @elseif($item->questionCount() > 0)
                                             <button type="button" class="bl-btn bl-btn-launch bl-btn-sm lm-open"
                                                     data-test-id="{{ $item->id }}"
                                                     data-test-name="{{ $item->name }}"
                                                     data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
-                                                    title="Xonadagi kompyuterlarni tanlab testni boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kompyuterlarda boshlash</button>
+                                                    data-public-url="{{ route('teacher.fan-testlari.launch-public', $item) }}"
+                                                    title="Kompyuterlarni tanlab yoki umumiy havola bilan testni boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Testni boshlash</button>
                                         @endif
                                         @if(!$isDraft && ($runningHere > 0 || $item->is_active))
                                             <form method="POST" action="{{ route('teacher.fan-testlari.stop', $item) }}" onsubmit="return confirm('Test to\'xtatilsinmi? Kompyuterlar kutish ekraniga qaytadi va test talabalar uchun yopiladi.')">
@@ -1163,13 +1322,28 @@
                     <p id="launchTestName"></p>
                 </div>
             </div>
+            <div class="lm-modes">
+                <button type="button" class="lm-mode is-on" data-mode="devices">
+                    <b>Ro'yxatdagi kompyuterlar</b><span>Xonadagi kompyuterlarni tanlaysiz — kutish ekrani testni o'zi ochadi</span>
+                </button>
+                <button type="button" class="lm-mode" data-mode="public">
+                    <b>Umumiy ochish</b><span>Bitta havola, istalgan kompyuter — talaba ID kiritadi, siz ruxsat berasiz</span>
+                </button>
+            </div>
             <div class="lm-body" id="launchRooms"></div>
+            <div class="lm-body lm-public" id="launchPublic" style="display:none">
+                <p>Test <b>umumiy havola</b> orqali ochiladi — ro'yxatdan o'tgan kompyuter shart emas. Talaba havolani ochib ID raqamini kiritadi; so'rovi sizning <b>"Kirish so'rovlari"</b> oynangizga tushadi. <b>Ruxsat</b> bersangiz talabaga yuz tekshiruvi ochiladi, <b>Rad etsangiz</b> — kirmaydi.</p>
+                <div class="lm-link"><span>Havola:</span><code id="launchPublicLink"></code></div>
+                <p class="lm-note">Havola faqat universitet tarmog'idan ochiladi. "To'xtatish" bosilganda umumiy kirish yopiladi va kutayotgan so'rovlar bekor bo'ladi.</p>
+            </div>
             <div class="bl-modal-foot">
                 <span class="lm-count" id="launchCount">0 ta kompyuter tanlandi</span>
                 <button type="button" class="bl-btn bl-btn-ghost" id="launchCancel">Bekor qilish</button>
                 <button type="submit" class="bl-btn bl-btn-launch" id="launchSubmit" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>Boshlash</button>
+                <button type="button" class="bl-btn bl-btn-launch" id="launchPublicSubmit" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Umumiy ochish</button>
             </div>
         </form>
+        <form method="POST" action="" id="launchPublicForm" style="display:none">@csrf</form>
     </div>
 
     <script>
@@ -1216,9 +1390,10 @@
                     const sub = busy
                         ? 'Band: ' + esc(d.assigned_test_name || 'boshqa test') + (d.assigned_by ? ' · ' + esc(d.assigned_by) : '')
                         : (mine ? 'Shu test ochiq' : '<i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + (d.online ? 'Kutish ekranida' : 'Oflayn'));
+                    const code = d.code ? '<em class="lm-code" title="Tiklash kodi: brauzer tozalanib ketsa kutish ekranida shu kod kiritiladi">kod ' + esc(d.code) + '</em>' : '';
                     return '<label class="lm-dev' + (busy ? ' is-busy' : '') + (mine ? ' is-mine' : '') + '">'
                         + '<input type="checkbox" name="device_ids[]" value="' + d.id + '"' + (busy ? ' disabled' : '') + (mine ? ' checked' : '') + '>'
-                        + '<div><b>' + esc(d.name) + '</b><span>' + sub + '</span></div></label>';
+                        + '<div><b>' + esc(d.name) + code + '</b><span>' + sub + '</span></div></label>';
                 }).join('');
                 return '<div class="lm-room"><div class="lm-room-head"><label><input type="checkbox" class="lm-room-all">'
                     + title + '</label><small>' + list.length + ' ta · ' + online + ' ta onlayn</small></div>'
@@ -1226,20 +1401,52 @@
             }).join('');
         }
 
+        // Ikki rejim: ro'yxatdagi kompyuterlar yoki umumiy havola
+        const publicForm = document.getElementById('launchPublicForm');
+        const publicBox = document.getElementById('launchPublic');
+        const publicSubmit = document.getElementById('launchPublicSubmit');
+        let publicUrl = '';
+
+        function setMode(mode) {
+            modal.querySelectorAll('.lm-mode').forEach((b) => b.classList.toggle('is-on', b.dataset.mode === mode));
+            const isPublic = mode === 'public';
+            box.style.display = isPublic ? 'none' : '';
+            publicBox.style.display = isPublic ? '' : 'none';
+            submit.style.display = isPublic ? 'none' : '';
+            countEl.style.display = isPublic ? 'none' : '';
+            publicSubmit.style.display = isPublic ? '' : 'none';
+        }
+
         document.addEventListener('click', (ev) => {
             const open = ev.target.closest ? ev.target.closest('.lm-open') : null;
             if (open) {
                 const testId = parseInt(open.dataset.testId, 10);
                 form.action = open.dataset.launchUrl;
+                publicUrl = open.dataset.publicUrl || '';
+                publicForm.action = publicUrl;
+                publicSubmit.disabled = !publicUrl;
+                // Kiosk havolasi: /test/{id}
+                document.getElementById('launchPublicLink').textContent = @json(url('/test')) + '/' + testId;
                 document.getElementById('launchTestName').textContent = open.dataset.testName || '';
                 render(testId);
                 refresh();
+                // Kompyuter ro'yxati bo'sh bo'lsa umumiy rejim qulayroq
+                setMode(DEVICES.length ? 'devices' : 'public');
                 modal.classList.add('is-open');
                 return;
             }
+            const modeBtn = ev.target.closest ? ev.target.closest('.lm-mode') : null;
+            if (modeBtn) { setMode(modeBtn.dataset.mode); return; }
             if (ev.target === modal || ev.target.id === 'launchCancel') {
                 modal.classList.remove('is-open');
             }
+        });
+
+        publicSubmit.addEventListener('click', () => {
+            if (!publicUrl) return;
+            publicSubmit.disabled = true;
+            publicSubmit.lastChild.textContent = 'Ochilmoqda...';
+            publicForm.submit();
         });
 
         // Xona belgisi — xonadagi barcha bo'sh kompyuterlarni tanlash/olib tashlash
@@ -1272,8 +1479,13 @@
                     <p id="monitorTestName"></p>
                 </div>
             </div>
+            <div class="mn-tabs">
+                <button type="button" class="mn-tab is-on" data-tab="devices"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Kompyuterlar</button>
+                <button type="button" class="mn-tab" data-tab="entries"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>Kirish so'rovlari <span class="mn-badge" id="monitorEntryCount" style="display:none">0</span></button>
+            </div>
             <div class="mn-sum" id="monitorSum"></div>
             <div class="mn-body" id="monitorBody"><div class="lm-empty">Yuklanmoqda...</div></div>
+            <div class="mn-body" id="monitorEntries" style="display:none"><div class="lm-empty">Yuklanmoqda...</div></div>
             <div class="bl-modal-foot">
                 <span class="mn-toast" id="monitorToast" aria-live="polite"></span>
                 <button type="button" class="bl-btn bl-btn-launch lm-open" id="monitorAdd">Kompyuter qo'shish</button>
@@ -1308,7 +1520,7 @@
                 meta += '<div class="mn-meta"><span>Javob: <b>' + answered + ' / ' + a.questions + '</b></span><span>Qoldi: <b>' + clock(a.seconds_left) + '</b></span></div>'
                     + '<div class="mn-bar" role="img" aria-label="' + pct + '% javob berilgan"><i style="width:' + pct + '%"></i></div>';
             } else if (a && a.finished && a.percent !== null) {
-                meta += '<div class="mn-meta"><span>Natija: <b class="' + (a.passed ? 'ok' : 'bad') + '">' + a.percent + '%</b></span><span class="' + (a.passed ? 'ok' : 'bad') + '">' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
+                meta += '<div class="mn-result ' + (a.passed ? 'ok' : 'bad') + '"><b>' + a.percent + '%</b><span>' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
             }
             if (d.stage === 'locked') {
                 meta += '<div class="mn-lock">' + a.away_limit + " marta chalg'igani uchun test to'xtatildi. Javoblari topshirilmagan — ochib berish faqat bir marta mumkin.</div>";
@@ -1319,11 +1531,11 @@
                 meta += '<div class="mn-lock" style="background:#e0f2fe;color:#075985">' + "Yuz tekshiruvisiz kirish ruxsati berilgan — keyingi talaba faqat ID bilan kiradi (bir marta).</div>";
             }
             const flags = [];
-            if (a && a.face_bypassed) flags.push('<span class="warn">Yuz tekshiruvisiz kirgan</span>');
-            if (a && a.away > 0) flags.push('<span class="warn">Chalg\'idi: ' + a.away + '</span>');
-            if (a && a.face_mismatches > 0) flags.push('<span class="bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
-            if (d.stage_since && d.stage !== 'offline') flags.push('<span>' + esc(d.stage_since) + '</span>');
-            if (flags.length) meta += '<div class="mn-meta">' + flags.join('') + '</div>';
+            if (a && a.face_bypassed) flags.push('<span class="mn-flag warn">Yuz tekshiruvisiz kirgan</span>');
+            if (a && a.away > 0) flags.push('<span class="mn-flag warn">Chalg\'idi: ' + a.away + '</span>');
+            if (a && a.face_mismatches > 0) flags.push('<span class="mn-flag bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
+            if (d.stage_since && d.stage !== 'offline') flags.push('<span class="mn-flag">' + esc(d.stage_since) + '</span>');
+            if (flags.length) meta += '<div class="mn-flags">' + flags.join('') + '</div>';
 
             const stopBtn = '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="stop" data-url="' + esc(d.stop_url || '') + '" data-name="' + esc(d.name) + '"' + (d.stop_url ? '' : ' disabled') + ">To'xtatish</button>";
             const restartTitle = a && a.lock_count > 0 ? "Chalg'ish sababli qulflangan testni qayta boshlab bo'lmaydi" : "Qayta boshlash uchun kompyuterda talaba bo'lishi kerak";
@@ -1338,20 +1550,22 @@
                 : '';
 
             return '<div class="mn-card ' + esc(d.stage) + '">'
-                + '<div class="mn-top"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i>' + esc(d.name) + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
-                + student + meta
-                + '<div class="mn-acts">' + stopBtn + restartBtn + '</div>'
-                + (bypassBtn ? '<div class="mn-acts">' + bypassBtn + '</div>' : '')
-                + '</div>';
+                + '<div class="mn-head"><span class="mn-name"><i class="lm-dot ' + (d.online ? 'on' : '') + '"></i><span class="mn-pc">' + esc(d.name) + '</span>'
+                + (d.code ? '<em class="lm-code" title="Tiklash kodi: brauzer tozalanib ketsa kutish ekranida shu kod kiritiladi">kod ' + esc(d.code) + '</em>' : '')
+                + '</span><span class="mn-stage">' + esc(d.stage_label) + '</span></div>'
+                + '<div class="mn-cbody">' + student + meta + '</div>'
+                + '<div class="mn-foot"><div class="mn-acts">' + stopBtn + restartBtn + '</div>'
+                + (bypassBtn ? '<div class="mn-acts one">' + bypassBtn + '</div>' : '')
+                + '</div></div>';
         }
 
-        function render(list) {
+        function render(list, finishedTotal) {
             const count = (fn) => list.filter(fn).length;
             sum.innerHTML = '<span class="mn-chip"><b>' + count((d) => d.running) + '</b> kompyuterda</span>'
                 + '<span class="mn-chip take"><b>' + count((d) => d.stage === 'take') + '</b> ishlamoqda</span>'
-                + '<span class="mn-chip done"><b>' + count((d) => d.stage === 'result') + '</b> topshirdi</span>'
+                + '<span class="mn-chip done"><b>' + (finishedTotal ?? 0) + '</b> topshirdi</span>'
                 + (count((d) => d.stage === 'locked') ? '<span class="mn-chip" style="background:#fee2e2;color:#991b1b"><b style="color:#dc2626">' + count((d) => d.stage === 'locked') + '</b> qulflangan</span>' : '')
-                + '<span class="mn-chip"><b>' + count((d) => ['start', 'face', 'wait'].includes(d.stage)) + '</b> kutmoqda</span>'
+                + '<span class="mn-chip wait"><b>' + count((d) => ['start', 'face', 'wait', 'idle'].includes(d.stage)) + '</b> kutmoqda</span>'
                 + '<span class="mn-chip off"><b>' + count((d) => d.stage === 'offline' || d.stage === 'stopped') + '</b> oflayn / to\'xtatilgan</span>'
                 + '<span class="mn-live">Har 3 soniyada yangilanadi</span>';
             if (!list.length) {
@@ -1367,6 +1581,94 @@
             }).join('');
         }
 
+        // ---- "Kirish so'rovlari" tabi (umumiy ochilgan test) ----
+        const entriesBox = document.getElementById('monitorEntries');
+        const entryCount = document.getElementById('monitorEntryCount');
+        let tab = 'devices';
+        let lastPending = 0;
+
+        function setTab(name) {
+            tab = name;
+            modal.querySelectorAll('.mn-tab').forEach((b) => b.classList.toggle('is-on', b.dataset.tab === name));
+            body.style.display = name === 'devices' ? '' : 'none';
+            sum.style.display = name === 'devices' ? '' : 'none';
+            entriesBox.style.display = name === 'entries' ? '' : 'none';
+        }
+
+        // Testga kirgan talabaning jonli jarayoni — kompyuter kartochkasi bilan bir xil ko'rinish
+        function entryProgress(e) {
+            const a = e.attempt;
+            if (!a || !e.stage) return '';
+            let meta = '';
+            if (e.stage === 'take' && !a.finished) {
+                const answered = e.answered ?? 0;
+                const pct = a.questions ? Math.round(answered * 100 / a.questions) : 0;
+                meta += '<div class="mn-meta"><span>Javob: <b>' + answered + ' / ' + a.questions + '</b></span><span>Qoldi: <b>' + clock(a.seconds_left) + '</b></span></div>'
+                    + '<div class="mn-bar" role="img" aria-label="' + pct + '% javob berilgan"><i style="width:' + pct + '%"></i></div>';
+            } else if (a.finished && a.percent !== null) {
+                meta += '<div class="mn-meta"><span>Natija: <b class="' + (a.passed ? 'ok' : 'bad') + '">' + a.percent + '%</b></span><span class="' + (a.passed ? 'ok' : 'bad') + '">' + (a.passed ? "O'tdi" : "O'tmadi") + '</span></div>';
+            } else if (e.stage === 'offline') {
+                meta += '<div class="mn-meta"><span>Qoldi: <b>' + clock(a.seconds_left) + '</b></span><span class="warn">Sahifa yopilgan yoki aloqa uzilgan</span></div>';
+            }
+            if (e.stage === 'locked') {
+                meta += '<div class="mn-lock">' + a.away_limit + " marta chalg'igani uchun test to'xtatildi. Javoblari topshirilmagan — ochib berish faqat bir marta mumkin.</div>";
+            } else if (e.stage === 'ended_away') {
+                meta += '<div class="mn-lock">' + "Ikkinchi marta chalg'idi — test yakunlandi, javoblari saqlandi.</div>";
+            }
+            if (e.stop_requested && !a.finished) {
+                meta += '<div class="mn-lock" style="background:#fef3c7;color:#92400e">' + "To'xtatish buyrug'i yuborildi — sahifa javoblarini topshirishi kutilmoqda.</div>";
+            }
+            const flags = [];
+            if (a.face_bypassed) flags.push('<span class="warn">Yuz tekshiruvisiz kirgan</span>');
+            if (a.away > 0) flags.push('<span class="warn">Chalg\'idi: ' + a.away + '</span>');
+            if (a.face_mismatches > 0) flags.push('<span class="bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
+            if (flags.length) meta += '<div class="mn-meta">' + flags.join('') + '</div>';
+            return meta;
+        }
+
+        function entryRow(e) {
+            const live = e.stage ? '<span class="mn-stage">' + esc(e.stage_label) + '</span>' : '';
+            const pill = '<span class="mn-epill ' + esc(e.status) + '">' + esc(e.status_label) + '</span>';
+            const who = '<div class="mn-student"><b>' + esc(e.student) + '</b><span>' + esc(e.student_id)
+                + (e.group ? ' · ' + esc(e.group) : '') + (e.faculty ? ' · ' + esc(e.faculty) : '') + '</span></div>';
+            const when = '<span class="mn-ewhen">' + esc(e.requested || '') + (e.ago ? ' · ' + esc(e.ago) + ' oldin' : '') + '</span>'
+                + (e.decided_by && e.status !== 'pending' ? '<span class="mn-ewhen">' + esc(e.decided_by) + '</span>' : '');
+            const approve = e.approve_url
+                ? '<button type="button" class="bl-btn bl-btn-ok bl-btn-sm" data-act="approve" data-url="' + esc(e.approve_url) + '" data-student="' + esc(e.student) + '">Ruxsat</button>' : '';
+            const reject = e.reject_url
+                ? '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="reject" data-url="' + esc(e.reject_url) + '" data-student="' + esc(e.student) + '">Rad etish</button>' : '';
+            const stop = e.stop_url
+                ? '<button type="button" class="bl-btn bl-btn-warn bl-btn-sm" data-act="stop-entry" data-url="' + esc(e.stop_url) + '" data-student="' + esc(e.student) + '">To\'xtatish</button>' : '';
+            const unlock = e.unlock_url
+                ? '<button type="button" class="bl-btn bl-btn-unlock bl-btn-sm" data-act="unlock" data-url="' + esc(e.unlock_url) + '" data-student="' + esc(e.student) + '">Ochib berish</button>' : '';
+            const progress = entryProgress(e);
+            return '<div class="mn-entry ' + esc(e.status) + (e.stage ? ' st-' + esc(e.stage) : '') + '">'
+                + '<div class="mn-ehead">' + who + '<div class="mn-emeta">' + (live || pill) + when + '</div></div>'
+                + (progress ? '<div class="mn-eprog">' + progress + '</div>' : '')
+                + '<div class="mn-acts">' + approve + reject + stop + unlock + '</div></div>';
+        }
+
+        function renderEntries(list, pub) {
+            const pending = list.filter((e) => e.status === 'pending').length;
+            entryCount.textContent = pending;
+            entryCount.style.display = pending ? '' : 'none';
+            // Yangi so'rov kelganda tab o'zi ochiladi — o'qituvchi sezsin
+            if (pending > lastPending && tab !== 'entries') setTab('entries');
+            lastPending = pending;
+
+            let head = '';
+            if (pub && pub.open) {
+                head = '<div class="mn-public"><b>Umumiy ochiq</b>' + (pub.since ? ' · ' + esc(pub.since) + ' dan' : '') + (pub.by ? ' · ' + esc(pub.by) : '')
+                    + '<div class="lm-link"><span>Havola:</span><code>' + esc(pub.url) + '</code><button type="button" class="bl-btn bl-btn-ghost bl-btn-sm" data-copy="' + esc(pub.url) + '">Nusxalash</button></div></div>';
+            } else {
+                head = '<div class="mn-public off">Test umumiy ochilmagan. "Kompyuter qo\'shish" → "Umumiy ochish" orqali havola bilan oching.</div>';
+            }
+            const rows = list.length
+                ? list.map(entryRow).join('')
+                : '<div class="lm-empty">Hali so\'rov yo\'q. Talaba havolani ochib ID sini kiritganda shu yerda chiqadi.</div>';
+            entriesBox.innerHTML = head + '<div class="mn-elist">' + rows + '</div>';
+        }
+
         async function load() {
             if (!url || busy) return;
             try {
@@ -1374,7 +1676,8 @@
                 if (!r.ok) throw new Error();
                 const j = await r.json();
                 if (j.migrate) { body.innerHTML = '<div class="lm-empty">Server yangilanmagan: php artisan migrate ni ishga tushiring.</div>'; return; }
-                render(j.devices || []);
+                render(j.devices || [], j.finished_total);
+                renderEntries(j.entries || [], j.public || null);
             } catch (e) {
                 toast.className = 'mn-toast bad';
                 toast.textContent = "Server bilan aloqa yo'q — qayta urinilmoqda";
@@ -1388,14 +1691,28 @@
             addBtn.dataset.testId = btn.dataset.testId;
             addBtn.dataset.testName = btn.dataset.testName;
             addBtn.dataset.launchUrl = btn.dataset.launchUrl;
+            addBtn.dataset.publicUrl = btn.dataset.publicUrl || '';
             toast.textContent = '';
             changed = false;
+            lastPending = 0;
             body.innerHTML = '<div class="lm-empty">Yuklanmoqda...</div>';
+            entriesBox.innerHTML = '<div class="lm-empty">Yuklanmoqda...</div>';
+            // Umumiy ochilgan test — so'rovlar tabi birinchi
+            setTab(btn.dataset.publicOpen ? 'entries' : 'devices');
             modal.classList.add('is-open');
             load();
             clearInterval(timer);
             timer = setInterval(load, 3000);
         }
+
+        modal.addEventListener('click', (ev) => {
+            const t = ev.target.closest ? ev.target.closest('.mn-tab') : null;
+            if (t) setTab(t.dataset.tab);
+            const copy = ev.target.closest ? ev.target.closest('[data-copy]') : null;
+            if (copy && navigator.clipboard) {
+                navigator.clipboard.writeText(copy.dataset.copy).then(() => { copy.textContent = 'Nusxalandi'; setTimeout(() => { copy.textContent = 'Nusxalash'; }, 1500); });
+            }
+        });
 
         function close() {
             modal.classList.remove('is-open');
@@ -1415,10 +1732,16 @@
             if (ev.key === 'Escape' && modal.classList.contains('is-open')) close();
         });
 
-        body.addEventListener('click', async (ev) => {
+        modal.addEventListener('click', async (ev) => {
             const btn = ev.target.closest('button[data-act]');
             if (!btn || btn.disabled || !btn.dataset.url) return;
-            const question = btn.dataset.act === 'bypass'
+            const question = btn.dataset.act === 'approve'
+                ? null // ruxsat — tasdiq so'ralmaydi, talaba kutib turibdi
+                : btn.dataset.act === 'reject'
+                ? btn.dataset.student + ' uchun kirish rad etilsinmi?'
+                : btn.dataset.act === 'stop-entry'
+                ? btn.dataset.student + " uchun test to'xtatilsinmi? Belgilangan javoblari topshiriladi."
+                : btn.dataset.act === 'bypass'
                 ? (btn.dataset.on
                     ? btn.dataset.name + ' kompyuteridagi yuz tekshiruvisiz kirish ruxsati bekor qilinsinmi?'
                     : btn.dataset.name + " kompyuterida keyingi talaba yuz tekshiruvisiz, faqat ID bilan kirsinmi? Ruxsat bir marta ishlaydi — yuzi tanilmayotgan talaba o'tirganiga ishonch hosil qiling.")
@@ -1427,7 +1750,7 @@
                 : btn.dataset.act === 'unlock'
                     ? btn.dataset.student + " uchun test qayta ochilsinmi? Bu faqat bir marta mumkin — yana chalg'isa test yakunlanadi."
                     : btn.dataset.name + ' kompyuterida test ' + btn.dataset.student + " uchun boshidan boshlansinmi? Hozirgi javoblari o'chiriladi.";
-            if (!confirm(question)) return;
+            if (question && !confirm(question)) return;
             btn.disabled = true;
             busy = true;
             try {

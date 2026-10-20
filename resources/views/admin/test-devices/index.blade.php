@@ -122,11 +122,12 @@
                     </div>
                     <div class="td-table-wrap">
                         <table class="td-table">
-                            <thead><tr><th>Kompyuter</th><th>Holat</th><th>Test</th><th>Belgilagan</th><th>Oxirgi faollik</th><th></th></tr></thead>
+                            <thead><tr><th>Kompyuter</th><th>Tiklash kodi</th><th>Holat</th><th>Test</th><th>Belgilagan</th><th>Oxirgi faollik</th><th></th></tr></thead>
                             <tbody>
                             @foreach($items as $device)
                                 <tr>
                                     <td><b>{{ $device->name }}</b>@if($current && $current->id === $device->id) <span class="td-muted">(shu kompyuter)</span>@endif</td>
+                                    <td class="td-num"><b style="letter-spacing:.1em" title="Brauzer tozalanib ketsa kutish ekranida shu kod kiritiladi — kompyuter qayta bog'lanadi">{{ $device->recovery_code ?? '—' }}</b></td>
                                     <td>
                                         <span class="td-dot {{ $device->isOnline() ? 'on' : '' }}"></span>{{ $device->isOnline() ? 'Kutish ekranida' : 'Oflayn' }}
                                     </td>

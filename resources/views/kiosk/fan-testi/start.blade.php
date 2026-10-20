@@ -100,6 +100,21 @@
         @media (prefers-reduced-motion: reduce) { .f-arrow-right, .f-arrow-left { animation: none; } }
         .f-actions { display: flex; gap: 10px; margin-top: 16px; }
         .f-actions .k-btn { flex: 1; }
+
+        /* ---- O'qituvchi ruxsatini kutish ---- */
+        .w-mark { background: #d97706; }
+        .w-box {
+            display: flex; align-items: center; gap: 18px;
+            padding: 22px 20px; border: 1px dashed #f59e0b; border-radius: 10px; background: #fffbeb;
+        }
+        .w-box p { margin: 0; color: #78350f; font-size: 15px; line-height: 1.6; }
+        .w-spinner {
+            flex: none; width: 38px; height: 38px; border-radius: 50%;
+            border: 4px solid #fde68a; border-top-color: #d97706;
+            animation: w-spin 1s linear infinite;
+        }
+        @keyframes w-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .w-spinner { animation: none; } }
 @endsection
 
 @section('content')
@@ -150,6 +165,20 @@
                 <div style="margin-top:20px">
                     <button class="k-btn k-btn-lg" type="button" id="btnCheck">Davom etish</button>
                 </div>
+            </div>
+
+            {{-- Umumiy ochilgan test: o'qituvchi "Kirish so'rovlari" oynasida ruxsat berishini kutish --}}
+            <div id="stepWait" style="display:none">
+                <div class="f-who">
+                    <span class="f-who-mark w-mark" aria-hidden="true">&#8987;</span>
+                    <div><b>O'qituvchi ruxsati kutilmoqda</b><span id="whoIdWait"></span></div>
+                    <button type="button" id="btnBackWait">Boshqa ID</button>
+                </div>
+                <div class="w-box">
+                    <div class="w-spinner" aria-hidden="true"></div>
+                    <p>ID raqamingiz o'qituvchiga yuborildi. O'qituvchi ruxsat bergach, <b>yuz tekshiruvi avtomatik ochiladi</b> — sahifani yopmang.</p>
+                </div>
+                <div class="k-error" id="waitError" style="display:none;margin-top:14px"><span>&#9888;</span><span></span></div>
             </div>
 
             {{-- O'qituvchi ruxsati: yuzi tanilmayotgan talaba faqat ID bilan kiradi (bir marta) --}}
@@ -224,6 +253,7 @@
     const CFG = {
         checkUrl: @json(route('kiosk.fan-testi.check', $test)),
         startUrl: @json(route('kiosk.fan-testi.start', $test)),
+        entryUrl: @json(route('kiosk.fan-testi.entry', [$test, 'TOKEN'])),
         models: @json(asset('face-models')),
         csrf: document.querySelector('meta[name="csrf-token"]').content,
         timeoutMs: Math.max(20, {{ (int) ($liveness['timeout_seconds'] ?? 30) }}) * 1000,
@@ -233,7 +263,7 @@
     };
 
     const $ = (id) => document.getElementById(id);
-    const state = { idNumber: '', stream: null, timer: null, busy: false, modelsReady: false };
+    const state = { idNumber: '', stream: null, timer: null, busy: false, modelsReady: false, entryToken: null, waitTimer: null };
 
     function showError(boxId, message) {
         const box = $(boxId);
@@ -280,6 +310,13 @@
 
             // Ism va rasm ko'rsatilmaydi — faqat rasm borligi aytiladi, solishtirish serverda.
             state.idNumber = idNumber;
+            state.entryToken = r.data.entry_token || null;
+
+            // Umumiy ochilgan test: o'qituvchi ruxsat bermaguncha kutiladi
+            if (r.data.entry === 'pending') {
+                showWait();
+                return;
+            }
 
             // O'qituvchi ruxsati bo'lsa — kamera ochilmaydi, faqat ID bilan kiriladi
             if (r.data.face_bypass) {
@@ -304,6 +341,46 @@
             btn.disabled = false;
             btn.textContent = 'Davom etish';
         }
+    }
+
+    // ---- Umumiy rejim: o'qituvchi ruxsatini kutish ----
+    function showWait() {
+        $('whoIdWait').textContent = 'ID: ' + state.idNumber;
+        showError('waitError', '');
+        $('stepId').style.display = 'none';
+        $('stepWait').style.display = '';
+        document.body.classList.add('s-face-mode');
+        window.scrollTo(0, 0);
+        stopWaiting();
+        state.waitTimer = setInterval(pollEntry, 3000);
+        pollEntry();
+    }
+
+    function stopWaiting() {
+        if (state.waitTimer) { clearInterval(state.waitTimer); state.waitTimer = null; }
+    }
+
+    async function pollEntry() {
+        if (!state.entryToken) return;
+        let resp, data = {};
+        try {
+            resp = await fetch(CFG.entryUrl.replace('TOKEN', state.entryToken), { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+            try { data = await resp.json(); } catch (e) {}
+        } catch (e) {
+            return; // tarmoq uzilishi — keyingi urinishda qaytadan
+        }
+        if (data.status === 'pending') return;
+        stopWaiting();
+        if (data.status === 'approved') {
+            $('stepWait').style.display = 'none';
+            $('whoId').textContent = 'ID: ' + state.idNumber + " · o'qituvchi ruxsat berdi, yuzingiz rasm bilan solishtiriladi";
+            $('stepFace').style.display = '';
+            await startCamera();
+            return;
+        }
+        // rad etildi / eskirdi / topilmadi — sabab bilan ID bosqichiga qaytish imkoni
+        showError('waitError', data.message || "So'rov yopildi. ID raqamingizni qayta kiriting.");
+        $('stepWait').querySelector('.w-spinner').style.visibility = 'hidden';
     }
 
     // ---- 2-bosqich: kamera va liveness ----
@@ -480,6 +557,7 @@
                 student_id_number: state.idNumber,
                 snapshot: snapshot,
                 liveness_passed: true,
+                entry_token: state.entryToken,
             });
         } catch (e) {
             fail("Server bilan aloqa yo'q. Qayta urinib ko'ring.");
@@ -519,6 +597,15 @@
         btn.disabled = false;
         btn.textContent = 'Testni boshlash';
     });
+    $('btnBackWait').addEventListener('click', () => {
+        stopWaiting();
+        state.entryToken = null;
+        $('stepWait').querySelector('.w-spinner').style.visibility = '';
+        $('stepWait').style.display = 'none';
+        $('stepId').style.display = '';
+        document.body.classList.remove('s-face-mode');
+        $('student_id_number').focus();
+    });
     $('btnBackBypass').addEventListener('click', () => {
         $('stepBypass').style.display = 'none';
         $('stepId').style.display = '';
@@ -532,7 +619,7 @@
         document.body.classList.remove('s-face-mode');
         $('student_id_number').focus();
     });
-    window.addEventListener('beforeunload', stopCamera);
+    window.addEventListener('beforeunload', () => { stopCamera(); stopWaiting(); });
 })();
 </script>
 @endsection

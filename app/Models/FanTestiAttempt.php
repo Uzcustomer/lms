@@ -19,6 +19,7 @@ class FanTestiAttempt extends Model
         'away_streak', 'lock_count', 'locked_at', 'ended_reason', 'face_bypass_by',
         'questions_snapshot', 'ip_address',
         'retake_allowed_at', 'retake_allowed_by',
+        'draft_answers', 'draft_saved_at',
     ];
 
     protected $casts = [
@@ -43,9 +44,11 @@ class FanTestiAttempt extends Model
         'lock_count' => 'integer',
         'locked_at' => 'datetime',
         'questions_snapshot' => 'array',
+        'draft_answers' => 'array',
+        'draft_saved_at' => 'datetime',
     ];
 
-    /** Shuncha marta chalg'isa test qulflanadi (ikkinchi marta — yakunlanadi). */
+    /** Shuncha marta ketma-ket chalg'isa test qulflanadi (ikkinchi marta — yakunlanadi). */
     public const AWAY_LIMIT = 3;
 
     public function test()

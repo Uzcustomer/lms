@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\FanTesti;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
+use App\Models\FanTestiEntryRequest;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Services\FaceIdService;
 use App\Services\FanTestiAttempts;
@@ -71,9 +73,114 @@ class FanTestiKioskController extends Controller
 
         // O'qituvchi shu kompyuterga yuz tekshiruvisiz kirish ruxsatini bergan bo'lsa
         $bypass = $this->faceBypassDevice($fanTesti) !== null;
-        $this->eligibleStudent($fanTesti, $data['student_id_number'], $bypass);
+        $student = $this->eligibleStudent($fanTesti, $data['student_id_number'], $bypass);
+
+        // Umumiy ochilgan test (ro'yxatdagi kompyuter emas): so'rov o'qituvchiga
+        // tushadi, talaba "ruxsat kutilmoqda" ekranida kutadi.
+        if ($this->needsTeacherApproval($fanTesti)) {
+            $entry = FanTestiEntryRequest::openFor($fanTesti, $student, $request->ip());
+
+            return response()->json([
+                'photo_found' => true,
+                'face_bypass' => false,
+                'entry' => $entry->isUsable() ? 'approved' : 'pending',
+                'entry_token' => $entry->token,
+            ]);
+        }
 
         return response()->json(['photo_found' => true, 'face_bypass' => $bypass]);
+    }
+
+    /** Kutish ekrani so'raydi: o'qituvchi ruxsat berdimi. */
+    public function entryStatus(FanTesti $fanTesti, string $token)
+    {
+        $entry = FanTestiEntryRequest::query()
+            ->where('fan_testi_id', $fanTesti->id)
+            ->where('token', $token)
+            ->first();
+
+        if (!$entry) {
+            return response()->json(['status' => 'gone', 'message' => "So'rov topilmadi. ID raqamingizni qayta kiriting."], 404);
+        }
+        if ($entry->used_at) {
+            return response()->json(['status' => 'used', 'message' => "Bu ruxsat ishlatib bo'lingan. ID raqamingizni qayta kiriting."]);
+        }
+        if ($entry->status === 'rejected') {
+            return response()->json(['status' => 'rejected', 'message' => "O'qituvchi kirishni rad etdi" . ($entry->decided_by ? " ({$entry->decided_by})" : '') . '.']);
+        }
+        if ($entry->status === 'approved' && !$entry->isUsable()) {
+            return response()->json(['status' => 'expired', 'message' => "Ruxsat muddati o'tdi. ID raqamingizni qayta kiriting."]);
+        }
+
+        return response()->json(['status' => $entry->status]);
+    }
+
+    /**
+     * Umumiy rejimdagi test sahifasi har bir necha soniyada yuboradi: nechta
+     * savolga javob berilgan. O'qituvchi "To'xtatish" bosgan bo'lsa sahifaga
+     * aytiladi — u belgilangan javoblarni topshiradi (javoblar brauzerda turadi,
+     * serverda to'xtatib bo'lmaydi).
+     */
+    public function progress(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return response()->json(['message' => 'Sessiya topilmadi.'], 403);
+        }
+        if (!Schema::hasColumn('fan_testi_entry_requests', 'progress_at')) {
+            return response()->json(['ok' => true]);
+        }
+
+        $entry = FanTestiEntryRequest::where('attempt_id', $attempt->id)->latest('id')->first();
+        if (!$entry) {
+            return response()->json(['ok' => true]);
+        }
+
+        $entry->forceFill([
+            'progress_answered' => min(65535, max(0, (int) $request->input('answered', 0))),
+            'progress_at' => now(),
+        ])->save();
+
+        return response()->json([
+            'ok' => true,
+            'stop' => $entry->stop_requested_at !== null && !$attempt->isFinished(),
+        ]);
+    }
+
+    /**
+     * Umumiy ochilgan testda, ro'yxatdagi (shu testga berilgan) kompyuterdan
+     * bo'lmasa — o'qituvchi ruxsati kerak.
+     */
+    private function needsTeacherApproval(FanTesti $fanTesti): bool
+    {
+        if (!$fanTesti->isPublicOpen() || !Schema::hasTable('fan_testi_entry_requests')) {
+            return false;
+        }
+
+        $device = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
+            ? TestDeviceToken::resolve(request())
+            : null;
+
+        return !($device && (int) $device->assigned_fan_testi_id === (int) $fanTesti->id);
+    }
+
+    /** Ruxsat berilgan so'rov (shu brauzer belgisi va shu talaba uchun), bo'lmasa 422. */
+    private function approvedEntry(Request $request, FanTesti $fanTesti, Student $student): FanTestiEntryRequest
+    {
+        $token = (string) $request->input('entry_token', '');
+        $entry = $token !== ''
+            ? FanTestiEntryRequest::query()
+                ->where('fan_testi_id', $fanTesti->id)
+                ->where('student_id', $student->id)
+                ->where('token', $token)
+                ->first()
+            : null;
+
+        if (!$entry || !$entry->isUsable()) {
+            throw ValidationException::withMessages(['student_id_number' => "O'qituvchi ruxsati yo'q yoki muddati o'tgan. ID raqamingizni qayta kiriting va ruxsatni kuting."]);
+        }
+
+        return $entry;
     }
 
     /**
@@ -98,6 +205,7 @@ class FanTestiKioskController extends Controller
         ], [], ['student_id_number' => 'Talaba ID', 'snapshot' => 'Yuz surati']);
 
         $student = $this->eligibleStudent($fanTesti, $data['student_id_number']);
+        $entry = $this->needsTeacherApproval($fanTesti) ? $this->approvedEntry($request, $fanTesti, $student) : null;
 
         $log = [
             'attempt_type' => 'fan_test',
@@ -151,7 +259,17 @@ class FanTestiKioskController extends Controller
             'snapshot' => $data['snapshot'],
         ]);
 
-        return response()->json(['redirect' => $this->enterAttempt($request, $fanTesti, $student)]);
+        $redirect = $this->enterAttempt($request, $fanTesti, $student);
+
+        // Ruxsat bir marta ishlaydi — o'qituvchi oynasida "Testga kirdi" bo'ladi
+        if ($entry) {
+            $entry->forceFill([
+                'used_at' => now(),
+                'attempt_id' => (int) $request->session()->get(self::SESSION_KEY) ?: null,
+            ])->save();
+        }
+
+        return response()->json(['redirect' => $redirect]);
     }
 
     public function take(FanTesti $fanTesti, FanTestiAttempt $attempt)
@@ -190,7 +308,116 @@ class FanTestiKioskController extends Controller
             'awayLimit' => FanTestiAttempt::AWAY_LIMIT,
             // Yuz tekshiruvisiz (o'qituvchi ruxsati) — test davomida jim yuz solishtirilmaydi
             'faceBypass' => !empty($attempt->face_bypass_by),
+            // Umumiy rejim: jarayon o'qituvchining "Kirish so'rovlari" oynasiga yuboriladi
+            'publicEntry' => $this->needsTeacherApproval($fanTesti),
+            // Sahifa qayta ochilganda belgilangan javoblar tiklanadi
+            'draft' => Schema::hasColumn('fan_testi_attempts', 'draft_answers') ? ($attempt->draft_answers ?? []) : [],
+            'monitor' => $this->monitorConfig(),
         ] + $this->follow('take'));
+    }
+
+    /**
+     * Test davomidagi kuzatuv chegaralari. Sozlamalar jadvalidan o'zgartirish
+     * mumkin (kod o'zgarmaydi): fan_test_away_seconds, fan_test_noface_seconds,
+     * fan_test_yaw_limit, fan_test_other_face_ratio, fan_test_mismatches_to_pause,
+     * fan_test_detector_score, fan_test_tick_seconds.
+     *
+     * 2026-10 da yumshatildi: sinfda parda tez-tez tushib turardi (o'qish uchun
+     * bosh egish, yon tomonga qarash, yorug'lik).
+     */
+    private function monitorConfig(): array
+    {
+        $num = fn (string $key, float $default) => (float) (Setting::get($key, $default) ?: $default);
+
+        return [
+            'tickMs' => (int) ($num('fan_test_tick_seconds', 5) * 1000),
+            // Boshqa tomonga qarash / yonida odam — shuncha soniya uzluksiz bo'lsa to'xtaydi
+            'awayMs' => (int) ($num('fan_test_away_seconds', 10) * 1000),
+            // Yuz umuman ko'rinmasa (bosh egib o'qish, yorug'lik) — bundan ham uzoqroq kutiladi
+            'noFaceMs' => (int) ($num('fan_test_noface_seconds', 10) * 1000),
+            'backMs' => 500,
+            'yawLimit' => $num('fan_test_yaw_limit', 0.5),
+            'otherFaceRatio' => $num('fan_test_other_face_ratio', 0.5),
+            'mismatchesToPause' => (int) $num('fan_test_mismatches_to_pause', 3),
+            'recheckMs' => 8000,
+            'detectorScore' => $num('fan_test_detector_score', 0.35),
+        ];
+    }
+
+    /**
+     * Javoblar qoralamasi: brauzer belgilangan maydonlarni [nom, qiymat]
+     * juftliklari bilan yuboradi. Sahifa yopilsa qayta kirganda tiklanadi;
+     * javoblar kelmay test yakunlansa shu qoralama baholanadi.
+     */
+    public function saveDraft(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
+    {
+        $this->assertAttemptBelongs($fanTesti, $attempt);
+        if (!$this->ownsAttempt($attempt)) {
+            return response()->json(['message' => 'Sessiya topilmadi.'], 403);
+        }
+        if ($attempt->isFinished()) {
+            return response()->json(['finished' => true]);
+        }
+        if (!Schema::hasColumn('fan_testi_attempts', 'draft_answers')) {
+            return response()->json(['ok' => false]);
+        }
+
+        $data = $request->validate([
+            'fields' => ['present', 'array', 'max:3000'],
+            'fields.*' => ['array', 'size:2'],
+            'fields.*.0' => ['required', 'string', 'max:80', 'regex:/^(answers\[\d+\](\[\d*\])?|order:\d+:\d+)$/'],
+            'fields.*.1' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $attempt->forceFill([
+            'draft_answers' => array_values($data['fields']),
+            'draft_saved_at' => now(),
+        ])->save();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Qoralamani submit() dagi answers[] ko'rinishiga keltiradi. */
+    private function draftAnswers(FanTestiAttempt $attempt): array
+    {
+        $pairs = [];
+        $orders = [];
+        foreach ((array) ($attempt->draft_answers ?? []) as $field) {
+            if (!is_array($field) || count($field) < 2 || !is_string($field[0])) {
+                continue;
+            }
+            [$name, $value] = $field;
+            if (str_starts_with($name, 'order:')) {
+                // order:{savol}:{bosqich} = pozitsiya (1..n)
+                $parts = explode(':', $name);
+                $pos = (int) $value;
+                if (count($parts) === 3 && $pos > 0) {
+                    $orders[(int) $parts[1]][$pos - 1] = (string) $parts[2];
+                }
+                continue;
+            }
+            if (str_starts_with($name, 'answers[')) {
+                $pairs[] = $name . '=' . rawurlencode((string) $value);
+            }
+        }
+        // Ketma-ketlik: formadagi kabi pozitsiya tartibida ro'yxat, bo'sh joylar ''
+        foreach ($orders as $q => $steps) {
+            for ($i = 0, $n = max(array_keys($steps)) + 1; $i < $n; $i++) {
+                $pairs[] = "answers[{$q}][]=" . rawurlencode($steps[$i] ?? '');
+            }
+        }
+
+        parse_str(implode('&', $pairs), $parsed);
+
+        return is_array($parsed['answers'] ?? null) ? $parsed['answers'] : [];
+    }
+
+    /** O'qituvchi oynasi uchun: sahifa bilan aloqa yo'q urinishni qoralama bilan yakunlash. */
+    public function finalizeFromDraft(FanTestiAttempt $attempt, string $status = 'submitted'): void
+    {
+        if (!$attempt->isFinished()) {
+            $this->finalize($attempt, $status);
+        }
     }
 
     public function submit(Request $request, FanTesti $fanTesti, FanTestiAttempt $attempt)
@@ -806,6 +1033,12 @@ class FanTestiKioskController extends Controller
 
     private function finalize(FanTestiAttempt $attempt, string $status): void
     {
+        // Javoblar kelmagan (sahifa yopilgan, vaqt tugagan, o'qituvchi to'xtatgan) —
+        // oxirgi saqlangan qoralama baholanadi, talabaning ishi yo'qolmaydi
+        if ($attempt->answers()->doesntExist() && !empty($attempt->draft_answers)) {
+            $this->gradeAnswers($attempt, $this->draftAnswers($attempt));
+        }
+
         $answers = $attempt->answers()->get();
         $score = (int) $answers->sum('points_earned');
         $total = (int) $answers->sum('points_possible') ?: (int) $attempt->total_points;

@@ -9,6 +9,7 @@ use App\Models\FanTesti;
 use App\Models\Group;
 use App\Models\FanTestiAttempt;
 use App\Models\FanTestiAttemptAnswer;
+use App\Models\FanTestiEntryRequest;
 use App\Models\TestKioskDevice;
 use App\Services\FanTestiAttempts;
 use App\Services\FanTestiGroups;
@@ -227,6 +228,115 @@ class FanTestiController extends Controller
     }
 
     /**
+     * Umumiy ochish: test bitta havola orqali istalgan kompyuterda ochiladi.
+     * Talaba ID sini kiritgach so'rovi "Kirish so'rovlari" oynasiga tushadi;
+     * o'qituvchi ruxsat bersa talabaga yuz tekshiruvi ochiladi.
+     */
+    public function launchPublic(FanTesti $fanTesti)
+    {
+        $this->authorizeCollection($fanTesti);
+
+        if (!$fanTesti->curriculum_subject_id) {
+            return back()->with('error', "Avval to'plamga fan biriktiring.");
+        }
+        if ($this->previewQuestions($fanTesti)->isEmpty()) {
+            return back()->with('error', "Bu to'plamda hali savol yo'q.");
+        }
+        if (!$this->hasPublicColumns()) {
+            return back()->with('error', "Server yangilanmagan: php artisan migrate ni ishga tushiring.");
+        }
+
+        $teacher = $this->teacher();
+        $fanTesti->update([
+            'is_active' => true,
+            'public_open_at' => now(),
+            'public_open_by' => mb_substr($teacher->short_name ?: $teacher->full_name, 0, 120),
+            'updated_by' => $teacher->id,
+        ]);
+
+        return back()->with('success', "Test umumiy ochildi. Havola: " . route('kiosk.fan-testi.show', $fanTesti)
+            . " — talabalar ID sini kiritgach, \"Kompyuterlar\" oynasidagi \"Kirish so'rovlari\" bo'limida ruxsat bering.");
+    }
+
+    /** Umumiy ochilgan testga kirish so'roviga ruxsat (yoki rad etilganini qaytarish). */
+    public function approveEntry(FanTesti $fanTesti, FanTestiEntryRequest $entry)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $entry->fan_testi_id === (int) $fanTesti->id, 404);
+
+        if ($entry->used_at) {
+            return response()->json(['message' => $entry->student_name . ' allaqachon testga kirgan.'], 422);
+        }
+        if (!$fanTesti->isPublicOpen()) {
+            return response()->json(['message' => "Test umumiy ochilmagan — avval \"Umumiy ochish\"ni bosing."], 422);
+        }
+
+        $teacher = $this->teacher();
+        $entry->forceFill([
+            'status' => 'approved',
+            'decided_by' => mb_substr($teacher->short_name ?: $teacher->full_name, 0, 120),
+            'decided_at' => now(),
+        ])->save();
+
+        return response()->json(['message' => $entry->student_name . ": ruxsat berildi — talabaga yuz tekshiruvi ochiladi ("
+            . FanTestiEntryRequest::APPROVAL_MINUTES . " daqiqa ichida kirishi kerak)."]);
+    }
+
+    public function rejectEntry(FanTesti $fanTesti, FanTestiEntryRequest $entry)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $entry->fan_testi_id === (int) $fanTesti->id, 404);
+
+        if ($entry->used_at) {
+            return response()->json(['message' => $entry->student_name . " allaqachon testga kirgan — rad etib bo'lmaydi."], 422);
+        }
+
+        $teacher = $this->teacher();
+        $entry->forceFill([
+            'status' => 'rejected',
+            'decided_by' => mb_substr($teacher->short_name ?: $teacher->full_name, 0, 120),
+            'decided_at' => now(),
+        ])->save();
+
+        return response()->json(['message' => $entry->student_name . ': kirish rad etildi.']);
+    }
+
+    /**
+     * Umumiy rejimda talabaning testini to'xtatish: buyruq so'rov yozuviga
+     * yoziladi, talabaning sahifasi keyingi aloqada belgilangan javoblarini
+     * topshiradi (javoblar brauzerda — serverdan to'xtatib bo'lmaydi).
+     */
+    public function stopEntry(FanTesti $fanTesti, FanTestiEntryRequest $entry)
+    {
+        $this->authorizeCollection($fanTesti);
+        abort_unless((int) $entry->fan_testi_id === (int) $fanTesti->id, 404);
+        abort_unless(Schema::hasColumn('fan_testi_entry_requests', 'stop_requested_at'), 409, 'php artisan migrate ni ishga tushiring.');
+
+        $attempt = $entry->attempt_id ? FanTestiAttempt::find($entry->attempt_id) : null;
+        if (!$attempt || $attempt->isFinished()) {
+            return response()->json(['message' => $entry->student_name . ': test hali boshlanmagan yoki allaqachon topshirilgan.'], 422);
+        }
+
+        $entry->forceFill(['stop_requested_at' => now()])->save();
+
+        // Sahifa bilan aloqa yo'q (yopilgan) — kutib o'tirmay, saqlangan qoralama bilan yakunlanadi
+        if (!$entry->isOnline()) {
+            app(\App\Http\Controllers\FanTestiKioskController::class)->finalizeFromDraft($attempt);
+
+            return response()->json(['message' => $entry->student_name . ": sahifa bilan aloqa yo'q edi — test saqlangan javoblari bilan topshirildi."]);
+        }
+
+        return response()->json(['message' => $entry->student_name . ": to'xtatish buyrug'i yuborildi — sahifasi bir necha soniyada javoblarini topshiradi."]);
+    }
+
+    private function hasPublicColumns(): bool
+    {
+        static $has = null;
+
+        return $has ??= Schema::hasColumn('fan_testlari', 'public_open_at') && Schema::hasTable('fan_testi_entry_requests');
+    }
+
+    /**
      * Testni to'xtatadi: berilgan kompyuterlar bo'shab kutish ekraniga qaytadi
      * va test talabalar uchun yopiladi (havola orqali ham ochilmaydi).
      * Boshlangan urinishlar o'z vaqtida topshiriladi.
@@ -235,8 +345,15 @@ class FanTestiController extends Controller
     {
         $this->authorizeCollection($fanTesti);
 
-        if ($fanTesti->is_active) {
-            $fanTesti->update(['is_active' => false, 'updated_by' => $this->teacher()->id]);
+        $closing = ['is_active' => false, 'updated_by' => $this->teacher()->id];
+        if ($this->hasPublicColumns()) {
+            $closing += ['public_open_at' => null, 'public_open_by' => null];
+            // Kutayotgan so'rovlar yopiq testga ruxsat olmasin
+            FanTestiEntryRequest::where('fan_testi_id', $fanTesti->id)->where('status', 'pending')
+                ->update(['status' => 'rejected', 'decided_by' => 'Test to\'xtatildi', 'decided_at' => now()]);
+        }
+        if ($fanTesti->is_active || !empty($fanTesti->getAttributes()['public_open_at'] ?? null)) {
+            $fanTesti->update($closing);
         }
 
         $count = Schema::hasColumn('test_kiosk_devices', 'assigned_fan_testi_id')
@@ -290,7 +407,15 @@ class FanTestiController extends Controller
             $online = $d->isOnline();
             $attempt = $attempts->get((int) $d->current_attempt_id)
                 ?? (!$running ? $attempts->get((int) $d->released_attempt_id) : null);
+            // Faqat jonli holat: topshirib ketgan talabaning natijasi kartochkada
+            // qolmaydi (u jurnalda) — kompyuter keyingi talabani kutayotgan bo'ladi
+            if ($attempt && $attempt->isFinished()) {
+                $attempt = null;
+            }
             $stage = !$running ? 'stopped' : (!$online ? 'offline' : ($d->kiosk_stage ?: 'wait'));
+            if ($stage === 'result' && !$attempt) {
+                $stage = 'idle';
+            }
             // Yangi qayta boshlangan, lekin kompyuter hali so'ramagan
             if ($running && $d->pending_command === 'restart') {
                 $stage = 'restarting';
@@ -307,6 +432,7 @@ class FanTestiController extends Controller
                 'id' => $d->id,
                 'name' => $d->name,
                 'room' => $d->roomLabel(),
+                'code' => $d->recovery_code ?? null,
                 'online' => $online,
                 'running' => $running,
                 'stage' => $stage,
@@ -342,8 +468,98 @@ class FanTestiController extends Controller
             ->filter(fn ($row) => $row['running'] || $row['attempt'] !== null)
             ->values();
 
-        return response()->json(['devices' => $rows]);
+        return response()->json([
+            'devices' => $rows,
+            // Kartochkalarda natija ko'rinmagani uchun — shu testni topshirganlar soni alohida
+            'finished_total' => FanTestiAttempt::where('fan_testi_id', $fanTesti->id)->where('status', '!=', 'in_progress')->count(),
+            'public' => [
+                'open' => $this->hasPublicColumns() && $fanTesti->isPublicOpen(),
+                'url' => route('kiosk.fan-testi.show', $fanTesti),
+                'since' => $fanTesti->public_open_at?->format('H:i'),
+                'by' => $fanTesti->public_open_by,
+            ],
+            'entries' => $this->entryRows($fanTesti),
+        ]);
     }
+
+    /** "Kirish so'rovlari" tabi: kutilayotganlar tepada, keyin yaqinda hal qilinganlar. */
+    private function entryRows(FanTesti $fanTesti): array
+    {
+        if (!$this->hasPublicColumns()) {
+            return [];
+        }
+
+        $entries = FanTestiEntryRequest::query()
+            ->where('fan_testi_id', $fanTesti->id)
+            ->where('created_at', '>', now()->subHours(FanTestiEntryRequest::LIST_HOURS))
+            ->orderByRaw("status = 'pending' DESC")
+            ->orderByDesc('id')
+            ->get();
+
+        $attempts = FanTestiAttempt::query()
+            ->whereIn('id', $entries->pluck('attempt_id')->filter()->unique())
+            ->where('fan_testi_id', $fanTesti->id)
+            ->get()
+            ->keyBy('id');
+        $hasProgress = Schema::hasColumn('fan_testi_entry_requests', 'progress_at');
+
+        return $entries->map(function (FanTestiEntryRequest $e) use ($fanTesti, $attempts, $hasProgress) {
+            $a = $e->attempt_id ? $attempts->get((int) $e->attempt_id) : null;
+            $lockCount = (int) ($a->lock_count ?? 0);
+
+            // Jarayon bosqichi — kompyuter kartochkasi bilan bir xil nomlar/ranglar
+            $stage = null;
+            if ($a) {
+                $stage = $a->isFinished() ? 'result'
+                    : ($a->isLocked() ? 'locked'
+                    : ($a->ended_reason === 'away' ? 'ended_away'
+                    : ($hasProgress && $e->isOnline() ? 'take' : 'offline')));
+            }
+
+            return [
+                'id' => $e->id,
+                'student' => $e->student_name,
+                'student_id' => $e->student_id_number,
+                'group' => $e->group_name,
+                'faculty' => $e->faculty_name,
+                'status' => $e->used_at ? 'used' : ($e->status === 'approved' && !$e->isUsable() ? 'expired' : $e->status),
+                'status_label' => $e->statusLabel(),
+                'requested' => $e->created_at?->format('H:i'),
+                'ago' => $e->created_at?->diffForHumans(null, true),
+                'decided_by' => $e->decided_by,
+                'approve_url' => !$e->used_at && $e->status !== 'approved' ? route('teacher.fan-testlari.entries.approve', [$fanTesti, $e]) : null,
+                'reject_url' => !$e->used_at && $e->status !== 'rejected' ? route('teacher.fan-testlari.entries.reject', [$fanTesti, $e]) : null,
+                // Testga kirgandan keyingi jonli holat
+                'stage' => $stage,
+                'stage_label' => $stage ? (self::ENTRY_STAGE_LABELS[$stage] ?? $stage) : null,
+                'answered' => $stage === 'take' ? (int) ($e->progress_answered ?? 0) : null,
+                'stop_requested' => $e->stop_requested_at !== null,
+                'attempt' => $a ? [
+                    'finished' => $a->isFinished(),
+                    'seconds_left' => $a->isFinished() ? 0 : $a->secondsLeft(),
+                    'questions' => (int) $a->questions_count,
+                    'percent' => $a->isFinished() && $a->percent !== null ? (float) $a->percent : null,
+                    'passed' => (bool) $a->is_passed,
+                    'away' => (int) $a->away_count,
+                    'face_mismatches' => (int) $a->face_mismatches,
+                    'lock_count' => $lockCount,
+                    'away_limit' => FanTestiAttempt::AWAY_LIMIT,
+                    'face_bypassed' => !empty($a->face_bypass_by),
+                ] : null,
+                'stop_url' => $a && !$a->isFinished() && $hasProgress && !$e->stop_requested_at
+                    ? route('teacher.fan-testlari.entries.stop', [$fanTesti, $e]) : null,
+                'unlock_url' => $a && $a->canUnlock() ? route('teacher.fan-testlari.attempts.unlock', [$fanTesti, $a]) : null,
+            ];
+        })->values()->all();
+    }
+
+    private const ENTRY_STAGE_LABELS = [
+        'take' => 'Test ishlanmoqda',
+        'result' => 'Topshirdi',
+        'locked' => 'Qulflangan',
+        'ended_away' => "Chalg'ib yakunlandi",
+        'offline' => "Sahifa bilan aloqa yo'q",
+    ];
 
     /**
      * Testni bitta kompyuterda to'xtatadi: kompyuter kutish ekraniga qaytadi,
@@ -495,6 +711,7 @@ class FanTestiController extends Controller
         'take' => 'Test ishlanmoqda',
         'result' => 'Topshirdi',
         'closed' => 'Test yopiq',
+        'idle' => 'Keyingi talaba kutilmoqda',
         'offline' => 'Oflayn',
         'stopped' => "To'xtatilgan",
         'restarting' => 'Qayta boshlanmoqda',
@@ -539,6 +756,8 @@ class FanTestiController extends Controller
                     'id' => $d->id,
                     'name' => $d->name,
                     'room' => $d->roomLabel(),
+                    // Tiklash kodi — cookie o'chib ketsa kutish ekranida kiritiladi
+                    'code' => $d->recovery_code ?? null,
                     'online' => $d->isOnline(),
                     'assigned_test_id' => $assigned ? (int) $assigned->id : null,
                     'assigned_test_name' => $assigned?->name,

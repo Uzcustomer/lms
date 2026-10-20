@@ -563,10 +563,6 @@ class TimetableController extends Controller
         return count($distinct) === 1 ? $distinct[0] : $entry['last'];
     }
 
-    /**
-     * Guruhdagi faol talabalar soni (students, status 11). Guruh nomi fakultetlararo takrorlanishi
-     * mumkin, shuning uchun guruhning o'z o'quv rejasi bo'yicha; reja mos kelmasa — nom bo'yicha jami.
-     */
     /** Doskadagi barcha guruh(cha)lar uchun faol talabalar soni: "fakultet|guruh nomi" => son. */
     private function boardGroupStudentCounts($cards): array
     {
@@ -588,6 +584,10 @@ class TimetableController extends Controller
         return $out;
     }
 
+    /**
+     * Guruhdagi faol talabalar soni (students, status 11). Guruh nomi fakultetlararo takrorlanishi
+     * mumkin, shuning uchun guruhning o'z o'quv rejasi bo'yicha; reja mos kelmasa — nom bo'yicha jami.
+     */
     private function activeStudentCountFor(string $groupName, ?string $faculty = null): int
     {
         static $counts = null;

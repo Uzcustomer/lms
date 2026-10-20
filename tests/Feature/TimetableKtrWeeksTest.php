@@ -109,3 +109,44 @@ it('1 va 2 soatlik kartalardan haftaning soati aniq yig\'iladi', function () {
         ->and(activeWeeks($s['p2']->fresh()))->toBe([1, 2, 3, 4, 5, 6])
         ->and(activeWeeks($s['p1']->fresh()))->toBe([3, 4, 6]);
 });
+
+it('birlikda 10 tadan ko\'p karta bo\'lsa ham hammasi hisobga olinadi', function () {
+    $hours = [];
+    foreach (range(1, 6) as $w) {
+        $hours[(string) $w] = ['11' => 2, '13' => 11];
+    }
+    $s = ktrWeeksSetup($hours);
+    $s['p1']->update(['len_half' => 1]);
+    $s['p2']->update(['len_half' => 1]);
+    $extra = [];
+    foreach (range(1, 9) as $i) {
+        $extra[] = TimetableCard::create($s['p1']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+            'subject_name', 'training_type', 'group_name']) + ['len_half' => 1, 'weeks' => 6]);
+    }
+
+    $res = (new TimetableController())->ktrWeeks(Request::create('/', 'POST', []), $s['board'])->getData(true);
+
+    expect($res['mismatch_count'])->toBe(0);
+    foreach (array_merge([$s['p1'], $s['p2']], $extra) as $card) {
+        expect(activeWeeks($card))->toBe([1, 2, 3, 4, 5, 6]);
+    }
+});
+
+it('2 soatlik asosiy karta ikki 1 soatlik qisqa kartadan ustun', function () {
+    $hours = [];
+    foreach (range(1, 6) as $w) {
+        $hours[(string) $w] = ['11' => 2, '13' => 2];
+    }
+    $s = ktrWeeksSetup($hours);
+    $s['p1']->update(['len_half' => 2, 'weeks' => 6]);
+    $s['p2']->update(['len_half' => 1, 'weeks' => 4]);
+    $p3 = TimetableCard::create($s['p2']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'students',
+        'subject_name', 'training_type', 'group_name']) + ['len_half' => 1, 'weeks' => 4]);
+
+    $res = (new TimetableController())->ktrWeeks(Request::create('/', 'POST', []), $s['board'])->getData(true);
+
+    expect($res['mismatch_count'])->toBe(0)
+        ->and(activeWeeks($s['p1']))->toBe([1, 2, 3, 4, 5, 6])
+        ->and(activeWeeks($s['p2']))->toBe([])
+        ->and(activeWeeks($p3))->toBe([]);
+});

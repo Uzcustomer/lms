@@ -2713,44 +2713,43 @@ class TimetableController extends Controller
     }
 
     /**
-     * Haftaning KTR soatiga teng bo'ladigan kartochkalar to'plami (birlikda odatda 1-4 ta karta):
-     * aniq teng to'plam afzal, ichida — ko'p haftali (asosiy) kartalar va kamroq karta;
-     * aniq teng bo'lmasa — soatdan oshmaydigan eng katta to'plam. [card_id => true]
+     * Haftaning KTR soatiga teng bo'ladigan kartochkalar to'plami: soatdan oshmaydigan eng katta
+     * yig'indi (aniq teng afzal), ichida — kamroq karta, so'ng asosiy (ko'p haftali) kartalar.
+     * $cards shu ustuvorlik tartibida saralangan. Kartalar soni cheklanmaydi: yig'indi bo'yicha
+     * dinamik dasturlash (soat × karta). [card_id => true]
      */
     private function ktrPickCards(array $cards, int $need): array
     {
         if ($need <= 0 || !$cards) {
             return [];
         }
-        $cards = array_values(array_slice($cards, 0, 10));
-        $n = count($cards);
-        $best = null;
-        $bestScore = null;
-        for ($mask = 1; $mask < (1 << $n); $mask++) {
-            $sum = 0;
-            $weeks = 0;
-            $count = 0;
-            for ($i = 0; $i < $n; $i++) {
-                if ($mask & (1 << $i)) {
-                    $sum += $cards[$i]->lenHalf();
-                    $weeks += (int) $cards[$i]->weeks;
-                    $count++;
+        $cards = array_values($cards);
+        // $best[yig'indi] = tanlangan indekslar (o'sish tartibida). Oxirgi kartadan boshlab
+        // yig'iladi: PHP massivlarni avval soni, so'ng elementlari bo'yicha solishtiradi —
+        // kamroq karta, teng bo'lsa oldingi (asosiy) kartasi bor to'plam "kichik" (yaxshi).
+        $best = [0 => []];
+        for ($i = count($cards) - 1; $i >= 0; $i--) {
+            $len = $cards[$i]->lenHalf();
+            $next = $best;
+            foreach ($best as $sum => $set) {
+                $total = $sum + $len;
+                if ($total > $need) {
+                    continue;
+                }
+                $candidate = array_merge([$i], $set);
+                if (!isset($next[$total]) || $candidate < $next[$total]) {
+                    $next[$total] = $candidate;
                 }
             }
-            if ($sum > $need) {
-                continue;
-            }
-            $score = [$sum, $weeks, -$count, -$mask];
-            if ($bestScore === null || $score > $bestScore) {
-                $bestScore = $score;
-                $best = $mask;
-            }
+            $best = $next;
+        }
+        unset($best[0]);
+        if (!$best) {
+            return [];
         }
         $out = [];
-        for ($i = 0; $best !== null && $i < $n; $i++) {
-            if ($best & (1 << $i)) {
-                $out[$cards[$i]->id] = true;
-            }
+        foreach ($best[max(array_keys($best))] as $i) {
+            $out[$cards[$i]->id] = true;
         }
 
         return $out;

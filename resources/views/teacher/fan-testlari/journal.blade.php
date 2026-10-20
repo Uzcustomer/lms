@@ -191,6 +191,18 @@
     .jr-flag.is-bad { background: #fee2e2; color: #b91c1c; }
     .jr-flag.is-warn { background: #fef3c7; color: #a35a06; }
     .jr-sid { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+    /* Jurnal tablari */
+    .jr-tabs { display: flex; flex-wrap: wrap; gap: 10px; }
+    .jr-tab {
+        --c: #1d4ed8; --ct: #eff6ff;
+        display: inline-flex; align-items: center; padding: 11px 22px; border: 2px solid var(--ct); border-radius: 11px;
+        background: var(--ct); color: var(--c); font-size: 14.5px; font-weight: 800; text-decoration: none;
+        transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+    }
+    .jr-tab.is-retake { --c: #7c3aed; --ct: #f5f3ff; }
+    .jr-tab:hover { border-color: var(--c); }
+    .jr-tab.is-on { background: var(--c); border-color: var(--c); color: #fff; box-shadow: 0 6px 16px rgba(15, 23, 42, .16); }
+    .jr-tab:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
     .jr-try {
         display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 999px;
         background: #eef2f8; color: var(--ink-soft); font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
@@ -393,8 +405,16 @@
                     <span>Avval "Test yaratish" bo'limida to'plam tuzing.</span>
                 </div>
             @else
+                @if(($tabsReady ?? false) && $selected)
+                    @php $tabLink = fn ($t) => route('teacher.fan-testlari.journal', array_filter(['test_id' => $selected->id, 'subject_id' => request('subject_id'), 'tab' => $t === 'retake' ? 'retake' : null])); @endphp
+                    <nav class="jr-tabs" aria-label="Jurnal bo'limlari">
+                        <a href="{{ $tabLink('main') }}" class="jr-tab {{ ($tab ?? 'main') === 'main' ? 'is-on' : '' }}">Asosiy topshirishlar</a>
+                        <a href="{{ $tabLink('retake') }}" class="jr-tab is-retake {{ ($tab ?? 'main') === 'retake' ? 'is-on' : '' }}">Qayta topshirishlar</a>
+                    </nav>
+                @endif
                 <div class="jr-panel">
                     <form method="GET" class="jr-filters">
+                        @if(($tab ?? 'main') === 'retake')<input type="hidden" name="tab" value="retake">@endif
                         <div>
                             <label for="subject_id">Mavzu (fan)</label>
                             <select name="subject_id" id="subject_id" onchange="this.form.querySelector('[name=test_id]').value=''; this.form.submit();">
@@ -438,14 +458,14 @@
                         </div>
                         <button class="jr-btn" type="submit">Ko'rsatish</button>
                         @if($selected)
-                            <a class="jr-excel" href="{{ route('teacher.fan-testlari.journal.excel', array_filter(['test_id' => $selected->id, 'group' => request('group'), 'student' => request('student')])) }}"
+                            <a class="jr-excel" href="{{ route('teacher.fan-testlari.journal.excel', array_filter(['test_id' => $selected->id, 'group' => request('group'), 'student' => request('student'), 'tab' => request('tab')])) }}"
                                title="Tanlangan test natijalari va javoblari (guruh/talaba filtri bilan)">
                                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M6 20h12a2 2 0 0 0 2-2V8l-6-6H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2Z"/></svg>
                                 Excel
                             </a>
                         @endif
                         @if(request()->hasAny(['group', 'student', 'subject_id']))
-                            <a class="jr-reset" href="{{ route('teacher.fan-testlari.journal', ['test_id' => $selected?->id]) }}">Tozalash</a>
+                            <a class="jr-reset" href="{{ route('teacher.fan-testlari.journal', array_filter(['test_id' => $selected?->id, 'tab' => request('tab')])) }}">Tozalash</a>
                         @endif
                     </form>
                 </div>
@@ -599,9 +619,7 @@
                                             {{-- Qayta topshirish: faqat talabaning oxirgi, tugagan urinishida --}}
                                             @if(($retakeReady ?? false) && $attempt->status !== 'in_progress')
                                                 @php
-                                                    $isLatest = $group['attempts']
-                                                        ->where('student_id', $attempt->student_id)
-                                                        ->max(fn ($a) => (int) ($a->attempt_no ?? 1)) === $attemptNo;
+                                                    $isLatest = (int) ($latestNo[$attempt->student_id] ?? $attemptNo) === $attemptNo;
                                                 @endphp
                                                 @if($isLatest)
                                                     @php
@@ -610,7 +628,7 @@
                                                             : $attempt->student_name . ' uchun ' . ($attemptNo + 1) . '-urinishga ruxsat berilsinmi?';
                                                     @endphp
                                                     <form method="POST" class="jr-retake-form"
-                                                          action="{{ route('teacher.fan-testlari.attempts.retake', [$selected, $attempt, 'group' => request('group'), 'student' => request('student')]) }}"
+                                                          action="{{ route('teacher.fan-testlari.attempts.retake', [$selected, $attempt, 'group' => request('group'), 'student' => request('student'), 'tab' => request('tab')]) }}"
                                                           onsubmit="return confirm({{ \Illuminate\Support\Js::from($confirmText) }})">
                                                         @csrf
                                                         @if($attempt->retake_allowed_at)
@@ -630,7 +648,7 @@
                         </details>
                     @empty
                         <div class="jr-empty">
-                            <b>Hali hech kim topshirmagan</b>
+                            <b>{{ ($tab ?? 'main') === 'retake' ? "Hali qayta topshirgan talaba yo'q" : 'Hali hech kim topshirmagan' }}</b>
                             <span>Test boshlangach, topshirgan talabalar shu yerda o'z guruhlari bo'yicha chiqadi.</span>
                         </div>
                     @endforelse

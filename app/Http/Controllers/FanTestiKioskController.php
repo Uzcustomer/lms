@@ -54,6 +54,7 @@ class FanTestiKioskController extends Controller
         return view('kiosk.fan-testi.start', [
             'test' => $fanTesti->load('subject'),
             'liveness' => FaceIdService::getLivenessConfig(),
+            'retake' => $this->isRetakeLaunch($fanTesti),
         ] + $this->follow('start'));
     }
 
@@ -145,6 +146,19 @@ class FanTestiKioskController extends Controller
             'ok' => true,
             'stop' => $entry->stop_requested_at !== null && !$attempt->isFinished(),
         ]);
+    }
+
+    /** Shu kompyuterga test "Qayta topshirish testlari" tabidan (qayta topshirish rejimida) berilgan. */
+    private function isRetakeLaunch(FanTesti $fanTesti): bool
+    {
+        if (!Schema::hasColumn('test_kiosk_devices', 'assigned_mode')) {
+            return false;
+        }
+        $device = TestDeviceToken::resolve(request());
+
+        return $device
+            && (int) $device->assigned_fan_testi_id === (int) $fanTesti->id
+            && $device->isRetakeMode();
     }
 
     /**
@@ -708,7 +722,16 @@ class FanTestiKioskController extends Controller
         // O'qituvchi jurnalda "Qayta topshirish" bergan bo'lsa — yangi urinish ochiladi.
         $latest = FanTestiAttempt::latestFor($fanTesti->id, $student->id);
         if ($latest && $latest->isFinished() && !$latest->retakeAllowed()) {
-            $fail("Bu talaba testni allaqachon topshirgan. Qayta topshirish uchun o'qituvchi jurnalda ruxsat berishi kerak.");
+            if (!$this->isRetakeLaunch($fanTesti)) {
+                $fail("Bu talaba testni allaqachon topshirgan. Qayta topshirish uchun o'qituvchi jurnalda ruxsat berishi kerak.");
+            }
+            // Qayta topshirish rejimi: o'tolmagan (yoki qatnashmagan) talaba bir marta qayta ishlaydi
+            if ($latest->is_passed) {
+                $fail("Bu talaba testdan o'tgan — qayta topshirish shart emas.");
+            }
+            if ($latest->is_retake) {
+                $fail("Bu talaba qayta topshirishni allaqachon ishlagan. Yana topshirishi uchun o'qituvchi jurnalda ruxsat berishi kerak.");
+            }
         }
 
         if ($this->activeQuestions($fanTesti)->isEmpty()) {
@@ -751,14 +774,20 @@ class FanTestiKioskController extends Controller
     private function enterAttempt(Request $request, FanTesti $fanTesti, Student $student): string
     {
         $attempt = FanTestiAttempt::latestFor($fanTesti->id, $student->id);
+        $retakeLaunch = $this->isRetakeLaunch($fanTesti);
 
         // Yo'q bo'lsa — 1-urinish; tugagan va qayta topshirishga ruxsat berilgan
-        // bo'lsa — keyingi raqamli yangi urinish (oldingisi jurnalda qoladi).
-        if (!$attempt || $attempt->retakeAllowed()) {
+        // (yoki test qayta topshirish rejimida ochilgan) bo'lsa — keyingi raqamli
+        // yangi urinish (oldingisi jurnalda qoladi).
+        if (!$attempt || $attempt->retakeAllowed() || ($retakeLaunch && $attempt->isFinished())) {
             $attempt = FanTestiAttempt::create(FanTestiAttempts::freshFields($fanTesti, FanTestiAttempts::questionSnapshot($fanTesti)) + [
                 'fan_testi_id' => $fanTesti->id,
                 'student_id' => $student->id,
                 'attempt_no' => $attempt ? (int) $attempt->attempt_no + 1 : 1,
+            ] + (Schema::hasColumn('fan_testi_attempts', 'is_retake') ? [
+                // Qayta topshirish rejimidagi yoki oldingi urinishdan keyingi har qanday urinish
+                'is_retake' => $retakeLaunch || $attempt !== null,
+            ] : []) + [
                 'student_hemis_id' => $student->hemis_id,
                 'student_name' => $student->full_name,
                 'student_id_number' => $student->student_id_number,

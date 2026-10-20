@@ -657,6 +657,28 @@
     .lm-link span { color: var(--muted); font-size: 12px; font-weight: 700; }
     .lm-link code { padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; background: #f8fafc; color: var(--navy); font-size: 13px; word-break: break-all; }
     .bl-run-badge.is-public { background: #ecfdf5; color: #047857; }
+    .bl-run-badge.is-retake { background: #f5f3ff; color: #6d28d9; }
+
+    /* To'plamlar tablari: asosiy — to'q ko'k, qayta topshirish — binafsha */
+    .bl-ctabs { display: flex; flex-wrap: wrap; gap: 10px; }
+    .bl-ctab {
+        --c: #0e2342; --ct: #eef3f9;
+        display: inline-flex; align-items: center; gap: 9px; padding: 10px 18px;
+        border: 2px solid var(--ct); border-radius: 11px; background: var(--ct); color: var(--c);
+        font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
+        transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+    }
+    .bl-ctab.is-retake { --c: #7c3aed; --ct: #f5f3ff; }
+    .bl-ctab:hover { border-color: var(--c); }
+    .bl-ctab.is-on { background: var(--c); border-color: var(--c); color: #fff; box-shadow: 0 6px 16px rgba(15, 23, 42, .16); }
+    .bl-ctab:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+    .bl-ctab-n { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; background: rgba(15, 23, 42, .08); font-size: 12px; }
+    .bl-ctab.is-on .bl-ctab-n { background: rgba(255, 255, 255, .22); }
+    .bl-retake-note { margin: 0; padding: 12px 22px; border-bottom: 1px solid var(--line-soft); background: #faf8ff; color: #4c1d95; font-size: 13px; line-height: 1.55; }
+    .bl-btn-retake { background: #7c3aed; color: #fff; box-shadow: 0 4px 12px rgba(124, 58, 237, .25); }
+    .bl-btn-retake:hover { background: #6d28d9; }
+    .lm-box.is-retake .bl-modal-icon { background: #f5f3ff; color: #7c3aed; }
+    .mn-flag.retake { background: #ede9fe; color: #6d28d9; }
 
     /* Kompyuterlar oynasi: tablar va kirish so'rovlari */
     .mn-tabs { display: flex; gap: 4px; padding: 10px 22px 0; border-bottom: 1px solid var(--line-soft); background: #fafcfe; }
@@ -1128,15 +1150,22 @@
         {{-- Mavjud to'plamlar --}}
         @if(($collections ?? collect())->isNotEmpty())
             <div class="bl-panel">
+                @php
+                    // Qayta topshirish uchun ochsa bo'ladigan to'plamlar: fani biriktirilgan va savoli bor
+                    $retakeCollections = $collections->filter(fn ($c) => $c->curriculum_subject_id && $c->questionCount() > 0)->values();
+                @endphp
                 <div class="bl-panel-head">
-                    <div>
-                        <h2>Yaratilgan test to'plamlari</h2>
-                        <p>Keyinchalik bu to'plamlardan dars testiga biriktiriladi.</p>
+                    <div class="bl-ctabs" role="tablist" aria-label="Test to'plamlari">
+                        <button type="button" class="bl-ctab is-on" role="tab" data-ctab="main" aria-selected="true">
+                            Yaratilgan test to'plamlari <span class="bl-ctab-n">{{ $collections->count() }}</span>
+                        </button>
+                        <button type="button" class="bl-ctab is-retake" role="tab" data-ctab="retake" aria-selected="false">
+                            Qayta topshirish testlari <span class="bl-ctab-n">{{ $retakeCollections->count() }}</span>
+                        </button>
                     </div>
-                    <span class="bl-panel-count">{{ $collections->count() }} ta to'plam</span>
                 </div>
 
-                <div class="bl-scroll">
+                <div class="bl-scroll" data-pane="main">
                     <table class="bl-table">
                         <thead>
                         <tr>
@@ -1179,7 +1208,7 @@
                                         <span class="bl-pill draft">Qoralama</span>
                                     @else
                                         <span class="bl-pill {{ $item->is_active ? 'ok' : 'off' }}">{{ $item->is_active ? 'Ochiq' : 'Yopiq' }}</span>
-                                        @php $runCount = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->count(); @endphp
+                                        @php $runCount = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->where('assigned_mode', '!=', 'retake')->count(); @endphp
                                         @if($runCount > 0)
                                             <div><span class="bl-run-badge">{{ $runCount }} ta kompyuterda</span></div>
                                         @endif
@@ -1190,7 +1219,7 @@
                                 </td>
                                 <td style="text-align:right">
                                     <div class="bl-acts">
-                                        @php $runningHere = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->count(); @endphp
+                                        @php $runningHere = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->where('assigned_mode', '!=', 'retake')->count(); @endphp
                                         @if($isDraft)
                                             <button type="button" class="bl-btn bl-btn-main bl-btn-sm bl-attach"
                                                     data-attach-id="{{ $item->id }}"
@@ -1238,7 +1267,98 @@
                         </tbody>
                     </table>
                 </div>
+
+                {{-- Qayta topshirish testlari: o'tolmagan / qatnashmagan talabalar bir marta qayta ishlaydi --}}
+                <div data-pane="retake" hidden>
+                    <p class="bl-retake-note">Testdan <b>o'tolmagan yoki qatnashmagan</b> talabalar shu yerdan ochilgan test orqali <b>bir marta</b> qayta topshiradi (talaba ID + yuz tekshiruvi). Natijalar <b>Test jurnali &rarr; "Qayta topshirishlar"</b> tabida chiqadi.</p>
+                    <div class="bl-scroll">
+                        <table class="bl-table">
+                            <thead>
+                            <tr>
+                                <th>Test to'plami</th>
+                                <th>Fan</th>
+                                <th style="text-align:center">Savollar</th>
+                                <th style="text-align:center">Vaqt</th>
+                                <th>Holat</th>
+                                <th style="text-align:right">Amal</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @forelse($retakeCollections as $item)
+                                @php $retakeRunning = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->where('assigned_mode', 'retake')->count(); @endphp
+                                <tr>
+                                    <td>
+                                        <span class="bl-t-name">{{ $item->name }}</span>
+                                        @if($item->description)
+                                            <span class="bl-t-sub">{{ \Illuminate\Support\Str::limit($item->description, 64) }}</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="bl-t-name">{{ $item->subject?->subject_name ?? '-' }}</span>
+                                        <span class="bl-t-sub">{{ collect([$item->subject?->semester_name, $item->subject?->curriculum_label ?? null])->filter()->implode(' · ') ?: '-' }}</span>
+                                    </td>
+                                    <td style="text-align:center">
+                                        <span class="bl-num">{{ $item->questionCount() }}</span>
+                                        @if($item->questionsPerAttempt() < $item->activeQuestionCount())
+                                            <span class="bl-t-sub">talabaga {{ $item->questionsPerAttempt() }} ta</span>
+                                        @endif
+                                    </td>
+                                    <td style="text-align:center">{{ $item->duration_minutes }} daqiqa</td>
+                                    <td>
+                                        @if($retakeRunning > 0)
+                                            <span class="bl-run-badge is-retake">{{ $retakeRunning }} ta kompyuterda</span>
+                                        @else
+                                            <span class="bl-t-sub">&mdash;</span>
+                                        @endif
+                                    </td>
+                                    <td style="text-align:right">
+                                        <div class="bl-acts">
+                                            <button type="button" class="bl-btn bl-btn-retake bl-btn-sm lm-open"
+                                                    data-mode="retake"
+                                                    data-test-id="{{ $item->id }}"
+                                                    data-test-name="{{ $item->name }}"
+                                                    data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"
+                                                    title="Kompyuterlarni tanlab qayta topshirish testini boshlash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Testni boshlash</button>
+                                            @if($retakeRunning > 0)
+                                                <button type="button" class="bl-btn bl-btn-monitor bl-btn-sm mn-open"
+                                                        data-mode="retake"
+                                                        data-test-id="{{ $item->id }}"
+                                                        data-test-name="{{ $item->name }} — qayta topshirish"
+                                                        data-devices-url="{{ route('teacher.fan-testlari.devices', $item) }}"
+                                                        data-launch-url="{{ route('teacher.fan-testlari.launch', $item) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="7" rx="1.5"/><rect x="13" y="3" width="9" height="7" rx="1.5"/><rect x="2" y="14" width="9" height="7" rx="1.5"/><rect x="13" y="14" width="9" height="7" rx="1.5"/></svg>Kompyuterlar ({{ $retakeRunning }})</button>
+                                                <form method="POST" action="{{ route('teacher.fan-testlari.stop', $item) }}" onsubmit="return confirm('Test to\'xtatilsinmi? Kompyuterlar kutish ekraniga qaytadi va test talabalar uchun yopiladi.')">
+                                                    @csrf
+                                                    <button class="bl-btn bl-btn-warn bl-btn-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>To'xtatish</button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="6"><div class="lm-empty">Qayta topshirish uchun ochsa bo'ladigan to'plam yo'q — avval to'plamga fan biriktiring va savol qo'shing.</div></td></tr>
+                            @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
+
+            <script>
+            // To'plamlar tablari; tanlangan tab qayta yuklanganda saqlanadi (masalan, test boshlangach)
+            (() => {
+                const tabs = document.querySelectorAll('.bl-ctab');
+                const panes = document.querySelectorAll('[data-pane]');
+                function show(name) {
+                    tabs.forEach((t) => { const on = t.dataset.ctab === name; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', on ? 'true' : 'false'); });
+                    panes.forEach((p) => { p.hidden = p.dataset.pane !== name; });
+                    try { localStorage.setItem('fanTestCtab', name); } catch (e) {}
+                }
+                tabs.forEach((t) => t.addEventListener('click', () => show(t.dataset.ctab)));
+                let saved = null;
+                try { saved = localStorage.getItem('fanTestCtab'); } catch (e) {}
+                if (saved === 'retake') show('retake');
+            })();
+            </script>
         @endif
     </div>
 </div>
@@ -1315,10 +1435,11 @@
     <div class="bl bl-modal" id="launchModal">
         <form method="POST" action="" class="bl-modal-box lm-box" id="launchForm">
             @csrf
+            <input type="hidden" name="mode" id="launchModeInput" value="normal">
             <div class="bl-modal-head">
                 <span class="bl-modal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
                 <div>
-                    <h3>Kompyuterlarda testni boshlash</h3>
+                    <h3 id="launchTitle">Kompyuterlarda testni boshlash</h3>
                     <p id="launchTestName"></p>
                 </div>
             </div>
@@ -1428,10 +1549,16 @@
                 // Kiosk havolasi: /test/{id}
                 document.getElementById('launchPublicLink').textContent = @json(url('/test')) + '/' + testId;
                 document.getElementById('launchTestName').textContent = open.dataset.testName || '';
+                // Qayta topshirish tabidan — faqat kompyuterlar, umumiy havola rejimi yo'q
+                const retake = open.dataset.mode === 'retake';
+                document.getElementById('launchModeInput').value = retake ? 'retake' : 'normal';
+                document.getElementById('launchTitle').textContent = retake ? 'Qayta topshirish testini boshlash' : 'Kompyuterlarda testni boshlash';
+                modal.querySelector('.lm-modes').style.display = retake ? 'none' : '';
+                modal.querySelector('.lm-box').classList.toggle('is-retake', retake);
                 render(testId);
                 refresh();
                 // Kompyuter ro'yxati bo'sh bo'lsa umumiy rejim qulayroq
-                setMode(DEVICES.length ? 'devices' : 'public');
+                setMode(retake || DEVICES.length ? 'devices' : 'public');
                 modal.classList.add('is-open');
                 return;
             }
@@ -1531,6 +1658,7 @@
                 meta += '<div class="mn-lock" style="background:#e0f2fe;color:#075985">' + "Yuz tekshiruvisiz kirish ruxsati berilgan — keyingi talaba faqat ID bilan kiradi (bir marta).</div>";
             }
             const flags = [];
+            if (d.retake) flags.push('<span class="mn-flag retake">Qayta topshirish</span>');
             if (a && a.face_bypassed) flags.push('<span class="mn-flag warn">Yuz tekshiruvisiz kirgan</span>');
             if (a && a.away > 0) flags.push('<span class="mn-flag warn">Chalg\'idi: ' + a.away + '</span>');
             if (a && a.face_mismatches > 0) flags.push('<span class="mn-flag bad">Yuz mos emas: ' + a.face_mismatches + '</span>');
@@ -1692,6 +1820,7 @@
             addBtn.dataset.testName = btn.dataset.testName;
             addBtn.dataset.launchUrl = btn.dataset.launchUrl;
             addBtn.dataset.publicUrl = btn.dataset.publicUrl || '';
+            addBtn.dataset.mode = btn.dataset.mode || '';
             toast.textContent = '';
             changed = false;
             lastPending = 0;

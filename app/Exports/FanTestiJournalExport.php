@@ -21,19 +21,25 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
  */
 class FanTestiJournalExport implements WithMultipleSheets
 {
-    public function __construct(private FanTesti $test, private Collection $attempts) {}
+    public function __construct(private FanTesti $test, private Collection $attempts, private bool $retake = false) {}
 
     public function sheets(): array
     {
+        self::$retakeTitle = $this->retake;
+
         return [
             new FanTestiJournalResultsSheet($this->test, $this->attempts),
             new FanTestiJournalAnswersSheet($this->test, $this->attempts),
         ];
     }
 
+    /** Qayta topshirishlar tabidan yuklanganda sarlavhaga belgi qo'shiladi. */
+    private static bool $retakeTitle = false;
+
     public static function title(FanTesti $test): string
     {
-        return trim($test->name . ($test->subject?->subject_name ? ' — ' . $test->subject->subject_name : ''));
+        return trim($test->name . ($test->subject?->subject_name ? ' — ' . $test->subject->subject_name : ''))
+            . (self::$retakeTitle ? ' (qayta topshirishlar)' : '');
     }
 
     public static function status(FanTestiAttempt $attempt): string

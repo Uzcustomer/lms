@@ -189,7 +189,11 @@ class FanTestiController extends Controller
         $data = $request->validate([
             'device_ids' => ['required', 'array', 'min:1'],
             'device_ids.*' => ['integer'],
+            // "Qayta topshirish testlari" tabidan — o'tolmaganlar qayta ishlaydi, natija jurnalda alohida
+            'mode' => ['nullable', 'in:normal,retake'],
         ], ['device_ids.required' => 'Kamida bitta kompyuter tanlang.']);
+        $mode = ($data['mode'] ?? 'normal') === 'retake' ? 'retake' : 'normal';
+        $hasMode = Schema::hasColumn('test_kiosk_devices', 'assigned_mode');
 
         $devices = TestKioskDevice::whereIn('id', $data['device_ids'])->whereNull('revoked_at')->with('assignedTest:id,is_active')->get();
         // O'chirilgan yoki yopilgan testga berilgan kompyuter band hisoblanmaydi.
@@ -207,7 +211,7 @@ class FanTestiController extends Controller
             'assigned_fan_testi_id' => $fanTesti->id,
             'assigned_at' => now(),
             'assigned_by_name' => $teacher->short_name ?: $teacher->full_name,
-        ] + ($this->hasLiveColumns() ? [
+        ] + ($hasMode ? ['assigned_mode' => $mode] : []) + ($this->hasLiveColumns() ? [
             'released_fan_testi_id' => null,
             'released_attempt_id' => null,
             'pending_command' => null,
@@ -219,7 +223,8 @@ class FanTestiController extends Controller
             $fanTesti->update(['is_active' => true, 'updated_by' => $teacher->id]);
         }
 
-        $message = $free->count() . " ta kompyuterda test boshlandi — bir necha soniyada test oynasi ochiladi.";
+        $message = $free->count() . ' ta kompyuterda ' . ($mode === 'retake' ? 'qayta topshirish testi' : 'test')
+            . " boshlandi — bir necha soniyada test oynasi ochiladi.";
         if ($busy->isNotEmpty()) {
             $message .= ' ' . $busy->count() . " ta kompyuter boshqa test bilan band bo'lgani uchun o'tkazib yuborildi.";
         }
@@ -433,6 +438,7 @@ class FanTestiController extends Controller
                 'name' => $d->name,
                 'room' => $d->roomLabel(),
                 'code' => $d->recovery_code ?? null,
+                'retake' => $running && ($d->assigned_mode ?? null) === 'retake',
                 'online' => $online,
                 'running' => $running,
                 'stage' => $stage,
@@ -760,6 +766,7 @@ class FanTestiController extends Controller
                     'code' => $d->recovery_code ?? null,
                     'online' => $d->isOnline(),
                     'assigned_test_id' => $assigned ? (int) $assigned->id : null,
+                    'assigned_mode' => $assigned ? ($d->assigned_mode ?? 'normal') : null,
                     'assigned_test_name' => $assigned?->name,
                     'assigned_by' => $assigned ? $d->assigned_by_name : null,
                 ];
@@ -1021,6 +1028,7 @@ class FanTestiController extends Controller
             'subjectOptions' => $subjectOptions,
             'allGroups' => FanTestiAttempt::query()
                 ->where('fan_testi_id', $selected->id)
+                ->when(Schema::hasColumn('fan_testi_attempts', 'is_retake'), fn ($q) => $q->where('is_retake', $this->journalTab($request) === 'retake'))
                 ->whereNotNull('group_name')
                 ->distinct()
                 ->orderBy('group_name')
@@ -1033,6 +1041,12 @@ class FanTestiController extends Controller
                 'average_percent' => round((float) $finished->avg('percent'), 1),
             ],
             'retakeReady' => Schema::hasColumn('fan_testi_attempts', 'attempt_no'),
+            'tab' => $this->journalTab($request),
+            'tabsReady' => Schema::hasColumn('fan_testi_attempts', 'is_retake'),
+            // Talabaning shu testdagi eng oxirgi urinish raqami (ikkala tab bo'yicha) —
+            // "Qayta topshirish" tugmasi faqat haqiqiy oxirgi urinishda chiqsin
+            'latestNo' => FanTestiAttempt::query()->where('fan_testi_id', $selected->id)
+                ->groupBy('student_id')->selectRaw('student_id, MAX(attempt_no) AS n')->pluck('n', 'student_id')->all(),
             'migrationPending' => false,
         ]);
     }
@@ -1052,6 +1066,7 @@ class FanTestiController extends Controller
             'test_id' => $fanTesti->id,
             'group' => request('group'),
             'student' => request('student'),
+            'tab' => request('tab'),
         ]));
 
         if (!$attempt->isFinished()) {
@@ -1094,19 +1109,29 @@ class FanTestiController extends Controller
 
         $name = trim(preg_replace('/[^\pL\pN]+/u', '_', $selected->name), '_') ?: 'test';
 
+        $retakeTab = $this->journalTab($request) === 'retake';
+
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\FanTestiJournalExport($selected, $attempts),
-            'test_jurnali_' . $name . '_' . now()->format('Y-m-d') . '.xlsx'
+            new \App\Exports\FanTestiJournalExport($selected, $attempts, $retakeTab),
+            'test_jurnali_' . ($retakeTab ? 'qayta_' : '') . $name . '_' . now()->format('Y-m-d') . '.xlsx'
         );
+    }
+
+    /** Jurnal tabi: asosiy urinishlar yoki qayta topshirishlar. */
+    private function journalTab(Request $request): string
+    {
+        return $request->input('tab') === 'retake' && Schema::hasColumn('fan_testi_attempts', 'is_retake') ? 'retake' : 'main';
     }
 
     private function journalAttempts(Request $request, FanTesti $selected)
     {
         $search = trim((string) $request->input('student'));
+        $hasRetake = Schema::hasColumn('fan_testi_attempts', 'is_retake');
 
         return FanTestiAttempt::query()
             ->with('answers')
             ->where('fan_testi_id', $selected->id)
+            ->when($hasRetake, fn ($query) => $query->where('is_retake', $this->journalTab($request) === 'retake'))
             ->when($request->filled('group'), fn ($query) => $query->where('group_name', $request->string('group')))
             ->when($search !== '', fn ($query) => $query->where(function ($inner) use ($search) {
                 $inner->where('student_name', 'like', "%{$search}%")

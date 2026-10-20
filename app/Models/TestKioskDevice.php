@@ -25,6 +25,7 @@ class TestKioskDevice extends Model
         'revoked_at',
         'revoked_reason',
         'assigned_fan_testi_id',
+        'assigned_mode',
         'assigned_at',
         'assigned_by_name',
         'kiosk_stage',
@@ -57,6 +58,12 @@ class TestKioskDevice extends Model
     public function isActive(): bool
     {
         return $this->revoked_at === null;
+    }
+
+    /** Test qayta topshirish rejimida berilgan. */
+    public function isRetakeMode(): bool
+    {
+        return ($this->assigned_mode ?? null) === 'retake';
     }
 
     /** Boshqa kompyuterda yo'q, tasodifiy 4 raqamli tiklash kodi. */

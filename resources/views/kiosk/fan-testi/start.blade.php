@@ -120,7 +120,7 @@
 @section('content')
     <div class="k-card">
         <div class="k-head">
-            <div class="k-eyebrow">Nazorat testi</div>
+            <div class="k-eyebrow">{{ ($retake ?? false) ? 'Qayta topshirish testi' : 'Nazorat testi' }}</div>
             <h1>{{ $test->name }}</h1>
             <p>{{ $test->subject?->subject_name }}@if($test->subject?->semester_name) · {{ $test->subject->semester_name }}@endif</p>
 
@@ -150,7 +150,11 @@
             <ul class="s-rules">
                 <li><span class="s-num">1</span><span>Test <b>{{ $test->duration_minutes }} daqiqa</b> davom etadi. Vaqt tugashiga bir daqiqa qolganda ogohlantirish beriladi.</span></li>
                 <li><span class="s-num">2</span><span>Vaqt tugaganda javoblaringiz <b>avtomatik topshiriladi</b>.</span></li>
-                <li><span class="s-num">3</span><span>Har bir talaba bu testni <b>faqat bir marta</b> topshiradi.</span></li>
+                @if($retake ?? false)
+                    <li><span class="s-num">3</span><span>Bu <b>qayta topshirish</b>: testdan o'tolmagan yoki qatnashmagan talabalar <b>bir marta</b> ishlaydi.</span></li>
+                @else
+                    <li><span class="s-num">3</span><span>Har bir talaba bu testni <b>faqat bir marta</b> topshiradi.</span></li>
+                @endif
                 <li><span class="s-num">4</span><span>Kirishda <b>yuz tekshiruvi</b> bor: boshingizni o'ngga, chapga burib, so'ng kameraga to'g'ri qarang.</span></li>
             </ul>
 

@@ -9,7 +9,7 @@ class FanTestiAttempt extends Model
     protected $table = 'fan_testi_attempts';
 
     protected $fillable = [
-        'fan_testi_id', 'student_id', 'attempt_no', 'student_hemis_id',
+        'fan_testi_id', 'student_id', 'attempt_no', 'is_retake', 'student_hemis_id',
         'student_name', 'student_id_number', 'group_id', 'group_name',
         'faculty_name', 'specialty_name',
         'status', 'started_at', 'expires_at', 'submitted_at', 'duration_seconds',
@@ -26,6 +26,7 @@ class FanTestiAttempt extends Model
         'fan_testi_id' => 'integer',
         'student_id' => 'integer',
         'attempt_no' => 'integer',
+        'is_retake' => 'boolean',
         'started_at' => 'datetime',
         'retake_allowed_at' => 'datetime',
         'expires_at' => 'datetime',

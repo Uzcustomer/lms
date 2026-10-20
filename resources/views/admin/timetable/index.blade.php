@@ -1074,9 +1074,10 @@
         }
         /* Nom va haftalar uchburchakdan chiqib ketmasin */
         #grid td.tt-split .tt-tri-name { max-width: 62%; }
-        .tt-bolak-tag { color: #7c2d12; font-weight: 800; white-space: nowrap; }
         #grid td.tt-split .tt-tri-name .tt-weeks { display: block; font-size: 8px; }
         #grid td.tt-split .tt-tri-name .tt-room { font-size: 9px; }
+        /* Bo'lakli fan harfi — "(a)", "(c)" */
+        .tt-bolak-tag { color: #7c2d12; font-weight: 800; white-space: nowrap; }
         /* Ikki rang tutashgan joydagi nozik ajratgich */
         #grid td.tt-cell.tt-split::after {
             content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 2;
@@ -6121,10 +6122,9 @@
             // Bo'lakli fan ("Tibbiyot kasbiga kirish. Terapiya (a)"): qisqa nomda asosiy qism
             // (oxirgi nuqtadan keyingisi — "Terapiya") va bo'lak harfi doim ko'rinadi,
             // aks holda uzun umumiy boshlanma tufayli (a) yoki (c) ekani bilinmay qolardi.
-            const BOLAK_NAME_RX = /^(.*?)\s*\((\p{L})\)\s*$/u;
             function cardLabel(c, short) {
                 const t = c.training_type === 'lecture' ? 'M' : 'A';
-                const bm = BOLAK_NAME_RX.exec(String(c.subject_name || '').trim());
+                const bm = BOLAK_RX.exec(String(c.subject_name || '').trim());
                 if (bm) {
                     let baseName = bm[1].trim();
                     if (short) {
@@ -6139,12 +6139,11 @@
             }
             // Karta ustiga kursor olib borilganda chiqadigan to'liq ma'lumot (sikldagi kabi).
             function cardTooltip(c, extra) {
-                const bm = BOLAK_NAME_RX.exec(String(c.subject_name || '').trim());
-                const groups = (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []);
+                const bm = BOLAK_RX.exec(String(c.subject_name || '').trim());
                 return [
                     c.subject_name + ' — ' + (c.training_type === 'lecture' ? "ma'ruza" : 'amaliy'),
                     bm ? '(' + bm[2] + ") bo'lak — guruh talabalarining bir qismi, boshqa bo'laklar bilan parallel" : '',
-                    (c.oqim_label ? c.oqim_label + ' · ' : '') + 'Guruh: ' + groups.join(', ') + (c.students ? ' · ' + c.students + ' talaba' : ''),
+                    (c.oqim_label ? c.oqim_label + ' · ' : '') + 'Guruh: ' + cardGroups(c).join(', ') + (c.students ? ' · ' + c.students + ' talaba' : ''),
                     "O'qituvchi: " + (c.teacher_name || 'biriktirilmagan'),
                     'Xona: ' + (c.auditorium_name ? c.auditorium_name + (c.auditorium_volume ? " (sig'im " + c.auditorium_volume + ')' : '') : 'biriktirilmagan'),
                     c.kafedra_name ? 'Kafedra: ' + c.kafedra_name : '',

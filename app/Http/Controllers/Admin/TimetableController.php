@@ -1966,13 +1966,6 @@ class TimetableController extends Controller
     }
 
     /**
-     * Bo'lakli fanning aralash (c) amaliy kartasi bir nechta asos guruhni qamrab olgan bo'lsa
-     * ("02a+02b+03a+03b+…"), uni asos guruhlar bo'yicha bo'ladi: har asos guruhga ("02a + 02b")
-     * alohida karta. Asl karta birinchi asos guruhda qoladi; qolganlari uning nusxasi —
-     * tashqi/ichki joylashuvi va haftalari (bekor qilingan haftalar, ko'chirishlar) bilan.
-     * O'qituvchi va xona nusxalarga ko'chirilmaydi (kafedra o'zi biriktiradi).
-     */
-    /**
      * Bo'lakli fanning ma'ruzalari ("Fan (a)", "Fan (b)", "Fan (c)") bitta oqimda — bitta umumiy ma'ruza:
      * asosiy nom bilan bitta karta qoladi (barcha guruhlar, jami talaba), qolganlari o'chiriladi.
      * Qolgan kartaning joylashuvi va haftalari saqlanadi.
@@ -2034,6 +2027,13 @@ class TimetableController extends Controller
         return response()->json(['ok' => true, 'dry_run' => $dry, 'lectures' => count($list), 'removed' => $removed, 'list' => array_slice($list, 0, 200)]);
     }
 
+    /**
+     * Bo'lakli fanning aralash (c) amaliy kartasi bir nechta asos guruhni qamrab olgan bo'lsa
+     * ("02a+02b+03a+03b+…"), uni asos guruhlar bo'yicha bo'ladi: har asos guruhga ("02a + 02b")
+     * alohida karta. Asl karta birinchi asos guruhda qoladi; qolganlari uning nusxasi —
+     * tashqi/ichki joylashuvi va haftalari (bekor qilingan haftalar, ko'chirishlar) bilan.
+     * O'qituvchi va xona nusxalarga ko'chirilmaydi (kafedra o'zi biriktiradi).
+     */
     public function splitVariantMixed(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([

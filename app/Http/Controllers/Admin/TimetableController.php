@@ -5756,7 +5756,7 @@ class TimetableController extends Controller
             if (!$this->halfOverlap($myRange, $this->rangeFor($o, (int) $op, $osh))) {
                 continue;
             }
-            if ($this->groupScopeKey($o) === $this->groupScopeKey($card)) {
+            if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
                 if (!empty($overlap)) {
                     $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';
@@ -5896,6 +5896,21 @@ class TimetableController extends Controller
     }
 
     /** Tashqi qatlamdagi guruh bandligi (ext_day/ext_pair bo'yicha). */
+    /**
+     * Bitta fanning turli bo'laklari ("Fan (a)" va "Fan (b)"): guruhning turli talabalari —
+     * bir vaqtda parallel o'tadi, guruh bandligi bo'yicha bir-biriga to'sqinlik qilmaydi
+     * (o'qituvchi va xona bandligi baribir tekshiriladi).
+     */
+    private function bolakSiblings(TimetableCard $a, TimetableCard $b): bool
+    {
+        $rx = '/^(.*?)\s*\((\p{L})\)\s*$/u';
+        if (!preg_match($rx, trim((string) $a->subject_name), $ma) || !preg_match($rx, trim((string) $b->subject_name), $mb)) {
+            return false;
+        }
+
+        return mb_strtolower(trim($ma[1])) === mb_strtolower(trim($mb[1])) && mb_strtolower($ma[2]) !== mb_strtolower($mb[2]);
+    }
+
     private function findExternalConflicts(TimetableCard $card, int $day, int $pair): array
     {
         $others = TimetableCard::where('board_id', $card->board_id)
@@ -5926,7 +5941,7 @@ class TimetableController extends Controller
                 continue;
             }
             $common = array_intersect($myGroups, $o->occupiedGroups());
-            if ($common && !array_intersect($activeWeeks((int) $card->id), $activeWeeks((int) $o->id))) {
+            if ($common && ($this->bolakSiblings($card, $o) || !array_intersect($activeWeeks((int) $card->id), $activeWeeks((int) $o->id)))) {
                 continue;
             }
             if ($common) {
@@ -6030,7 +6045,7 @@ class TimetableController extends Controller
                 continue;
             }
             // Guruh konflikti — bir yo'nalish+kurs ichida
-            if ($this->groupScopeKey($o) === $this->groupScopeKey($card)) {
+            if ($this->groupScopeKey($o) === $this->groupScopeKey($card) && !$this->bolakSiblings($card, $o)) {
                 $overlap = array_intersect($myGroups, $o->occupiedGroups());
                 if (!empty($overlap)) {
                     $errors[] = 'Guruh band: ' . implode(',', $overlap) . ' (' . $o->subject_name . ')';

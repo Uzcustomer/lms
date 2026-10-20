@@ -2792,7 +2792,15 @@
                         ? { bg: PALETTE[i][0], border: PALETTE[i][1] }
                         : (h => ({ bg: hslToHex(h, [74, 60, 82][i % 3], [85, 90, 81][i % 3]), border: hslToHex(h, 64, 40) }))(Math.round((i * GOLDEN + 18) % 360));
                 });
-                allNames.forEach(n => { subjectColors[n] = { ...colorOf[baseOf(n)] }; });
+                [...new Set([...allNames, ...scopeNames])].forEach(n => { subjectColors[n] = { ...colorOf[baseOf(n)] }; });
+            }
+            // Rang qamrovi — ekranda ko'rinib turganlar: sikl ko'rinishida sikl bloklari (specCards ularni
+            // chiqarib tashlaydi), aks holda tanlangan yo'nalish/kurs kartalari.
+            function colorScopeCards() {
+                if (viewMode === 'cycle' && cyclePlanData && Array.isArray(cyclePlanData.cycle_cards)) {
+                    return cyclePlanData.cycle_cards.map(c => ({ subject_name: c.subject }));
+                }
+                return specCards();
             }
             // Foydalanuvchi tanlagan ranglar doska sozlamalarida saqlanadi va
             // avtomatik (golden-angle) rangdan ustun turadi.
@@ -3654,6 +3662,7 @@
             $('viewMode').onchange = function () {
                 viewMode = this.value;
                 selected = null;
+                try { buildSubjectColors(colorScopeCards()); } catch (e) { }
                 if (typeof renderWeeklyLayerUi === 'function') renderWeeklyLayerUi();
                 if (board) fillWeekSel();
                 renderGrid();
@@ -4215,6 +4224,7 @@
                     const gw = $('cycleGridWrap');
                     const keep = gw ? { top: gw.scrollTop, left: gw.scrollLeft, page: window.scrollY } : null;
                     cyclePlanData = j;
+                    try { buildSubjectColors(colorScopeCards()); } catch (e) { }
                     renderCycleLayerUi(j);
                     if (j.start_date && !$('cycleStart').value) $('cycleStart').value = j.start_date;
                     cycleHolidays = j.holidays || [];   // server — yagona manba (saqlangandan keyin)
@@ -6098,7 +6108,7 @@
             });
 
             // ===== Render =====
-            function renderAll() { resetCompactCache(); try { buildSubjectColors(specCards()); } catch (e) { } buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
+            function renderAll() { resetCompactCache(); try { buildSubjectColors(colorScopeCards()); } catch (e) { } buildGroupRows(); renderPanel(); renderGrid(); renderStats(); updateCheckBadge(); syncUrl(); markPendingChanges(); renderWeeklyLayerUi(); }
 
             function renderStats() {
                 // Shu haftada o'tilmaydigan kartalar hisobga olinmaydi — aks holda

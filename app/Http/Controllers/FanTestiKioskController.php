@@ -785,8 +785,9 @@ class FanTestiKioskController extends Controller
                 'student_id' => $student->id,
                 'attempt_no' => $attempt ? (int) $attempt->attempt_no + 1 : 1,
             ] + (Schema::hasColumn('fan_testi_attempts', 'is_retake') ? [
-                // Qayta topshirish rejimidagi yoki oldingi urinishdan keyingi har qanday urinish
-                'is_retake' => $retakeLaunch || $attempt !== null,
+                // Faqat "Qayta topshirish testlari"dan ochilgan test orqali — jurnalda alohida tab.
+                // Jurnaldagi "Qayta topshirish" tugmasi bilan ochilgan 2-urinish asosiy tabda qoladi.
+                'is_retake' => $retakeLaunch,
             ] : []) + [
                 'student_hemis_id' => $student->hemis_id,
                 'student_name' => $student->full_name,

@@ -198,12 +198,15 @@
     .jr-tabs { display: flex; flex-wrap: wrap; gap: 10px; }
     .jr-tab {
         --c: #1d4ed8; --ct: #eff6ff;
-        display: inline-flex; align-items: center; padding: 11px 22px; border: 2px solid var(--ct); border-radius: 11px;
-        background: var(--ct); color: var(--c); font-size: 14.5px; font-weight: 800; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border: 2px solid var(--c); border-radius: 11px;
+        background: #fff; color: var(--c); font-size: 15px; font-weight: 800; text-decoration: none;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, .08);
         transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
     }
+    .jr-tab:not(.is-on):hover { background: var(--ct); }
+    /* "(NB)" — otrabotka belgisi, faol tabda ham ko'rinsin */
+    .tab-nb { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; background: #dc2626; color: #fff; font-size: 11.5px; font-weight: 800; letter-spacing: .04em; }
     .jr-tab.is-retake { --c: #7c3aed; --ct: #f5f3ff; }
-    .jr-tab:hover { border-color: var(--c); }
     .jr-tab.is-on { background: var(--c); border-color: var(--c); color: #fff; box-shadow: 0 6px 16px rgba(15, 23, 42, .16); }
     .jr-tab:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
     .jr-try {
@@ -412,7 +415,7 @@
                     @php $tabLink = fn ($t) => route('teacher.fan-testlari.journal', array_filter(['test_id' => $selected->id, 'subject_id' => request('subject_id'), 'tab' => $t === 'retake' ? 'retake' : null])); @endphp
                     <nav class="jr-tabs" aria-label="Jurnal bo'limlari">
                         <a href="{{ $tabLink('main') }}" class="jr-tab {{ ($tab ?? 'main') === 'main' ? 'is-on' : '' }}">Asosiy topshirishlar</a>
-                        <a href="{{ $tabLink('retake') }}" class="jr-tab is-retake {{ ($tab ?? 'main') === 'retake' ? 'is-on' : '' }}">Qayta topshirishlar</a>
+                        <a href="{{ $tabLink('retake') }}" class="jr-tab is-retake {{ ($tab ?? 'main') === 'retake' ? 'is-on' : '' }}">Qayta topshirishlar <span class="tab-nb">NB</span></a>
                     </nav>
                 @endif
                 <div class="jr-panel">

@@ -681,13 +681,15 @@
     .bl-ctabs { display: flex; flex-wrap: wrap; gap: 10px; }
     .bl-ctab {
         --c: #0e2342; --ct: #eef3f9;
-        display: inline-flex; align-items: center; gap: 9px; padding: 10px 18px;
-        border: 2px solid var(--ct); border-radius: 11px; background: var(--ct); color: var(--c);
-        font-family: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer;
+        display: inline-flex; align-items: center; gap: 9px; padding: 12px 22px;
+        border: 2px solid var(--c); border-radius: 11px; background: #fff; color: var(--c);
+        font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, .08);
         transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
     }
+    .bl-ctab:not(.is-on):hover { background: var(--ct); }
+    .tab-nb { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; background: #dc2626; color: #fff; font-size: 11.5px; font-weight: 800; letter-spacing: .04em; }
     .bl-ctab.is-retake { --c: #7c3aed; --ct: #f5f3ff; }
-    .bl-ctab:hover { border-color: var(--c); }
     .bl-ctab.is-on { background: var(--c); border-color: var(--c); color: #fff; box-shadow: 0 6px 16px rgba(15, 23, 42, .16); }
     .bl-ctab:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
     .bl-ctab-n { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; background: rgba(15, 23, 42, .08); font-size: 12px; }
@@ -1193,7 +1195,7 @@
                             Yaratilgan test to'plamlari <span class="bl-ctab-n">{{ $collections->count() }}</span>
                         </button>
                         <button type="button" class="bl-ctab is-retake" role="tab" data-ctab="retake" aria-selected="false">
-                            Qayta topshirish testlari <span class="bl-ctab-n">{{ $retakeCollections->count() }}</span>
+                            Qayta topshirish testlari <span class="tab-nb">NB</span> <span class="bl-ctab-n">{{ $retakeCollections->count() }}</span>
                         </button>
                     </div>
                 </div>

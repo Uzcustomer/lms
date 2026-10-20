@@ -1958,12 +1958,6 @@ class TimetableController extends Controller
     }
 
     /**
-     * Joylashuvlarni bo'shatish (kartochkalarni panelga qaytarish) — qamrov
-     * bo'yicha: yo'nalish+kurs / kurs (barcha yo'nalishlar) / butun doska.
-     * Kartochkalar o'chirilmaydi; faqat kun/para/auditoriya va haftaga xos
-     * joylashuvlar tozalanadi.
-     */
-    /**
      * Bo'lakli fanning aralash (c) amaliy kartasi bir nechta asos guruhni qamrab olgan bo'lsa
      * ("02a+02b+03a+03b+…"), uni asos guruhlar bo'yicha bo'ladi: har asos guruhga ("02a + 02b")
      * alohida karta. Asl karta birinchi asos guruhda qoladi; qolganlari uning nusxasi —
@@ -2056,6 +2050,12 @@ class TimetableController extends Controller
         return response()->json(['ok' => true, 'dry_run' => $dry, 'cards' => count($split), 'created' => $created, 'list' => array_slice($split, 0, 200)]);
     }
 
+    /**
+     * Joylashuvlarni bo'shatish (kartochkalarni panelga qaytarish) — qamrov
+     * bo'yicha: yo'nalish+kurs / kurs (barcha yo'nalishlar) / butun doska.
+     * Kartochkalar o'chirilmaydi; faqat kun/para/auditoriya va haftaga xos
+     * joylashuvlar tozalanadi.
+     */
     public function unplaceAll(Request $request, TimetableBoard $board)
     {
         $data = $request->validate([

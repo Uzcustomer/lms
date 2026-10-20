@@ -2013,10 +2013,29 @@ class TimetableController extends Controller
 
             return json_encode([(int) $c->day, (int) $c->pair, (int) $c->start_half, (int) $c->ext_day, (int) $c->ext_pair, $ovs]);
         };
+        // HEMIS biriktiruvi bo'yicha yaratilgan bo'lak ma'ruzasi (assembleRows dagi $variantUnits) — har biri
+        // o'z bo'lagining ulushi, guruhlari bir xil bo'lsa ham (bitta guruh talabalari bo'laklarga bo'lingan).
+        $hemis = $this->isHemisBoard($board);
+        $year = (int) substr((string) $board->academic_year, 0, 4);
+        $assignmentBacked = function (array $items) use ($hemis, $year): bool {
+            if (!$hemis) {
+                return false;
+            }
+            foreach ($items as [$c]) {
+                $counts = $this->variantStudentCounts((string) $c->subject_name, $year);
+                foreach ((array) $c->group_names as $g) {
+                    if (array_sum(array_column($counts, $this->groupNameKey((string) preg_replace('/\s*\(.*$/u', '', (string) $g)))) > 0) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
         $list = [];
         $skipped = [];
         $removed = 0;
-        DB::transaction(function () use ($groups, $dry, $hasOv, $placementSig, &$list, &$skipped, &$removed) {
+        DB::transaction(function () use ($groups, $dry, $hasOv, $placementSig, $assignmentBacked, &$list, &$skipped, &$removed) {
             foreach ($groups as $items) {
                 [$keep, $base] = $items[0];
                 $label = $base . ' · ' . $keep->oqim_label;
@@ -2036,9 +2055,9 @@ class TimetableController extends Controller
                     $sets[json_encode($gs)] = true;
                     $students[] = (int) $c->students;
                 }
-                // Guruhlari bir xil bo'laklar (biriktiruvsiz: ishchi reja, harf qoidasi) — har biri butun
-                // oqim sonini olgan, qo'shilsa ikki-uch barobar bo'lardi; aks holda har bo'lak o'z ulushi.
-                $total = count($sets) === 1 ? max($students) : array_sum($students);
+                // Biriktiruvsiz (ishchi reja, harf qoidasi) va guruhlari bir xil bo'laklar — har biri butun oqim
+                // sonini olgan, qo'shilsa ikki-uch barobar bo'lardi; aks holda har bo'lak o'z ulushi.
+                $total = count($sets) === 1 && !$assignmentBacked($items) ? max($students) : array_sum($students);
                 $list[] = $label . ' · ' . count($items) . " bo'lak → 1";
                 if ($dry) {
                     continue;

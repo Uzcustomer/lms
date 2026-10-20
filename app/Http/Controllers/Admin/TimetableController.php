@@ -1982,10 +1982,12 @@ class TimetableController extends Controller
 
             return response()->json(['ok' => true, 'unplaced' => $count, 'layer' => 'external']);
         }
-        // Kafedra mudiri faqat o'z kafedrasi kartalarini bo'shatadi.
-        if ($this->timetableActiveRole($request) === 'kafedra_mudiri' && ($own = $this->departmentHeadKafedraSafe($request))) {
+        // Kafedra mudiri faqat o'z kafedrasi kartalarini bo'shatadi (kafedra aniqlanmasa
+        // weeklyLayerDenied allaqachon rad etgan — bu yerda $own bo'sh bo'lmaydi).
+        if ($this->timetableActiveRole($request) === 'kafedra_mudiri') {
+            $own = $this->departmentHeadKafedraSafe($request) ?? [];
             $ids = (clone $scopeQuery)->get(['id', 'kafedra_name'])
-                ->filter(fn ($c) => $this->sameKafedra($c->kafedra_name, $own))->pluck('id')->all();
+                ->filter(fn ($c) => $own && $this->sameKafedra($c->kafedra_name, $own))->pluck('id')->all();
             $scopeQuery->whereIn('id', $ids ?: [0]);
         }
 
@@ -5872,7 +5874,12 @@ class TimetableController extends Controller
         if ($role !== 'kafedra_mudiri') {
             return response()->json(['error' => 'Ichki dars jadvalini faqat kafedra mudiri tahrirlaydi.'], 403);
         }
-        if ($card && ($own = $this->departmentHeadKafedraSafe($request)) && !$this->sameKafedra($card->kafedra_name, $own)) {
+        // Kafedra aniqlanmasa — cheklovsiz ruxsat emas, rad etiladi.
+        $own = $this->departmentHeadKafedraSafe($request);
+        if (!$own) {
+            return response()->json(['error' => 'Kafedrangiz aniqlanmadi — profilingizdagi kafedra ma\'lumotini tekshiring.'], 403);
+        }
+        if ($card && !$this->sameKafedra($card->kafedra_name, $own)) {
             return response()->json(['error' => 'Bu fan sizning kafedrangizga tegishli emas.'], 403);
         }
 

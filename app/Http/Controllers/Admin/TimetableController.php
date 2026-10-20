@@ -2712,6 +2712,50 @@ class TimetableController extends Controller
         return response()->json($this->syncCardWeeksFromKtr($board, $data, $request->boolean('dry_run')));
     }
 
+    /**
+     * Haftaning KTR soatiga teng bo'ladigan kartochkalar to'plami (birlikda odatda 1-4 ta karta):
+     * aniq teng to'plam afzal, ichida — ko'p haftali (asosiy) kartalar va kamroq karta;
+     * aniq teng bo'lmasa — soatdan oshmaydigan eng katta to'plam. [card_id => true]
+     */
+    private function ktrPickCards(array $cards, int $need): array
+    {
+        if ($need <= 0 || !$cards) {
+            return [];
+        }
+        $cards = array_values(array_slice($cards, 0, 10));
+        $n = count($cards);
+        $best = null;
+        $bestScore = null;
+        for ($mask = 1; $mask < (1 << $n); $mask++) {
+            $sum = 0;
+            $weeks = 0;
+            $count = 0;
+            for ($i = 0; $i < $n; $i++) {
+                if ($mask & (1 << $i)) {
+                    $sum += $cards[$i]->lenHalf();
+                    $weeks += (int) $cards[$i]->weeks;
+                    $count++;
+                }
+            }
+            if ($sum > $need) {
+                continue;
+            }
+            $score = [$sum, $weeks, -$count, -$mask];
+            if ($bestScore === null || $score > $bestScore) {
+                $bestScore = $score;
+                $best = $mask;
+            }
+        }
+        $out = [];
+        for ($i = 0; $best !== null && $i < $n; $i++) {
+            if ($best & (1 << $i)) {
+                $out[$cards[$i]->id] = true;
+            }
+        }
+
+        return $out;
+    }
+
     private function syncCardWeeksFromKtr(TimetableBoard $board, array $scope = [], bool $dryRun = false): array
     {
         // Qamrov boshqa amallar (bo'shatish) bilan bir xil: yuborilmagan — cheklovsiz,
@@ -2786,16 +2830,8 @@ class TimetableController extends Controller
             $active = [];
             for ($w = 1; $w <= $total; $w++) {
                 $need = (int) ($plan[$w - 1][$typeKey] ?? 0);
-                $chosen = [];
-                foreach ($unitCards as $c) {
-                    if ($need <= 0) {
-                        break;
-                    }
-                    if ($c->lenHalf() <= $need) {
-                        $chosen[$c->id] = true;
-                        $need -= $c->lenHalf();
-                    }
-                }
+                $chosen = $this->ktrPickCards($unitCards, $need);
+                $need -= array_sum(array_map(fn ($c) => isset($chosen[$c->id]) ? $c->lenHalf() : 0, $unitCards));
                 if ($need > 0) {
                     $mismatch[] = $first->subject_name . ' · ' . ($first->group_name ?: $first->oqim_label) . ' · ' . $w . '-hafta: KTR '
                         . (int) ($plan[$w - 1][$typeKey] ?? 0) . ' soat, kartochkalar yetmaydi';

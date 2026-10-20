@@ -95,3 +95,17 @@ it('qamrov boshqa amallar kabi: bo\'sh tanlov yoki boshqa fakultet — hech nars
     $res = (new TimetableController())->ktrWeeks(Request::create('/', 'POST', ['faculty_names' => ['1-son davolash'], 'courses' => [2]]), $s['board'])->getData(true);
     expect($res['cards'])->toBe(3)->and(activeWeeks($s['lec']))->toBe([1, 2, 5]);
 });
+
+it('1 va 2 soatlik kartalardan haftaning soati aniq yig\'iladi', function () {
+    $s = ktrWeeksSetup(['1' => ['11' => 2, '13' => 2], '2' => ['11' => 0, '13' => 2], '3' => ['11' => 0, '13' => 3],
+        '4' => ['11' => 0, '13' => 3], '5' => ['11' => 2, '13' => 2], '6' => ['11' => 0, '13' => 3]]);
+    // Gigiyena kabi: 1 soatlik (15 hafta) va 2 soatlik (10 hafta) kartalar
+    $s['p1']->update(['len_half' => 1, 'weeks' => 6]);
+    $s['p2']->update(['len_half' => 2, 'weeks' => 4]);
+
+    $res = (new TimetableController())->ktrWeeks(Request::create('/', 'POST', []), $s['board'])->getData(true);
+
+    expect($res['mismatch_count'])->toBe(0)
+        ->and(activeWeeks($s['p2']->fresh()))->toBe([1, 2, 3, 4, 5, 6])
+        ->and(activeWeeks($s['p1']->fresh()))->toBe([3, 4, 6]);
+});

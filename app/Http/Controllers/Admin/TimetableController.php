@@ -5816,14 +5816,17 @@ class TimetableController extends Controller
             return response()->json(['error' => 'Bu amal faqat admin uchun.'], 403);
         }
         [$facSet, $specSet, $courseSet] = $this->scopeSets($data);
-        $q = TimetableCard::where('board_id', $board->id)->whereNotNull('day')->whereNotNull('pair');
-        $this->applyScopeToQuery($q, $facSet, $specSet, $courseSet);
-        $cards = $q->get(['id', 'day', 'pair']);
+        $scopeQ = TimetableCard::where('board_id', $board->id);
+        $this->applyScopeToQuery($scopeQ, $facSet, $specSet, $courseSet);
+        $cards = (clone $scopeQ)->whereNotNull('day')->whereNotNull('pair')->get(['id', 'day', 'pair']);
         $result = ['ok' => true, 'copied' => $cards->count(), 'cleared' => $request->boolean('clear_internal') ? $cards->count() : 0];
         if ($request->boolean('dry_run')) {
             return response()->json($result + ['dry_run' => true]);
         }
-        DB::transaction(function () use ($cards, $request) {
+        DB::transaction(function () use ($cards, $request, $scopeQ) {
+            // Qamrovdagi tashqi qatlam hozirgi joylashuvning nusxasi bo'ladi: ichki jadvaldan
+            // olib tashlangan kartaning eski tashqi joyi qolib ketmasin.
+            (clone $scopeQ)->whereNotNull('ext_day')->update(['ext_day' => null, 'ext_pair' => null]);
             foreach ($cards as $c) {
                 $upd = ['ext_day' => $c->day, 'ext_pair' => $c->pair];
                 if ($request->boolean('clear_internal')) {

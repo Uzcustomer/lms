@@ -118,3 +118,15 @@ it('kafedrasi aniqlanmagan mudir ichki jadvalni o\'zgartira olmaydi (yopiq holat
     layerAs($lost, 'kafedra_mudiri')->postJson(route('admin.timetable.boards.unplace', $s['board']), ['courses' => [2], 'layer' => 'internal'])->assertForbidden();
     expect($s['foreign']->fresh()->only(['day', 'pair']))->toBe(['day' => 2, 'pair' => 1]);
 });
+
+it('qayta ko\'chirishda ichkidan olingan kartaning eski tashqi joyi tozalanadi', function () {
+    $s = layersSetup();
+    $s['own']->update(['ext_day' => 2, 'ext_pair' => 3]);            // ichkida joylashmagan
+    $s['foreign']->update(['day' => 1, 'pair' => 1]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.weekly-layer-copy', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['copied' => 1]);
+
+    expect($s['own']->fresh()->only(['ext_day', 'ext_pair']))->toBe(['ext_day' => null, 'ext_pair' => null])
+        ->and($s['foreign']->fresh()->only(['ext_day', 'ext_pair', 'day']))->toBe(['ext_day' => 1, 'ext_pair' => 1, 'day' => 1]);
+});

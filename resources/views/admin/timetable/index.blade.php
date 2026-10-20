@@ -3513,12 +3513,14 @@
                     const pl = place(c), u = occ();
                     let st = pl.p;
                     while (st > 1 && cardGroups(c).every(g => tmpl[slots(c, g, pl.d)] && tmpl[slots(c, g, pl.d)].has(st - 1)) && free(u, c, pl.d, st - 1)) st--;
-                    if ((pl.p - st) % 2) st++;
-                    for (; st < pl.p; st += 2) { if (await move(c, pl.d, st)) { res.up++; break; } }
+                    // Para chegarasi faqat butun para (2+ yarim-slot) darslar uchun saqlanadi.
+                    const step = cardLen(c) > 1 ? 2 : 1;
+                    if (step === 2 && (pl.p - st) % 2) st++;
+                    for (; st < pl.p; st += step) { if (await move(c, pl.d, st)) { res.up++; break; } }
                 }
                 for (const c of scopeCards.filter(c => !off(c) && !place(c) && c.ext_day && c.ext_pair)) {
                     let ok = false;
-                    for (let p = +c.ext_pair; p <= maxPair && !ok; p += 2) {
+                    for (let p = +c.ext_pair; p <= maxPair && !ok; p += cardLen(c) > 1 ? 2 : 1) {
                         if (free(occ(), c, +c.ext_day, p) && await move(c, +c.ext_day, p)) ok = true;
                     }
                     if (ok) res.placed++; else res.left++;
@@ -3677,7 +3679,7 @@
                         while (start > 1 && keys.length && keys.every(k =>
                             tmpl[k].has(start - 1) && !(used[k] && used[k].has(start - 1)))) start--;
                         // Juft yarim-slot chegarasini saqlash (para o'rtasidan boshlanmasin)
-                        if ((c.pair - start) % 2) start++;
+                        if (len > 1 && (c.pair - start) % 2) start++;   // yarim para dars yarim-slot bo'shliqqa ham suriladi
                         if (start !== c.pair) map[c.id] = start;
                         keys.forEach(k => {
                             const set = used[k] || (used[k] = new Set());

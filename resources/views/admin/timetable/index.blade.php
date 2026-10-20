@@ -3544,7 +3544,7 @@
                 selectedFaculties.has(c.faculty_name || '') &&
                 selectedDirs.has(c.specialty_name) &&
                 selectedCourses.has(c.course) &&
-                !isCycleCard(c));
+                !isCycleCardAny(c));
             const cardGroups = c => (c.group_names && c.group_names.length) ? c.group_names : (c.group_name ? [c.group_name] : []);
             // Guruh identifikatori. Guruh NOMI fakultetlar bo'ylab takrorlanishi mumkin
             // (mas. 1-kurs "1K-01a (o'z)" ham 1-son, ham 2-son davolashda bor), shuning
@@ -5983,7 +5983,7 @@
                 // "fanlar yo'qolmadi", ular sikl kalendarida. Yo'naltiruvchi xabar.
                 if (!groupRows.length) {
                     const hasCycleHere = cards.some(c => selectedFaculties.has(c.faculty_name || '') &&
-                        selectedDirs.has(c.specialty_name) && selectedCourses.has(c.course) && isCycleCard(c));
+                        selectedDirs.has(c.specialty_name) && selectedCourses.has(c.course) && isCycleCardAny(c));
                     if (hasCycleHere) {
                         $('grid').innerHTML = '<tbody><tr><td class="p-6 text-sm text-gray-600 text-center">' +
                             'Bu tanlovdagi fanlar <b>sikl (blok)</b> rejimida belgilangan — ular haftalik panjarada emas, ' +

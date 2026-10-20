@@ -444,7 +444,7 @@
                             <select name="test_id" id="test_id">
                                 @foreach($collections as $item)
                                     <option value="{{ $item->id }}" @selected($selected && $item->id === $selected->id)>
-                                        {{ $item->name }} — {{ $item->subject?->subject_name }}
+                                        {{ $item->topic_number ? $item->topicLabel() . ' · ' : '' }}{{ $item->name }} — {{ $item->subject?->subject_name }}
                                     </option>
                                 @endforeach
                             </select>

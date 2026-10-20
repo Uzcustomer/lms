@@ -11,6 +11,7 @@ class FanTesti extends Model
     protected $fillable = [
         'curriculum_subject_id',
         'name',
+        'topic_number',
         'description',
         'duration_minutes',
         'pass_percent',
@@ -28,6 +29,7 @@ class FanTesti extends Model
     protected $casts = [
         'shuffle_questions' => 'boolean',
         'questions_per_attempt' => 'integer',
+        'topic_number' => 'integer',
         'show_result_after_submit' => 'boolean',
         'is_active' => 'boolean',
         'public_open_at' => 'datetime',
@@ -62,6 +64,12 @@ class FanTesti extends Model
     public function updater()
     {
         return $this->belongsTo(Teacher::class, 'updated_by');
+    }
+
+    /** "3-mavzu" yoki bo'sh (raqam kiritilmagan). */
+    public function topicLabel(): string
+    {
+        return $this->topic_number ? $this->topic_number . '-mavzu' : '';
     }
 
     public function questionCount(): int

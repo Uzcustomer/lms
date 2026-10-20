@@ -122,7 +122,7 @@
         <div class="k-head">
             <div class="k-eyebrow">{{ ($retake ?? false) ? 'Qayta topshirish testi' : 'Nazorat testi' }}</div>
             <h1>{{ $test->name }}</h1>
-            <p>{{ $test->subject?->subject_name }}@if($test->subject?->semester_name) · {{ $test->subject->semester_name }}@endif</p>
+            <p>@if($test->topic_number){{ $test->topicLabel() }} · @endif{{ $test->subject?->subject_name }}@if($test->subject?->semester_name) · {{ $test->subject->semester_name }}@endif</p>
 
             @php
                 $activeCount = collect($test->questions ?? [])

@@ -1408,6 +1408,10 @@ class FanTestiController extends Controller
                 Rule::in($subjects->pluck('id')->map(fn ($id) => (int) $id)->all()),
             ],
             'name' => ['required', 'string', 'max:255'],
+            // Mavzu raqami (KTR bo'yicha) — majburiy; eski to'plamlar tahrirlanganda qo'yiladi
+            'topic_number' => Schema::hasColumn('fan_testlari', 'topic_number')
+                ? ['required', 'integer', 'min:1', 'max:500']
+                : ['nullable'],
             'description' => ['nullable', 'string'],
             'duration_minutes' => ['required', 'integer', 'min:1', 'max:300'],
             'pass_percent' => ['nullable', 'integer', 'min:1', 'max:100'],

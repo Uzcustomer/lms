@@ -38,7 +38,7 @@ class FanTestiJournalExport implements WithMultipleSheets
 
     public static function title(FanTesti $test): string
     {
-        return trim($test->name . ($test->subject?->subject_name ? ' — ' . $test->subject->subject_name : ''))
+        return trim(($test->topic_number ? $test->topic_number . '-mavzu. ' : '') . $test->name . ($test->subject?->subject_name ? ' — ' . $test->subject->subject_name : ''))
             . (self::$retakeTitle ? ' (qayta topshirishlar)' : '');
     }
 

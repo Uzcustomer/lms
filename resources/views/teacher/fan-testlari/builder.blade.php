@@ -675,6 +675,10 @@
     .bl-create[open] .bl-create-toggle { background: #fff; color: #0e2342; border: 1px solid #d8e2ee; box-shadow: none; }
     .bl-create[open] .bl-create-toggle .is-open { display: inline-flex; }
     .bl-create[open] .bl-create-toggle .is-closed { display: none; }
+    /* Mavzu raqami */
+    .bl-topic input { max-width: 220px; }
+    .bl-topic-badge { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 6px; background: #e0e7ff; color: #3730a3; font-size: 11.5px; font-weight: 800; white-space: nowrap; vertical-align: 1px; }
+    .bl-topic-badge.is-missing { background: #fef3c7; color: #92400e; font-weight: 700; }
     .bl-run-badge.is-retake { background: #f5f3ff; color: #6d28d9; white-space: nowrap; }
 
     /* To'plamlar tablari: asosiy — to'q ko'k, qayta topshirish — binafsha */
@@ -1015,6 +1019,13 @@
                     <input id="name" name="name" required maxlength="255" value="{{ old('name', $collection?->name) }}" placeholder="Masalan: 1-mavzu nazorat testi">
                 </div>
 
+                <div class="bl-field bl-topic">
+                    <label for="topic_number"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg> Mavzu raqami</label>
+                    <input id="topic_number" name="topic_number" type="number" min="1" max="500" required inputmode="numeric"
+                           value="{{ old('topic_number', $collection?->topic_number) }}" placeholder="Masalan: 3">
+                    <span class="bl-hint">KTR (kalendar-tematik reja) bo'yicha mavzu tartib raqami.</span>
+                </div>
+
                 <div class="bl-grid bl-grid-2">
                     <div class="bl-field">
                         <label for="duration_minutes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Vaqt (daqiqa)</label>
@@ -1217,7 +1228,7 @@
                             @php $isDraft = !$item->curriculum_subject_id; @endphp
                             <tr class="{{ $isEdit && $item->id === $collection->id ? 'is-current' : '' }}">
                                 <td>
-                                    <span class="bl-t-name">{{ $item->name }}</span>
+                                    <span class="bl-t-name">@if($item->topic_number)<span class="bl-topic-badge">{{ $item->topicLabel() }}</span> @else<span class="bl-topic-badge is-missing" title="Tahrirlab mavzu raqamini kiriting">mavzu raqami yo'q</span> @endif{{ $item->name }}</span>
                                     @if($item->description)
                                         <span class="bl-t-sub">{{ \Illuminate\Support\Str::limit($item->description, 64) }}</span>
                                     @endif
@@ -1323,7 +1334,7 @@
                                 @php $retakeRunning = collect($kioskDevices ?? [])->where('assigned_test_id', $item->id)->where('assigned_mode', 'retake')->count(); @endphp
                                 <tr>
                                     <td>
-                                        <span class="bl-t-name">{{ $item->name }}</span>
+                                        <span class="bl-t-name">@if($item->topic_number)<span class="bl-topic-badge">{{ $item->topicLabel() }}</span> @else<span class="bl-topic-badge is-missing" title="Tahrirlab mavzu raqamini kiriting">mavzu raqami yo'q</span> @endif{{ $item->name }}</span>
                                         @if($item->description)
                                             <span class="bl-t-sub">{{ \Illuminate\Support\Str::limit($item->description, 64) }}</span>
                                         @endif

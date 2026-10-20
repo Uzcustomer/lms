@@ -3462,7 +3462,14 @@
             // shu haftada bo'sh qolgan yarim-slotlariga keyingi darslar yuqoriga suriladi; so'ng
             // joylashmagan kartalar andozadagi joyiga yoki shu kunning pastroq bo'sh joyiga qo'yiladi.
             // Har bir ko'chirish oddiy week-override (server konflikt tekshiradi).
+            // Kartaning o'z panjarasidagi haftalar soni (yo'nalish+kurs, bo'lmasa doska).
+            const cardTermWeeks = c => {
+                const g = grids[gridKey(c.faculty_name || '', c.specialty_name, c.course)] || grids[gridKey('', c.specialty_name, c.course)];
+                return +(g && g.weeks) || +board.weeks || 15;
+            };
             async function compactInternalWeek(W, scopeCards) {
+                // Kartaning semestri tugagan haftaga ko'chirish yozilmasin.
+                scopeCards = scopeCards.filter(c => W <= cardTermWeeks(c));
                 const all = cards.filter(c => !isCycleCardAny(c));
                 const key = c => c.id + '|' + W;
                 const off = c => { const o = overrides[key(c)]; return !!(o && o.cancelled); };
@@ -3529,12 +3536,13 @@
             }
             if ($('compactWeekBtn')) $('compactWeekBtn').onclick = async function () {
                 if (!board || !curWeek || weeklyLayer !== 'internal') return;
-                const total = Math.max(curWeek, ...Object.values(grids || {}).map(g => +(g && g.weeks) || 0));
+                const scope = visibleSpecCards().filter(c => !isCycleCardAny(c));
+                // Faqat tanlangan qamrovdagi panjaralar semestri (boshqa, uzunroq panjara emas).
+                const total = Math.max(curWeek, ...scope.map(cardTermWeeks));
                 if (!confirm('Qamrov: ' + scopeLabelText() + '\n\nIchki jadvalda bo\'sh qolgan dars joylariga keyingi darslar suriladi, ' +
                     'joylashmagan kartalar pastdagi bo\'sh joyga qo\'yiladi.\n\nDavom etamizmi?')) return;
                 const allWeeks = total > 1 && confirm('Barcha haftalarga (1–' + total + ') qo\'llansinmi?\n\nOK — barcha haftalar, Bekor — faqat ' + curWeek + '-hafta');
                 const weeks = allWeeks ? Array.from({ length: total }, (_, i) => i + 1) : [curWeek];
-                const scope = visibleSpecCards().filter(c => !isCycleCardAny(c));
                 this.disabled = true;
                 const sum = { up: 0, placed: 0, left: 0 };
                 try {

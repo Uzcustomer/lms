@@ -197,3 +197,24 @@ it('bitta fanning turli bo\'laklari bir katakda parallel tura oladi, boshqa fan 
         + ['subject_name' => 'Xirurgiya (b)', 'kafedra_name' => 'X']);
     layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.cards.place', $other), ['day' => 2, 'pair' => 3, 'layer' => 'external'])->assertStatus(422);
 });
+
+it('aralash (c) bo\'lak kartasini asos guruhlar bo\'yicha bo\'ladi, joylashuv va haftalar saqlanadi', function () {
+    $s = layersSetup();
+    $c = \App\Models\TimetableCard::create($s['own']->only(['board_id', 'faculty_name', 'specialty_name', 'course', 'oqim_label', 'lang', 'training_type', 'len_half', 'weeks'])
+        + ['subject_name' => 'IKP (c)', 'kafedra_name' => 'X', 'students' => 40, 'teacher_id' => 7, 'teacher_name' => 'T',
+            'group_name' => 'g-02a + g-02b + g-03a + g-03b', 'group_names' => ['g-02a', 'g-02b', 'g-03a', 'g-03b'], 'ext_day' => 1, 'ext_pair' => 3]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $c->id, 'week' => 9, 'cancelled' => true]);
+    \App\Models\TimetableCardOverride::create(['card_id' => $c->id, 'week' => 2, 'day' => 1, 'pair' => 5, 'cancelled' => false]);
+
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-variant-mixed', $s['board']), ['courses' => [2], 'dry_run' => 1])
+        ->assertOk()->assertJson(['cards' => 1, 'created' => 0]);
+    layerAs($s['admin'], 'superadmin')->postJson(route('admin.timetable.boards.split-variant-mixed', $s['board']), ['courses' => [2]])
+        ->assertOk()->assertJson(['cards' => 1, 'created' => 1]);
+
+    $c->refresh();
+    expect($c->group_names)->toBe(['g-02a', 'g-02b']);
+    $copy = \App\Models\TimetableCard::where('subject_name', 'IKP (c)')->where('id', '!=', $c->id)->first();
+    expect($copy->group_names)->toBe(['g-03a', 'g-03b'])
+        ->and([$copy->ext_day, $copy->ext_pair, $copy->teacher_id])->toBe([1, 3, null])
+        ->and(\App\Models\TimetableCardOverride::where('card_id', $copy->id)->count())->toBe(2);
+});

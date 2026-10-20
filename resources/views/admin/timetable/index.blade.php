@@ -5999,6 +5999,15 @@
             // Birlashtirilgan (ketma-ket) blok — kartalarni ketma-ket paralarga joylaymiz
             // parallel — bo'lakli fan bo'laklari: hammasi bitta katakka (ketma-ket emas).
             async function placeBlockAt(ids, d, p, parallel) {
+                // Bo'laklar birga ko'chadi: birortasi sig'masa (o'qituvchi/xona band) — hech biri
+                // ko'chirilmaydi, aks holda so'rovlar birma-bir ketib, guruh yarim ko'chgan holda qolardi.
+                if (parallel) {
+                    for (const id of ids) {
+                        const card = cards.find(x => x.id === id);
+                        const errs = card ? conflictsAt(card, d, p) : [];
+                        if (errs.length) { alert('Konflikt (' + card.subject_name + '): ' + errs.join('; ')); return; }
+                    }
+                }
                 try {
                     for (let k = 0; k < ids.length; k++) {
                         const card = cards.find(x => x.id === ids[k]);

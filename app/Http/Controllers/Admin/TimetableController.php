@@ -567,6 +567,27 @@ class TimetableController extends Controller
      * Guruhdagi faol talabalar soni (students, status 11). Guruh nomi fakultetlararo takrorlanishi
      * mumkin, shuning uchun guruhning o'z o'quv rejasi bo'yicha; reja mos kelmasa — nom bo'yicha jami.
      */
+    /** Doskadagi barcha guruh(cha)lar uchun faol talabalar soni: "fakultet|guruh nomi" => son. */
+    private function boardGroupStudentCounts($cards): array
+    {
+        $out = [];
+        try {
+            foreach ($cards as $c) {
+                $names = $c['group_name'] ? [$c['group_name']] : (array) ($c['group_names'] ?? []);
+                foreach ($names as $g) {
+                    $key = ($c['faculty_name'] ?? '') . '|' . $g;
+                    if ($g !== '' && !isset($out[$key])) {
+                        $out[$key] = $this->activeStudentCountFor((string) $g, $c['faculty_name'] ?? null);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return $out;
+    }
+
     private function activeStudentCountFor(string $groupName, ?string $faculty = null): int
     {
         static $counts = null;
@@ -2126,6 +2147,8 @@ class TimetableController extends Controller
             'missing_groups' => $this->missingGroupSpecs($board),
             // Kafedra mudiri: "Kafedraniki" filtri uchun o'z kafedrasi nomlari.
             'my_kafedras' => $this->departmentHeadKafedraSafe(request()),
+            // Guruh(cha) sarlavhasida faol talabalar soni (sikl jadvalidagi kabi): "fakultet|guruh" => son.
+            'group_students' => $this->boardGroupStudentCounts($cards),
         ])
             // Doska ma'lumoti tez-tez o'zgaradi (kartalar qayta yaratiladi, joylashadi).
             // Brauzer eski GET javobini keshdan bermasin — aks holda yangi kartalar

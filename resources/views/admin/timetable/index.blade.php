@@ -965,6 +965,9 @@
             text-align: center; white-space: nowrap; letter-spacing: .3px; position: sticky; left: 0; z-index: 4;
             width: 26px; min-width: 26px; max-width: 26px; padding: 2px 0; border-bottom: 4px solid #000 !important; }
         #grid td.tt-para { background: #f8fafc; font-weight: 700; color: #334155; text-align: center; position: sticky; left: 26px; z-index: 4; min-width: 40px; width: 40px; padding: 2px; }
+        #grid .tt-grp-count { margin-top: 2px; line-height: 1; }
+        .tt-stu-count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #059669;
+            color: #fff; font-size: 10px; font-weight: 800; font-style: normal; line-height: 16px; text-align: center; }
         #grid td.tt-para.tt-para-roman { min-width: 28px; width: 28px; max-width: 28px; padding: 1px; background: #e8eef6; line-height: 1; }
         #grid td.tt-para.tt-para-roman b { display: block; color: #1e293b; font-size: 12px; font-weight: 900; }
         #grid td.tt-para.tt-para-roman i { display: block; font-style: normal; color: #64748b; font-size: 7px; font-weight: 700; margin-top: 2px; }
@@ -2509,6 +2512,7 @@
                 return list;
             }
             let allCards = [];
+            let groupStudents = {};   // "fakultet|guruh" => faol talabalar soni (sikl jadvalidagi kabi)
             const TIMETABLE_CAN_USE_MANAGER = @json($timetableCanUseManager);
             const DAY_NAMES = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
 
@@ -3126,6 +3130,7 @@
                 // qaytarmasin (yangi kurs/kartalar darrov ko'rinsin).
                 const j = await api(BASE + '/boards/' + id + '/data?_=' + Date.now());
                 board = j.board; allCards = j.cards || [];
+                groupStudents = j.group_students || {};
                 myKafedras = Array.isArray(j.my_kafedras) ? j.my_kafedras : [];
                 cards = scopeCards(allCards);
                 missingGroups = j.missing_groups || [];
@@ -6211,18 +6216,25 @@
                 }
                 const multiCourse = selectedCourses.size > 1;
                 const showSpec = multiSpec();
+                const grpCount = (o, gr) => groupStudents[(o.faculty || '') + '|' + (gName[gr] || '')];
                 oqimCols.forEach((o, oi) => {
                     const flowKey = (o.faculty || '') + '|' + (o.specialty || '') + '|' + o.course + '|' + (o.label || '');
-                    const studentCount = flowStudents[flowKey];
+                    const known = o.groups.map(gr => grpCount(o, gr)).filter(n => n != null);
+                    // Faol talabalar (students) bo'yicha; ma'lumot bo'lmasa — kartalardagi son.
+                    const studentCount = known.length ? known.reduce((a, b) => a + (+b || 0), 0) : flowStudents[flowKey];
                     const title = (showSpec && o.specialty ? o.specialty + ' · ' : '') +
                         (multiCourse ? o.course + '-kurs · ' : '') + (o.label || '—');
                     h += '<th class="tt-oqim px-2 py-1' + courseCls(o.course) + (oi > 0 ? ' sep-oqim' : '') + '" colspan="' + o.groups.length + '">' +
                         '<div>' + esc(title) + '</div>' +
-                        (studentCount ? '<div class="tt-oqim-count">' + studentCount + ' ta</div>' : '') +
+                        (studentCount ? '<div class="tt-oqim-count">' + o.groups.length + ' guruh · ' + studentCount + ' talaba</div>' : '') +
                     '</th>';
                 });
                 h += '</tr><tr>';
-                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') + '</th>'));
+                oqimCols.forEach((o, oi) => o.groups.forEach((gr, gi) => {
+                    const n = grpCount(o, gr);
+                    h += '<th class="tt-grp px-2 py-1' + courseCls(o.course) + colBorder(oi, gi, o.groups) + '">' + esc(gName[gr] || '') +
+                        (n != null ? '<div class="tt-grp-count"><em class="tt-stu-count" title="' + n + ' ta faol talaba">' + n + '</em></div>' : '') + '</th>';
+                }));
                 h += '</tr></thead><tbody>';
 
                 // Para ajratuvchi chiziq darajasi: shu qatorda TUGAYDIGAN katak uchun

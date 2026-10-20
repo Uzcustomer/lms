@@ -150,3 +150,13 @@ it('2 soatlik asosiy karta ikki 1 soatlik qisqa kartadan ustun', function () {
         ->and(activeWeeks($s['p2']))->toBe([])
         ->and(activeWeeks($p3))->toBe([]);
 });
+
+it('doska ma\'lumotida guruhcha talabalar soni keladi', function () {
+    $s = ktrWeeksSetup(['1' => ['11' => 2, '13' => 2]]);
+    DB::table('students')->insert([
+        ['hemis_id' => 1, 'full_name' => 'A', 'short_name' => 'A', 'first_name' => 'A', 'second_name' => 'A', 'student_id_number' => '1', 'group_name' => 'g-01a', 'student_status_code' => 11, 'created_at' => now(), 'updated_at' => now()],
+        ['hemis_id' => 2, 'full_name' => 'B', 'short_name' => 'B', 'first_name' => 'B', 'second_name' => 'B', 'student_id_number' => '2', 'group_name' => 'g-01a', 'student_status_code' => 11, 'created_at' => now(), 'updated_at' => now()],
+    ]);
+    $data = (new TimetableController())->data($s['board'])->getData(true);
+    expect($data['group_students']['1-son davolash|g-01a'])->toBe(2);
+});

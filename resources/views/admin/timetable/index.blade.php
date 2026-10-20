@@ -5881,6 +5881,15 @@
                 const n = String(name || '').trim();
                 return n !== '' && !/\d/.test(n) && /mashg|umumiy/i.test(n);
             };
+            // Ikki karta kamida bitta umumiy faol haftaga egami (bekor qilinmagan haftalar, panjara haftalari ichida).
+            function weeksIntersect(a, b) {
+                const total = +curGrid().weeks || +board.weeks || 15;
+                for (let w = 1; w <= total; w++) {
+                    const oa = overrides[a.id + '|' + w], ob = overrides[b.id + '|' + w];
+                    if (!(oa && oa.cancelled) && !(ob && ob.cancelled)) return true;
+                }
+                return false;
+            }
             // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha).
             // `pair` — yarim-slot indeksi; dars cardLen(card) ta yarim-slotni egallaydi,
             // shu oraliq [pair, pair+len) boshqa kartaning oralig'i bilan kesishsa — band.
@@ -5901,7 +5910,9 @@
                     // Guruh bandligi kalit bo'yicha: bir xil nomli, lekin turli
                     // fakultetdagi guruhlar bir-biriga to'sqinlik qilmasin.
                     const ov = cardGKeys(o).filter(k => my.includes(k));
-                    if (ov.length) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
+                    // Tashqi jadval — umumiy shablon: hech qachon bir haftaga tushmaydigan kartalar
+                    // bitta katakni bo'lisha oladi (serverdagi findExternalConflicts kabi).
+                    if (ov.length && !(weeklyLayer === 'external' && !weeksIntersect(card, o))) errs.push('Guruh band: ' + ov.map(k => k.split('¦').pop()).join(','));
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
                     // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
                     if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code

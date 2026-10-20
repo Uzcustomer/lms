@@ -161,9 +161,9 @@
                     <div class="tt-field tt-week-field">
                         <label>Hafta</label>
                         <span class="tt-week-nav">
-                            <button type="button" id="weekPrev" title="Oldingi hafta">&#8249;</button>
+                            <button type="button" id="weekPrev" title="Oldingi hafta" aria-label="Oldingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                             <select id="weekSel"></select>
-                            <button type="button" id="weekNext" title="Keyingi hafta">&#8250;</button>
+                            <button type="button" id="weekNext" title="Keyingi hafta" aria-label="Keyingi hafta"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                         </span>
                         <span id="weekHint" class="hidden text-[10px] text-amber-600 font-medium">individual</span>
                         @unless($timetableAssignmentOnly)
@@ -1093,6 +1093,8 @@
         .tt-room-vol { font-weight: 800; color: #16a34a; opacity: 1; }\n        #grid th.tt-room-head .tt-room-name { display:block; font-size:10px; font-weight:500; color:#64748b; margin-top:2px; }
         .pn-card { display: inline-block; width: 170px; vertical-align: top; border-radius: 6px; padding: 4px 6px;
             font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; }
+        .pn-card img { width: 12px; height: 12px; display: inline-block; vertical-align: -2px; }
+        .pn-card .bi { font-size: 10px; }
         .pn-card.lec { background: #fefce8; border-color: #fde68a; }
         .pn-card.prc { background: #faf5ff; }
         .pn-card.sel { outline: 2px solid #f59e0b; }
@@ -1282,11 +1284,18 @@
         #cycleGrid .cyc-vrow-flow { margin-left: auto; color: #475569; font-size: 10px; font-weight: 700; white-space: nowrap; }
         #cycleGrid .cyc-vrow-subj { color: #1e293b; font-size: 10.5px; font-weight: 700; line-height: 1.2;
             display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-        .tt-week-nav { display: inline-flex; align-items: center; gap: 2px; }
-        .tt-week-nav button { width: 22px; height: 26px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #1e40af;
-            font-size: 16px; font-weight: 800; line-height: 1; }
-        .tt-week-nav button:hover:not(:disabled) { background: #dbeafe; }
-        .tt-week-nav button:disabled { opacity: .35; }
+        .tt-week-nav { display: inline-flex; align-items: stretch; height: 30px; border: 1px solid #bfdbfe; border-radius: 9px;
+            background: #fff; box-shadow: 0 1px 2px rgba(30,64,175,.08); overflow: hidden; }
+        .tt-week-nav:focus-within { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,.25); }
+        .tt-week-nav button { display: inline-flex; align-items: center; justify-content: center; width: 28px; border: 0; padding: 0;
+            background: linear-gradient(180deg, #eff6ff, #dbeafe); color: #1d4ed8; cursor: pointer; transition: background .15s, color .15s; }
+        .tt-week-nav button#weekPrev { border-right: 1px solid #bfdbfe; }
+        .tt-week-nav button#weekNext { border-left: 1px solid #bfdbfe; }
+        .tt-week-nav button:hover:not(:disabled) { background: #2563eb; color: #fff; }
+        .tt-week-nav button:active:not(:disabled) { background: #1d4ed8; color: #fff; }
+        .tt-week-nav button:disabled { background: #f8fafc; color: #cbd5e1; cursor: default; }
+        .tt-week-nav select#weekSel { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; height: 100%;
+            background-color: #fff; font-weight: 600; color: #1e3a8a; padding-top: 0; padding-bottom: 0; outline: none; }
         .tt-ktr-weeks-btn { margin-left: 6px; padding: 3px 8px; border-radius: 6px; border: 1px solid #a7f3d0; background: #ecfdf5;
             color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap; }
         .tt-ktr-weeks-btn:disabled { opacity: .5; }
@@ -5984,7 +5993,7 @@
                     (c.training_type === 'lecture'
                         ? esc(c.oqim_label || 'oqim') + ' · ' + (c.group_names || []).length + ' guruh · ' + c.students + ' t.'
                         : esc(c.group_name || '') + ' · ' + c.students + ' t.') +
-                    (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <img src="{{ asset('image/08_classrooms.png') }}" alt="" aria-hidden="true">' : '') +
+                    (c.teacher_name ? ' · <i class="bi bi-person-check" aria-hidden="true"></i>' : '') + (c.auditorium_name ? ' · <i class="bi bi-door-open" aria-hidden="true"></i>' : '') +
                     '</div></div>';
 
                 $('cardPanel').innerHTML =

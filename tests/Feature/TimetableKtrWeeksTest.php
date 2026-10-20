@@ -178,3 +178,18 @@ it('raqamsiz umumiy xona ("amaliy mashg\'ulot xonasi") bandlik to\'qnashuvi berm
     $res = (new TimetableController())->placeCard(Request::create('/', 'POST', ['day' => 1, 'pair' => 1]), $third);
     expect($res->getStatusCode())->toBe(422);
 });
+
+it('raqamsiz, lekin aniq zal ("Katta majlislar zali") bandligi tekshirilaveradi', function () {
+    $s = ktrWeeksSetup(['1' => ['11' => 2, '13' => 2]]);
+    $hall = ['auditorium_code' => 'KMZ', 'auditorium_name' => 'Katta majlislar zali'];
+    $s['p1']->update($hall + ['day' => 1, 'pair' => 1]);
+    $other = TimetableCard::create(['board_id' => $s['board']->id, 'faculty_name' => '1-son davolash', 'specialty_name' => 'davolash ishi',
+        'course' => 2, 'oqim_label' => '1-oqim', 'lang' => 'uz', 'students' => 15, 'subject_name' => 'Biokimyo',
+        'training_type' => 'practice', 'group_name' => 'g-02a', 'len_half' => 2, 'weeks' => 6] + $hall);
+
+    $res = (new TimetableController())->placeCard(Request::create('/', 'POST', ['day' => 1, 'pair' => 1]), $other);
+
+    expect($res->getStatusCode())->toBe(422)
+        ->and($res->getData(true)['error'])->toContain('Auditoriya band')
+        ->and($other->fresh()->day)->toBeNull();
+});

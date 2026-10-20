@@ -5606,6 +5606,11 @@
 
             // Karta uzunligi yarim-slot birligida (1=0.5 para, 2=1 para ...). Sukut 2.
             const cardLen = c => Math.max(1, parseInt(c.len_half) || 2);
+            // Serverdagi isSharedRoom bilan bir xil: raqamsiz va "mashg'ulot"/"umumiy" so'zli nom.
+            const isSharedRoomName = name => {
+                const n = String(name || '').trim();
+                return n !== '' && !/\d/.test(n) && /mashg|umumiy/i.test(n);
+            };
             // Konflikt: karta (day,pair) ga qo'yilsa — sabablar ro'yxati (tanlangan hafta effektiv joylashuvi bo'yicha).
             // `pair` — yarim-slot indeksi; dars cardLen(card) ta yarim-slotni egallaydi,
             // shu oraliq [pair, pair+len) boshqa kartaning oralig'i bilan kesishsa — band.
@@ -5628,7 +5633,7 @@
                     if (card.teacher_id && o.teacher_id === card.teacher_id) errs.push("O'qituvchi band: " + o.teacher_name);
                     // Raqamsiz umumiy xona ("amaliy mashg'ulot xonasi") — bandlik tekshirilmaydi (serverdagi isSharedRoom).
                     if (effectiveSource.auditorium_code && effectiveOther.auditorium_code === effectiveSource.auditorium_code
-                        && !(effectiveOther.auditorium_name && !/\d/.test(effectiveOther.auditorium_name))) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
+                        && !isSharedRoomName(effectiveOther.auditorium_name)) errs.push('Auditoriya band: ' + effectiveOther.auditorium_name);
                 });
                 return errs;
             }

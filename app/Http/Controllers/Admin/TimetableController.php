@@ -5811,12 +5811,14 @@ class TimetableController extends Controller
      * Umumiy (raqamsiz) xona nomi — masalan "amaliy mashg'ulot xonasi": bu aniq bitta xona emas,
      * kafedraning amaliy xonalari umumiy belgisi. Bir vaqtda bir nechta guruhga berilishi mumkin,
      * shuning uchun xona bandligi tekshirilmaydi (o'qituvchi va guruh bandligi tekshiriladi).
+     * Faqat raqamsiz VA "mashg'ulot"/"umumiy" so'zli nom: "Katta majlislar zali" kabi raqamsiz,
+     * lekin aniq bitta zal bandligi tekshirilaveradi (blade'dagi isSharedRoomName bilan bir xil).
      */
     private function isSharedRoom(?string $name): bool
     {
         $name = trim((string) $name);
 
-        return $name !== '' && !preg_match('/\d/u', $name);
+        return $name !== '' && !preg_match('/\d/u', $name) && preg_match('/mashg|umumiy/iu', $name) === 1;
     }
 
     private function findConflicts(TimetableCard $card, int $day, int $pair, int $startHalf = 0): array
